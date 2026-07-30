@@ -1,0 +1,376 @@
+package st.unamedtba.ui
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
+import st.unamedtba.data.NotesRepository
+import st.unamedtba.data.PageLoad
+import st.unamedtba.data.db.NotebookWithSections
+import st.unamedtba.data.db.PageEntity
+import st.unamedtba.model.Block
+import st.unamedtba.model.Outline
+import st.unamedtba.model.PageDoc
+import st.unamedtba.model.newId
+import st.unamedtba.richtext.FormatCommand
+import st.unamedtba.richtext.SelectionState
+
+/**
+ * Position and size of one text container on the page canvas.
+ *
+ * Deliberately excludes the container's text: this is UI state and changes on every drag frame,
+ * whereas block content changes on every keystroke. Keeping them apart means typing does not
+ * recompose the canvas.
+ */
+data class OutlineBox(
+    val id: String,
+    val x: Float,
+    val y: Float,
+    val width: Float,
+    val minHeight: Float = 0f,
+)
+
+data class NotesUiState(
+    val tree: List<NotebookWithSections> = emptyList(),
+    val selectedSectionId: String? = null,
+    val pages: List<PageEntity> = emptyList(),
+    val selectedPageId: String? = null,
+    val title: String = "",
+    val createdAt: Long = 0L,
+    val outlines: List<OutlineBox> = emptyList(),
+    /** Bumped when a different page loads, so the canvas rebuilds its editors. */
+    val pageRevision: Int = 0,
+    val loading: Boolean = true,
+    /** Set when the page body could not be decoded; the page is shown read-only. */
+    val contentError: String? = null,
+)
+
+/** Which pane is showing when the window is too narrow to show them side by side. */
+enum class CompactPane { Notebooks, Pages, Editor }
+
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+class NotesViewModel(private val repository: NotesRepository) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(NotesUiState())
+    val uiState: StateFlow<NotesUiState> = _uiState.asStateFlow()
+
+    private val _selection = MutableStateFlow(SelectionState())
+    val selection: StateFlow<SelectionState> = _selection.asStateFlow()
+
+    /** Commands travel to the focused editor, the only thing that can act on them. */
+    private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
+    val commands: SharedFlow<FormatCommand> = _commands
+
+    private val _compactPane = MutableStateFlow(CompactPane.Editor)
+    val compactPane: StateFlow<CompactPane> = _compactPane.asStateFlow()
+
+    private val _railVisible = MutableStateFlow(true)
+    val railVisible: StateFlow<Boolean> = _railVisible.asStateFlow()
+
+    /**
+     * Live block content per outline. Held outside [uiState] on purpose — see [OutlineBox].
+     */
+    private val blocksByOutline = mutableMapOf<String, List<Block>>()
+
+    /** Signals an edit that autosave should pick up; the payload is irrelevant. */
+    private val edits = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
+
+    private val selectedSection = MutableStateFlow<String?>(null)
+
+    /** Page whose stored body failed to decode. Never written to. */
+    private var readOnlyPageId: String? = null
+
+    init {
+        viewModelScope.launch { repository.seedIfEmpty() }
+
+        repository.observeTree()
+            .onEach { tree ->
+                _uiState.value = _uiState.value.copy(tree = tree, loading = false)
+                // Land on something real on first launch rather than an empty editor.
+                if (selectedSection.value == null) {
+                    tree.firstOrNull()?.liveSections?.firstOrNull()?.let { selectSection(it.id) }
+                }
+            }
+            .launchIn(viewModelScope)
+
+        selectedSection
+            .filterNotNull()
+            .flatMapLatest { repository.observePages(it) }
+            .onEach { pages ->
+                _uiState.value = _uiState.value.copy(pages = pages)
+                val current = _uiState.value.selectedPageId
+                if (current == null || pages.none { it.id == current }) {
+                    pages.firstOrNull()?.let { openPage(it.id) }
+                        ?: run { _uiState.value = _uiState.value.copy(selectedPageId = null, title = "", outlines = emptyList()) }
+                }
+            }
+            .launchIn(viewModelScope)
+
+        // Debounced so a burst of keystrokes is one write, not one per character.
+        edits
+            .debounce(AUTOSAVE_DELAY_MS)
+            .onEach { persist() }
+            .launchIn(viewModelScope)
+    }
+
+    // --- navigation ----------------------------------------------------------------------------
+
+    fun selectSection(sectionId: String) {
+        if (selectedSection.value == sectionId) return
+        viewModelScope.launch { persist() }
+        selectedSection.value = sectionId
+        _uiState.value = _uiState.value.copy(selectedSectionId = sectionId, selectedPageId = null)
+        _compactPane.value = CompactPane.Pages
+    }
+
+    fun openPage(pageId: String) {
+        viewModelScope.launch {
+            persist()
+            val page = _uiState.value.pages.firstOrNull { it.id == pageId }
+
+            val doc = when (val load = repository.loadDoc(pageId)) {
+                is PageLoad.Loaded -> {
+                    readOnlyPageId = null
+                    load.doc
+                }
+                is PageLoad.Unreadable -> {
+                    // Show an empty canvas but refuse to write, so unreadable content is not
+                    // replaced by the blank page standing in for it.
+                    readOnlyPageId = pageId
+                    PageDoc.empty()
+                }
+            }
+
+            val loaded = doc.outlines.filterIsInstance<Outline.Text>()
+                .ifEmpty { listOf(Outline.Text.empty()) }
+
+            blocksByOutline.clear()
+            loaded.forEach { blocksByOutline[it.id] = it.blocks }
+
+            _uiState.value = _uiState.value.copy(
+                selectedPageId = pageId,
+                title = page?.title.orEmpty(),
+                createdAt = page?.createdAt ?: System.currentTimeMillis(),
+                outlines = loaded.map { OutlineBox(it.id, it.x, it.y, it.width, it.minHeight) },
+                pageRevision = _uiState.value.pageRevision + 1,
+                contentError = if (readOnlyPageId == pageId) {
+                    "This page could not be read, so editing is disabled to protect its contents."
+                } else {
+                    null
+                },
+            )
+            _selection.value = SelectionState()
+            _compactPane.value = CompactPane.Editor
+        }
+    }
+
+    fun showCompactPane(pane: CompactPane) {
+        _compactPane.value = pane
+    }
+
+    fun toggleRail() {
+        _railVisible.value = !_railVisible.value
+    }
+
+    fun toggleNotebookExpanded(notebookId: String, expanded: Boolean) {
+        viewModelScope.launch { repository.setNotebookExpanded(notebookId, expanded) }
+    }
+
+    // --- outlines ------------------------------------------------------------------------------
+
+    fun initialBlocksFor(outlineId: String): List<Block> =
+        blocksByOutline[outlineId] ?: listOf(Block.empty())
+
+    /**
+     * Creates a container where the user tapped empty canvas. This is what makes a page a canvas
+     * rather than a document: text goes where you put it.
+     */
+    fun createOutline(x: Float, y: Float): String {
+        val id = newId()
+        blocksByOutline[id] = listOf(Block.empty())
+        _uiState.value = _uiState.value.copy(
+            outlines = _uiState.value.outlines + OutlineBox(
+                id = id,
+                x = x.coerceAtLeast(0f),
+                y = y.coerceAtLeast(0f),
+                width = Outline.Text.DEFAULT_WIDTH,
+            ),
+        )
+        return id
+    }
+
+    fun moveOutline(outlineId: String, x: Float, y: Float) {
+        _uiState.value = _uiState.value.copy(
+            outlines = _uiState.value.outlines.map {
+                if (it.id == outlineId) it.copy(x = x.coerceAtLeast(0f), y = y.coerceAtLeast(0f)) else it
+            },
+        )
+        edits.tryEmit(Unit)
+    }
+
+    fun resizeOutline(outlineId: String, width: Float) {
+        _uiState.value = _uiState.value.copy(
+            outlines = _uiState.value.outlines.map {
+                if (it.id == outlineId) it.copy(width = width.coerceIn(MIN_OUTLINE_WIDTH, MAX_OUTLINE_WIDTH)) else it
+            },
+        )
+        edits.tryEmit(Unit)
+    }
+
+    fun setOutlineMinHeight(outlineId: String, minHeight: Float) {
+        _uiState.value = _uiState.value.copy(
+            outlines = _uiState.value.outlines.map {
+                if (it.id == outlineId) it.copy(minHeight = minHeight.coerceIn(0f, MAX_OUTLINE_HEIGHT)) else it
+            },
+        )
+        edits.tryEmit(Unit)
+    }
+
+    /**
+     * Discards a container the user tapped into but never typed in, so clicking around the page
+     * does not litter it with empty boxes. The last remaining container always survives.
+     */
+    fun onOutlineBlurred(outlineId: String) {
+        // No recorded content means "unknown", not "empty" — an absent entry must never be
+        // grounds for deleting a container, since `emptyList().all { }` is vacuously true.
+        val blocks = blocksByOutline[outlineId] ?: return
+        if (blocks.isEmpty()) return
+        val isEmpty = blocks.all { it.text.isBlank() }
+        if (!isEmpty || _uiState.value.outlines.size <= 1) return
+
+        blocksByOutline.remove(outlineId)
+        _uiState.value = _uiState.value.copy(
+            outlines = _uiState.value.outlines.filterNot { it.id == outlineId },
+        )
+        edits.tryEmit(Unit)
+    }
+
+    fun onBlocksChanged(outlineId: String, blocks: List<Block>) {
+        blocksByOutline[outlineId] = blocks
+        edits.tryEmit(Unit)
+    }
+
+    fun onSelectionChanged(state: SelectionState) {
+        _selection.value = state
+    }
+
+    fun send(command: FormatCommand) {
+        _commands.tryEmit(command)
+    }
+
+    // --- pages, sections, notebooks -------------------------------------------------------------
+
+    fun createNotebook(name: String) {
+        viewModelScope.launch {
+            val id = repository.createNotebook(name.ifBlank { "New Notebook" })
+            val sectionId = repository.createSection(id, "New Section")
+            selectSection(sectionId)
+        }
+    }
+
+    fun createSection(notebookId: String, name: String) {
+        viewModelScope.launch {
+            val id = repository.createSection(notebookId, name.ifBlank { "New Section" })
+            selectSection(id)
+            addPage()
+        }
+    }
+
+    fun addPage() {
+        val sectionId = selectedSection.value ?: return
+        viewModelScope.launch {
+            persist()
+            val id = repository.createPage(sectionId)
+            openPage(id)
+        }
+    }
+
+    fun renameSection(sectionId: String, name: String) {
+        viewModelScope.launch { repository.renameSection(sectionId, name) }
+    }
+
+    fun renameNotebook(notebookId: String, name: String) {
+        viewModelScope.launch { repository.renameNotebook(notebookId, name) }
+    }
+
+    fun deleteSection(sectionId: String) {
+        viewModelScope.launch {
+            repository.deleteSection(sectionId)
+            if (selectedSection.value == sectionId) {
+                selectedSection.value = null
+                _uiState.value = _uiState.value.copy(
+                    selectedSectionId = null,
+                    selectedPageId = null,
+                    pages = emptyList(),
+                    outlines = emptyList(),
+                )
+                _uiState.value.tree.firstOrNull()?.liveSections?.firstOrNull()?.let { selectSection(it.id) }
+            }
+        }
+    }
+
+    fun deletePage(pageId: String) {
+        viewModelScope.launch { repository.deletePage(pageId) }
+    }
+
+    fun setTitle(title: String) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        _uiState.value = _uiState.value.copy(title = title)
+        viewModelScope.launch { repository.renamePage(pageId, title) }
+    }
+
+    /** Writes the current document, so switching pages cannot lose the last keystrokes. */
+    private suspend fun persist() {
+        val state = _uiState.value
+        val pageId = state.selectedPageId ?: return
+        if (state.outlines.isEmpty()) return
+        // The page's stored content could not be read, so anything shown is a placeholder rather
+        // than the user's work. Writing it would destroy the real content.
+        if (readOnlyPageId == pageId) return
+
+        val outlines = mutableListOf<Outline.Text>()
+        for (box in state.outlines) {
+            // A missing entry means "content not known", never "content is empty". Writing an
+            // empty outline for one would silently blank it, so an incomplete picture skips the
+            // write entirely and waits for the next edit.
+            val blocks = blocksByOutline[box.id] ?: return
+            // Containers the user tapped into but never typed in are not written; they exist only
+            // as a caret position until there is something to hold.
+            if (blocks.all { it.text.isBlank() }) continue
+            outlines += Outline.Text(
+                id = box.id,
+                x = box.x,
+                y = box.y,
+                width = box.width,
+                minHeight = box.minHeight,
+                blocks = blocks,
+            )
+        }
+        repository.saveDoc(pageId, PageDoc(outlines = outlines))
+    }
+
+    companion object {
+        private const val AUTOSAVE_DELAY_MS = 400L
+        const val MIN_OUTLINE_WIDTH = 120f
+        const val MAX_OUTLINE_WIDTH = 2000f
+        const val MAX_OUTLINE_HEIGHT = 4000f
+
+        fun factory(repository: NotesRepository) = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                NotesViewModel(repository) as T
+        }
+    }
+}

@@ -1,0 +1,516 @@
+package st.unamedtba.ui.editor
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.filled.FormatAlignRight
+import androidx.compose.material.icons.automirrored.filled.FormatIndentDecrease
+import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentCut
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.FormatAlignCenter
+import androidx.compose.material.icons.filled.FormatBold
+import androidx.compose.material.icons.filled.FormatClear
+import androidx.compose.material.icons.filled.FormatColorFill
+import androidx.compose.material.icons.filled.FormatColorText
+import androidx.compose.material.icons.filled.FormatItalic
+import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.FormatStrikethrough
+import androidx.compose.material.icons.filled.FormatUnderlined
+import androidx.compose.material.icons.filled.Subscript
+import androidx.compose.material.icons.filled.Superscript
+import androidx.compose.material.icons.filled.Title
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import st.unamedtba.model.Align
+import st.unamedtba.model.BlockType
+import st.unamedtba.model.Mark
+import st.unamedtba.richtext.ClipboardAction
+import st.unamedtba.richtext.FormatCommand
+import st.unamedtba.richtext.SelectionState
+
+/**
+ * Ribbon tabs from the reference UI. Only Home is implemented; the rest are shown because the
+ * shell is part of the design, and each states plainly that it is not built rather than
+ * pretending to work.
+ */
+enum class RibbonTab(val label: String) {
+    File("File"),
+    Home("Home"),
+    Insert("Insert"),
+    Draw("Draw"),
+    History("History"),
+    Review("Review"),
+    View("View"),
+    Help("Help"),
+}
+
+private val TEXT_COLORS = listOf(
+    0xFFFFFFFF, 0xFFE6E6E6, 0xFF9A9A9A, 0xFF000000,
+    0xFFE53935, 0xFFFB8C00, 0xFFFDD835, 0xFF43A047,
+    0xFF1E88E5, 0xFF8E24AA, 0xFF00ACC1, 0xFFD81B60,
+).map { it.toInt() }
+
+private val HIGHLIGHT_COLORS = listOf(
+    0x66FFEB3B, 0x6676FF03, 0x6640C4FF, 0x66FF4081,
+    0x66FF9100, 0x66B388FF, 0x66FFFFFF, 0x00000000,
+).map { it.toInt() }
+
+private val FONT_SIZES = listOf(8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72)
+
+private val FONT_FAMILIES = listOf("sans-serif", "serif", "monospace", "sans-serif-condensed", "cursive")
+
+@Composable
+fun Ribbon(
+    selection: SelectionState,
+    activeTab: RibbonTab,
+    onTabChange: (RibbonTab) -> Unit,
+    onCommand: (FormatCommand) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface),
+    ) {
+        TabStrip(activeTab, onTabChange)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant),
+        )
+        when (activeTab) {
+            RibbonTab.Home -> HomeTab(selection, onCommand)
+            else -> PlaceholderTab(activeTab)
+        }
+    }
+}
+
+@Composable
+private fun TabStrip(activeTab: RibbonTab, onTabChange: (RibbonTab) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RibbonTab.entries.forEach { tab ->
+            val active = tab == activeTab
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 2.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable { onTabChange(tab) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = tab.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (active) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaceholderTab(tab: RibbonTab) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "The ${tab.label} tab is not built yet.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun HomeTab(selection: SelectionState, onCommand: (FormatCommand) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RibbonButton(Icons.Default.ContentPaste, "Paste") {
+            onCommand(FormatCommand.Clipboard(ClipboardAction.Paste))
+        }
+        RibbonButton(Icons.Default.ContentCut, "Cut") {
+            onCommand(FormatCommand.Clipboard(ClipboardAction.Cut))
+        }
+        RibbonButton(Icons.Default.ContentCopy, "Copy") {
+            onCommand(FormatCommand.Clipboard(ClipboardAction.Copy))
+        }
+
+        Divider()
+
+        FontFamilyPicker(selection.fontFamily) { onCommand(FormatCommand.SetMark(Mark.FontFamily(it))) }
+        FontSizePicker(selection.fontSize) { onCommand(FormatCommand.SetMark(Mark.FontSize(it))) }
+
+        Divider()
+
+        RibbonButton(Icons.Default.FormatBold, "Bold", selection.has(Mark.Bold)) {
+            onCommand(FormatCommand.ToggleMark(Mark.Bold))
+        }
+        RibbonButton(Icons.Default.FormatItalic, "Italic", selection.has(Mark.Italic)) {
+            onCommand(FormatCommand.ToggleMark(Mark.Italic))
+        }
+        RibbonButton(Icons.Default.FormatUnderlined, "Underline", selection.has(Mark.Underline)) {
+            onCommand(FormatCommand.ToggleMark(Mark.Underline))
+        }
+        RibbonButton(Icons.Default.FormatStrikethrough, "Strikethrough", selection.has(Mark.Strikethrough)) {
+            onCommand(FormatCommand.ToggleMark(Mark.Strikethrough))
+        }
+
+        ColorPicker(
+            icon = Icons.Default.FormatColorText,
+            label = "Font colour",
+            colors = TEXT_COLORS,
+            current = selection.textColor,
+            onPick = { onCommand(FormatCommand.SetMark(Mark.TextColor(it))) },
+            onClear = { onCommand(FormatCommand.ClearMark(Mark.TextColor(0))) },
+        )
+        ColorPicker(
+            icon = Icons.Default.FormatColorFill,
+            label = "Highlight",
+            colors = HIGHLIGHT_COLORS,
+            current = selection.highlight,
+            onPick = { onCommand(FormatCommand.SetMark(Mark.Highlight(it))) },
+            onClear = { onCommand(FormatCommand.ClearMark(Mark.Highlight(0))) },
+        )
+
+        RibbonButton(Icons.Default.Subscript, "Subscript", selection.has(Mark.Subscript)) {
+            onCommand(FormatCommand.ToggleMark(Mark.Subscript))
+        }
+        RibbonButton(Icons.Default.Superscript, "Superscript", selection.has(Mark.Superscript)) {
+            onCommand(FormatCommand.ToggleMark(Mark.Superscript))
+        }
+        RibbonButton(Icons.Default.FormatClear, "Clear formatting") {
+            onCommand(FormatCommand.ClearFormatting)
+        }
+
+        Divider()
+
+        RibbonButton(
+            Icons.AutoMirrored.Filled.FormatListBulleted,
+            "Bulleted list",
+            selection.blockType == BlockType.Bullet,
+        ) { onCommand(FormatCommand.SetBlockType(BlockType.Bullet)) }
+        RibbonButton(
+            Icons.Default.FormatListNumbered,
+            "Numbered list",
+            selection.blockType == BlockType.Numbered,
+        ) { onCommand(FormatCommand.SetBlockType(BlockType.Numbered)) }
+        RibbonButton(
+            Icons.Default.CheckBox,
+            "To-do",
+            selection.blockType == BlockType.Todo,
+        ) { onCommand(FormatCommand.SetBlockType(BlockType.Todo)) }
+
+        RibbonButton(Icons.AutoMirrored.Filled.FormatIndentDecrease, "Decrease indent") {
+            onCommand(FormatCommand.Indent(-1))
+        }
+        RibbonButton(Icons.AutoMirrored.Filled.FormatIndentIncrease, "Increase indent") {
+            onCommand(FormatCommand.Indent(1))
+        }
+
+        Divider()
+
+        RibbonButton(
+            Icons.AutoMirrored.Filled.FormatAlignLeft,
+            "Align left",
+            selection.align == Align.Start,
+        ) { onCommand(FormatCommand.SetAlign(Align.Start)) }
+        RibbonButton(
+            Icons.Default.FormatAlignCenter,
+            "Align centre",
+            selection.align == Align.Center,
+        ) { onCommand(FormatCommand.SetAlign(Align.Center)) }
+        RibbonButton(
+            Icons.AutoMirrored.Filled.FormatAlignRight,
+            "Align right",
+            selection.align == Align.End,
+        ) { onCommand(FormatCommand.SetAlign(Align.End)) }
+
+        Divider()
+
+        StylesPicker(selection.blockType) { onCommand(FormatCommand.SetBlockType(it)) }
+    }
+}
+
+@Composable
+private fun RibbonButton(
+    icon: ImageVector,
+    label: String,
+    active: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val background = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 1.dp)
+            .size(32.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(background)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (active) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+@Composable
+private fun Divider() {
+    Box(
+        Modifier
+            .padding(horizontal = 6.dp)
+            .width(1.dp)
+            .height(22.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant),
+    )
+}
+
+@Composable
+private fun FontFamilyPicker(current: String?, onPick: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ComboBox(text = current ?: "sans-serif", width = 132.dp) { open = true }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            FONT_FAMILIES.forEach { family ->
+                DropdownMenuItem(
+                    text = { Text(family) },
+                    onClick = {
+                        open = false
+                        onPick(family)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FontSizePicker(current: Int?, onPick: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ComboBox(text = (current ?: 15).toString(), width = 58.dp) { open = true }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            FONT_SIZES.forEach { size ->
+                DropdownMenuItem(
+                    text = { Text("$size") },
+                    onClick = {
+                        open = false
+                        onPick(size)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ComboBox(text: String, width: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 2.dp)
+            .width(width)
+            .height(28.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
+            .padding(start = 8.dp, end = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+        Icon(
+            imageVector = Icons.Default.ArrowDropDown,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+@Composable
+private fun ColorPicker(
+    icon: ImageVector,
+    label: String,
+    colors: List<Int>,
+    current: Int?,
+    onPick: (Int) -> Unit,
+    onClear: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 1.dp)
+                .size(width = 32.dp, height = 32.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .clickable { open = true },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(17.dp),
+            )
+            Spacer(Modifier.height(2.dp))
+            Box(
+                Modifier
+                    .width(16.dp)
+                    .height(3.dp)
+                    .background(current?.let { Color(it) } ?: MaterialTheme.colorScheme.onSurfaceVariant),
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            Column(Modifier.padding(8.dp)) {
+                colors.chunked(4).forEach { row ->
+                    Row {
+                        row.forEach { argb ->
+                            Box(
+                                modifier = Modifier
+                                    .padding(3.dp)
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(Color(argb))
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(3.dp))
+                                    .clickable {
+                                        open = false
+                                        onPick(argb)
+                                    },
+                            )
+                        }
+                    }
+                }
+                DropdownMenuItem(
+                    text = { Text("None") },
+                    onClick = {
+                        open = false
+                        onClear()
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StylesPicker(current: BlockType, onPick: (BlockType) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val styles = listOf(
+        BlockType.Paragraph to "Normal",
+        BlockType.Heading1 to "Heading 1",
+        BlockType.Heading2 to "Heading 2",
+        BlockType.Heading3 to "Heading 3",
+        BlockType.Quote to "Quote",
+        BlockType.Code to "Code",
+    )
+    Box {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 2.dp)
+                .height(30.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .clickable { open = true }
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (current == BlockType.Quote) Icons.Default.FormatQuote else Icons.Default.Title,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(17.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = styles.firstOrNull { it.first == current }?.second ?: "Styles",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            styles.forEach { (type, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        open = false
+                        onPick(type)
+                    },
+                )
+            }
+        }
+    }
+}
