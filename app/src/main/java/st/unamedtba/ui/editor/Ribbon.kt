@@ -21,25 +21,16 @@ import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
 import androidx.compose.material.icons.automirrored.filled.FormatAlignRight
 import androidx.compose.material.icons.automirrored.filled.FormatIndentDecrease
 import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
-import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatClear
-import androidx.compose.material.icons.filled.FormatColorFill
-import androidx.compose.material.icons.filled.FormatColorText
 import androidx.compose.material.icons.filled.FormatItalic
-import androidx.compose.material.icons.filled.FormatListNumbered
-import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.FormatStrikethrough
 import androidx.compose.material.icons.filled.FormatUnderlined
-import androidx.compose.material.icons.filled.Subscript
-import androidx.compose.material.icons.filled.Superscript
-import androidx.compose.material.icons.filled.Title
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -64,6 +55,10 @@ import st.unamedtba.richtext.ClipboardAction
 import st.unamedtba.richtext.FontRegistry
 import st.unamedtba.richtext.FormatCommand
 import st.unamedtba.richtext.SelectionState
+import st.unamedtba.ui.icons.AppIcons
+import st.unamedtba.ui.icons.LocalRibbonIcons
+import st.unamedtba.ui.icons.fontColorGlyph
+import st.unamedtba.ui.icons.highlightGlyph
 
 /**
  * Ribbon tabs from the reference UI. Only Home is implemented; the rest are shown because the
@@ -213,7 +208,7 @@ private fun HomeTab(selection: SelectionState, onCommand: (FormatCommand) -> Uni
         }
 
         ColorPicker(
-            icon = Icons.Default.FormatColorText,
+            glyph = ::fontColorGlyph,
             label = "Font colour",
             colors = TEXT_COLORS,
             current = selection.textColor,
@@ -221,7 +216,7 @@ private fun HomeTab(selection: SelectionState, onCommand: (FormatCommand) -> Uni
             onClear = { onCommand(FormatCommand.ClearMark(Mark.TextColor(0))) },
         )
         ColorPicker(
-            icon = Icons.Default.FormatColorFill,
+            glyph = ::highlightGlyph,
             label = "Highlight",
             colors = HIGHLIGHT_COLORS,
             current = selection.highlight,
@@ -229,10 +224,10 @@ private fun HomeTab(selection: SelectionState, onCommand: (FormatCommand) -> Uni
             onClear = { onCommand(FormatCommand.ClearMark(Mark.Highlight(0))) },
         )
 
-        RibbonButton(Icons.Default.Subscript, "Subscript", selection.has(Mark.Subscript)) {
+        TwoToneRibbonButton({ it.subscript }, "Subscript", selection.has(Mark.Subscript)) {
             onCommand(FormatCommand.ToggleMark(Mark.Subscript))
         }
-        RibbonButton(Icons.Default.Superscript, "Superscript", selection.has(Mark.Superscript)) {
+        TwoToneRibbonButton({ it.superscript }, "Superscript", selection.has(Mark.Superscript)) {
             onCommand(FormatCommand.ToggleMark(Mark.Superscript))
         }
         RibbonButton(Icons.Default.FormatClear, "Clear formatting") {
@@ -241,18 +236,18 @@ private fun HomeTab(selection: SelectionState, onCommand: (FormatCommand) -> Uni
 
         Divider()
 
-        RibbonButton(
-            Icons.AutoMirrored.Filled.FormatListBulleted,
+        TwoToneRibbonButton(
+            { it.bulletList },
             "Bulleted list",
             selection.blockType == BlockType.Bullet,
         ) { onCommand(FormatCommand.SetBlockType(BlockType.Bullet)) }
-        RibbonButton(
-            Icons.Default.FormatListNumbered,
+        TwoToneRibbonButton(
+            { it.numberedList },
             "Numbered list",
             selection.blockType == BlockType.Numbered,
         ) { onCommand(FormatCommand.SetBlockType(BlockType.Numbered)) }
-        RibbonButton(
-            Icons.Default.CheckBox,
+        TwoToneRibbonButton(
+            { it.todoList },
             "To-do",
             selection.blockType == BlockType.Todo,
         ) { onCommand(FormatCommand.SetBlockType(BlockType.Todo)) }
@@ -295,16 +290,7 @@ private fun RibbonButton(
     active: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val background = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-    Box(
-        modifier = Modifier
-            .padding(horizontal = 1.dp)
-            .size(32.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(background)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
+    RibbonButtonSlot(active, onClick) {
         Icon(
             imageVector = icon,
             contentDescription = label,
@@ -315,6 +301,53 @@ private fun RibbonButton(
             },
             modifier = Modifier.size(18.dp),
         )
+    }
+}
+
+/**
+ * A ribbon button whose icon carries its own colours.
+ *
+ * The glyph is picked from a pre-built set rather than passed in directly, because a two-tone
+ * icon cannot be recoloured by `tint` — the pressed state needs a different neutral, which means a
+ * different vector. `tint` is [Color.Unspecified] here so Compose applies no colour filter at all;
+ * anything else would flatten both paths to one colour and undo the point of the icon.
+ */
+@Composable
+private fun TwoToneRibbonButton(
+    glyph: (AppIcons) -> ImageVector,
+    label: String,
+    active: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val icons = LocalRibbonIcons.current
+    RibbonButtonSlot(active, onClick) {
+        Icon(
+            imageVector = glyph(if (active) icons.active else icons.idle),
+            contentDescription = label,
+            tint = Color.Unspecified,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/** The pressed-state chrome shared by both button flavours. */
+@Composable
+private fun RibbonButtonSlot(
+    active: Boolean,
+    onClick: () -> Unit,
+    icon: @Composable () -> Unit,
+) {
+    val background = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 1.dp)
+            .size(32.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(background)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        icon()
     }
 }
 
@@ -399,9 +432,17 @@ private fun ComboBox(text: String, width: androidx.compose.ui.unit.Dp, onClick: 
     }
 }
 
+/**
+ * Font colour and highlight, whose bar shows the colour that is currently applied.
+ *
+ * That bar is live selection state, so unlike the accented glyphs it cannot be pre-built — the
+ * [glyph] is a builder taking the swatch, rebuilt only when the selected colour actually changes.
+ * It also replaces a bar drawn under the icon: Material's `FormatColorText` and `FormatColorFill`
+ * already include one in the glyph, so the old layout showed two.
+ */
 @Composable
 private fun ColorPicker(
-    icon: ImageVector,
+    glyph: (neutral: Color, swatch: Color) -> ImageVector,
     label: String,
     colors: List<Int>,
     current: Int?,
@@ -409,28 +450,18 @@ private fun ColorPicker(
     onClear: () -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+    val neutral = MaterialTheme.colorScheme.onSurfaceVariant
+    // Highlights are stored semi-transparent so they read over text. The bar has nothing behind
+    // it, so it is drawn opaque or the lighter shades would be all but invisible.
+    val swatch = current?.takeIf { it != 0 }?.let { Color(it).copy(alpha = 1f) } ?: neutral
+    val icon = remember(neutral, swatch) { glyph(neutral, swatch) }
     Box {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 1.dp)
-                .size(width = 32.dp, height = 32.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .clickable { open = true },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
+        RibbonButtonSlot(active = false, onClick = { open = true }) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(17.dp),
-            )
-            Spacer(Modifier.height(2.dp))
-            Box(
-                Modifier
-                    .width(16.dp)
-                    .height(3.dp)
-                    .background(current?.let { Color(it) } ?: MaterialTheme.colorScheme.onSurfaceVariant),
+                tint = Color.Unspecified,
+                modifier = Modifier.size(20.dp),
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -487,10 +518,10 @@ private fun StylesPicker(current: BlockType, onPick: (BlockType) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = if (current == BlockType.Quote) Icons.Default.FormatQuote else Icons.Default.Title,
+                imageVector = LocalRibbonIcons.current.idle.styles,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(17.dp),
+                tint = Color.Unspecified,
+                modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(6.dp))
             Text(

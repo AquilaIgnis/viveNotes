@@ -7,11 +7,14 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import st.unamedtba.ui.icons.LocalRibbonIcons
+import st.unamedtba.ui.icons.rememberRibbonIcons
 
 /** Chrome greys, matching the reference screenshots' dark shell. */
 private val DarkColors = darkColorScheme(
@@ -53,6 +56,42 @@ private val LightColors = lightColorScheme(
 )
 
 /**
+ * Accents for the two-tone icons, sampled from the ribbon in `docs/references/`.
+ *
+ * These are deliberately *not* part of the [androidx.compose.material3.ColorScheme]. An accent
+ * here marks what a glyph means — blue for emphasis, green for create, gold for tag — so it
+ * belongs to the icon, not to the theme. Tying them to `primary` would turn the green "+" purple
+ * the moment the app theme changed, which is not what the reference does: its ribbon accents stay
+ * put while the brand colour appears only on primary actions like Add Page.
+ *
+ * They are still theme-*aware*, because a colour picked to read against the dark ribbon does not
+ * survive a white surface — the sampled `#3B9ADC` manages only about 2.5:1 on the light theme's
+ * background.
+ */
+@Immutable
+data class IconAccents(
+    val blue: Color,
+    val gold: Color,
+    val green: Color,
+)
+
+/** Sampled directly from `generalUI.png` and `viewsTab.png`. */
+private val DarkAccents = IconAccents(
+    blue = Color(0xFF3B9ADC),   // bullets, numerals, subscript digit, Styles brush
+    gold = Color(0xFFE6A545),   // Tag star — unused until the Tag button exists
+    green = Color(0xFF73DD83),  // New Window "+" — unused until the View tab is built
+)
+
+/** The same hues darkened to hold contrast against light surfaces. */
+private val LightAccents = IconAccents(
+    blue = Color(0xFF1B6FA8),
+    gold = Color(0xFF8A5B0F),
+    green = Color(0xFF1E7A32),
+)
+
+val LocalIconAccents = staticCompositionLocalOf { DarkAccents }
+
+/**
  * Colours the note canvas rather than the app chrome. The View tab exposes these separately from
  * the app theme, because OneNote lets a page stay light while the shell is dark.
  */
@@ -88,6 +127,8 @@ fun UnamedTbaTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
+    val colors = if (darkTheme) DarkColors else LightColors
+    val accents = if (darkTheme) DarkAccents else LightAccents
     val canvas = if (darkTheme) {
         CanvasColors(
             background = Color(0xFF1F1F1F),
@@ -104,9 +145,21 @@ fun UnamedTbaTheme(
         )
     }
 
-    CompositionLocalProvider(LocalCanvasColors provides canvas) {
+    // Built here rather than at the call sites so the vectors are constructed once per theme
+    // instead of once per recomposition of a ribbon that redraws on every cursor move.
+    val ribbonIcons = rememberRibbonIcons(
+        idleNeutral = colors.onSurfaceVariant,
+        activeNeutral = colors.onPrimaryContainer,
+        accent = accents.blue,
+    )
+
+    CompositionLocalProvider(
+        LocalCanvasColors provides canvas,
+        LocalIconAccents provides accents,
+        LocalRibbonIcons provides ribbonIcons,
+    ) {
         MaterialTheme(
-            colorScheme = if (darkTheme) DarkColors else LightColors,
+            colorScheme = colors,
             typography = AppTypography,
             content = content,
         )
