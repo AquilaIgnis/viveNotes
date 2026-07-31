@@ -61,6 +61,7 @@ import st.unamedtba.model.Align
 import st.unamedtba.model.BlockType
 import st.unamedtba.model.Mark
 import st.unamedtba.richtext.ClipboardAction
+import st.unamedtba.richtext.FontRegistry
 import st.unamedtba.richtext.FormatCommand
 import st.unamedtba.richtext.SelectionState
 
@@ -93,7 +94,7 @@ private val HIGHLIGHT_COLORS = listOf(
 
 private val FONT_SIZES = listOf(8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72)
 
-private val FONT_FAMILIES = listOf("sans-serif", "serif", "monospace", "sans-serif-condensed", "cursive")
+private val FONT_FAMILIES = FontRegistry.families
 
 @Composable
 fun Ribbon(
@@ -332,14 +333,17 @@ private fun Divider() {
 private fun FontFamilyPicker(current: String?, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        ComboBox(text = current ?: "sans-serif", width = 132.dp) { open = true }
+        ComboBox(
+            text = FontRegistry.displayName(current ?: "sans-serif"),
+            width = 148.dp,
+        ) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             FONT_FAMILIES.forEach { family ->
                 DropdownMenuItem(
-                    text = { Text(family) },
+                    text = { Text(family.displayName) },
                     onClick = {
                         open = false
-                        onPick(family)
+                        onPick(family.id)
                     },
                 )
             }

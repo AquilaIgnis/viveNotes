@@ -1,6 +1,7 @@
 package st.unamedtba.richtext
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -79,6 +80,38 @@ class SpannableCodecTest {
             val marks = SpannableCodec.parse(rendered).first().runs.flatMap { it.marks }
             assertTrue("$mark was not removed, left $marks", mark !in marks)
         }
+    }
+
+    @Test
+    fun preservesBundledFontFamiliesAndKeepsBoldAlongside() {
+        // The font id is what lands in the stored document, so it has to survive the round trip
+        // intact — and applying a font must not wipe out bold applied over the same text.
+        FontRegistry.init(InstrumentationRegistry.getInstrumentation().targetContext)
+
+        FontRegistry.families.forEach { family ->
+            val blocks = listOf(
+                Block(
+                    id = "b",
+                    runs = listOf(Run("styled", setOf(Mark.FontFamily(family.id), Mark.Bold))),
+                ),
+            )
+
+            val marks = roundTrip(blocks).first().runs.first().marks
+
+            assertTrue("${family.id} was lost, got $marks", Mark.FontFamily(family.id) in marks)
+            assertTrue("bold was lost alongside ${family.id}, got $marks", Mark.Bold in marks)
+        }
+    }
+
+    @Test
+    fun keepsAnUnknownFontFamilyRatherThanRewritingIt() {
+        // A document written on a build that bundles a font this one does not must keep its
+        // family name, so opening it elsewhere does not silently restyle the text.
+        val blocks = listOf(Block(id = "b", runs = listOf(Run("x", setOf(Mark.FontFamily("some-unbundled-font"))))))
+
+        val marks = roundTrip(blocks).first().runs.first().marks
+
+        assertTrue("unknown family was rewritten, got $marks", Mark.FontFamily("some-unbundled-font") in marks)
     }
 
     @Test

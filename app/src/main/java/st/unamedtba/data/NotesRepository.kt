@@ -9,10 +9,10 @@ import st.unamedtba.data.db.PageEntity
 import st.unamedtba.data.db.SectionEntity
 import st.unamedtba.model.Block
 import st.unamedtba.model.BlockType
+import st.unamedtba.model.DocumentCodecs
 import st.unamedtba.model.Outline
 import st.unamedtba.model.PageDoc
-import st.unamedtba.model.decodePageDoc
-import st.unamedtba.model.encode
+import st.unamedtba.model.TextDocumentCodec
 import st.unamedtba.model.newId
 import st.unamedtba.model.plainText
 
@@ -38,7 +38,15 @@ sealed interface PageLoad {
     data class Unreadable(val rawJson: String, val cause: Throwable) : PageLoad
 }
 
-class NotesRepository(private val db: NotesDatabase) {
+class NotesRepository(
+    private val db: NotesDatabase,
+    /**
+     * Format for newly written documents. Text rather than binary because the local database
+     * being readable with `sqlite3` is worth more than the bytes saved; the sync protocol is free
+     * to use a compact binary codec independently.
+     */
+    private val codec: TextDocumentCodec = DocumentCodecs.default,
+) {
 
     private val notebooks = db.notebookDao()
     private val sections = db.sectionDao()
@@ -123,7 +131,9 @@ class NotesRepository(private val db: NotesDatabase) {
                 updatedAt = now,
             ),
         )
-        contents.upsert(PageContentEntity(id, PageDoc.empty().encode(), now))
+        contents.upsert(
+            PageContentEntity(id, codec.encodeToString(PageDoc.empty()), now, codec.id),
+        )
         return id
     }
 
@@ -142,7 +152,11 @@ class NotesRepository(private val db: NotesDatabase) {
      */
     suspend fun loadDoc(pageId: String): PageLoad {
         val row = contents.byId(pageId) ?: return PageLoad.Loaded(PageDoc.empty())
-        return runCatching { decodePageDoc(row.docJson) }.fold(
+        // Decode with the codec that wrote the row, not the current default, so a format change
+        // does not orphan everything written before it.
+        val rowCodec = DocumentCodecs.byId(row.format)
+            ?: return PageLoad.Unreadable(row.docJson, IllegalStateException("unknown format '${row.format}'"))
+        return runCatching { rowCodec.decode(row.docJson.encodeToByteArray()) }.fold(
             onSuccess = { PageLoad.Loaded(it) },
             onFailure = { PageLoad.Unreadable(row.docJson, it) },
         )
@@ -150,7 +164,7 @@ class NotesRepository(private val db: NotesDatabase) {
 
     suspend fun saveDoc(pageId: String, doc: PageDoc) {
         val now = System.currentTimeMillis()
-        contents.upsert(PageContentEntity(pageId, doc.encode(), now))
+        contents.upsert(PageContentEntity(pageId, codec.encodeToString(doc), now, codec.id))
         pages.updatePreview(pageId, doc.plainText().lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(140), now)
     }
 

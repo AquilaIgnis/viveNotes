@@ -76,6 +76,30 @@ class NotesRepositoryTest {
     }
 
     @Test
+    fun storedRowsRecordTheCodecThatWroteThem() = runBlocking {
+        val pageId = newPage()
+        repository.saveDoc(pageId, PageDoc(outlines = listOf(Outline.Text(id = "o", blocks = listOf(Block.of("x"))))))
+
+        assertEquals("json/1", db.pageContentDao().byId(pageId)!!.format)
+    }
+
+    /**
+     * A row written by a format this build does not know must be reported, not guessed at. Without
+     * this, switching the sync protocol to MessagePack would silently corrupt older rows.
+     */
+    @Test
+    fun aRowInAnUnknownFormatIsReportedRatherThanDecodedAnyway() = runBlocking {
+        val pageId = newPage()
+        db.pageContentDao().upsert(
+            PageContentEntity(pageId, """{"outlines":[]}""", 0L, format = "msgpack/1"),
+        )
+
+        val load = repository.loadDoc(pageId)
+
+        assertTrue("an unknown format decoded anyway: $load", load is PageLoad.Unreadable)
+    }
+
+    @Test
     fun aFreshPageLoadsAsAnEmptyDocument() = runBlocking {
         val load = repository.loadDoc(newPage())
 

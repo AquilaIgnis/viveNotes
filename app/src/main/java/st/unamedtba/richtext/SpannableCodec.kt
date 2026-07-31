@@ -178,7 +178,16 @@ object SpannableCodec {
             is Mark.TextColor -> text.setSpan(ForegroundColorSpan(mark.argb), start, end, flags)
             is Mark.Highlight -> text.setSpan(BackgroundColorSpan(mark.argb), start, end, flags)
             is Mark.FontSize -> text.setSpan(AbsoluteSizeSpan(mark.sp, true), start, end, flags)
-            is Mark.FontFamily -> text.setSpan(TypefaceSpan(mark.name), start, end, flags)
+            is Mark.FontFamily -> {
+                // Falls back to the platform family name when the font is not one this build
+                // bundles, so an unknown family degrades to a default rather than failing.
+                val typeface = FontRegistry.typeface(mark.name)
+                if (typeface != null) {
+                    text.setSpan(FontFamilySpan(mark.name, typeface), start, end, flags)
+                } else {
+                    text.setSpan(TypefaceSpan(mark.name), start, end, flags)
+                }
+            }
             is Mark.Link -> text.setSpan(URLSpan(mark.href), start, end, flags)
         }
     }
@@ -230,6 +239,7 @@ object SpannableCodec {
         is BackgroundColorSpan -> Mark.Highlight(span.backgroundColor)
         is AbsoluteSizeSpan -> Mark.FontSize(span.size)
         is URLSpan -> Mark.Link(span.url)
+        is FontFamilySpan -> Mark.FontFamily(span.familyId)
         is TypefaceSpan -> span.family?.let { Mark.FontFamily(it) }
         else -> null
     }
@@ -265,6 +275,8 @@ object SpannableCodec {
         is BackgroundColorSpan -> BackgroundColorSpan(span.backgroundColor)
         is AbsoluteSizeSpan -> AbsoluteSizeSpan(span.size, span.dip)
         is URLSpan -> URLSpan(span.url)
+        is FontFamilySpan -> FontRegistry.typeface(span.familyId)
+            ?.let { FontFamilySpan(span.familyId, it) } ?: span
         is TypefaceSpan -> TypefaceSpan(span.family)
         else -> span
     }

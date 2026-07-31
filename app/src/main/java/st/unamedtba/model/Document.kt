@@ -169,15 +169,23 @@ fun newId(): String {
     return java.util.UUID(hi, random.leastSignificantBits).toString()
 }
 
+/**
+ * JSON configuration for [JsonDocumentCodec].
+ *
+ * `classDiscriminator` is JSON-specific; a binary format tags sealed types its own way. The
+ * `@SerialName`s on [Outline] and [Mark] are format-independent and carry over unchanged.
+ * `ignoreUnknownKeys` is what lets an older build open a document written by a newer one.
+ */
 val DocumentJson: Json = Json {
     encodeDefaults = false
     ignoreUnknownKeys = true
     classDiscriminator = "t"
 }
 
-fun PageDoc.encode(): String = DocumentJson.encodeToString(PageDoc.serializer(), this)
+/** Convenience over [JsonDocumentCodec]; prefer a [DocumentCodec] where the format should vary. */
+fun PageDoc.encode(): String = JsonDocumentCodec.encodeToString(this)
 
-fun decodePageDoc(json: String): PageDoc = DocumentJson.decodeFromString(PageDoc.serializer(), json)
+fun decodePageDoc(json: String): PageDoc = JsonDocumentCodec.decodeFromString(json)
 
 /** Flattened plain text for search indexing and page-list previews. */
 fun PageDoc.plainText(): String = outlines

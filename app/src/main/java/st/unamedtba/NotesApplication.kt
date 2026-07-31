@@ -3,6 +3,7 @@ package st.unamedtba
 import android.app.Application
 import st.unamedtba.data.NotesRepository
 import st.unamedtba.data.db.NotesDatabase
+import st.unamedtba.richtext.FontRegistry
 
 /**
  * Manual dependency container.
@@ -14,4 +15,9 @@ class NotesApplication : Application() {
 
     val database: NotesDatabase by lazy { NotesDatabase.create(this) }
     val repository: NotesRepository by lazy { NotesRepository(database) }
+
+    override fun onCreate() {
+        super.onCreate()
+        FontRegistry.init(this)
+    }
 }

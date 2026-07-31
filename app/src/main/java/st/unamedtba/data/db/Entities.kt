@@ -93,6 +93,13 @@ data class PageContentEntity(
     @PrimaryKey val pageId: String,
     val docJson: String,
     val updatedAt: Long,
+    /**
+     * Id of the [st.unamedtba.model.DocumentCodec] that wrote [docJson].
+     *
+     * Stored per row so the format can change without rewriting every document: rows keep decoding
+     * with the codec that produced them, and only new writes use the new format.
+     */
+    val format: String = "json/1",
 )
 
 /** A notebook with its sections, for the navigation rail's expandable tree. */
