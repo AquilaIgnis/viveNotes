@@ -19,6 +19,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import st.unamedtba.data.EditorDefaultsStore
 import st.unamedtba.data.NotesRepository
 import st.unamedtba.data.PageLoad
 import st.unamedtba.data.db.NotesDatabase
@@ -41,6 +42,7 @@ class NotesViewModelTest {
 
     private lateinit var db: NotesDatabase
     private lateinit var repository: NotesRepository
+    private lateinit var editorDefaults: EditorDefaultsStore
 
     @Before
     fun setUp() {
@@ -52,6 +54,9 @@ class NotesViewModelTest {
             .setTransactionExecutor { it.run() }
             .build()
         repository = NotesRepository(db)
+        // Backed by a real file, unlike the in-memory database — the preferences delegate memoises
+        // per Context, so every test in this class shares one store rather than clashing over it.
+        editorDefaults = EditorDefaultsStore(context)
     }
 
     @After
@@ -62,7 +67,7 @@ class NotesViewModelTest {
 
     /** Builds a settled view model sitting on the seeded Welcome page. */
     private suspend fun seededViewModel(): NotesViewModel {
-        val vm = NotesViewModel(repository)
+        val vm = NotesViewModel(repository, editorDefaults)
         scheduler.advanceUntilIdle()
         assertNotNull("expected the seeded page to be open", vm.uiState.value.selectedPageId)
         return vm

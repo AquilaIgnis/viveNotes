@@ -1,6 +1,7 @@
 package st.unamedtba
 
 import android.app.Application
+import st.unamedtba.data.EditorDefaultsStore
 import st.unamedtba.data.NotesRepository
 import st.unamedtba.data.db.NotesDatabase
 import st.unamedtba.richtext.FontRegistry
@@ -15,6 +16,7 @@ class NotesApplication : Application() {
 
     val database: NotesDatabase by lazy { NotesDatabase.create(this) }
     val repository: NotesRepository by lazy { NotesRepository(database) }
+    val editorDefaults: EditorDefaultsStore by lazy { EditorDefaultsStore(this) }
 
     override fun onCreate() {
         super.onCreate()

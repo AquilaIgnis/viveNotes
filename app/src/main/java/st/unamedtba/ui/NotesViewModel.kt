@@ -8,6 +8,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
@@ -15,17 +16,22 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import st.unamedtba.data.EditorDefaults
+import st.unamedtba.data.EditorDefaultsStore
 import st.unamedtba.data.NotesRepository
 import st.unamedtba.data.PageLoad
 import st.unamedtba.data.db.NotebookWithSections
 import st.unamedtba.data.db.PageEntity
 import st.unamedtba.model.Block
+import st.unamedtba.model.Mark
 import st.unamedtba.model.Outline
 import st.unamedtba.model.PageDoc
 import st.unamedtba.model.newId
 import st.unamedtba.richtext.FormatCommand
 import st.unamedtba.richtext.SelectionState
+import st.unamedtba.richtext.sameKindAs
 
 /**
  * Position and size of one text container on the page canvas.
@@ -61,13 +67,20 @@ data class NotesUiState(
 enum class CompactPane { Notebooks, Pages, Editor }
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
-class NotesViewModel(private val repository: NotesRepository) : ViewModel() {
+class NotesViewModel(
+    private val repository: NotesRepository,
+    private val editorDefaultsStore: EditorDefaultsStore,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotesUiState())
     val uiState: StateFlow<NotesUiState> = _uiState.asStateFlow()
 
     private val _selection = MutableStateFlow(SelectionState())
     val selection: StateFlow<SelectionState> = _selection.asStateFlow()
+
+    /** Font and size for text with no mark of its own — the ribbon's readout and the editor's base. */
+    val editorDefaults: StateFlow<EditorDefaults> = editorDefaultsStore.defaults
+        .stateIn(viewModelScope, SharingStarted.Eagerly, EditorDefaults())
 
     /** Commands travel to the focused editor, the only thing that can act on them. */
     private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
@@ -270,6 +283,35 @@ class NotesViewModel(private val repository: NotesRepository) : ViewModel() {
         _commands.tryEmit(command)
     }
 
+    /**
+     * Records a font or size chosen with nothing selected as the new default.
+     *
+     * Called by the editor when a mark had no range to apply to, never inferred from the last
+     * reported [SelectionState]. That distinction is the whole point: the ribbon's view of the
+     * selection can be a beat behind the editor's — a container re-render or the dropdown's focus
+     * round-trip is enough — and acting on a stale "nothing is selected" rewrote the default while
+     * the user had text selected, restyling every unmarked block on the page.
+     *
+     * The editor already arms the mark for characters typed immediately after, and adjacent text
+     * inherits it because inline spans are end-inclusive. This covers what that cannot reach: text
+     * with no neighbour to inherit from, in a fresh container or a page opened later.
+     */
+    fun rememberDefaultMark(mark: Mark) {
+        // The ribbon describes the text at the caret, so a pick made with no editor focused would
+        // otherwise leave the combo reading whatever it read before. Reflecting it here makes the
+        // choice visible immediately; clicking into text replaces it with that text's own marks.
+        _selection.value = _selection.value.let { state ->
+            state.copy(marks = state.marks.filterNot { it.sameKindAs(mark) }.toSet() + mark)
+        }
+        viewModelScope.launch {
+            when (mark) {
+                is Mark.FontFamily -> editorDefaultsStore.setFontFamily(mark.name)
+                is Mark.FontSize -> editorDefaultsStore.setFontSize(mark.sp)
+                else -> Unit
+            }
+        }
+    }
+
     // --- pages, sections, notebooks -------------------------------------------------------------
 
     fun createNotebook(name: String) {
@@ -367,10 +409,13 @@ class NotesViewModel(private val repository: NotesRepository) : ViewModel() {
         const val MAX_OUTLINE_WIDTH = 2000f
         const val MAX_OUTLINE_HEIGHT = 4000f
 
-        fun factory(repository: NotesRepository) = object : ViewModelProvider.Factory {
+        fun factory(
+            repository: NotesRepository,
+            editorDefaultsStore: EditorDefaultsStore,
+        ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                NotesViewModel(repository) as T
+                NotesViewModel(repository, editorDefaultsStore) as T
         }
     }
 }

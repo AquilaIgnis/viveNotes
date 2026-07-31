@@ -40,6 +40,29 @@ class OutlineEditText @JvmOverloads constructor(
     var onSelectionStateChanged: ((SelectionState) -> Unit)? = null
 
     /**
+     * Fired when a [FormatCommand.SetMark] lands on a collapsed caret.
+     *
+     * That is the case where the mark describes what the user is about to type rather than editing
+     * anything, so it is also what should become the editor's default. Reported from here because
+     * this is the only place that knows the real selection at the moment the command is applied —
+     * inferring it from the last [SelectionState] the ribbon saw is a race.
+     */
+    var onMarkArmed: ((Mark) -> Unit)? = null
+
+    /**
+     * The editor's default font and size, as marks to stamp onto text that has nothing to inherit.
+     *
+     * Deliberately not applied as the view's base typeface and text size. The base is shared by
+     * every character with no span of its own, so driving it from the default retroactively
+     * restyled text the user wrote under a previous one. Stamping instead means a default only ever
+     * reaches text typed while it was in force, and existing content is left exactly as written.
+     *
+     * Empty when the default matches the view's fixed base, so the common case adds no marks to the
+     * document at all.
+     */
+    var defaultMarks: Set<Mark> = emptySet()
+
+    /**
      * Marks queued by toggling with no selection. Android has no notion of "formatting about to be
      * typed", so it is held here and applied to the next inserted characters.
      */
@@ -76,6 +99,7 @@ class OutlineEditText @JvmOverloads constructor(
                 val to = insertStart + insertCount
                 pendingMarks.forEach { SpannableCodec.applyMark(s, it, insertStart, to) }
                 suppressedMarks.forEach { SpannableCodec.removeMark(s, it, insertStart, to) }
+                stampDefaults(s, insertStart, to)
             }
             SpannableCodec.normalize(s, editorStyle)
 
@@ -220,10 +244,27 @@ class OutlineEditText @JvmOverloads constructor(
         if (from == to) {
             pendingMarks.removeAll { it.sameKindAs(mark) }
             pendingMarks.add(mark)
+            onMarkArmed?.invoke(mark)
             return
         }
         SpannableCodec.removeMark(editable, mark, from, to)
         SpannableCodec.applyMark(editable, mark, from, to)
+    }
+
+    /**
+     * Applies [defaultMarks] to just-inserted text, and only where nothing already decides it.
+     *
+     * Order matters: this runs after [pendingMarks], so a font the user picked explicitly wins, and
+     * it checks what the range already carries, so text typed onto the end of a styled run keeps
+     * inheriting that run rather than jumping to the default. The default is what fills the gap
+     * when there is nothing to inherit — a new container, or a fresh page.
+     */
+    private fun stampDefaults(s: Editable, from: Int, to: Int) {
+        if (defaultMarks.isEmpty()) return
+        val present = SpannableCodec.marksAt(s, from, to)
+        defaultMarks.forEach { mark ->
+            if (present.none { it.sameKindAs(mark) }) SpannableCodec.applyMark(s, mark, from, to)
+        }
     }
 
     private fun emitSelectionState() {
@@ -254,7 +295,7 @@ class OutlineEditText @JvmOverloads constructor(
 }
 
 /** Compares marks by kind, ignoring any value, so setting a colour replaces the previous one. */
-private fun Mark.sameKindAs(other: Mark): Boolean = when {
+internal fun Mark.sameKindAs(other: Mark): Boolean = when {
     this is Mark.TextColor && other is Mark.TextColor -> true
     this is Mark.Highlight && other is Mark.Highlight -> true
     this is Mark.FontSize && other is Mark.FontSize -> true

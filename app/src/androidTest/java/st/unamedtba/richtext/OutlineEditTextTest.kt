@@ -2,6 +2,7 @@ package st.unamedtba.richtext
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -48,6 +49,32 @@ class OutlineEditTextTest {
                 val styled = renderToBitmap(view)
                 assertTrue("$mark rendered identically to unstyled text", !plain.sameAs(styled))
             }
+        }
+    }
+
+    /**
+     * Guards the signal the editor defaults are built on.
+     *
+     * A font or size chosen with nothing selected becomes the app-wide default; chosen over a
+     * selection it must not. That decision was briefly made from the last [SelectionState] the
+     * ribbon had seen, which can lag the editor by a frame — so formatting a selection would
+     * sometimes rewrite the default and restyle every unmarked block on the page. Reporting it
+     * from the apply path is what makes the two cases distinguishable at all.
+     */
+    @Test
+    fun setMarkReportsArmedOnlyWhenNothingIsSelected() {
+        withEditor { view ->
+            val armed = mutableListOf<Mark>()
+            view.onMarkArmed = { armed += it }
+            view.setBlocks(listOf(Block(id = "b", runs = listOf(Run("hello there")))))
+
+            view.setSelection(0, 5)
+            view.apply(FormatCommand.SetMark(Mark.FontSize(24)))
+            assertTrue("a mark over a selection is an edit, not a new default: $armed", armed.isEmpty())
+
+            view.setSelection(5)
+            view.apply(FormatCommand.SetMark(Mark.FontSize(24)))
+            assertEquals(listOf<Mark>(Mark.FontSize(24)), armed)
         }
     }
 

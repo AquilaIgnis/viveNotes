@@ -15,10 +15,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        val repository = (application as NotesApplication).repository
+        val app = application as NotesApplication
         val viewModel = ViewModelProvider(
             this,
-            NotesViewModel.factory(repository),
+            NotesViewModel.factory(app.repository, app.editorDefaults),
         )[NotesViewModel::class.java]
 
         setContent {

@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import st.unamedtba.data.EditorDefaults
 import st.unamedtba.model.Align
 import st.unamedtba.model.BlockType
 import st.unamedtba.model.Mark
@@ -87,7 +88,9 @@ private val HIGHLIGHT_COLORS = listOf(
     0x66FF9100, 0x66B388FF, 0x66FFFFFF, 0x00000000,
 ).map { it.toInt() }
 
-private val FONT_SIZES = listOf(8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72)
+// 15 is not a size Word or OneNote offers, but it is this editor's default, and now that the
+// default persists a user who changes it could otherwise never get back to it.
+private val FONT_SIZES = listOf(8, 9, 10, 11, 12, 14, 15, 16, 18, 20, 24, 28, 36, 48, 72)
 
 private val FONT_FAMILIES = FontRegistry.families
 
@@ -169,7 +172,10 @@ private fun PlaceholderTab(tab: RibbonTab) {
 }
 
 @Composable
-private fun HomeTab(selection: SelectionState, onCommand: (FormatCommand) -> Unit) {
+private fun HomeTab(
+    selection: SelectionState,
+    onCommand: (FormatCommand) -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -189,8 +195,15 @@ private fun HomeTab(selection: SelectionState, onCommand: (FormatCommand) -> Uni
 
         Divider()
 
-        FontFamilyPicker(selection.fontFamily) { onCommand(FormatCommand.SetMark(Mark.FontFamily(it))) }
-        FontSizePicker(selection.fontSize) { onCommand(FormatCommand.SetMark(Mark.FontSize(it))) }
+        // These describe the text at the caret, so text with no font mark of its own reads as the
+        // editor's fixed base — which is what it is actually rendered in. Falling back to the
+        // stored default instead would label old writing with a font it is not in.
+        FontFamilyPicker(selection.fontFamily ?: EditorDefaults.FALLBACK_FONT_FAMILY) {
+            onCommand(FormatCommand.SetMark(Mark.FontFamily(it)))
+        }
+        FontSizePicker(selection.fontSize ?: EditorDefaults.FALLBACK_FONT_SIZE) {
+            onCommand(FormatCommand.SetMark(Mark.FontSize(it)))
+        }
 
         Divider()
 
@@ -363,11 +376,11 @@ private fun Divider() {
 }
 
 @Composable
-private fun FontFamilyPicker(current: String?, onPick: (String) -> Unit) {
+private fun FontFamilyPicker(current: String, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         ComboBox(
-            text = FontRegistry.displayName(current ?: "sans-serif"),
+            text = FontRegistry.displayName(current),
             width = 148.dp,
         ) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -385,10 +398,10 @@ private fun FontFamilyPicker(current: String?, onPick: (String) -> Unit) {
 }
 
 @Composable
-private fun FontSizePicker(current: Int?, onPick: (Int) -> Unit) {
+private fun FontSizePicker(current: Int, onPick: (Int) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        ComboBox(text = (current ?: 15).toString(), width = 58.dp) { open = true }
+        ComboBox(text = current.toString(), width = 58.dp) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             FONT_SIZES.forEach { size ->
                 DropdownMenuItem(
@@ -525,7 +538,13 @@ private fun StylesPicker(current: BlockType, onPick: (BlockType) -> Unit) {
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                text = styles.firstOrNull { it.first == current }?.second ?: "Styles",
+                // Names the control, not the selection, while the selection carries no style —
+                // plain text is the default state, so reading "Normal" back is noise. The menu
+                // still offers "Normal" as the way to clear a heading.
+                text = when (current) {
+                    BlockType.Paragraph -> "Styles"
+                    else -> styles.firstOrNull { it.first == current }?.second ?: "Styles"
+                },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )

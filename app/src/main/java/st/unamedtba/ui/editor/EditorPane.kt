@@ -55,7 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.flow.Flow
+import st.unamedtba.data.EditorDefaults
 import st.unamedtba.model.Block
+import st.unamedtba.model.Mark
 import st.unamedtba.richtext.EditorStyle
 import st.unamedtba.richtext.FormatCommand
 import st.unamedtba.richtext.OutlineEditText
@@ -85,6 +87,7 @@ private val RESIZE_HANDLE_WIDTH = 18.dp
 fun EditorPane(
     title: String,
     createdAt: Long,
+    defaults: EditorDefaults,
     onTitleChange: (String) -> Unit,
     outlines: List<OutlineBox>,
     pageRevision: Int,
@@ -92,6 +95,8 @@ fun EditorPane(
     commands: Flow<FormatCommand>,
     onBlocksChanged: (String, List<Block>) -> Unit,
     onSelectionChanged: (SelectionState) -> Unit,
+    /** A mark applied with no selection — the editor's new default, not an edit. */
+    onMarkArmed: (Mark) -> Unit,
     onCreateOutline: (Float, Float) -> String,
     onMoveOutline: (String, Float, Float) -> Unit,
     onResizeOutline: (String, Float) -> Unit,
@@ -126,7 +131,16 @@ fun EditorPane(
     // Commands are one-shot events, so they are collected rather than read from state —
     // replaying them on recomposition would re-apply formatting.
     LaunchedEffect(Unit) {
-        commands.collect { command -> focusedEditor?.apply(command) }
+        commands.collect { command ->
+            val editor = focusedEditor
+            if (editor != null) {
+                editor.apply(command)
+            } else if (command is FormatCommand.SetMark) {
+                // Nothing focused, so there is nothing to format — but choosing a font or size
+                // from the ribbon still says what the next text should look like.
+                onMarkArmed(command.mark)
+            }
+        }
     }
 
     val lowestContent = outlines.maxOfOrNull { box ->
@@ -186,6 +200,7 @@ fun EditorPane(
                             box = box,
                             initialBlocks = initialBlocksFor(box.id),
                             editorStyle = style,
+                            defaults = defaults,
                             focused = focusedOutlineId == box.id,
                             requestFocus = pendingFocusId == box.id,
                             onFocusHandled = { pendingFocusId = null },
@@ -202,6 +217,7 @@ fun EditorPane(
                             },
                             onBlocksChanged = { blocks -> onBlocksChanged(box.id, blocks) },
                             onSelectionChanged = onSelectionChanged,
+                            onMarkArmed = onMarkArmed,
                             onMove = { x, y -> onMoveOutline(box.id, x, y) },
                             onResize = { width -> onResizeOutline(box.id, width) },
                             onSetMinHeight = { height -> onSetOutlineMinHeight(box.id, height) },
@@ -212,6 +228,18 @@ fun EditorPane(
             }
         }
     }
+}
+
+/**
+ * The default expressed as marks, empty where it already matches the editor's fixed base.
+ *
+ * Skipping the matching case is what keeps documents clean for anyone who never changes the
+ * setting: their text renders from the base and carries no font marks at all. Because that base is
+ * a constant, such text also stays put forever, whatever the default becomes later.
+ */
+private fun EditorDefaults.asMarks(): Set<Mark> = buildSet {
+    if (fontFamily != EditorDefaults.FALLBACK_FONT_FAMILY) add(Mark.FontFamily(fontFamily))
+    if (fontSize != EditorDefaults.FALLBACK_FONT_SIZE) add(Mark.FontSize(fontSize))
 }
 
 /** Test tags for the container's drag targets. */
@@ -227,6 +255,8 @@ internal fun OutlineContainer(
     box: OutlineBox,
     initialBlocks: List<Block>,
     editorStyle: EditorStyle,
+    /** Defaulted so the container can be exercised in isolation without a preferences store. */
+    defaults: EditorDefaults = EditorDefaults(),
     focused: Boolean,
     requestFocus: Boolean,
     onFocusHandled: () -> Unit,
@@ -234,6 +264,7 @@ internal fun OutlineContainer(
     onBlurred: () -> Unit,
     onBlocksChanged: (List<Block>) -> Unit,
     onSelectionChanged: (SelectionState) -> Unit,
+    onMarkArmed: (Mark) -> Unit = {},
     onMove: (Float, Float) -> Unit,
     onResize: (Float) -> Unit,
     onSetMinHeight: (Float) -> Unit,
@@ -290,7 +321,9 @@ internal fun OutlineContainer(
                         )
                         background = null
                         setPadding(0, 0, 0, 0)
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                        // Fixed, never the current default: this is what every character with no
+                        // span of its own renders as, so changing it would restyle old writing.
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, EditorDefaults.FALLBACK_FONT_SIZE.toFloat())
                         setLineSpacing(0f, 1.25f)
                         typeface = Typeface.SANS_SERIF
                         gravity = android.view.Gravity.TOP or android.view.Gravity.START
@@ -307,6 +340,7 @@ internal fun OutlineContainer(
                             onBlocksChanged(blocks)
                         }
                         this@apply.onSelectionStateChanged = { state -> onSelectionChanged(state) }
+                        this@apply.onMarkArmed = { mark -> onMarkArmed(mark) }
                         setOnFocusChangeListener { v, hasFocus ->
                             if (hasFocus) onFocused(v as OutlineEditText) else onBlurred()
                         }
@@ -318,6 +352,7 @@ internal fun OutlineContainer(
                     editor.editorStyle = editorStyle
                     editor.setTextColor(canvas.text.toArgb())
                     editor.setHintTextColor(canvas.secondaryText.toArgb())
+                    editor.defaultMarks = defaults.asMarks()
                     // Applied to the view rather than as a Compose height constraint: constraining
                     // the wrapper only grows the box around the editor, leaving the text area
                     // itself — and its touch target — at the height of its content.

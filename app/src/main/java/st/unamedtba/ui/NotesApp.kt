@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import st.unamedtba.data.EditorDefaults
 import st.unamedtba.ui.editor.EditorPane
 import st.unamedtba.ui.editor.Ribbon
 import st.unamedtba.ui.editor.RibbonTab
@@ -57,6 +58,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val selection by viewModel.selection.collectAsStateWithLifecycle()
     val compactPane by viewModel.compactPane.collectAsStateWithLifecycle()
     val railVisible by viewModel.railVisible.collectAsStateWithLifecycle()
+    val defaults by viewModel.editorDefaults.collectAsStateWithLifecycle()
 
     var activeTab by remember { mutableStateOf(RibbonTab.Home) }
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
@@ -118,7 +120,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                             modifier = Modifier.width(PAGE_LIST_WIDTH),
                         )
                         VerticalHairline()
-                        EditorSurface(state, viewModel, Modifier.weight(1f))
+                        EditorSurface(state, viewModel, defaults, Modifier.weight(1f))
                     }
                 } else {
                     BackHandler(enabled = compactPane != CompactPane.Notebooks) {
@@ -147,7 +149,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                             onDeletePage = viewModel::deletePage,
                             modifier = Modifier.fillMaxSize(),
                         )
-                        CompactPane.Editor -> EditorSurface(state, viewModel, Modifier.fillMaxSize())
+                        CompactPane.Editor -> EditorSurface(state, viewModel, defaults, Modifier.fillMaxSize())
                     }
                 }
             }
@@ -176,6 +178,7 @@ fun NotesApp(viewModel: NotesViewModel) {
 private fun EditorSurface(
     state: NotesUiState,
     viewModel: NotesViewModel,
+    defaults: EditorDefaults,
     modifier: Modifier = Modifier,
 ) {
     if (state.selectedPageId == null) {
@@ -192,6 +195,7 @@ private fun EditorSurface(
     EditorPane(
         title = state.title,
         createdAt = state.createdAt,
+        defaults = defaults,
         onTitleChange = viewModel::setTitle,
         outlines = state.outlines,
         pageRevision = state.pageRevision,
@@ -199,6 +203,7 @@ private fun EditorSurface(
         commands = viewModel.commands,
         onBlocksChanged = viewModel::onBlocksChanged,
         onSelectionChanged = viewModel::onSelectionChanged,
+        onMarkArmed = viewModel::rememberDefaultMark,
         onCreateOutline = viewModel::createOutline,
         onMoveOutline = viewModel::moveOutline,
         onResizeOutline = viewModel::resizeOutline,
