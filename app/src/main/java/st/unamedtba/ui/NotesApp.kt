@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuOpen
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -68,7 +69,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
     val compactPane by viewModel.compactPane.collectAsStateWithLifecycle()
-    val railVisible by viewModel.railVisible.collectAsStateWithLifecycle()
+    val navigationVisible by viewModel.navigationVisible.collectAsStateWithLifecycle()
     val defaults by viewModel.editorDefaults.collectAsStateWithLifecycle()
     val viewSettings by viewModel.viewSettings.collectAsStateWithLifecycle()
 
@@ -116,8 +117,11 @@ fun NotesApp(viewModel: NotesViewModel) {
                         title = state.title.ifBlank { "Untitled page" },
                         showBack = !medium && pane != rootPane,
                         onBack = { viewModel.showCompactPane(paneBehind(pane)) },
-                        showRailToggle = !horizontalTabs,
-                        onToggleRail = { viewModel.toggleRail() },
+                        // Only where there is something to collapse: a compact window shows one
+                        // pane at a time, and hiding it would leave nothing behind.
+                        showNavToggle = medium,
+                        navigationVisible = navigationVisible,
+                        onToggleNavigation = { viewModel.toggleNavigation() },
                     )
 
                     Ribbon(
@@ -145,27 +149,29 @@ fun NotesApp(viewModel: NotesViewModel) {
 
                     if (medium) {
                         Row(Modifier.fillMaxSize()) {
-                            if (!horizontalTabs && expanded && railVisible) {
-                                NotebookRail(
-                                    tree = state.tree,
-                                    selectedSectionId = state.selectedSectionId,
-                                    onSelectSection = viewModel::selectSection,
-                                    onToggleNotebook = viewModel::toggleNotebookExpanded,
-                                    onAddSection = { pendingDialog = NameDialog.Section(it) },
-                                    onAddNotebook = { pendingDialog = NameDialog.Notebook },
-                                    modifier = Modifier.width(RAIL_WIDTH),
+                            if (navigationVisible) {
+                                if (!horizontalTabs && expanded) {
+                                    NotebookRail(
+                                        tree = state.tree,
+                                        selectedSectionId = state.selectedSectionId,
+                                        onSelectSection = viewModel::selectSection,
+                                        onToggleNotebook = viewModel::toggleNotebookExpanded,
+                                        onAddSection = { pendingDialog = NameDialog.Section(it) },
+                                        onAddNotebook = { pendingDialog = NameDialog.Notebook },
+                                        modifier = Modifier.width(RAIL_WIDTH),
+                                    )
+                                    VerticalHairline()
+                                }
+                                PageListPane(
+                                    pages = state.pages,
+                                    selectedPageId = state.selectedPageId,
+                                    onSelectPage = viewModel::openPage,
+                                    onAddPage = viewModel::addPage,
+                                    onDeletePage = viewModel::deletePage,
+                                    modifier = Modifier.width(PAGE_LIST_WIDTH),
                                 )
                                 VerticalHairline()
                             }
-                            PageListPane(
-                                pages = state.pages,
-                                selectedPageId = state.selectedPageId,
-                                onSelectPage = viewModel::openPage,
-                                onAddPage = viewModel::addPage,
-                                onDeletePage = viewModel::deletePage,
-                                modifier = Modifier.width(PAGE_LIST_WIDTH),
-                            )
-                            VerticalHairline()
                             EditorSurface(
                                 state,
                                 viewModel,
@@ -330,9 +336,9 @@ private fun TitleBar(
     title: String,
     showBack: Boolean,
     onBack: () -> Unit,
-    /** False under the horizontal tabs layout, where there is no rail to toggle. */
-    showRailToggle: Boolean,
-    onToggleRail: () -> Unit,
+    showNavToggle: Boolean,
+    navigationVisible: Boolean,
+    onToggleNavigation: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -351,11 +357,17 @@ private fun TitleBar(
                     modifier = Modifier.size(18.dp),
                 )
             }
-        } else if (showRailToggle) {
-            IconButton(onClick = onToggleRail, modifier = Modifier.size(34.dp)) {
+        } else if (showNavToggle) {
+            IconButton(onClick = onToggleNavigation, modifier = Modifier.size(34.dp)) {
                 Icon(
-                    Icons.Default.Menu,
-                    contentDescription = "Toggle notebook list",
+                    // The open/closed glyph is the only thing that says the panes are hidden
+                    // rather than absent, once they are gone and the canvas has taken their place.
+                    imageVector = if (navigationVisible) Icons.Default.Menu else Icons.AutoMirrored.Filled.MenuOpen,
+                    contentDescription = if (navigationVisible) {
+                        "Hide notebooks and pages"
+                    } else {
+                        "Show notebooks and pages"
+                    },
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
                 )

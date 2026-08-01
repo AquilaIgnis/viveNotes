@@ -105,8 +105,15 @@ class NotesViewModel(
     private val _compactPane = MutableStateFlow(CompactPane.Editor)
     val compactPane: StateFlow<CompactPane> = _compactPane.asStateFlow()
 
-    private val _railVisible = MutableStateFlow(true)
-    val railVisible: StateFlow<Boolean> = _railVisible.asStateFlow()
+    /**
+     * Whether the navigation — the notebook rail and the page list — is showing.
+     *
+     * One flag for both, because what the title bar's button offers is the whole canvas: hiding
+     * the notebooks while keeping their pages would leave the widest of the two panes in place and
+     * reclaim almost nothing.
+     */
+    private val _navigationVisible = MutableStateFlow(true)
+    val navigationVisible: StateFlow<Boolean> = _navigationVisible.asStateFlow()
 
     /**
      * Live block content per outline. Held outside [uiState] on purpose — see [OutlineBox].
@@ -219,8 +226,8 @@ class NotesViewModel(
         _compactPane.value = pane
     }
 
-    fun toggleRail() {
-        _railVisible.value = !_railVisible.value
+    fun toggleNavigation() {
+        _navigationVisible.value = !_navigationVisible.value
     }
 
     fun toggleNotebookExpanded(notebookId: String, expanded: Boolean) {
