@@ -9,16 +9,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -29,7 +32,9 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
@@ -43,14 +48,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -58,19 +65,28 @@ import kotlinx.coroutines.flow.Flow
 import st.unamedtba.data.EditorDefaults
 import st.unamedtba.model.Block
 import st.unamedtba.model.Mark
+import st.unamedtba.model.PageStyle
+import st.unamedtba.model.RuleLines
 import st.unamedtba.richtext.EditorStyle
 import st.unamedtba.richtext.FormatCommand
 import st.unamedtba.richtext.OutlineEditText
 import st.unamedtba.richtext.SelectionState
 import st.unamedtba.ui.OutlineBox
+import st.unamedtba.ui.theme.CanvasColors
 import st.unamedtba.ui.theme.LocalCanvasColors
+import st.unamedtba.ui.theme.paintedWith
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private val CANVAS_MIN_HEIGHT = 700.dp
 private val CANVAS_MAX_HEIGHT = 20_000.dp
 private val CANVAS_TRAILING_SPACE = 320.dp
+
+/** Blank canvas kept to the right of the widest container, so there is room to start another. */
+private val CANVAS_TRAILING_WIDTH = 200.dp
+private val CANVAS_MIN_WIDTH = 720.dp
 private val GRIP_HEIGHT = 18.dp
 private val RESIZE_HANDLE_WIDTH = 18.dp
 
@@ -88,6 +104,9 @@ fun EditorPane(
     title: String,
     createdAt: Long,
     defaults: EditorDefaults,
+    /** The page's own appearance, from the View tab. */
+    style: PageStyle,
+    zoom: Float,
     onTitleChange: (String) -> Unit,
     outlines: List<OutlineBox>,
     pageRevision: Int,
@@ -102,10 +121,12 @@ fun EditorPane(
     onResizeOutline: (String, Float) -> Unit,
     onSetOutlineMinHeight: (String, Float) -> Unit,
     onOutlineBlurred: (String) -> Unit,
-    showRuleLines: Boolean,
+    /** Window width and page width in dp, which is all Zoom to Page Width needs. */
+    onCanvasMeasured: (Float, Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val canvas = LocalCanvasColors.current
+    val shell = LocalCanvasColors.current
+    val canvas = remember(shell, style.backgroundArgb) { shell.paintedWith(style.backgroundArgb) }
     val density = LocalDensity.current
     val primary = MaterialTheme.colorScheme.primary
 
@@ -115,7 +136,7 @@ fun EditorPane(
     var pendingFocusId by remember { mutableStateOf<String?>(null) }
     val heights = remember { mutableStateMapOf<String, Int>() }
 
-    val style = remember(density, primary) {
+    val editorStyle = remember(density, primary) {
         with(density) {
             EditorStyle(
                 indentStepPx = 28.dp.roundToPx(),
@@ -143,88 +164,183 @@ fun EditorPane(
         }
     }
 
+    val paper = style.pageSizeDp
     val lowestContent = outlines.maxOfOrNull { box ->
         box.y.dp + with(density) { (heights[box.id] ?: 0).toDp() }
     } ?: 0.dp
+    val widestContent = outlines.maxOfOrNull { (it.x + it.width).dp } ?: 0.dp
+
+    // What the page *is*, as opposed to how much of it is scrollable: a sheet when a paper size is
+    // set, otherwise whatever the content occupies. This is the width Zoom to Page Width fits.
+    val pageWidth = paper?.first?.dp ?: maxOf(widestContent, CANVAS_MIN_WIDTH)
     // Clamped as a backstop: the canvas is sized from its children's measured heights, so any
     // child that sizes itself from the canvas would otherwise grow without bound until the
     // height overflows what Constraints can pack.
-    val canvasHeight = (lowestContent + CANVAS_TRAILING_SPACE)
+    val canvasHeight = maxOf(paper?.second?.dp ?: 0.dp, lowestContent + CANVAS_TRAILING_SPACE)
         .coerceIn(CANVAS_MIN_HEIGHT, CANVAS_MAX_HEIGHT)
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(canvas.background),
+            // Only a bounded page has an outside; an unbounded one simply is the background.
+            .background(if (paper != null) MaterialTheme.colorScheme.surfaceContainer else canvas.background),
     ) {
-        if (showRuleLines) {
-            RuleLines(color = canvas.ruleLine)
-        }
+        val viewport = maxWidth
+        // Never narrower than the window, so the canvas fills it at any zoom and a tap beside the
+        // page still lands on something that can hold text.
+        val canvasWidth = maxOf(pageWidth + CANVAS_TRAILING_WIDTH, viewport / zoom)
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-        ) {
-            PageHeader(
-                title = title,
-                createdAt = createdAt,
-                onTitleChange = onTitleChange,
-                modifier = Modifier.padding(start = 40.dp, end = 40.dp, top = 24.dp),
-            )
+        // Reported rather than derived by the caller: these are layout facts, known here and
+        // nowhere else. Writing them costs nothing and nothing recomposes from them.
+        SideEffect { onCanvasMeasured(viewport.value, pageWidth.value) }
 
-            Spacer(Modifier.height(16.dp))
+        // Provided so containers and the title read the page's colours, which may be nothing like
+        // the shell's — a white page inside a dark app, or a page painted from the Page Color menu.
+        CompositionLocalProvider(LocalCanvasColors provides canvas) {
+            PageViewport(zoom) {
+                Box(Modifier.width(canvasWidth)) {
+                    PageSurface(paper, canvas, style.ruleLines)
 
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(canvasHeight),
-            ) {
-                // Placed first so it sits beneath the containers: taps that land on a container
-                // reach its editor, and only taps on bare canvas create a new one.
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .pointerInput(pageRevision) {
-                            detectTapGestures { offset ->
-                                val x = with(density) { offset.x.toDp().value }
-                                val y = with(density) { offset.y.toDp().value }
-                                pendingFocusId = onCreateOutline(x - 8f, y - 8f)
-                            }
-                        },
-                )
+                    Column(Modifier.fillMaxWidth()) {
+                        if (!style.hideTitle) {
+                            PageHeader(
+                                title = title,
+                                createdAt = createdAt,
+                                onTitleChange = onTitleChange,
+                                modifier = Modifier.padding(start = 40.dp, end = 40.dp, top = 24.dp),
+                            )
 
-                outlines.forEach { box ->
-                    key(pageRevision, box.id) {
-                        OutlineContainer(
-                            box = box,
-                            initialBlocks = initialBlocksFor(box.id),
-                            editorStyle = style,
-                            defaults = defaults,
-                            focused = focusedOutlineId == box.id,
-                            requestFocus = pendingFocusId == box.id,
-                            onFocusHandled = { pendingFocusId = null },
-                            onFocused = { view ->
-                                focusedEditor = view
-                                focusedOutlineId = box.id
-                            },
-                            onBlurred = {
-                                if (focusedOutlineId == box.id) {
-                                    focusedOutlineId = null
-                                    focusedEditor = null
+                            Spacer(Modifier.height(16.dp))
+                        }
+
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(canvasHeight),
+                        ) {
+                            // Placed first so it sits beneath the containers: taps that land on a
+                            // container reach its editor, and only taps on bare canvas create a
+                            // new one.
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(pageRevision) {
+                                        detectTapGestures { offset ->
+                                            val x = with(density) { offset.x.toDp().value }
+                                            val y = with(density) { offset.y.toDp().value }
+                                            pendingFocusId = onCreateOutline(x - 8f, y - 8f)
+                                        }
+                                    },
+                            )
+
+                            outlines.forEach { box ->
+                                key(pageRevision, box.id) {
+                                    OutlineContainer(
+                                        box = box,
+                                        initialBlocks = initialBlocksFor(box.id),
+                                        editorStyle = editorStyle,
+                                        defaults = defaults,
+                                        focused = focusedOutlineId == box.id,
+                                        requestFocus = pendingFocusId == box.id,
+                                        onFocusHandled = { pendingFocusId = null },
+                                        onFocused = { view ->
+                                            focusedEditor = view
+                                            focusedOutlineId = box.id
+                                        },
+                                        onBlurred = {
+                                            if (focusedOutlineId == box.id) {
+                                                focusedOutlineId = null
+                                                focusedEditor = null
+                                            }
+                                            onOutlineBlurred(box.id)
+                                        },
+                                        onBlocksChanged = { blocks -> onBlocksChanged(box.id, blocks) },
+                                        onSelectionChanged = onSelectionChanged,
+                                        onMarkArmed = onMarkArmed,
+                                        onMove = { x, y -> onMoveOutline(box.id, x, y) },
+                                        onResize = { width -> onResizeOutline(box.id, width) },
+                                        onSetMinHeight = { height -> onSetOutlineMinHeight(box.id, height) },
+                                        onMeasured = { heightPx -> heights[box.id] = heightPx },
+                                    )
                                 }
-                                onOutlineBlurred(box.id)
-                            },
-                            onBlocksChanged = { blocks -> onBlocksChanged(box.id, blocks) },
-                            onSelectionChanged = onSelectionChanged,
-                            onMarkArmed = onMarkArmed,
-                            onMove = { x, y -> onMoveOutline(box.id, x, y) },
-                            onResize = { width -> onResizeOutline(box.id, width) },
-                            onSetMinHeight = { height -> onSetOutlineMinHeight(box.id, height) },
-                            onMeasured = { heightPx -> heights[box.id] = heightPx },
-                        )
+                            }
+                        }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The window onto the page: it pans in both directions and scales.
+ *
+ * Both axes scroll because a page has a size of its own — a sheet, or whatever the containers
+ * occupy — and at any zoom above what fits, the rest of it still has to be reachable.
+ */
+@Composable
+private fun PageViewport(zoom: Float, content: @Composable () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Box(Modifier.horizontalScroll(rememberScrollState())) {
+            Zoomed(zoom, content)
+        }
+    }
+}
+
+/**
+ * The sheet: its colour and its ruling.
+ *
+ * Drawn behind the content rather than as a background on the same box, because a bounded page is
+ * a rectangle of a fixed size sitting on a larger canvas — the ruling has to stop at the paper's
+ * edge, and the area beyond it has to read as "off the page".
+ */
+@Composable
+private fun BoxScope.PageSurface(
+    paper: Pair<Float, Float>?,
+    colors: CanvasColors,
+    ruleLines: RuleLines,
+) {
+    Box(
+        Modifier
+            .then(
+                if (paper != null) {
+                    Modifier.size(paper.first.dp, paper.second.dp)
+                } else {
+                    Modifier.matchParentSize()
+                },
+            )
+            .background(colors.background)
+            .then(if (paper != null) Modifier.border(1.dp, colors.ruleLine) else Modifier)
+            .testTag(PageTags.SURFACE),
+    ) {
+        if (ruleLines != RuleLines.None) {
+            PageRuling(color = colors.ruleLine, rules = ruleLines)
+        }
+    }
+}
+
+/**
+ * Scales the page.
+ *
+ * `graphicsLayer` on its own would scale what is drawn but not the space it takes up, so a zoomed
+ * page would be clipped to its old bounds and the rest could never be scrolled to. Measuring the
+ * content unbounded and reporting its *scaled* size instead makes zoom a layout fact, which is what
+ * the surrounding scroll containers need to see. The content keeps its own coordinate system, so
+ * taps and drags inside it need no conversion.
+ */
+@Composable
+private fun Zoomed(zoom: Float, content: @Composable () -> Unit) {
+    Layout(content = content) { measurables, _ ->
+        val placeable = measurables.first().measure(Constraints())
+        layout((placeable.width * zoom).roundToInt(), (placeable.height * zoom).roundToInt()) {
+            placeable.placeWithLayer(0, 0) {
+                scaleX = zoom
+                scaleY = zoom
+                transformOrigin = TransformOrigin(0f, 0f)
             }
         }
     }
@@ -240,6 +356,11 @@ fun EditorPane(
 private fun EditorDefaults.asMarks(): Set<Mark> = buildSet {
     if (fontFamily != EditorDefaults.FALLBACK_FONT_FAMILY) add(Mark.FontFamily(fontFamily))
     if (fontSize != EditorDefaults.FALLBACK_FONT_SIZE) add(Mark.FontSize(fontSize))
+}
+
+/** Test tag for the sheet, whose geometry the View tab changes. */
+internal object PageTags {
+    const val SURFACE = "page-surface"
 }
 
 /** Test tags for the container's drag targets. */
@@ -530,17 +651,23 @@ private fun PageHeader(
     }
 }
 
-/** The ruled/grid page background from the reference UI. */
+/**
+ * The ruled or squared page background from the reference UI.
+ *
+ * Spacing comes from the document, so a page ruled on a tablet is ruled identically on a phone —
+ * the lines are part of the page, not of the window it is being read in.
+ */
 @Composable
-private fun RuleLines(color: Color) {
+private fun PageRuling(color: Color, rules: RuleLines) {
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val step: Dp = 26.dp
-        val stepPx = step.toPx()
+        val stepPx = rules.spacingDp.dp.toPx()
+        if (stepPx <= 0f) return@Canvas
         var y = stepPx
         while (y < size.height) {
             drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
             y += stepPx
         }
+        if (!rules.squared) return@Canvas
         var x = stepPx
         while (x < size.width) {
             drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)

@@ -22,12 +22,19 @@ import st.unamedtba.data.EditorDefaults
 import st.unamedtba.data.EditorDefaultsStore
 import st.unamedtba.data.NotesRepository
 import st.unamedtba.data.PageLoad
+import st.unamedtba.data.TabsLayout
+import st.unamedtba.data.ViewSettings
+import st.unamedtba.data.ViewSettingsStore
 import st.unamedtba.data.db.NotebookWithSections
 import st.unamedtba.data.db.PageEntity
 import st.unamedtba.model.Block
 import st.unamedtba.model.Mark
+import st.unamedtba.model.Orientation
 import st.unamedtba.model.Outline
 import st.unamedtba.model.PageDoc
+import st.unamedtba.model.PageStyle
+import st.unamedtba.model.PaperSize
+import st.unamedtba.model.RuleLines
 import st.unamedtba.model.newId
 import st.unamedtba.richtext.FormatCommand
 import st.unamedtba.richtext.SelectionState
@@ -56,6 +63,8 @@ data class NotesUiState(
     val title: String = "",
     val createdAt: Long = 0L,
     val outlines: List<OutlineBox> = emptyList(),
+    /** The open page's own appearance, loaded and saved with its content. */
+    val pageStyle: PageStyle = PageStyle(),
     /** Bumped when a different page loads, so the canvas rebuilds its editors. */
     val pageRevision: Int = 0,
     val loading: Boolean = true,
@@ -70,6 +79,7 @@ enum class CompactPane { Notebooks, Pages, Editor }
 class NotesViewModel(
     private val repository: NotesRepository,
     private val editorDefaultsStore: EditorDefaultsStore,
+    private val viewSettingsStore: ViewSettingsStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotesUiState())
@@ -81,6 +91,10 @@ class NotesViewModel(
     /** Font and size for text with no mark of its own — the ribbon's readout and the editor's base. */
     val editorDefaults: StateFlow<EditorDefaults> = editorDefaultsStore.defaults
         .stateIn(viewModelScope, SharingStarted.Eagerly, EditorDefaults())
+
+    /** Zoom, navigation layout and canvas brightness — this device's view, not the document's. */
+    val viewSettings: StateFlow<ViewSettings> = viewSettingsStore.settings
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ViewSettings())
 
     /** Commands travel to the focused editor, the only thing that can act on them. */
     private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
@@ -105,37 +119,46 @@ class NotesViewModel(
     /** Page whose stored body failed to decode. Never written to. */
     private var readOnlyPageId: String? = null
 
+    /** Last measured (viewport, canvas) width in dp, for [zoomToPageWidth]. */
+    private var canvasWidths: Pair<Float, Float> = 0f to 0f
+
     init {
-        viewModelScope.launch { repository.seedIfEmpty() }
+        viewModelScope.launch {
+            // Nothing may observe the tree until first-run seeding has finished. A page's row is
+            // created before its content is written, so a page opened inside that gap loads the
+            // empty document the row was created with — and the next save writes that emptiness
+            // over the seeded content. On any later launch this returns immediately.
+            repository.seedIfEmpty()
 
-        repository.observeTree()
-            .onEach { tree ->
-                _uiState.value = _uiState.value.copy(tree = tree, loading = false)
-                // Land on something real on first launch rather than an empty editor.
-                if (selectedSection.value == null) {
-                    tree.firstOrNull()?.liveSections?.firstOrNull()?.let { selectSection(it.id) }
+            repository.observeTree()
+                .onEach { tree ->
+                    _uiState.value = _uiState.value.copy(tree = tree, loading = false)
+                    // Land on something real on first launch rather than an empty editor.
+                    if (selectedSection.value == null) {
+                        tree.firstOrNull()?.liveSections?.firstOrNull()?.let { selectSection(it.id) }
+                    }
                 }
-            }
-            .launchIn(viewModelScope)
+                .launchIn(this)
 
-        selectedSection
-            .filterNotNull()
-            .flatMapLatest { repository.observePages(it) }
-            .onEach { pages ->
-                _uiState.value = _uiState.value.copy(pages = pages)
-                val current = _uiState.value.selectedPageId
-                if (current == null || pages.none { it.id == current }) {
-                    pages.firstOrNull()?.let { openPage(it.id) }
-                        ?: run { _uiState.value = _uiState.value.copy(selectedPageId = null, title = "", outlines = emptyList()) }
+            selectedSection
+                .filterNotNull()
+                .flatMapLatest { repository.observePages(it) }
+                .onEach { pages ->
+                    _uiState.value = _uiState.value.copy(pages = pages)
+                    val current = _uiState.value.selectedPageId
+                    if (current == null || pages.none { it.id == current }) {
+                        pages.firstOrNull()?.let { openPage(it.id) }
+                            ?: run { _uiState.value = _uiState.value.copy(selectedPageId = null, title = "", outlines = emptyList()) }
+                    }
                 }
-            }
-            .launchIn(viewModelScope)
+                .launchIn(this)
 
-        // Debounced so a burst of keystrokes is one write, not one per character.
-        edits
-            .debounce(AUTOSAVE_DELAY_MS)
-            .onEach { persist() }
-            .launchIn(viewModelScope)
+            // Debounced so a burst of keystrokes is one write, not one per character.
+            edits
+                .debounce(AUTOSAVE_DELAY_MS)
+                .onEach { persist() }
+                .launchIn(this)
+        }
     }
 
     // --- navigation ----------------------------------------------------------------------------
@@ -177,6 +200,7 @@ class NotesViewModel(
                 title = page?.title.orEmpty(),
                 createdAt = page?.createdAt ?: System.currentTimeMillis(),
                 outlines = loaded.map { OutlineBox(it.id, it.x, it.y, it.width, it.minHeight) },
+                pageStyle = doc.style,
                 pageRevision = _uiState.value.pageRevision + 1,
                 contentError = if (readOnlyPageId == pageId) {
                     "This page could not be read, so editing is disabled to protect its contents."
@@ -312,6 +336,69 @@ class NotesViewModel(
         }
     }
 
+    // --- view ----------------------------------------------------------------------------------
+
+    fun setRuleLines(rule: RuleLines) = updatePageStyle { it.copy(ruleLines = rule) }
+
+    /** Null restores the theme's canvas colour rather than painting a light page dark. */
+    fun setPageColor(argb: Int?) = updatePageStyle { it.copy(backgroundArgb = argb) }
+
+    fun setPaperSize(paper: PaperSize) = updatePageStyle { it.copy(paper = paper) }
+
+    fun setOrientation(orientation: Orientation) = updatePageStyle { it.copy(orientation = orientation) }
+
+    fun setHideTitle(hidden: Boolean) = updatePageStyle { it.copy(hideTitle = hidden) }
+
+    /**
+     * Page appearance is part of the document, so a change goes through the same autosave path as
+     * typing rather than being written immediately — switching pages mid-change still persists it.
+     */
+    private fun updatePageStyle(block: (PageStyle) -> PageStyle) {
+        if (_uiState.value.selectedPageId == null) return
+        val updated = block(_uiState.value.pageStyle)
+        if (updated == _uiState.value.pageStyle) return
+        _uiState.value = _uiState.value.copy(pageStyle = updated)
+        edits.tryEmit(Unit)
+    }
+
+    fun setZoom(zoom: Float) {
+        viewModelScope.launch { viewSettingsStore.setZoom(zoom) }
+    }
+
+    fun zoomIn() = setZoom(ViewSettings.zoomStepUp(viewSettings.value.zoom))
+
+    fun zoomOut() = setZoom(ViewSettings.zoomStepDown(viewSettings.value.zoom))
+
+    /**
+     * Fits the page's width to the window.
+     *
+     * The two widths this needs are known only where the canvas is laid out, so the canvas reports
+     * them and the ribbon stays ignorant of geometry — the same one-way arrangement as AD6's
+     * command bus. They are held outside [uiState] because they change with every layout pass and
+     * nothing renders from them.
+     */
+    fun zoomToPageWidth() {
+        val (viewport, content) = canvasWidths
+        ViewSettings.fitZoom(viewport, content)?.let(::setZoom)
+    }
+
+    fun onCanvasMeasured(viewportWidthDp: Float, contentWidthDp: Float) {
+        canvasWidths = viewportWidthDp to contentWidthDp
+    }
+
+    fun setTabsLayout(layout: TabsLayout) {
+        viewModelScope.launch { viewSettingsStore.setTabsLayout(layout) }
+    }
+
+    /**
+     * Pins the canvas light or dark, independently of the app's own theme — OneNote lets a light
+     * page sit inside a dark shell. The caller passes what the canvas should become, because until
+     * this is used the canvas simply follows the theme and only the UI knows what that resolved to.
+     */
+    fun setCanvasDark(dark: Boolean) {
+        viewModelScope.launch { viewSettingsStore.setCanvasDark(dark) }
+    }
+
     // --- pages, sections, notebooks -------------------------------------------------------------
 
     fun createNotebook(name: String) {
@@ -400,7 +487,7 @@ class NotesViewModel(
                 blocks = blocks,
             )
         }
-        repository.saveDoc(pageId, PageDoc(outlines = outlines))
+        repository.saveDoc(pageId, PageDoc(outlines = outlines, style = state.pageStyle))
     }
 
     companion object {
@@ -412,10 +499,11 @@ class NotesViewModel(
         fun factory(
             repository: NotesRepository,
             editorDefaultsStore: EditorDefaultsStore,
+            viewSettingsStore: ViewSettingsStore,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                NotesViewModel(repository, editorDefaultsStore) as T
+                NotesViewModel(repository, editorDefaultsStore, viewSettingsStore) as T
         }
     }
 }

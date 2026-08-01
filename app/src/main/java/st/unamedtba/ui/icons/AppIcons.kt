@@ -15,13 +15,18 @@ import androidx.compose.ui.graphics.Color
  * therefore rebuild every glyph on every keystroke, so they are hoisted to the theme instead.
  */
 @Immutable
-class AppIcons(neutral: Color, accent: Color) {
+class AppIcons(neutral: Color, accent: Color, warn: Color) {
     val bulletList = bulletListGlyph(neutral, accent)
     val numberedList = numberedListGlyph(neutral, accent)
     val todoList = todoListGlyph(neutral, accent)
     val subscript = subscriptGlyph(neutral, accent)
     val superscript = superscriptGlyph(neutral, accent)
     val styles = stylesGlyph(neutral, accent)
+    val tabsLayout = tabsLayoutGlyph(neutral, accent)
+    val ruleLines = ruleLinesGlyph(neutral, accent, warn)
+    val paperSize = paperSizeGlyph(neutral, accent)
+    val hidePageTitle = hidePageTitleGlyph(neutral, warn)
+    val pageWidth = pageWidthGlyph(neutral, accent)
 }
 
 /**
@@ -40,10 +45,15 @@ val LocalRibbonIcons = staticCompositionLocalOf<RibbonIcons> {
 }
 
 @Composable
-fun rememberRibbonIcons(idleNeutral: Color, activeNeutral: Color, accent: Color): RibbonIcons =
-    remember(idleNeutral, activeNeutral, accent) {
+fun rememberRibbonIcons(
+    idleNeutral: Color,
+    activeNeutral: Color,
+    accent: Color,
+    warn: Color,
+): RibbonIcons =
+    remember(idleNeutral, activeNeutral, accent, warn) {
         RibbonIcons(
-            idle = AppIcons(idleNeutral, accent),
-            active = AppIcons(activeNeutral, accent),
+            idle = AppIcons(idleNeutral, accent, warn),
+            active = AppIcons(activeNeutral, accent, warn),
         )
     }

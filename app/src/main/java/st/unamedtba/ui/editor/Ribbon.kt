@@ -43,15 +43,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import st.unamedtba.data.EditorDefaults
+import st.unamedtba.data.ViewSettings
 import st.unamedtba.model.Align
 import st.unamedtba.model.BlockType
 import st.unamedtba.model.Mark
+import st.unamedtba.model.PageStyle
 import st.unamedtba.richtext.ClipboardAction
 import st.unamedtba.richtext.FontRegistry
 import st.unamedtba.richtext.FormatCommand
@@ -100,6 +103,11 @@ fun Ribbon(
     activeTab: RibbonTab,
     onTabChange: (RibbonTab) -> Unit,
     onCommand: (FormatCommand) -> Unit,
+    /** The open page's appearance, which the View tab both shows and changes. */
+    pageStyle: PageStyle,
+    viewSettings: ViewSettings,
+    view: ViewActions,
+    pageOpen: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -116,6 +124,7 @@ fun Ribbon(
         )
         when (activeTab) {
             RibbonTab.Home -> HomeTab(selection, onCommand)
+            RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
             else -> PlaceholderTab(activeTab)
         }
     }
@@ -297,7 +306,7 @@ private fun HomeTab(
 }
 
 @Composable
-private fun RibbonButton(
+internal fun RibbonButton(
     icon: ImageVector,
     label: String,
     active: Boolean = false,
@@ -318,6 +327,62 @@ private fun RibbonButton(
 }
 
 /**
+ * A ribbon control that spells out what it does.
+ *
+ * The View tab's controls are labelled in the reference where Home's are not, and for good reason:
+ * "Rule Lines" and "Paper Size" have no glyph anyone would recognise cold, while bold and italic do.
+ *
+ * [enabled] renders the control without wiring it up. That is the honest way to show a button whose
+ * feature is not built — it holds its place in the layout and plainly does not work, rather than
+ * accepting a tap and doing nothing.
+ */
+@Composable
+internal fun RibbonCommand(
+    label: String,
+    onClick: () -> Unit,
+    active: Boolean = false,
+    enabled: Boolean = true,
+    dropdown: Boolean = false,
+    icon: @Composable (active: Boolean) -> Unit,
+) {
+    val background = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 1.dp)
+            .height(32.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(background)
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .alpha(if (enabled) 1f else DISABLED_ALPHA)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        icon(active)
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (active) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            maxLines = 1,
+        )
+        if (dropdown) {
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+internal const val DISABLED_ALPHA = 0.42f
+
+/**
  * A ribbon button whose icon carries its own colours.
  *
  * The glyph is picked from a pre-built set rather than passed in directly, because a two-tone
@@ -326,7 +391,7 @@ private fun RibbonButton(
  * anything else would flatten both paths to one colour and undo the point of the icon.
  */
 @Composable
-private fun TwoToneRibbonButton(
+internal fun TwoToneRibbonButton(
     glyph: (AppIcons) -> ImageVector,
     label: String,
     active: Boolean = false,
@@ -345,7 +410,7 @@ private fun TwoToneRibbonButton(
 
 /** The pressed-state chrome shared by both button flavours. */
 @Composable
-private fun RibbonButtonSlot(
+internal fun RibbonButtonSlot(
     active: Boolean,
     onClick: () -> Unit,
     icon: @Composable () -> Unit,
@@ -365,7 +430,7 @@ private fun RibbonButtonSlot(
 }
 
 @Composable
-private fun Divider() {
+internal fun Divider() {
     Box(
         Modifier
             .padding(horizontal = 6.dp)
@@ -417,7 +482,7 @@ private fun FontSizePicker(current: Int, onPick: (Int) -> Unit) {
 }
 
 @Composable
-private fun ComboBox(text: String, width: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+internal fun ComboBox(text: String, width: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .padding(horizontal = 2.dp)

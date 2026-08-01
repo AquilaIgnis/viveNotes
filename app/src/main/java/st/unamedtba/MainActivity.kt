@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
         val app = application as NotesApplication
         val viewModel = ViewModelProvider(
             this,
-            NotesViewModel.factory(app.repository, app.editorDefaults),
+            NotesViewModel.factory(app.repository, app.editorDefaults, app.viewSettings),
         )[NotesViewModel::class.java]
 
         setContent {

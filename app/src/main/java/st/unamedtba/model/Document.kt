@@ -15,6 +15,7 @@ import kotlinx.serialization.json.Json
 data class PageDoc(
     val schema: Int = CURRENT_SCHEMA,
     val outlines: List<Outline> = emptyList(),
+    val style: PageStyle = PageStyle(),
 ) {
     companion object {
         const val CURRENT_SCHEMA = 1
@@ -22,6 +23,90 @@ data class PageDoc(
         /** A page starts with one full-width outline holding a single empty paragraph. */
         fun empty(): PageDoc = PageDoc(outlines = listOf(Outline.Text.empty()))
     }
+}
+
+/**
+ * How a page is presented: its ruling, colour, paper bounds and whether it shows a title.
+ *
+ * These belong to the document rather than to preferences, because they are properties of the page
+ * itself — a squared page stays squared when it reaches another device, and an exporter needs them
+ * to reproduce the page. Contrast `data/EditorDefaults.kt`, which describes how the user likes to
+ * write and so must *not* travel with any one document.
+ *
+ * Every field has a default, so a page written before the View tab existed decodes to the same
+ * appearance it already had.
+ */
+@Serializable
+data class PageStyle(
+    val ruleLines: RuleLines = RuleLines.GridMedium,
+    val paper: PaperSize = PaperSize.Auto,
+    val orientation: Orientation = Orientation.Portrait,
+    /** Page background. Null follows the app's canvas colours, which track the theme. */
+    val backgroundArgb: Int? = null,
+    val hideTitle: Boolean = false,
+) {
+    /**
+     * The page's bounds in dp, or null on [PaperSize.Auto] — the canvas is then unbounded, which
+     * is the free-form default rather than a missing value.
+     */
+    val pageSizeDp: Pair<Float, Float>?
+        get() {
+            if (paper == PaperSize.Auto) return null
+            val w = paper.widthInches * DP_PER_INCH
+            val h = paper.heightInches * DP_PER_INCH
+            return if (orientation == Orientation.Landscape) h to w else w to h
+        }
+
+    companion object {
+        /**
+         * Android's dp is defined so that 160 of them measure an inch, so a page laid out this way
+         * is physically the size it claims at 100% zoom. That is what makes the View tab's "100%"
+         * mean the same thing here as it does in OneNote.
+         */
+        const val DP_PER_INCH = 160f
+    }
+}
+
+/**
+ * Page ruling. Spacing is carried here rather than in the renderer because dp is already the
+ * document's unit — outline positions are stored in it — so this stays a description of the page
+ * rather than of one screen. Only the enum's *name* is serialized, so the spacings can be retuned
+ * without touching a stored document.
+ */
+@Serializable
+enum class RuleLines(val spacingDp: Float, val squared: Boolean) {
+    None(0f, false),
+    Narrow(18f, false),
+    College(22f, false),
+    Standard(26f, false),
+    Wide(32f, false),
+    GridSmall(14f, true),
+    GridMedium(26f, true),
+    GridLarge(38f, true),
+}
+
+@Serializable
+enum class Orientation { Portrait, Landscape }
+
+/** Paper sizes offered by the View tab, in the reference UI's order. */
+@Serializable
+enum class PaperSize(val widthInches: Float, val heightInches: Float) {
+    /** No bounds: the canvas grows with its content, which is how a page starts. */
+    Auto(0f, 0f),
+    Statement(5.5f, 8.5f),
+    Letter(8.5f, 11f),
+    Tabloid(11f, 17f),
+    Legal(8.5f, 14f),
+    A3(11.69f, 16.54f),
+    A4(8.27f, 11.69f),
+    A5(5.83f, 8.27f),
+    A6(4.13f, 5.83f),
+    B4(9.84f, 13.90f),
+    B5(6.93f, 9.84f),
+    B6(4.92f, 6.93f),
+    Postcard(3.94f, 5.83f),
+    IndexCard(3f, 5f),
+    Billfold(2.75f, 6.25f),
 }
 
 /**

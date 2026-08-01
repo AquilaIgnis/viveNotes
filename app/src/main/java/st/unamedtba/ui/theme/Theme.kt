@@ -10,6 +10,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -73,13 +74,15 @@ data class IconAccents(
     val blue: Color,
     val gold: Color,
     val green: Color,
+    val red: Color,
 )
 
 /** Sampled directly from `generalUI.png` and `viewsTab.png`. */
 private val DarkAccents = IconAccents(
-    blue = Color(0xFF3B9ADC),   // bullets, numerals, subscript digit, Styles brush
+    blue = Color(0xFF3B9ADC),   // bullets, numerals, subscript digit, Styles brush, page geometry
     gold = Color(0xFFE6A545),   // Tag star — unused until the Tag button exists
-    green = Color(0xFF73DD83),  // New Window "+" — unused until the View tab is built
+    green = Color(0xFF73DD83),  // the "+" that adds something: a section tab, a notebook
+    red = Color(0xFFE94C4F),    // what a glyph removes or hides: the Hide Page Title cross
 )
 
 /** The same hues darkened to hold contrast against light surfaces. */
@@ -87,6 +90,7 @@ private val LightAccents = IconAccents(
     blue = Color(0xFF1B6FA8),
     gold = Color(0xFF8A5B0F),
     green = Color(0xFF1E7A32),
+    red = Color(0xFFC12F32),
 )
 
 val LocalIconAccents = staticCompositionLocalOf { DarkAccents }
@@ -100,16 +104,41 @@ data class CanvasColors(
     val ruleLine: Color,
     val text: Color,
     val secondaryText: Color,
+    /** What Switch Background is currently showing, so the ribbon can flip it. */
+    val isDark: Boolean,
 )
 
-val LocalCanvasColors = staticCompositionLocalOf {
-    CanvasColors(
-        background = Color(0xFF1F1F1F),
-        ruleLine = Color(0xFF2E3A4A),
-        text = Color(0xFFE6E6E6),
-        secondaryText = Color(0xFF9A9A9A),
-    )
+val DarkCanvasColors = CanvasColors(
+    background = Color(0xFF1F1F1F),
+    ruleLine = Color(0xFF2C3947),
+    text = Color(0xFFE6E6E6),
+    secondaryText = Color(0xFF9A9A9A),
+    isDark = true,
+)
+
+val LightCanvasColors = CanvasColors(
+    background = Color(0xFFFFFFFF),
+    ruleLine = Color(0xFFD8E4F0),
+    text = Color(0xFF1B1B1B),
+    secondaryText = Color(0xFF6B6B6B),
+    isDark = false,
+)
+
+fun canvasColorsFor(dark: Boolean): CanvasColors = if (dark) DarkCanvasColors else LightCanvasColors
+
+/**
+ * Re-derives the page's ink for a background the user chose from the Page Color menu.
+ *
+ * Taking the colour alone would be a trap: a dark page picked while the shell is light would keep
+ * near-black text and swallow it. The ink follows the *page*, which is the whole point of the
+ * canvas colours being separate from the theme in the first place.
+ */
+fun CanvasColors.paintedWith(argb: Int?): CanvasColors {
+    val background = argb?.let(::Color) ?: return this
+    return canvasColorsFor(background.luminance() < 0.45f).copy(background = background)
 }
+
+val LocalCanvasColors = staticCompositionLocalOf { DarkCanvasColors }
 
 private val AppTypography = Typography(
     titleLarge = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Normal),
@@ -129,21 +158,9 @@ fun UnamedTbaTheme(
 ) {
     val colors = if (darkTheme) DarkColors else LightColors
     val accents = if (darkTheme) DarkAccents else LightAccents
-    val canvas = if (darkTheme) {
-        CanvasColors(
-            background = Color(0xFF1F1F1F),
-            ruleLine = Color(0xFF2C3947),
-            text = Color(0xFFE6E6E6),
-            secondaryText = Color(0xFF9A9A9A),
-        )
-    } else {
-        CanvasColors(
-            background = Color(0xFFFFFFFF),
-            ruleLine = Color(0xFFD8E4F0),
-            text = Color(0xFF1B1B1B),
-            secondaryText = Color(0xFF6B6B6B),
-        )
-    }
+    // The starting point only. Switch Background and Page Color both re-provide this lower down,
+    // where the setting and the open page are known.
+    val canvas = canvasColorsFor(darkTheme)
 
     // Built here rather than at the call sites so the vectors are constructed once per theme
     // instead of once per recomposition of a ribbon that redraws on every cursor move.
@@ -151,6 +168,7 @@ fun UnamedTbaTheme(
         idleNeutral = colors.onSurfaceVariant,
         activeNeutral = colors.onPrimaryContainer,
         accent = accents.blue,
+        warn = accents.red,
     )
 
     CompositionLocalProvider(

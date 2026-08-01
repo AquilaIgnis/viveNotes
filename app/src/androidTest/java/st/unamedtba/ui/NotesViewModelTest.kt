@@ -22,10 +22,15 @@ import org.junit.runner.RunWith
 import st.unamedtba.data.EditorDefaultsStore
 import st.unamedtba.data.NotesRepository
 import st.unamedtba.data.PageLoad
+import st.unamedtba.data.ViewSettingsStore
 import st.unamedtba.data.db.NotesDatabase
 import st.unamedtba.data.db.PageContentEntity
 import st.unamedtba.model.Block
+import st.unamedtba.model.Orientation
 import st.unamedtba.model.Outline
+import st.unamedtba.model.PageStyle
+import st.unamedtba.model.PaperSize
+import st.unamedtba.model.RuleLines
 import st.unamedtba.model.plainText
 
 /**
@@ -43,6 +48,7 @@ class NotesViewModelTest {
     private lateinit var db: NotesDatabase
     private lateinit var repository: NotesRepository
     private lateinit var editorDefaults: EditorDefaultsStore
+    private lateinit var viewSettings: ViewSettingsStore
 
     @Before
     fun setUp() {
@@ -57,6 +63,7 @@ class NotesViewModelTest {
         // Backed by a real file, unlike the in-memory database — the preferences delegate memoises
         // per Context, so every test in this class shares one store rather than clashing over it.
         editorDefaults = EditorDefaultsStore(context)
+        viewSettings = ViewSettingsStore(context)
     }
 
     @After
@@ -67,7 +74,7 @@ class NotesViewModelTest {
 
     /** Builds a settled view model sitting on the seeded Welcome page. */
     private suspend fun seededViewModel(): NotesViewModel {
-        val vm = NotesViewModel(repository, editorDefaults)
+        val vm = NotesViewModel(repository, editorDefaults, viewSettings)
         scheduler.advanceUntilIdle()
         assertNotNull("expected the seeded page to be open", vm.uiState.value.selectedPageId)
         return vm
@@ -112,6 +119,30 @@ class NotesViewModelTest {
 
         assertEquals("the unreadable document was overwritten", garbage, storedJson(pageId))
         assertNotNull("the user was not told the page is unreadable", vm.uiState.value.contentError)
+    }
+
+    /**
+     * Regression: the seeded page was blanked by the first thing that saved it.
+     *
+     * Seeding creates a page's row and writes its content a moment later. The tree observer used
+     * to start alongside the seed, so it could open the page in that gap, load the empty document
+     * the row was created with, and hold it — and the first save wrote that emptiness over the
+     * seed. Found on a clean install by changing the page colour, which is a save that touches no
+     * text at all.
+     */
+    @Test
+    fun theSeededPageIsNotBlankedByASaveThatTouchesNoText() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        assertTrue(
+            "the view model opened the seeded page before its content was written",
+            vm.initialBlocksFor(vm.uiState.value.outlines.first().id).any { it.text.isNotBlank() },
+        )
+
+        vm.setRuleLines(RuleLines.Wide)
+        advanceUntilIdle()
+
+        assertTrue("the seeded page was blanked", storedText(pageId).contains("This is a page"))
     }
 
     // --- the load/edit/save cycle --------------------------------------------------------------
@@ -252,6 +283,83 @@ class NotesViewModelTest {
         advanceUntilIdle()
 
         assertEquals(before, vm.uiState.value.outlines.size)
+    }
+
+    // --- page appearance -------------------------------------------------------------------------
+
+    /**
+     * The View tab writes into the document, so its settings ride the same autosave path as text —
+     * and must come back with the page, not with the app.
+     */
+    @Test
+    fun pageAppearanceIsSavedAndRestored() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+
+        vm.setRuleLines(RuleLines.College)
+        vm.setPaperSize(PaperSize.A4)
+        vm.setOrientation(Orientation.Landscape)
+        vm.setPageColor(0xFF102030.toInt())
+        vm.setHideTitle(true)
+        advanceUntilIdle()
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        val style = vm.uiState.value.pageStyle
+        assertEquals(RuleLines.College, style.ruleLines)
+        assertEquals(PaperSize.A4, style.paper)
+        assertEquals(Orientation.Landscape, style.orientation)
+        assertEquals(0xFF102030.toInt(), style.backgroundArgb)
+        assertEquals(true, style.hideTitle)
+    }
+
+    /** Appearance belongs to one page, so styling it must not follow the user to the next. */
+    @Test
+    fun pageAppearanceDoesNotLeakToAnotherPage() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val sectionId = vm.uiState.value.selectedSectionId!!
+        vm.setRuleLines(RuleLines.Wide)
+        advanceUntilIdle()
+
+        vm.openPage(repository.createPage(sectionId, "another"))
+        advanceUntilIdle()
+
+        assertEquals(PageStyle().ruleLines, vm.uiState.value.pageStyle.ruleLines)
+    }
+
+    /** A page can be styled before a word is typed in it, and that is worth persisting on its own. */
+    @Test
+    fun appearanceIsPersistedOnAPageWithNoText() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val sectionId = vm.uiState.value.selectedSectionId!!
+        val pageId = repository.createPage(sectionId, "blank")
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        vm.setRuleLines(RuleLines.GridLarge)
+        advanceUntilIdle()
+
+        val stored = (runBlocking { repository.loadDoc(pageId) } as PageLoad.Loaded).doc
+        assertEquals(RuleLines.GridLarge, stored.style.ruleLines)
+    }
+
+    /** The read-only rule covers appearance too: it is written into the same document. */
+    @Test
+    fun stylingAnUnreadablePageDoesNotOverwriteIt() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val sectionId = vm.uiState.value.selectedSectionId!!
+        val pageId = repository.createPage(sectionId, "corrupt")
+        val garbage = """{"outlines":[{"t":"text","id":"x","blocks":"not-an-array"}]}"""
+        db.pageContentDao().upsert(PageContentEntity(pageId, garbage, 1L))
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        vm.setRuleLines(RuleLines.Narrow)
+        vm.setHideTitle(true)
+        advanceUntilIdle()
+
+        assertEquals("the unreadable document was overwritten", garbage, storedJson(pageId))
     }
 
     @Test

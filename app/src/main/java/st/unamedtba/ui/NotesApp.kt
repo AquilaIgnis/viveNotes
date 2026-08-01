@@ -26,6 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,11 +38,16 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import st.unamedtba.data.EditorDefaults
+import st.unamedtba.data.TabsLayout
 import st.unamedtba.ui.editor.EditorPane
 import st.unamedtba.ui.editor.Ribbon
 import st.unamedtba.ui.editor.RibbonTab
+import st.unamedtba.ui.editor.ViewActions
 import st.unamedtba.ui.shell.NotebookRail
 import st.unamedtba.ui.shell.PageListPane
+import st.unamedtba.ui.shell.SectionTabsBar
+import st.unamedtba.ui.theme.LocalCanvasColors
+import st.unamedtba.ui.theme.canvasColorsFor
 
 private val RAIL_WIDTH = 232.dp
 private val PAGE_LIST_WIDTH = 260.dp
@@ -59,97 +65,133 @@ fun NotesApp(viewModel: NotesViewModel) {
     val compactPane by viewModel.compactPane.collectAsStateWithLifecycle()
     val railVisible by viewModel.railVisible.collectAsStateWithLifecycle()
     val defaults by viewModel.editorDefaults.collectAsStateWithLifecycle()
+    val viewSettings by viewModel.viewSettings.collectAsStateWithLifecycle()
 
     var activeTab by remember { mutableStateOf(RibbonTab.Home) }
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val expanded = maxWidth >= EXPANDED_BREAKPOINT
-        val medium = maxWidth >= MEDIUM_BREAKPOINT
+    val viewActions = remember(viewModel) {
+        ViewActions(
+            setRuleLines = viewModel::setRuleLines,
+            setPageColor = viewModel::setPageColor,
+            setPaperSize = viewModel::setPaperSize,
+            setOrientation = viewModel::setOrientation,
+            setHideTitle = viewModel::setHideTitle,
+            setZoom = viewModel::setZoom,
+            zoomIn = viewModel::zoomIn,
+            zoomOut = viewModel::zoomOut,
+            zoomToPageWidth = viewModel::zoomToPageWidth,
+            setTabsLayout = viewModel::setTabsLayout,
+            setCanvasDark = viewModel::setCanvasDark,
+        )
+    }
 
-        Scaffold { padding ->
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .background(MaterialTheme.colorScheme.background),
-            ) {
-                TitleBar(
-                    title = state.title.ifBlank { "Untitled page" },
-                    showBack = !medium && compactPane != CompactPane.Notebooks,
-                    onBack = {
-                        viewModel.showCompactPane(
-                            when (compactPane) {
-                                CompactPane.Editor -> CompactPane.Pages
-                                else -> CompactPane.Notebooks
-                            },
+    val horizontalTabs = viewSettings.tabsLayout == TabsLayout.Horizontal
+    // Switch Background pins the canvas light or dark; until it is used it follows the theme.
+    val canvas = viewSettings.canvasDark?.let { canvasColorsFor(it) } ?: LocalCanvasColors.current
+    // Where "back" stops. With the sections on screen as tabs there is no notebook pane behind the
+    // page list to return to.
+    val rootPane = if (horizontalTabs) CompactPane.Pages else CompactPane.Notebooks
+    val pane = if (horizontalTabs && compactPane == CompactPane.Notebooks) CompactPane.Pages else compactPane
+
+    CompositionLocalProvider(LocalCanvasColors provides canvas) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val expanded = maxWidth >= EXPANDED_BREAKPOINT
+            val medium = maxWidth >= MEDIUM_BREAKPOINT
+
+            Scaffold { padding ->
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .background(MaterialTheme.colorScheme.background),
+                ) {
+                    TitleBar(
+                        title = state.title.ifBlank { "Untitled page" },
+                        showBack = !medium && pane != rootPane,
+                        onBack = { viewModel.showCompactPane(paneBehind(pane)) },
+                        showRailToggle = !horizontalTabs,
+                        onToggleRail = { viewModel.toggleRail() },
+                    )
+
+                    Ribbon(
+                        selection = selection,
+                        activeTab = activeTab,
+                        onTabChange = { activeTab = it },
+                        onCommand = viewModel::send,
+                        pageStyle = state.pageStyle,
+                        viewSettings = viewSettings,
+                        view = viewActions,
+                        pageOpen = state.selectedPageId != null,
+                    )
+
+                    HorizontalHairline()
+
+                    if (horizontalTabs) {
+                        SectionTabsBar(
+                            tree = state.tree,
+                            selectedSectionId = state.selectedSectionId,
+                            onSelectSection = viewModel::selectSection,
+                            onAddSection = { pendingDialog = NameDialog.Section(it) },
+                            onAddNotebook = { pendingDialog = NameDialog.Notebook },
                         )
-                    },
-                    onToggleRail = { viewModel.toggleRail() },
-                )
+                    }
 
-                Ribbon(
-                    selection = selection,
-                    activeTab = activeTab,
-                    onTabChange = { activeTab = it },
-                    onCommand = viewModel::send,
-                )
-
-                HorizontalHairline()
-
-                if (medium) {
-                    Row(Modifier.fillMaxSize()) {
-                        if (expanded && railVisible) {
-                            NotebookRail(
+                    if (medium) {
+                        Row(Modifier.fillMaxSize()) {
+                            if (!horizontalTabs && expanded && railVisible) {
+                                NotebookRail(
+                                    tree = state.tree,
+                                    selectedSectionId = state.selectedSectionId,
+                                    onSelectSection = viewModel::selectSection,
+                                    onToggleNotebook = viewModel::toggleNotebookExpanded,
+                                    onAddSection = { pendingDialog = NameDialog.Section(it) },
+                                    onAddNotebook = { pendingDialog = NameDialog.Notebook },
+                                    modifier = Modifier.width(RAIL_WIDTH),
+                                )
+                                VerticalHairline()
+                            }
+                            PageListPane(
+                                pages = state.pages,
+                                selectedPageId = state.selectedPageId,
+                                onSelectPage = viewModel::openPage,
+                                onAddPage = viewModel::addPage,
+                                onDeletePage = viewModel::deletePage,
+                                modifier = Modifier.width(PAGE_LIST_WIDTH),
+                            )
+                            VerticalHairline()
+                            EditorSurface(state, viewModel, defaults, viewSettings.zoom, Modifier.weight(1f))
+                        }
+                    } else {
+                        BackHandler(enabled = pane != rootPane) {
+                            viewModel.showCompactPane(paneBehind(pane))
+                        }
+                        when (pane) {
+                            CompactPane.Notebooks -> NotebookRail(
                                 tree = state.tree,
                                 selectedSectionId = state.selectedSectionId,
                                 onSelectSection = viewModel::selectSection,
                                 onToggleNotebook = viewModel::toggleNotebookExpanded,
                                 onAddSection = { pendingDialog = NameDialog.Section(it) },
                                 onAddNotebook = { pendingDialog = NameDialog.Notebook },
-                                modifier = Modifier.width(RAIL_WIDTH),
+                                modifier = Modifier.fillMaxSize(),
                             )
-                            VerticalHairline()
+                            CompactPane.Pages -> PageListPane(
+                                pages = state.pages,
+                                selectedPageId = state.selectedPageId,
+                                onSelectPage = viewModel::openPage,
+                                onAddPage = viewModel::addPage,
+                                onDeletePage = viewModel::deletePage,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            CompactPane.Editor -> EditorSurface(
+                                state,
+                                viewModel,
+                                defaults,
+                                viewSettings.zoom,
+                                Modifier.fillMaxSize(),
+                            )
                         }
-                        PageListPane(
-                            pages = state.pages,
-                            selectedPageId = state.selectedPageId,
-                            onSelectPage = viewModel::openPage,
-                            onAddPage = viewModel::addPage,
-                            onDeletePage = viewModel::deletePage,
-                            modifier = Modifier.width(PAGE_LIST_WIDTH),
-                        )
-                        VerticalHairline()
-                        EditorSurface(state, viewModel, defaults, Modifier.weight(1f))
-                    }
-                } else {
-                    BackHandler(enabled = compactPane != CompactPane.Notebooks) {
-                        viewModel.showCompactPane(
-                            when (compactPane) {
-                                CompactPane.Editor -> CompactPane.Pages
-                                else -> CompactPane.Notebooks
-                            },
-                        )
-                    }
-                    when (compactPane) {
-                        CompactPane.Notebooks -> NotebookRail(
-                            tree = state.tree,
-                            selectedSectionId = state.selectedSectionId,
-                            onSelectSection = viewModel::selectSection,
-                            onToggleNotebook = viewModel::toggleNotebookExpanded,
-                            onAddSection = { pendingDialog = NameDialog.Section(it) },
-                            onAddNotebook = { pendingDialog = NameDialog.Notebook },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        CompactPane.Pages -> PageListPane(
-                            pages = state.pages,
-                            selectedPageId = state.selectedPageId,
-                            onSelectPage = viewModel::openPage,
-                            onAddPage = viewModel::addPage,
-                            onDeletePage = viewModel::deletePage,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        CompactPane.Editor -> EditorSurface(state, viewModel, defaults, Modifier.fillMaxSize())
                     }
                 }
             }
@@ -174,11 +216,18 @@ fun NotesApp(viewModel: NotesViewModel) {
     }
 }
 
+/** The pane one step back from [pane] in the compact flow. */
+private fun paneBehind(pane: CompactPane): CompactPane = when (pane) {
+    CompactPane.Editor -> CompactPane.Pages
+    else -> CompactPane.Notebooks
+}
+
 @Composable
 private fun EditorSurface(
     state: NotesUiState,
     viewModel: NotesViewModel,
     defaults: EditorDefaults,
+    zoom: Float,
     modifier: Modifier = Modifier,
 ) {
     if (state.selectedPageId == null) {
@@ -196,6 +245,8 @@ private fun EditorSurface(
         title = state.title,
         createdAt = state.createdAt,
         defaults = defaults,
+        style = state.pageStyle,
+        zoom = zoom,
         onTitleChange = viewModel::setTitle,
         outlines = state.outlines,
         pageRevision = state.pageRevision,
@@ -209,7 +260,7 @@ private fun EditorSurface(
         onResizeOutline = viewModel::resizeOutline,
         onSetOutlineMinHeight = viewModel::setOutlineMinHeight,
         onOutlineBlurred = viewModel::onOutlineBlurred,
-        showRuleLines = true,
+        onCanvasMeasured = viewModel::onCanvasMeasured,
         modifier = modifier,
     )
 }
@@ -219,6 +270,8 @@ private fun TitleBar(
     title: String,
     showBack: Boolean,
     onBack: () -> Unit,
+    /** False under the horizontal tabs layout, where there is no rail to toggle. */
+    showRailToggle: Boolean,
     onToggleRail: () -> Unit,
 ) {
     Row(
@@ -238,7 +291,7 @@ private fun TitleBar(
                     modifier = Modifier.size(18.dp),
                 )
             }
-        } else {
+        } else if (showRailToggle) {
             IconButton(onClick = onToggleRail, modifier = Modifier.size(34.dp)) {
                 Icon(
                     Icons.Default.Menu,
@@ -247,6 +300,8 @@ private fun TitleBar(
                     modifier = Modifier.size(18.dp),
                 )
             }
+        } else {
+            Spacer(Modifier.width(8.dp))
         }
         Spacer(Modifier.width(6.dp))
         Text(
