@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "st.unamedtba"
+    namespace = "com.vivenotes"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -14,7 +14,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "st.unamedtba"
+        applicationId = "com.vivenotes"
         minSdk = 35
         targetSdk = 36
         versionCode = 1

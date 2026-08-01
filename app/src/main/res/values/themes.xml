@@ -1,7 +1,7 @@
 <resources>
     <!-- Compose supplies the real theme; this only styles the window before
          first composition. Keep it in sync with ui/theme/Theme.kt. -->
-    <style name="Theme.UnamedTba" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.ViveNotes" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/canvas_background</item>
         <item name="android:statusBarColor">@color/chrome_background</item>
         <item name="android:navigationBarColor">@color/chrome_background</item>

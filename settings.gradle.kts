@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "UnamedTba"
+rootProject.name = "viveNotes"
 include(":app")
  
