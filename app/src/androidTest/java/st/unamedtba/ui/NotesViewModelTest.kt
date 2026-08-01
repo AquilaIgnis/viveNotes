@@ -5,7 +5,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -19,6 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import st.unamedtba.data.EditorDefaults
 import st.unamedtba.data.EditorDefaultsStore
 import st.unamedtba.data.NotesRepository
 import st.unamedtba.data.PageLoad
@@ -26,6 +29,7 @@ import st.unamedtba.data.ViewSettingsStore
 import st.unamedtba.data.db.NotesDatabase
 import st.unamedtba.data.db.PageContentEntity
 import st.unamedtba.model.Block
+import st.unamedtba.model.Mark
 import st.unamedtba.model.Orientation
 import st.unamedtba.model.Outline
 import st.unamedtba.model.PageStyle
@@ -50,6 +54,9 @@ class NotesViewModelTest {
     private lateinit var editorDefaults: EditorDefaultsStore
     private lateinit var viewSettings: ViewSettingsStore
 
+    /** The device's own editor defaults, restored after the tests that overwrite them. */
+    private var savedDefaults: EditorDefaults? = null
+
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -64,10 +71,20 @@ class NotesViewModelTest {
         // per Context, so every test in this class shares one store rather than clashing over it.
         editorDefaults = EditorDefaultsStore(context)
         viewSettings = ViewSettingsStore(context)
+        // That file belongs to the installed app, not to the test, so whatever the defaults tests
+        // write to it has to be put back — otherwise running the suite silently changes the font
+        // the user's own build types in.
+        savedDefaults = runBlocking { editorDefaults.defaults.first() }
     }
 
     @After
     fun tearDown() {
+        savedDefaults?.let { saved ->
+            runBlocking {
+                editorDefaults.setFontSize(saved.fontSize)
+                editorDefaults.setFontFamily(saved.fontFamily)
+            }
+        }
         db.close()
         Dispatchers.resetMain()
     }
@@ -378,5 +395,59 @@ class NotesViewModelTest {
         val text = storedText(pageId)
         assertTrue("the untouched container was affected", text.contains("alpha"))
         assertTrue(text.contains("beta edited"))
+    }
+
+    // --- editor defaults -------------------------------------------------------------------------
+
+    /**
+     * The far end of the ribbon's press-and-hold: the size has to reach the preferences file.
+     *
+     * Deliberately not on the test dispatcher. DataStore runs a write in *its caller's* context, so
+     * a view model launched on a paused scheduler writes only while that scheduler is being turned —
+     * and waiting on the result blocks the very thread that would turn it. Running Main unconfined
+     * puts the write on the calling thread, which is what it has in the app.
+     */
+    @Test
+    fun holdingASizeStoresItAsTheDefault() = runBlocking<Unit> {
+        Dispatchers.setMain(Dispatchers.Unconfined)
+        val vm = NotesViewModel(repository, editorDefaults, viewSettings)
+
+        vm.setDefaultFont(Mark.FontSize(36))
+
+        withTimeout(STORE_TIMEOUT_MS) { editorDefaults.defaults.first { it.fontSize == 36 } }
+        assertEquals("the flow the ribbon renders from", 36, vm.editorDefaults.value.fontSize)
+    }
+
+    @Test
+    fun holdingAFontStoresItAsTheDefault() = runBlocking<Unit> {
+        Dispatchers.setMain(Dispatchers.Unconfined)
+        val vm = NotesViewModel(repository, editorDefaults, viewSettings)
+
+        vm.setDefaultFont(Mark.FontFamily("lora"))
+
+        withTimeout(STORE_TIMEOUT_MS) { editorDefaults.defaults.first { it.fontFamily == "lora" } }
+    }
+
+    /**
+     * Picking a size is an edit; only holding one is a preference. The two used to be a single
+     * path, so choosing 28 to write one heading in changed what every page opened afterwards
+     * started at. Arming now moves the readout and nothing else.
+     */
+    @Test
+    fun armingASizeMovesTheReadoutAndNothingElse() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        vm.onMarkArmed(Mark.FontSize(48))
+        advanceUntilIdle()
+
+        assertEquals("the ribbon must show the pick", 48, vm.selection.value.fontSize)
+        assertTrue(
+            "arming must not touch the store at all",
+            runBlocking { editorDefaults.defaults.first().fontSize } != 48,
+        )
+    }
+
+    private companion object {
+        const val STORE_TIMEOUT_MS = 5_000L
     }
 }

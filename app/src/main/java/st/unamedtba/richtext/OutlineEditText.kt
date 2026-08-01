@@ -2,8 +2,10 @@ package st.unamedtba.richtext
 
 import android.content.Context
 import android.text.Editable
+import android.text.Spanned
 import android.text.TextWatcher
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.inputmethod.BaseInputConnection
 import android.widget.EditText
@@ -11,6 +13,7 @@ import st.unamedtba.model.Align
 import st.unamedtba.model.Block
 import st.unamedtba.model.BlockType
 import st.unamedtba.model.Mark
+import kotlin.math.roundToInt
 
 /**
  * The note canvas.
@@ -58,9 +61,29 @@ class OutlineEditText @JvmOverloads constructor(
      * reaches text typed while it was in force, and existing content is left exactly as written.
      *
      * Empty when the default matches the view's fixed base, so the common case adds no marks to the
-     * document at all.
+     * document at all. It is also the last thing consulted — see [carryFontForward].
      */
     var defaultMarks: Set<Mark> = emptySet()
+
+    /**
+     * Font id of the view's own typeface, so text carrying no font mark can be named rather than
+     * reported as nothing.
+     *
+     * Declared instead of derived because a [android.graphics.Typeface] cannot be mapped back to
+     * the id a document would store. Set wherever the base typeface is set; fixed, never the user's
+     * default, for the reason [defaultMarks] gives.
+     */
+    var baseFontFamily: String = "sans-serif"
+
+    /**
+     * The size text with no size mark is drawn at, read back off the view so the two can never
+     * disagree. [android.util.TypedValue.deriveDimension] inverts the density and font-scale the
+     * size was set through, so this is the number the user picked, not a pixel count.
+     */
+    private val baseFontSize: Int
+        get() = TypedValue
+            .deriveDimension(TypedValue.COMPLEX_UNIT_SP, textSize, resources.displayMetrics)
+            .roundToInt()
 
     /**
      * Marks queued by toggling with no selection. Android has no notion of "formatting about to be
@@ -77,6 +100,15 @@ class OutlineEditText @JvmOverloads constructor(
      */
     private var suppressedMarks: MutableSet<Mark> = mutableSetOf()
 
+    /**
+     * What the text around the insertion point hands down, sampled before the buffer changes.
+     *
+     * It has to be read in [TextWatcher.beforeTextChanged]: by the time the edit has landed, the
+     * character behind the insertion point is one the user has just typed, so every keystroke would
+     * inherit from itself and the first one would decide the rest of the word.
+     */
+    private var inheritedAtInsert: Set<Mark> = emptySet()
+
     /** Guards the [TextWatcher] against the edits that normalisation itself makes. */
     private var suppressWatcher = false
 
@@ -84,7 +116,13 @@ class OutlineEditText @JvmOverloads constructor(
         private var insertStart = 0
         private var insertCount = 0
 
-        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+            inheritedAtInsert = if (!suppressWatcher && after > 0 && s is Spanned) {
+                SpannableCodec.inheritedMarks(s, start)
+            } else {
+                emptySet()
+            }
+        }
 
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
             insertStart = start
@@ -99,7 +137,7 @@ class OutlineEditText @JvmOverloads constructor(
                 val to = insertStart + insertCount
                 pendingMarks.forEach { SpannableCodec.applyMark(s, it, insertStart, to) }
                 suppressedMarks.forEach { SpannableCodec.removeMark(s, it, insertStart, to) }
-                stampDefaults(s, insertStart, to)
+                carryFontForward(s, insertStart, to)
             }
             SpannableCodec.normalize(s, editorStyle)
 
@@ -252,19 +290,34 @@ class OutlineEditText @JvmOverloads constructor(
     }
 
     /**
-     * Applies [defaultMarks] to just-inserted text, and only where nothing already decides it.
+     * Gives just-typed text a font and size where nothing else has decided one.
      *
-     * Order matters: this runs after [pendingMarks], so a font the user picked explicitly wins, and
-     * it checks what the range already carries, so text typed onto the end of a styled run keeps
-     * inheriting that run rather than jumping to the default. The default is what fills the gap
-     * when there is nothing to inherit — a new container, or a fresh page.
+     * Three sources, in falling order. A mark the user armed from the ribbon has already been
+     * applied by the caller and wins outright. Failing that, whatever the range already carries
+     * stands — text typed onto the end of a styled run needs nothing, since end-inclusive spans have
+     * already grown over it. What is left is text with nothing on it, and it takes the font of the
+     * character it was typed against, so writing at the head of a 20pt line stays 20pt instead of
+     * snapping back. [defaultMarks] fills in only where there is no neighbour at all: a fresh
+     * container, or a new page.
      */
-    private fun stampDefaults(s: Editable, from: Int, to: Int) {
-        if (defaultMarks.isEmpty()) return
-        val present = SpannableCodec.marksAt(s, from, to)
-        defaultMarks.forEach { mark ->
-            if (present.none { it.sameKindAs(mark) }) SpannableCodec.applyMark(s, mark, from, to)
-        }
+    private fun carryFontForward(s: Editable, from: Int, to: Int) {
+        if (inheritedAtInsert.isEmpty() && defaultMarks.isEmpty()) return
+        val present = SpannableCodec.marksTouching(s, from, to)
+        carry<Mark.FontSize>(s, from, to, present)
+        carry<Mark.FontFamily>(s, from, to, present)
+    }
+
+    /**
+     * Any mark of this kind *anywhere* in the range means the text arrived with formatting of its
+     * own — a paste, most likely — and a mark laid over the whole range would flatten it. Only text
+     * that carries nothing gets one.
+     */
+    private inline fun <reified T : Mark> carry(s: Editable, from: Int, to: Int, present: Set<Mark>) {
+        if (present.any { it is T }) return
+        val mark = inheritedAtInsert.firstOrNull { it is T }
+            ?: defaultMarks.firstOrNull { it is T }
+            ?: return
+        SpannableCodec.applyMark(s, mark, from, to)
     }
 
     private fun emitSelectionState() {
@@ -273,18 +326,33 @@ class OutlineEditText @JvmOverloads constructor(
         val from = minOf(selectionStart, selectionEnd).coerceIn(0, editable.length)
         val to = maxOf(selectionStart, selectionEnd).coerceIn(0, editable.length)
         val block = SpannableCodec.blockAt(editable, from)
-        val marks = if (from == to) {
-            SpannableCodec.marksAt(editable, from, to) + pendingMarks - suppressedMarks
+        val caret = from == to
+        // Two different questions. Over a selection the ribbon describes the text; at a caret it
+        // has to describe what typing would produce, which is exactly what [carryFontForward]
+        // applies — so the two read from the same place and cannot drift apart.
+        val marks = if (caret) {
+            SpannableCodec.inheritedMarks(editable, from).overriddenBy(pendingMarks) - suppressedMarks
         } else {
             SpannableCodec.marksAt(editable, from, to)
         }
+        val base = baseFontSize
         listener(
             SelectionState(
                 marks = marks,
                 blockType = block?.type ?: BlockType.Paragraph,
                 align = block?.align ?: Align.Start,
                 indent = block?.indent ?: 0,
-                hasSelection = from != to,
+                hasSelection = !caret,
+                fontSize = if (caret) {
+                    marks.filterIsInstance<Mark.FontSize>().firstOrNull()?.sp ?: base
+                } else {
+                    SpannableCodec.fontSizeIn(editable, from, to, base)
+                },
+                fontFamily = if (caret) {
+                    marks.filterIsInstance<Mark.FontFamily>().firstOrNull()?.name ?: baseFontFamily
+                } else {
+                    SpannableCodec.fontFamilyIn(editable, from, to, baseFontFamily)
+                },
             ),
         )
     }
@@ -293,6 +361,15 @@ class OutlineEditText @JvmOverloads constructor(
         const val MAX_INDENT = 8
     }
 }
+
+/**
+ * Merges two mark sets, [others] replacing anything of the same kind.
+ *
+ * A plain union would keep both — leaving an inherited 12 sitting next to a just-picked 20, for the
+ * ribbon to choose between arbitrarily.
+ */
+private fun Set<Mark>.overriddenBy(others: Collection<Mark>): Set<Mark> =
+    if (others.isEmpty()) this else filterNot { mark -> others.any { it.sameKindAs(mark) } }.toSet() + others
 
 /** Compares marks by kind, ignoring any value, so setting a colour replaces the previous one. */
 internal fun Mark.sameKindAs(other: Mark): Boolean = when {

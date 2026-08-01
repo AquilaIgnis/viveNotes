@@ -45,11 +45,21 @@ data class SelectionState(
     val align: Align = Align.Start,
     val indent: Int = 0,
     val hasSelection: Boolean = false,
+    /**
+     * The size the selected text is drawn at, or the size the next character typed will be when
+     * nothing is selected. Null where a selection mixes sizes and there is no one answer.
+     *
+     * Resolved by the editor rather than read out of [marks], because "no size mark" means both
+     * "drawn at the editor's base size" and "several sizes at once", and a ribbon that cannot tell
+     * those apart shows a number for text that has no single size.
+     */
+    val fontSize: Int? = null,
+
+    /** The family, on the same terms as [fontSize]. */
+    val fontFamily: String? = null,
 ) {
     fun has(mark: Mark): Boolean = mark in marks
 
     val textColor: Int? get() = marks.filterIsInstance<Mark.TextColor>().firstOrNull()?.argb
     val highlight: Int? get() = marks.filterIsInstance<Mark.Highlight>().firstOrNull()?.argb
-    val fontSize: Int? get() = marks.filterIsInstance<Mark.FontSize>().firstOrNull()?.sp
-    val fontFamily: String? get() = marks.filterIsInstance<Mark.FontFamily>().firstOrNull()?.name
 }

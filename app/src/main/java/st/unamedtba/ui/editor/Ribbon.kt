@@ -1,11 +1,14 @@
 package st.unamedtba.ui.editor
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,10 +36,12 @@ import androidx.compose.material.icons.filled.FormatStrikethrough
 import androidx.compose.material.icons.filled.FormatUnderlined
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,8 +52,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import st.unamedtba.data.EditorDefaults
 import st.unamedtba.data.ViewSettings
 import st.unamedtba.model.Align
@@ -97,12 +105,25 @@ private val FONT_SIZES = listOf(8, 9, 10, 11, 12, 14, 15, 16, 18, 20, 24, 28, 36
 
 private val FONT_FAMILIES = FontRegistry.families
 
+/** Long enough to register as deliberate, short enough not to outlive the gesture. */
+private const val CONFIRM_FLASH_MS = 650L
+
+/** Test tags for the font controls, which have a state — a mixed selection — that shows no text. */
+internal object FontTags {
+    const val SIZE = "font-size-combo"
+    const val FAMILY = "font-family-combo"
+}
+
 @Composable
 fun Ribbon(
     selection: SelectionState,
     activeTab: RibbonTab,
     onTabChange: (RibbonTab) -> Unit,
     onCommand: (FormatCommand) -> Unit,
+    /** The font new text starts in, shown when there is no caret to describe instead. */
+    defaults: EditorDefaults,
+    /** Makes a font or size the default. A deliberate gesture, never a side effect of picking one. */
+    onSetDefault: (Mark) -> Unit,
     /** The open page's appearance, which the View tab both shows and changes. */
     pageStyle: PageStyle,
     viewSettings: ViewSettings,
@@ -123,7 +144,7 @@ fun Ribbon(
                 .background(MaterialTheme.colorScheme.outlineVariant),
         )
         when (activeTab) {
-            RibbonTab.Home -> HomeTab(selection, onCommand)
+            RibbonTab.Home -> HomeTab(selection, defaults, onCommand, onSetDefault)
             RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
             else -> PlaceholderTab(activeTab)
         }
@@ -180,7 +201,9 @@ private fun PlaceholderTab(tab: RibbonTab) {
 @Composable
 private fun HomeTab(
     selection: SelectionState,
+    defaults: EditorDefaults,
     onCommand: (FormatCommand) -> Unit,
+    onSetDefault: (Mark) -> Unit,
 ) {
     ScrollingRow(
         modifier = Modifier.fillMaxWidth(),
@@ -198,15 +221,23 @@ private fun HomeTab(
 
         Divider()
 
-        // These describe the text at the caret, so text with no font mark of its own reads as the
-        // editor's fixed base — which is what it is actually rendered in. Falling back to the
-        // stored default instead would label old writing with a font it is not in.
-        FontFamilyPicker(selection.fontFamily ?: EditorDefaults.FALLBACK_FONT_FAMILY) {
-            onCommand(FormatCommand.SetMark(Mark.FontFamily(it)))
-        }
-        FontSizePicker(selection.fontSize ?: EditorDefaults.FALLBACK_FONT_SIZE) {
-            onCommand(FormatCommand.SetMark(Mark.FontSize(it)))
-        }
+        // These describe the text the caret is in, not the stored default: what is shown is what
+        // the next character will actually be. With nothing focused there is no text to describe,
+        // so the default stands in — that is the one case where it is the honest answer.
+        FontFamilyPicker(
+            current = selection.fontFamily,
+            default = defaults.fontFamily,
+            mixed = selection.fontFamily == null && selection.hasSelection,
+            onPick = { onCommand(FormatCommand.SetMark(Mark.FontFamily(it))) },
+            onSetDefault = { onSetDefault(Mark.FontFamily(it)) },
+        )
+        FontSizePicker(
+            current = selection.fontSize,
+            default = defaults.fontSize,
+            mixed = selection.fontSize == null && selection.hasSelection,
+            onPick = { onCommand(FormatCommand.SetMark(Mark.FontSize(it))) },
+            onSetDefault = { onSetDefault(Mark.FontSize(it)) },
+        )
 
         Divider()
 
@@ -435,56 +466,205 @@ internal fun Divider() {
 }
 
 @Composable
-private fun FontFamilyPicker(current: String, onPick: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        ComboBox(
-            text = FontRegistry.displayName(current),
-            width = 148.dp,
-        ) { open = true }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            FONT_FAMILIES.forEach { family ->
-                DropdownMenuItem(
-                    text = { Text(family.displayName) },
-                    onClick = {
-                        open = false
-                        onPick(family.id)
-                    },
-                )
-            }
+private fun FontFamilyPicker(
+    current: String?,
+    default: String,
+    mixed: Boolean,
+    onPick: (String) -> Unit,
+    onSetDefault: (String) -> Unit,
+) {
+    val shown = if (mixed) null else current ?: default
+    DefaultableCombo(
+        text = shown?.let(FontRegistry::displayName).orEmpty(),
+        width = 148.dp,
+        tag = FontTags.FAMILY,
+        onSetDefault = { shown?.let(onSetDefault) },
+        hint = "Hold a font to type in it by default",
+    ) { dismiss ->
+        FONT_FAMILIES.forEach { family ->
+            MenuRow(
+                label = family.displayName,
+                isDefault = family.id == default,
+                onClick = {
+                    dismiss()
+                    onPick(family.id)
+                },
+                onLongClick = { onSetDefault(family.id) },
+            )
         }
     }
 }
 
 @Composable
-private fun FontSizePicker(current: Int, onPick: (Int) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        ComboBox(text = current.toString(), width = 58.dp) { open = true }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            FONT_SIZES.forEach { size ->
-                DropdownMenuItem(
-                    text = { Text("$size") },
-                    onClick = {
-                        open = false
-                        onPick(size)
-                    },
-                )
-            }
+private fun FontSizePicker(
+    current: Int?,
+    default: Int,
+    mixed: Boolean,
+    onPick: (Int) -> Unit,
+    onSetDefault: (Int) -> Unit,
+) {
+    // What the box reads, and so what holding it promotes: the size at the caret, or the default
+    // where there is no caret to describe, or nothing at all where a selection mixes sizes.
+    val shown = if (mixed) null else current ?: default
+    DefaultableCombo(
+        text = shown?.toString().orEmpty(),
+        width = 58.dp,
+        tag = FontTags.SIZE,
+        onSetDefault = { shown?.let(onSetDefault) },
+        hint = "Hold a size to start new text at it",
+    ) { dismiss ->
+        FONT_SIZES.forEach { size ->
+            MenuRow(
+                label = "$size",
+                isDefault = size == default,
+                onClick = {
+                    dismiss()
+                    onPick(size)
+                },
+                onLongClick = { onSetDefault(size) },
+            )
         }
     }
 }
 
+/**
+ * A menu entry that a tap picks and a hold makes the default.
+ *
+ * Hand-rolled rather than a [DropdownMenuItem] because that owns its own click handling: a
+ * `combinedClickable` wrapped around one never sees the gesture, since the inner handler consumes
+ * it first. The metrics are Material's own, so the two are indistinguishable on screen.
+ *
+ * Holding deliberately leaves the menu open. The tag moving onto the entry under the finger is the
+ * confirmation, and closing the menu would hide the one thing that says it worked.
+ */
 @Composable
-internal fun ComboBox(text: String, width: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+private fun MenuRow(
+    label: String,
+    isDefault: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
+            .fillMaxWidth()
+            .sizeIn(minWidth = 112.dp, minHeight = 48.dp)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (isDefault) {
+            Spacer(Modifier.width(16.dp))
+            DefaultTag()
+        }
+    }
+}
+
+/**
+ * A combo showing [text], which holding makes the default.
+ *
+ * Long-press is the gesture because picking is not: choosing a size to write the next sentence in
+ * used to move the default too, so a passing choice quietly changed what every later page opened in.
+ * Separating them means the default only moves when the user says so.
+ *
+ * What is promoted is exactly [text] — the rule the whole control turns on. Blank means a selection
+ * mixing several values, which has no one answer to show and none to set.
+ *
+ * A long press has no result of its own to see, so the border takes the accent colour for a moment
+ * to say it landed — without that the gesture is indistinguishable from a mis-tap. The menu carries
+ * the same fact permanently, tagging whichever entry is currently the default.
+ */
+@Composable
+private fun DefaultableCombo(
+    text: String,
+    width: androidx.compose.ui.unit.Dp,
+    tag: String,
+    onSetDefault: () -> Unit,
+    hint: String,
+    items: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    var confirming by remember { mutableStateOf(false) }
+    LaunchedEffect(confirming) {
+        if (confirming) {
+            delay(CONFIRM_FLASH_MS)
+            confirming = false
+        }
+    }
+    val border by animateColorAsState(
+        targetValue = if (confirming) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.outline
+        },
+        label = "combo-border",
+    )
+
+    Box {
+        ComboBox(
+            text = text,
+            width = width,
+            modifier = Modifier.testTag(tag),
+            borderColor = border,
+            onClick = { open = true },
+            onLongClick = {
+                // Holding promotes whatever is on screen, whether that came from the caret or is
+                // the default already standing in for one. Gating on there being a caret instead
+                // meant the box could show a number that holding it would not set. An empty box is
+                // a selection mixing values: no one number, and none shown to promote.
+                if (text.isNotBlank()) {
+                    confirming = true
+                    onSetDefault()
+                }
+            },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // Heads the menu rather than closing it: the size list is long enough to scroll, and a
+            // footer teaching a gesture nobody knows about would sit below the fold unread.
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+            HorizontalDivider()
+            items { open = false }
+        }
+    }
+}
+
+/** Marks the entry that new text starts in, so the setting is visible rather than remembered. */
+@Composable
+private fun DefaultTag() {
+    Text(
+        text = "Default",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
+}
+
+@Composable
+internal fun ComboBox(
+    text: String,
+    width: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+    borderColor: Color = MaterialTheme.colorScheme.outline,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = modifier
             .padding(horizontal = 2.dp)
             .width(width)
             .height(28.dp)
             .clip(RoundedCornerShape(4.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
-            .clickable(onClick = onClick)
+            .border(1.dp, borderColor, RoundedCornerShape(4.dp))
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(start = 8.dp, end = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,

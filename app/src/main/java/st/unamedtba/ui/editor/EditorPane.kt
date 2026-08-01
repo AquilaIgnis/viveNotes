@@ -485,6 +485,9 @@ internal fun OutlineContainer(
                         setTextSize(TypedValue.COMPLEX_UNIT_SP, EditorDefaults.FALLBACK_FONT_SIZE.toFloat())
                         setLineSpacing(0f, 1.25f)
                         typeface = Typeface.SANS_SERIF
+                        // Named here because a Typeface cannot be mapped back to an id, and the
+                        // ribbon has to be able to say what unmarked text is written in.
+                        baseFontFamily = EditorDefaults.FALLBACK_FONT_FAMILY
                         gravity = android.view.Gravity.TOP or android.view.Gravity.START
                         inputType = InputType.TYPE_CLASS_TEXT or
                             InputType.TYPE_TEXT_FLAG_MULTI_LINE or

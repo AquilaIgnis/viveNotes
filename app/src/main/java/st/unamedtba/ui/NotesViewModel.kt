@@ -317,25 +317,33 @@ class NotesViewModel(
     }
 
     /**
-     * Records a font or size chosen with nothing selected as the new default.
+     * Shows a font or size picked with nothing focused, so the ribbon reflects the choice.
      *
-     * Called by the editor when a mark had no range to apply to, never inferred from the last
-     * reported [SelectionState]. That distinction is the whole point: the ribbon's view of the
-     * selection can be a beat behind the editor's — a container re-render or the dropdown's focus
-     * round-trip is enough — and acting on a stale "nothing is selected" rewrote the default while
-     * the user had text selected, restyling every unmarked block on the page.
+     * The readout only. The editor arms the mark itself for whatever is typed next, and text typed
+     * against existing writing inherits from it, so nothing here needs to reach the document.
      *
-     * The editor already arms the mark for characters typed immediately after, and adjacent text
-     * inherits it because inline spans are end-inclusive. This covers what that cannot reach: text
-     * with no neighbour to inherit from, in a fresh container or a page opened later.
+     * It used to persist the pick as the app-wide default as well, which meant choosing a size to
+     * write one sentence in silently changed what every page opened afterwards started at. Moving
+     * the default is now its own gesture — see [setDefaultFont].
      */
-    fun rememberDefaultMark(mark: Mark) {
-        // The ribbon describes the text at the caret, so a pick made with no editor focused would
-        // otherwise leave the combo reading whatever it read before. Reflecting it here makes the
-        // choice visible immediately; clicking into text replaces it with that text's own marks.
+    fun onMarkArmed(mark: Mark) {
         _selection.value = _selection.value.let { state ->
-            state.copy(marks = state.marks.filterNot { it.sameKindAs(mark) }.toSet() + mark)
+            state.copy(
+                marks = state.marks.filterNot { it.sameKindAs(mark) }.toSet() + mark,
+                fontSize = (mark as? Mark.FontSize)?.sp ?: state.fontSize,
+                fontFamily = (mark as? Mark.FontFamily)?.name ?: state.fontFamily,
+            )
         }
+    }
+
+    /**
+     * Makes a font or size the one new writing starts in — the ribbon's press-and-hold.
+     *
+     * Reaches only text with nothing to inherit from: a fresh container, or a page opened later.
+     * Existing writing is never restyled, which is why this is a preference and not a document
+     * property — see [st.unamedtba.data.EditorDefaults].
+     */
+    fun setDefaultFont(mark: Mark) {
         viewModelScope.launch {
             when (mark) {
                 is Mark.FontFamily -> editorDefaultsStore.setFontFamily(mark.name)

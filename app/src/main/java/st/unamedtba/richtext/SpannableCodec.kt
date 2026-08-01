@@ -192,9 +192,18 @@ object SpannableCodec {
         }
     }
 
+    /**
+     * Strips [mark] from the range, matching by kind so any size replaces any other size.
+     *
+     * Both sides are erased before comparing. Erasing only the argument compared a span's real
+     * value against a zeroed one, which never matched — so setting a second size left the first
+     * span in place underneath it. The text drew in the newer size while the older span was still
+     * there to be read back, which is how a 20pt selection came to report itself as 12.
+     */
     fun removeMark(text: Spannable, mark: Mark, start: Int, end: Int) {
+        val kind = mark.erased()
         text.getSpans(start, end, Any::class.java).forEach { span ->
-            if (span is Derived || markOf(span) != mark.erased()) return@forEach
+            if (span is Derived || markOf(span)?.erased() != kind) return@forEach
             splitAround(text, span, start, end)
         }
     }
@@ -209,20 +218,90 @@ object SpannableCodec {
         }
     }
 
+    /**
+     * The marks covering the whole of [start]..[end] — at most one per kind.
+     *
+     * A mark counts as active only if it covers the entire range; partial coverage reads as "not
+     * set", so toggling applies it to everything rather than clearing it. Where two spans of the
+     * same kind both cover the range the later one wins, which is what the reader sees: each
+     * metric-affecting span overwrites the paint the one before it set. Returning both instead
+     * left callers picking arbitrarily out of a set, and wrote runs carrying two conflicting sizes.
+     */
     fun marksAt(text: Spanned, start: Int, end: Int): Set<Mark> {
-        // A mark counts as active only if it covers the entire selection; partial coverage reads
-        // as "not set", so toggling applies it to everything rather than clearing it.
-        return text.getSpans(start, end, Any::class.java)
+        val byKind = LinkedHashMap<Mark, Mark>()
+        text.getSpans(start, end, Any::class.java).forEach { span ->
+            if (span is Derived) return@forEach
+            val mark = markOf(span) ?: return@forEach
+            if (text.getSpanStart(span) > start || text.getSpanEnd(span) < end) return@forEach
+            byKind[mark.erased()] = mark
+        }
+        return byKind.values.toSet()
+    }
+
+    /**
+     * Every mark carried by any part of [start]..[end], however little of it they cover.
+     *
+     * The counterpart to [marksAt]: that one answers "what is this range formatted as", this one
+     * answers "does this range already have formatting of its own" — which is what the editor needs
+     * before stamping anything over it.
+     */
+    fun marksTouching(text: Spanned, start: Int, end: Int): Set<Mark> =
+        text.getSpans(start, end, Any::class.java)
             .filterNot { it is Derived }
-            .mapNotNull { span ->
-                val mark = markOf(span) ?: return@mapNotNull null
-                if (start == end) {
-                    if (text.getSpanStart(span) <= start && text.getSpanEnd(span) >= start) mark else null
-                } else {
-                    if (text.getSpanStart(span) <= start && text.getSpanEnd(span) >= end) mark else null
-                }
-            }
+            .mapNotNull(::markOf)
             .toSet()
+
+    /**
+     * The size, in sp, every character in [start]..[end] is drawn at, or null where they differ.
+     *
+     * Resolved from the spans rather than read out of [marksAt] because the two answer different
+     * questions. A size mark is absent both when the text is at [baseSp] and when a selection mixes
+     * sizes, and the ribbon has to tell those apart: one is a number to show, the other a blank.
+     */
+    fun fontSizeIn(text: Spanned, start: Int, end: Int, baseSp: Int): Int? =
+        uniformly(text, start, end) { it.filterIsInstance<Mark.FontSize>().firstOrNull()?.sp ?: baseSp }
+
+    /** The family every character in [start]..[end] is drawn in, on the same terms as [fontSizeIn]. */
+    fun fontFamilyIn(text: Spanned, start: Int, end: Int, base: String): String? =
+        uniformly(text, start, end) { it.filterIsInstance<Mark.FontFamily>().firstOrNull()?.name ?: base }
+
+    /**
+     * Reads [of] across [start]..[end] and returns its value where every stretch agrees, null where
+     * they do not.
+     *
+     * Walks span transitions rather than characters: formatting can only change where a span begins
+     * or ends, so a paragraph with no boundary in it is looked at once however long it is.
+     */
+    private inline fun <T> uniformly(text: Spanned, start: Int, end: Int, of: (Set<Mark>) -> T): T? {
+        if (start >= end) return null
+        var resolved: T? = null
+        var offset = start
+        while (offset < end) {
+            val next = text.nextSpanTransition(offset, end, Any::class.java)
+            val here = of(marksAt(text, offset, next))
+            if (offset == start) resolved = here else if (resolved != here) return null
+            offset = next
+        }
+        return resolved
+    }
+
+    /**
+     * The marks text typed at [position] takes on: those of the character behind the caret, or of
+     * the one in front where there is nothing behind to continue.
+     *
+     * This is what "staying on the same line keeps the same size" is, mechanically. A newline counts
+     * as a character behind — inline spans are end-inclusive, so pressing Enter carries the line's
+     * formatting over the break onto the next one. Only where the break itself is unformatted, which
+     * is the start of a paragraph, does the line's own first character decide instead. An empty
+     * container has neither, and falls through to the editor's default.
+     */
+    fun inheritedMarks(text: Spanned, position: Int): Set<Mark> {
+        val at = position.coerceIn(0, text.length)
+        if (at > 0) {
+            val behind = marksAt(text, at - 1, at)
+            if (behind.isNotEmpty() || text[at - 1] != '\n') return behind
+        }
+        return if (at < text.length && text[at] != '\n') marksAt(text, at, at + 1) else emptySet()
     }
 
     private fun markOf(span: Any): Mark? = when (span) {
