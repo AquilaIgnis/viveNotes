@@ -46,7 +46,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.toArgb
@@ -66,6 +69,7 @@ import st.unamedtba.data.EditorDefaults
 import st.unamedtba.model.Block
 import st.unamedtba.model.Mark
 import st.unamedtba.model.PageStyle
+import st.unamedtba.model.PrintMargins
 import st.unamedtba.model.RuleLines
 import st.unamedtba.richtext.EditorStyle
 import st.unamedtba.richtext.FormatCommand
@@ -123,6 +127,8 @@ fun EditorPane(
     onOutlineBlurred: (String) -> Unit,
     /** Window width and page width in dp, which is all Zoom to Page Width needs. */
     onCanvasMeasured: (Float, Float) -> Unit,
+    /** Drawn while the Paper Size pane is open, so the margins being edited are visible. */
+    showPrintMargins: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val shell = LocalCanvasColors.current
@@ -199,7 +205,7 @@ fun EditorPane(
         CompositionLocalProvider(LocalCanvasColors provides canvas) {
             PageViewport(zoom) {
                 Box(Modifier.width(canvasWidth)) {
-                    PageSurface(paper, canvas, style.ruleLines)
+                    PageSurface(paper, canvas, style.ruleLines, style.margins.takeIf { showPrintMargins })
 
                     Column(Modifier.fillMaxWidth()) {
                         if (!style.hideTitle) {
@@ -303,6 +309,7 @@ private fun BoxScope.PageSurface(
     paper: Pair<Float, Float>?,
     colors: CanvasColors,
     ruleLines: RuleLines,
+    margins: PrintMargins?,
 ) {
     Box(
         Modifier
@@ -320,6 +327,37 @@ private fun BoxScope.PageSurface(
         if (ruleLines != RuleLines.None) {
             PageRuling(color = colors.ruleLine, rules = ruleLines)
         }
+        // Nothing prints yet, so the guides are the only thing that makes a margin setting
+        // observable. They are drawn only while the pane that edits them is open.
+        if (margins != null && paper != null) {
+            MarginGuides(margins, colors.secondaryText)
+        }
+    }
+}
+
+/** Dashed rules where the printable area would begin. */
+@Composable
+private fun MarginGuides(margins: PrintMargins, color: Color) {
+    Canvas(Modifier.fillMaxSize()) {
+        // The page is laid out at a known dp-per-inch, so a margin in inches is a distance on it.
+        fun inches(value: Float) = (value * PageStyle.DP_PER_INCH).dp.toPx()
+
+        val inset = Rect(
+            left = inches(margins.leftInches),
+            top = inches(margins.topInches),
+            right = size.width - inches(margins.rightInches),
+            bottom = size.height - inches(margins.bottomInches),
+        )
+        // Margins wider than the sheet leave no printable area; there is nothing to draw, and the
+        // field is already flagged as out of range.
+        if (inset.width <= 0f || inset.height <= 0f) return@Canvas
+
+        drawRect(
+            color = color.copy(alpha = 0.7f),
+            topLeft = inset.topLeft,
+            size = inset.size,
+            style = Stroke(width = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))),
+        )
     }
 }
 

@@ -39,10 +39,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import st.unamedtba.data.EditorDefaults
 import st.unamedtba.data.TabsLayout
+import st.unamedtba.model.PageStyle
 import st.unamedtba.ui.editor.EditorPane
 import st.unamedtba.ui.editor.Ribbon
 import st.unamedtba.ui.editor.RibbonTab
 import st.unamedtba.ui.editor.ViewActions
+import st.unamedtba.ui.panel.PaperSizePanelContent
+import st.unamedtba.ui.panel.TOOL_PANEL_WIDTH
+import st.unamedtba.ui.panel.ToolPane
+import st.unamedtba.ui.panel.ToolPanel
 import st.unamedtba.ui.shell.NotebookRail
 import st.unamedtba.ui.shell.PageListPane
 import st.unamedtba.ui.shell.SectionTabsBar
@@ -69,13 +74,13 @@ fun NotesApp(viewModel: NotesViewModel) {
 
     var activeTab by remember { mutableStateOf(RibbonTab.Home) }
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
+    /** The docked pane, if any. Deliberately not persisted: it is where you are, not what you have. */
+    var openPane by remember { mutableStateOf<ToolPane?>(null) }
 
     val viewActions = remember(viewModel) {
         ViewActions(
             setRuleLines = viewModel::setRuleLines,
             setPageColor = viewModel::setPageColor,
-            setPaperSize = viewModel::setPaperSize,
-            setOrientation = viewModel::setOrientation,
             setHideTitle = viewModel::setHideTitle,
             setZoom = viewModel::setZoom,
             zoomIn = viewModel::zoomIn,
@@ -83,6 +88,7 @@ fun NotesApp(viewModel: NotesViewModel) {
             zoomToPageWidth = viewModel::zoomToPageWidth,
             setTabsLayout = viewModel::setTabsLayout,
             setCanvasDark = viewModel::setCanvasDark,
+            openPane = { openPane = it },
         )
     }
 
@@ -160,10 +166,29 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 modifier = Modifier.width(PAGE_LIST_WIDTH),
                             )
                             VerticalHairline()
-                            EditorSurface(state, viewModel, defaults, viewSettings.zoom, Modifier.weight(1f))
+                            EditorSurface(
+                                state,
+                                viewModel,
+                                defaults,
+                                viewSettings.zoom,
+                                showPrintMargins = openPane == ToolPane.PaperSize,
+                                modifier = Modifier.weight(1f),
+                            )
+                            openPane?.let { toolPane ->
+                                VerticalHairline()
+                                ToolPaneHost(
+                                    pane = toolPane,
+                                    style = state.pageStyle,
+                                    viewModel = viewModel,
+                                    onClose = { openPane = null },
+                                    modifier = Modifier.width(TOOL_PANEL_WIDTH),
+                                )
+                            }
                         }
                     } else {
-                        BackHandler(enabled = pane != rootPane) {
+                        // A pane is a step deeper than the editor, so back closes it first.
+                        BackHandler(enabled = openPane != null) { openPane = null }
+                        BackHandler(enabled = openPane == null && pane != rootPane) {
                             viewModel.showCompactPane(paneBehind(pane))
                         }
                         when (pane) {
@@ -184,12 +209,23 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 onDeletePage = viewModel::deletePage,
                                 modifier = Modifier.fillMaxSize(),
                             )
-                            CompactPane.Editor -> EditorSurface(
+                            // Too narrow to dock beside the page, so the pane takes the pane slot
+                            // it would otherwise sit next to.
+                            CompactPane.Editor -> openPane?.let { toolPane ->
+                                ToolPaneHost(
+                                    pane = toolPane,
+                                    style = state.pageStyle,
+                                    viewModel = viewModel,
+                                    onClose = { openPane = null },
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            } ?: EditorSurface(
                                 state,
                                 viewModel,
                                 defaults,
                                 viewSettings.zoom,
-                                Modifier.fillMaxSize(),
+                                showPrintMargins = false,
+                                modifier = Modifier.fillMaxSize(),
                             )
                         }
                     }
@@ -222,12 +258,35 @@ private fun paneBehind(pane: CompactPane): CompactPane = when (pane) {
     else -> CompactPane.Notebooks
 }
 
+/** Wires an open [ToolPane] to the page it edits. */
+@Composable
+private fun ToolPaneHost(
+    pane: ToolPane,
+    style: PageStyle,
+    viewModel: NotesViewModel,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ToolPanel(pane = pane, onClose = onClose, modifier = modifier) {
+        when (pane) {
+            ToolPane.PaperSize -> PaperSizePanelContent(
+                style = style,
+                onPickSize = viewModel::setPaperSize,
+                onPickOrientation = viewModel::setOrientation,
+                onSetCustomPaper = viewModel::setCustomPaper,
+                onSetMargins = viewModel::setMargins,
+            )
+        }
+    }
+}
+
 @Composable
 private fun EditorSurface(
     state: NotesUiState,
     viewModel: NotesViewModel,
     defaults: EditorDefaults,
     zoom: Float,
+    showPrintMargins: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (state.selectedPageId == null) {
@@ -261,6 +320,7 @@ private fun EditorSurface(
         onSetOutlineMinHeight = viewModel::setOutlineMinHeight,
         onOutlineBlurred = viewModel::onOutlineBlurred,
         onCanvasMeasured = viewModel::onCanvasMeasured,
+        showPrintMargins = showPrintMargins,
         modifier = modifier,
     )
 }

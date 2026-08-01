@@ -33,7 +33,9 @@ import st.unamedtba.model.Orientation
 import st.unamedtba.model.Outline
 import st.unamedtba.model.PageDoc
 import st.unamedtba.model.PageStyle
+import st.unamedtba.model.PaperDimensions
 import st.unamedtba.model.PaperSize
+import st.unamedtba.model.PrintMargins
 import st.unamedtba.model.RuleLines
 import st.unamedtba.model.newId
 import st.unamedtba.richtext.FormatCommand
@@ -343,7 +345,23 @@ class NotesViewModel(
     /** Null restores the theme's canvas colour rather than painting a light page dark. */
     fun setPageColor(argb: Int?) = updatePageStyle { it.copy(backgroundArgb = argb) }
 
-    fun setPaperSize(paper: PaperSize) = updatePageStyle { it.copy(paper = paper) }
+    /**
+     * Choosing Custom seeds the dimensions from the size being left behind, so the Width and Height
+     * fields open on the page the user is already looking at rather than on a guess.
+     */
+    fun setPaperSize(paper: PaperSize) = updatePageStyle { style ->
+        val seeded = if (paper == PaperSize.Custom && style.customPaper == null) {
+            style.paperInches ?: PaperDimensions.DEFAULT
+        } else {
+            style.customPaper
+        }
+        style.copy(paper = paper, customPaper = seeded)
+    }
+
+    fun setCustomPaper(dimensions: PaperDimensions) =
+        updatePageStyle { it.copy(paper = PaperSize.Custom, customPaper = dimensions) }
+
+    fun setMargins(margins: PrintMargins) = updatePageStyle { it.copy(margins = margins) }
 
     fun setOrientation(orientation: Orientation) = updatePageStyle { it.copy(orientation = orientation) }
 

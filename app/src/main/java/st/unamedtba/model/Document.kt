@@ -41,19 +41,32 @@ data class PageStyle(
     val ruleLines: RuleLines = RuleLines.GridMedium,
     val paper: PaperSize = PaperSize.Auto,
     val orientation: Orientation = Orientation.Portrait,
+    /** Only meaningful for [PaperSize.Custom], and measured as though the page were portrait. */
+    val customPaper: PaperDimensions? = null,
+    val margins: PrintMargins = PrintMargins(),
     /** Page background. Null follows the app's canvas colours, which track the theme. */
     val backgroundArgb: Int? = null,
     val hideTitle: Boolean = false,
 ) {
+    /** The sheet in inches, portrait-relative, or null when the page is unbounded. */
+    val paperInches: PaperDimensions?
+        get() = when (paper) {
+            PaperSize.Auto -> null
+            // A custom size with nothing entered yet is a page in the middle of being set up, not
+            // an unbounded one; falling back keeps it a sheet the moment it is chosen.
+            PaperSize.Custom -> customPaper ?: PaperDimensions.DEFAULT
+            else -> PaperDimensions(paper.widthInches, paper.heightInches)
+        }
+
     /**
      * The page's bounds in dp, or null on [PaperSize.Auto] — the canvas is then unbounded, which
      * is the free-form default rather than a missing value.
      */
     val pageSizeDp: Pair<Float, Float>?
         get() {
-            if (paper == PaperSize.Auto) return null
-            val w = paper.widthInches * DP_PER_INCH
-            val h = paper.heightInches * DP_PER_INCH
+            val size = paperInches ?: return null
+            val w = size.widthInches * DP_PER_INCH
+            val h = size.heightInches * DP_PER_INCH
             return if (orientation == Orientation.Landscape) h to w else w to h
         }
 
@@ -64,6 +77,39 @@ data class PageStyle(
          * mean the same thing here as it does in OneNote.
          */
         const val DP_PER_INCH = 160f
+    }
+}
+
+/** A sheet in inches. Portrait-relative; [PageStyle.orientation] decides which way it is turned. */
+@Serializable
+data class PaperDimensions(val widthInches: Float, val heightInches: Float) {
+    companion object {
+        /** Where a custom size starts when there is nothing to seed it from. */
+        val DEFAULT = PaperDimensions(PaperSize.A4.widthInches, PaperSize.A4.heightInches)
+
+        /** What a page can be set to by hand. Anything outside this is a typo, not a page. */
+        const val MIN_INCHES = 1f
+        const val MAX_INCHES = 48f
+    }
+}
+
+/**
+ * Page margins for printing and export, in inches.
+ *
+ * Stored with the page because they describe the sheet, not the reader. Nothing consumes them yet —
+ * there is no print or PDF path (feature J3) — so the Paper Size panel draws them as guides on the
+ * page while it is open, which is the only honest way to show what a setting is doing.
+ */
+@Serializable
+data class PrintMargins(
+    val topInches: Float = DEFAULT_INCHES,
+    val bottomInches: Float = DEFAULT_INCHES,
+    val leftInches: Float = DEFAULT_INCHES,
+    val rightInches: Float = DEFAULT_INCHES,
+) {
+    companion object {
+        const val DEFAULT_INCHES = 1f
+        const val MAX_INCHES = 4f
     }
 }
 
@@ -88,15 +134,17 @@ enum class RuleLines(val spacingDp: Float, val squared: Boolean) {
 @Serializable
 enum class Orientation { Portrait, Landscape }
 
-/** Paper sizes offered by the View tab, in the reference UI's order. */
+/**
+ * Paper sizes offered by the View tab.
+ *
+ * A subset of the reference's list: the US sizes it also offers — Letter, Legal, Statement,
+ * Tabloid, Postcard and Index Card — are deliberately not here. Anything they would have covered is
+ * reachable through [Custom].
+ */
 @Serializable
 enum class PaperSize(val widthInches: Float, val heightInches: Float) {
     /** No bounds: the canvas grows with its content, which is how a page starts. */
     Auto(0f, 0f),
-    Statement(5.5f, 8.5f),
-    Letter(8.5f, 11f),
-    Tabloid(11f, 17f),
-    Legal(8.5f, 14f),
     A3(11.69f, 16.54f),
     A4(8.27f, 11.69f),
     A5(5.83f, 8.27f),
@@ -104,9 +152,10 @@ enum class PaperSize(val widthInches: Float, val heightInches: Float) {
     B4(9.84f, 13.90f),
     B5(6.93f, 9.84f),
     B6(4.92f, 6.93f),
-    Postcard(3.94f, 5.83f),
-    IndexCard(3f, 5f),
     Billfold(2.75f, 6.25f),
+
+    /** Dimensions come from [PageStyle.customPaper] rather than from the entry itself. */
+    Custom(0f, 0f),
 }
 
 /**
@@ -265,6 +314,11 @@ val DocumentJson: Json = Json {
     encodeDefaults = false
     ignoreUnknownKeys = true
     classDiscriminator = "t"
+    // `ignoreUnknownKeys` covers unknown *fields*; this covers unknown *values*. Without it a
+    // ruling or paper size that this build does not have — written by a newer one, or dropped from
+    // the list by a later one — throws, and the whole page is reported unreadable over a setting.
+    // With it, the field falls back to its default and the note still opens.
+    coerceInputValues = true
 }
 
 /** Convenience over [JsonDocumentCodec]; prefer a [DocumentCodec] where the format should vary. */

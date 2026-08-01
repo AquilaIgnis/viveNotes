@@ -3,16 +3,15 @@ package st.unamedtba.ui.editor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Article
@@ -42,13 +41,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import st.unamedtba.data.TabsLayout
 import st.unamedtba.data.ViewSettings
-import st.unamedtba.model.Orientation
 import st.unamedtba.model.PageStyle
 import st.unamedtba.model.PaperSize
 import st.unamedtba.model.RuleLines
+import st.unamedtba.ui.ScrollingRow
 import st.unamedtba.ui.icons.AppIcons
 import st.unamedtba.ui.icons.LocalRibbonIcons
 import st.unamedtba.ui.icons.pageColorGlyph
+import st.unamedtba.ui.panel.ToolPane
 import st.unamedtba.ui.theme.LocalCanvasColors
 import kotlin.math.roundToInt
 
@@ -63,8 +63,6 @@ import kotlin.math.roundToInt
 data class ViewActions(
     val setRuleLines: (RuleLines) -> Unit,
     val setPageColor: (Int?) -> Unit,
-    val setPaperSize: (PaperSize) -> Unit,
-    val setOrientation: (Orientation) -> Unit,
     val setHideTitle: (Boolean) -> Unit,
     val setZoom: (Float) -> Unit,
     val zoomIn: () -> Unit,
@@ -72,6 +70,8 @@ data class ViewActions(
     val zoomToPageWidth: () -> Unit,
     val setTabsLayout: (TabsLayout) -> Unit,
     val setCanvasDark: (Boolean) -> Unit,
+    /** Opens a docked pane for the settings too involved to sit in a drop-down. */
+    val openPane: (ToolPane) -> Unit,
 )
 
 /** Page colours, and the "no colour" that hands the page back to the theme. */
@@ -92,9 +92,6 @@ private val RULE_LINE_LABELS = listOf(
     RuleLines.GridLarge to "Large Grid",
 )
 
-/** Only the one whose name is two words; the rest read correctly as written. */
-private val PAPER_SIZE_LABELS = mapOf(PaperSize.IndexCard to "Index Card")
-
 /**
  * The View tab from `docs/references/viewsTab.png`.
  *
@@ -111,12 +108,9 @@ internal fun ViewTab(
 ) {
     val canvas = LocalCanvasColors.current
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    ScrollingRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
         RibbonCommand(
             label = "Full Page View",
@@ -161,7 +155,15 @@ internal fun ViewTab(
 
         RuleLinesMenu(style.ruleLines, pageOpen, actions.setRuleLines)
         PageColorMenu(style.backgroundArgb, pageOpen, actions.setPageColor)
-        PaperSizeMenu(style, pageOpen, actions.setPaperSize, actions.setOrientation)
+        RibbonCommand(
+            label = "Paper Size",
+            // A pane rather than a menu: this one is six fields in two groups, and it has to stay
+            // open while the page changes shape underneath it.
+            onClick = { actions.openPane(ToolPane.PaperSize) },
+            active = style.paper != PaperSize.Auto,
+            enabled = pageOpen,
+            icon = { active -> TwoToneIcon({ it.paperSize }, active) },
+        )
         RibbonCommand(
             label = "Hide Page Title",
             onClick = { actions.setHideTitle(!style.hideTitle) },
@@ -329,53 +331,6 @@ private fun PageColorMenu(current: Int?, pageOpen: Boolean, onPick: (Int?) -> Un
             }
         }
     }
-}
-
-@Composable
-private fun PaperSizeMenu(
-    style: PageStyle,
-    pageOpen: Boolean,
-    onPickSize: (PaperSize) -> Unit,
-    onPickOrientation: (Orientation) -> Unit,
-) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        RibbonCommand(
-            label = "Paper Size",
-            onClick = { open = true },
-            active = style.paper != PaperSize.Auto,
-            enabled = pageOpen,
-            dropdown = true,
-            icon = { active -> TwoToneIcon({ it.paperSize }, active) },
-        )
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            MenuHeading("Paper size")
-            PaperSize.entries.forEach { size ->
-                CheckableItem(PAPER_SIZE_LABELS[size] ?: size.name, size == style.paper) {
-                    open = false
-                    onPickSize(size)
-                }
-            }
-            HorizontalDivider()
-            MenuHeading("Orientation")
-            Orientation.entries.forEach { orientation ->
-                CheckableItem(orientation.name, orientation == style.orientation) {
-                    open = false
-                    onPickOrientation(orientation)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MenuHeading(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 2.dp),
-    )
 }
 
 /**

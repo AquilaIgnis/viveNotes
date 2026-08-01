@@ -3,10 +3,10 @@ package st.unamedtba.ui.editor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
@@ -59,6 +58,7 @@ import st.unamedtba.richtext.ClipboardAction
 import st.unamedtba.richtext.FontRegistry
 import st.unamedtba.richtext.FormatCommand
 import st.unamedtba.richtext.SelectionState
+import st.unamedtba.ui.ScrollingRow
 import st.unamedtba.ui.icons.AppIcons
 import st.unamedtba.ui.icons.LocalRibbonIcons
 import st.unamedtba.ui.icons.fontColorGlyph
@@ -132,12 +132,9 @@ fun Ribbon(
 
 @Composable
 private fun TabStrip(activeTab: RibbonTab, onTabChange: (RibbonTab) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    ScrollingRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 6.dp),
     ) {
         RibbonTab.entries.forEach { tab ->
             val active = tab == activeTab
@@ -185,12 +182,9 @@ private fun HomeTab(
     selection: SelectionState,
     onCommand: (FormatCommand) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 8.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    ScrollingRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
         RibbonButton(Icons.Default.ContentPaste, "Paste") {
             onCommand(FormatCommand.Clipboard(ClipboardAction.Paste))

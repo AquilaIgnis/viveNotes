@@ -4,7 +4,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -12,10 +11,9 @@ import org.junit.Rule
 import org.junit.Test
 import st.unamedtba.data.TabsLayout
 import st.unamedtba.data.ViewSettings
-import st.unamedtba.model.Orientation
 import st.unamedtba.model.PageStyle
-import st.unamedtba.model.PaperSize
 import st.unamedtba.model.RuleLines
+import st.unamedtba.ui.panel.ToolPane
 import st.unamedtba.ui.theme.UnamedTbaTheme
 
 /**
@@ -31,8 +29,7 @@ class ViewTabTest {
     private var ruleLines: RuleLines? = null
     private var pageColor: Int? = null
     private var pageColorCleared = false
-    private var paper: PaperSize? = null
-    private var orientation: Orientation? = null
+    private var openedPane: ToolPane? = null
     private var hideTitle: Boolean? = null
     private var zoom: Float? = null
     private var zoomedIn = false
@@ -55,8 +52,6 @@ class ViewTabTest {
                     actions = ViewActions(
                         setRuleLines = { ruleLines = it },
                         setPageColor = { if (it == null) pageColorCleared = true else pageColor = it },
-                        setPaperSize = { paper = it },
-                        setOrientation = { orientation = it },
                         setHideTitle = { hideTitle = it },
                         setZoom = { zoom = it },
                         zoomIn = { zoomedIn = true },
@@ -64,6 +59,7 @@ class ViewTabTest {
                         zoomToPageWidth = { fittedToPageWidth = true },
                         setTabsLayout = { tabsLayout = it },
                         setCanvasDark = { canvasDark = it },
+                        openPane = { openedPane = it },
                     ),
                 )
             }
@@ -90,26 +86,15 @@ class ViewTabTest {
         assertTrue("clearing the page colour must hand the page back to the theme", pageColorCleared)
     }
 
+    /** Paper Size is a pane, not a menu — six fields in two groups do not belong in a drop-down. */
     @Test
-    fun paperSizePicksASheet() {
+    fun paperSizeOpensItsPaneRatherThanAMenu() {
         setTab()
 
         compose.onNodeWithText("Paper Size").performClick()
-        compose.onNodeWithText("A4").performClick()
 
-        assertEquals(PaperSize.A4, paper)
-    }
-
-    /** Orientation shares the Paper Size menu but is a separate property of the page. */
-    @Test
-    fun orientationTurnsTheSheetWithoutChangingIt() {
-        setTab()
-
-        compose.onNodeWithText("Paper Size").performClick()
-        compose.onNodeWithText("Landscape").performScrollTo().performClick()
-
-        assertEquals(Orientation.Landscape, orientation)
-        assertNull("turning the page must not resize it", paper)
+        assertEquals(ToolPane.PaperSize, openedPane)
+        compose.onNodeWithText("A4").assertDoesNotExist()
     }
 
     @Test

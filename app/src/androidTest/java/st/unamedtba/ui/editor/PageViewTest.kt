@@ -84,6 +84,7 @@ class PageViewTest {
                         onSetOutlineMinHeight = { _, _ -> },
                         onOutlineBlurred = {},
                         onCanvasMeasured = { _, _ -> },
+                        showPrintMargins = false,
                     )
                 }
             }
@@ -139,7 +140,7 @@ class PageViewTest {
      */
     @Test
     fun zoomScalesWhatIsDrawnWithoutRelayingOutThePage() {
-        val sheet = PageStyle(hideTitle = true, paper = PaperSize.IndexCard, ruleLines = RuleLines.None)
+        val sheet = PageStyle(hideTitle = true, paper = PaperSize.Billfold, ruleLines = RuleLines.None)
         setPage(style = sheet)
         val natural = sheetWidthOnScreen()
         val laidOut = pageSize().width

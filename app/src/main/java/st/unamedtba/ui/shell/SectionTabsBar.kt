@@ -2,7 +2,6 @@ package st.unamedtba.ui.shell
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import st.unamedtba.data.db.NotebookWithSections
 import st.unamedtba.data.db.SectionEntity
+import st.unamedtba.ui.ScrollingRow
 import st.unamedtba.ui.theme.LocalIconAccents
 
 private val BAR_HEIGHT = 40.dp
@@ -72,11 +72,10 @@ fun SectionTabsBar(
         ?: MaterialTheme.colorScheme.outlineVariant
 
     Column(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
-        Row(
+        ScrollingRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(BAR_HEIGHT)
-                .horizontalScroll(rememberScrollState()),
+                .height(BAR_HEIGHT),
             verticalAlignment = Alignment.Bottom,
         ) {
             NotebookChooser(
