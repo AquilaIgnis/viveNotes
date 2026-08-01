@@ -35,6 +35,10 @@ import kotlin.math.abs
  * scales what is drawn but not where touches land is the classic way to break an editor: text would
  * appear under the finger while the caret went somewhere else. That is invisible in the code and
  * obvious only when something actually taps the screen.
+ *
+ * **Needs a large-screen device**, which is what the app targets (`docs/plan.md` §1) and what CI
+ * runs on. [zoomScalesWhatIsDrawnWithoutRelayingOutThePage] measures the sheet against the window,
+ * so on a phone-sized window the sheet is already clipped at 1x and the comparison is meaningless.
  */
 class PageViewTest {
 
