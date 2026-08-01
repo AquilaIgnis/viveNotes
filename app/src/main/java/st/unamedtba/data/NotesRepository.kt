@@ -12,6 +12,8 @@ import st.unamedtba.model.BlockType
 import st.unamedtba.model.DocumentCodecs
 import st.unamedtba.model.Outline
 import st.unamedtba.model.PageDoc
+import st.unamedtba.model.PageStyle
+import st.unamedtba.model.migrated
 import st.unamedtba.model.TextDocumentCodec
 import st.unamedtba.model.newId
 import st.unamedtba.model.plainText
@@ -149,6 +151,10 @@ class NotesRepository(
      * A decode failure is reported rather than swallowed. Returning an empty document here would
      * be silently destructive: the editor would show a blank page and autosave would write that
      * blank page over content that was merely unreadable, not actually gone.
+     *
+     * What decodes is then brought up to the current schema. Migrating on read rather than in a bulk
+     * pass means a page nobody opens is never rewritten, and an older build still reads what a newer
+     * one saved — the same rolling-change property the per-row codec id gives the format.
      */
     suspend fun loadDoc(pageId: String): PageLoad {
         val row = contents.byId(pageId) ?: return PageLoad.Loaded(PageDoc.empty())
@@ -157,7 +163,7 @@ class NotesRepository(
         val rowCodec = DocumentCodecs.byId(row.format)
             ?: return PageLoad.Unreadable(row.docJson, IllegalStateException("unknown format '${row.format}'"))
         return runCatching { rowCodec.decode(row.docJson.encodeToByteArray()) }.fold(
-            onSuccess = { PageLoad.Loaded(it) },
+            onSuccess = { PageLoad.Loaded(it.migrated()) },
             onFailure = { PageLoad.Unreadable(row.docJson, it) },
         )
     }
@@ -188,6 +194,10 @@ class NotesRepository(
                 outlines = listOf(
                     Outline.Text(
                         id = newId(),
+                        // Clear of the title band: outline coordinates start at the page's own
+                        // top-left corner, so a seeded page has to place itself below the header
+                        // rather than being pushed down by it.
+                        y = PageStyle.TITLE_BAND_DP,
                         blocks = listOf(
                             Block.of("This is a page. Type anywhere to start writing.", BlockType.Paragraph),
                             Block.of("", BlockType.Paragraph),

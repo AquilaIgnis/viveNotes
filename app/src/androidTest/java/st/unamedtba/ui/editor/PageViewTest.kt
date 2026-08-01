@@ -12,10 +12,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.emptyFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -25,6 +28,7 @@ import st.unamedtba.model.Orientation
 import st.unamedtba.model.PageStyle
 import st.unamedtba.model.PaperSize
 import st.unamedtba.model.RuleLines
+import st.unamedtba.ui.OutlineBox
 import st.unamedtba.ui.theme.UnamedTbaTheme
 import kotlin.math.abs
 
@@ -50,6 +54,7 @@ class PageViewTest {
     private val style = mutableStateOf(PageStyle())
     private val zoom = mutableFloatStateOf(1f)
     private val title = mutableStateOf("A page")
+    private val outlines = mutableStateOf(emptyList<OutlineBox>())
     private var composed = false
     private lateinit var density: Density
     private var created: Pair<Float, Float>? = null
@@ -58,11 +63,13 @@ class PageViewTest {
         style: PageStyle = PageStyle(),
         zoom: Float = 1f,
         title: String = "A page",
+        outlines: List<OutlineBox> = emptyList(),
     ) {
         created = null
         this.style.value = style
         this.zoom.floatValue = zoom
         this.title.value = title
+        this.outlines.value = outlines
         if (!composed) {
             composed = true
             compose.setContent {
@@ -75,7 +82,7 @@ class PageViewTest {
                         style = this.style.value,
                         zoom = this.zoom.floatValue,
                         onTitleChange = {},
-                        outlines = emptyList(),
+                        outlines = this.outlines.value,
                         pageRevision = 0,
                         initialBlocksFor = { listOf(Block.empty()) },
                         commands = emptyFlow(),
@@ -196,6 +203,114 @@ class PageViewTest {
 
         assertTrue("a landscape sheet should be wider than it is tall", size.width > size.height)
     }
+
+    // --- the page's origin -------------------------------------------------------------------------
+
+    /**
+     * One coordinate space: an outline at `(0, 0)` is at the sheet's own top-left corner.
+     *
+     * It used to be measured from a box sitting *below* the title header, so the same y meant one
+     * thing to an outline and another to the ruling and the margin guides drawn on the sheet — the
+     * guides could not line up with the content they exist to describe.
+     *
+     * Asserted with the title shown, because that is the case where the two origins came apart.
+     */
+    @Test
+    fun anOutlineAtTheOriginSitsAtThePagesTopLeft() {
+        setPage(
+            style = PageStyle(paper = PaperSize.A4),
+            outlines = listOf(OutlineBox(id = "o", x = 0f, y = 0f, width = 300f)),
+        )
+
+        val sheet = compose.onNodeWithTag(PageTags.SURFACE).fetchSemanticsNode().positionInRoot
+        val container = compose.onNodeWithTag(OutlineTags.CONTAINER).fetchSemanticsNode().positionInRoot
+
+        assertClose("outline x against the sheet", expected = 0, actual = (container.x - sheet.x).toInt())
+        assertClose("outline y against the sheet", expected = 0, actual = (container.y - sheet.y).toInt())
+    }
+
+    // --- the sheet binds, or marks -----------------------------------------------------------------
+
+    /**
+     * A chosen size hard-sizes the page only while the page can hold what is on it. That is the
+     * whole rule: a sheet is a bound when the content fits and a guide when it does not, so choosing
+     * A4 can never put work out of reach.
+     */
+    @Test
+    fun aSheetTheContentFitsInsideBindsThePage() {
+        setPage(
+            style = PageStyle(hideTitle = true, paper = PaperSize.A6),
+            outlines = listOf(OutlineBox(id = "o", x = 0f, y = 40f, width = 300f)),
+        )
+
+        val sheet = pageSize()
+        val expectedHeight = with(density) { (PaperSize.A6.heightInches * PageStyle.DP_PER_INCH).dp.roundToPx() }
+        assertClose("the writable area is the sheet", expected = expectedHeight, actual = sheet.height)
+        compose.onNodeWithTag(PageTags.SHEET_GUIDE).assertDoesNotExist()
+    }
+
+    @Test
+    fun contentPastTheSheetMarksItInsteadOfClippingIt() {
+        val past = PaperSize.A6.heightInches * PageStyle.DP_PER_INCH + 200f
+        setPage(
+            style = PageStyle(hideTitle = true, paper = PaperSize.A6),
+            outlines = listOf(OutlineBox(id = "o", x = 0f, y = past, width = 300f)),
+        )
+
+        val sheetHeight = with(density) { (PaperSize.A6.heightInches * PageStyle.DP_PER_INCH).dp.roundToPx() }
+        assertTrue(
+            "the page must still reach the content that spilled past the sheet",
+            pageSize().height > sheetHeight,
+        )
+        compose.onNodeWithTag(PageTags.SHEET_GUIDE).assertExists()
+    }
+
+    /** A page bound by a sheet has edges: there is nowhere outside it to put anything. */
+    @Test
+    fun aTapBesideABoundSheetCreatesNothing() {
+        setPage(style = PageStyle(hideTitle = true, paper = PaperSize.A6, ruleLines = RuleLines.None))
+        val beyond = PaperSize.A6.widthInches * PageStyle.DP_PER_INCH + 80f
+
+        tapScreen(beyond, 200f)
+        assertNull("a tap off the sheet started a container", created)
+
+        tapScreen(120f, 200f)
+        assertNotNull("a tap on the sheet should still start one", created)
+    }
+
+    /** The title owns the band at the top of the page, now that content shares its coordinates. */
+    @Test
+    fun aTapOnTheTitleBandCreatesNothing() {
+        setPage(style = PageStyle(paper = PaperSize.A4))
+
+        tapScreen(300f, PageStyle.TITLE_BAND_DP / 2f)
+
+        assertNull("a tap on the title started a container", created)
+    }
+
+    // --- an unbounded page keeps going ---------------------------------------------------------
+
+    /**
+     * `Auto` is an endless canvas, not "content plus a margin": scrolling to the bottom has to find
+     * more page rather than the end of it. Grown a screenful at a time, so this asserts the step.
+     */
+    @Test
+    fun anAutoPageExtendsAsItIsScrolled() {
+        setPage(style = PageStyle(hideTitle = true))
+        val before = canvasHeight()
+
+        repeat(3) {
+            compose.onRoot().performTouchInput { swipeUp() }
+            compose.waitForIdle()
+        }
+
+        assertTrue(
+            "scrolling to the bottom of an endless page should find more of it: was $before, still $before",
+            canvasHeight() > before,
+        )
+    }
+
+    private fun canvasHeight() = compose.onNodeWithTag(PageTags.CANVAS).fetchSemanticsNode().size.height
 
     // --- title and ruling ------------------------------------------------------------------------
 

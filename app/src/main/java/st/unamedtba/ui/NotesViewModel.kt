@@ -199,7 +199,9 @@ class NotesViewModel(
             }
 
             val loaded = doc.outlines.filterIsInstance<Outline.Text>()
-                .ifEmpty { listOf(Outline.Text.empty()) }
+                // A page with nothing on it still needs somewhere to put the caret, placed clear of
+                // the title rather than under it — outline coordinates start at the page's corner.
+                .ifEmpty { listOf(Outline.Text.empty(y = if (doc.style.hideTitle) 0f else PageStyle.TITLE_BAND_DP)) }
 
             blocksByOutline.clear()
             loaded.forEach { blocksByOutline[it.id] = it.blocks }

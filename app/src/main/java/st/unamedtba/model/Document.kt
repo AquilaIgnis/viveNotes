@@ -18,11 +18,44 @@ data class PageDoc(
     val style: PageStyle = PageStyle(),
 ) {
     companion object {
-        const val CURRENT_SCHEMA = 1
+        /**
+         * 2 — outline coordinates are measured from the page's top-left corner.
+         *
+         * Schema 1 measured `y` from below the title header, which meant an outline and the sheet
+         * drawn behind it disagreed about where the page began. See [PageDoc.migrated].
+         */
+        const val CURRENT_SCHEMA = 2
 
         /** A page starts with one full-width outline holding a single empty paragraph. */
-        fun empty(): PageDoc = PageDoc(outlines = listOf(Outline.Text.empty()))
+        fun empty(): PageDoc = PageDoc(outlines = listOf(Outline.Text.empty(y = PageStyle.TITLE_BAND_DP)))
     }
+}
+
+/**
+ * Brings a stored document up to [PageDoc.CURRENT_SCHEMA].
+ *
+ * Schema 1 laid outlines out in a box that sat *below* the title header, so an outline's `y` was
+ * measured from a different origin than the sheet, the ruling and the margin guides it was drawn
+ * against. Schema 2 shares one origin, which costs every schema-1 outline a shift down by the band
+ * the title used to occupy — a page whose title was hidden already started at the top and must not
+ * move.
+ *
+ * Kept a pure function on the model so it is covered by JVM tests, and applied on every load, so it
+ * has to be idempotent: the schema stamp is what makes it so.
+ */
+fun PageDoc.migrated(): PageDoc {
+    if (schema >= PageDoc.CURRENT_SCHEMA) return this
+    val shift = if (style.hideTitle) 0f else PageStyle.TITLE_BAND_DP
+    return copy(
+        schema = PageDoc.CURRENT_SCHEMA,
+        outlines = if (shift == 0f) outlines else outlines.map { it.shiftedDown(shift) },
+    )
+}
+
+private fun Outline.shiftedDown(dy: Float): Outline = when (this) {
+    is Outline.Text -> copy(y = y + dy)
+    is Outline.Image -> copy(y = y + dy)
+    is Outline.Ink -> copy(y = y + dy)
 }
 
 /**
@@ -77,6 +110,19 @@ data class PageStyle(
          * mean the same thing here as it does in OneNote.
          */
         const val DP_PER_INCH = 160f
+
+        /**
+         * The band at the top of the page that the title and its date occupy.
+         *
+         * A document constant rather than a layout detail, because outline coordinates start at the
+         * page's top-left corner: where content begins on a titled page has to mean the same number
+         * on every device, and [PageDoc.migrated] measures a schema-1 page's shift by it.
+         *
+         * Measured off the rendered header at font scale 1. The header is drawn over this band
+         * rather than clipped to it, so a larger font scale makes it encroach on the content area
+         * without moving the origin — a moving origin is the thing schema 2 exists to stop.
+         */
+        const val TITLE_BAND_DP = 94f
     }
 }
 
@@ -188,7 +234,8 @@ sealed interface Outline {
         companion object {
             const val DEFAULT_WIDTH = 720f
 
-            fun empty(): Text = Text(id = newId(), blocks = listOf(Block.empty()))
+            /** Defaults to the top of the page; a titled page passes the band below its header. */
+            fun empty(y: Float = 0f): Text = Text(id = newId(), y = y, blocks = listOf(Block.empty()))
         }
     }
 

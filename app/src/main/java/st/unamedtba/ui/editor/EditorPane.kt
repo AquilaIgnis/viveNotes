@@ -5,6 +5,7 @@ import android.text.InputType
 import android.util.TypedValue
 import android.view.ViewGroup
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -35,16 +36,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -61,6 +66,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -82,10 +90,10 @@ import st.unamedtba.ui.theme.paintedWith
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 private val CANVAS_MIN_HEIGHT = 700.dp
-private val CANVAS_MAX_HEIGHT = 20_000.dp
 private val CANVAS_TRAILING_SPACE = 320.dp
 
 /** Blank canvas kept to the right of the widest container, so there is room to start another. */
@@ -93,6 +101,34 @@ private val CANVAS_TRAILING_WIDTH = 200.dp
 private val CANVAS_MIN_WIDTH = 720.dp
 private val GRIP_HEIGHT = 18.dp
 private val RESIZE_HANDLE_WIDTH = 18.dp
+
+/**
+ * Ceilings imposed by [Constraints], which packs both axes into a single Int.
+ *
+ * The allowance on one axis depends on the other: while one stays under [CONSTRAINT_NARROW_PX] the
+ * other may reach [CONSTRAINT_SOLE_PX], and past that both drop to [CONSTRAINT_PAIRED_PX]. A page
+ * that grows as you scroll will find that edge eventually, and the old fixed 20,000dp height was
+ * already only legal because the canvas happened to stay narrow — a wide sheet carrying tall content
+ * would have thrown at layout time.
+ */
+private const val CONSTRAINT_NARROW_PX = 8_191
+private const val CONSTRAINT_SOLE_PX = 262_143
+private const val CONSTRAINT_PAIRED_PX = 32_767
+
+/**
+ * The largest canvas that can actually be laid out, at this zoom.
+ *
+ * Zoom belongs in the arithmetic because [Zoomed] reports the *scaled* size to its parent, so it is
+ * the scaled size that has to be packable — a canvas that is legal at 100% can overflow at 400%.
+ */
+private fun Density.clampToConstraints(size: DpSize, zoom: Float): DpSize {
+    fun limit(dp: Dp, ceiling: Int): Dp = minOf(dp, (ceiling / zoom).toDp())
+
+    val width = limit(size.width, CONSTRAINT_PAIRED_PX)
+    val widthPx = width.toPx() * zoom
+    val heightCeiling = if (widthPx <= CONSTRAINT_NARROW_PX) CONSTRAINT_SOLE_PX else CONSTRAINT_PAIRED_PX
+    return DpSize(width, limit(size.height, heightCeiling))
+}
 
 /**
  * The page canvas: title, timestamp, ruled background, and free-form text containers.
@@ -170,106 +206,186 @@ fun EditorPane(
         }
     }
 
-    val paper = style.pageSizeDp
-    val lowestContent = outlines.maxOfOrNull { box ->
-        box.y.dp + with(density) { (heights[box.id] ?: 0).toDp() }
-    } ?: 0.dp
-    val widestContent = outlines.maxOfOrNull { (it.x + it.width).dp } ?: 0.dp
+    val sheet = style.pageSizeDp?.let { (w, h) -> DpSize(w.dp, h.dp) }
 
-    // What the page *is*, as opposed to how much of it is scrollable: a sheet when a paper size is
-    // set, otherwise whatever the content occupies. This is the width Zoom to Page Width fits.
-    val pageWidth = paper?.first?.dp ?: maxOf(widestContent, CANVAS_MIN_WIDTH)
-    // Clamped as a backstop: the canvas is sized from its children's measured heights, so any
-    // child that sizes itself from the canvas would otherwise grow without bound until the
-    // height overflows what Constraints can pack.
-    val canvasHeight = maxOf(paper?.second?.dp ?: 0.dp, lowestContent + CANVAS_TRAILING_SPACE)
-        .coerceIn(CANVAS_MIN_HEIGHT, CANVAS_MAX_HEIGHT)
+    // What the content occupies, measured from the page's own top-left corner and including the
+    // band the title sits in. Derived rather than recomputed: the canvas now grows as the user
+    // scrolls, so this is read on far more recompositions than it used to be.
+    val contentBounds by remember(outlines, style.hideTitle, density) {
+        derivedStateOf {
+            var width = 0.dp
+            var height = if (style.hideTitle) 0.dp else PageStyle.TITLE_BAND_DP.dp
+            outlines.forEach { box ->
+                width = maxOf(width, (box.x + box.width).dp)
+                height = maxOf(height, box.y.dp + with(density) { (heights[box.id] ?: 0).toDp() })
+            }
+            DpSize(width, height)
+        }
+    }
+
+    // A chosen paper size binds the page only while the page can hold the content. Once something
+    // sits outside it, clipping to it would hide the user's work, so the sheet steps back to being
+    // a guide and the canvas covers the content instead. Live state, so dragging a container over
+    // the edge and back flips it both ways.
+    val fits = sheet != null &&
+        contentBounds.width <= sheet.width && contentBounds.height <= sheet.height
+
+    // What the page *is*, as opposed to how much of it can be scrolled: the sheet when one holds
+    // the content, otherwise whatever the content needs. This is what Zoom to Page Width fits.
+    val pageSize = if (fits) {
+        sheet!!
+    } else {
+        DpSize(
+            maxOf(contentBounds.width, sheet?.width ?: 0.dp, CANVAS_MIN_WIDTH),
+            maxOf(contentBounds.height, sheet?.height ?: 0.dp, CANVAS_MIN_HEIGHT),
+        )
+    }
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            // Only a bounded page has an outside; an unbounded one simply is the background.
-            .background(if (paper != null) MaterialTheme.colorScheme.surfaceContainer else canvas.background),
+            // Only a page bound by a sheet has an outside. One the content has outgrown is canvas
+            // all the way to its edge, and painting a surround there would say otherwise.
+            .background(if (fits) MaterialTheme.colorScheme.surfaceContainer else canvas.background),
     ) {
-        val viewport = maxWidth
-        // Never narrower than the window, so the canvas fills it at any zoom and a tap beside the
-        // page still lands on something that can hold text.
-        val canvasWidth = maxOf(pageWidth + CANVAS_TRAILING_WIDTH, viewport / zoom)
+        val horizontal = rememberScrollState()
+        val vertical = rememberScrollState()
+        // The window onto the page, in page units: what the user can see at this zoom.
+        val window = DpSize(maxWidth / zoom, maxHeight / zoom)
+
+        // How far the canvas has been extended to meet the user, counted in whole screenfuls.
+        //
+        // A high-water mark, so scrolling back does not shrink the canvas out from under the
+        // scroll position, and quantised to the screen so this changes about once per screenful
+        // rather than once per frame — the difference between one recomposition and sixty.
+        var reachedX by remember(pageRevision) { mutableIntStateOf(0) }
+        var reachedY by remember(pageRevision) { mutableIntStateOf(0) }
+        LaunchedEffect(pageRevision, window, density) {
+            snapshotFlow {
+                val across = with(density) { window.width.toPx() }
+                val down = with(density) { window.height.toPx() }
+                val x = if (across > 0f) ((horizontal.value / zoom + across) / across).toInt() else 0
+                val y = if (down > 0f) ((vertical.value / zoom + down) / down).toInt() else 0
+                x to y
+            }.collect { (x, y) ->
+                if (x > reachedX) reachedX = x
+                if (y > reachedY) reachedY = y
+            }
+        }
+
+        // A bound page stops at its sheet plus a surround — that is what choosing a size buys. An
+        // unbounded one always keeps a screenful in front of wherever the user has got to, which is
+        // what makes it feel like it has no end.
+        val room = DpSize(pageSize.width + CANVAS_TRAILING_WIDTH, pageSize.height + CANVAS_TRAILING_SPACE)
+        val canvasSize = density.clampToConstraints(
+            if (fits) {
+                DpSize(maxOf(room.width, window.width), maxOf(room.height, window.height))
+            } else {
+                DpSize(
+                    maxOf(room.width, window.width * (reachedX + 1)),
+                    maxOf(room.height, window.height * (reachedY + 1)),
+                )
+            },
+            zoom,
+        )
 
         // Reported rather than derived by the caller: these are layout facts, known here and
         // nowhere else. Writing them costs nothing and nothing recomposes from them.
-        SideEffect { onCanvasMeasured(viewport.value, pageWidth.value) }
+        SideEffect { onCanvasMeasured(maxWidth.value, pageSize.width.value) }
+
+        // Read while drawing rather than while composing, so scrolling re-runs the ruling's draw
+        // and nothing above it. Given as a lambda for exactly that reason — calling it here would
+        // subscribe the whole page to every scrolled pixel.
+        val visibleWindow: () -> Rect = {
+            val left = horizontal.value / zoom
+            val top = vertical.value / zoom
+            with(density) {
+                Rect(left, top, left + window.width.toPx(), top + window.height.toPx())
+            }
+        }
 
         // Provided so containers and the title read the page's colours, which may be nothing like
         // the shell's — a white page inside a dark app, or a page painted from the Page Color menu.
         CompositionLocalProvider(LocalCanvasColors provides canvas) {
-            PageViewport(zoom) {
-                Box(Modifier.width(canvasWidth)) {
-                    PageSurface(paper, canvas, style.ruleLines, style.margins.takeIf { showPrintMargins })
+            PageViewport(zoom, horizontal, vertical) {
+                // One coordinate space. An outline's stored (x, y) is measured from this corner, and
+                // so are the sheet, the ruling and the margin guides drawn behind it — before, the
+                // content sat in a box below the title and the two disagreed by the height of the
+                // header, which is why the guides never lined up with anything.
+                Box(
+                    Modifier
+                        .size(canvasSize)
+                        .testTag(PageTags.CANVAS),
+                ) {
+                    PageSurface(
+                        sheet = sheet,
+                        bound = fits,
+                        colors = canvas,
+                        ruleLines = style.ruleLines,
+                        margins = style.margins.takeIf { showPrintMargins },
+                        window = visibleWindow,
+                    )
 
-                    Column(Modifier.fillMaxWidth()) {
-                        if (!style.hideTitle) {
-                            PageHeader(
-                                title = title,
-                                createdAt = createdAt,
-                                onTitleChange = onTitleChange,
-                                modifier = Modifier.padding(start = 40.dp, end = 40.dp, top = 24.dp),
-                            )
-
-                            Spacer(Modifier.height(16.dp))
-                        }
-
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(canvasHeight),
-                        ) {
-                            // Placed first so it sits beneath the containers: taps that land on a
-                            // container reach its editor, and only taps on bare canvas create a
-                            // new one.
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .pointerInput(pageRevision) {
-                                        detectTapGestures { offset ->
-                                            val x = with(density) { offset.x.toDp().value }
-                                            val y = with(density) { offset.y.toDp().value }
-                                            pendingFocusId = onCreateOutline(x - 8f, y - 8f)
-                                        }
-                                    },
-                            )
-
-                            outlines.forEach { box ->
-                                key(pageRevision, box.id) {
-                                    OutlineContainer(
-                                        box = box,
-                                        initialBlocks = initialBlocksFor(box.id),
-                                        editorStyle = editorStyle,
-                                        defaults = defaults,
-                                        focused = focusedOutlineId == box.id,
-                                        requestFocus = pendingFocusId == box.id,
-                                        onFocusHandled = { pendingFocusId = null },
-                                        onFocused = { view ->
-                                            focusedEditor = view
-                                            focusedOutlineId = box.id
-                                        },
-                                        onBlurred = {
-                                            if (focusedOutlineId == box.id) {
-                                                focusedOutlineId = null
-                                                focusedEditor = null
-                                            }
-                                            onOutlineBlurred(box.id)
-                                        },
-                                        onBlocksChanged = { blocks -> onBlocksChanged(box.id, blocks) },
-                                        onSelectionChanged = onSelectionChanged,
-                                        onMarkArmed = onMarkArmed,
-                                        onMove = { x, y -> onMoveOutline(box.id, x, y) },
-                                        onResize = { width -> onResizeOutline(box.id, width) },
-                                        onSetMinHeight = { height -> onSetOutlineMinHeight(box.id, height) },
-                                        onMeasured = { heightPx -> heights[box.id] = heightPx },
-                                    )
+                    // Placed above the surface but beneath the containers: taps that land on a
+                    // container reach its editor, and only taps on bare canvas create a new one.
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .pointerInput(pageRevision, fits, pageSize, style.hideTitle) {
+                                detectTapGestures { offset ->
+                                    val x = with(density) { offset.x.toDp() }
+                                    val y = with(density) { offset.y.toDp() }
+                                    // A bound page has edges: there is no page outside the sheet to
+                                    // put anything on, and while it is bound the sheet *is* the
+                                    // page. The title owns the band at the top.
+                                    val offSheet = fits && (x > pageSize.width || y > pageSize.height)
+                                    val onTitle = !style.hideTitle && y < PageStyle.TITLE_BAND_DP.dp
+                                    if (offSheet || onTitle) return@detectTapGestures
+                                    pendingFocusId = onCreateOutline(x.value - 8f, y.value - 8f)
                                 }
-                            }
+                            },
+                    )
+
+                    if (!style.hideTitle) {
+                        PageHeader(
+                            title = title,
+                            createdAt = createdAt,
+                            onTitleChange = onTitleChange,
+                            modifier = Modifier
+                                .width(pageSize.width)
+                                .padding(start = 40.dp, end = 40.dp, top = 24.dp),
+                        )
+                    }
+
+                    outlines.forEach { box ->
+                        key(pageRevision, box.id) {
+                            OutlineContainer(
+                                box = box,
+                                initialBlocks = initialBlocksFor(box.id),
+                                editorStyle = editorStyle,
+                                defaults = defaults,
+                                focused = focusedOutlineId == box.id,
+                                requestFocus = pendingFocusId == box.id,
+                                onFocusHandled = { pendingFocusId = null },
+                                onFocused = { view ->
+                                    focusedEditor = view
+                                    focusedOutlineId = box.id
+                                },
+                                onBlurred = {
+                                    if (focusedOutlineId == box.id) {
+                                        focusedOutlineId = null
+                                        focusedEditor = null
+                                    }
+                                    onOutlineBlurred(box.id)
+                                },
+                                onBlocksChanged = { blocks -> onBlocksChanged(box.id, blocks) },
+                                onSelectionChanged = onSelectionChanged,
+                                onMarkArmed = onMarkArmed,
+                                onMove = { x, y -> onMoveOutline(box.id, x, y) },
+                                onResize = { width -> onResizeOutline(box.id, width) },
+                                onSetMinHeight = { height -> onSetOutlineMinHeight(box.id, height) },
+                                onMeasured = { heightPx -> heights[box.id] = heightPx },
+                            )
                         }
                     }
                 }
@@ -285,54 +401,89 @@ fun EditorPane(
  * occupy — and at any zoom above what fits, the rest of it still has to be reachable.
  */
 @Composable
-private fun PageViewport(zoom: Float, content: @Composable () -> Unit) {
+private fun PageViewport(
+    zoom: Float,
+    horizontal: ScrollState,
+    vertical: ScrollState,
+    content: @Composable () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(vertical),
     ) {
-        Box(Modifier.horizontalScroll(rememberScrollState())) {
+        Box(Modifier.horizontalScroll(horizontal)) {
             Zoomed(zoom, content)
         }
     }
 }
 
 /**
- * The sheet: its colour and its ruling.
+ * The writable page: its colour, its ruling, and the marks describing the sheet.
  *
- * Drawn behind the content rather than as a background on the same box, because a bounded page is
- * a rectangle of a fixed size sitting on a larger canvas — the ruling has to stop at the paper's
- * edge, and the area beyond it has to read as "off the page".
+ * Drawn behind the content rather than as a background on the same box, because a page bound by a
+ * sheet is a rectangle of a fixed size sitting on a larger canvas — the ruling stops at the paper's
+ * edge and the area beyond has to read as "off the page".
+ *
+ * A page the content has outgrown is the other case: every part of it is writable, so it is ruled
+ * to its own edge and the sheet is reduced to a dashed outline saying where it would have ended.
+ * [PageTags.SURFACE] is therefore the writable area, which is the sheet exactly when [bound].
  */
 @Composable
 private fun BoxScope.PageSurface(
-    paper: Pair<Float, Float>?,
+    sheet: DpSize?,
+    bound: Boolean,
     colors: CanvasColors,
     ruleLines: RuleLines,
     margins: PrintMargins?,
+    window: () -> Rect,
 ) {
     Box(
         Modifier
-            .then(
-                if (paper != null) {
-                    Modifier.size(paper.first.dp, paper.second.dp)
-                } else {
-                    Modifier.matchParentSize()
-                },
-            )
+            .then(if (bound && sheet != null) Modifier.size(sheet) else Modifier.matchParentSize())
             .background(colors.background)
-            .then(if (paper != null) Modifier.border(1.dp, colors.ruleLine) else Modifier)
+            .then(if (bound && sheet != null) Modifier.border(1.dp, colors.ruleLine) else Modifier)
             .testTag(PageTags.SURFACE),
     ) {
         if (ruleLines != RuleLines.None) {
-            PageRuling(color = colors.ruleLine, rules = ruleLines)
-        }
-        // Nothing prints yet, so the guides are the only thing that makes a margin setting
-        // observable. They are drawn only while the pane that edits them is open.
-        if (margins != null && paper != null) {
-            MarginGuides(margins, colors.secondaryText)
+            PageRuling(color = colors.ruleLine, rules = ruleLines, window = window)
         }
     }
+
+    if (sheet != null) {
+        // Anchored to the page's corner rather than drawn inside the surface, so they still describe
+        // the sheet on a page whose writable area has grown past it.
+        Box(Modifier.size(sheet)) {
+            if (!bound) SheetEdgeGuide(colors.secondaryText)
+            // Nothing prints yet, so the guides are the only thing that makes a margin setting
+            // observable. They are drawn only while the pane that edits them is open.
+            if (margins != null) MarginGuides(margins, colors.secondaryText)
+        }
+    }
+}
+
+/**
+ * Where the chosen sheet ends, on a page whose content has spilled past it.
+ *
+ * One rectangle, not a run of page breaks: it says "this is where A4 stops", which is the question
+ * choosing a size asks. Nothing is clipped and the content past it is as writable as the rest.
+ */
+@Composable
+private fun SheetEdgeGuide(color: Color) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .testTag(PageTags.SHEET_GUIDE)
+            .drawBehind {
+                drawRect(
+                    color = color,
+                    style = Stroke(
+                        width = 2f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 9f)),
+                    ),
+                )
+            },
+    )
 }
 
 /** Dashed rules where the printable area would begin. */
@@ -396,13 +547,22 @@ private fun EditorDefaults.asMarks(): Set<Mark> = buildSet {
     if (fontSize != EditorDefaults.FALLBACK_FONT_SIZE) add(Mark.FontSize(fontSize))
 }
 
-/** Test tag for the sheet, whose geometry the View tab changes. */
+/** Test tags for the page itself, whose geometry the View tab changes. */
 internal object PageTags {
+    /** The writable area — the sheet exactly when the content still fits inside one. */
     const val SURFACE = "page-surface"
+
+    /** The dashed outline of a sheet the content has outgrown; absent while it still fits. */
+    const val SHEET_GUIDE = "sheet-edge-guide"
+
+    /** Everything that can be scrolled to, which on an unbounded page grows as you scroll. */
+    const val CANVAS = "page-canvas"
 }
 
 /** Test tags for the container's drag targets. */
 internal object OutlineTags {
+    /** The container's own box, whose top-left *is* the outline's stored coordinate. */
+    const val CONTAINER = "outline-container"
     const val MOVE = "outline-move-handle"
     const val RESIZE_WIDTH = "outline-width-handle"
     const val RESIZE_HEIGHT = "outline-height-handle"
@@ -456,7 +616,8 @@ internal fun OutlineContainer(
         modifier = Modifier
             .offset(x = box.x.dp, y = box.y.dp)
             .width(box.width.dp + RESIZE_HANDLE_WIDTH)
-            .onSizeChanged { onMeasured(it.height) },
+            .onSizeChanged { onMeasured(it.height) }
+            .testTag(OutlineTags.CONTAINER),
     ) {
         Column(Modifier.width(box.width.dp)) {
             // Reserved strip for the move grip. It cannot be floated above the container with a
@@ -697,21 +858,32 @@ private fun PageHeader(
  *
  * Spacing comes from the document, so a page ruled on a tablet is ruled identically on a phone —
  * the lines are part of the page, not of the window it is being read in.
+ *
+ * Only the lines the window can show are drawn. Ruling the whole page instead cost one line per
+ * step of its *height*, which on a page that extends as you scroll has no upper bound; this is
+ * bounded by the screen instead, whatever the page has grown to. [window] is called inside the draw
+ * scope on purpose — that is what keeps the scroll position off the composition path, so scrolling
+ * re-runs this lambda and nothing above it.
  */
 @Composable
-private fun PageRuling(color: Color, rules: RuleLines) {
+private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
     Canvas(modifier = Modifier.fillMaxSize()) {
         val stepPx = rules.spacingDp.dp.toPx()
         if (stepPx <= 0f) return@Canvas
-        var y = stepPx
-        while (y < size.height) {
-            drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+        val visible = window().intersect(Rect(Offset.Zero, size))
+        if (visible.isEmpty) return@Canvas
+
+        // Snapped to the ruling's own grid, not to the window, so the lines stay where the page puts
+        // them however far it has been scrolled. The first line is a whole step in, as it always was.
+        var y = maxOf(stepPx, ceil(visible.top / stepPx) * stepPx)
+        while (y < visible.bottom) {
+            drawLine(color, Offset(visible.left, y), Offset(visible.right, y), strokeWidth = 1f)
             y += stepPx
         }
         if (!rules.squared) return@Canvas
-        var x = stepPx
-        while (x < size.width) {
-            drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+        var x = maxOf(stepPx, ceil(visible.left / stepPx) * stepPx)
+        while (x < visible.right) {
+            drawLine(color, Offset(x, visible.top), Offset(x, visible.bottom), strokeWidth = 1f)
             x += stepPx
         }
     }
