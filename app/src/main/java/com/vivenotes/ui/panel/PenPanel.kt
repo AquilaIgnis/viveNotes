@@ -133,6 +133,7 @@ fun ColumnScope.PenPanelContent(pen: PenPreset, onChange: (PenPreset) -> Unit) {
         value = pen.thickness,
         range = PenPreset.MIN_THICKNESS..PenPreset.MAX_THICKNESS,
         onChange = { onChange(pen.copy(thickness = it)) },
+        sizePreviewColor = Color(pen.colorArgb),
     )
 
     Spacer(Modifier.height(2.dp))

@@ -20,6 +20,8 @@ import androidx.ink.brush.InputToolType
 import androidx.ink.brush.StockBrushes
 import androidx.ink.strokes.MutableStrokeInputBatch
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -161,6 +163,46 @@ class InkOverlayTest {
         assertEquals(0f, dragged, 0.001f)
         assertEquals("normal erase should finish as one geometric mask", 1, partialErases)
         assertEquals(0, objectEraseCalls)
+    }
+
+    @Test
+    fun eraserPublishesItsExactCursorAndCutGeometryBeforePointerUp() {
+        val ink = PageStroke(
+            "stroke",
+            InkCodec.eraseMask(
+                MutableStrokeInputBatch().apply {
+                    add(InputToolType.UNKNOWN, 40f, 100f, 0L)
+                    add(InputToolType.UNKNOWN, 160f, 100f, 10L)
+                }.toImmutable(),
+                6f,
+            ),
+        )
+        val gesture = EraseGesture()
+        var finished = 0
+        val identity = Matrix()
+
+        gesture.handle(motion(MotionEvent.ACTION_DOWN, 100f, 75f), identity, 18f) { finished++ }
+        gesture.handle(motion(MotionEvent.ACTION_MOVE, 100f, 125f), identity, 18f) { finished++ }
+
+        val indicator = gesture.indicator
+        assertNotNull("eraser size cursor was not visible during contact", indicator)
+        assertEquals(100f, indicator!!.center.x, 0.001f)
+        assertEquals(125f, indicator.center.y, 0.001f)
+        assertEquals(18f, indicator.diameterDp, 0.001f)
+        val liveMask = gesture.previewMask
+        assertNotNull("eraser did not expose geometry until release", liveMask)
+        val normalPreview = listOf(ink).previewErase(liveMask!!, EraserMode.Normal)
+        assertTrue("normal eraser did not cut the stroke during the drag", normalPreview.size >= 2)
+        assertTrue(
+            "object eraser did not remove the touched object during the drag",
+            listOf(ink).previewErase(liveMask, EraserMode.Object).isEmpty(),
+        )
+        assertEquals("live preview persisted before release", 0, finished)
+
+        gesture.handle(motion(MotionEvent.ACTION_UP, 100f, 125f), identity, 18f) { finished++ }
+
+        assertEquals("one drag must still persist as one undoable erase", 1, finished)
+        assertFalse("finger cursor remained after release", gesture.indicator != null)
     }
 
     @Test

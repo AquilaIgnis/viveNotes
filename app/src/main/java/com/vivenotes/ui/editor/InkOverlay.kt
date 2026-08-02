@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -53,6 +54,12 @@ import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.pageBounds
 import com.vivenotes.ink.projectionKey
 import com.vivenotes.ink.selectWithLasso
+import com.vivenotes.ink.targetsFor
+import com.vivenotes.ink.subtract
+import com.vivenotes.ink.eraseObjects
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.withContext
 import kotlin.math.hypot
 
 /** Test tag for the drawing surface, which has no text and no children of its own. */
@@ -174,7 +181,11 @@ internal fun InkOverlay(
         if (!lassoing) lassoGesture.clear()
     }
     LaunchedEffect(strokes) {
+        eraseGesture.reconcileCommittedStrokes()
         lassoGesture.reconcile(strokes)
+    }
+    LaunchedEffect(erasing) {
+        if (!erasing) eraseGesture.clear()
     }
     LaunchedEffect(hasInkClipboard) {
         if (!hasInkClipboard) fingerDoubleTap.reset()
@@ -185,6 +196,20 @@ internal fun InkOverlay(
     var panning by remember { mutableStateOf(false) }
     var lastPan by remember { mutableStateOf(0f to 0f) }
     var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    var liveErasedStrokes by remember { mutableStateOf<List<PageStroke>?>(null) }
+    LaunchedEffect(strokes, eraser.mode) {
+        snapshotFlow { eraseGesture.previewMask }
+            .conflate()
+            .collect { mask ->
+                liveErasedStrokes = if (mask == null) {
+                    null
+                } else {
+                    withContext(Dispatchers.Default) {
+                        strokes.previewErase(mask, eraser.mode)
+                    }
+                }
+            }
+    }
 
     // Clipped here rather than left to the caller, because nothing else stops it. Compose does not
     // clip children to their parent, and this draws through a matrix that can put a stroke anywhere
@@ -211,7 +236,7 @@ internal fun InkOverlay(
                 // landed at page-units-as-pixels, ignoring zoom and scroll. The argument is what
                 // the renderer measures to pick a mesh detail level for the scale it is drawn at,
                 // not what moves it.
-                currentStrokes.forEach { pageStroke ->
+                (liveErasedStrokes ?: currentStrokes).forEach { pageStroke ->
                     val strokeMatrix = Matrix(matrix).apply {
                         lassoGesture.applyPreview(this, pageStroke)
                         preTranslate(pageStroke.offsetX, pageStroke.offsetY)
@@ -224,6 +249,9 @@ internal fun InkOverlay(
                 }
                 if (currentLassoing && gestureRevision >= 0) {
                     drawLasso(native, matrix, lassoGesture, lassoColor)
+                }
+                eraseGesture.indicator?.let { indicator ->
+                    drawEraserIndicator(native, matrix, indicator)
                 }
             }
         }
@@ -628,6 +656,64 @@ private fun drawLasso(
     canvas.restoreToCount(checkpoint)
 }
 
+internal data class EraserIndicator(val center: InkPoint, val diameterDp: Float)
+
+/** Drawn in page space so zoom changes the cursor by exactly the same amount as the erase mask. */
+private fun drawEraserIndicator(
+    canvas: android.graphics.Canvas,
+    pageToView: Matrix,
+    indicator: EraserIndicator,
+) {
+    val values = FloatArray(9)
+    pageToView.getValues(values)
+    val scale = hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y]).coerceAtLeast(0.001f)
+    val radius = indicator.diameterDp / 2f
+    val outlineWidth = 2f / scale
+    val drawnRadius = (radius - outlineWidth / 2f).coerceAtLeast(outlineWidth / 2f)
+    val checkpoint = canvas.save()
+    canvas.concat(pageToView)
+    canvas.drawCircle(
+        indicator.center.x,
+        indicator.center.y,
+        radius,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x28FFFFFF
+            style = Paint.Style.FILL
+        },
+    )
+    canvas.drawCircle(
+        indicator.center.x,
+        indicator.center.y,
+        drawnRadius,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xE6000000.toInt()
+            style = Paint.Style.STROKE
+            strokeWidth = outlineWidth
+        },
+    )
+    canvas.drawCircle(
+        indicator.center.x,
+        indicator.center.y,
+        drawnRadius,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xF2FFFFFF.toInt()
+            style = Paint.Style.STROKE
+            strokeWidth = 1f / scale
+        },
+    )
+    canvas.restoreToCount(checkpoint)
+}
+
+/** Applies the in-progress mask for display only; persistence still happens once on pointer-up. */
+internal fun List<PageStroke>.previewErase(mask: Stroke, mode: EraserMode): List<PageStroke> {
+    val targets = targetsFor(mask)
+    if (targets.isEmpty()) return this
+    return when (mode) {
+        EraserMode.Normal -> subtract(mask, targets)
+        EraserMode.Object -> eraseObjects(mask, targets)
+    }
+}
+
 /** Owns one lasso loop, then moves or corner-resizes the selected page-space objects. */
 internal class LassoGesture {
     private enum class Mode { Idle, Drawing, Moving, Resizing }
@@ -937,14 +1023,19 @@ private fun MotionEvent.pagePoint(index: Int, toPage: Matrix, history: Int? = nu
     return InkPoint(point[0], point[1])
 }
 
-/** Accumulates one eraser drag into a round Ink mask in page coordinates. */
-private class EraseGesture {
+/** Accumulates one eraser drag while exposing its mask and size cursor for live rendering. */
+internal class EraseGesture {
     private var inputs: MutableStrokeInputBatch? = null
     private var pointerId: Int = -1
     private var startTimeMillis: Long = 0L
     private var lastElapsedMillis: Long = -1L
     private var lastX: Float = Float.NaN
     private var lastY: Float = Float.NaN
+    private var awaitingCommit = false
+    var previewMask by mutableStateOf<Stroke?>(null)
+        private set
+    var indicator by mutableStateOf<EraserIndicator?>(null)
+        private set
 
     fun handle(
         event: MotionEvent,
@@ -954,40 +1045,74 @@ private class EraseGesture {
     ): Boolean {
         return when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                reset()
+                resetInput()
+                awaitingCommit = false
+                previewMask = null
                 pointerId = event.getPointerId(event.actionIndex)
                 startTimeMillis = event.eventTime
                 inputs = MutableStrokeInputBatch()
-                addSamples(event, toWorld)
+                addSamples(event, toWorld, sizeDp)
+                updatePreview(sizeDp)
                 true
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 // A second contact is a palm or pan gesture, not a wider eraser.
-                reset()
+                clear()
                 false
             }
             MotionEvent.ACTION_MOVE -> {
                 if (inputs == null) return false
-                addSamples(event, toWorld)
+                addSamples(event, toWorld, sizeDp)
+                updatePreview(sizeDp)
                 true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 if (inputs == null || event.getPointerId(event.actionIndex) != pointerId) return false
-                addSamples(event, toWorld)
-                val finished = inputs!!.toImmutable()
-                reset()
-                if (!finished.isEmpty()) onFinished(InkCodec.eraseMask(finished, sizeDp))
+                addSamples(event, toWorld, sizeDp)
+                updatePreview(sizeDp)
+                val finished = previewMask
+                awaitingCommit = finished != null
+                // Touch has left the surface. A hovering stylus/mouse will immediately send a hover
+                // event and restore the cursor at its real position.
+                resetInput()
+                if (finished != null) onFinished(finished)
                 true
             }
             MotionEvent.ACTION_CANCEL -> {
-                reset()
+                clear()
+                true
+            }
+            MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE -> {
+                indicator = EraserIndicator(event.pagePoint(event.actionIndex, toWorld), sizeDp)
+                true
+            }
+            MotionEvent.ACTION_HOVER_EXIT -> {
+                indicator = null
                 true
             }
             else -> false
         }
     }
 
-    private fun addSamples(event: MotionEvent, toWorld: Matrix) {
+    /** Drops a released preview once the committed stroke list arrives from the view model. */
+    fun reconcileCommittedStrokes() {
+        if (!awaitingCommit) return
+        awaitingCommit = false
+        previewMask = null
+    }
+
+    fun clear() {
+        awaitingCommit = false
+        previewMask = null
+        resetInput()
+    }
+
+    private fun updatePreview(sizeDp: Float) {
+        val batch = inputs?.toImmutable() ?: return
+        if (!batch.isEmpty()) previewMask = InkCodec.eraseMask(batch, sizeDp)
+    }
+
+    private fun addSamples(event: MotionEvent, toWorld: Matrix, sizeDp: Float) {
         val index = event.findPointerIndex(pointerId)
         if (index < 0) return
         repeat(event.historySize) { history ->
@@ -996,14 +1121,22 @@ private class EraseGesture {
                 event.getHistoricalY(index, history),
                 event.getHistoricalEventTime(history),
                 toWorld,
+                sizeDp,
             )
         }
-        addPoint(event.getX(index), event.getY(index), event.eventTime, toWorld)
+        addPoint(event.getX(index), event.getY(index), event.eventTime, toWorld, sizeDp)
     }
 
-    private fun addPoint(viewX: Float, viewY: Float, eventTime: Long, toWorld: Matrix) {
+    private fun addPoint(
+        viewX: Float,
+        viewY: Float,
+        eventTime: Long,
+        toWorld: Matrix,
+        sizeDp: Float,
+    ) {
         val point = floatArrayOf(viewX, viewY)
         toWorld.mapPoints(point)
+        indicator = EraserIndicator(InkPoint(point[0], point[1]), sizeDp)
         if (point[0] == lastX && point[1] == lastY) return
         val elapsed = (eventTime - startTimeMillis).coerceAtLeast(lastElapsedMillis + 1)
         inputs?.add(InputToolType.UNKNOWN, point[0], point[1], elapsed)
@@ -1012,13 +1145,14 @@ private class EraseGesture {
         lastY = point[1]
     }
 
-    private fun reset() {
+    private fun resetInput(hideIndicator: Boolean = true) {
         inputs = null
         pointerId = -1
         startTimeMillis = 0L
         lastElapsedMillis = -1L
         lastX = Float.NaN
         lastY = Float.NaN
+        if (hideIndicator) indicator = null
     }
 }
 

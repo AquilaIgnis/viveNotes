@@ -2,7 +2,11 @@ package com.vivenotes.ui.panel
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,9 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -61,6 +70,7 @@ enum class ToolPane(val title: String) {
 /** A pane's fields are addressable by the label beside them. */
 internal object PanelTags {
     fun field(label: String) = "panel-field-$label"
+    fun sizePreview(label: String) = "panel-size-preview-$label"
 }
 
 /**
@@ -379,7 +389,15 @@ fun ColumnScope.PanelSlider(
     value: Int,
     range: IntRange,
     onChange: (Int) -> Unit,
+    showTicks: Boolean = true,
+    sizePreviewColor: Color? = null,
+    outlineSizePreview: Boolean = false,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val dragged by interactionSource.collectIsDraggedAsState()
+    var pointerHeld by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -404,21 +422,126 @@ fun ColumnScope.PanelSlider(
         StepButton(MaterialSymbols.Remove, "Decrease $label", value > range.first) {
             onChange(value - 1)
         }
-        Slider(
-            value = value.toFloat(),
-            onValueChange = { onChange(it.toInt()) },
-            valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = (range.last - range.first - 1).coerceAtLeast(0),
+        Box(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 6.dp)
-                .testTag(PanelTags.field(field)),
-        )
+                // Slider's interaction source starts at drag slop, which is too late for a tap-and-
+                // hold preview. Observe the initial pointer pass without consuming it so the slider
+                // still owns all value changes.
+                .pointerInput(Unit) {
+                    try {
+                        awaitPointerEventScope {
+                            while (true) {
+                                pointerHeld = awaitPointerEvent(PointerEventPass.Initial)
+                                    .changes
+                                    .any { it.pressed }
+                            }
+                        }
+                    } finally {
+                        pointerHeld = false
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Slider(
+                value = value.toFloat(),
+                onValueChange = { onChange(it.toInt()) },
+                valueRange = range.first.toFloat()..range.last.toFloat(),
+                // The eraser is a continuous physical size, while the compact pen range benefits
+                // from discrete stops. Passing false removes Material's tick marks as well as the
+                // stops without changing the integer setting stored by the editor.
+                steps = if (showTicks) {
+                    (range.last - range.first - 1).coerceAtLeast(0)
+                } else {
+                    0
+                },
+                interactionSource = interactionSource,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp)
+                    .testTag(PanelTags.field(field)),
+            )
+            if (sizePreviewColor != null && (pointerHeld || pressed || dragged)) {
+                val fraction = (value - range.first).toFloat() /
+                    (range.last - range.first).coerceAtLeast(1)
+                SliderSizePreview(
+                    field = field,
+                    diameter = value,
+                    color = sizePreviewColor,
+                    outlined = outlineSizePreview,
+                    fraction = fraction.coerceIn(0f, 1f),
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+        }
         StepButton(MaterialSymbols.Add, "Increase $label", value < range.last) {
             onChange(value + 1)
         }
     }
 }
+
+/** A transient, true-to-size sample drawn at the live thumb position while it is held. */
+@Composable
+private fun SliderSizePreview(
+    field: String,
+    diameter: Int,
+    color: Color,
+    outlined: Boolean,
+    fraction: Float,
+    modifier: Modifier = Modifier,
+) {
+    val surfaceColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val borderColor = MaterialTheme.colorScheme.outlineVariant
+    Canvas(modifier.testTag(PanelTags.sizePreview(field))) {
+        val indicatorRadius = diameter.dp.toPx() / 2f
+        val bubbleDiameter = (diameter + SIZE_PREVIEW_PADDING).coerceAtLeast(
+            MIN_SIZE_PREVIEW_CONTAINER,
+        ).dp.toPx()
+        val bubbleRadius = bubbleDiameter / 2f
+        val trackInset = SLIDER_HORIZONTAL_PADDING.toPx()
+        val intendedX = trackInset + (size.width - trackInset * 2f) * fraction
+        val center = Offset(
+            x = if (bubbleDiameter <= size.width) {
+                intendedX.coerceIn(bubbleRadius, size.width - bubbleRadius)
+            } else {
+                size.width / 2f
+            },
+            y = size.height / 2f,
+        )
+
+        drawCircle(color = surfaceColor, radius = bubbleRadius, center = center)
+        drawCircle(
+            color = borderColor,
+            radius = (bubbleRadius - 0.5.dp.toPx()).coerceAtLeast(0f),
+            center = center,
+            style = Stroke(width = 1.dp.toPx()),
+        )
+        if (outlined) {
+            drawCircle(color = color.copy(alpha = 0.12f), radius = indicatorRadius, center = center)
+            drawCircle(
+                color = color,
+                radius = (indicatorRadius - 0.75.dp.toPx()).coerceAtLeast(0f),
+                center = center,
+                style = Stroke(width = 1.5.dp.toPx()),
+            )
+        } else {
+            drawCircle(color = color, radius = indicatorRadius, center = center)
+            // Keep very light pen colours legible against the preview surface.
+            if (color.red + color.green + color.blue > 2.55f) {
+                drawCircle(
+                    color = borderColor,
+                    radius = (indicatorRadius - 0.5.dp.toPx()).coerceAtLeast(0f),
+                    center = center,
+                    style = Stroke(width = 1.dp.toPx()),
+                )
+            }
+        }
+    }
+}
+
+private const val SIZE_PREVIEW_PADDING = 8
+private const val MIN_SIZE_PREVIEW_CONTAINER = 28
+private val SLIDER_HORIZONTAL_PADDING = 6.dp
 
 @Composable
 private fun StepButton(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {

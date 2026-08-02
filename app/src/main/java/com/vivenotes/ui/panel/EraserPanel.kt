@@ -76,6 +76,9 @@ fun ColumnScope.EraserPanelContent(
         value = settings.size,
         range = EraserSettings.MIN_SIZE..EraserSettings.MAX_SIZE,
         onChange = { onChange(settings.copy(size = it)) },
+        showTicks = false,
+        sizePreviewColor = MaterialTheme.colorScheme.primary,
+        outlineSizePreview = true,
     )
 }
 

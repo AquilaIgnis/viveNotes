@@ -4,6 +4,8 @@ import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -26,6 +28,7 @@ import com.vivenotes.data.PenPreset
 import com.vivenotes.ui.panel.PenPanelContent
 import com.vivenotes.ui.panel.PenPanelTags
 import com.vivenotes.ui.panel.PanelTags
+import com.vivenotes.ui.panel.EraserPanelContent
 import com.vivenotes.ui.panel.EraserPanelTags
 import com.vivenotes.ui.theme.ViveNotesTheme
 
@@ -82,9 +85,29 @@ class DrawTabTest {
     }
 
     private fun setPanel(pen: PenPreset = PenPreset.starting(0)) {
+        val current = mutableStateOf(pen)
         compose.setContent {
             ViveNotesTheme {
-                Column { PenPanelContent(pen = pen) { changed = it } }
+                Column {
+                    PenPanelContent(pen = current.value) {
+                        current.value = it
+                        changed = it
+                    }
+                }
+            }
+        }
+    }
+
+    private fun setEraserPanel(eraser: EraserSettings = EraserSettings()) {
+        val current = mutableStateOf(eraser)
+        compose.setContent {
+            ViveNotesTheme {
+                Column {
+                    EraserPanelContent(settings = current.value) {
+                        current.value = it
+                        changedEraser = it
+                    }
+                }
             }
         }
     }
@@ -197,6 +220,29 @@ class DrawTabTest {
     }
 
     @Test
+    fun holdingTheEraserSizeSliderShowsItsSizeUntilRelease() {
+        setEraserPanel()
+        val slider = compose.onNodeWithTag(PanelTags.field("Eraser size"))
+
+        slider.performTouchInput { down(center) }
+        compose.onNodeWithTag(PanelTags.sizePreview("Eraser size")).assertIsDisplayed()
+
+        slider.performTouchInput { up() }
+        compose.onNodeWithTag(PanelTags.sizePreview("Eraser size")).assertDoesNotExist()
+    }
+
+    @Test
+    fun theEraserSizeSliderHasNoDiscreteTicks() {
+        setEraserPanel()
+
+        val rangeInfo = compose.onNodeWithTag(PanelTags.field("Eraser size"))
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.ProgressBarRangeInfo]
+
+        assertEquals(0, rangeInfo.steps)
+    }
+
+    @Test
     fun undoAndRedoStayDisabledWhenTheirHistoryIsEmpty() {
         setTab()
         compose.onNodeWithContentDescription("Undo").assertIsDisplayed()
@@ -292,6 +338,18 @@ class DrawTabTest {
     fun theStrokePreviewIsShown() {
         setPanel()
         compose.onNodeWithTag(PenPanelTags.PREVIEW).assertIsDisplayed()
+    }
+
+    @Test
+    fun holdingThePenThicknessSliderShowsItsSizeUntilRelease() {
+        setPanel()
+        val slider = compose.onNodeWithTag(PanelTags.field("Thickness"))
+
+        slider.performTouchInput { down(center) }
+        compose.onNodeWithTag(PanelTags.sizePreview("Thickness")).assertIsDisplayed()
+
+        slider.performTouchInput { up() }
+        compose.onNodeWithTag(PanelTags.sizePreview("Thickness")).assertDoesNotExist()
     }
 
     @Test
