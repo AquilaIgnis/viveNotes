@@ -18,15 +18,21 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
+import androidx.ink.strokes.Stroke
+import com.vivenotes.data.PenPreset
+import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
+import com.vivenotes.ink.InkCodec
+import com.vivenotes.ink.PageStroke
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.Orientation
@@ -82,6 +88,7 @@ class NotesViewModel(
     private val repository: NotesRepository,
     private val editorDefaultsStore: EditorDefaultsStore,
     private val viewSettingsStore: ViewSettingsStore,
+    private val penSettingsStore: PenSettingsStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotesUiState())
@@ -97,6 +104,33 @@ class NotesViewModel(
     /** Zoom, navigation layout and canvas brightness — this device's view, not the document's. */
     val viewSettings: StateFlow<ViewSettings> = viewSettingsStore.settings
         .stateIn(viewModelScope, SharingStarted.Eagerly, ViewSettings())
+
+    /** The Draw tab's three pens. How the user likes to draw, so preferences rather than document. */
+    val pens: StateFlow<List<PenPreset>> = penSettingsStore.pens
+        .stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            List(PenPreset.COUNT) { PenPreset.starting(it) },
+        )
+
+    /** Whether a finger draws or scrolls. A property of this device, so it persists. */
+    val drawWithFinger: StateFlow<Boolean> = penSettingsStore.drawWithFinger
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /**
+     * The tool in hand. Held here rather than in preferences: it is where you are, not what you
+     * have, and an app that reopens with an eraser armed would be startling.
+     *
+     * A pen by default, because this is a notebook you draw in — text is what the Home tab's T
+     * button is for. With a pen armed a tap on bare canvas leaves a mark rather than opening a
+     * caret, which is why [createOutline] is reached only in [DrawTool.None].
+     */
+    private val _tool = MutableStateFlow<DrawTool>(DrawTool.Pen(0))
+    val tool: StateFlow<DrawTool> = _tool.asStateFlow()
+
+    /** The open page's ink, in draw order. Empty while no page is open. */
+    private val _strokes = MutableStateFlow<List<PageStroke>>(emptyList())
+    val strokes: StateFlow<List<PageStroke>> = _strokes.asStateFlow()
 
     /** Commands travel to the focused editor, the only thing that can act on them. */
     private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
@@ -222,6 +256,10 @@ class NotesViewModel(
             // and may have been substituted for an empty one. An unreadable page decodes to
             // PageDoc.empty(), so this clears — the outgoing page's outlines must not follow it.
             unmanagedOutlines = doc.outlines.withIndex().filterNot { it.value is Outline.Text }
+            // A stroke that cannot be decoded costs that stroke, not the page: the rest still load.
+            _strokes.value = repository.inkFor(pageId).mapNotNull { row ->
+                InkCodec.decode(row)?.let { PageStroke(row.id, it) }
+            }
 
             _uiState.value = _uiState.value.copy(
                 selectedPageId = pageId,
@@ -451,6 +489,54 @@ class NotesViewModel(
         viewModelScope.launch { viewSettingsStore.setCanvasDark(dark) }
     }
 
+    // --- draw ----------------------------------------------------------------------------------
+
+    fun selectTool(tool: DrawTool) {
+        _tool.value = tool
+    }
+
+    fun setDrawWithFinger(enabled: Boolean) {
+        viewModelScope.launch { penSettingsStore.setDrawWithFinger(enabled) }
+    }
+
+    /** The pen currently in hand, or null when the armed tool is not a pen. */
+    fun activePen(): PenPreset? =
+        (_tool.value as? DrawTool.Pen)?.let { pens.value.getOrNull(it.index) }
+
+    /**
+     * Records a finished stroke.
+     *
+     * Added to the in-memory list first and written second: the canvas draws from that list, and the
+     * authoring view stops drawing the stroke the instant it hands it over, so waiting for the
+     * database would leave a frame with the stroke on neither.
+     */
+    fun onStrokeFinished(stroke: Stroke) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        // An unreadable page is never written to, and that has to include its ink.
+        if (readOnlyPageId == pageId) return
+        val pen = activePen() ?: return
+        val entity = InkCodec.encode(stroke, pageId, seq = 0, pen = pen)
+        _strokes.value = _strokes.value + PageStroke(entity.id, stroke)
+        viewModelScope.launch { repository.addStroke(entity) }
+    }
+
+    /** Erases by tombstone. Same ordering as [onStrokeFinished], for the same reason. */
+    fun eraseStrokes(ids: List<String>) {
+        if (ids.isEmpty()) return
+        val gone = ids.toSet()
+        if (_strokes.value.none { it.id in gone }) return
+        _strokes.value = _strokes.value.filterNot { it.id in gone }
+        viewModelScope.launch { repository.eraseStrokes(ids) }
+    }
+
+    /**
+     * Persists a pen. Every field on it is a preference, so the write goes to DataStore and the
+     * open document is not touched — changing your pen is not an edit to the page.
+     */
+    fun updatePen(index: Int, preset: PenPreset) {
+        viewModelScope.launch { penSettingsStore.setPen(index, preset) }
+    }
+
     // --- pages, sections, notebooks -------------------------------------------------------------
 
     fun createNotebook(name: String) {
@@ -570,10 +656,16 @@ class NotesViewModel(
             repository: NotesRepository,
             editorDefaultsStore: EditorDefaultsStore,
             viewSettingsStore: ViewSettingsStore,
+            penSettingsStore: PenSettingsStore,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                NotesViewModel(repository, editorDefaultsStore, viewSettingsStore) as T
+                NotesViewModel(
+                    repository,
+                    editorDefaultsStore,
+                    viewSettingsStore,
+                    penSettingsStore,
+                ) as T
         }
     }
 }

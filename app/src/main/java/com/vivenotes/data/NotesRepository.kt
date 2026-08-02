@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.data.db.PageEntity
 import com.vivenotes.data.db.SectionEntity
@@ -54,6 +55,7 @@ class NotesRepository(
     private val sections = db.sectionDao()
     private val pages = db.pageDao()
     private val contents = db.pageContentDao()
+    private val ink = db.inkStrokeDao()
 
     fun observeTree(): Flow<List<NotebookWithSections>> = notebooks.observeTree()
 
@@ -172,6 +174,35 @@ class NotesRepository(
         val now = System.currentTimeMillis()
         contents.upsert(PageContentEntity(pageId, codec.encodeToString(doc), now, codec.id))
         pages.updatePreview(pageId, doc.plainText().lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(140), now)
+    }
+
+    // --- ink -------------------------------------------------------------------------------
+
+    /**
+     * A page's live strokes, in draw order.
+     *
+     * Rows rather than the document: ink does not travel through [saveDoc], so drawing never
+     * rewrites the document column and autosave latency stays independent of how much ink is on the
+     * page. See `docs/inkPlan.md` ID2.
+     */
+    suspend fun inkFor(pageId: String): List<InkStrokeEntity> = ink.byPage(pageId)
+
+    /** Appends one stroke. Strokes are immutable, so this is the only way ink is ever written. */
+    suspend fun addStroke(stroke: InkStrokeEntity): InkStrokeEntity {
+        val placed = stroke.copy(seq = ink.nextSeq(stroke.pageId))
+        ink.insert(placed)
+        return placed
+    }
+
+    /**
+     * Erases strokes by tombstone.
+     *
+     * Never a hard delete, for the same reason nothing else here is: a row that is gone cannot be
+     * replicated, so an erase on one device would silently reappear from another.
+     */
+    suspend fun eraseStrokes(ids: List<String>) {
+        if (ids.isEmpty()) return
+        ink.softDelete(ids, System.currentTimeMillis())
     }
 
     // --- first run -------------------------------------------------------------------------

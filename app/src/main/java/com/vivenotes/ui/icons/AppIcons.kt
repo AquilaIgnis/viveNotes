@@ -27,6 +27,7 @@ class AppIcons(neutral: Color, accent: Color, warn: Color) {
     val paperSize = paperSizeGlyph(neutral, accent)
     val hidePageTitle = hidePageTitleGlyph(neutral, warn)
     val pageWidth = pageWidthGlyph(neutral, accent)
+    val eraser = eraserGlyph(neutral, warn)
 }
 
 /**

@@ -96,3 +96,20 @@ interface PageContentDao {
     @Upsert
     suspend fun upsert(content: PageContentEntity)
 }
+
+@Dao
+interface InkStrokeDao {
+
+    /** A page's live ink, in draw order. Tombstones are excluded, never removed. */
+    @Query("SELECT * FROM ink_strokes WHERE pageId = :pageId AND deletedAt IS NULL ORDER BY seq")
+    suspend fun byPage(pageId: String): List<InkStrokeEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(stroke: InkStrokeEntity)
+
+    @Query("UPDATE ink_strokes SET deletedAt = :now WHERE id IN (:ids)")
+    suspend fun softDelete(ids: List<String>, now: Long)
+
+    @Query("SELECT COALESCE(MAX(seq), -1) + 1 FROM ink_strokes WHERE pageId = :pageId")
+    suspend fun nextSeq(pageId: String): Int
+}

@@ -11,7 +11,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
+import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
+import com.vivenotes.data.PenPreset
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.Mark
 import com.vivenotes.model.PageStyle
@@ -51,6 +53,10 @@ class FontPickerTest {
                     pageStyle = PageStyle(),
                     viewSettings = ViewSettings(),
                     view = noopViewActions(),
+                    pens = List(PenPreset.COUNT) { PenPreset.starting(it) },
+                    tool = DrawTool.None,
+                    allowFinger = false,
+                    draw = DrawActions(selectTool = {}, openPen = {}, setDrawWithFinger = {}),
                     pageOpen = true,
                 )
             }

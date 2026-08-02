@@ -25,6 +25,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
+import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
@@ -54,6 +55,7 @@ class NotesViewModelTest {
     private lateinit var repository: NotesRepository
     private lateinit var editorDefaults: EditorDefaultsStore
     private lateinit var viewSettings: ViewSettingsStore
+    private lateinit var penSettings: PenSettingsStore
 
     /** The device's own editor defaults, restored after the tests that overwrite them. */
     private var savedDefaults: EditorDefaults? = null
@@ -72,6 +74,7 @@ class NotesViewModelTest {
         // per Context, so every test in this class shares one store rather than clashing over it.
         editorDefaults = EditorDefaultsStore(context)
         viewSettings = ViewSettingsStore(context)
+        penSettings = PenSettingsStore(context)
         // That file belongs to the installed app, not to the test, so whatever the defaults tests
         // write to it has to be put back — otherwise running the suite silently changes the font
         // the user's own build types in.
@@ -92,7 +95,7 @@ class NotesViewModelTest {
 
     /** Builds a settled view model sitting on the seeded Welcome page. */
     private suspend fun seededViewModel(): NotesViewModel {
-        val vm = NotesViewModel(repository, editorDefaults, viewSettings)
+        val vm = NotesViewModel(repository, editorDefaults, viewSettings, penSettings)
         scheduler.advanceUntilIdle()
         assertNotNull("expected the seeded page to be open", vm.uiState.value.selectedPageId)
         return vm
@@ -452,7 +455,7 @@ class NotesViewModelTest {
     @Test
     fun holdingASizeStoresItAsTheDefault() = runBlocking<Unit> {
         Dispatchers.setMain(Dispatchers.Unconfined)
-        val vm = NotesViewModel(repository, editorDefaults, viewSettings)
+        val vm = NotesViewModel(repository, editorDefaults, viewSettings, penSettings)
 
         vm.setDefaultFont(Mark.FontSize(36))
 
@@ -463,7 +466,7 @@ class NotesViewModelTest {
     @Test
     fun holdingAFontStoresItAsTheDefault() = runBlocking<Unit> {
         Dispatchers.setMain(Dispatchers.Unconfined)
-        val vm = NotesViewModel(repository, editorDefaults, viewSettings)
+        val vm = NotesViewModel(repository, editorDefaults, viewSettings, penSettings)
 
         vm.setDefaultFont(Mark.FontFamily("lora"))
 

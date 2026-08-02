@@ -115,3 +115,69 @@ data class NotebookWithSections(
     val liveSections: List<SectionEntity>
         get() = sections.filter { it.deletedAt == null }.sortedBy { it.sortIndex }
 }
+
+/**
+ * One ink stroke, in its own table rather than inside `page_content.docJson`.
+ *
+ * Autosave rewrites the whole document column on a 400ms debounce, so ink living there would rewrite
+ * hundreds of kilobytes because someone typed a character. Ink is also append-mostly and immutable —
+ * a stroke, once lifted, never changes — which is what makes row-per-stroke match both the access
+ * pattern and, later, the merge: a grow-only set of immutable strokes converges without conflict.
+ * See `docs/inkPlan.md` ID2 and §8.
+ *
+ * Only [points] is opaque. Brush, bounds and order stay in readable columns, so `sqlite3` still
+ * answers what is on a page.
+ */
+@Entity(
+    tableName = "ink_strokes",
+    foreignKeys = [
+        ForeignKey(
+            entity = PageEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["pageId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("pageId")],
+)
+data class InkStrokeEntity(
+    @PrimaryKey val id: String,
+    val pageId: String,
+    /** Draw order within the page. Later strokes sit on top. */
+    val seq: Int,
+    val brushFamily: String,
+    /** Pinned at creation, never "latest": a stock brush that gains a V2 must not restyle old ink. */
+    val brushVersion: Int,
+    val sizeDp: Float,
+    val colorArgb: Int,
+    val epsilon: Float,
+    /**
+     * The pen's stabilization level when the stroke was drawn.
+     *
+     * Recorded rather than applied: the library's input models are restricted API (see [InkCodec]),
+     * so nothing here changes the geometry yet. It is still a fact about the stroke, and the one a
+     * smoothing pass would need to reproduce it — see `docs/inkPlan.md` §4.
+     */
+    val stabilization: Int,
+    /** Page-unit bounds, so a draw pass can skip a stroke without decoding it. */
+    val minX: Float,
+    val minY: Float,
+    val maxX: Float,
+    val maxY: Float,
+    val points: ByteArray,
+    /**
+     * Which encoder wrote [points]. Recorded per row for the reason `page_content.format` is:
+     * changing format becomes a rolling change rather than a migration.
+     */
+    val enc: String,
+    val createdAt: Long,
+    /** Erasing is a tombstone. Ink is never hard-deleted, so an erase can be replicated. */
+    val deletedAt: Long? = null,
+) {
+    // ByteArray gives identity equals, which would make two rows with the same ink unequal and
+    // break any test that compares them. Room does not care; callers do.
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is InkStrokeEntity && id == other.id && points.contentEquals(other.points))
+
+    override fun hashCode(): Int = 31 * id.hashCode() + points.contentHashCode()
+}

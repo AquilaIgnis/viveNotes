@@ -3,6 +3,7 @@ package com.vivenotes
 import android.app.Application
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
+import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.richtext.FontRegistry
@@ -19,6 +20,7 @@ class NotesApplication : Application() {
     val repository: NotesRepository by lazy { NotesRepository(database) }
     val editorDefaults: EditorDefaultsStore by lazy { EditorDefaultsStore(this) }
     val viewSettings: ViewSettingsStore by lazy { ViewSettingsStore(this) }
+    val penSettings: PenSettingsStore by lazy { PenSettingsStore(this) }
 
     override fun onCreate() {
         super.onCreate()

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.FormatClear
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatStrikethrough
 import androidx.compose.material.icons.filled.FormatUnderlined
+import androidx.compose.material.icons.filled.Title
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -56,7 +57,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
+import com.vivenotes.data.PenPreset
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.Align
 import com.vivenotes.model.BlockType
@@ -73,9 +76,9 @@ import com.vivenotes.ui.icons.fontColorGlyph
 import com.vivenotes.ui.icons.highlightGlyph
 
 /**
- * Ribbon tabs from the reference UI. Only Home is implemented; the rest are shown because the
- * shell is part of the design, and each states plainly that it is not built rather than
- * pretending to work.
+ * Ribbon tabs from the reference UI. Home, View and Draw are implemented; the rest are shown
+ * because the shell is part of the design, and each states plainly that it is not built rather
+ * than pretending to work.
  */
 enum class RibbonTab(val label: String) {
     File("File"),
@@ -109,6 +112,11 @@ private val FONT_FAMILIES = FontRegistry.families
 private const val CONFIRM_FLASH_MS = 650L
 
 /** Test tags for the font controls, which have a state — a mixed selection — that shows no text. */
+/** Test tag for the Text button, whose active state is the whole point of it. */
+internal object HomeTags {
+    const val TEXT = "home-text-mode"
+}
+
 internal object FontTags {
     const val SIZE = "font-size-combo"
     const val FAMILY = "font-family-combo"
@@ -128,6 +136,11 @@ fun Ribbon(
     pageStyle: PageStyle,
     viewSettings: ViewSettings,
     view: ViewActions,
+    /** The Draw tab's pens, and which tool is currently in hand. */
+    pens: List<PenPreset>,
+    tool: DrawTool,
+    allowFinger: Boolean,
+    draw: DrawActions,
     pageOpen: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -144,8 +157,16 @@ fun Ribbon(
                 .background(MaterialTheme.colorScheme.outlineVariant),
         )
         when (activeTab) {
-            RibbonTab.Home -> HomeTab(selection, defaults, onCommand, onSetDefault)
+            RibbonTab.Home -> HomeTab(
+                selection = selection,
+                defaults = defaults,
+                onCommand = onCommand,
+                onSetDefault = onSetDefault,
+                textMode = tool == DrawTool.None,
+                onTextMode = { draw.selectTool(DrawTool.None) },
+            )
             RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
+            RibbonTab.Draw -> DrawTab(pens, tool, allowFinger, draw)
             else -> PlaceholderTab(activeTab)
         }
     }
@@ -204,11 +225,28 @@ private fun HomeTab(
     defaults: EditorDefaults,
     onCommand: (FormatCommand) -> Unit,
     onSetDefault: (Mark) -> Unit,
+    textMode: Boolean,
+    onTextMode: () -> Unit,
 ) {
     ScrollingRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
+        // The canvas draws by default, so tapping it leaves a mark rather than opening a caret.
+        // This is how you ask for text: it puts the pen down, after which a tap on bare canvas
+        // starts a container exactly as it always did. A mode rather than a one-shot insert,
+        // because "where does it go" is a question only a tap can answer.
+        Box(Modifier.testTag(HomeTags.TEXT)) {
+            RibbonButton(
+                icon = Icons.Default.Title,
+                label = "Text",
+                active = textMode,
+                onClick = onTextMode,
+            )
+        }
+
+        Divider()
+
         RibbonButton(Icons.Default.ContentPaste, "Paste") {
             onCommand(FormatCommand.Clipboard(ClipboardAction.Paste))
         }
@@ -335,9 +373,11 @@ internal fun RibbonButton(
     icon: ImageVector,
     label: String,
     active: Boolean = false,
+    /** Renders the button without wiring it up — see [RibbonCommand] for why that beats hiding it. */
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    RibbonButtonSlot(active, onClick) {
+    RibbonButtonSlot(active, onClick, enabled) {
         Icon(
             imageVector = icon,
             contentDescription = label,
@@ -438,6 +478,7 @@ internal fun TwoToneRibbonButton(
 internal fun RibbonButtonSlot(
     active: Boolean,
     onClick: () -> Unit,
+    enabled: Boolean = true,
     icon: @Composable () -> Unit,
 ) {
     val background = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
@@ -447,7 +488,8 @@ internal fun RibbonButtonSlot(
             .size(32.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(background)
-            .clickable(onClick = onClick),
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .alpha(if (enabled) 1f else DISABLED_ALPHA),
         contentAlignment = Alignment.Center,
     ) {
         icon()

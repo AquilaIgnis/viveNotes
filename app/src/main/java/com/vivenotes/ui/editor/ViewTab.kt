@@ -182,7 +182,7 @@ internal fun ViewTab(
 }
 
 @Composable
-private fun MonoIcon(icon: ImageVector, active: Boolean = false) {
+internal fun MonoIcon(icon: ImageVector, active: Boolean = false) {
     Icon(
         imageVector = icon,
         contentDescription = null,
@@ -197,7 +197,7 @@ private fun MonoIcon(icon: ImageVector, active: Boolean = false) {
 
 /** See [TwoToneRibbonButton] for why the pressed state is a different vector, not a different tint. */
 @Composable
-private fun TwoToneIcon(glyph: (AppIcons) -> ImageVector, active: Boolean) {
+internal fun TwoToneIcon(glyph: (AppIcons) -> ImageVector, active: Boolean) {
     val icons = LocalRibbonIcons.current
     Icon(
         imageVector = glyph(if (active) icons.active else icons.idle),

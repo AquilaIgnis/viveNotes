@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -43,6 +44,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -72,8 +74,16 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.ink.brush.Brush
+import androidx.ink.strokes.Stroke as InkStroke
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.DecayAnimationSpec
+import androidx.compose.animation.core.animateDecay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import com.vivenotes.data.EditorDefaults
+import com.vivenotes.ink.PageStroke
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.PageStyle
@@ -165,6 +175,19 @@ fun EditorPane(
     onCanvasMeasured: (Float, Float) -> Unit,
     /** Drawn while the Paper Size pane is open, so the margins being edited are visible. */
     showPrintMargins: Boolean,
+    /**
+     * The page's ink, and what the armed tool does with it.
+     *
+     * Defaulted to a page with no ink and nothing in hand, so the canvas can be exercised in
+     * isolation the way [OutlineContainer] can — and because those defaults leave the overlay
+     * transparent to touch, which is what the tap and zoom tests depend on.
+     */
+    strokes: List<PageStroke> = emptyList(),
+    brush: Brush? = null,
+    erasing: Boolean = false,
+    allowFinger: Boolean = false,
+    onStrokeFinished: (InkStroke) -> Unit = {},
+    onErase: (List<String>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val shell = LocalCanvasColors.current
@@ -250,6 +273,10 @@ fun EditorPane(
     ) {
         val horizontal = rememberScrollState()
         val vertical = rememberScrollState()
+        val scope = rememberCoroutineScope()
+        // The platform's own fling curve, so letting go of the page decelerates the way letting go
+        // of anything else on the device does.
+        val flingSpec = rememberSplineBasedDecay<Float>()
         // The window onto the page, in page units: what the user can see at this zoom.
         val window = DpSize(maxWidth / zoom, maxHeight / zoom)
 
@@ -390,6 +417,33 @@ fun EditorPane(
                     }
                 }
             }
+
+            // Above the page, and outside the zoom — see InkOverlay for why a front-buffered
+            // surface cannot be scaled by a graphics layer. It is transparent to touch unless a
+            // tool is armed, so with nothing in hand a tap still reaches the canvas beneath and
+            // opens a text container.
+            InkOverlay(
+                strokes = strokes,
+                brush = brush,
+                erasing = erasing,
+                allowFinger = allowFinger,
+                pageToView = {
+                    // Read here rather than captured, so scrolling re-runs the draw and not the
+                    // composition — the same reason PageRuling takes its window as a lambda.
+                    inkPageToView(
+                        zoom = zoom,
+                        density = density.density,
+                        scrollX = horizontal.value.toFloat(),
+                        scrollY = vertical.value.toFloat(),
+                    )
+                },
+                onStrokeFinished = onStrokeFinished,
+                onErase = onErase,
+                pan = remember(horizontal, vertical, scope, flingSpec) {
+                    ScrollStatePan(horizontal, vertical, scope, flingSpec)
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }
@@ -896,4 +950,46 @@ private fun formatCreated(timestamp: Long): String {
     if (timestamp == 0L) return ""
     val date = Date(timestamp)
     return "${createdFormat.format(date)}    ${createdTimeFormat.format(date)}"
+}
+
+/**
+ * Pans the page by driving its two scroll states directly.
+ *
+ * [ScrollState.dispatchRawDelta] rather than an animation while the finger is down, so the page
+ * tracks it exactly; the fling afterwards is a decay animation feeding the same method, which is
+ * how the platform's own scrollables do it.
+ */
+private class ScrollStatePan(
+    private val horizontal: ScrollState,
+    private val vertical: ScrollState,
+    private val scope: CoroutineScope,
+    private val flingSpec: DecayAnimationSpec<Float>,
+) : CanvasPan {
+
+    override fun by(dx: Float, dy: Float) {
+        horizontal.dispatchRawDelta(dx)
+        vertical.dispatchRawDelta(dy)
+    }
+
+    override fun fling(vx: Float, vy: Float) {
+        decay(horizontal, vx)
+        decay(vertical, vy)
+    }
+
+    private fun decay(state: ScrollState, velocity: Float) {
+        // Below this a "fling" is just the noise at the end of a deliberate drag, and animating it
+        // makes the page drift after the finger has stopped.
+        if (kotlin.math.abs(velocity) < MIN_FLING_VELOCITY) return
+        scope.launch {
+            var last = 0f
+            AnimationState(initialValue = 0f, initialVelocity = velocity).animateDecay(flingSpec) {
+                state.dispatchRawDelta(value - last)
+                last = value
+            }
+        }
+    }
+
+    private companion object {
+        const val MIN_FLING_VELOCITY = 50f
+    }
 }
