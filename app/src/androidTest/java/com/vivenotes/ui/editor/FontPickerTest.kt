@@ -13,6 +13,7 @@ import org.junit.Rule
 import org.junit.Test
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
+import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.Mark
@@ -54,9 +55,15 @@ class FontPickerTest {
                     viewSettings = ViewSettings(),
                     view = noopViewActions(),
                     pens = List(PenPreset.COUNT) { PenPreset.starting(it) },
+                    eraser = EraserSettings(),
                     tool = DrawTool.None,
                     allowFinger = false,
-                    draw = DrawActions(selectTool = {}, updatePen = { _, _ -> }, setDrawWithFinger = {}),
+                    draw = DrawActions(
+                        selectTool = {},
+                        updatePen = { _, _ -> },
+                        updateEraser = {},
+                        setDrawWithFinger = {},
+                    ),
                     pageOpen = true,
                 )
             }

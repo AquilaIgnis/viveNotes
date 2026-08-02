@@ -34,6 +34,27 @@ enum class LineType(val label: String) {
     Dotted("Dotted"),
 }
 
+/** Whether the eraser cuts through ink or removes a complete stroke at the first contact. */
+@Serializable
+enum class EraserMode(val label: String) {
+    Normal("Normal"),
+    Object("Object"),
+}
+
+/** User-level eraser preferences, shared by the ribbon eraser and a stylus's eraser end. */
+@Serializable
+data class EraserSettings(
+    val mode: EraserMode = EraserMode.Normal,
+    /** Diameter in page dp. */
+    val size: Int = DEFAULT_SIZE,
+) {
+    companion object {
+        const val MIN_SIZE = 4
+        const val MAX_SIZE = 64
+        const val DEFAULT_SIZE = 18
+    }
+}
+
 /**
  * One of the Draw tab's pens.
  *
@@ -114,8 +135,12 @@ class PenSettingsStore(context: Context) {
 
     val pens: Flow<List<PenPreset>> = store.data.map { prefs ->
         List(PenPreset.COUNT) { index ->
-            prefs[key(index)]?.let(::decode) ?: PenPreset.starting(index)
+            prefs[key(index)]?.let(::decodePen) ?: PenPreset.starting(index)
         }
+    }
+
+    val eraser: Flow<EraserSettings> = store.data.map { prefs ->
+        prefs[ERASER]?.let(::decodeEraser) ?: EraserSettings()
     }
 
     /**
@@ -139,13 +164,21 @@ class PenSettingsStore(context: Context) {
         store.edit { it[key(index)] = json.encodeToString(PenPreset.serializer(), preset) }
     }
 
-    private fun decode(text: String): PenPreset? =
+    suspend fun setEraser(settings: EraserSettings) {
+        store.edit { it[ERASER] = json.encodeToString(EraserSettings.serializer(), settings) }
+    }
+
+    private fun decodePen(text: String): PenPreset? =
         runCatching { json.decodeFromString(PenPreset.serializer(), text) }.getOrNull()
+
+    private fun decodeEraser(text: String): EraserSettings? =
+        runCatching { json.decodeFromString(EraserSettings.serializer(), text) }.getOrNull()
 
     private companion object {
         fun key(index: Int) = stringPreferencesKey("pen_$index")
 
         val DRAW_WITH_FINGER = booleanPreferencesKey("draw_with_finger")
+        val ERASER = stringPreferencesKey("eraser")
 
         /**
          * `ignoreUnknownKeys` covers a field this build does not have; `coerceInputValues` covers a

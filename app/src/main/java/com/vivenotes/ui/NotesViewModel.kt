@@ -3,6 +3,8 @@ package com.vivenotes.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -18,9 +20,13 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
+import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
 import androidx.ink.strokes.Stroke
@@ -33,6 +39,8 @@ import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.PageStroke
+import com.vivenotes.ink.subtract
+import com.vivenotes.ink.targetsFor
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.Orientation
@@ -89,6 +97,7 @@ class NotesViewModel(
     private val editorDefaultsStore: EditorDefaultsStore,
     private val viewSettingsStore: ViewSettingsStore,
     private val penSettingsStore: PenSettingsStore,
+    private val inkDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotesUiState())
@@ -113,6 +122,10 @@ class NotesViewModel(
             List(PenPreset.COUNT) { PenPreset.starting(it) },
         )
 
+    /** Partial/object mode and diameter are user preferences, not properties of a page. */
+    val eraser: StateFlow<EraserSettings> = penSettingsStore.eraser
+        .stateIn(viewModelScope, SharingStarted.Eagerly, EraserSettings())
+
     /** Whether a finger draws or scrolls. A property of this device, so it persists. */
     val drawWithFinger: StateFlow<Boolean> = penSettingsStore.drawWithFinger
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -131,6 +144,9 @@ class NotesViewModel(
     /** The open page's ink, in draw order. Empty while no page is open. */
     private val _strokes = MutableStateFlow<List<PageStroke>>(emptyList())
     val strokes: StateFlow<List<PageStroke>> = _strokes.asStateFlow()
+
+    /** Keeps stroke inserts, whole erases and replayable partial erases in gesture order. */
+    private val inkMutations = Mutex()
 
     /** Commands travel to the focused editor, the only thing that can act on them. */
     private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
@@ -254,9 +270,20 @@ class NotesViewModel(
             // and may have been substituted for an empty one. An unreadable page decodes to
             // PageDoc.empty(), so this clears — the outgoing page's outlines must not follow it.
             unmanagedOutlines = doc.outlines.withIndex().filterNot { it.value is Outline.Text }
-            // A stroke that cannot be decoded costs that stroke, not the page: the rest still load.
-            _strokes.value = repository.inkFor(pageId).mapNotNull { row ->
+            // A stroke or erase mask that cannot be decoded costs only that item, not the page.
+            val baseStrokes = repository.inkFor(pageId).mapNotNull { row ->
                 InkCodec.decode(row)?.let { PageStroke(row.id, it) }
+            }
+            val storedErases = repository.partialErasesFor(pageId)
+            _strokes.value = if (storedErases.isEmpty()) {
+                baseStrokes
+            } else {
+                withContext(inkDispatcher) {
+                    storedErases.fold(baseStrokes) { current, stored ->
+                        val mask = InkCodec.decodeErase(stored.erase) ?: return@fold current
+                        current.subtract(mask, stored.targets.map { it.strokeId })
+                    }
+                }
             }
 
             _uiState.value = _uiState.value.copy(
@@ -513,6 +540,10 @@ class NotesViewModel(
         viewModelScope.launch { penSettingsStore.setDrawWithFinger(enabled) }
     }
 
+    fun updateEraser(settings: EraserSettings) {
+        viewModelScope.launch { penSettingsStore.setEraser(settings) }
+    }
+
     /** The pen currently in hand, or null when the armed tool is not a pen. */
     fun activePen(): PenPreset? =
         (_tool.value as? DrawTool.Pen)?.let { pens.value.getOrNull(it.index) }
@@ -531,7 +562,9 @@ class NotesViewModel(
         val pen = activePen() ?: return
         val entity = InkCodec.encode(stroke, pageId, seq = 0, pen = pen)
         _strokes.value = _strokes.value + PageStroke(entity.id, stroke)
-        viewModelScope.launch { repository.addStroke(entity) }
+        viewModelScope.launch {
+            inkMutations.withLock { repository.addStroke(entity) }
+        }
     }
 
     /** Erases by tombstone. Same ordering as [onStrokeFinished], for the same reason. */
@@ -540,7 +573,32 @@ class NotesViewModel(
         val gone = ids.toSet()
         if (_strokes.value.none { it.id in gone }) return
         _strokes.value = _strokes.value.filterNot { it.id in gone }
-        viewModelScope.launch { repository.eraseStrokes(ids) }
+        viewModelScope.launch {
+            inkMutations.withLock { repository.eraseStrokes(ids) }
+        }
+    }
+
+    /**
+     * Applies a normal eraser mask to only the strokes that existed when the gesture ended.
+     * Geometry work stays off the input thread; the immutable mask and target set are then stored
+     * so reopening the page reconstructs the same cut mesh.
+     */
+    fun eraseStrokeParts(mask: Stroke) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val candidates = _strokes.value
+        viewModelScope.launch {
+            inkMutations.withLock {
+                val targetIds = withContext(inkDispatcher) { candidates.targetsFor(mask) }
+                if (targetIds.isEmpty()) return@withLock
+                val updated = withContext(inkDispatcher) {
+                    _strokes.value.subtract(mask, targetIds)
+                }
+                val erase = InkCodec.encodeErase(mask, pageId)
+                repository.addPartialErase(erase, targetIds)
+                if (_uiState.value.selectedPageId == pageId) _strokes.value = updated
+            }
+        }
     }
 
     /**

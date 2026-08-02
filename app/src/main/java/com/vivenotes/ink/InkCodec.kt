@@ -18,6 +18,7 @@ import androidx.ink.strokes.StrokeInputBatch
 import com.vivenotes.data.LineType
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.model.newId
 import java.io.ByteArrayInputStream
@@ -182,6 +183,17 @@ object InkCodec {
         epsilon = EPSILON,
     )
 
+    /** A round, opaque stroke used only as the geometric mask for a normal eraser gesture. */
+    fun eraseMask(inputs: StrokeInputBatch, sizeDp: Float): Stroke = Stroke(
+        brush = Brush.createWithColorIntArgb(
+            family = StockBrushes.marker(StockBrushes.MarkerVersion.V1),
+            colorIntArgb = 0xFF000000.toInt(),
+            size = sizeDp,
+            epsilon = EPSILON,
+        ),
+        inputs = inputs,
+    )
+
     fun encode(
         stroke: Stroke,
         pageId: String,
@@ -190,10 +202,7 @@ object InkCodec {
         now: Long = System.currentTimeMillis(),
     ): InkStrokeEntity {
         val box = stroke.shape.computeBoundingBox()
-        val points = ByteArrayOutputStream().use { out ->
-            stroke.inputs.encode(out)
-            out.toByteArray()
-        }
+        val points = encodeInputs(stroke.inputs)
         return InkStrokeEntity(
             id = newId(),
             pageId = pageId,
@@ -226,9 +235,7 @@ object InkCodec {
     fun decode(entity: InkStrokeEntity): Stroke? {
         if (entity.enc != ENCODING) return null
         return runCatching {
-            val inputs: StrokeInputBatch = ByteArrayInputStream(entity.points).use { input ->
-                StrokeInputBatch.decode(input)
-            }
+            val inputs = decodeInputs(entity.points)
             val brush = Brush.createWithColorIntArgb(
                 family = family(entity.brushFamily),
                 colorIntArgb = entity.colorArgb,
@@ -238,6 +245,36 @@ object InkCodec {
             Stroke(brush = brush, inputs = inputs)
         }.getOrNull()
     }
+
+    fun encodeErase(
+        mask: Stroke,
+        pageId: String,
+        now: Long = System.currentTimeMillis(),
+    ): InkEraseEntity = InkEraseEntity(
+        id = newId(),
+        pageId = pageId,
+        sizeDp = mask.brush.size,
+        points = encodeInputs(mask.inputs),
+        enc = ENCODING,
+        createdAt = now,
+    )
+
+    fun decodeErase(entity: InkEraseEntity): Stroke? {
+        if (entity.enc != ENCODING) return null
+        return runCatching {
+            val inputs = decodeInputs(entity.points)
+            eraseMask(inputs, entity.sizeDp)
+        }.getOrNull()
+    }
+
+    private fun encodeInputs(inputs: StrokeInputBatch): ByteArray =
+        ByteArrayOutputStream().use { out ->
+            inputs.encode(out)
+            out.toByteArray()
+        }
+
+    private fun decodeInputs(points: ByteArray): StrokeInputBatch =
+        ByteArrayInputStream(points).use { input -> StrokeInputBatch.decode(input) }
 
     /**
      * Mesh tolerance in page units. Smaller means more triangles for the same stroke; a quarter of a

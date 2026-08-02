@@ -42,9 +42,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
+import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.Align
@@ -58,6 +58,7 @@ import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.ScrollingRow
 import com.vivenotes.ui.icons.AppIcons
 import com.vivenotes.ui.icons.LocalRibbonIcons
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.icons.fontColorGlyph
 import com.vivenotes.ui.icons.highlightGlyph
 
@@ -124,6 +125,7 @@ fun Ribbon(
     view: ViewActions,
     /** The Draw tab's pens, and which tool is currently in hand. */
     pens: List<PenPreset>,
+    eraser: EraserSettings,
     tool: DrawTool,
     allowFinger: Boolean,
     draw: DrawActions,
@@ -165,7 +167,7 @@ fun Ribbon(
                 onTextMode = { draw.selectTool(DrawTool.None) },
             )
             RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
-            RibbonTab.Draw -> DrawTab(pens, tool, allowFinger, draw)
+            RibbonTab.Draw -> DrawTab(pens, eraser, tool, allowFinger, draw)
             else -> PlaceholderTab(activeTab)
         }
     }

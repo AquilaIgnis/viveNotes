@@ -1,6 +1,7 @@
 package com.vivenotes.data.db
 
 import androidx.room.Entity
+import androidx.room.Embedded
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -181,3 +182,67 @@ data class InkStrokeEntity(
 
     override fun hashCode(): Int = 31 * id.hashCode() + points.contentHashCode()
 }
+
+/**
+ * One normal-eraser gesture. Its round brush and input path rebuild the exact mask on load.
+ *
+ * The affected stroke ids live in [InkEraseTargetEntity], rather than applying this mask to every
+ * stroke on the page: ink drawn later through the same spot must remain visible.
+ */
+@Entity(
+    tableName = "ink_erases",
+    foreignKeys = [
+        ForeignKey(
+            entity = PageEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["pageId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("pageId")],
+)
+data class InkEraseEntity(
+    @PrimaryKey val id: String,
+    val pageId: String,
+    /** Eraser diameter in page dp. */
+    val sizeDp: Float,
+    val points: ByteArray,
+    val enc: String,
+    val createdAt: Long,
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is InkEraseEntity && id == other.id && points.contentEquals(other.points))
+
+    override fun hashCode(): Int = 31 * id.hashCode() + points.contentHashCode()
+}
+
+/** The immutable link between an erase gesture and a stroke that existed when it was made. */
+@Entity(
+    tableName = "ink_erase_targets",
+    primaryKeys = ["eraseId", "strokeId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = InkEraseEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["eraseId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = InkStrokeEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["strokeId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("strokeId")],
+)
+data class InkEraseTargetEntity(
+    val eraseId: String,
+    val strokeId: String,
+)
+
+data class InkEraseWithTargets(
+    @Embedded val erase: InkEraseEntity,
+    @Relation(parentColumn = "id", entityColumn = "eraseId")
+    val targets: List<InkEraseTargetEntity>,
+)

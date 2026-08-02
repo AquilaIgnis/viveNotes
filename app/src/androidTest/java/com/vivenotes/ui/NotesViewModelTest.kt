@@ -1,5 +1,10 @@
 package com.vivenotes.ui
 
+import androidx.ink.brush.InputToolType
+import androidx.ink.geometry.ImmutableBox
+import androidx.ink.geometry.ImmutableVec
+import androidx.ink.strokes.MutableStrokeInputBatch
+import androidx.ink.strokes.Stroke
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -16,11 +21,13 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
@@ -29,6 +36,7 @@ import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
+import com.vivenotes.ink.InkCodec
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.Orientation
@@ -95,7 +103,13 @@ class NotesViewModelTest {
 
     /** Builds a settled view model sitting on the seeded Welcome page. */
     private suspend fun seededViewModel(): NotesViewModel {
-        val vm = NotesViewModel(repository, editorDefaults, viewSettings, penSettings)
+        val vm = NotesViewModel(
+            repository,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+        )
         scheduler.advanceUntilIdle()
         assertNotNull("expected the seeded page to be open", vm.uiState.value.selectedPageId)
         return vm
@@ -220,6 +234,32 @@ class NotesViewModelTest {
         assertTrue(storedText(pageId).contains("persisted body"))
     }
 
+    @Test
+    fun reopeningAPageReplaysPartialEraseWithoutTouchingInkDrawnLater() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+        val oldId = vm.strokes.value.single().id
+
+        vm.eraseStrokeParts(inkStroke(50f to 35f, 50f to 65f, sizeDp = 18f))
+        advanceUntilIdle()
+        assertFalse(vm.strokes.value.single().stroke.overlaps(centerBox()))
+
+        // This crosses the same place after the erase and must not become a target during replay.
+        vm.onStrokeFinished(inkStroke(50f to 10f, 50f to 90f))
+        advanceUntilIdle()
+        val newId = vm.strokes.value.first { it.id != oldId }.id
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        assertFalse(vm.strokes.value.first { it.id == oldId }.stroke.overlaps(centerBox()))
+        assertTrue(vm.strokes.value.first { it.id == newId }.stroke.overlaps(centerBox()))
+    }
+
     /**
      * Regression: [NotesViewModel.persist] rebuilds `PageDoc.outlines` out of the text containers it
      * tracks, so an image or an ink layer — neither of which it manages — was written out of
@@ -260,6 +300,26 @@ class NotesViewModelTest {
         )
         assertEquals("edited body", stored.plainText())
     }
+
+    private fun inkStroke(
+        vararg points: Pair<Float, Float>,
+        sizeDp: Float = 6f,
+    ): Stroke {
+        val inputs = MutableStrokeInputBatch().apply {
+            points.forEachIndexed { index, (x, y) ->
+                add(InputToolType.UNKNOWN, x, y, index * 10L)
+            }
+        }.toImmutable()
+        return InkCodec.eraseMask(inputs, sizeDp)
+    }
+
+    private fun centerBox(): ImmutableBox = ImmutableBox.fromTwoPoints(
+        ImmutableVec(48f, 48f),
+        ImmutableVec(52f, 52f),
+    )
+
+    private fun Stroke.overlaps(area: ImmutableBox): Boolean =
+        shape.computeCoverageIsGreaterThan(area, 0f)
 
     // --- free-form containers ------------------------------------------------------------------
 

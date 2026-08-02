@@ -65,4 +65,38 @@ class MigrationTest {
             }
         }
     }
+
+    @Test
+    fun migration3To4StoresTargetedEraseMasksAndCascadesTheirTargets() {
+        val driver = AndroidSQLiteDriver()
+
+        driver.open(file.absolutePath).use { connection ->
+            connection.execSQL("PRAGMA foreign_keys = ON")
+            // Only the referenced keys are relevant to this migration's two new tables.
+            connection.execSQL("CREATE TABLE pages (id TEXT NOT NULL PRIMARY KEY)")
+            connection.execSQL("CREATE TABLE ink_strokes (id TEXT NOT NULL PRIMARY KEY)")
+
+            NotesDatabase.MIGRATION_3_4.migrate(connection)
+
+            connection.execSQL("INSERT INTO pages VALUES ('page')")
+            connection.execSQL("INSERT INTO ink_strokes VALUES ('stroke')")
+            connection.execSQL(
+                "INSERT INTO ink_erases VALUES ('erase', 'page', 18.0, X'0102', 'ink/androidx1', 42)",
+            )
+            connection.execSQL("INSERT INTO ink_erase_targets VALUES ('erase', 'stroke')")
+
+            connection.prepare(
+                "SELECT strokeId FROM ink_erase_targets WHERE eraseId = 'erase'",
+            ).use {
+                assertEquals(true, it.step())
+                assertEquals("stroke", it.getText(0))
+            }
+
+            connection.execSQL("DELETE FROM ink_erases WHERE id = 'erase'")
+            connection.prepare("SELECT COUNT(*) FROM ink_erase_targets").use {
+                assertEquals(true, it.step())
+                assertEquals(0L, it.getLong(0))
+            }
+        }
+    }
 }

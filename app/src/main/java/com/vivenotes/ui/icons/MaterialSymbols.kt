@@ -52,6 +52,7 @@ object MaterialSymbols {
     val TouchApp: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_touch_app)
     val Undo: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_undo)
     val VerticalSplit: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_vertical_split)
+    val ViewInArOff: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_view_in_ar_off)
     val WbSunny: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_wb_sunny)
     val ZoomIn: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_zoom_in)
     val ZoomOut: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_zoom_out)

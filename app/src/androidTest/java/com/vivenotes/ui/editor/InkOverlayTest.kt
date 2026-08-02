@@ -14,6 +14,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import com.vivenotes.data.EraserMode
+import com.vivenotes.data.EraserSettings
 import com.vivenotes.ui.theme.ViveNotesTheme
 
 /**
@@ -32,6 +34,8 @@ class InkOverlayTest {
     private var dragged = 0f
     private var flung = false
     private var strokes = 0
+    private var partialErases = 0
+    private var objectEraseCalls = 0
 
     private val recordingPan = object : CanvasPan {
         override fun by(dx: Float, dy: Float) {
@@ -43,7 +47,11 @@ class InkOverlayTest {
         }
     }
 
-    private fun setOverlay(allowFinger: Boolean, erasing: Boolean = false) {
+    private fun setOverlay(
+        allowFinger: Boolean,
+        erasing: Boolean = false,
+        eraser: EraserSettings = EraserSettings(),
+    ) {
         compose.setContent {
             ViveNotesTheme {
                 Box(Modifier.fillMaxSize()) {
@@ -56,10 +64,12 @@ class InkOverlayTest {
                             epsilon = 0.25f,
                         ),
                         erasing = erasing,
+                        eraser = eraser,
                         allowFinger = allowFinger,
                         pageToView = { Matrix() },
                         onStrokeFinished = { strokes++ },
-                        onErase = {},
+                        onErase = { objectEraseCalls++ },
+                        onPartialErase = { partialErases++ },
                         pan = recordingPan,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -106,5 +116,21 @@ class InkOverlayTest {
         compose.waitForIdle()
 
         assertEquals(0f, dragged, 0.001f)
+        assertEquals("normal erase should finish as one geometric mask", 1, partialErases)
+        assertEquals(0, objectEraseCalls)
+    }
+
+    @Test
+    fun objectModeUsesWholeStrokeHitTestingInsteadOfAPartialMask() {
+        setOverlay(
+            allowFinger = true,
+            erasing = true,
+            eraser = EraserSettings(mode = EraserMode.Object),
+        )
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+
+        assertTrue(objectEraseCalls > 0)
+        assertEquals(0, partialErases)
     }
 }

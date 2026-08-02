@@ -26,10 +26,15 @@ import androidx.ink.authoring.InProgressStrokeId
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
 import androidx.ink.brush.Brush
+import androidx.ink.brush.InputToolType
 import androidx.ink.geometry.ImmutableBox
 import androidx.ink.geometry.ImmutableVec
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
+import com.vivenotes.data.EraserMode
+import com.vivenotes.data.EraserSettings
+import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.PageStroke
 
 /** Test tag for the drawing surface, which has no text and no children of its own. */
@@ -79,11 +84,13 @@ internal fun InkOverlay(
     /** The brush to draw with, or null when the armed tool does not lay down ink. */
     brush: Brush?,
     erasing: Boolean,
+    eraser: EraserSettings,
     /** Whether a finger — or, on an emulator, a mouse — may draw as well as a stylus. */
     allowFinger: Boolean,
     /** Page units (dp) to view pixels: scale by zoom and density, then subtract the scroll. */
     pageToView: () -> Matrix,
     onStrokeFinished: (Stroke) -> Unit,
+    onPartialErase: (Stroke) -> Unit,
     onErase: (List<String>) -> Unit,
     /**
      * Pans the page. The overlay owns this because it owns the gesture: a hit pointer node blocks
@@ -102,9 +109,11 @@ internal fun InkOverlay(
     val currentBrush by rememberUpdatedState(brush)
     val currentStrokes by rememberUpdatedState(strokes)
     val currentErasing by rememberUpdatedState(erasing)
+    val currentEraser by rememberUpdatedState(eraser)
     val currentAllowFinger by rememberUpdatedState(allowFinger)
     val currentTransform by rememberUpdatedState(pageToView)
     val currentOnFinished by rememberUpdatedState(onStrokeFinished)
+    val currentOnPartialErase by rememberUpdatedState(onPartialErase)
     val currentOnErase by rememberUpdatedState(onErase)
 
     val currentPan by rememberUpdatedState(pan)
@@ -112,6 +121,7 @@ internal fun InkOverlay(
     /** The stroke being drawn, and the pointer drawing it. One at a time: this is a pen, not a rake. */
     var liveStroke by remember { mutableStateOf<InProgressStrokeId?>(null) }
     var livePointer by remember { mutableStateOf(-1) }
+    val eraseGesture = remember { EraseGesture() }
 
     // Velocity for the fling, measured from the same events the pan is driven by.
     val velocity = remember { VelocityTracker.obtain() }
@@ -198,9 +208,11 @@ internal fun InkOverlay(
                             view = wetView,
                             brush = currentBrush,
                             erasing = currentErasing,
+                            eraser = currentEraser,
                             allowFinger = currentAllowFinger,
                             transform = currentTransform(),
                             strokes = currentStrokes,
+                            onPartialErase = currentOnPartialErase,
                             onErase = currentOnErase,
                             liveStroke = liveStroke,
                             livePointer = livePointer,
@@ -216,6 +228,7 @@ internal fun InkOverlay(
                                 panning = on
                                 lastPan = at
                             },
+                            eraseGesture = eraseGesture,
                         )
                     },
             )
@@ -238,9 +251,11 @@ private fun handleInk(
     view: InProgressStrokesView?,
     brush: Brush?,
     erasing: Boolean,
+    eraser: EraserSettings,
     allowFinger: Boolean,
     transform: Matrix,
     strokes: List<PageStroke>,
+    onPartialErase: (Stroke) -> Unit,
     onErase: (List<String>) -> Unit,
     liveStroke: InProgressStrokeId?,
     livePointer: Int,
@@ -250,6 +265,7 @@ private fun handleInk(
     panning: Boolean,
     lastPan: Pair<Float, Float>,
     setPanning: (Boolean, Pair<Float, Float>) -> Unit,
+    eraseGesture: EraseGesture,
 ): Boolean {
     if (view == null) return false
     val index = event.actionIndex
@@ -269,14 +285,18 @@ private fun handleInk(
     val erase = erasing || toolType == MotionEvent.TOOL_TYPE_ERASER
 
     if (erase) {
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                onErase(strokes.hitBy(event, transform))
-                return true
+        if (eraser.mode == EraserMode.Object) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                    onErase(strokes.hitBy(event, transform, eraser.size / 2f))
+                    return true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> return true
+                else -> return false
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> return true
-            else -> return false
         }
+        val toWorld = Matrix().also { transform.invert(it) }
+        return eraseGesture.handle(event, toWorld, eraser.size.toFloat(), onPartialErase)
     }
 
     if (brush == null) return false
@@ -284,8 +304,6 @@ private fun handleInk(
 
     when (event.actionMasked) {
         MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-            // A second pointer during a stroke is a palm, or a pinch. Either way it is not a
-            // second stroke.
             // A second pointer while drawing is a palm or a pinch, so the stroke is taken back and
             // the gesture handed to the scroll container behind — that is how the page still pans
             // while a pen is in hand.
@@ -370,20 +388,114 @@ private fun panPage(
 }
 
 /** Ids of the strokes the eraser is currently over. */
-private fun List<PageStroke>.hitBy(event: MotionEvent, pageToView: Matrix): List<String> {
+private fun List<PageStroke>.hitBy(
+    event: MotionEvent,
+    pageToView: Matrix,
+    radiusDp: Float,
+): List<String> {
     val toWorld = Matrix().also { pageToView.invert(it) }
-    val point = floatArrayOf(event.x, event.y)
-    toWorld.mapPoints(point)
-    // A radius rather than a point: erasing has to be forgiving, and a single world-space pixel
-    // would demand the user hit the centre line of a stroke.
-    val reach = ERASER_RADIUS_DP
-    val area = ImmutableBox.fromTwoPoints(
-        ImmutableVec(point[0] - reach, point[1] - reach),
-        ImmutableVec(point[0] + reach, point[1] + reach),
-    )
-    // Any overlap at all counts. computeCoverageIsGreaterThan short-circuits, so this is
-    // cheaper than asking for the coverage fraction and comparing it.
-    return filter { it.stroke.shape.computeCoverageIsGreaterThan(area, 0f) }.map { it.id }
+    val index = event.actionIndex.coerceAtMost(event.pointerCount - 1)
+    val points = buildList {
+        repeat(event.historySize) { history ->
+            add(floatArrayOf(event.getHistoricalX(index, history), event.getHistoricalY(index, history)))
+        }
+        add(floatArrayOf(event.getX(index), event.getY(index)))
+    }
+    points.forEach(toWorld::mapPoints)
+    return filter { pageStroke ->
+        points.any { point ->
+            val area = ImmutableBox.fromTwoPoints(
+                ImmutableVec(point[0] - radiusDp, point[1] - radiusDp),
+                ImmutableVec(point[0] + radiusDp, point[1] + radiusDp),
+            )
+            pageStroke.stroke.shape.computeCoverageIsGreaterThan(area, 0f)
+        }
+    }.map(PageStroke::id)
+}
+
+/** Accumulates one normal-eraser drag into a round Ink stroke in page coordinates. */
+private class EraseGesture {
+    private var inputs: MutableStrokeInputBatch? = null
+    private var pointerId: Int = -1
+    private var startTimeMillis: Long = 0L
+    private var lastElapsedMillis: Long = -1L
+    private var lastX: Float = Float.NaN
+    private var lastY: Float = Float.NaN
+
+    fun handle(
+        event: MotionEvent,
+        toWorld: Matrix,
+        sizeDp: Float,
+        onFinished: (Stroke) -> Unit,
+    ): Boolean {
+        return when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                reset()
+                pointerId = event.getPointerId(event.actionIndex)
+                startTimeMillis = event.eventTime
+                inputs = MutableStrokeInputBatch()
+                addSamples(event, toWorld)
+                true
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                // A second contact is a palm or pan gesture, not a wider eraser.
+                reset()
+                false
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (inputs == null) return false
+                addSamples(event, toWorld)
+                true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                if (inputs == null || event.getPointerId(event.actionIndex) != pointerId) return false
+                addSamples(event, toWorld)
+                val finished = inputs!!.toImmutable()
+                reset()
+                if (!finished.isEmpty()) onFinished(InkCodec.eraseMask(finished, sizeDp))
+                true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                reset()
+                true
+            }
+            else -> false
+        }
+    }
+
+    private fun addSamples(event: MotionEvent, toWorld: Matrix) {
+        val index = event.findPointerIndex(pointerId)
+        if (index < 0) return
+        repeat(event.historySize) { history ->
+            addPoint(
+                event.getHistoricalX(index, history),
+                event.getHistoricalY(index, history),
+                event.getHistoricalEventTime(history),
+                toWorld,
+            )
+        }
+        addPoint(event.getX(index), event.getY(index), event.eventTime, toWorld)
+    }
+
+    private fun addPoint(viewX: Float, viewY: Float, eventTime: Long, toWorld: Matrix) {
+        val point = floatArrayOf(viewX, viewY)
+        toWorld.mapPoints(point)
+        if (point[0] == lastX && point[1] == lastY) return
+        val elapsed = (eventTime - startTimeMillis).coerceAtLeast(lastElapsedMillis + 1)
+        inputs?.add(InputToolType.UNKNOWN, point[0], point[1], elapsed)
+        lastElapsedMillis = elapsed
+        lastX = point[0]
+        lastY = point[1]
+    }
+
+    private fun reset() {
+        inputs = null
+        pointerId = -1
+        startTimeMillis = 0L
+        lastElapsedMillis = -1L
+        lastX = Float.NaN
+        lastY = Float.NaN
+    }
 }
 
 /**
@@ -414,6 +526,3 @@ internal fun inkPageToView(zoom: Float, density: Float, scrollX: Float, scrollY:
         postTranslate(-scrollX, -scrollY)
     }
 }
-
-/** How near the eraser has to get, in page units. */
-private const val ERASER_RADIUS_DP = 9f

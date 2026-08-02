@@ -23,11 +23,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.DrawTool
+import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.ui.ScrollingRow
+import com.vivenotes.ui.icons.LocalRibbonIcons
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.icons.penGlyph
+import com.vivenotes.ui.panel.EraserPanelContent
 import com.vivenotes.ui.panel.FloatingSettingsPanel
 import com.vivenotes.ui.panel.PenPanelContent
 
@@ -39,6 +42,7 @@ import com.vivenotes.ui.panel.PenPanelContent
 data class DrawActions(
     val selectTool: (DrawTool) -> Unit,
     val updatePen: (Int, PenPreset) -> Unit,
+    val updateEraser: (EraserSettings) -> Unit,
     val setDrawWithFinger: (Boolean) -> Unit,
 )
 
@@ -75,11 +79,13 @@ internal object DrawTags {
 @Composable
 internal fun DrawTab(
     pens: List<PenPreset>,
+    eraser: EraserSettings,
     tool: DrawTool,
     allowFinger: Boolean,
     actions: DrawActions,
 ) {
     var openPenIndex by remember { mutableStateOf<Int?>(null) }
+    var eraserSettingsOpen by remember { mutableStateOf(false) }
 
     ScrollingRow(
         modifier = Modifier.fillMaxWidth(),
@@ -126,17 +132,63 @@ internal fun DrawTab(
 
         Divider()
 
-        Box(Modifier.testTag(DrawTags.ERASER)) {
-            TwoToneRibbonButton(
-                glyph = { it.eraser },
-                label = "Eraser",
-                active = tool == DrawTool.Eraser,
-                onClick = {
-                    // Tapping the armed eraser puts it down, so there is a way back to the text
-                    // without having to pick up a pen first.
-                    actions.selectTool(if (tool == DrawTool.Eraser) DrawTool.None else DrawTool.Eraser)
-                },
+        EraserButton(
+            settings = eraser,
+            selected = tool == DrawTool.Eraser,
+            settingsOpen = eraserSettingsOpen,
+            onSelect = { actions.selectTool(DrawTool.Eraser) },
+            onOpen = { eraserSettingsOpen = true },
+            onDismiss = { eraserSettingsOpen = false },
+            onChange = actions.updateEraser,
+        )
+    }
+}
+
+/** Same select/configure interaction as a pen, with its popup anchored under the eraser itself. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun EraserButton(
+    settings: EraserSettings,
+    selected: Boolean,
+    settingsOpen: Boolean,
+    onSelect: () -> Unit,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+    onChange: (EraserSettings) -> Unit,
+) {
+    val icons = LocalRibbonIcons.current
+    Box(modifier = Modifier.padding(horizontal = 1.dp)) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .testTag(DrawTags.ERASER)
+                .clip(RoundedCornerShape(4.dp))
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                )
+                .combinedClickable(
+                    onClick = { if (selected) onOpen() else onSelect() },
+                    onLongClick = {
+                        onSelect()
+                        onOpen()
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = if (selected) icons.active.eraser else icons.idle.eraser,
+                contentDescription = "Eraser",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(18.dp),
             )
+        }
+
+        FloatingSettingsPanel(
+            expanded = settingsOpen,
+            onDismissRequest = onDismiss,
+            title = "Eraser",
+        ) {
+            EraserPanelContent(settings = settings, onChange = onChange)
         }
     }
 }

@@ -1,5 +1,8 @@
 package com.vivenotes.ui.editor
 
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -9,18 +12,21 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.click
 import androidx.compose.ui.test.longClick
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import com.vivenotes.data.DrawTool
+import com.vivenotes.data.EraserMode
+import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
 import com.vivenotes.ui.panel.PenPanelContent
 import com.vivenotes.ui.panel.PenPanelTags
 import com.vivenotes.ui.panel.PanelTags
+import com.vivenotes.ui.panel.EraserPanelTags
 import com.vivenotes.ui.theme.ViveNotesTheme
 
 /**
@@ -37,17 +43,20 @@ class DrawTabTest {
     private var selected: DrawTool? = null
     private var changed: PenPreset? = null
     private var changedIndex: Int? = null
+    private var changedEraser: EraserSettings? = null
     private var fingerDrawing: Boolean? = null
 
     private fun setTab(
         tool: DrawTool = DrawTool.None,
         pens: List<PenPreset> = List(PenPreset.COUNT) { PenPreset.starting(it) },
+        eraser: EraserSettings = EraserSettings(),
         allowFinger: Boolean = false,
     ) {
         compose.setContent {
             ViveNotesTheme {
                 DrawTab(
                     pens = pens,
+                    eraser = eraser,
                     tool = tool,
                     allowFinger = allowFinger,
                     actions = DrawActions(
@@ -56,6 +65,7 @@ class DrawTabTest {
                             changedIndex = index
                             changed = pen
                         },
+                        updateEraser = { changedEraser = it },
                         setDrawWithFinger = { fingerDrawing = it },
                     ),
                 )
@@ -104,7 +114,7 @@ class DrawTabTest {
         compose.onNodeWithTag(DrawTags.pen(0)).performClick()
         compose.onNodeWithTag(PenPanelTags.PREVIEW).assertIsDisplayed()
 
-        compose.onNodeWithContentDescription("Undo").performTouchInput { click() }
+        tapOutsidePopup()
 
         compose.onNodeWithTag(PenPanelTags.PREVIEW).assertDoesNotExist()
     }
@@ -128,12 +138,45 @@ class DrawTabTest {
         assertEquals(DrawTool.Eraser, selected)
     }
 
-    /** Otherwise there is no way back to the text without picking up a pen first. */
     @Test
-    fun tappingTheArmedEraserPutsItDown() {
+    fun tappingTheArmedEraserOpensItsSettings() {
         setTab(tool = DrawTool.Eraser)
         compose.onNodeWithTag(DrawTags.ERASER).performClick()
-        assertEquals(DrawTool.None, selected)
+
+        compose.onNodeWithText("Eraser").assertIsDisplayed()
+        compose.onNodeWithText("Normal").assertIsDisplayed()
+        compose.onNodeWithText("Object").assertIsDisplayed()
+        compose.onNodeWithTag(EraserPanelTags.mode(EraserMode.Normal)).assertIsDisplayed()
+        compose.onNodeWithTag(EraserPanelTags.mode(EraserMode.Object)).assertIsDisplayed()
+        compose.onNodeWithTag(PanelTags.field("Erase mode")).assertDoesNotExist()
+        compose.onNodeWithTag(PanelTags.field("Eraser size")).assertIsDisplayed()
+    }
+
+    @Test
+    fun holdingTheEraserSelectsItAndOpensItsSettings() {
+        setTab()
+        compose.onNodeWithTag(DrawTags.ERASER).performTouchInput { longClick() }
+
+        assertEquals(DrawTool.Eraser, selected)
+        compose.onNodeWithText("Eraser").assertIsDisplayed()
+    }
+
+    @Test
+    fun eraserModeCanBeChangedToWholeObject() {
+        setTab(tool = DrawTool.Eraser)
+        compose.onNodeWithTag(DrawTags.ERASER).performClick()
+        compose.onNodeWithTag(EraserPanelTags.mode(EraserMode.Object)).performClick()
+
+        assertEquals(EraserMode.Object, changedEraser?.mode)
+    }
+
+    @Test
+    fun eraserSizeCanBeChanged() {
+        setTab(tool = DrawTool.Eraser)
+        compose.onNodeWithTag(DrawTags.ERASER).performClick()
+        compose.onNodeWithContentDescription("Increase Size").performClick()
+
+        assertEquals(EraserSettings.DEFAULT_SIZE + 1, changedEraser?.size)
     }
 
     /**
@@ -231,5 +274,25 @@ class DrawTabTest {
         setPanel()
         compose.onNodeWithContentDescription("Add color").assertIsDisplayed()
         assertTrue("nothing should have been written by merely showing the pane", changed == null)
+    }
+
+    /** Popup dismissal is window-level, so inject through Android rather than one Compose owner. */
+    private fun tapOutsidePopup() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val display = instrumentation.targetContext.resources.displayMetrics
+        val downTime = SystemClock.uptimeMillis()
+        listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP).forEachIndexed { index, action ->
+            val event = MotionEvent.obtain(
+                downTime,
+                downTime + index,
+                action,
+                display.widthPixels - 2f,
+                display.heightPixels / 2f,
+                0,
+            ).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
+            instrumentation.uiAutomation.injectInputEvent(event, true)
+            event.recycle()
+        }
+        compose.waitForIdle()
     }
 }

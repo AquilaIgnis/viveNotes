@@ -30,8 +30,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.DrawTool
+import com.vivenotes.data.EditorDefaults
+import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.model.PageStyle
@@ -70,6 +71,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val defaults by viewModel.editorDefaults.collectAsStateWithLifecycle()
     val viewSettings by viewModel.viewSettings.collectAsStateWithLifecycle()
     val pens by viewModel.pens.collectAsStateWithLifecycle()
+    val eraser by viewModel.eraser.collectAsStateWithLifecycle()
     val tool by viewModel.tool.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
 
@@ -97,6 +99,7 @@ fun NotesApp(viewModel: NotesViewModel) {
         DrawActions(
             selectTool = viewModel::selectTool,
             updatePen = viewModel::updatePen,
+            updateEraser = viewModel::updateEraser,
             setDrawWithFinger = viewModel::setDrawWithFinger,
         )
     }
@@ -132,6 +135,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                         viewSettings = viewSettings,
                         view = viewActions,
                         pens = pens,
+                        eraser = eraser,
                         tool = tool,
                         allowFinger = drawWithFinger,
                         draw = drawActions,
@@ -192,6 +196,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 showPrintMargins = openPane == ToolPane.PaperSize,
                                 tool = tool,
                                 pens = pens,
+                                eraser = eraser,
                                 allowFinger = drawWithFinger,
                                 modifier = Modifier.weight(1f),
                             )
@@ -250,6 +255,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 showPrintMargins = false,
                                 tool = tool,
                                 pens = pens,
+                                eraser = eraser,
                                 allowFinger = drawWithFinger,
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -315,6 +321,7 @@ private fun EditorSurface(
     showPrintMargins: Boolean,
     tool: DrawTool,
     pens: List<PenPreset>,
+    eraser: EraserSettings,
     allowFinger: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -358,8 +365,10 @@ private fun EditorSurface(
             (tool as? DrawTool.Pen)?.let { pens.getOrNull(it.index) }?.let(InkCodec::brushFor)
         },
         erasing = tool == DrawTool.Eraser,
+        eraser = eraser,
         allowFinger = allowFinger,
         onStrokeFinished = viewModel::onStrokeFinished,
+        onPartialErase = viewModel::eraseStrokeParts,
         onErase = viewModel::eraseStrokes,
         showPrintMargins = showPrintMargins,
         modifier = modifier,

@@ -83,6 +83,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import com.vivenotes.data.EditorDefaults
+import com.vivenotes.data.EraserSettings
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
@@ -185,8 +186,10 @@ fun EditorPane(
     strokes: List<PageStroke> = emptyList(),
     brush: Brush? = null,
     erasing: Boolean = false,
+    eraser: EraserSettings = EraserSettings(),
     allowFinger: Boolean = false,
     onStrokeFinished: (InkStroke) -> Unit = {},
+    onPartialErase: (InkStroke) -> Unit = {},
     onErase: (List<String>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -426,6 +429,7 @@ fun EditorPane(
                 strokes = strokes,
                 brush = brush,
                 erasing = erasing,
+                eraser = eraser,
                 allowFinger = allowFinger,
                 pageToView = {
                     // Read here rather than captured, so scrolling re-runs the draw and not the
@@ -438,6 +442,7 @@ fun EditorPane(
                     )
                 },
                 onStrokeFinished = onStrokeFinished,
+                onPartialErase = onPartialErase,
                 onErase = onErase,
                 pan = remember(horizontal, vertical, scope, flingSpec) {
                     ScrollStatePan(horizontal, vertical, scope, flingSpec)

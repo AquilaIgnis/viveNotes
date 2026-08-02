@@ -113,3 +113,17 @@ interface InkStrokeDao {
     @Query("SELECT COALESCE(MAX(seq), -1) + 1 FROM ink_strokes WHERE pageId = :pageId")
     suspend fun nextSeq(pageId: String): Int
 }
+
+@Dao
+interface InkEraseDao {
+
+    @Transaction
+    @Query("SELECT * FROM ink_erases WHERE pageId = :pageId ORDER BY createdAt, id")
+    suspend fun byPage(pageId: String): List<InkEraseWithTargets>
+
+    @Insert
+    suspend fun insert(erase: InkEraseEntity)
+
+    @Insert
+    suspend fun insertTargets(targets: List<InkEraseTargetEntity>)
+}
