@@ -277,7 +277,7 @@ data class Block(
     val checked: Boolean? = null,
 ) {
     /** The block's text with formatting discarded — used for search indexing and previews. */
-    val text: String get() = runs.joinToString("") { it.text }
+    val text: String get() = runs.joinToString("") { it.plainText }
 
     companion object {
         fun empty(): Block = Block(id = newId())
@@ -298,7 +298,14 @@ enum class Align { Start, Center, End }
 data class Run(
     val text: String,
     val marks: Set<Mark> = emptySet(),
-)
+) {
+    /** Equations project their source, not the editor's otherwise meaningless object character. */
+    val plainText: String
+        get() = marks.filterIsInstance<Mark.Equation>().firstOrNull()?.latex ?: text
+}
+
+/** The single editor character occupied by an inline object such as an equation. */
+const val OBJECT_REPLACEMENT_CHARACTER: Char = '\uFFFC'
 
 /** An inline formatting attribute. Each maps to one Android span; see `richtext/SpannableCodec.kt`. */
 @Serializable
@@ -324,6 +331,9 @@ sealed interface Mark {
     @Serializable @SerialName("font") data class FontFamily(val name: String) : Mark
 
     @Serializable @SerialName("link") data class Link(val href: String) : Mark
+
+    /** Delimiter-free LaTeX source for one atomic inline equation. */
+    @Serializable @SerialName("eq") data class Equation(val latex: String) : Mark
 }
 
 /**

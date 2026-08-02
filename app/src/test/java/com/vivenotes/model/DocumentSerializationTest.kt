@@ -40,6 +40,10 @@ class DocumentSerializationTest {
                                 Run("link", setOf(Mark.Link("https://example.com"))),
                                 Run("sub", setOf(Mark.Subscript)),
                                 Run("sup", setOf(Mark.Superscript)),
+                                Run(
+                                    OBJECT_REPLACEMENT_CHARACTER.toString(),
+                                    setOf(Mark.Equation("{\\displaystyle x^2}")),
+                                ),
                             ),
                         ),
                         Block(id = "b3", type = BlockType.Todo, checked = true, runs = listOf(Run("done"))),
@@ -106,6 +110,29 @@ class DocumentSerializationTest {
             ),
         )
         assertEquals("first\nsecond", doc.plainText())
+    }
+
+    @Test
+    fun `plain text projection exposes equation source instead of object character`() {
+        val latex = "{\\displaystyle \\int _{a}^{b}f'(t)\\,dt=f(b)-f(a)}"
+        val doc = PageDoc(
+            outlines = listOf(
+                Outline.Text(
+                    id = "o",
+                    blocks = listOf(
+                        Block(
+                            id = "b",
+                            runs = listOf(
+                                Run("The result is "),
+                                Run(OBJECT_REPLACEMENT_CHARACTER.toString(), setOf(Mark.Equation(latex))),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals("The result is $latex", doc.plainText())
     }
 
     @Test

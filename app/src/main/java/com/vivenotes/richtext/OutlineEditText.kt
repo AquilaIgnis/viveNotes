@@ -1,6 +1,7 @@
 package com.vivenotes.richtext
 
 import android.content.Context
+import android.graphics.Rect
 import android.text.Editable
 import android.text.Spanned
 import android.text.TextWatcher
@@ -13,6 +14,12 @@ import com.vivenotes.model.Align
 import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
+import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
@@ -27,6 +34,33 @@ class OutlineEditText @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
 ) : EditText(context, attrs) {
+
+    private val equationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var equationRenderJob: Job? = null
+    private var equationRenderGeneration = 0
+    private var autoEquationRenderJob: Job? = null
+    private var autoEquationRenderGeneration = 0
+    private val autoEquationCache = object : LinkedHashMap<EquationRenderKey, io.ratex.RaTeXRenderer>(
+        AUTO_EQUATION_CACHE_SIZE,
+        0.75f,
+        true,
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<EquationRenderKey, io.ratex.RaTeXRenderer>?,
+        ): Boolean = size > AUTO_EQUATION_CACHE_SIZE
+    }
+
+    /** Equations are parsed with the canvas text colour because RaTeX bakes it into its display list. */
+    var equationColor: Int = 0xFF000000.toInt()
+        set(value) {
+            if (field == value) return
+            field = value
+            autoEquationCache.clear()
+            if (initialised) {
+                hydrateEquations()
+                refreshAutoEquations()
+            }
+        }
 
     var editorStyle: EditorStyle = EditorStyle(
         indentStepPx = 48,
@@ -144,6 +178,7 @@ class OutlineEditText @JvmOverloads constructor(
             suppressWatcher = false
             onBlocksChanged?.invoke(SpannableCodec.parse(s))
             emitSelectionState()
+            refreshAutoEquations()
         }
     }
 
@@ -168,7 +203,9 @@ class OutlineEditText @JvmOverloads constructor(
         suppressedMarks.clear()
         setText(SpannableCodec.render(blocks, editorStyle))
         suppressWatcher = false
+        hydrateEquations()
         emitSelectionState()
+        refreshAutoEquations()
     }
 
     fun blocks(): List<Block> = SpannableCodec.parse(text)
@@ -180,6 +217,23 @@ class OutlineEditText @JvmOverloads constructor(
         if (pendingMarks.isNotEmpty()) pendingMarks.clear()
         if (suppressedMarks.isNotEmpty()) suppressedMarks.clear()
         emitSelectionState()
+        refreshAutoEquations()
+    }
+
+    override fun onFocusChanged(focused: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
+        super.onFocusChanged(focused, direction, previouslyFocusedRect)
+        if (initialised) {
+            emitSelectionState()
+            refreshAutoEquations()
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        equationRenderGeneration++
+        equationRenderJob?.cancel()
+        autoEquationRenderGeneration++
+        autoEquationRenderJob?.cancel()
+        super.onDetachedFromWindow()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -204,6 +258,9 @@ class OutlineEditText @JvmOverloads constructor(
     }
 
     fun apply(command: FormatCommand) {
+        // These two are consumed by EditorPane; accepting them here as no-ops keeps this view's
+        // command surface exhaustive without turning panel lifetime into a document edit.
+        if (command == FormatCommand.RetainEquationTarget || command == FormatCommand.ReleaseEquationTarget) return
         val editable = text ?: return
         // Applying spans while the IME holds a composing region corrupts predictive text on many
         // keyboards. Committing the composition first is cheap and avoids the whole class of bug.
@@ -235,6 +292,7 @@ class OutlineEditText @JvmOverloads constructor(
             is FormatCommand.SetAlign -> SpannableCodec.updateBlocks(editable, from, to, editorStyle) {
                 it.copy(align = command.align)
             }
+            is FormatCommand.InsertEquation -> insertEquation(editable, command.latex, from, to)
             is FormatCommand.Clipboard -> {
                 val id = when (command.action) {
                     ClipboardAction.Cut -> android.R.id.cut
@@ -253,11 +311,164 @@ class OutlineEditText @JvmOverloads constructor(
                 }
                 pendingMarks.clear()
             }
+            FormatCommand.RetainEquationTarget,
+            FormatCommand.ReleaseEquationTarget,
+            -> Unit
         }
         suppressWatcher = false
 
         onBlocksChanged?.invoke(SpannableCodec.parse(editable))
+        if (command is FormatCommand.InsertEquation) hydrateEquations()
         emitSelectionState()
+        refreshAutoEquations()
+    }
+
+    private fun insertEquation(editable: Editable, latex: String, from: Int, to: Int) {
+        val source = latex.trim()
+        if (source.isEmpty()) return
+
+        val existing = SpannableCodec.equationAt(editable, from, to)
+        val replaceFrom = existing?.start ?: from
+        val replaceTo = existing?.end ?: to
+        editable.getSpans(replaceFrom, replaceTo, EquationSpan::class.java).forEach(editable::removeSpan)
+        editable.replace(replaceFrom, replaceTo, OBJECT_REPLACEMENT_CHARACTER.toString())
+
+        // End-inclusive text formatting around the caret may have expanded onto the replacement
+        // character. An equation is its own atomic content, so begin with no inherited text marks.
+        SpannableCodec.clearMarks(editable, replaceFrom, replaceFrom + 1)
+        SpannableCodec.applyMark(editable, Mark.Equation(source), replaceFrom, replaceFrom + 1)
+        SpannableCodec.normalize(editable, editorStyle)
+        pendingMarks.clear()
+        suppressedMarks.clear()
+        setSelection(replaceFrom + 1)
+    }
+
+    /** Replaces each source fallback with a native renderer, discarding work from older documents. */
+    private fun hydrateEquations() {
+        val editable = text ?: return
+        val spans = editable.getSpans(0, editable.length, EquationSpan::class.java).toList()
+        val generation = ++equationRenderGeneration
+        equationRenderJob?.cancel()
+        if (spans.isEmpty()) return
+
+        val sizePx = textSize
+        val color = equationColor
+        equationRenderJob = equationScope.launch {
+            spans.forEach { span ->
+                launch {
+                    val renderer = try {
+                        createEquationRenderer(context, span.latex, sizePx, color)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (generation != equationRenderGeneration || editable.getSpanStart(span) < 0) return@launch
+                    span.show(renderer)
+                    requestLayout()
+                    invalidate()
+                }
+            }
+        }
+    }
+
+    /**
+     * Draws explicitly bounded LaTeX while preserving its source as ordinary editable text.
+     *
+     * The preview span is absent whenever the focused caret/selection touches its range. Moving
+     * away reapplies it from a small renderer cache; unfinished or invalid source simply never gets
+     * a span and therefore remains visible.
+     */
+    private fun refreshAutoEquations() {
+        val editable = text ?: return
+        val sourceText = editable.toString()
+        val candidates = findAutoEquationCandidates(sourceText)
+        val generation = ++autoEquationRenderGeneration
+        autoEquationRenderJob?.cancel()
+
+        var spansChanged = false
+        editable.getSpans(0, editable.length, LiveEquationSpan::class.java).forEach { span ->
+            val start = editable.getSpanStart(span)
+            val end = editable.getSpanEnd(span)
+            val candidate = candidates.firstOrNull {
+                it.start == start && it.end == end && it.latex == span.latex
+            }
+            if (candidate == null || isEditing(candidate)) {
+                editable.removeSpan(span)
+                spansChanged = true
+            }
+        }
+
+        val missing = candidates.filterNot(::isEditing).filterNot { candidate ->
+            editable.getSpans(candidate.start, candidate.end, LiveEquationSpan::class.java).any {
+                editable.getSpanStart(it) == candidate.start &&
+                    editable.getSpanEnd(it) == candidate.end &&
+                    it.latex == candidate.latex
+            }
+        }
+        if (missing.isEmpty()) {
+            if (spansChanged) refreshEquationLayout()
+            return
+        }
+
+        val sizePx = textSize
+        val color = equationColor
+        val pending = mutableListOf<AutoEquationCandidate>()
+        missing.forEach { candidate ->
+            val key = EquationRenderKey(candidate.latex, sizePx, color)
+            val cached = autoEquationCache[key]
+            if (cached == null) {
+                pending += candidate
+            } else {
+                applyLiveEquation(editable, candidate, cached)
+                spansChanged = true
+            }
+        }
+        if (spansChanged) refreshEquationLayout()
+        if (pending.isEmpty()) return
+
+        autoEquationRenderJob = equationScope.launch {
+            pending.forEach { candidate ->
+                launch {
+                    val renderer = try {
+                        createEquationRenderer(context, candidate.latex, sizePx, color)
+                    } catch (_: Exception) {
+                        null
+                    } ?: return@launch
+                    if (generation != autoEquationRenderGeneration) return@launch
+                    if (candidate.end > editable.length ||
+                        editable.subSequence(candidate.start, candidate.end).toString() !=
+                        sourceText.substring(candidate.start, candidate.end) ||
+                        isEditing(candidate)
+                    ) return@launch
+
+                    autoEquationCache[EquationRenderKey(candidate.latex, sizePx, color)] = renderer
+                    applyLiveEquation(editable, candidate, renderer)
+                    refreshEquationLayout()
+                }
+            }
+        }
+    }
+
+    private fun isEditing(candidate: AutoEquationCandidate): Boolean {
+        return candidate.isBeingEdited(hasFocus(), selectionStart, selectionEnd)
+    }
+
+    private fun applyLiveEquation(
+        editable: Editable,
+        candidate: AutoEquationCandidate,
+        renderer: io.ratex.RaTeXRenderer,
+    ) {
+        if (editable.getSpans(candidate.start, candidate.end, LiveEquationSpan::class.java).any {
+                editable.getSpanStart(it) == candidate.start && editable.getSpanEnd(it) == candidate.end
+            }
+        ) return
+        val span = LiveEquationSpan(candidate.latex)
+        span.show(renderer)
+        editable.setSpan(span, candidate.start, candidate.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+    }
+
+    private fun refreshEquationLayout() {
+        requestLayout()
+        invalidate()
     }
 
     private fun toggleMark(editable: Editable, mark: Mark, from: Int, to: Int) {
@@ -353,13 +564,18 @@ class OutlineEditText @JvmOverloads constructor(
                 } else {
                     SpannableCodec.fontFamilyIn(editable, from, to, baseFontFamily)
                 },
+                equation = SpannableCodec.equationAt(editable, from, to)?.latex,
+                editorFocused = hasFocus(),
             ),
         )
     }
 
     private companion object {
         const val MAX_INDENT = 8
+        const val AUTO_EQUATION_CACHE_SIZE = 48
     }
+
+    private data class EquationRenderKey(val latex: String, val sizePx: Float, val color: Int)
 }
 
 /**
@@ -378,5 +594,6 @@ internal fun Mark.sameKindAs(other: Mark): Boolean = when {
     this is Mark.FontSize && other is Mark.FontSize -> true
     this is Mark.FontFamily && other is Mark.FontFamily -> true
     this is Mark.Link && other is Mark.Link -> true
+    this is Mark.Equation && other is Mark.Equation -> true
     else -> this == other
 }

@@ -23,6 +23,7 @@ import com.vivenotes.model.Align
 import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
+import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
 import com.vivenotes.model.Run
 import com.vivenotes.model.newId
 
@@ -58,7 +59,8 @@ object SpannableCodec {
             val start = out.length
             block.runs.forEach { run ->
                 val runStart = out.length
-                out.append(run.text)
+                val equation = run.marks.filterIsInstance<Mark.Equation>().firstOrNull()
+                out.append(if (equation == null) run.text else OBJECT_REPLACEMENT_CHARACTER.toString())
                 run.marks.forEach { mark -> markRanges += Triple(mark, runStart, out.length) }
             }
             // An empty block still needs a paragraph to hang its BlockSpan on.
@@ -161,7 +163,13 @@ object SpannableCodec {
         if (start >= end) return
         // INCLUSIVE at the end so typing immediately after formatted text continues the format,
         // which is what every word processor does.
-        val flags = Spannable.SPAN_EXCLUSIVE_INCLUSIVE
+        // An inline object must not absorb text typed beside it. Ordinary formatting is
+        // end-inclusive so typing after bold text continues bold; equations are atomic instead.
+        val flags = if (mark is Mark.Equation) {
+            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+        } else {
+            Spannable.SPAN_EXCLUSIVE_INCLUSIVE
+        }
         when (mark) {
             Mark.Bold -> text.setSpan(StyleSpan(Typeface.BOLD), start, end, flags)
             Mark.Italic -> text.setSpan(StyleSpan(Typeface.ITALIC), start, end, flags)
@@ -189,6 +197,7 @@ object SpannableCodec {
                 }
             }
             is Mark.Link -> text.setSpan(URLSpan(mark.href), start, end, flags)
+            is Mark.Equation -> text.setSpan(EquationSpan(mark.latex), start, end, flags)
         }
     }
 
@@ -213,9 +222,29 @@ object SpannableCodec {
         if (start >= end) return
         text.getSpans(start, end, Any::class.java).forEach { span ->
             if (span is Derived || span is BlockSpan) return@forEach
+            // An equation is semantic content, not formatting. Clearing styles around it must not
+            // strand an object-replacement character with no source or renderer.
+            if (span is EquationSpan) return@forEach
             if (markOf(span) == null && span !is ScriptSizeSpan) return@forEach
             splitAround(text, span, start, end)
         }
+    }
+
+    /** The atomic equation intersecting a selection, or touching a collapsed caret. */
+    fun equationAt(text: Spanned, start: Int, end: Int): EquationRange? {
+        val from = minOf(start, end).coerceIn(0, text.length)
+        val to = maxOf(start, end).coerceIn(0, text.length)
+        val equations = text.getSpans(0, text.length, EquationSpan::class.java).map { span ->
+            EquationRange(span.latex, text.getSpanStart(span), text.getSpanEnd(span))
+        }
+        if (from != to) {
+            return equations.firstOrNull { it.start < to && it.end > from }
+        }
+        // At a boundary, prefer the equation behind the caret: typing and backspace both treat
+        // that as the current inline object. Falling forward handles a caret immediately before it.
+        return equations.firstOrNull { it.start < from && it.end == from }
+            ?: equations.firstOrNull { from in it.start until it.end }
+            ?: equations.firstOrNull { it.start == from }
     }
 
     /**
@@ -320,6 +349,7 @@ object SpannableCodec {
         is URLSpan -> Mark.Link(span.url)
         is FontFamilySpan -> Mark.FontFamily(span.familyId)
         is TypefaceSpan -> span.family?.let { Mark.FontFamily(it) }
+        is EquationSpan -> Mark.Equation(span.latex)
         else -> null
     }
 
@@ -330,6 +360,7 @@ object SpannableCodec {
         is Mark.FontSize -> Mark.FontSize(0)
         is Mark.FontFamily -> Mark.FontFamily("")
         is Mark.Link -> Mark.Link("")
+        is Mark.Equation -> Mark.Equation("")
         else -> this
     }
 
@@ -357,6 +388,7 @@ object SpannableCodec {
         is FontFamilySpan -> FontRegistry.typeface(span.familyId)
             ?.let { FontFamilySpan(span.familyId, it) } ?: span
         is TypefaceSpan -> TypefaceSpan(span.family)
+        is EquationSpan -> EquationSpan(span.latex)
         else -> span
     }
 
@@ -479,3 +511,6 @@ object SpannableCodec {
         return result
     }
 }
+
+/** Source and editor coordinates for one inline equation. */
+data class EquationRange(val latex: String, val start: Int, val end: Int)

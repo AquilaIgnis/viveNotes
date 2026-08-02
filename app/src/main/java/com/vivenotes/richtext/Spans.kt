@@ -7,11 +7,14 @@ import android.text.Layout
 import android.text.Spanned
 import android.text.style.BackgroundColorSpan
 import android.text.style.LeadingMarginSpan
+import android.text.style.ReplacementSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
 import com.vivenotes.model.Align
 import com.vivenotes.model.BlockType
+import io.ratex.RaTeXRenderer
+import kotlin.math.ceil
 
 /**
  * Marks a span as generated from block metadata rather than from a user's inline formatting.
@@ -134,6 +137,70 @@ class CodeBackgroundSpan(color: Int) : BackgroundColorSpan(color), Derived
 
 /** Size reduction paired with sub/superscript. Never read back as a mark. */
 class ScriptSizeSpan : RelativeSizeSpan(0.75f)
+
+/**
+ * The portable equation mark's editable projection.
+ *
+ * It draws source text until its native renderer is ready (and keeps doing so after a parse error),
+ * so asynchronous parsing can never make content disappear. The source itself is what the codec
+ * reads back; [renderer] is a disposable view concern.
+ */
+abstract class RenderedEquationSpan(val latex: String) : ReplacementSpan() {
+    private var renderer: RaTeXRenderer? = null
+
+    internal fun show(renderer: RaTeXRenderer?) {
+        this.renderer = renderer
+    }
+
+    override fun getSize(
+        paint: Paint,
+        text: CharSequence?,
+        start: Int,
+        end: Int,
+        fm: Paint.FontMetricsInt?,
+    ): Int {
+        val equation = renderer
+        if (equation == null) return ceil(paint.measureText(latex)).toInt().coerceAtLeast(1)
+
+        fm?.let {
+            val ascent = -ceil(equation.heightPx).toInt()
+            val descent = ceil(equation.depthPx).toInt()
+            it.ascent = minOf(it.ascent, ascent)
+            it.top = minOf(it.top, ascent)
+            it.descent = maxOf(it.descent, descent)
+            it.bottom = maxOf(it.bottom, descent)
+        }
+        return ceil(equation.widthPx).toInt().coerceAtLeast(1)
+    }
+
+    override fun draw(
+        canvas: Canvas,
+        text: CharSequence?,
+        start: Int,
+        end: Int,
+        x: Float,
+        top: Int,
+        y: Int,
+        bottom: Int,
+        paint: Paint,
+    ) {
+        val equation = renderer
+        if (equation == null) {
+            canvas.drawText(latex, x, y.toFloat(), paint)
+            return
+        }
+        canvas.save()
+        canvas.translate(x, y - equation.heightPx)
+        equation.draw(canvas)
+        canvas.restore()
+    }
+}
+
+/** A persisted equation inserted through the ribbon. Its source lives in [com.vivenotes.model.Mark]. */
+class EquationSpan(latex: String) : RenderedEquationSpan(latex)
+
+/** A disposable preview over source text such as `$x^2$`; never read back into the document model. */
+class LiveEquationSpan(latex: String) : RenderedEquationSpan(latex), Derived
 
 val BlockType.headingScale: Float?
     get() = when (this) {

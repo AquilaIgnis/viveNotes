@@ -39,6 +39,7 @@ object MaterialSymbols {
     val FormatStrikethrough: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_strikethrough)
     val FormatUnderlined: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_underlined)
     val Fullscreen: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_fullscreen)
+    val Function: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_function)
     val Info: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_info)
     val KeyboardDoubleArrowLeft: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_keyboard_double_arrow_left)
     val KeyboardDoubleArrowRight: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_keyboard_double_arrow_right)

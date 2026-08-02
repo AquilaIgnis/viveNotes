@@ -168,6 +168,7 @@ fun Ribbon(
             )
             RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
             RibbonTab.Draw -> DrawTab(pens, eraser, tool, allowFinger, draw)
+            RibbonTab.Insert -> InsertTab(selection, onCommand, pageOpen)
             else -> PlaceholderTab(activeTab)
         }
     }
@@ -421,9 +422,10 @@ internal fun RibbonButton(
     active: Boolean = false,
     /** Renders the button without wiring it up — see [RibbonCommand] for why that beats hiding it. */
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    RibbonButtonSlot(active, onClick, enabled) {
+    RibbonButtonSlot(active, onClick, enabled, modifier) {
         Icon(
             imageVector = icon,
             contentDescription = label,
@@ -525,11 +527,12 @@ internal fun RibbonButtonSlot(
     active: Boolean,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
     icon: @Composable () -> Unit,
 ) {
     val background = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(
-        modifier = Modifier
+        modifier = modifier
             .padding(horizontal = 1.dp)
             .size(32.dp)
             .clip(RoundedCornerShape(4.dp))

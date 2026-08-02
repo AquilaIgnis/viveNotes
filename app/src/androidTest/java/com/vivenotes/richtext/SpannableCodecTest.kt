@@ -10,6 +10,7 @@ import com.vivenotes.model.Align
 import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
+import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
 import com.vivenotes.model.Run
 import com.vivenotes.model.TOGGLEABLE_MARKS
 
@@ -33,6 +34,96 @@ class SpannableCodecTest {
 
     private fun roundTrip(blocks: List<Block>): List<Block> =
         SpannableCodec.parse(SpannableCodec.render(blocks, style))
+
+    @Test
+    fun preservesAnEquationAsOneAtomicEditorCharacter() {
+        val latex = "{\\displaystyle \\int _{a}^{b}f'(t)\\,dt=f(b)-f(a)}"
+        val blocks = listOf(
+            Block(
+                id = "equation-block",
+                runs = listOf(
+                    Run("before "),
+                    Run(OBJECT_REPLACEMENT_CHARACTER.toString(), setOf(Mark.Equation(latex))),
+                    Run(" after"),
+                ),
+            ),
+        )
+
+        val rendered = SpannableCodec.render(blocks, style)
+        val equationStart = "before ".length
+        assertEquals(OBJECT_REPLACEMENT_CHARACTER, rendered[equationStart])
+        assertEquals(equationStart + 1, rendered.getSpanEnd(rendered.getSpans(
+            0,
+            rendered.length,
+            EquationSpan::class.java,
+        ).single()))
+
+        assertEquals(blocks, SpannableCodec.parse(rendered))
+        assertEquals("before $latex after", SpannableCodec.parse(rendered).single().text)
+    }
+
+    @Test
+    fun findsAnEquationOnItsSelectionAndEitherCaretBoundary() {
+        val latex = "x^2"
+        val rendered = SpannableCodec.render(
+            listOf(
+                Block(
+                    id = "b",
+                    runs = listOf(
+                        Run("a"),
+                        Run(OBJECT_REPLACEMENT_CHARACTER.toString(), setOf(Mark.Equation(latex))),
+                        Run("b"),
+                    ),
+                ),
+            ),
+            style,
+        )
+
+        assertEquals(latex, SpannableCodec.equationAt(rendered, 1, 2)?.latex)
+        assertEquals(latex, SpannableCodec.equationAt(rendered, 1, 1)?.latex)
+        assertEquals(latex, SpannableCodec.equationAt(rendered, 2, 2)?.latex)
+    }
+
+    @Test
+    fun clearingFormattingDoesNotDeleteEquationSource() {
+        val equation = Mark.Equation("x+y")
+        val rendered = SpannableCodec.render(
+            listOf(
+                Block(
+                    id = "b",
+                    runs = listOf(
+                        Run(
+                            OBJECT_REPLACEMENT_CHARACTER.toString(),
+                            setOf<Mark>(equation, Mark.Bold, Mark.TextColor(0xFFFF0000.toInt())),
+                        ),
+                    ),
+                ),
+            ),
+            style,
+        )
+
+        SpannableCodec.clearMarks(rendered, 0, 1)
+
+        assertEquals(setOf<Mark>(equation), SpannableCodec.parse(rendered).single().runs.single().marks)
+    }
+
+    @Test
+    fun liveEquationPreviewDoesNotReplaceItsEditableSourceInTheModel() {
+        val source = "Solve \\(x^2+y^2=z^2\\) here"
+        val rendered = SpannableCodec.render(listOf(Block.of(source)), style)
+        val candidate = findAutoEquationCandidates(source).single()
+        rendered.setSpan(
+            LiveEquationSpan(candidate.latex),
+            candidate.start,
+            candidate.end,
+            android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+        )
+
+        val parsed = SpannableCodec.parse(rendered).single()
+
+        assertEquals(source, parsed.text)
+        assertTrue(parsed.runs.all { it.marks.isEmpty() })
+    }
 
     @Test
     fun preservesInlineMarks() {

@@ -9,6 +9,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
+import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
 import com.vivenotes.model.Run
 import com.vivenotes.model.TOGGLEABLE_MARKS
 
@@ -19,6 +20,58 @@ import com.vivenotes.model.TOGGLEABLE_MARKS
  */
 @RunWith(AndroidJUnit4::class)
 class OutlineEditTextTest {
+
+    @Test
+    fun insertsAnEquationAtTheCaretAndReportsItForEditing() {
+        withEditor { view ->
+            val latex = "{\\displaystyle x^2}"
+            var selection: SelectionState? = null
+            view.setBlocks(listOf(Block(id = "b", runs = listOf(Run("before after")))))
+            view.onSelectionStateChanged = { selection = it }
+            view.setSelection(7)
+
+            view.apply(FormatCommand.InsertEquation(latex))
+
+            assertEquals(
+                listOf(
+                    Run("before "),
+                    Run(OBJECT_REPLACEMENT_CHARACTER.toString(), setOf(Mark.Equation(latex))),
+                    Run("after"),
+                ),
+                view.blocks().single().runs,
+            )
+            assertEquals(latex, selection?.equation)
+            assertEquals(8, view.selectionStart)
+        }
+    }
+
+    @Test
+    fun insertingAtAnExistingEquationUpdatesItInsteadOfAddingAnother() {
+        withEditor { view ->
+            val old = Mark.Equation("x")
+            val replacement = "x^2"
+            view.setBlocks(
+                listOf(
+                    Block(
+                        id = "b",
+                        runs = listOf(
+                            Run("a"),
+                            Run(OBJECT_REPLACEMENT_CHARACTER.toString(), setOf(old)),
+                            Run("b"),
+                        ),
+                    ),
+                ),
+            )
+            view.setSelection(2)
+
+            view.apply(FormatCommand.InsertEquation(replacement))
+
+            val runs = view.blocks().single().runs
+            assertEquals(1, runs.count { run -> run.marks.any { it is Mark.Equation } })
+            assertEquals(Mark.Equation(replacement), runs.single { it.marks.any { mark -> mark is Mark.Equation } }.marks.single())
+            assertEquals("a${OBJECT_REPLACEMENT_CHARACTER}b", view.text.toString())
+        }
+    }
 
     private fun withEditor(body: (OutlineEditText) -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()

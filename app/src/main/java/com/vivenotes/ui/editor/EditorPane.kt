@@ -203,6 +203,10 @@ fun EditorPane(
 
     var focusedEditor by remember { mutableStateOf<OutlineEditText?>(null) }
     var focusedOutlineId by remember { mutableStateOf<String?>(null) }
+    var lastFocusedEditor by remember { mutableStateOf<OutlineEditText?>(null) }
+    var lastFocusedOutlineId by remember { mutableStateOf<String?>(null) }
+    var retainedEquationEditor by remember { mutableStateOf<OutlineEditText?>(null) }
+    var retainedEquationOutlineId by remember { mutableStateOf<String?>(null) }
     /** Container to grab focus once composed — the one the user just created by tapping. */
     var pendingFocusId by remember { mutableStateOf<String?>(null) }
     val heights = remember { mutableStateMapOf<String, Int>() }
@@ -224,15 +228,41 @@ fun EditorPane(
     // replaying them on recomposition would re-apply formatting.
     LaunchedEffect(Unit) {
         commands.collect { command ->
-            val editor = focusedEditor
-            if (editor != null) {
-                editor.apply(command)
-            } else if (command is FormatCommand.SetMark) {
-                // Nothing focused, so there is nothing to format — but choosing a font or size
-                // from the ribbon still says what the next text should look like.
-                onMarkArmed(command.mark)
+            when (command) {
+                FormatCommand.RetainEquationTarget -> {
+                    retainedEquationEditor = focusedEditor ?: lastFocusedEditor
+                    retainedEquationOutlineId = focusedOutlineId ?: lastFocusedOutlineId
+                }
+                FormatCommand.ReleaseEquationTarget -> {
+                    val releasedId = retainedEquationOutlineId
+                    retainedEquationEditor = null
+                    retainedEquationOutlineId = null
+                    if (releasedId != null && focusedOutlineId != releasedId) onOutlineBlurred(releasedId)
+                }
+                is FormatCommand.InsertEquation -> {
+                    (retainedEquationEditor ?: focusedEditor)?.apply(command)
+                    retainedEquationEditor = null
+                    retainedEquationOutlineId = null
+                }
+                else -> {
+                    val editor = focusedEditor
+                    if (editor != null) {
+                        editor.apply(command)
+                    } else if (command is FormatCommand.SetMark) {
+                        // Nothing focused, so there is nothing to format — but choosing a font or
+                        // size still says what the next text should look like.
+                        onMarkArmed(command.mark)
+                    }
+                }
             }
         }
+    }
+
+    LaunchedEffect(pageRevision) {
+        lastFocusedEditor = null
+        lastFocusedOutlineId = null
+        retainedEquationEditor = null
+        retainedEquationOutlineId = null
     }
 
     val sheet = style.pageSizeDp?.let { (w, h) -> DpSize(w.dp, h.dp) }
@@ -403,13 +433,15 @@ fun EditorPane(
                                 onFocused = { view ->
                                     focusedEditor = view
                                     focusedOutlineId = box.id
+                                    lastFocusedEditor = view
+                                    lastFocusedOutlineId = box.id
                                 },
                                 onBlurred = {
                                     if (focusedOutlineId == box.id) {
                                         focusedOutlineId = null
                                         focusedEditor = null
                                     }
-                                    onOutlineBlurred(box.id)
+                                    if (retainedEquationOutlineId != box.id) onOutlineBlurred(box.id)
                                 },
                                 onBlocksChanged = { blocks -> onBlocksChanged(box.id, blocks) },
                                 onSelectionChanged = onSelectionChanged,
@@ -738,6 +770,7 @@ internal fun OutlineContainer(
                 update = { editor ->
                     editor.editorStyle = editorStyle
                     editor.setTextColor(canvas.text.toArgb())
+                    editor.equationColor = canvas.text.toArgb()
                     editor.setHintTextColor(canvas.secondaryText.toArgb())
                     editor.defaultMarks = defaults.asMarks()
                     // Applied to the view rather than as a Compose height constraint: constraining

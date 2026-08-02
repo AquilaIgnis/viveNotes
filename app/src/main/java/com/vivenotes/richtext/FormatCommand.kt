@@ -29,6 +29,15 @@ sealed interface FormatCommand {
 
     data object ClearFormatting : FormatCommand
 
+    /** Keeps the current editor/caret alive while the focusable equation panel is open. */
+    data object RetainEquationTarget : FormatCommand
+
+    /** Releases a retained target when equation entry is cancelled or dismissed. */
+    data object ReleaseEquationTarget : FormatCommand
+
+    /** Inserts a new equation, or replaces the equation at the retained caret. */
+    data class InsertEquation(val latex: String) : FormatCommand
+
     /**
      * Delegated to the platform widget's own handlers, which already move styled text through the
      * clipboard. Reimplementing cut/copy/paste would lose that for no gain.
@@ -57,6 +66,12 @@ data class SelectionState(
 
     /** The family, on the same terms as [fontSize]. */
     val fontFamily: String? = null,
+
+    /** Source of the equation at the selection/caret, if there is one to edit. */
+    val equation: String? = null,
+
+    /** An equation needs a real insertion target; a page by itself is not enough. */
+    val editorFocused: Boolean = false,
 ) {
     fun has(mark: Mark): Boolean = mark in marks
 
