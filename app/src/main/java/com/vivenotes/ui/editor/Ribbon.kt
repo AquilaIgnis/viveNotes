@@ -294,12 +294,7 @@ private fun HomeTab(
         // starts a container exactly as it always did. A mode rather than a one-shot insert,
         // because "where does it go" is a question only a tap can answer.
         Box(Modifier.testTag(HomeTags.TEXT)) {
-            RibbonButton(
-                icon = MaterialSymbols.Title,
-                label = "Text",
-                active = textMode,
-                onClick = onTextMode,
-            )
+            TwoToneRibbonButton({ it.insertText }, "Text", textMode, onTextMode)
         }
 
         Divider()

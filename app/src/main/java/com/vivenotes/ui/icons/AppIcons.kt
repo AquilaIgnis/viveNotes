@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
  */
 @Immutable
 class AppIcons(neutral: Color, accent: Color, warn: Color) {
+    val insertText = insertTextGlyph(neutral, accent)
     val bulletList = bulletListGlyph(neutral, accent)
     val numberedList = numberedListGlyph(neutral, accent)
     val todoList = todoListGlyph(neutral, accent)

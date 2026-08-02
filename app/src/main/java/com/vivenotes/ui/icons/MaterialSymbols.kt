@@ -50,7 +50,6 @@ object MaterialSymbols {
     val Redo: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_redo)
     val Remove: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_remove)
     val Sort: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_sort)
-    val Title: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_title)
     val TouchApp: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_touch_app)
     val Undo: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_undo)
     val VerticalSplit: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_vertical_split)

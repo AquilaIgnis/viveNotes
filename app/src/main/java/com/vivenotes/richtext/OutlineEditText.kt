@@ -9,6 +9,7 @@ import android.text.style.AbsoluteSizeSpan
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.KeyEvent
+import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.BaseInputConnection
 import android.widget.EditText
 import com.vivenotes.model.Align
@@ -237,6 +238,15 @@ class OutlineEditText @JvmOverloads constructor(
         super.onDetachedFromWindow()
     }
 
+    /** Leaves text mode completely when a canvas tool is picked up. */
+    fun deactivateTextInput() {
+        pendingMarks.clear()
+        suppressedMarks.clear()
+        clearFocus()
+        context.getSystemService(InputMethodManager::class.java)
+            ?.hideSoftInputFromWindow(windowToken, 0)
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         // Tab indents rather than moving focus — inside a note, indent is what a writer means.
         if (keyCode == KeyEvent.KEYCODE_TAB) {
@@ -259,9 +269,13 @@ class OutlineEditText @JvmOverloads constructor(
     }
 
     fun apply(command: FormatCommand) {
-        // These two are consumed by EditorPane; accepting them here as no-ops keeps this view's
+        // These are consumed by EditorPane; accepting them here as no-ops keeps this view's
         // command surface exhaustive without turning panel lifetime into a document edit.
-        if (command == FormatCommand.RetainEquationTarget || command == FormatCommand.ReleaseEquationTarget) return
+        if (
+            command == FormatCommand.DeactivateTextInput ||
+            command == FormatCommand.RetainEquationTarget ||
+            command == FormatCommand.ReleaseEquationTarget
+        ) return
         val editable = text ?: return
         // Applying spans while the IME holds a composing region corrupts predictive text on many
         // keyboards. Committing the composition first is cheap and avoids the whole class of bug.
@@ -322,6 +336,7 @@ class OutlineEditText @JvmOverloads constructor(
                 }
                 pendingMarks.clear()
             }
+            FormatCommand.DeactivateTextInput,
             FormatCommand.RetainEquationTarget,
             FormatCommand.ReleaseEquationTarget,
             -> Unit

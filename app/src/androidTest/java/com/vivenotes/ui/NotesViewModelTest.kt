@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -17,6 +18,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -49,6 +51,7 @@ import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.RuleLines
 import com.vivenotes.model.plainText
+import com.vivenotes.richtext.FormatCommand
 
 /**
  * The ViewModel owns the load → edit → save cycle, and a bug here destroyed a page's contents
@@ -309,6 +312,20 @@ class NotesViewModelTest {
     }
 
     // --- Draw-toolbar history -----------------------------------------------------------------
+
+    @Test
+    fun selectingAnyCanvasToolDeactivatesTextInput() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        listOf(DrawTool.Pen(1), DrawTool.Eraser, DrawTool.Lasso).forEach { tool ->
+            val nextCommand = async { vm.commands.first() }
+            runCurrent()
+
+            vm.selectTool(tool)
+
+            assertEquals(FormatCommand.DeactivateTextInput, nextCommand.await())
+        }
+    }
 
     @Test
     fun drawingCanBeUndoneRedoneAndReloaded() = runTest(dispatcher) {

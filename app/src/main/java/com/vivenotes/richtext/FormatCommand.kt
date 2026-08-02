@@ -29,6 +29,9 @@ sealed interface FormatCommand {
 
     data object ClearFormatting : FormatCommand
 
+    /** Puts the caret and IME away before a Draw-tab tool starts consuming page gestures. */
+    data object DeactivateTextInput : FormatCommand
+
     /** Keeps the current editor/caret alive while the focusable equation panel is open. */
     data object RetainEquationTarget : FormatCommand
 

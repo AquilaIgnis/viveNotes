@@ -229,6 +229,23 @@ fun EditorPane(
     LaunchedEffect(Unit) {
         commands.collect { command ->
             when (command) {
+                FormatCommand.DeactivateTextInput -> {
+                    val editor = focusedEditor ?: retainedEquationEditor
+                    val outlineId = focusedOutlineId ?: retainedEquationOutlineId
+                    val editorWasFocused = editor?.hasFocus() == true
+                    pendingFocusId = null
+                    focusedEditor = null
+                    focusedOutlineId = null
+                    lastFocusedEditor = null
+                    lastFocusedOutlineId = null
+                    retainedEquationEditor = null
+                    retainedEquationOutlineId = null
+                    editor?.deactivateTextInput()
+                    // A retained equation target has already lost View focus to its popup, so it
+                    // will not produce another blur callback when the Draw tool releases it.
+                    if (!editorWasFocused && outlineId != null) onOutlineBlurred(outlineId)
+                    onSelectionChanged(SelectionState())
+                }
                 FormatCommand.RetainEquationTarget -> {
                     retainedEquationEditor = focusedEditor ?: lastFocusedEditor
                     retainedEquationOutlineId = focusedOutlineId ?: lastFocusedOutlineId

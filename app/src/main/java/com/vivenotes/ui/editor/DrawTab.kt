@@ -179,7 +179,10 @@ private fun EraserButton(
                     if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                 )
                 .combinedClickable(
-                    onClick = { if (selected) onOpen() else onSelect() },
+                    onClick = {
+                        onSelect()
+                        if (selected) onOpen()
+                    },
                     onLongClick = {
                         onSelect()
                         onOpen()
@@ -243,7 +246,10 @@ private fun PenButton(
                     if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                 )
                 .combinedClickable(
-                    onClick = { if (selected) onOpen() else onSelect() },
+                    onClick = {
+                        onSelect()
+                        if (selected) onOpen()
+                    },
                     // Configuring a pen picks it up as well: the settings you are about to change
                     // are the ones you would then be drawing with.
                     onLongClick = {

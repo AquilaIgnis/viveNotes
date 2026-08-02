@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -75,6 +76,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val tool by viewModel.tool.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
     val inkUndoState by viewModel.inkUndoState.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
 
     var activeTab by remember { mutableStateOf(RibbonTab.Home) }
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
@@ -96,9 +98,12 @@ fun NotesApp(viewModel: NotesViewModel) {
         )
     }
 
-    val drawActions = remember(viewModel) {
+    val drawActions = remember(viewModel, focusManager) {
         DrawActions(
-            selectTool = viewModel::selectTool,
+            selectTool = { selected ->
+                if (selected != DrawTool.None) focusManager.clearFocus(force = true)
+                viewModel.selectTool(selected)
+            },
             updatePen = viewModel::updatePen,
             updateEraser = viewModel::updateEraser,
             setDrawWithFinger = viewModel::setDrawWithFinger,

@@ -114,6 +114,7 @@ class DrawTabTest {
         setTab(tool = DrawTool.Pen(0))
         compose.onNodeWithTag(DrawTags.pen(0)).performClick()
         compose.onNodeWithText("Pen 1").assertIsDisplayed()
+        assertEquals("an already-selected pen did not reassert Draw mode", DrawTool.Pen(0), selected)
     }
 
     @Test
@@ -158,6 +159,7 @@ class DrawTabTest {
         setTab(tool = DrawTool.Eraser)
         compose.onNodeWithTag(DrawTags.ERASER).performClick()
 
+        assertEquals("an already-selected eraser did not reassert Draw mode", DrawTool.Eraser, selected)
         compose.onNodeWithText("Eraser").assertIsDisplayed()
         compose.onNodeWithText("Normal").assertIsDisplayed()
         compose.onNodeWithText("Object").assertIsDisplayed()

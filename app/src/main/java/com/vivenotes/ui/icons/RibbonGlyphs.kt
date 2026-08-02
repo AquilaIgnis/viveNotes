@@ -71,6 +71,64 @@ private fun ImageVector.Builder.strokedAccent(
     )
 }
 
+/**
+ * Material Symbols Rounded `insert_text`, separated into two semantic colours.
+ *
+ * The selection frame is the action — creating a new text container — so it receives the blue
+ * accent. The T remains neutral and therefore follows both the theme and the button's active state.
+ */
+fun insertTextGlyph(neutral: Color, accent: Color): ImageVector = glyph("InsertText") {
+    // Bounding frame. Its four short rules disappear beneath the corner handles, matching the
+    // official symbol's continuous selection rectangle without baking in a background colour.
+    path(
+        stroke = SolidColor(accent),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+    ) {
+        moveTo(5f, 4f)
+        lineTo(19f, 4f)
+        moveTo(20f, 5f)
+        lineTo(20f, 19f)
+        moveTo(19f, 20f)
+        lineTo(5f, 20f)
+        moveTo(4f, 19f)
+        lineTo(4f, 5f)
+    }
+    listOf(
+        2f to 2f,
+        18f to 2f,
+        18f to 18f,
+        2f to 18f,
+    ).forEach { (left, top) ->
+        path(
+            stroke = SolidColor(accent),
+            strokeLineWidth = 2f,
+            strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(left, top)
+            lineTo(left + 4f, top)
+            lineTo(left + 4f, top + 4f)
+            lineTo(left, top + 4f)
+            close()
+        }
+    }
+    path(fill = SolidColor(neutral)) {
+        moveTo(9f, 8f)
+        lineTo(15f, 8f)
+        curveTo(15.55f, 8f, 16f, 8.45f, 16f, 9f)
+        curveTo(16f, 9.55f, 15.55f, 10f, 15f, 10f)
+        lineTo(13f, 10f)
+        lineTo(13f, 15f)
+        curveTo(13f, 15.55f, 12.55f, 16f, 12f, 16f)
+        curveTo(11.45f, 16f, 11f, 15.55f, 11f, 15f)
+        lineTo(11f, 10f)
+        lineTo(9f, 10f)
+        curveTo(8.45f, 10f, 8f, 9.55f, 8f, 9f)
+        curveTo(8f, 8.45f, 8.45f, 8f, 9f, 8f)
+        close()
+    }
+}
+
 fun bulletListGlyph(neutral: Color, accent: Color): ImageVector = glyph("BulletList") {
     ListRows.forEach { cy ->
         path(fill = SolidColor(accent)) {

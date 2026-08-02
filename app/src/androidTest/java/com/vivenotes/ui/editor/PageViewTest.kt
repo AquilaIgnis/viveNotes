@@ -11,11 +11,13 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.emptyFlow
+import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.flow.MutableSharedFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -28,6 +30,8 @@ import com.vivenotes.model.Orientation
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.RuleLines
+import com.vivenotes.richtext.FormatCommand
+import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.OutlineBox
 import com.vivenotes.ui.theme.ViveNotesTheme
 import kotlin.math.abs
@@ -58,6 +62,8 @@ class PageViewTest {
     private var composed = false
     private lateinit var density: Density
     private var created: Pair<Float, Float>? = null
+    private val commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 4)
+    private val selection = mutableStateOf(SelectionState())
 
     private fun setPage(
         style: PageStyle = PageStyle(),
@@ -85,9 +91,9 @@ class PageViewTest {
                         outlines = this.outlines.value,
                         pageRevision = 0,
                         initialBlocksFor = { listOf(Block.empty()) },
-                        commands = emptyFlow(),
+                        commands = commands,
                         onBlocksChanged = { _, _ -> },
-                        onSelectionChanged = {},
+                        onSelectionChanged = { selection.value = it },
                         onMarkArmed = {},
                         onCreateOutline = { x, y -> created = x to y; "new-outline" },
                         onMoveOutline = { _, _, _ -> },
@@ -111,6 +117,24 @@ class PageViewTest {
     }
 
     private fun pageSize() = compose.onNodeWithTag(PageTags.SURFACE).fetchSemanticsNode().size
+
+    @Test
+    fun pickingADrawToolDismissesTheActiveTextCursor() {
+        setPage(
+            style = PageStyle(hideTitle = true),
+            outlines = listOf(OutlineBox("text", 80f, 100f, 360f)),
+        )
+        compose.onNodeWithTag(OutlineTags.EDITOR).performClick()
+        compose.waitUntil(timeoutMillis = 2_000) { selection.value.editorFocused }
+
+        var emitted = false
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            emitted = commands.tryEmit(FormatCommand.DeactivateTextInput)
+        }
+        assertTrue(emitted)
+
+        compose.waitUntil(timeoutMillis = 2_000) { !selection.value.editorFocused }
+    }
 
     // --- zoom ------------------------------------------------------------------------------------
 

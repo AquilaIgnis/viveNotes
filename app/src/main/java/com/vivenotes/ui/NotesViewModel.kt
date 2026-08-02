@@ -629,6 +629,7 @@ class NotesViewModel(
     }
 
     fun selectTool(tool: DrawTool) {
+        if (tool != DrawTool.None) _commands.tryEmit(FormatCommand.DeactivateTextInput)
         _tool.value = tool
     }
 
