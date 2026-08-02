@@ -7,6 +7,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -30,6 +31,7 @@ import com.vivenotes.model.Orientation
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.RuleLines
+import com.vivenotes.ink.InkPoint
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.OutlineBox
@@ -62,6 +64,8 @@ class PageViewTest {
     private var composed = false
     private lateinit var density: Density
     private var created: Pair<Float, Float>? = null
+    private var pasted: InkPoint? = null
+    private val hasInkClipboard = mutableStateOf(false)
     private val commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 4)
     private val selection = mutableStateOf(SelectionState())
 
@@ -70,8 +74,11 @@ class PageViewTest {
         zoom: Float = 1f,
         title: String = "A page",
         outlines: List<OutlineBox> = emptyList(),
+        hasInkClipboard: Boolean = false,
     ) {
         created = null
+        pasted = null
+        this.hasInkClipboard.value = hasInkClipboard
         this.style.value = style
         this.zoom.floatValue = zoom
         this.title.value = title
@@ -101,6 +108,8 @@ class PageViewTest {
                         onSetOutlineMinHeight = { _, _ -> },
                         onOutlineBlurred = {},
                         onCanvasMeasured = { _, _ -> },
+                        hasInkClipboard = this.hasInkClipboard.value,
+                        onPasteInk = { pasted = it },
                         showPrintMargins = false,
                     )
                 }
@@ -164,6 +173,32 @@ class PageViewTest {
         val (x, y) = created ?: error("tapping empty canvas created no container")
         assertEquals(92f, x, 1f)
         assertEquals(142f, y, 1f)
+    }
+
+    @Test
+    fun aFingerDoubleTapOffersPasteAtThatPagePositionWithoutCreatingText() {
+        setPage(style = PageStyle(hideTitle = true), hasInkClipboard = true)
+        val offset = with(density) { Offset(220.dp.toPx(), 310.dp.toPx()) }
+
+        compose.onRoot().performTouchInput { doubleClick(offset) }
+        compose.onNodeWithTag(PageTags.PASTE).assertIsDisplayed()
+        assertNull("the first tap of a paste gesture created a text container", created)
+
+        compose.onNodeWithTag(PageTags.PASTE).performClick()
+
+        assertEquals(220f, pasted?.x ?: Float.NaN, 1f)
+        assertEquals(310f, pasted?.y ?: Float.NaN, 1f)
+        compose.onNodeWithTag(PageTags.PASTE_MENU).assertDoesNotExist()
+    }
+
+    @Test
+    fun aDoubleTapHasNoPasteActionWhenTheInkClipboardIsEmpty() {
+        setPage(style = PageStyle(hideTitle = true), hasInkClipboard = false)
+        val offset = with(density) { Offset(220.dp.toPx(), 310.dp.toPx()) }
+
+        compose.onRoot().performTouchInput { doubleClick(offset) }
+
+        compose.onNodeWithTag(PageTags.PASTE).assertDoesNotExist()
     }
 
     /**

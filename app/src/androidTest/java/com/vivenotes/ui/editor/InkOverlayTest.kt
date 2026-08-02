@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipe
 import androidx.ink.brush.Brush
@@ -27,6 +28,7 @@ import com.vivenotes.data.EraserSettings
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
+import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ui.theme.ViveNotesTheme
 
@@ -52,6 +54,7 @@ class InkOverlayTest {
     private var lassoResize: InkLassoResize? = null
     private var deletedIds = emptySet<String>()
     private var recolorArgb: Int? = null
+    private var requestedPaste: InkPoint? = null
 
     private val recordingPan = object : CanvasPan {
         override fun by(dx: Float, dy: Float) {
@@ -69,6 +72,7 @@ class InkOverlayTest {
         lassoing: Boolean = false,
         eraser: EraserSettings = EraserSettings(),
         pageStrokes: List<PageStroke> = emptyList(),
+        hasInkClipboard: Boolean = false,
     ) {
         compose.setContent {
             ViveNotesTheme {
@@ -93,6 +97,8 @@ class InkOverlayTest {
                         onResizeSelection = { lassoResize = it },
                         onDeleteSelection = { deletedIds = it },
                         onRecolorSelection = { _, color -> recolorArgb = color },
+                        hasInkClipboard = hasInkClipboard,
+                        onRequestPaste = { requestedPaste = it },
                         pan = recordingPan,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -119,6 +125,20 @@ class InkOverlayTest {
         compose.waitForIdle()
 
         assertTrue("letting go of a pan should fling it", flung)
+    }
+
+    @Test
+    fun aFingerDoubleTapRequestsPasteWhileThePenOverlayOwnsTouch() {
+        setOverlay(allowFinger = false, hasInkClipboard = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            doubleClick(Offset(160f, 180f))
+        }
+        compose.waitForIdle()
+
+        assertEquals(160f, requestedPaste?.x ?: Float.NaN, 1f)
+        assertEquals(180f, requestedPaste?.y ?: Float.NaN, 1f)
+        assertEquals("the paste gesture drew ink", 0, strokes)
     }
 
     /** With finger drawing on, the same gesture is ink — so it must *not* also move the page. */

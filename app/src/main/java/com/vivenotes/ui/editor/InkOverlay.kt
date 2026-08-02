@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
@@ -114,6 +115,8 @@ internal fun InkOverlay(
     onResizeSelection: (InkLassoResize) -> Unit = {},
     onDeleteSelection: (Set<String>) -> Unit = {},
     onCopySelection: (Set<String>) -> Unit = {},
+    hasInkClipboard: Boolean = false,
+    onRequestPaste: (InkPoint) -> Unit = {},
     onRecolorSelection: (Set<String>, Int) -> Unit = { _, _ -> },
     onGroupSelection: (Set<String>) -> Unit = {},
     onUngroupSelection: (Set<String>) -> Unit = {},
@@ -145,6 +148,8 @@ internal fun InkOverlay(
     val currentOnResizeSelection by rememberUpdatedState(onResizeSelection)
     val currentOnDeleteSelection by rememberUpdatedState(onDeleteSelection)
     val currentOnCopySelection by rememberUpdatedState(onCopySelection)
+    val currentHasInkClipboard by rememberUpdatedState(hasInkClipboard)
+    val currentOnRequestPaste by rememberUpdatedState(onRequestPaste)
     val currentOnRecolorSelection by rememberUpdatedState(onRecolorSelection)
     val currentOnGroupSelection by rememberUpdatedState(onGroupSelection)
     val currentOnUngroupSelection by rememberUpdatedState(onUngroupSelection)
@@ -156,12 +161,23 @@ internal fun InkOverlay(
     var livePointer by remember { mutableStateOf(-1) }
     val eraseGesture = remember { EraseGesture() }
     val lassoGesture = remember { LassoGesture() }
+    val viewConfiguration = LocalViewConfiguration.current
+    val fingerDoubleTap = remember(viewConfiguration) {
+        FingerDoubleTapGesture(
+            minimumIntervalMillis = viewConfiguration.doubleTapMinTimeMillis,
+            maximumIntervalMillis = viewConfiguration.doubleTapTimeoutMillis,
+            touchSlop = viewConfiguration.touchSlop,
+        )
+    }
 
     LaunchedEffect(lassoing) {
         if (!lassoing) lassoGesture.clear()
     }
     LaunchedEffect(strokes) {
         lassoGesture.reconcile(strokes)
+    }
+    LaunchedEffect(hasInkClipboard) {
+        if (!hasInkClipboard) fingerDoubleTap.reset()
     }
 
     // Velocity for the fling, measured from the same events the pan is driven by.
@@ -262,7 +278,15 @@ internal fun InkOverlay(
                 Modifier
                     .fillMaxSize()
                     .pointerInteropFilter { event ->
-                        handleInk(
+                        val pastePoint = if (
+                            currentHasInkClipboard && fingerDoubleTap.observe(event)
+                        ) {
+                            val toPage = Matrix().also { currentTransform().invert(it) }
+                            event.pagePoint(event.actionIndex, toPage)
+                        } else {
+                            null
+                        }
+                        val handled = handleInk(
                             event = event,
                             view = wetView,
                             brush = currentBrush,
@@ -293,6 +317,8 @@ internal fun InkOverlay(
                             eraseGesture = eraseGesture,
                             lassoGesture = lassoGesture,
                         )
+                        pastePoint?.let(currentOnRequestPaste)
+                        handled
                     },
             )
         }
@@ -326,6 +352,69 @@ internal fun InkOverlay(
 
     DisposableEffect(Unit) {
         onDispose { wetView?.cancelUnfinishedStrokes() }
+    }
+}
+
+/** Recognises stationary, single-finger double taps without taking drag/pan ownership. */
+internal class FingerDoubleTapGesture(
+    private val minimumIntervalMillis: Long,
+    private val maximumIntervalMillis: Long,
+    private val touchSlop: Float,
+) {
+    private var tracking = false
+    private var stayedStill = false
+    private var downAt = 0L
+    private var downX = 0f
+    private var downY = 0f
+    private var firstTapAt = -1L
+    private var firstTapX = 0f
+    private var firstTapY = 0f
+
+    fun observe(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (event.getToolType(event.actionIndex) != MotionEvent.TOOL_TYPE_FINGER) {
+                    tracking = false
+                    return false
+                }
+                if (firstTapAt >= 0L && event.eventTime - firstTapAt > maximumIntervalMillis) {
+                    firstTapAt = -1L
+                }
+                tracking = true
+                stayedStill = true
+                downAt = event.eventTime
+                downX = event.x
+                downY = event.y
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> stayedStill = false
+            MotionEvent.ACTION_MOVE -> {
+                if (tracking && hypot(event.x - downX, event.y - downY) > touchSlop) {
+                    stayedStill = false
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                if (!tracking) return false
+                tracking = false
+                if (!stayedStill || event.eventTime - downAt > maximumIntervalMillis) return false
+                val interval = event.eventTime - firstTapAt
+                val closeEnough = hypot(event.x - firstTapX, event.y - firstTapY) <= touchSlop * 2f
+                if (firstTapAt >= 0L && interval in minimumIntervalMillis..maximumIntervalMillis && closeEnough) {
+                    reset()
+                    return true
+                }
+                firstTapAt = event.eventTime
+                firstTapX = event.x
+                firstTapY = event.y
+            }
+            MotionEvent.ACTION_CANCEL -> reset()
+        }
+        return false
+    }
+
+    fun reset() {
+        tracking = false
+        stayedStill = false
+        firstTapAt = -1L
     }
 }
 

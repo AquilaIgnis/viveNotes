@@ -232,7 +232,7 @@ object InkCodec {
         )
     }
 
-    /** Encodes an already-styled live stroke, used by the selection Copy action. */
+    /** Encodes an already-styled clipboard stroke when it is pasted onto a page. */
     fun encodeCopy(
         source: PageStroke,
         stroke: Stroke,

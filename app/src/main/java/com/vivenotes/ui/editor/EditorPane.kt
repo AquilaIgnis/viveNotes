@@ -10,6 +10,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -32,6 +35,9 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -61,6 +67,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -81,10 +89,12 @@ import androidx.compose.animation.core.DecayAnimationSpec
 import androidx.compose.animation.core.animateDecay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.ink.PageStroke
+import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.model.Block
@@ -97,6 +107,7 @@ import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.OutlineEditText
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.OutlineBox
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.theme.CanvasColors
 import com.vivenotes.ui.theme.LocalCanvasColors
 import com.vivenotes.ui.theme.paintedWith
@@ -198,6 +209,8 @@ fun EditorPane(
     onResizeSelection: (InkLassoResize) -> Unit = {},
     onDeleteInkSelection: (Set<String>) -> Unit = {},
     onCopyInkSelection: (Set<String>) -> Unit = {},
+    hasInkClipboard: Boolean = false,
+    onPasteInk: (InkPoint) -> Unit = {},
     onRecolorInkSelection: (Set<String>, Int) -> Unit = { _, _ -> },
     onGroupInkSelection: (Set<String>) -> Unit = {},
     onUngroupInkSelection: (Set<String>) -> Unit = {},
@@ -216,7 +229,12 @@ fun EditorPane(
     var retainedEquationOutlineId by remember { mutableStateOf<String?>(null) }
     /** Container to grab focus once composed — the one the user just created by tapping. */
     var pendingFocusId by remember { mutableStateOf<String?>(null) }
+    var pastePopupAt by remember { mutableStateOf<InkPoint?>(null) }
     val heights = remember { mutableStateMapOf<String, Int>() }
+
+    LaunchedEffect(pageRevision, hasInkClipboard) {
+        pastePopupAt = null
+    }
 
     val editorStyle = remember(density, primary) {
         with(density) {
@@ -390,6 +408,17 @@ fun EditorPane(
                 Rect(left, top, left + window.width.toPx(), top + window.height.toPx())
             }
         }
+        val canPlaceAt: (InkPoint) -> Boolean = { point ->
+            val offSheet = fits && (point.x > pageSize.width.value || point.y > pageSize.height.value)
+            val onTitle = !style.hideTitle && point.y < PageStyle.TITLE_BAND_DP
+            !offSheet && !onTitle
+        }
+        val offsetToPage: (Offset) -> InkPoint = { offset ->
+            with(density) { InkPoint(offset.x.toDp().value, offset.y.toDp().value) }
+        }
+        val requestPasteAt: (InkPoint) -> Unit = { point ->
+            if (hasInkClipboard && canPlaceAt(point)) pastePopupAt = point
+        }
 
         // Provided so containers and the title read the page's colours, which may be nothing like
         // the shell's — a white page inside a dark app, or a page painted from the Page Color menu.
@@ -418,17 +447,26 @@ fun EditorPane(
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .pointerInput(pageRevision, fits, pageSize, style.hideTitle) {
-                                detectTapGestures { offset ->
-                                    val x = with(density) { offset.x.toDp() }
-                                    val y = with(density) { offset.y.toDp() }
-                                    // A bound page has edges: there is no page outside the sheet to
-                                    // put anything on, and while it is bound the sheet *is* the
-                                    // page. The title owns the band at the top.
-                                    val offSheet = fits && (x > pageSize.width || y > pageSize.height)
-                                    val onTitle = !style.hideTitle && y < PageStyle.TITLE_BAND_DP.dp
-                                    if (offSheet || onTitle) return@detectTapGestures
-                                    pendingFocusId = onCreateOutline(x.value - 8f, y.value - 8f)
+                            .pointerInput(
+                                pageRevision,
+                                fits,
+                                pageSize,
+                                style.hideTitle,
+                                hasInkClipboard,
+                            ) {
+                                val onTap: (Offset) -> Unit = tap@ { offset ->
+                                    pastePopupAt = null
+                                    val point = offsetToPage(offset)
+                                    if (!canPlaceAt(point)) return@tap
+                                    pendingFocusId = onCreateOutline(point.x - 8f, point.y - 8f)
+                                }
+                                if (hasInkClipboard) {
+                                    detectCanvasTapGestures(
+                                        onTap = onTap,
+                                        onFingerDoubleTap = { requestPasteAt(offsetToPage(it)) },
+                                    )
+                                } else {
+                                    detectTapGestures(onTap = onTap)
                                 }
                             },
                     )
@@ -515,7 +553,20 @@ fun EditorPane(
                     ScrollStatePan(horizontal, vertical, scope, flingSpec)
                 },
                 modifier = Modifier.fillMaxSize(),
+                hasInkClipboard = hasInkClipboard,
+                onRequestPaste = requestPasteAt,
             )
+
+            pastePopupAt?.takeIf { hasInkClipboard }?.let { point ->
+                InkPastePopup(
+                    point = point,
+                    onDismiss = { pastePopupAt = null },
+                    onPaste = {
+                        onPasteInk(point)
+                        pastePopupAt = null
+                    },
+                )
+            }
         }
     }
 }
@@ -683,6 +734,71 @@ internal object PageTags {
 
     /** Everything that can be scrolled to, which on an unbounded page grows as you scroll. */
     const val CANVAS = "page-canvas"
+    const val PASTE_MENU = "ink-paste-menu"
+    const val PASTE = "ink-paste"
+}
+
+/** A touch-only double tap; mouse and stylus clicks retain the canvas's normal single-tap action. */
+private suspend fun PointerInputScope.detectCanvasTapGestures(
+    onTap: (Offset) -> Unit,
+    onFingerDoubleTap: (Offset) -> Unit,
+) {
+    awaitEachGesture {
+        val firstDown = awaitFirstDown()
+        firstDown.consume()
+        val firstUp = waitForUpOrCancellation()
+        if (firstUp == null) return@awaitEachGesture
+        firstUp.consume()
+        if (firstDown.type != PointerType.Touch) {
+            onTap(firstUp.position)
+            return@awaitEachGesture
+        }
+
+        val secondDown = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
+            val earliest = firstUp.uptimeMillis + viewConfiguration.doubleTapMinTimeMillis
+            var candidate = awaitFirstDown()
+            while (candidate.uptimeMillis < earliest) candidate = awaitFirstDown()
+            candidate
+        }
+        if (secondDown == null || secondDown.type != PointerType.Touch) {
+            onTap(firstUp.position)
+            return@awaitEachGesture
+        }
+        secondDown.consume()
+        val secondUp = waitForUpOrCancellation()
+        if (secondUp == null) {
+            onTap(firstUp.position)
+            return@awaitEachGesture
+        }
+        secondUp.consume()
+        onFingerDoubleTap(secondUp.position)
+    }
+}
+
+@Composable
+private fun BoxScope.InkPastePopup(
+    point: InkPoint,
+    onDismiss: () -> Unit,
+    onPaste: () -> Unit,
+) {
+    Box(
+        Modifier
+            .offset(x = point.x.dp, y = point.y.dp)
+            .size(1.dp),
+    ) {
+        DropdownMenu(
+            expanded = true,
+            onDismissRequest = onDismiss,
+            modifier = Modifier.testTag(PageTags.PASTE_MENU),
+        ) {
+            DropdownMenuItem(
+                text = { Text("Paste") },
+                leadingIcon = { Icon(MaterialSymbols.ContentPaste, contentDescription = null) },
+                onClick = onPaste,
+                modifier = Modifier.testTag(PageTags.PASTE),
+            )
+        }
+    }
 }
 
 /** Test tags for the container's drag targets. */

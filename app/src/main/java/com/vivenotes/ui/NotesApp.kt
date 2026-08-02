@@ -76,6 +76,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val tool by viewModel.tool.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
     val inkUndoState by viewModel.inkUndoState.collectAsStateWithLifecycle()
+    val hasInkClipboard by viewModel.hasInkClipboard.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
 
     var activeTab by remember { mutableStateOf(RibbonTab.Home) }
@@ -208,6 +209,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 pens = pens,
                                 eraser = eraser,
                                 allowFinger = drawWithFinger,
+                                hasInkClipboard = hasInkClipboard,
                                 modifier = Modifier.weight(1f),
                             )
                             openPane?.let { toolPane ->
@@ -267,6 +269,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 pens = pens,
                                 eraser = eraser,
                                 allowFinger = drawWithFinger,
+                                hasInkClipboard = hasInkClipboard,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -333,6 +336,7 @@ private fun EditorSurface(
     pens: List<PenPreset>,
     eraser: EraserSettings,
     allowFinger: Boolean,
+    hasInkClipboard: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (state.selectedPageId == null) {
@@ -378,6 +382,7 @@ private fun EditorSurface(
         lassoing = tool == DrawTool.Lasso,
         eraser = eraser,
         allowFinger = allowFinger,
+        hasInkClipboard = hasInkClipboard,
         onStrokeFinished = viewModel::onStrokeFinished,
         onPartialErase = viewModel::eraseStrokeParts,
         onObjectErase = viewModel::eraseStrokeObjects,
@@ -385,6 +390,7 @@ private fun EditorSurface(
         onResizeSelection = viewModel::resizeInk,
         onDeleteInkSelection = { viewModel.eraseStrokes(it.toList()) },
         onCopyInkSelection = viewModel::copyInk,
+        onPasteInk = viewModel::pasteInk,
         onRecolorInkSelection = viewModel::recolorInk,
         onGroupInkSelection = viewModel::groupInk,
         onUngroupInkSelection = viewModel::ungroupInk,

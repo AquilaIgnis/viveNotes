@@ -47,6 +47,7 @@ import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.eraseObjects
 import com.vivenotes.ink.moveSelected
+import com.vivenotes.ink.pageBounds
 import com.vivenotes.ink.recolor
 import com.vivenotes.ink.regroup
 import com.vivenotes.ink.replayMove
@@ -215,6 +216,11 @@ class NotesViewModel(
     /** Availability for the open page's bounded, session-local ink history. */
     private val _inkUndoState = MutableStateFlow(InkUndoState())
     val inkUndoState: StateFlow<InkUndoState> = _inkUndoState.asStateFlow()
+
+    /** Session-local object clipboard. Native strokes are immutable, so shallow snapshots are safe. */
+    private var inkClipboard: List<PageStroke> = emptyList()
+    private val _hasInkClipboard = MutableStateFlow(false)
+    val hasInkClipboard: StateFlow<Boolean> = _hasInkClipboard.asStateFlow()
 
     /** Snapshots are shallow lists: native strokes are immutable and safely shared between entries. */
     private val inkHistoryByPage = mutableMapOf<String, PageInkHistory>()
@@ -784,20 +790,40 @@ class NotesViewModel(
         }
     }
 
-    /** Duplicates selected logical ink objects and offsets the result so the copy is visible. */
+    /** Copies selected logical ink objects without changing the page. */
     fun copyInk(ids: Set<String>) {
         if (ids.isEmpty()) return
+        val selected = _strokes.value.filter { it.id in ids }.distinctBy(PageStroke::id)
+        if (selected.isEmpty()) return
+        inkClipboard = selected
+        _hasInkClipboard.value = true
+    }
+
+    /** Pastes the clipboard with its union centre at [at], preserving styles and remapping groups. */
+    fun pasteInk(at: InkPoint) {
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
+        val sources = inkClipboard
+        if (sources.isEmpty()) return
+        val sourceBounds = sources.mapNotNull(PageStroke::pageBounds)
+        if (sourceBounds.isEmpty()) return
+        val centreX = (sourceBounds.minOf { it.left } + sourceBounds.maxOf { it.right }) / 2f
+        val centreY = (sourceBounds.minOf { it.top } + sourceBounds.maxOf { it.bottom }) / 2f
+        val dx = at.x - centreX
+        val dy = at.y - centreY
+        val pastedGroups = sources.mapNotNull(PageStroke::groupId).distinct()
+            .associateWith { newId() }
         val before = _strokes.value
-        val selected = before.filter { it.id in ids }.distinctBy(PageStroke::id)
-        if (selected.isEmpty()) return
-        val sourceGroup = selected.map(PageStroke::groupId).distinct().singleOrNull()
-        val copiedGroup = sourceGroup?.let { newId() }
         val now = nextInkOperationTime()
-        val copies = selected.map { source ->
-            val stroke = source.translatedCopy(COPY_OFFSET_DP, COPY_OFFSET_DP)
-            val entity = InkCodec.encodeCopy(source, stroke, pageId, copiedGroup, now)
+        val copies = sources.map { source ->
+            val stroke = source.translatedCopy(dx, dy)
+            val entity = InkCodec.encodeCopy(
+                source = source,
+                stroke = stroke,
+                pageId = pageId,
+                groupId = source.groupId?.let(pastedGroups::get),
+                now = now,
+            )
             entity to PageStroke(
                 id = entity.id,
                 stroke = stroke,
@@ -1106,7 +1132,6 @@ class NotesViewModel(
     companion object {
         private const val AUTOSAVE_DELAY_MS = 400L
         private const val INK_HISTORY_LIMIT = 100
-        private const val COPY_OFFSET_DP = 18f
         const val MIN_OUTLINE_WIDTH = 120f
         const val MAX_OUTLINE_WIDTH = 2000f
         const val MAX_OUTLINE_HEIGHT = 4000f

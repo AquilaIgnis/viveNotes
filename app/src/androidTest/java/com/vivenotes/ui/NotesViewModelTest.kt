@@ -449,7 +449,7 @@ class NotesViewModelTest {
     }
 
     @Test
-    fun copyingInkCreatesAnOffsetUndoableDuplicate() = runTest(dispatcher) {
+    fun copyingInkChangesNothingUntilPasteThenCreatesAnUndoableObjectAtTheTap() = runTest(dispatcher) {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!
         vm.selectTool(DrawTool.Pen(0))
@@ -458,8 +458,14 @@ class NotesViewModelTest {
         val originalId = vm.strokes.value.single().id
 
         vm.copyInk(setOf(originalId))
+        assertEquals("Copy must not clone ink onto the page", 1, vm.strokes.value.size)
+        assertTrue(vm.hasInkClipboard.value)
+
+        vm.pasteInk(InkPoint(100f, 120f))
         assertEquals(2, vm.strokes.value.size)
-        assertTrue(vm.strokes.value.any { it.id != originalId && it.stroke.shape.computeBoundingBox()!!.xMin > 20f })
+        val pastedBounds = vm.strokes.value.first { it.id != originalId }.stroke.shape.computeBoundingBox()!!
+        assertEquals(100f, (pastedBounds.xMin + pastedBounds.xMax) / 2f, 1f)
+        assertEquals(120f, (pastedBounds.yMin + pastedBounds.yMax) / 2f, 1f)
         vm.undoInk()
         assertEquals(1, vm.strokes.value.size)
         vm.redoInk()
