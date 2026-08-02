@@ -37,6 +37,9 @@ import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.ink.InkCodec
+import com.vivenotes.ink.InkLassoMove
+import com.vivenotes.ink.InkPoint
+import com.vivenotes.ink.projectionKey
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.Orientation
@@ -246,7 +249,7 @@ class NotesViewModelTest {
 
         vm.eraseStrokeParts(inkStroke(50f to 35f, 50f to 65f, sizeDp = 18f))
         advanceUntilIdle()
-        assertFalse(vm.strokes.value.single().stroke.overlaps(centerBox()))
+        assertFalse(vm.strokes.value.any { it.stroke.overlaps(centerBox()) })
 
         vm.eraseStrokeObjects(inkStroke(20f to 45f, 20f to 55f, sizeDp = 12f))
         advanceUntilIdle()
@@ -265,6 +268,44 @@ class NotesViewModelTest {
         assertFalse(vm.strokes.value.first { it.id == oldId }.stroke.overlaps(leftBox()))
         assertTrue(vm.strokes.value.first { it.id == oldId }.stroke.overlaps(rightBox()))
         assertTrue(vm.strokes.value.first { it.id == newId }.stroke.overlaps(centerBox()))
+    }
+
+    @Test
+    fun reopeningReplaysLassoMoveBeforeAnEraseAtItsNewPosition() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+
+        val original = vm.strokes.value.single()
+        val path = listOf(
+            InkPoint(0f, 30f),
+            InkPoint(100f, 30f),
+            InkPoint(100f, 70f),
+            InkPoint(0f, 70f),
+        )
+        vm.moveInk(
+            InkLassoMove(
+                path = path,
+                targetIds = setOf(original.id),
+                projections = setOf(original.projectionKey),
+                dx = 100f,
+                dy = 0f,
+            ),
+        )
+        advanceUntilIdle()
+        vm.eraseStrokeParts(inkStroke(150f to 35f, 150f to 65f, sizeDp = 18f))
+        advanceUntilIdle()
+
+        assertTrue(vm.strokes.value.all { it.offsetX == 100f })
+        assertFalse(vm.strokes.value.any { it.stroke.overlaps(centerBox()) })
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        assertTrue(vm.strokes.value.all { it.offsetX == 100f })
+        assertFalse(vm.strokes.value.any { it.stroke.overlaps(centerBox()) })
     }
 
     /**

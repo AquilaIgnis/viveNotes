@@ -107,4 +107,45 @@ class MigrationTest {
             }
         }
     }
+
+    @Test
+    fun migration5To6StoresLassoMovesAndCascadesTheirTargets() {
+        val driver = AndroidSQLiteDriver()
+
+        driver.open(file.absolutePath).use { connection ->
+            connection.execSQL("PRAGMA foreign_keys = ON")
+            connection.execSQL("CREATE TABLE pages (id TEXT NOT NULL PRIMARY KEY)")
+            connection.execSQL("CREATE TABLE ink_strokes (id TEXT NOT NULL PRIMARY KEY)")
+
+            NotesDatabase.MIGRATION_5_6.migrate(connection)
+
+            connection.execSQL("INSERT INTO pages VALUES ('page')")
+            connection.execSQL("INSERT INTO ink_strokes VALUES ('stroke')")
+            connection.execSQL(
+                "INSERT INTO ink_moves VALUES " +
+                    "('move', 'page', 12.0, -4.0, X'0102', 'ink/lasso-f32le1', 42)",
+            )
+            connection.execSQL("INSERT INTO ink_move_targets VALUES ('move', 'stroke')")
+
+            connection.prepare(
+                """
+                SELECT ink_move_targets.strokeId, ink_moves.dxDp, ink_moves.dyDp
+                FROM ink_move_targets
+                JOIN ink_moves ON ink_moves.id = ink_move_targets.moveId
+                WHERE moveId = 'move'
+                """.trimIndent(),
+            ).use {
+                assertEquals(true, it.step())
+                assertEquals("stroke", it.getText(0))
+                assertEquals(12.0, it.getDouble(1), 0.001)
+                assertEquals(-4.0, it.getDouble(2), 0.001)
+            }
+
+            connection.execSQL("DELETE FROM ink_moves WHERE id = 'move'")
+            connection.prepare("SELECT COUNT(*) FROM ink_move_targets").use {
+                assertEquals(true, it.step())
+                assertEquals(0L, it.getLong(0))
+            }
+        }
+    }
 }

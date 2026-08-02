@@ -365,11 +365,13 @@ private fun EditorSurface(
             (tool as? DrawTool.Pen)?.let { pens.getOrNull(it.index) }?.let(InkCodec::brushFor)
         },
         erasing = tool == DrawTool.Eraser,
+        lassoing = tool == DrawTool.Lasso,
         eraser = eraser,
         allowFinger = allowFinger,
         onStrokeFinished = viewModel::onStrokeFinished,
         onPartialErase = viewModel::eraseStrokeParts,
         onObjectErase = viewModel::eraseStrokeObjects,
+        onMoveSelection = viewModel::moveInk,
         showPrintMargins = showPrintMargins,
         modifier = modifier,
     )

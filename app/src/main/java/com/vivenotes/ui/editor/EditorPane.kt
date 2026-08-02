@@ -85,6 +85,7 @@ import kotlinx.coroutines.flow.Flow
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.ink.PageStroke
+import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.PageStyle
@@ -186,11 +187,13 @@ fun EditorPane(
     strokes: List<PageStroke> = emptyList(),
     brush: Brush? = null,
     erasing: Boolean = false,
+    lassoing: Boolean = false,
     eraser: EraserSettings = EraserSettings(),
     allowFinger: Boolean = false,
     onStrokeFinished: (InkStroke) -> Unit = {},
     onPartialErase: (InkStroke) -> Unit = {},
     onObjectErase: (InkStroke) -> Unit = {},
+    onMoveSelection: (InkLassoMove) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val shell = LocalCanvasColors.current
@@ -429,6 +432,7 @@ fun EditorPane(
                 strokes = strokes,
                 brush = brush,
                 erasing = erasing,
+                lassoing = lassoing,
                 eraser = eraser,
                 allowFinger = allowFinger,
                 pageToView = {
@@ -444,6 +448,7 @@ fun EditorPane(
                 onStrokeFinished = onStrokeFinished,
                 onPartialErase = onPartialErase,
                 onObjectErase = onObjectErase,
+                onMoveSelection = onMoveSelection,
                 pan = remember(horizontal, vertical, scope, flingSpec) {
                     ScrollStatePan(horizontal, vertical, scope, flingSpec)
                 },

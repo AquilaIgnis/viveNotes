@@ -250,3 +250,63 @@ data class InkEraseWithTargets(
     @Relation(parentColumn = "id", entityColumn = "eraseId")
     val targets: List<InkEraseTargetEntity>,
 )
+
+/** One lasso translation, stored as its original page-space polygon and delta. */
+@Entity(
+    tableName = "ink_moves",
+    foreignKeys = [
+        ForeignKey(
+            entity = PageEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["pageId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("pageId")],
+)
+data class InkMoveEntity(
+    @PrimaryKey val id: String,
+    val pageId: String,
+    val dxDp: Float,
+    val dyDp: Float,
+    /** Closed lasso vertices encoded in page coordinates. */
+    val points: ByteArray,
+    val enc: String,
+    val createdAt: Long,
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is InkMoveEntity && id == other.id && points.contentEquals(other.points))
+
+    override fun hashCode(): Int = 31 * id.hashCode() + points.contentHashCode()
+}
+
+/** The source rows that existed inside a lasso when its move was committed. */
+@Entity(
+    tableName = "ink_move_targets",
+    primaryKeys = ["moveId", "strokeId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = InkMoveEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["moveId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = InkStrokeEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["strokeId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("strokeId")],
+)
+data class InkMoveTargetEntity(
+    val moveId: String,
+    val strokeId: String,
+)
+
+data class InkMoveWithTargets(
+    @Embedded val move: InkMoveEntity,
+    @Relation(parentColumn = "id", entityColumn = "moveId")
+    val targets: List<InkMoveTargetEntity>,
+)

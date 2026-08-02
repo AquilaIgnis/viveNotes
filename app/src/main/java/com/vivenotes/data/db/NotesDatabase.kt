@@ -17,8 +17,10 @@ import androidx.sqlite.execSQL
         InkStrokeEntity::class,
         InkEraseEntity::class,
         InkEraseTargetEntity::class,
+        InkMoveEntity::class,
+        InkMoveTargetEntity::class,
     ],
-    version = 5,
+    version = 6,
     // Turn this on together with the androidx.room Gradle plugin and room.schemaLocation before
     // the first release, since the exported schemas are what migration tests assert against.
     exportSchema = false,
@@ -31,6 +33,7 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun pageContentDao(): PageContentDao
     abstract fun inkStrokeDao(): InkStrokeDao
     abstract fun inkEraseDao(): InkEraseDao
+    abstract fun inkMoveDao(): InkMoveDao
 
     companion object {
 
@@ -128,9 +131,53 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds replayable lasso translations and the source rows each gesture selected. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS ink_moves (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        pageId TEXT NOT NULL,
+                        dxDp REAL NOT NULL,
+                        dyDp REAL NOT NULL,
+                        points BLOB NOT NULL,
+                        enc TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        FOREIGN KEY(pageId) REFERENCES pages(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_ink_moves_pageId ON ink_moves(pageId)",
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS ink_move_targets (
+                        moveId TEXT NOT NULL,
+                        strokeId TEXT NOT NULL,
+                        PRIMARY KEY(moveId, strokeId),
+                        FOREIGN KEY(moveId) REFERENCES ink_moves(id) ON DELETE CASCADE,
+                        FOREIGN KEY(strokeId) REFERENCES ink_strokes(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_ink_move_targets_strokeId " +
+                        "ON ink_move_targets(strokeId)",
+                )
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                )
                 .build()
     }
 }

@@ -127,3 +127,17 @@ interface InkEraseDao {
     @Insert
     suspend fun insertTargets(targets: List<InkEraseTargetEntity>)
 }
+
+@Dao
+interface InkMoveDao {
+
+    @Transaction
+    @Query("SELECT * FROM ink_moves WHERE pageId = :pageId ORDER BY createdAt, id")
+    suspend fun byPage(pageId: String): List<InkMoveWithTargets>
+
+    @Insert
+    suspend fun insert(move: InkMoveEntity)
+
+    @Insert
+    suspend fun insertTargets(targets: List<InkMoveTargetEntity>)
+}

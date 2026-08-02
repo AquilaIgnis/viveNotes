@@ -38,9 +38,14 @@ import com.vivenotes.data.ViewSettings
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
+import com.vivenotes.data.db.InkEraseWithTargets
+import com.vivenotes.data.db.InkMoveWithTargets
 import com.vivenotes.ink.InkCodec
+import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.eraseObjects
+import com.vivenotes.ink.moveSelected
+import com.vivenotes.ink.replayMove
 import com.vivenotes.ink.subtract
 import com.vivenotes.ink.targetsFor
 import com.vivenotes.model.Block
@@ -72,6 +77,21 @@ data class OutlineBox(
     val width: Float,
     val minHeight: Float = 0f,
 )
+
+private sealed interface StoredInkOperation {
+    val createdAt: Long
+    val id: String
+
+    data class Erase(val stored: InkEraseWithTargets) : StoredInkOperation {
+        override val createdAt: Long get() = stored.erase.createdAt
+        override val id: String get() = stored.erase.id
+    }
+
+    data class Move(val stored: InkMoveWithTargets) : StoredInkOperation {
+        override val createdAt: Long get() = stored.move.createdAt
+        override val id: String get() = stored.move.id
+    }
+}
 
 data class NotesUiState(
     val tree: List<NotebookWithSections> = emptyList(),
@@ -149,6 +169,9 @@ class NotesViewModel(
 
     /** Keeps stroke inserts, whole erases and replayable partial erases in gesture order. */
     private val inkMutations = Mutex()
+
+    /** Wall time made strictly increasing so erase/move replay never has an ambiguous tie. */
+    private var lastInkOperationAt = 0L
 
     /** Commands travel to the focused editor, the only thing that can act on them. */
     private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
@@ -276,17 +299,36 @@ class NotesViewModel(
             val baseStrokes = repository.inkFor(pageId).mapNotNull { row ->
                 InkCodec.decode(row)?.let { PageStroke(row.id, it) }
             }
-            val storedErases = repository.partialErasesFor(pageId)
-            _strokes.value = if (storedErases.isEmpty()) {
+            val storedOperations = buildList {
+                repository.partialErasesFor(pageId).forEach { add(StoredInkOperation.Erase(it)) }
+                repository.inkMovesFor(pageId).forEach { add(StoredInkOperation.Move(it)) }
+            }.sortedWith(compareBy(StoredInkOperation::createdAt, StoredInkOperation::id))
+            lastInkOperationAt = maxOf(lastInkOperationAt, storedOperations.maxOfOrNull { it.createdAt } ?: 0L)
+            _strokes.value = if (storedOperations.isEmpty()) {
                 baseStrokes
             } else {
                 withContext(inkDispatcher) {
-                    storedErases.fold(baseStrokes) { current, stored ->
-                        val mask = InkCodec.decodeErase(stored.erase) ?: return@fold current
-                        val targets = stored.targets.map { it.strokeId }
-                        when (stored.erase.mode) {
-                            EraserMode.Normal -> current.subtract(mask, targets)
-                            EraserMode.Object -> current.eraseObjects(mask, targets)
+                    storedOperations.fold(baseStrokes) { current, operation ->
+                        when (operation) {
+                            is StoredInkOperation.Erase -> {
+                                val stored = operation.stored
+                                val mask = InkCodec.decodeErase(stored.erase) ?: return@fold current
+                                val targets = stored.targets.map { it.strokeId }
+                                when (stored.erase.mode) {
+                                    EraserMode.Normal -> current.subtract(mask, targets)
+                                    EraserMode.Object -> current.eraseObjects(mask, targets)
+                                }
+                            }
+                            is StoredInkOperation.Move -> {
+                                val stored = operation.stored
+                                val path = InkCodec.decodeMove(stored.move) ?: return@fold current
+                                current.replayMove(
+                                    path = path,
+                                    targetIds = stored.targets.map { it.strokeId },
+                                    dx = stored.move.dxDp,
+                                    dy = stored.move.dyDp,
+                                )
+                            }
                         }
                     }
                 }
@@ -594,6 +636,27 @@ class NotesViewModel(
     /** Deletes only the disconnected stroke regions touched by an Object-mode mask. */
     fun eraseStrokeObjects(mask: Stroke) = erase(mask, EraserMode.Object)
 
+    /** Moves selected live projections immediately, then records the replayable lasso operation. */
+    fun moveInk(move: InkLassoMove) {
+        if (move.projections.isEmpty() || (move.dx == 0f && move.dy == 0f)) return
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        if (_strokes.value.none { it.id in move.targetIds }) return
+        _strokes.value = _strokes.value.moveSelected(move)
+        viewModelScope.launch {
+            inkMutations.withLock {
+                val entity = InkCodec.encodeMove(
+                    path = move.path,
+                    pageId = pageId,
+                    dx = move.dx,
+                    dy = move.dy,
+                    now = nextInkOperationTime(),
+                )
+                repository.addInkMove(entity, move.targetIds)
+            }
+        }
+    }
+
     private fun erase(mask: Stroke, mode: EraserMode) {
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
@@ -608,12 +671,15 @@ class NotesViewModel(
                         EraserMode.Object -> _strokes.value.eraseObjects(mask, targetIds)
                     }
                 }
-                val erase = InkCodec.encodeErase(mask, pageId, mode)
+                val erase = InkCodec.encodeErase(mask, pageId, mode, now = nextInkOperationTime())
                 repository.addPartialErase(erase, targetIds)
                 if (_uiState.value.selectedPageId == pageId) _strokes.value = updated
             }
         }
     }
+
+    private fun nextInkOperationTime(): Long =
+        maxOf(System.currentTimeMillis(), lastInkOperationAt + 1).also { lastInkOperationAt = it }
 
     /**
      * Persists a pen. Every field on it is a preference, so the write goes to DataStore and the

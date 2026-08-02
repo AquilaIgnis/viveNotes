@@ -1,15 +1,21 @@
 package com.vivenotes.ui.editor
 
+import android.graphics.DashPathEffect
 import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.Path
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.ViewGroup
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -19,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.viewinterop.AndroidView
@@ -33,7 +40,14 @@ import androidx.ink.strokes.Stroke
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.ink.InkCodec
+import com.vivenotes.ink.InkLassoMove
+import com.vivenotes.ink.InkLassoSelection
+import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageStroke
+import com.vivenotes.ink.pageBounds
+import com.vivenotes.ink.projectionKey
+import com.vivenotes.ink.selectWithLasso
+import kotlin.math.hypot
 
 /** Test tag for the drawing surface, which has no text and no children of its own. */
 internal const val INK_OVERLAY_TAG = "ink-overlay"
@@ -82,6 +96,7 @@ internal fun InkOverlay(
     /** The brush to draw with, or null when the armed tool does not lay down ink. */
     brush: Brush?,
     erasing: Boolean,
+    lassoing: Boolean,
     eraser: EraserSettings,
     /** Whether a finger — or, on an emulator, a mouse — may draw as well as a stylus. */
     allowFinger: Boolean,
@@ -90,6 +105,7 @@ internal fun InkOverlay(
     onStrokeFinished: (Stroke) -> Unit,
     onPartialErase: (Stroke) -> Unit,
     onObjectErase: (Stroke) -> Unit,
+    onMoveSelection: (InkLassoMove) -> Unit,
     /**
      * Pans the page. The overlay owns this because it owns the gesture: a hit pointer node blocks
      * its siblings from seeing the event at all, so declining a touch is not enough to hand it to
@@ -107,12 +123,14 @@ internal fun InkOverlay(
     val currentBrush by rememberUpdatedState(brush)
     val currentStrokes by rememberUpdatedState(strokes)
     val currentErasing by rememberUpdatedState(erasing)
+    val currentLassoing by rememberUpdatedState(lassoing)
     val currentEraser by rememberUpdatedState(eraser)
     val currentAllowFinger by rememberUpdatedState(allowFinger)
     val currentTransform by rememberUpdatedState(pageToView)
     val currentOnFinished by rememberUpdatedState(onStrokeFinished)
     val currentOnPartialErase by rememberUpdatedState(onPartialErase)
     val currentOnObjectErase by rememberUpdatedState(onObjectErase)
+    val currentOnMoveSelection by rememberUpdatedState(onMoveSelection)
 
     val currentPan by rememberUpdatedState(pan)
 
@@ -120,6 +138,14 @@ internal fun InkOverlay(
     var liveStroke by remember { mutableStateOf<InProgressStrokeId?>(null) }
     var livePointer by remember { mutableStateOf(-1) }
     val eraseGesture = remember { EraseGesture() }
+    val lassoGesture = remember { LassoGesture() }
+
+    LaunchedEffect(lassoing) {
+        if (!lassoing) lassoGesture.clear()
+    }
+    LaunchedEffect(strokes) {
+        lassoGesture.reconcile(strokes)
+    }
 
     // Velocity for the fling, measured from the same events the pan is driven by.
     val velocity = remember { VelocityTracker.obtain() }
@@ -132,6 +158,7 @@ internal fun InkOverlay(
     // an open tool pane painted straight over them. Android delivers the whole gesture to whoever
     // took the ACTION_DOWN, which is right (a stroke must not break because the pen left the page),
     // so the fix belongs in what is drawn, not in what is delivered.
+    val lassoColor = MaterialTheme.colorScheme.primary.toArgb()
     Box(modifier.clipToBounds().testTag(INK_OVERLAY_TAG)) {
         // Finished ink, drawn by us rather than left in the authoring view: the authoring view
         // renders with the transform it was given when the stroke started, so it would not follow a
@@ -146,10 +173,22 @@ internal fun InkOverlay(
                 // landed at page-units-as-pixels, ignoring zoom and scroll. The argument is what
                 // the renderer measures to pick a mesh detail level for the scale it is drawn at,
                 // not what moves it.
-                val checkpoint = native.save()
-                native.concat(matrix)
-                currentStrokes.forEach { renderer.draw(native, it.stroke, matrix) }
-                native.restoreToCount(checkpoint)
+                currentStrokes.forEach { pageStroke ->
+                    val preview = lassoGesture.previewFor(pageStroke)
+                    val strokeMatrix = Matrix(matrix).apply {
+                        preTranslate(
+                            pageStroke.offsetX + preview.x,
+                            pageStroke.offsetY + preview.y,
+                        )
+                    }
+                    val checkpoint = native.save()
+                    native.concat(strokeMatrix)
+                    renderer.draw(native, pageStroke.stroke, strokeMatrix)
+                    native.restoreToCount(checkpoint)
+                }
+                if (currentLassoing) {
+                    drawLasso(native, matrix, currentStrokes, lassoGesture, lassoColor)
+                }
             }
         }
 
@@ -196,7 +235,9 @@ internal fun InkOverlay(
                 onRelease = { wetView = null },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
 
+        if (brush != null || erasing || lassoing) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -206,11 +247,14 @@ internal fun InkOverlay(
                             view = wetView,
                             brush = currentBrush,
                             erasing = currentErasing,
+                            lassoing = currentLassoing,
                             eraser = currentEraser,
+                            strokes = currentStrokes,
                             allowFinger = currentAllowFinger,
                             transform = currentTransform(),
                             onPartialErase = currentOnPartialErase,
                             onObjectErase = currentOnObjectErase,
+                            onMoveSelection = currentOnMoveSelection,
                             liveStroke = liveStroke,
                             livePointer = livePointer,
                             setLive = { id, pointer ->
@@ -226,6 +270,7 @@ internal fun InkOverlay(
                                 lastPan = at
                             },
                             eraseGesture = eraseGesture,
+                            lassoGesture = lassoGesture,
                         )
                     },
             )
@@ -248,11 +293,14 @@ private fun handleInk(
     view: InProgressStrokesView?,
     brush: Brush?,
     erasing: Boolean,
+    lassoing: Boolean,
     eraser: EraserSettings,
+    strokes: List<PageStroke>,
     allowFinger: Boolean,
     transform: Matrix,
     onPartialErase: (Stroke) -> Unit,
     onObjectErase: (Stroke) -> Unit,
+    onMoveSelection: (InkLassoMove) -> Unit,
     liveStroke: InProgressStrokeId?,
     livePointer: Int,
     setLive: (InProgressStrokeId?, Int) -> Unit,
@@ -262,10 +310,19 @@ private fun handleInk(
     lastPan: Pair<Float, Float>,
     setPanning: (Boolean, Pair<Float, Float>) -> Unit,
     eraseGesture: EraseGesture,
+    lassoGesture: LassoGesture,
 ): Boolean {
-    if (view == null) return false
     val index = event.actionIndex
     val toolType = event.getToolType(index)
+
+    // Lasso is a direct manipulation tool, so touch selects even when finger drawing is disabled.
+    // It needs no front-buffer authoring view; its path is ordinary overlay geometry.
+    if (lassoing) {
+        val toPage = Matrix().also { transform.invert(it) }
+        return lassoGesture.handle(event, toPage, strokes, onMoveSelection)
+    }
+
+    if (view == null) return false
 
     // An emulator reports a mouse, and a mouse is the only pointing device it has — so it counts as
     // a finger here, which is what makes the finger toggle testable without a stylus.
@@ -376,6 +433,201 @@ private fun panPage(
         else -> return false
     }
     return true
+}
+
+/** Draws the free-form loop and the bounds of the objects it currently owns. */
+private fun drawLasso(
+    canvas: android.graphics.Canvas,
+    pageToView: Matrix,
+    strokes: List<PageStroke>,
+    gesture: LassoGesture,
+    color: Int,
+) {
+    val points = gesture.visiblePath()
+    if (points.isEmpty()) return
+    val values = FloatArray(9)
+    pageToView.getValues(values)
+    val scale = hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y]).coerceAtLeast(0.001f)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        style = Paint.Style.STROKE
+        strokeWidth = 1.5f / scale
+        pathEffect = DashPathEffect(floatArrayOf(6f / scale, 4f / scale), 0f)
+    }
+    val path = Path().apply {
+        moveTo(points.first().x, points.first().y)
+        points.drop(1).forEach { lineTo(it.x, it.y) }
+        if (gesture.hasSelection) close()
+    }
+    val checkpoint = canvas.save()
+    canvas.concat(pageToView)
+    canvas.drawPath(path, paint)
+    val preview = gesture.preview
+    val selected = gesture.selectedProjections
+    strokes.filter { it.projectionKey in selected }.forEach { stroke ->
+        stroke.pageBounds()?.translated(preview.x, preview.y)?.let { bounds ->
+            canvas.drawRect(bounds.left, bounds.top, bounds.right, bounds.bottom, paint)
+        }
+    }
+    canvas.restoreToCount(checkpoint)
+}
+
+/** Owns one lasso loop, then turns a drag inside its bounds into a page-space translation. */
+private class LassoGesture {
+    private enum class Mode { Idle, Drawing, Moving }
+
+    private var mode: Mode = Mode.Idle
+    private var pointerId: Int = -1
+    private var start = InkPoint(0f, 0f)
+    private val path = mutableStateListOf<InkPoint>()
+    private var selection by mutableStateOf<InkLassoSelection?>(null)
+    var preview by mutableStateOf(InkPoint(0f, 0f))
+        private set
+
+    val hasSelection: Boolean get() = selection != null
+    val selectedProjections get() = selection?.projections.orEmpty()
+
+    fun visiblePath(): List<InkPoint> = path.map { point ->
+        InkPoint(point.x + preview.x, point.y + preview.y)
+    }
+
+    fun previewFor(stroke: PageStroke): InkPoint =
+        if (stroke.projectionKey in selectedProjections) preview else InkPoint(0f, 0f)
+
+    fun reconcile(strokes: List<PageStroke>) {
+        val selected = selection ?: return
+        val current = strokes.map(PageStroke::projectionKey).toSet()
+        if (!current.containsAll(selected.projections)) clear()
+    }
+
+    fun clear() {
+        mode = Mode.Idle
+        pointerId = -1
+        path.clear()
+        selection = null
+        preview = InkPoint(0f, 0f)
+    }
+
+    fun handle(
+        event: MotionEvent,
+        toPage: Matrix,
+        strokes: List<PageStroke>,
+        onMove: (InkLassoMove) -> Unit,
+    ): Boolean {
+        return when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                pointerId = event.getPointerId(event.actionIndex)
+                val point = event.pagePoint(event.actionIndex, toPage)
+                val selected = selection
+                if (selected != null && selected.bounds.contains(point)) {
+                    mode = Mode.Moving
+                    start = point
+                    preview = InkPoint(0f, 0f)
+                } else {
+                    mode = Mode.Drawing
+                    selection = null
+                    path.clear()
+                    path += point
+                    preview = InkPoint(0f, 0f)
+                }
+                true
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                cancelActiveGesture()
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val index = event.findPointerIndex(pointerId)
+                if (index < 0 || mode == Mode.Idle) return false
+                when (mode) {
+                    Mode.Drawing -> appendSamples(event, index, toPage)
+                    Mode.Moving -> {
+                        val point = event.pagePoint(index, toPage)
+                        preview = InkPoint(point.x - start.x, point.y - start.y)
+                    }
+                    Mode.Idle -> Unit
+                }
+                true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                if (event.getPointerId(event.actionIndex) != pointerId || mode == Mode.Idle) return false
+                when (mode) {
+                    Mode.Drawing -> {
+                        appendSamples(event, event.actionIndex, toPage)
+                        selection = strokes.selectWithLasso(path.toList())
+                        path.clear()
+                        path.addAll(selection?.path.orEmpty())
+                    }
+                    Mode.Moving -> {
+                        val point = event.pagePoint(event.actionIndex, toPage)
+                        val delta = InkPoint(point.x - start.x, point.y - start.y)
+                        val selected = selection
+                        if (selected != null && (delta.x != 0f || delta.y != 0f)) {
+                            onMove(
+                                InkLassoMove(
+                                    path = selected.path,
+                                    targetIds = selected.targetIds,
+                                    projections = selected.projections,
+                                    dx = delta.x,
+                                    dy = delta.y,
+                                ),
+                            )
+                            val movedPath = selected.path.map {
+                                InkPoint(it.x + delta.x, it.y + delta.y)
+                            }
+                            path.clear()
+                            path.addAll(movedPath)
+                            selection = selected.copy(
+                                path = movedPath,
+                                bounds = selected.bounds.translated(delta.x, delta.y),
+                            )
+                        }
+                    }
+                    Mode.Idle -> Unit
+                }
+                mode = Mode.Idle
+                pointerId = -1
+                preview = InkPoint(0f, 0f)
+                true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                cancelActiveGesture()
+                true
+            }
+            else -> false
+        }
+    }
+
+    private fun appendSamples(event: MotionEvent, index: Int, toPage: Matrix) {
+        repeat(event.historySize) { history ->
+            append(event.pagePoint(index, toPage, history))
+        }
+        append(event.pagePoint(index, toPage))
+    }
+
+    private fun append(point: InkPoint) {
+        val last = path.lastOrNull()
+        if (last == null || hypot(point.x - last.x, point.y - last.y) >= 0.5f) {
+            path += point
+        }
+    }
+
+    private fun cancelActiveGesture() {
+        if (mode == Mode.Drawing) path.clear()
+        mode = Mode.Idle
+        pointerId = -1
+        preview = InkPoint(0f, 0f)
+    }
+}
+
+private fun MotionEvent.pagePoint(index: Int, toPage: Matrix, history: Int? = null): InkPoint {
+    val point = if (history == null) {
+        floatArrayOf(getX(index), getY(index))
+    } else {
+        floatArrayOf(getHistoricalX(index, history), getHistoricalY(index, history))
+    }
+    toPage.mapPoints(point)
+    return InkPoint(point[0], point[1])
 }
 
 /** Accumulates one eraser drag into a round Ink mask in page coordinates. */

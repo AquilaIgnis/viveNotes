@@ -20,10 +20,13 @@ import com.vivenotes.data.LineType
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.db.InkEraseEntity
+import com.vivenotes.data.db.InkMoveEntity
 import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.model.newId
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 /**
  * The boundary between the stored ink and `androidx.ink`, exactly as `richtext/SpannableCodec.kt` is
@@ -49,6 +52,9 @@ object InkCodec {
      * `page_content.format` gives documents.
      */
     const val ENCODING = "ink/androidx1"
+
+    /** Little-endian count followed by x/y float pairs, all in page dp. */
+    const val MOVE_ENCODING = "ink/lasso-f32le1"
 
     /** Stock brush versions are pinned, never `LATEST`; see `docs/inkPlan.md` ID6. */
     const val BRUSH_VERSION = 1
@@ -267,6 +273,45 @@ object InkCodec {
         return runCatching {
             val inputs = decodeInputs(entity.points)
             eraseMask(inputs, entity.sizeDp)
+        }.getOrNull()
+    }
+
+    fun encodeMove(
+        path: List<InkPoint>,
+        pageId: String,
+        dx: Float,
+        dy: Float,
+        now: Long = System.currentTimeMillis(),
+    ): InkMoveEntity {
+        require(path.size >= 3) { "A lasso needs at least three points" }
+        require(path.all { it.x.isFinite() && it.y.isFinite() }) { "Lasso points must be finite" }
+        val bytes = ByteBuffer.allocate(Int.SIZE_BYTES + path.size * 2 * Float.SIZE_BYTES)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .putInt(path.size)
+            .apply { path.forEach { point -> putFloat(point.x).putFloat(point.y) } }
+            .array()
+        return InkMoveEntity(
+            id = newId(),
+            pageId = pageId,
+            dxDp = dx,
+            dyDp = dy,
+            points = bytes,
+            enc = MOVE_ENCODING,
+            createdAt = now,
+        )
+    }
+
+    fun decodeMove(entity: InkMoveEntity): List<InkPoint>? {
+        if (entity.enc != MOVE_ENCODING) return null
+        return runCatching {
+            val buffer = ByteBuffer.wrap(entity.points).order(ByteOrder.LITTLE_ENDIAN)
+            val count = buffer.int
+            require(count >= 3 && buffer.remaining() == count * 2 * Float.SIZE_BYTES)
+            List(count) {
+                InkPoint(buffer.float, buffer.float).also { point ->
+                    require(point.x.isFinite() && point.y.isFinite())
+                }
+            }
         }.getOrNull()
     }
 

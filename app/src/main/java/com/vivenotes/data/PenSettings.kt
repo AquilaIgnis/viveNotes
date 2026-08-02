@@ -117,6 +117,9 @@ sealed interface DrawTool {
 
     data object Eraser : DrawTool
 
+    /** Free-form selection: circle ink, then drag the selected objects. */
+    data object Lasso : DrawTool
+
     /** Nothing armed: taps reach the text containers, and the canvas behaves as it does today. */
     data object None : DrawTool
 }

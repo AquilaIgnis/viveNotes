@@ -139,6 +139,13 @@ class DrawTabTest {
     }
 
     @Test
+    fun theLassoIsPickedUp() {
+        setTab()
+        compose.onNodeWithTag(DrawTags.LASSO).performClick()
+        assertEquals(DrawTool.Lasso, selected)
+    }
+
+    @Test
     fun tappingTheArmedEraserOpensItsSettings() {
         setTab(tool = DrawTool.Eraser)
         compose.onNodeWithTag(DrawTags.ERASER).performClick()

@@ -51,6 +51,7 @@ internal object DrawTags {
     const val UNDO = "draw-undo"
     const val REDO = "draw-redo"
     const val ERASER = "draw-eraser"
+    const val LASSO = "draw-lasso"
     const val FINGER = "draw-finger"
     fun pen(index: Int) = "draw-pen-$index"
 }
@@ -141,6 +142,15 @@ internal fun DrawTab(
             onDismiss = { eraserSettingsOpen = false },
             onChange = actions.updateEraser,
         )
+
+        Box(Modifier.testTag(DrawTags.LASSO)) {
+            RibbonButton(
+                icon = MaterialSymbols.LassoSelect,
+                label = "Lasso",
+                active = tool == DrawTool.Lasso,
+                onClick = { actions.selectTool(DrawTool.Lasso) },
+            )
+        }
     }
 }
 

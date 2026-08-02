@@ -4,18 +4,25 @@ import android.graphics.Matrix
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.swipe
 import androidx.ink.brush.Brush
+import androidx.ink.brush.InputToolType
 import androidx.ink.brush.StockBrushes
+import androidx.ink.strokes.MutableStrokeInputBatch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.ink.InkCodec
+import com.vivenotes.ink.InkLassoMove
+import com.vivenotes.ink.PageStroke
 import com.vivenotes.ui.theme.ViveNotesTheme
 
 /**
@@ -36,6 +43,7 @@ class InkOverlayTest {
     private var strokes = 0
     private var partialErases = 0
     private var objectEraseCalls = 0
+    private var lassoMove: InkLassoMove? = null
 
     private val recordingPan = object : CanvasPan {
         override fun by(dx: Float, dy: Float) {
@@ -50,26 +58,30 @@ class InkOverlayTest {
     private fun setOverlay(
         allowFinger: Boolean,
         erasing: Boolean = false,
+        lassoing: Boolean = false,
         eraser: EraserSettings = EraserSettings(),
+        pageStrokes: List<PageStroke> = emptyList(),
     ) {
         compose.setContent {
             ViveNotesTheme {
                 Box(Modifier.fillMaxSize()) {
                     InkOverlay(
-                        strokes = emptyList(),
-                        brush = Brush.createWithColorIntArgb(
+                        strokes = pageStrokes,
+                        brush = if (lassoing) null else Brush.createWithColorIntArgb(
                             family = StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1),
                             colorIntArgb = android.graphics.Color.BLACK,
                             size = 5f,
                             epsilon = 0.25f,
                         ),
                         erasing = erasing,
+                        lassoing = lassoing,
                         eraser = eraser,
                         allowFinger = allowFinger,
                         pageToView = { Matrix() },
                         onStrokeFinished = { strokes++ },
                         onObjectErase = { objectEraseCalls++ },
                         onPartialErase = { partialErases++ },
+                        onMoveSelection = { lassoMove = it },
                         pan = recordingPan,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -118,6 +130,39 @@ class InkOverlayTest {
         assertEquals(0f, dragged, 0.001f)
         assertEquals("normal erase should finish as one geometric mask", 1, partialErases)
         assertEquals(0, objectEraseCalls)
+    }
+
+    @Test
+    fun lassoSelectsThenMovesInkEvenWhenFingerDrawingIsOff() {
+        val inputs = MutableStrokeInputBatch().apply {
+            add(InputToolType.UNKNOWN, 90f, 100f, 0L)
+            add(InputToolType.UNKNOWN, 110f, 100f, 10L)
+        }.toImmutable()
+        val ink = PageStroke("stroke", InkCodec.eraseMask(inputs, 6f))
+        setOverlay(
+            allowFinger = false,
+            lassoing = true,
+            pageStrokes = listOf(ink),
+        )
+        val overlay = compose.onNodeWithTag(INK_OVERLAY_TAG)
+
+        overlay.performTouchInput {
+            down(Offset(70f, 70f))
+            moveTo(Offset(130f, 70f))
+            moveTo(Offset(130f, 130f))
+            moveTo(Offset(70f, 130f))
+            moveTo(Offset(70f, 70f))
+            up()
+        }
+        overlay.performTouchInput {
+            swipe(Offset(100f, 100f), Offset(180f, 150f), durationMillis = 200L)
+        }
+        compose.waitForIdle()
+
+        assertEquals(setOf("stroke"), lassoMove?.targetIds)
+        assertEquals(80f, lassoMove!!.dx, 2f)
+        assertEquals(50f, lassoMove!!.dy, 2f)
+        assertEquals("lasso should not pan the page", 0f, dragged, 0.001f)
     }
 
     @Test

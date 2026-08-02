@@ -5,6 +5,9 @@ import kotlinx.coroutines.flow.Flow
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
 import com.vivenotes.data.db.InkEraseWithTargets
+import com.vivenotes.data.db.InkMoveEntity
+import com.vivenotes.data.db.InkMoveTargetEntity
+import com.vivenotes.data.db.InkMoveWithTargets
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.NotesDatabase
@@ -61,6 +64,7 @@ class NotesRepository(
     private val contents = db.pageContentDao()
     private val ink = db.inkStrokeDao()
     private val inkErases = db.inkEraseDao()
+    private val inkMoves = db.inkMoveDao()
 
     fun observeTree(): Flow<List<NotebookWithSections>> = notebooks.observeTree()
 
@@ -213,6 +217,9 @@ class NotesRepository(
     suspend fun partialErasesFor(pageId: String): List<InkEraseWithTargets> =
         inkErases.byPage(pageId)
 
+    suspend fun inkMovesFor(pageId: String): List<InkMoveWithTargets> =
+        inkMoves.byPage(pageId)
+
     /**
      * Stores a normal-eraser gesture and its target set atomically. The mask without its targets
      * would be unsafe: replaying it against every page stroke would also erase ink drawn later.
@@ -222,6 +229,15 @@ class NotesRepository(
         db.withTransaction {
             inkErases.insert(erase)
             inkErases.insertTargets(strokeIds.distinct().map { InkEraseTargetEntity(erase.id, it) })
+        }
+    }
+
+    /** Stores a lasso translation with the source rows it was allowed to move. */
+    suspend fun addInkMove(move: InkMoveEntity, strokeIds: Collection<String>) {
+        if (strokeIds.isEmpty()) return
+        db.withTransaction {
+            inkMoves.insert(move)
+            inkMoves.insertTargets(strokeIds.distinct().map { InkMoveTargetEntity(move.id, it) })
         }
     }
 
