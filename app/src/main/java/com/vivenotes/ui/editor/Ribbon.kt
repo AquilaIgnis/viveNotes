@@ -19,22 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
-import androidx.compose.material.icons.automirrored.filled.FormatAlignRight
-import androidx.compose.material.icons.automirrored.filled.FormatIndentDecrease
-import androidx.compose.material.icons.automirrored.filled.FormatIndentIncrease
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ContentCut
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.FormatAlignCenter
-import androidx.compose.material.icons.filled.FormatBold
-import androidx.compose.material.icons.filled.FormatClear
-import androidx.compose.material.icons.filled.FormatItalic
-import androidx.compose.material.icons.filled.FormatStrikethrough
-import androidx.compose.material.icons.filled.FormatUnderlined
-import androidx.compose.material.icons.filled.Title
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -57,6 +41,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.PenPreset
@@ -238,7 +223,7 @@ private fun HomeTab(
         // because "where does it go" is a question only a tap can answer.
         Box(Modifier.testTag(HomeTags.TEXT)) {
             RibbonButton(
-                icon = Icons.Default.Title,
+                icon = MaterialSymbols.Title,
                 label = "Text",
                 active = textMode,
                 onClick = onTextMode,
@@ -247,13 +232,13 @@ private fun HomeTab(
 
         Divider()
 
-        RibbonButton(Icons.Default.ContentPaste, "Paste") {
+        RibbonButton(MaterialSymbols.ContentPaste, "Paste") {
             onCommand(FormatCommand.Clipboard(ClipboardAction.Paste))
         }
-        RibbonButton(Icons.Default.ContentCut, "Cut") {
+        RibbonButton(MaterialSymbols.ContentCut, "Cut") {
             onCommand(FormatCommand.Clipboard(ClipboardAction.Cut))
         }
-        RibbonButton(Icons.Default.ContentCopy, "Copy") {
+        RibbonButton(MaterialSymbols.ContentCopy, "Copy") {
             onCommand(FormatCommand.Clipboard(ClipboardAction.Copy))
         }
 
@@ -279,16 +264,16 @@ private fun HomeTab(
 
         Divider()
 
-        RibbonButton(Icons.Default.FormatBold, "Bold", selection.has(Mark.Bold)) {
+        RibbonButton(MaterialSymbols.FormatBold, "Bold", selection.has(Mark.Bold)) {
             onCommand(FormatCommand.ToggleMark(Mark.Bold))
         }
-        RibbonButton(Icons.Default.FormatItalic, "Italic", selection.has(Mark.Italic)) {
+        RibbonButton(MaterialSymbols.FormatItalic, "Italic", selection.has(Mark.Italic)) {
             onCommand(FormatCommand.ToggleMark(Mark.Italic))
         }
-        RibbonButton(Icons.Default.FormatUnderlined, "Underline", selection.has(Mark.Underline)) {
+        RibbonButton(MaterialSymbols.FormatUnderlined, "Underline", selection.has(Mark.Underline)) {
             onCommand(FormatCommand.ToggleMark(Mark.Underline))
         }
-        RibbonButton(Icons.Default.FormatStrikethrough, "Strikethrough", selection.has(Mark.Strikethrough)) {
+        RibbonButton(MaterialSymbols.FormatStrikethrough, "Strikethrough", selection.has(Mark.Strikethrough)) {
             onCommand(FormatCommand.ToggleMark(Mark.Strikethrough))
         }
 
@@ -315,7 +300,7 @@ private fun HomeTab(
         TwoToneRibbonButton({ it.superscript }, "Superscript", selection.has(Mark.Superscript)) {
             onCommand(FormatCommand.ToggleMark(Mark.Superscript))
         }
-        RibbonButton(Icons.Default.FormatClear, "Clear formatting") {
+        RibbonButton(MaterialSymbols.FormatClear, "Clear formatting") {
             onCommand(FormatCommand.ClearFormatting)
         }
 
@@ -337,27 +322,27 @@ private fun HomeTab(
             selection.blockType == BlockType.Todo,
         ) { onCommand(FormatCommand.SetBlockType(BlockType.Todo)) }
 
-        RibbonButton(Icons.AutoMirrored.Filled.FormatIndentDecrease, "Decrease indent") {
+        RibbonButton(MaterialSymbols.FormatIndentDecrease, "Decrease indent") {
             onCommand(FormatCommand.Indent(-1))
         }
-        RibbonButton(Icons.AutoMirrored.Filled.FormatIndentIncrease, "Increase indent") {
+        RibbonButton(MaterialSymbols.FormatIndentIncrease, "Increase indent") {
             onCommand(FormatCommand.Indent(1))
         }
 
         Divider()
 
         RibbonButton(
-            Icons.AutoMirrored.Filled.FormatAlignLeft,
+            MaterialSymbols.FormatAlignLeft,
             "Align left",
             selection.align == Align.Start,
         ) { onCommand(FormatCommand.SetAlign(Align.Start)) }
         RibbonButton(
-            Icons.Default.FormatAlignCenter,
+            MaterialSymbols.FormatAlignCenter,
             "Align centre",
             selection.align == Align.Center,
         ) { onCommand(FormatCommand.SetAlign(Align.Center)) }
         RibbonButton(
-            Icons.AutoMirrored.Filled.FormatAlignRight,
+            MaterialSymbols.FormatAlignRight,
             "Align right",
             selection.align == Align.End,
         ) { onCommand(FormatCommand.SetAlign(Align.End)) }
@@ -436,7 +421,7 @@ internal fun RibbonCommand(
         )
         if (dropdown) {
             Icon(
-                imageVector = Icons.Default.ArrowDropDown,
+                imageVector = MaterialSymbols.ArrowDropDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp),
@@ -718,7 +703,7 @@ internal fun ComboBox(
             maxLines = 1,
         )
         Icon(
-            imageVector = Icons.Default.ArrowDropDown,
+            imageVector = MaterialSymbols.ArrowDropDown,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp),
@@ -830,7 +815,7 @@ private fun StylesPicker(current: BlockType, onPick: (BlockType) -> Unit) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Icon(
-                imageVector = Icons.Default.ArrowDropDown,
+                imageVector = MaterialSymbols.ArrowDropDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp),

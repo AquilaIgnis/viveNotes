@@ -13,14 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Article
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.VerticalSplit
-import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material.icons.filled.ZoomIn
-import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -39,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.PageStyle
@@ -116,13 +109,13 @@ internal fun ViewTab(
             label = "Full Page View",
             onClick = {},
             enabled = false,
-            icon = { MonoIcon(Icons.Default.Fullscreen) },
+            icon = { MonoIcon(MaterialSymbols.Fullscreen) },
         )
         RibbonCommand(
             label = "Normal View",
             onClick = {},
             enabled = false,
-            icon = { MonoIcon(Icons.Default.VerticalSplit) },
+            icon = { MonoIcon(MaterialSymbols.VerticalSplit) },
         )
 
         Divider()
@@ -138,12 +131,12 @@ internal fun ViewTab(
             modifier = Modifier.padding(horizontal = 4.dp),
         )
         ZoomPicker(settings.zoom, actions.setZoom)
-        RibbonButton(Icons.Default.ZoomIn, "Zoom in", onClick = actions.zoomIn)
-        RibbonButton(Icons.Default.ZoomOut, "Zoom out", onClick = actions.zoomOut)
+        RibbonButton(MaterialSymbols.ZoomIn, "Zoom in", onClick = actions.zoomIn)
+        RibbonButton(MaterialSymbols.ZoomOut, "Zoom out", onClick = actions.zoomOut)
         RibbonCommand(
             label = "100%",
             onClick = { actions.setZoom(1f) },
-            icon = { MonoIcon(Icons.AutoMirrored.Filled.Article) },
+            icon = { MonoIcon(MaterialSymbols.Article) },
         )
         RibbonCommand(
             label = "Page Width",
@@ -176,7 +169,7 @@ internal fun ViewTab(
             // Reads the canvas rather than the theme: once this has been used the two differ, and
             // what the button flips is what the user is actually looking at.
             onClick = { actions.setCanvasDark(!canvas.isDark) },
-            icon = { MonoIcon(Icons.Default.WbSunny) },
+            icon = { MonoIcon(MaterialSymbols.WbSunny) },
         )
     }
 }
@@ -346,7 +339,7 @@ private fun CheckableItem(label: String, selected: Boolean, onClick: () -> Unit)
         leadingIcon = {
             if (selected) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = MaterialSymbols.Check,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp),

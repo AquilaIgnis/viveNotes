@@ -19,10 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -41,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.db.PageEntity
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -95,7 +92,7 @@ fun PageListPane(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Default.NoteAdd,
+                    imageVector = MaterialSymbols.NoteAdd,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp),
@@ -111,7 +108,7 @@ fun PageListPane(
             Box {
                 IconButton(onClick = { sortMenuOpen = true }, modifier = Modifier.size(30.dp)) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Sort,
+                        imageVector = MaterialSymbols.Sort,
                         contentDescription = "Sort pages",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(17.dp),
@@ -199,7 +196,7 @@ private fun PageRow(
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(
                 text = { Text("Delete page") },
-                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                leadingIcon = { Icon(MaterialSymbols.Delete, contentDescription = null) },
                 onClick = {
                     menuOpen = false
                     onDelete()

@@ -50,12 +50,14 @@ object InkCodec {
 
     private fun familyId(pen: PenPreset): String = when {
         pen.lineType != LineType.Solid -> FAMILY_DASHED
-        // No pressure response means a line of one width, which is what the marker is.
+        // Fountain is the plain pen: one width for the whole stroke, however hard you press. That
+        // is why it has no pressure setting at all — see PenPanelContent.
+        pen.kind == PenKind.Fountain -> FAMILY_MARKER
+        // Calligraphy with the response turned off is the same plain line.
         pen.pressure == 0 -> FAMILY_MARKER
-        // Stock has no chisel tip, so calligraphy is approximated by the marker until a custom
-        // BrushFamily exists for it. Recorded under its own id so old strokes keep their shape when
-        // that lands.
-        pen.kind == PenKind.Calligraphy -> FAMILY_MARKER
+        // Calligraphy is the expressive one. The stock pressure pen is a stand-in for its width
+        // response until the real chisel nib exists — `docs/inkPlan.md` §6a — and is recorded under
+        // its own id so those strokes keep their shape when the nib lands.
         else -> FAMILY_PRESSURE_PEN
     }
 

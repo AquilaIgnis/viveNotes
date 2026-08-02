@@ -15,10 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.MenuOpen
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +35,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.PenPreset
@@ -411,7 +408,7 @@ private fun TitleBar(
         if (showBack) {
             IconButton(onClick = onBack, modifier = Modifier.size(34.dp)) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    MaterialSymbols.ArrowBack,
                     contentDescription = "Back",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
@@ -422,7 +419,7 @@ private fun TitleBar(
                 Icon(
                     // The open/closed glyph is the only thing that says the panes are hidden
                     // rather than absent, once they are gone and the canvas has taken their place.
-                    imageVector = if (navigationVisible) Icons.Default.Menu else Icons.AutoMirrored.Filled.MenuOpen,
+                    imageVector = if (navigationVisible) MaterialSymbols.Menu else MaterialSymbols.MenuOpen,
                     contentDescription = if (navigationVisible) {
                         "Hide notebooks and pages"
                     } else {

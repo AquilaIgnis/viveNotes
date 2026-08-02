@@ -16,10 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Brush
-import androidx.compose.material.icons.filled.Create
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,6 +33,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.LineType
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenKind
@@ -61,6 +58,9 @@ object PenPanelTags {
  * Reached by holding a pen in the Draw tab rather than by a ribbon button, because the pen it edits
  * is the one you held — there is no "which pen?" question to answer first.
  *
+ * Pressure sensitivity shows only for the calligraphy pen. The fountain pen is this app's plain
+ * pen — one width for the whole stroke — so the control is absent rather than disabled.
+ *
  * Two things in the reference are deliberately not here. The middle pen type is crossed out, so it
  * is absent entirely rather than disabled; and the overflow beside Hold to draw shape, which chooses
  * *which* shapes are recognised, waits for shape recognition to exist at all (`docs/inkPlan.md` §5).
@@ -78,13 +78,13 @@ fun ColumnScope.PenPanelContent(pen: PenPreset, onChange: (PenPreset) -> Unit) {
     ) {
         PenKindCard(
             kind = PenKind.Fountain,
-            icon = Icons.Default.Create,
+            icon = MaterialSymbols.Edit,
             selected = pen.kind == PenKind.Fountain,
             modifier = Modifier.weight(1f),
         ) { onChange(pen.copy(kind = PenKind.Fountain)) }
         PenKindCard(
             kind = PenKind.Calligraphy,
-            icon = Icons.Default.Brush,
+            icon = MaterialSymbols.Brush,
             selected = pen.kind == PenKind.Calligraphy,
             modifier = Modifier.weight(1f),
         ) { onChange(pen.copy(kind = PenKind.Calligraphy)) }
@@ -138,12 +138,17 @@ fun ColumnScope.PenPanelContent(pen: PenPreset, onChange: (PenPreset) -> Unit) {
     )
 
     Spacer(Modifier.height(2.dp))
-    PanelSetting(
-        label = "Pressure sensitivity",
-        info = "How much harder pressing thickens the line. 0 draws at one width however you press.",
-    ) {
-        PanelStepper("Pressure sensitivity", pen.pressure, 0..PenPreset.MAX_PRESSURE) {
-            onChange(pen.copy(pressure = it))
+    // Absent for the fountain pen rather than disabled: that pen draws one width by definition, so
+    // a pressure control on it is not a setting turned off, it is a setting that does not exist.
+    if (pen.kind != PenKind.Fountain) {
+        PanelSetting(
+            label = "Pressure sensitivity",
+            info = "How much harder pressing thickens the line. 0 draws at one width however you " +
+                "press.",
+        ) {
+            PanelStepper("Pressure sensitivity", pen.pressure, 0..PenPreset.MAX_PRESSURE) {
+                onChange(pen.copy(pressure = it))
+            }
         }
     }
     PanelSetting(
@@ -170,7 +175,7 @@ fun ColumnScope.PenPanelContent(pen: PenPreset, onChange: (PenPreset) -> Unit) {
             color = MaterialTheme.colorScheme.onSurface,
         )
         Icon(
-            imageVector = Icons.Default.Add,
+            imageVector = MaterialSymbols.Add,
             contentDescription = "Add color",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier

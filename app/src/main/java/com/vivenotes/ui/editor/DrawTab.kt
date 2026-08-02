@@ -9,10 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -24,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.PenPreset
 import com.vivenotes.ui.ScrollingRow
@@ -83,13 +80,13 @@ internal fun DrawTab(
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
         RibbonButton(
-            icon = Icons.AutoMirrored.Filled.Undo,
+            icon = MaterialSymbols.Undo,
             label = "Undo",
             enabled = false,
             onClick = {},
         )
         RibbonButton(
-            icon = Icons.AutoMirrored.Filled.Redo,
+            icon = MaterialSymbols.Redo,
             label = "Redo",
             enabled = false,
             onClick = {},
@@ -111,7 +108,7 @@ internal fun DrawTab(
 
         Box(Modifier.testTag(DrawTags.FINGER)) {
             RibbonButton(
-                icon = Icons.Default.TouchApp,
+                icon = MaterialSymbols.TouchApp,
                 label = if (allowFinger) "Drawing with finger and stylus" else "Stylus only",
                 active = allowFinger,
                 onClick = { actions.setDrawWithFinger(!allowFinger) },

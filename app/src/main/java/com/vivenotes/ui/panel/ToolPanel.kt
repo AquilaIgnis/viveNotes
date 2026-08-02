@@ -20,12 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -51,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.vivenotes.ui.icons.MaterialSymbols
 
 /** Width of a docked pane where there is room to dock one. */
 val TOOL_PANEL_WIDTH = 320.dp
@@ -104,7 +99,7 @@ fun ToolPanel(
             )
             IconButton(onClick = onClose, modifier = Modifier.size(34.dp)) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = MaterialSymbols.Close,
                     contentDescription = "Close ${pane.title}",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
@@ -188,7 +183,7 @@ fun <T> PanelChoice(
                 maxLines = 1,
             )
             Icon(
-                imageVector = Icons.Default.ArrowDropDown,
+                imageVector = MaterialSymbols.ArrowDropDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
@@ -300,7 +295,7 @@ fun PanelSetting(label: String, info: String? = null, trailing: @Composable () -
                 if (info != null) {
                     Spacer(Modifier.width(6.dp))
                     Icon(
-                        imageVector = Icons.Outlined.Info,
+                        imageVector = MaterialSymbols.Info,
                         contentDescription = "About $label",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
@@ -407,7 +402,7 @@ fun ColumnScope.PanelSlider(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StepButton(Icons.Default.Remove, "Decrease $label", value > range.first) {
+        StepButton(MaterialSymbols.Remove, "Decrease $label", value > range.first) {
             onChange(value - 1)
         }
         Slider(
@@ -420,7 +415,7 @@ fun ColumnScope.PanelSlider(
                 .padding(horizontal = 6.dp)
                 .testTag(PanelTags.field(field)),
         )
-        StepButton(Icons.Default.Add, "Increase $label", value < range.last) {
+        StepButton(MaterialSymbols.Add, "Increase $label", value < range.last) {
             onChange(value + 1)
         }
     }

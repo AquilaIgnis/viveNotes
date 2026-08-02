@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
-import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -32,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.vivenotes.ui.icons.MaterialSymbols
 
 private val EDGE_WIDTH = 30.dp
 
@@ -86,7 +84,7 @@ fun ScrollingRow(
             ScrollEdge(
                 alignment = Alignment.CenterStart,
                 visible = !atStart,
-                icon = Icons.Default.KeyboardDoubleArrowLeft,
+                icon = MaterialSymbols.KeyboardDoubleArrowLeft,
                 label = "More to the left",
                 tag = ScrollEdgeTags.START,
                 background = background,
@@ -95,7 +93,7 @@ fun ScrollingRow(
             ScrollEdge(
                 alignment = Alignment.CenterEnd,
                 visible = !atEnd,
-                icon = Icons.Default.KeyboardDoubleArrowRight,
+                icon = MaterialSymbols.KeyboardDoubleArrowRight,
                 label = "More to the right",
                 tag = ScrollEdgeTags.END,
                 background = background,

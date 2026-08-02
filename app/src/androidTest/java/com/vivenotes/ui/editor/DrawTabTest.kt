@@ -177,6 +177,22 @@ class DrawTabTest {
         compose.onNodeWithTag(PenPanelTags.kind(PenKind.Calligraphy)).assertIsDisplayed()
     }
 
+    /**
+     * The fountain pen is this app's plain pen — one width, whatever the pressure — so the control
+     * is absent rather than disabled. The calligraphy pen is the one that responds.
+     */
+    @Test
+    fun theFountainPenHasNoPressureSetting() {
+        setPanel(PenPreset.starting(0).copy(kind = PenKind.Fountain))
+        compose.onNodeWithTag(PanelTags.field("Pressure sensitivity")).assertDoesNotExist()
+    }
+
+    @Test
+    fun theCalligraphyPenHasAPressureSetting() {
+        setPanel(PenPreset.starting(0).copy(kind = PenKind.Calligraphy))
+        compose.onNodeWithTag(PanelTags.field("Pressure sensitivity")).assertIsDisplayed()
+    }
+
     @Test
     fun theStrokePreviewIsShown() {
         setPanel()

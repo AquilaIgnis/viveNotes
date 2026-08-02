@@ -13,10 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Book
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -36,6 +32,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.ui.ScrollingRow
@@ -121,7 +118,7 @@ private fun NotebookChooser(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Default.Book,
+                imageVector = MaterialSymbols.Book,
                 contentDescription = null,
                 tint = current?.notebook?.colorArgb?.let { Color(it) }
                     ?: MaterialTheme.colorScheme.onSurfaceVariant,
@@ -136,7 +133,7 @@ private fun NotebookChooser(
                 overflow = TextOverflow.Ellipsis,
             )
             Icon(
-                imageVector = Icons.Default.ArrowDropDown,
+                imageVector = MaterialSymbols.ArrowDropDown,
                 contentDescription = "Choose notebook",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
@@ -148,7 +145,7 @@ private fun NotebookChooser(
                     text = { Text(entry.notebook.name) },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Book,
+                            imageVector = MaterialSymbols.Book,
                             contentDescription = null,
                             tint = Color(entry.notebook.colorArgb),
                             modifier = Modifier.size(16.dp),
@@ -166,7 +163,7 @@ private fun NotebookChooser(
                 text = { Text("New Notebook") },
                 leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.Add,
+                        imageVector = MaterialSymbols.Add,
                         contentDescription = null,
                         tint = LocalIconAccents.current.green,
                         modifier = Modifier.size(16.dp),
@@ -224,7 +221,7 @@ private fun AddTab(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.Default.Add,
+            imageVector = MaterialSymbols.Add,
             contentDescription = "New section",
             tint = LocalIconAccents.current.green,
             modifier = Modifier.size(16.dp),

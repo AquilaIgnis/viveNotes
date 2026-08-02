@@ -17,11 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.SectionEntity
 
@@ -105,14 +101,14 @@ private fun NotebookHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            imageVector = if (expanded) MaterialSymbols.ExpandLess else MaterialSymbols.ExpandMore,
             contentDescription = if (expanded) "Collapse $name" else "Expand $name",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(6.dp))
         Icon(
-            imageVector = Icons.Default.Book,
+            imageVector = MaterialSymbols.Book,
             contentDescription = null,
             tint = color,
             modifier = Modifier.size(16.dp),
@@ -182,7 +178,7 @@ private fun AddRow(
         horizontalArrangement = Arrangement.Start,
     ) {
         Icon(
-            imageVector = Icons.Default.Add,
+            imageVector = MaterialSymbols.Add,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp),
