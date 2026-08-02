@@ -23,6 +23,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -127,6 +128,11 @@ fun Ribbon(
     allowFinger: Boolean,
     draw: DrawActions,
     pageOpen: Boolean,
+    showBack: Boolean = false,
+    onBack: () -> Unit = {},
+    showNavigationToggle: Boolean = false,
+    navigationVisible: Boolean = true,
+    onToggleNavigation: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -134,7 +140,15 @@ fun Ribbon(
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface),
     ) {
-        TabStrip(activeTab, onTabChange)
+        TabStrip(
+            activeTab = activeTab,
+            onTabChange = onTabChange,
+            showBack = showBack,
+            onBack = onBack,
+            showNavigationToggle = showNavigationToggle,
+            navigationVisible = navigationVisible,
+            onToggleNavigation = onToggleNavigation,
+        )
         Box(
             Modifier
                 .fillMaxWidth()
@@ -158,32 +172,77 @@ fun Ribbon(
 }
 
 @Composable
-private fun TabStrip(activeTab: RibbonTab, onTabChange: (RibbonTab) -> Unit) {
-    ScrollingRow(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 6.dp),
-    ) {
-        RibbonTab.entries.forEach { tab ->
-            val active = tab == activeTab
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 2.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .clickable { onTabChange(tab) }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    text = tab.label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (active) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+private fun TabStrip(
+    activeTab: RibbonTab,
+    onTabChange: (RibbonTab) -> Unit,
+    showBack: Boolean,
+    onBack: () -> Unit,
+    showNavigationToggle: Boolean,
+    navigationVisible: Boolean,
+    onToggleNavigation: () -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        when {
+            showBack -> RibbonNavigationButton(
+                icon = MaterialSymbols.ArrowBack,
+                contentDescription = "Back",
+                onClick = onBack,
+            )
+            showNavigationToggle -> RibbonNavigationButton(
+                // Once the panes are hidden, the changed glyph is the only visible indication
+                // that the canvas can reveal them again.
+                icon = if (navigationVisible) MaterialSymbols.Menu else MaterialSymbols.MenuOpen,
+                contentDescription = if (navigationVisible) {
+                    "Hide notebooks and pages"
+                } else {
+                    "Show notebooks and pages"
+                },
+                onClick = onToggleNavigation,
+            )
+        }
+
+        ScrollingRow(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(horizontal = 6.dp),
+        ) {
+            RibbonTab.entries.forEach { tab ->
+                val active = tab == activeTab
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 2.dp, vertical = 4.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { onTabChange(tab) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        text = tab.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (active) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun RibbonNavigationButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

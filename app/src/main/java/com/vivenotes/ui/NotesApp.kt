@@ -6,18 +6,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -35,7 +31,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.PenPreset
@@ -132,17 +127,6 @@ fun NotesApp(viewModel: NotesViewModel) {
                         .padding(padding)
                         .background(MaterialTheme.colorScheme.background),
                 ) {
-                    TitleBar(
-                        title = state.title.ifBlank { "Untitled page" },
-                        showBack = !medium && pane != rootPane,
-                        onBack = { viewModel.showCompactPane(paneBehind(pane)) },
-                        // Only where there is something to collapse: a compact window shows one
-                        // pane at a time, and hiding it would leave nothing behind.
-                        showNavToggle = medium,
-                        navigationVisible = navigationVisible,
-                        onToggleNavigation = { viewModel.toggleNavigation() },
-                    )
-
                     Ribbon(
                         selection = selection,
                         activeTab = activeTab,
@@ -158,6 +142,13 @@ fun NotesApp(viewModel: NotesViewModel) {
                         allowFinger = drawWithFinger,
                         draw = drawActions,
                         pageOpen = state.selectedPageId != null,
+                        showBack = !medium && pane != rootPane,
+                        onBack = { viewModel.showCompactPane(paneBehind(pane)) },
+                        // Only where there is something to collapse: a compact window shows one
+                        // pane at a time, and hiding it would leave nothing behind.
+                        showNavigationToggle = medium,
+                        navigationVisible = navigationVisible,
+                        onToggleNavigation = viewModel::toggleNavigation,
                     )
 
                     HorizontalHairline()
@@ -386,59 +377,6 @@ private fun EditorSurface(
         showPrintMargins = showPrintMargins,
         modifier = modifier,
     )
-}
-
-@Composable
-private fun TitleBar(
-    title: String,
-    showBack: Boolean,
-    onBack: () -> Unit,
-    showNavToggle: Boolean,
-    navigationVisible: Boolean,
-    onToggleNavigation: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(40.dp)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (showBack) {
-            IconButton(onClick = onBack, modifier = Modifier.size(34.dp)) {
-                Icon(
-                    MaterialSymbols.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        } else if (showNavToggle) {
-            IconButton(onClick = onToggleNavigation, modifier = Modifier.size(34.dp)) {
-                Icon(
-                    // The open/closed glyph is the only thing that says the panes are hidden
-                    // rather than absent, once they are gone and the canvas has taken their place.
-                    imageVector = if (navigationVisible) MaterialSymbols.Menu else MaterialSymbols.MenuOpen,
-                    contentDescription = if (navigationVisible) {
-                        "Hide notebooks and pages"
-                    } else {
-                        "Show notebooks and pages"
-                    },
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        } else {
-            Spacer(Modifier.width(8.dp))
-        }
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
 }
 
 @Composable
