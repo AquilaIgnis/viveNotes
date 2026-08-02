@@ -20,7 +20,7 @@ import androidx.sqlite.execSQL
         InkMoveEntity::class,
         InkMoveTargetEntity::class,
     ],
-    version = 6,
+    version = 7,
     // Turn this on together with the androidx.room Gradle plugin and room.schemaLocation before
     // the first release, since the exported schemas are what migration tests assert against.
     exportSchema = false,
@@ -169,6 +169,14 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /** Makes replayable erase and move operations reversible without hard-deleting sync rows. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE ink_erases ADD COLUMN deletedAt INTEGER")
+                connection.execSQL("ALTER TABLE ink_moves ADD COLUMN deletedAt INTEGER")
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 .addMigrations(
@@ -177,6 +185,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
+                    MIGRATION_6_7,
                 )
                 .build()
     }

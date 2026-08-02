@@ -308,6 +308,134 @@ class NotesViewModelTest {
         assertFalse(vm.strokes.value.any { it.stroke.overlaps(centerBox()) })
     }
 
+    // --- Draw-toolbar history -----------------------------------------------------------------
+
+    @Test
+    fun drawingCanBeUndoneRedoneAndReloaded() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+        assertEquals(1, vm.strokes.value.size)
+        assertEquals(InkUndoState(canUndo = true), vm.inkUndoState.value)
+
+        vm.undoInk()
+        assertTrue(vm.strokes.value.isEmpty())
+        assertEquals(InkUndoState(canRedo = true), vm.inkUndoState.value)
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertTrue("undoing a draw was not persisted", vm.strokes.value.isEmpty())
+
+        vm.redoInk()
+        assertEquals(1, vm.strokes.value.size)
+        assertEquals(InkUndoState(canUndo = true), vm.inkUndoState.value)
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals("redoing a draw was not persisted", 1, vm.strokes.value.size)
+    }
+
+    @Test
+    fun anEraseIsOneUndoableOperationAndItsUndoneStateReloads() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+
+        vm.eraseStrokeParts(inkStroke(50f to 35f, 50f to 65f, sizeDp = 18f))
+        assertEquals("history stayed active while erase geometry was unresolved", InkUndoState(), vm.inkUndoState.value)
+        advanceUntilIdle()
+        assertFalse(vm.strokes.value.any { it.stroke.overlaps(centerBox()) })
+        assertEquals(InkUndoState(canUndo = true), vm.inkUndoState.value)
+
+        vm.undoInk()
+        assertTrue(vm.strokes.value.single().stroke.overlaps(centerBox()))
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertTrue("the undone erase still replayed after reload", vm.strokes.value.single().stroke.overlaps(centerBox()))
+
+        vm.redoInk()
+        assertFalse(vm.strokes.value.any { it.stroke.overlaps(centerBox()) })
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun aLassoTranslationCanBeUndoneAndRedone() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+        val original = vm.strokes.value.single()
+        val move = InkLassoMove(
+            path = listOf(
+                InkPoint(0f, 30f),
+                InkPoint(100f, 30f),
+                InkPoint(100f, 70f),
+                InkPoint(0f, 70f),
+            ),
+            targetIds = setOf(original.id),
+            projections = setOf(original.projectionKey),
+            dx = 100f,
+            dy = 25f,
+        )
+
+        vm.moveInk(move)
+        assertEquals(100f, vm.strokes.value.single().offsetX, 0.01f)
+        assertEquals(25f, vm.strokes.value.single().offsetY, 0.01f)
+        advanceUntilIdle()
+
+        vm.undoInk()
+        assertEquals(0f, vm.strokes.value.single().offsetX, 0.01f)
+        assertEquals(0f, vm.strokes.value.single().offsetY, 0.01f)
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals("the undone move still replayed after reload", 0f, vm.strokes.value.single().offsetX, 0.01f)
+
+        vm.redoInk()
+        assertEquals(100f, vm.strokes.value.single().offsetX, 0.01f)
+        assertEquals(25f, vm.strokes.value.single().offsetY, 0.01f)
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals("the redone move was not replayed after reload", 100f, vm.strokes.value.single().offsetX, 0.01f)
+    }
+
+    @Test
+    fun aNewDrawAfterUndoClearsRedoOnlyOnThatPage() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val firstPage = vm.uiState.value.selectedPageId!!
+        val sectionId = vm.uiState.value.selectedSectionId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 10f, 20f to 20f))
+        advanceUntilIdle()
+
+        val secondPage = repository.createPage(sectionId, "second")
+        vm.openPage(secondPage)
+        advanceUntilIdle()
+        assertEquals(InkUndoState(), vm.inkUndoState.value)
+        vm.onStrokeFinished(inkStroke(30f to 30f, 40f to 40f))
+        vm.undoInk()
+        assertEquals(InkUndoState(canRedo = true), vm.inkUndoState.value)
+
+        vm.onStrokeFinished(inkStroke(50f to 50f, 60f to 60f))
+        assertEquals(InkUndoState(canUndo = true, canRedo = false), vm.inkUndoState.value)
+        val branched = vm.strokes.value
+        vm.redoInk()
+        assertEquals("redo survived a new branch", branched, vm.strokes.value)
+
+        advanceUntilIdle()
+        vm.openPage(firstPage)
+        advanceUntilIdle()
+        assertEquals("the first page lost its independent undo ring", InkUndoState(canUndo = true), vm.inkUndoState.value)
+    }
+
     /**
      * Regression: [NotesViewModel.persist] rebuilds `PageDoc.outlines` out of the text containers it
      * tracks, so an image or an ink layer — neither of which it manages — was written out of

@@ -214,6 +214,12 @@ class NotesRepository(
         ink.softDelete(ids, System.currentTimeMillis())
     }
 
+    /** Restores stroke rows tombstoned by Draw-toolbar undo. */
+    suspend fun restoreStrokes(ids: List<String>) {
+        if (ids.isEmpty()) return
+        ink.restore(ids)
+    }
+
     suspend fun partialErasesFor(pageId: String): List<InkEraseWithTargets> =
         inkErases.byPage(pageId)
 
@@ -232,6 +238,10 @@ class NotesRepository(
         }
     }
 
+    /** Includes or excludes an existing erase operation from page-open replay. */
+    suspend fun setPartialEraseActive(id: String, active: Boolean) =
+        inkErases.setDeletedAt(id, if (active) null else System.currentTimeMillis())
+
     /** Stores a lasso translation with the source rows it was allowed to move. */
     suspend fun addInkMove(move: InkMoveEntity, strokeIds: Collection<String>) {
         if (strokeIds.isEmpty()) return
@@ -240,6 +250,10 @@ class NotesRepository(
             inkMoves.insertTargets(strokeIds.distinct().map { InkMoveTargetEntity(move.id, it) })
         }
     }
+
+    /** Includes or excludes an existing lasso translation from page-open replay. */
+    suspend fun setInkMoveActive(id: String, active: Boolean) =
+        inkMoves.setDeletedAt(id, if (active) null else System.currentTimeMillis())
 
     // --- first run -------------------------------------------------------------------------
 

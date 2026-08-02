@@ -45,12 +45,16 @@ class DrawTabTest {
     private var changedIndex: Int? = null
     private var changedEraser: EraserSettings? = null
     private var fingerDrawing: Boolean? = null
+    private var undoCount = 0
+    private var redoCount = 0
 
     private fun setTab(
         tool: DrawTool = DrawTool.None,
         pens: List<PenPreset> = List(PenPreset.COUNT) { PenPreset.starting(it) },
         eraser: EraserSettings = EraserSettings(),
         allowFinger: Boolean = false,
+        canUndo: Boolean = false,
+        canRedo: Boolean = false,
     ) {
         compose.setContent {
             ViveNotesTheme {
@@ -67,7 +71,11 @@ class DrawTabTest {
                         },
                         updateEraser = { changedEraser = it },
                         setDrawWithFinger = { fingerDrawing = it },
+                        undo = { undoCount++ },
+                        redo = { redoCount++ },
                     ),
+                    canUndo = canUndo,
+                    canRedo = canRedo,
                 )
             }
         }
@@ -186,17 +194,25 @@ class DrawTabTest {
         assertEquals(EraserSettings.DEFAULT_SIZE + 1, changedEraser?.size)
     }
 
-    /**
-     * Icon-only now, so they are found by the description rather than by a label — and still inert,
-     * because the undo stack is feature C6.
-     */
     @Test
-    fun undoAndRedoAreIconsAndNotWired() {
+    fun undoAndRedoStayDisabledWhenTheirHistoryIsEmpty() {
         setTab()
         compose.onNodeWithContentDescription("Undo").assertIsDisplayed()
         compose.onNodeWithContentDescription("Redo").assertIsDisplayed()
         compose.onNodeWithContentDescription("Undo").assertHasNoClickAction()
+        compose.onNodeWithContentDescription("Redo").assertHasNoClickAction()
         compose.onNodeWithText("Undo").assertDoesNotExist()
+    }
+
+    @Test
+    fun enabledUndoAndRedoInvokeTheirHistoryActions() {
+        setTab(canUndo = true, canRedo = true)
+
+        compose.onNodeWithContentDescription("Undo").performClick()
+        compose.onNodeWithContentDescription("Redo").performClick()
+
+        assertEquals(1, undoCount)
+        assertEquals(1, redoCount)
     }
 
     @Test

@@ -213,6 +213,8 @@ data class InkEraseEntity(
     val points: ByteArray,
     val enc: String,
     val createdAt: Long,
+    /** Undo is a tombstone, matching strokes: redo clears it without replacing this operation. */
+    val deletedAt: Long? = null,
 ) {
     override fun equals(other: Any?): Boolean =
         this === other || (other is InkEraseEntity && id == other.id && points.contentEquals(other.points))
@@ -273,6 +275,8 @@ data class InkMoveEntity(
     val points: ByteArray,
     val enc: String,
     val createdAt: Long,
+    /** Null while this translation participates in replay; stamped while it is undone. */
+    val deletedAt: Long? = null,
 ) {
     override fun equals(other: Any?): Boolean =
         this === other || (other is InkMoveEntity && id == other.id && points.contentEquals(other.points))

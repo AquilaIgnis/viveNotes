@@ -44,6 +44,8 @@ data class DrawActions(
     val updatePen: (Int, PenPreset) -> Unit,
     val updateEraser: (EraserSettings) -> Unit,
     val setDrawWithFinger: (Boolean) -> Unit,
+    val undo: () -> Unit = {},
+    val redo: () -> Unit = {},
 )
 
 /** Test tags for the tools, which show their state as a colour rather than as text. */
@@ -68,9 +70,7 @@ internal object DrawTags {
  * already selected does the same thing, because a gesture nobody discovers is a gesture nobody uses.
  *
  * Undo and redo are icon-only — their glyphs are universal, so a label would only cost width in a
- * row that scrolls. They are also inert: the undo stack is feature C6, which is not built. Same
- * treatment the View tab gives Full Page View — holding the spot the design gives them and plainly
- * not working beats accepting a tap and doing nothing.
+ * row that scrolls. Each reverses one complete ink gesture on the current page.
  *
  * The finger button decides whether a direct touch draws or scrolls. It is a device property rather
  * than a pen setting — whether you own a stylus is not an attribute of pen 2 — and defaults to off,
@@ -84,6 +84,8 @@ internal fun DrawTab(
     tool: DrawTool,
     allowFinger: Boolean,
     actions: DrawActions,
+    canUndo: Boolean = false,
+    canRedo: Boolean = false,
 ) {
     var openPenIndex by remember { mutableStateOf<Int?>(null) }
     var eraserSettingsOpen by remember { mutableStateOf(false) }
@@ -95,14 +97,14 @@ internal fun DrawTab(
         RibbonButton(
             icon = MaterialSymbols.Undo,
             label = "Undo",
-            enabled = false,
-            onClick = {},
+            enabled = canUndo,
+            onClick = actions.undo,
         )
         RibbonButton(
             icon = MaterialSymbols.Redo,
             label = "Redo",
-            enabled = false,
-            onClick = {},
+            enabled = canRedo,
+            onClick = actions.redo,
         )
 
         Divider()

@@ -148,4 +148,59 @@ class MigrationTest {
             }
         }
     }
+
+    @Test
+    fun migration6To7MakesExistingEraseAndMoveOperationsUndoableAndActive() {
+        val driver = AndroidSQLiteDriver()
+
+        driver.open(file.absolutePath).use { connection ->
+            connection.execSQL(
+                """
+                CREATE TABLE ink_erases (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    pageId TEXT NOT NULL,
+                    mode TEXT NOT NULL,
+                    sizeDp REAL NOT NULL,
+                    points BLOB NOT NULL,
+                    enc TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                """
+                CREATE TABLE ink_moves (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    pageId TEXT NOT NULL,
+                    dxDp REAL NOT NULL,
+                    dyDp REAL NOT NULL,
+                    points BLOB NOT NULL,
+                    enc TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                "INSERT INTO ink_erases VALUES ('erase', 'page', 'Normal', 18.0, X'01', 'ink/androidx1', 41)",
+            )
+            connection.execSQL(
+                "INSERT INTO ink_moves VALUES ('move', 'page', 4.0, 8.0, X'02', 'ink/lasso-f32le1', 42)",
+            )
+
+            NotesDatabase.MIGRATION_6_7.migrate(connection)
+
+            connection.prepare(
+                "SELECT COALESCE(deletedAt, -1) FROM ink_erases WHERE id = 'erase'",
+            ).use {
+                assertEquals(true, it.step())
+                assertEquals("an existing erase did not remain active", -1L, it.getLong(0))
+            }
+            connection.prepare(
+                "SELECT COALESCE(deletedAt, -1) FROM ink_moves WHERE id = 'move'",
+            ).use {
+                assertEquals(true, it.step())
+                assertEquals("an existing move did not remain active", -1L, it.getLong(0))
+            }
+        }
+    }
 }

@@ -74,6 +74,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val eraser by viewModel.eraser.collectAsStateWithLifecycle()
     val tool by viewModel.tool.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
+    val inkUndoState by viewModel.inkUndoState.collectAsStateWithLifecycle()
 
     var activeTab by remember { mutableStateOf(RibbonTab.Home) }
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
@@ -101,6 +102,8 @@ fun NotesApp(viewModel: NotesViewModel) {
             updatePen = viewModel::updatePen,
             updateEraser = viewModel::updateEraser,
             setDrawWithFinger = viewModel::setDrawWithFinger,
+            undo = viewModel::undoInk,
+            redo = viewModel::redoInk,
         )
     }
 
@@ -140,6 +143,8 @@ fun NotesApp(viewModel: NotesViewModel) {
                         allowFinger = drawWithFinger,
                         draw = drawActions,
                         pageOpen = state.selectedPageId != null,
+                        canUndoInk = inkUndoState.canUndo,
+                        canRedoInk = inkUndoState.canRedo,
                         showBack = !medium && pane != rootPane,
                         onBack = { viewModel.showCompactPane(paneBehind(pane)) },
                         // Only where there is something to collapse: a compact window shows one

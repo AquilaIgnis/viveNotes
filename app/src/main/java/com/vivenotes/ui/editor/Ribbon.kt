@@ -130,6 +130,8 @@ fun Ribbon(
     allowFinger: Boolean,
     draw: DrawActions,
     pageOpen: Boolean,
+    canUndoInk: Boolean = false,
+    canRedoInk: Boolean = false,
     showBack: Boolean = false,
     onBack: () -> Unit = {},
     showNavigationToggle: Boolean = false,
@@ -167,7 +169,15 @@ fun Ribbon(
                 onTextMode = { draw.selectTool(DrawTool.None) },
             )
             RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
-            RibbonTab.Draw -> DrawTab(pens, eraser, tool, allowFinger, draw)
+            RibbonTab.Draw -> DrawTab(
+                pens = pens,
+                eraser = eraser,
+                tool = tool,
+                allowFinger = allowFinger,
+                actions = draw,
+                canUndo = canUndoInk,
+                canRedo = canRedoInk,
+            )
             RibbonTab.Insert -> InsertTab(selection, onCommand, pageOpen)
             else -> PlaceholderTab(activeTab)
         }

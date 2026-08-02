@@ -93,6 +93,34 @@ private sealed interface StoredInkOperation {
     }
 }
 
+/** Whether the open page has a Draw-toolbar action in either direction. */
+data class InkUndoState(
+    val canUndo: Boolean = false,
+    val canRedo: Boolean = false,
+)
+
+private sealed interface InkHistoryMutation {
+    /** A draw adds these rows; undo hides them and redo restores them. */
+    data class AddStrokes(val ids: List<String>) : InkHistoryMutation
+
+    /** A whole-object deletion hides these rows; undo restores them. */
+    data class EraseStrokes(val ids: List<String>) : InkHistoryMutation
+
+    data class EraseOperation(val id: String) : InkHistoryMutation
+    data class MoveOperation(val id: String) : InkHistoryMutation
+}
+
+private data class InkHistoryEntry(
+    val before: List<PageStroke>,
+    val after: List<PageStroke>,
+    val mutation: InkHistoryMutation,
+)
+
+private data class PageInkHistory(
+    val undo: MutableList<InkHistoryEntry> = mutableListOf(),
+    val redo: MutableList<InkHistoryEntry> = mutableListOf(),
+)
+
 data class NotesUiState(
     val tree: List<NotebookWithSections> = emptyList(),
     val selectedSectionId: String? = null,
@@ -166,6 +194,16 @@ class NotesViewModel(
     /** The open page's ink, in draw order. Empty while no page is open. */
     private val _strokes = MutableStateFlow<List<PageStroke>>(emptyList())
     val strokes: StateFlow<List<PageStroke>> = _strokes.asStateFlow()
+
+    /** Availability for the open page's bounded, session-local ink history. */
+    private val _inkUndoState = MutableStateFlow(InkUndoState())
+    val inkUndoState: StateFlow<InkUndoState> = _inkUndoState.asStateFlow()
+
+    /** Snapshots are shallow lists: native strokes are immutable and safely shared between entries. */
+    private val inkHistoryByPage = mutableMapOf<String, PageInkHistory>()
+
+    /** An erase resolves native geometry off-thread; history pauses until its action is committed. */
+    private val pendingInkEditsByPage = mutableMapOf<String, Int>()
 
     /** Keeps stroke inserts, whole erases and replayable partial erases in gesture order. */
     private val inkMutations = Mutex()
@@ -263,6 +301,8 @@ class NotesViewModel(
         viewModelScope.launch { persist() }
         selectedSection.value = sectionId
         _uiState.value = _uiState.value.copy(selectedSectionId = sectionId, selectedPageId = null)
+        _strokes.value = emptyList()
+        publishInkUndoState(null)
         _compactPane.value = CompactPane.Pages
     }
 
@@ -295,44 +335,9 @@ class NotesViewModel(
             // and may have been substituted for an empty one. An unreadable page decodes to
             // PageDoc.empty(), so this clears — the outgoing page's outlines must not follow it.
             unmanagedOutlines = doc.outlines.withIndex().filterNot { it.value is Outline.Text }
-            // A stroke or erase mask that cannot be decoded costs only that item, not the page.
-            val baseStrokes = repository.inkFor(pageId).mapNotNull { row ->
-                InkCodec.decode(row)?.let { PageStroke(row.id, it) }
-            }
-            val storedOperations = buildList {
-                repository.partialErasesFor(pageId).forEach { add(StoredInkOperation.Erase(it)) }
-                repository.inkMovesFor(pageId).forEach { add(StoredInkOperation.Move(it)) }
-            }.sortedWith(compareBy(StoredInkOperation::createdAt, StoredInkOperation::id))
-            lastInkOperationAt = maxOf(lastInkOperationAt, storedOperations.maxOfOrNull { it.createdAt } ?: 0L)
-            _strokes.value = if (storedOperations.isEmpty()) {
-                baseStrokes
-            } else {
-                withContext(inkDispatcher) {
-                    storedOperations.fold(baseStrokes) { current, operation ->
-                        when (operation) {
-                            is StoredInkOperation.Erase -> {
-                                val stored = operation.stored
-                                val mask = InkCodec.decodeErase(stored.erase) ?: return@fold current
-                                val targets = stored.targets.map { it.strokeId }
-                                when (stored.erase.mode) {
-                                    EraserMode.Normal -> current.subtract(mask, targets)
-                                    EraserMode.Object -> current.eraseObjects(mask, targets)
-                                }
-                            }
-                            is StoredInkOperation.Move -> {
-                                val stored = operation.stored
-                                val path = InkCodec.decodeMove(stored.move) ?: return@fold current
-                                current.replayMove(
-                                    path = path,
-                                    targetIds = stored.targets.map { it.strokeId },
-                                    dx = stored.move.dxDp,
-                                    dy = stored.move.dyDp,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            // Loading joins the same serialization lane as edits. Otherwise a fast page switch can
+            // read an operation between its immediate canvas update and its database tombstone.
+            _strokes.value = inkMutations.withLock { loadInk(pageId) }
 
             _uiState.value = _uiState.value.copy(
                 selectedPageId = pageId,
@@ -347,6 +352,7 @@ class NotesViewModel(
                     null
                 },
             )
+            publishInkUndoState(pageId)
             _selection.value = SelectionState()
             _compactPane.value = CompactPane.Editor
         }
@@ -580,6 +586,48 @@ class NotesViewModel(
 
     // --- draw ----------------------------------------------------------------------------------
 
+    /** Rebuilds one page from its live stroke rows and active replay operations. */
+    private suspend fun loadInk(pageId: String): List<PageStroke> {
+        // A stroke or operation that cannot be decoded costs only that item, not the page.
+        val baseStrokes = repository.inkFor(pageId).mapNotNull { row ->
+            InkCodec.decode(row)?.let { PageStroke(row.id, it) }
+        }
+        val storedOperations = buildList {
+            repository.partialErasesFor(pageId).forEach { add(StoredInkOperation.Erase(it)) }
+            repository.inkMovesFor(pageId).forEach { add(StoredInkOperation.Move(it)) }
+        }.sortedWith(compareBy(StoredInkOperation::createdAt, StoredInkOperation::id))
+        lastInkOperationAt = maxOf(
+            lastInkOperationAt,
+            storedOperations.maxOfOrNull { it.createdAt } ?: 0L,
+        )
+        if (storedOperations.isEmpty()) return baseStrokes
+        return withContext(inkDispatcher) {
+            storedOperations.fold(baseStrokes) { current, operation ->
+                when (operation) {
+                    is StoredInkOperation.Erase -> {
+                        val stored = operation.stored
+                        val mask = InkCodec.decodeErase(stored.erase) ?: return@fold current
+                        val targets = stored.targets.map { it.strokeId }
+                        when (stored.erase.mode) {
+                            EraserMode.Normal -> current.subtract(mask, targets)
+                            EraserMode.Object -> current.eraseObjects(mask, targets)
+                        }
+                    }
+                    is StoredInkOperation.Move -> {
+                        val stored = operation.stored
+                        val path = InkCodec.decodeMove(stored.move) ?: return@fold current
+                        current.replayMove(
+                            path = path,
+                            targetIds = stored.targets.map { it.strokeId },
+                            dx = stored.move.dxDp,
+                            dy = stored.move.dyDp,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     fun selectTool(tool: DrawTool) {
         _tool.value = tool
     }
@@ -609,7 +657,13 @@ class NotesViewModel(
         if (readOnlyPageId == pageId) return
         val pen = activePen() ?: return
         val entity = InkCodec.encode(stroke, pageId, seq = 0, pen = pen)
-        _strokes.value = _strokes.value + PageStroke(entity.id, stroke)
+        val before = _strokes.value
+        commitInkEdit(
+            pageId = pageId,
+            before = before,
+            after = before + PageStroke(entity.id, stroke),
+            mutation = InkHistoryMutation.AddStrokes(listOf(entity.id)),
+        )
         viewModelScope.launch {
             inkMutations.withLock { repository.addStroke(entity) }
         }
@@ -618,9 +672,17 @@ class NotesViewModel(
     /** Erases by tombstone. Same ordering as [onStrokeFinished], for the same reason. */
     fun eraseStrokes(ids: List<String>) {
         if (ids.isEmpty()) return
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
         val gone = ids.toSet()
-        if (_strokes.value.none { it.id in gone }) return
-        _strokes.value = _strokes.value.filterNot { it.id in gone }
+        val before = _strokes.value
+        if (before.none { it.id in gone }) return
+        commitInkEdit(
+            pageId = pageId,
+            before = before,
+            after = before.filterNot { it.id in gone },
+            mutation = InkHistoryMutation.EraseStrokes(ids.distinct()),
+        )
         viewModelScope.launch {
             inkMutations.withLock { repository.eraseStrokes(ids) }
         }
@@ -641,17 +703,23 @@ class NotesViewModel(
         if (move.projections.isEmpty() || (move.dx == 0f && move.dy == 0f)) return
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
-        if (_strokes.value.none { it.id in move.targetIds }) return
-        _strokes.value = _strokes.value.moveSelected(move)
+        val before = _strokes.value
+        if (before.none { it.id in move.targetIds }) return
+        val entity = InkCodec.encodeMove(
+            path = move.path,
+            pageId = pageId,
+            dx = move.dx,
+            dy = move.dy,
+            now = nextInkOperationTime(),
+        )
+        commitInkEdit(
+            pageId = pageId,
+            before = before,
+            after = before.moveSelected(move),
+            mutation = InkHistoryMutation.MoveOperation(entity.id),
+        )
         viewModelScope.launch {
             inkMutations.withLock {
-                val entity = InkCodec.encodeMove(
-                    path = move.path,
-                    pageId = pageId,
-                    dx = move.dx,
-                    dy = move.dy,
-                    now = nextInkOperationTime(),
-                )
                 repository.addInkMove(entity, move.targetIds)
             }
         }
@@ -661,19 +729,114 @@ class NotesViewModel(
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
         val candidates = _strokes.value
+        changePendingInkEdits(pageId, 1)
+        viewModelScope.launch {
+            try {
+                inkMutations.withLock {
+                    val targetIds = withContext(inkDispatcher) { candidates.targetsFor(mask) }
+                    if (targetIds.isEmpty()) return@withLock
+                    // A stroke completed while the mask geometry was being calculated was not a
+                    // target, but it is part of both snapshots and must not disappear from the canvas.
+                    val before = if (_uiState.value.selectedPageId == pageId) _strokes.value else candidates
+                    val updated = withContext(inkDispatcher) {
+                        when (mode) {
+                            EraserMode.Normal -> before.subtract(mask, targetIds)
+                            EraserMode.Object -> before.eraseObjects(mask, targetIds)
+                        }
+                    }
+                    val erase = InkCodec.encodeErase(mask, pageId, mode, now = nextInkOperationTime())
+                    repository.addPartialErase(erase, targetIds)
+                    commitInkEdit(
+                        pageId = pageId,
+                        before = before,
+                        after = updated,
+                        mutation = InkHistoryMutation.EraseOperation(erase.id),
+                    )
+                }
+            } finally {
+                changePendingInkEdits(pageId, -1)
+            }
+        }
+    }
+
+    /** Reverts the last committed ink gesture on the open page. */
+    fun undoInk() {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if ((pendingInkEditsByPage[pageId] ?: 0) > 0) return
+        val history = inkHistoryByPage[pageId] ?: return
+        if (history.undo.isEmpty()) return
+        val entry = history.undo.removeAt(history.undo.lastIndex)
+        history.redo += entry
+        _strokes.value = entry.before
+        publishInkUndoState(pageId)
+        persistHistoryEntry(entry, applied = false)
+    }
+
+    /** Reapplies the next ink gesture previously removed by [undoInk]. */
+    fun redoInk() {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if ((pendingInkEditsByPage[pageId] ?: 0) > 0) return
+        val history = inkHistoryByPage[pageId] ?: return
+        if (history.redo.isEmpty()) return
+        val entry = history.redo.removeAt(history.redo.lastIndex)
+        history.undo += entry
+        _strokes.value = entry.after
+        publishInkUndoState(pageId)
+        persistHistoryEntry(entry, applied = true)
+    }
+
+    private fun commitInkEdit(
+        pageId: String,
+        before: List<PageStroke>,
+        after: List<PageStroke>,
+        mutation: InkHistoryMutation,
+    ) {
+        val history = inkHistoryByPage.getOrPut(pageId, ::PageInkHistory)
+        history.undo += InkHistoryEntry(before, after, mutation)
+        if (history.undo.size > INK_HISTORY_LIMIT) history.undo.removeAt(0)
+        // The abandoned operations are already tombstoned by their undo. Keeping their database
+        // rows preserves sync history; only their in-memory route back is discarded.
+        history.redo.clear()
+        if (_uiState.value.selectedPageId == pageId) {
+            _strokes.value = after
+            publishInkUndoState(pageId)
+        }
+    }
+
+    private fun publishInkUndoState(pageId: String? = _uiState.value.selectedPageId) {
+        val history = pageId?.let(inkHistoryByPage::get)
+        val pending = pageId != null && (pendingInkEditsByPage[pageId] ?: 0) > 0
+        _inkUndoState.value = InkUndoState(
+            canUndo = !pending && history?.undo?.isNotEmpty() == true,
+            canRedo = !pending && history?.redo?.isNotEmpty() == true,
+        )
+    }
+
+    private fun changePendingInkEdits(pageId: String, delta: Int) {
+        val count = ((pendingInkEditsByPage[pageId] ?: 0) + delta).coerceAtLeast(0)
+        if (count == 0) pendingInkEditsByPage.remove(pageId) else pendingInkEditsByPage[pageId] = count
+        if (_uiState.value.selectedPageId == pageId) publishInkUndoState(pageId)
+    }
+
+    private fun persistHistoryEntry(entry: InkHistoryEntry, applied: Boolean) {
         viewModelScope.launch {
             inkMutations.withLock {
-                val targetIds = withContext(inkDispatcher) { candidates.targetsFor(mask) }
-                if (targetIds.isEmpty()) return@withLock
-                val updated = withContext(inkDispatcher) {
-                    when (mode) {
-                        EraserMode.Normal -> _strokes.value.subtract(mask, targetIds)
-                        EraserMode.Object -> _strokes.value.eraseObjects(mask, targetIds)
+                when (val mutation = entry.mutation) {
+                    is InkHistoryMutation.AddStrokes -> if (applied) {
+                        repository.restoreStrokes(mutation.ids)
+                    } else {
+                        repository.eraseStrokes(mutation.ids)
                     }
+                    is InkHistoryMutation.EraseStrokes -> if (applied) {
+                        repository.eraseStrokes(mutation.ids)
+                    } else {
+                        repository.restoreStrokes(mutation.ids)
+                    }
+                    is InkHistoryMutation.EraseOperation ->
+                        repository.setPartialEraseActive(mutation.id, applied)
+                    is InkHistoryMutation.MoveOperation ->
+                        repository.setInkMoveActive(mutation.id, applied)
                 }
-                val erase = InkCodec.encodeErase(mask, pageId, mode, now = nextInkOperationTime())
-                repository.addPartialErase(erase, targetIds)
-                if (_uiState.value.selectedPageId == pageId) _strokes.value = updated
             }
         }
     }
@@ -735,6 +898,8 @@ class NotesViewModel(
                     pages = emptyList(),
                     outlines = emptyList(),
                 )
+                _strokes.value = emptyList()
+                publishInkUndoState(null)
                 _uiState.value.tree.firstOrNull()?.liveSections?.firstOrNull()?.let { selectSection(it.id) }
             }
         }
@@ -800,6 +965,7 @@ class NotesViewModel(
 
     companion object {
         private const val AUTOSAVE_DELAY_MS = 400L
+        private const val INK_HISTORY_LIMIT = 100
         const val MIN_OUTLINE_WIDTH = 120f
         const val MAX_OUTLINE_WIDTH = 2000f
         const val MAX_OUTLINE_HEIGHT = 4000f

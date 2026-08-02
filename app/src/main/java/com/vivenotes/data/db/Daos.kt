@@ -110,6 +110,9 @@ interface InkStrokeDao {
     @Query("UPDATE ink_strokes SET deletedAt = :now WHERE id IN (:ids)")
     suspend fun softDelete(ids: List<String>, now: Long)
 
+    @Query("UPDATE ink_strokes SET deletedAt = NULL WHERE id IN (:ids)")
+    suspend fun restore(ids: List<String>)
+
     @Query("SELECT COALESCE(MAX(seq), -1) + 1 FROM ink_strokes WHERE pageId = :pageId")
     suspend fun nextSeq(pageId: String): Int
 }
@@ -118,7 +121,7 @@ interface InkStrokeDao {
 interface InkEraseDao {
 
     @Transaction
-    @Query("SELECT * FROM ink_erases WHERE pageId = :pageId ORDER BY createdAt, id")
+    @Query("SELECT * FROM ink_erases WHERE pageId = :pageId AND deletedAt IS NULL ORDER BY createdAt, id")
     suspend fun byPage(pageId: String): List<InkEraseWithTargets>
 
     @Insert
@@ -126,13 +129,16 @@ interface InkEraseDao {
 
     @Insert
     suspend fun insertTargets(targets: List<InkEraseTargetEntity>)
+
+    @Query("UPDATE ink_erases SET deletedAt = :deletedAt WHERE id = :id")
+    suspend fun setDeletedAt(id: String, deletedAt: Long?)
 }
 
 @Dao
 interface InkMoveDao {
 
     @Transaction
-    @Query("SELECT * FROM ink_moves WHERE pageId = :pageId ORDER BY createdAt, id")
+    @Query("SELECT * FROM ink_moves WHERE pageId = :pageId AND deletedAt IS NULL ORDER BY createdAt, id")
     suspend fun byPage(pageId: String): List<InkMoveWithTargets>
 
     @Insert
@@ -140,4 +146,7 @@ interface InkMoveDao {
 
     @Insert
     suspend fun insertTargets(targets: List<InkMoveTargetEntity>)
+
+    @Query("UPDATE ink_moves SET deletedAt = :deletedAt WHERE id = :id")
+    suspend fun setDeletedAt(id: String, deletedAt: Long?)
 }
