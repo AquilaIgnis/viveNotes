@@ -120,6 +120,19 @@ class NotesViewModel(
      */
     private val blocksByOutline = mutableMapOf<String, List<Block>>()
 
+    /**
+     * Outlines this ViewModel does not manage — images and ink — with the position each held in the
+     * document it was loaded from.
+     *
+     * [persist] rebuilds `PageDoc.outlines` from the text containers it tracks, so an outline it did
+     * not put there is not merely ignored: it is written out of existence by the next autosave, 400ms
+     * after the next keystroke. Nothing produces those variants yet, which is exactly why the loss
+     * would be silent when something does — the write succeeds and the page looks fine until the
+     * drawing is gone. Carrying them through untouched keeps load → save → load the identity for a
+     * document this ViewModel only half understands.
+     */
+    private var unmanagedOutlines: List<IndexedValue<Outline>> = emptyList()
+
     /** Signals an edit that autosave should pick up; the payload is irrelevant. */
     private val edits = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
 
@@ -205,6 +218,10 @@ class NotesViewModel(
 
             blocksByOutline.clear()
             loaded.forEach { blocksByOutline[it.id] = it.blocks }
+            // Taken from the document rather than from [loaded], which is the text containers alone
+            // and may have been substituted for an empty one. An unreadable page decodes to
+            // PageDoc.empty(), so this clears — the outgoing page's outlines must not follow it.
+            unmanagedOutlines = doc.outlines.withIndex().filterNot { it.value is Outline.Text }
 
             _uiState.value = _uiState.value.copy(
                 selectedPageId = pageId,
@@ -522,7 +539,25 @@ class NotesViewModel(
                 blocks = blocks,
             )
         }
-        repository.saveDoc(pageId, PageDoc(outlines = outlines, style = state.pageStyle))
+        repository.saveDoc(pageId, PageDoc(outlines = merged(outlines), style = state.pageStyle))
+    }
+
+    /**
+     * Puts the outlines [persist] does not manage back where they were.
+     *
+     * Recorded indices are positions in the document as loaded — the combined list — so reinserting
+     * them into the text-only list in ascending order lands each one at its original position, which
+     * is what makes the round trip an identity. They are clamped rather than trusted: containers are
+     * created and deleted while the page is open, so a recorded position can be past the end of the
+     * list it is being restored into.
+     */
+    private fun merged(text: List<Outline.Text>): List<Outline> {
+        if (unmanagedOutlines.isEmpty()) return text
+        val outlines = ArrayList<Outline>(text)
+        unmanagedOutlines.forEach { (index, outline) ->
+            outlines.add(index.coerceAtMost(outlines.size), outline)
+        }
+        return outlines
     }
 
     companion object {

@@ -32,6 +32,7 @@ import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.Orientation
 import com.vivenotes.model.Outline
+import com.vivenotes.model.PageDoc
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.RuleLines
@@ -214,6 +215,47 @@ class NotesViewModelTest {
         assertEquals(480f, box.width, 0.01f)
         assertEquals(300f, box.minHeight, 0.01f)
         assertTrue(storedText(pageId).contains("persisted body"))
+    }
+
+    /**
+     * Regression: [NotesViewModel.persist] rebuilds `PageDoc.outlines` out of the text containers it
+     * tracks, so an image or an ink layer — neither of which it manages — was written out of
+     * existence by the next autosave. Nothing produces those variants yet, which is what would have
+     * made the loss silent when something does: the write succeeds, and the page looks right until
+     * the drawing is gone.
+     */
+    @Test
+    fun autosaveKeepsOutlinesTheViewModelDoesNotManage() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val sectionId = vm.uiState.value.selectedSectionId!!
+        // A page of its own rather than the seeded one, because openPage persists the outgoing page
+        // first and would write the seeded state back over this document before reading it.
+        val pageId = repository.createPage(sectionId, "mixed")
+        repository.saveDoc(
+            pageId,
+            PageDoc(
+                outlines = listOf(
+                    Outline.Ink(id = "ink", y = 40f),
+                    Outline.Text(id = "text", y = 140f, blocks = listOf(Block.of("body"))),
+                    Outline.Image(id = "image", y = 420f, attachmentId = "att-1", height = 200f),
+                ),
+            ),
+        )
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        vm.onBlocksChanged("text", listOf(Block.of("edited body")))
+        advanceUntilIdle()
+
+        val stored = (runBlocking { repository.loadDoc(pageId) } as PageLoad.Loaded).doc
+        // Position as well as survival: the ink was before the text and the image after it, and an
+        // outline that comes back somewhere else is a different page.
+        assertEquals(
+            "an autosave lost or reordered the outlines the view model does not manage",
+            listOf("ink", "text", "image"),
+            stored.outlines.map { it.id },
+        )
+        assertEquals("edited body", stored.plainText())
     }
 
     // --- free-form containers ------------------------------------------------------------------
