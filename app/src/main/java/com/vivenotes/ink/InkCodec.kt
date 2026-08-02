@@ -1,8 +1,16 @@
 package com.vivenotes.ink
 
 import androidx.ink.brush.Brush
+import androidx.ink.brush.BrushBehavior
 import androidx.ink.brush.BrushFamily
+import androidx.ink.brush.BrushTip
+import androidx.ink.brush.InputToolType
 import androidx.ink.brush.StockBrushes
+import androidx.ink.brush.behavior.DampingNode
+import androidx.ink.brush.behavior.ProgressDomain
+import androidx.ink.brush.behavior.SourceNode
+import androidx.ink.brush.behavior.TargetNode
+import androidx.ink.brush.behavior.ToolTypeFilterNode
 import androidx.ink.storage.decode
 import androidx.ink.storage.encode
 import androidx.ink.strokes.Stroke
@@ -47,36 +55,123 @@ object InkCodec {
     private const val FAMILY_MARKER = "marker"
     private const val FAMILY_DASHED = "dashed-line"
     private const val FAMILY_HIGHLIGHTER = "highlighter"
+    private const val FAMILY_CALLIGRAPHY_PREFIX = "calligraphy-v1-p"
+    private const val CALLIGRAPHY_V1_MAX_PRESSURE = 5
 
     private fun familyId(pen: PenPreset): String = when {
         pen.lineType != LineType.Solid -> FAMILY_DASHED
         // Fountain is the plain pen: one width for the whole stroke, however hard you press. That
         // is why it has no pressure setting at all — see PenPanelContent.
         pen.kind == PenKind.Fountain -> FAMILY_MARKER
-        // Calligraphy with the response turned off is the same plain line.
-        pen.pressure == 0 -> FAMILY_MARKER
-        // Calligraphy is the expressive one. The stock pressure pen is a stand-in for its width
-        // response until the real chisel nib exists — `docs/inkPlan.md` §6a — and is recorded under
-        // its own id so those strokes keep their shape when the nib lands.
-        else -> FAMILY_PRESSURE_PEN
+        // The pressure level is part of the family id because it changes the shape of every point.
+        // Keeping it here makes the rendered stroke independent of future pen-setting changes.
+        else -> FAMILY_CALLIGRAPHY_PREFIX + pen.pressure.coerceIn(0, CALLIGRAPHY_V1_MAX_PRESSURE)
     }
 
     /**
-     * The stock family for an id.
-     *
-     * The smoothing each family applies is **not** configurable from here. `BrushFamily.InputModel`
-     * and its `SlidingWindowModel` are `@RestrictTo(LIBRARY_GROUP)` — restricted to `androidx.ink`
-     * itself, not merely experimental — so a stroke is modelled by whatever the stock family does.
-     * The pen's Stabilization setting is therefore recorded with the stroke but does not yet change
-     * it; making it real means the pre-filter in `docs/inkPlan.md` §4.3, which is ours and needs no
-     * library support.
+     * The family for an id. Legacy stock-family ids stay here permanently: changing their meaning
+     * would restyle ink that was already saved.
      */
     private fun family(id: String): BrushFamily = when (id) {
         FAMILY_DASHED -> StockBrushes.dashedLine(StockBrushes.DashedLineVersion.V1)
         FAMILY_MARKER -> StockBrushes.marker(StockBrushes.MarkerVersion.V1)
         FAMILY_HIGHLIGHTER -> StockBrushes.highlighter()
-        else -> StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1)
+        FAMILY_PRESSURE_PEN -> StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1)
+        else -> if (id.startsWith(FAMILY_CALLIGRAPHY_PREFIX)) {
+            val pressure = id.removePrefix(FAMILY_CALLIGRAPHY_PREFIX).toIntOrNull()
+                ?.coerceIn(0, CALLIGRAPHY_V1_MAX_PRESSURE)
+                ?: PenPreset().pressure
+            calligraphyFamilies[pressure]
+        } else {
+            // `pressure-pen` is the id written by builds before the chisel nib existed. Unknown ids
+            // have historically taken this fallback too, so retain that recovery behaviour.
+            StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1)
+        }
     }
+
+    /**
+     * A broad-edge nib held at a fixed page angle. The flattened tip produces thick downstrokes and
+     * thin cross-strokes even when pressure response is off; pressure or speed then scales that
+     * shape without changing its aspect ratio.
+     */
+    private val calligraphyFamilies: List<BrushFamily> by lazy {
+        (0..CALLIGRAPHY_V1_MAX_PRESSURE).map(::createCalligraphyFamily)
+    }
+
+    private fun createCalligraphyFamily(pressureLevel: Int): BrushFamily {
+        val response = pressureLevel.toFloat() / CALLIGRAPHY_V1_MAX_PRESSURE
+        val minSize = lerp(1f, 0.45f, response)
+        val maxSize = lerp(1f, 1.6f, response)
+        val behaviors = if (pressureLevel == 0) {
+            emptyList()
+        } else {
+            listOf(
+                sizeBehavior(
+                    source = SourceNode.Source.NORMALIZED_PRESSURE,
+                    sourceRangeEnd = 1f,
+                    targetRangeStart = minSize,
+                    targetRangeEnd = maxSize,
+                    enabledTools = setOf(InputToolType.STYLUS),
+                    comment = "Stylus pressure flex for calligraphy level $pressureLevel.",
+                ),
+                sizeBehavior(
+                    source = SourceNode.Source.SPEED_IN_MULTIPLES_OF_BRUSH_SIZE_PER_SECOND,
+                    sourceRangeEnd = 20f,
+                    // Touch and mouse have no useful pressure signal: slow is thick, fast is thin.
+                    targetRangeStart = maxSize,
+                    targetRangeEnd = minSize,
+                    enabledTools = setOf(
+                        InputToolType.UNKNOWN,
+                        InputToolType.MOUSE,
+                        InputToolType.TOUCH,
+                    ),
+                    comment = "Speed fallback for calligraphy level $pressureLevel.",
+                ),
+            )
+        }
+        return BrushFamily(
+            tip = BrushTip(
+                scaleX = 1f,
+                scaleY = 0.22f,
+                cornerRounding = 0.2f,
+                rotationDegrees = 45f,
+                behaviors = behaviors,
+            ),
+            developerComment =
+                "ViveNotes calligraphy v1: fixed 45-degree broad nib, pressure level $pressureLevel.",
+        )
+    }
+
+    private fun sizeBehavior(
+        source: SourceNode.Source,
+        sourceRangeEnd: Float,
+        targetRangeStart: Float,
+        targetRangeEnd: Float,
+        enabledTools: Set<InputToolType>,
+        comment: String,
+    ): BrushBehavior = BrushBehavior(
+        terminalNode = TargetNode(
+            target = TargetNode.Target.SIZE_MULTIPLIER,
+            targetModifierRangeStart = targetRangeStart,
+            targetModifierRangeEnd = targetRangeEnd,
+            input = ToolTypeFilterNode(
+                enabledToolTypes = enabledTools,
+                input = DampingNode(
+                    dampingSource = ProgressDomain.DISTANCE_IN_MULTIPLES_OF_BRUSH_SIZE,
+                    dampingGap = 0.75f,
+                    input = SourceNode(
+                        source = source,
+                        sourceValueRangeStart = 0f,
+                        sourceValueRangeEnd = sourceRangeEnd,
+                    ),
+                ),
+            ),
+        ),
+        developerComment = comment,
+    )
+
+    private fun lerp(start: Float, end: Float, amount: Float): Float =
+        start + (end - start) * amount
 
     /** The brush a pen currently draws with. */
     fun brushFor(pen: PenPreset): Brush = Brush.createWithColorIntArgb(

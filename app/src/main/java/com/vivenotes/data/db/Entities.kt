@@ -154,9 +154,9 @@ data class InkStrokeEntity(
     /**
      * The pen's stabilization level when the stroke was drawn.
      *
-     * Recorded rather than applied: the library's input models are restricted API (see [InkCodec]),
-     * so nothing here changes the geometry yet. It is still a fact about the stroke, and the one a
-     * smoothing pass would need to reproduce it — see `docs/inkPlan.md` §4.
+     * Recorded rather than applied: stabilization still needs the reproducible pre-filter described
+     * in `docs/inkPlan.md` §4. It is kept here now so that filter can later reproduce the stroke
+     * without a storage migration.
      */
     val stabilization: Int,
     /** Page-unit bounds, so a draw pass can skip a stroke without decoding it. */

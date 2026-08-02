@@ -141,8 +141,8 @@ fun ColumnScope.PenPanelContent(pen: PenPreset, onChange: (PenPreset) -> Unit) {
     if (pen.kind != PenKind.Fountain) {
         PanelSetting(
             label = "Pressure sensitivity",
-            info = "How much harder pressing thickens the line. 0 draws at one width however you " +
-                "press.",
+            info = "How much harder pressing thickens the line. 0 turns off pressure response; " +
+                "the broad nib still makes downstrokes and cross-strokes different.",
         ) {
             PanelStepper("Pressure sensitivity", pen.pressure, 0..PenPreset.MAX_PRESSURE) {
                 onChange(pen.copy(pressure = it))
