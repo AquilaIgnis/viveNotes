@@ -203,6 +203,15 @@ class NotesRepository(
         return placed
     }
 
+    /** Appends a copied selection as one contiguous draw-order block. */
+    suspend fun addStrokes(strokes: List<InkStrokeEntity>): List<InkStrokeEntity> {
+        if (strokes.isEmpty()) return emptyList()
+        return db.withTransaction {
+            var sequence = ink.nextSeq(strokes.first().pageId)
+            strokes.map { stroke -> stroke.copy(seq = sequence++).also { ink.insert(it) } }
+        }
+    }
+
     /**
      * Erases strokes by tombstone.
      *
@@ -218,6 +227,16 @@ class NotesRepository(
     suspend fun restoreStrokes(ids: List<String>) {
         if (ids.isEmpty()) return
         ink.restore(ids)
+    }
+
+    suspend fun setInkColors(colors: Map<String, Int>) {
+        if (colors.isEmpty()) return
+        db.withTransaction { colors.forEach { (id, color) -> ink.setColor(id, color) } }
+    }
+
+    suspend fun setInkGroups(groups: Map<String, String?>) {
+        if (groups.isEmpty()) return
+        db.withTransaction { groups.forEach { (id, group) -> ink.setGroup(id, group) } }
     }
 
     suspend fun partialErasesFor(pageId: String): List<InkEraseWithTargets> =
@@ -242,7 +261,7 @@ class NotesRepository(
     suspend fun setPartialEraseActive(id: String, active: Boolean) =
         inkErases.setDeletedAt(id, if (active) null else System.currentTimeMillis())
 
-    /** Stores a lasso translation with the source rows it was allowed to move. */
+    /** Stores a lasso move or resize with the source rows it was allowed to transform. */
     suspend fun addInkMove(move: InkMoveEntity, strokeIds: Collection<String>) {
         if (strokeIds.isEmpty()) return
         db.withTransaction {
@@ -251,7 +270,7 @@ class NotesRepository(
         }
     }
 
-    /** Includes or excludes an existing lasso translation from page-open replay. */
+    /** Includes or excludes an existing lasso transform from page-open replay. */
     suspend fun setInkMoveActive(id: String, active: Boolean) =
         inkMoves.setDeletedAt(id, if (active) null else System.currentTimeMillis())
 

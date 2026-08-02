@@ -232,6 +232,36 @@ object InkCodec {
         )
     }
 
+    /** Encodes an already-styled live stroke, used by the selection Copy action. */
+    fun encodeCopy(
+        source: PageStroke,
+        stroke: Stroke,
+        pageId: String,
+        groupId: String? = null,
+        now: Long = System.currentTimeMillis(),
+    ): InkStrokeEntity {
+        val box = stroke.shape.computeBoundingBox()
+        return InkStrokeEntity(
+            id = newId(),
+            pageId = pageId,
+            seq = 0,
+            brushFamily = source.brushFamily,
+            brushVersion = source.brushVersion,
+            sizeDp = stroke.brush.size,
+            colorArgb = stroke.brush.colorIntArgb,
+            epsilon = stroke.brush.epsilon,
+            stabilization = source.stabilization,
+            minX = box?.xMin ?: 0f,
+            minY = box?.yMin ?: 0f,
+            maxX = box?.xMax ?: 0f,
+            maxY = box?.yMax ?: 0f,
+            points = encodeInputs(stroke.inputs),
+            enc = ENCODING,
+            createdAt = now,
+            groupId = groupId,
+        )
+    }
+
     /**
      * Rebuilds a stroke, or null if the row cannot be read.
      *
@@ -300,6 +330,23 @@ object InkCodec {
             createdAt = now,
         )
     }
+
+    fun encodeResize(
+        resize: InkLassoResize,
+        pageId: String,
+        now: Long = System.currentTimeMillis(),
+    ): InkMoveEntity = encodeMove(
+        path = resize.path,
+        pageId = pageId,
+        dx = 0f,
+        dy = 0f,
+        now = now,
+    ).copy(
+        scaleX = resize.scaleX,
+        scaleY = resize.scaleY,
+        anchorX = resize.anchor.x,
+        anchorY = resize.anchor.y,
+    )
 
     fun decodeMove(entity: InkMoveEntity): List<InkPoint>? {
         if (entity.enc != MOVE_ENCODING) return null

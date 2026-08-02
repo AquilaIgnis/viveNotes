@@ -20,7 +20,7 @@ import androidx.sqlite.execSQL
         InkMoveEntity::class,
         InkMoveTargetEntity::class,
     ],
-    version = 7,
+    version = 9,
     // Turn this on together with the androidx.room Gradle plugin and room.schemaLocation before
     // the first release, since the exported schemas are what migration tests assert against.
     exportSchema = false,
@@ -177,6 +177,23 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds durable logical grouping without changing immutable stroke geometry. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE ink_strokes ADD COLUMN groupId TEXT")
+            }
+        }
+
+        /** Extends replayable lasso transforms with axis-aligned corner resizing. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE ink_moves ADD COLUMN scaleX REAL NOT NULL DEFAULT 1")
+                connection.execSQL("ALTER TABLE ink_moves ADD COLUMN scaleY REAL NOT NULL DEFAULT 1")
+                connection.execSQL("ALTER TABLE ink_moves ADD COLUMN anchorX REAL NOT NULL DEFAULT 0")
+                connection.execSQL("ALTER TABLE ink_moves ADD COLUMN anchorY REAL NOT NULL DEFAULT 0")
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 .addMigrations(
@@ -186,6 +203,8 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_7_8,
+                    MIGRATION_8_9,
                 )
                 .build()
     }

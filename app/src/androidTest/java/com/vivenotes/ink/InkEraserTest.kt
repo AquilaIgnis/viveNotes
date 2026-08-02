@@ -112,6 +112,64 @@ class InkEraserTest {
     }
 
     @Test
+    fun touchingOneGroupedStrokeSelectsTheWholeGroupAndUsesOneUnionBounds() {
+        val left = PageStroke(
+            "left",
+            InkCodec.eraseMask(inputs(20f to 50f, 40f to 50f), 6f),
+            groupId = "group",
+        )
+        val right = PageStroke(
+            "right",
+            InkCodec.eraseMask(inputs(120f to 50f, 140f to 50f), 6f),
+            groupId = "group",
+        )
+
+        val selection = listOf(left, right).selectWithLasso(rectangle(5f, 30f, 60f, 70f))!!
+
+        assertEquals(setOf("left", "right"), selection.targetIds)
+        assertTrue(selection.bounds.left < 20f)
+        assertTrue(selection.bounds.right > 140f)
+    }
+
+    @Test
+    fun aTightLassoSelectsAnInnerObjectWithoutItsLargerSurround() {
+        val outer = PageStroke(
+            "outer",
+            InkCodec.eraseMask(inputs(10f to 10f, 100f to 100f), 6f),
+        )
+        val inner = PageStroke(
+            "inner",
+            InkCodec.eraseMask(inputs(47f to 47f, 57f to 57f), 6f),
+        )
+
+        val selection = listOf(outer, inner).selectWithLasso(rectangle(40f, 40f, 65f, 65f))
+
+        assertEquals(setOf("inner"), selection?.targetIds)
+    }
+
+    @Test
+    fun aTightCurvedLassoUsesTheInkOutlineInsteadOfEmptyBoundingBoxCorners() {
+        val triangle = PageStroke(
+            "triangle",
+            InkCodec.eraseMask(
+                inputs(50f to 20f, 40f to 50f, 60f to 50f, 50f to 20f),
+                4f,
+            ),
+        )
+        // This encloses the rendered triangle closely. The top-left and top-right corners of the
+        // triangle's rectangular bounds are deliberately outside this triangular lasso.
+        val tightLasso = listOf(
+            InkPoint(50f, 14f),
+            InkPoint(34f, 56f),
+            InkPoint(66f, 56f),
+        )
+
+        val selection = listOf(triangle).selectWithLasso(tightLasso, edgeTolerance = 3f)
+
+        assertEquals(setOf("triangle"), selection?.targetIds)
+    }
+
+    @Test
     fun replayedLassoMoveCanMoveOneDisconnectedProjectionWithASharedRowId() {
         val left = PageStroke("stroke", InkCodec.eraseMask(inputs(20f to 50f, 40f to 50f), 6f))
         val right = PageStroke("stroke", InkCodec.eraseMask(inputs(120f to 50f, 140f to 50f), 6f))
@@ -125,6 +183,28 @@ class InkEraserTest {
 
         assertEquals(80f, moved[0].offsetX, 0.001f)
         assertEquals(0f, moved[1].offsetX, 0.001f)
+    }
+
+    @Test
+    fun cornerResizeScalesSelectedInkAroundTheOppositeCorner() {
+        val stroke = PageStroke("stroke", InkCodec.eraseMask(inputs(20f to 20f, 40f to 40f), 6f))
+        val selection = listOf(stroke).selectWithLasso(rectangle(10f, 10f, 50f, 50f))!!
+
+        val resized = listOf(stroke).resizeSelected(
+            InkLassoResize(
+                path = selection.path,
+                targetIds = selection.targetIds,
+                projections = selection.projections,
+                anchor = InkPoint(10f, 10f),
+                scaleX = 2f,
+                scaleY = 1.5f,
+            ),
+        ).single()
+
+        assertEquals(2f, resized.scaleX, 0.001f)
+        assertEquals(1.5f, resized.scaleY, 0.001f)
+        assertEquals(-10f, resized.offsetX, 0.001f)
+        assertEquals(-5f, resized.offsetY, 0.001f)
     }
 
     @Test

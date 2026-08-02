@@ -1,12 +1,16 @@
 package com.vivenotes.ui.editor
 
 import android.graphics.Matrix
+import android.view.MotionEvent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipe
@@ -22,6 +26,7 @@ import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkLassoMove
+import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ui.theme.ViveNotesTheme
 
@@ -44,6 +49,9 @@ class InkOverlayTest {
     private var partialErases = 0
     private var objectEraseCalls = 0
     private var lassoMove: InkLassoMove? = null
+    private var lassoResize: InkLassoResize? = null
+    private var deletedIds = emptySet<String>()
+    private var recolorArgb: Int? = null
 
     private val recordingPan = object : CanvasPan {
         override fun by(dx: Float, dy: Float) {
@@ -82,6 +90,9 @@ class InkOverlayTest {
                         onObjectErase = { objectEraseCalls++ },
                         onPartialErase = { partialErases++ },
                         onMoveSelection = { lassoMove = it },
+                        onResizeSelection = { lassoResize = it },
+                        onDeleteSelection = { deletedIds = it },
+                        onRecolorSelection = { _, color -> recolorArgb = color },
                         pan = recordingPan,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -164,6 +175,178 @@ class InkOverlayTest {
         assertEquals(50f, lassoMove!!.dy, 2f)
         assertEquals("lasso should not pan the page", 0f, dragged, 0.001f)
     }
+
+    @Test
+    fun aCompletedInkSelectionShowsTheReferenceStyleActions() {
+        val first = PageStroke(
+            "first",
+            InkCodec.eraseMask(
+                MutableStrokeInputBatch().apply {
+                    add(InputToolType.UNKNOWN, 90f, 100f, 0L)
+                    add(InputToolType.UNKNOWN, 110f, 100f, 10L)
+                }.toImmutable(),
+                6f,
+            ),
+        )
+        val second = PageStroke(
+            "second",
+            InkCodec.eraseMask(
+                MutableStrokeInputBatch().apply {
+                    add(InputToolType.UNKNOWN, 150f, 100f, 0L)
+                    add(InputToolType.UNKNOWN, 170f, 100f, 10L)
+                }.toImmutable(),
+                6f,
+            ),
+        )
+        setOverlay(allowFinger = false, lassoing = true, pageStrokes = listOf(first, second))
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(60f, 60f))
+            moveTo(Offset(200f, 60f))
+            moveTo(Offset(200f, 140f))
+            moveTo(Offset(60f, 140f))
+            up()
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_COLOR_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_COLOR_TAG).performClick()
+        compose.onNodeWithContentDescription("White").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Black").assertIsDisplayed().performClick()
+        assertEquals(0xFF000000.toInt(), recolorArgb)
+        compose.onNodeWithTag(OBJECT_COPY_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_GROUP_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_DELETE_TAG).assertIsDisplayed().performClick()
+        assertEquals(setOf("first", "second"), deletedIds)
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun groupIsHiddenForASingleSelectedObject() {
+        val ink = PageStroke(
+            "only",
+            InkCodec.eraseMask(
+                MutableStrokeInputBatch().apply {
+                    add(InputToolType.UNKNOWN, 90f, 100f, 0L)
+                    add(InputToolType.UNKNOWN, 110f, 100f, 10L)
+                }.toImmutable(),
+                6f,
+            ),
+        )
+        setOverlay(allowFinger = false, lassoing = true, pageStrokes = listOf(ink))
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(70f, 70f))
+            moveTo(Offset(130f, 70f))
+            moveTo(Offset(130f, 130f))
+            moveTo(Offset(70f, 130f))
+            up()
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_GROUP_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun draggingASelectionCornerRequestsAResize() {
+        val ink = PageStroke(
+            "only",
+            InkCodec.eraseMask(
+                MutableStrokeInputBatch().apply {
+                    add(InputToolType.UNKNOWN, 90f, 100f, 0L)
+                    add(InputToolType.UNKNOWN, 110f, 100f, 10L)
+                }.toImmutable(),
+                6f,
+            ),
+        )
+        setOverlay(allowFinger = false, lassoing = true, pageStrokes = listOf(ink))
+        val overlay = compose.onNodeWithTag(INK_OVERLAY_TAG)
+        overlay.performTouchInput {
+            down(Offset(70f, 70f))
+            moveTo(Offset(130f, 70f))
+            moveTo(Offset(130f, 130f))
+            moveTo(Offset(70f, 130f))
+            up()
+        }
+        compose.waitForIdle()
+
+        overlay.performTouchInput {
+            down(Offset(113f, 103f))
+            moveTo(Offset(160f, 145f))
+            up()
+        }
+        compose.waitForIdle()
+
+        assertEquals(setOf("only"), lassoResize?.targetIds)
+        assertTrue(lassoResize!!.scaleX > 1f)
+        assertTrue(lassoResize!!.scaleY > 1f)
+    }
+
+    @Test
+    fun lassoMoveAndResizeExposeLivePreviewBeforeRelease() {
+        val ink = PageStroke(
+            "only",
+            InkCodec.eraseMask(
+                MutableStrokeInputBatch().apply {
+                    add(InputToolType.UNKNOWN, 90f, 100f, 0L)
+                    add(InputToolType.UNKNOWN, 110f, 100f, 10L)
+                }.toImmutable(),
+                6f,
+            ),
+        )
+        val gesture = LassoGesture()
+        val identity = Matrix()
+        val noMove: (InkLassoMove) -> Unit = {}
+        val noResize: (InkLassoResize) -> Unit = {}
+
+        gesture.handle(motion(MotionEvent.ACTION_DOWN, 70f, 70f), identity, listOf(ink), noMove, noResize)
+        val beforeTrace = gesture.renderRevision
+        gesture.handle(motion(MotionEvent.ACTION_MOVE, 130f, 70f), identity, listOf(ink), noMove, noResize)
+        assertTrue("lasso samples did not invalidate the live trace", gesture.renderRevision > beforeTrace)
+        assertTrue(gesture.drawingPath().size > 1)
+        gesture.handle(motion(MotionEvent.ACTION_MOVE, 130f, 130f), identity, listOf(ink), noMove, noResize)
+        gesture.handle(motion(MotionEvent.ACTION_MOVE, 70f, 130f), identity, listOf(ink), noMove, noResize)
+        gesture.handle(motion(MotionEvent.ACTION_UP, 70f, 70f), identity, listOf(ink), noMove, noResize)
+        assertTrue("the completed lasso trace remained visible", gesture.drawingPath().isEmpty())
+
+        val selected = gesture.selectionBounds()!!
+        gesture.handle(motion(MotionEvent.ACTION_DOWN, selected.center.x, selected.center.y), identity, listOf(ink), noMove, noResize)
+        gesture.handle(
+            motion(MotionEvent.ACTION_MOVE, selected.center.x + 30f, selected.center.y + 25f),
+            identity,
+            listOf(ink),
+            noMove,
+            noResize,
+        )
+        val moving = gesture.selectionBounds()!!
+        assertEquals(selected.center.x + 30f, moving.center.x, 0.01f)
+        assertEquals(selected.center.y + 25f, moving.center.y, 0.01f)
+        gesture.handle(
+            motion(MotionEvent.ACTION_UP, selected.center.x + 30f, selected.center.y + 25f),
+            identity,
+            listOf(ink),
+            noMove,
+            noResize,
+        )
+
+        val moved = gesture.selectionBounds()!!
+        gesture.handle(motion(MotionEvent.ACTION_DOWN, moved.right, moved.bottom), identity, listOf(ink), noMove, noResize)
+        gesture.handle(
+            motion(MotionEvent.ACTION_MOVE, moved.right + 25f, moved.bottom + 20f),
+            identity,
+            listOf(ink),
+            noMove,
+            noResize,
+        )
+        val resizing = gesture.selectionBounds()!!
+        assertTrue("corner resize had no live horizontal preview", resizing.right > moved.right)
+        assertTrue("corner resize had no live vertical preview", resizing.bottom > moved.bottom)
+    }
+
+    private fun motion(action: Int, x: Float, y: Float): MotionEvent =
+        MotionEvent.obtain(0L, 16L, action, x, y, 0)
 
     @Test
     fun objectModeUsesWholeStrokeHitTestingInsteadOfAPartialMask() {

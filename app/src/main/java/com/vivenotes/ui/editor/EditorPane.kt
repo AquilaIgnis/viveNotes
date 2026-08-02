@@ -86,6 +86,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.InkLassoMove
+import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.PageStyle
@@ -194,6 +195,12 @@ fun EditorPane(
     onPartialErase: (InkStroke) -> Unit = {},
     onObjectErase: (InkStroke) -> Unit = {},
     onMoveSelection: (InkLassoMove) -> Unit = {},
+    onResizeSelection: (InkLassoResize) -> Unit = {},
+    onDeleteInkSelection: (Set<String>) -> Unit = {},
+    onCopyInkSelection: (Set<String>) -> Unit = {},
+    onRecolorInkSelection: (Set<String>, Int) -> Unit = { _, _ -> },
+    onGroupInkSelection: (Set<String>) -> Unit = {},
+    onUngroupInkSelection: (Set<String>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val shell = LocalCanvasColors.current
@@ -498,6 +505,12 @@ fun EditorPane(
                 onPartialErase = onPartialErase,
                 onObjectErase = onObjectErase,
                 onMoveSelection = onMoveSelection,
+                onResizeSelection = onResizeSelection,
+                onDeleteSelection = onDeleteInkSelection,
+                onCopySelection = onCopyInkSelection,
+                onRecolorSelection = onRecolorInkSelection,
+                onGroupSelection = onGroupInkSelection,
+                onUngroupSelection = onUngroupInkSelection,
                 pan = remember(horizontal, vertical, scope, flingSpec) {
                     ScrollStatePan(horizontal, vertical, scope, flingSpec)
                 },

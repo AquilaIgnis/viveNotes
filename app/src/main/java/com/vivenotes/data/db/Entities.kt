@@ -174,6 +174,8 @@ data class InkStrokeEntity(
      */
     val enc: String,
     val createdAt: Long,
+    /** Optional logical object group. Geometry remains immutable when membership changes. */
+    val groupId: String? = null,
     /** Erasing is a tombstone. Ink is never hard-deleted, so an erase can be replicated. */
     val deletedAt: Long? = null,
 ) {
@@ -253,7 +255,7 @@ data class InkEraseWithTargets(
     val targets: List<InkEraseTargetEntity>,
 )
 
-/** One lasso translation, stored as its original page-space polygon and delta. */
+/** One lasso transform, stored as its original page-space polygon and affine parameters. */
 @Entity(
     tableName = "ink_moves",
     foreignKeys = [
@@ -271,6 +273,11 @@ data class InkMoveEntity(
     val pageId: String,
     val dxDp: Float,
     val dyDp: Float,
+    /** Optional resize composed after the translation, around a page-space anchor. */
+    @ColumnInfo(defaultValue = "1") val scaleX: Float = 1f,
+    @ColumnInfo(defaultValue = "1") val scaleY: Float = 1f,
+    @ColumnInfo(defaultValue = "0") val anchorX: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val anchorY: Float = 0f,
     /** Closed lasso vertices encoded in page coordinates. */
     val points: ByteArray,
     val enc: String,
@@ -284,7 +291,7 @@ data class InkMoveEntity(
     override fun hashCode(): Int = 31 * id.hashCode() + points.contentHashCode()
 }
 
-/** The source rows that existed inside a lasso when its move was committed. */
+/** The source rows that existed inside a lasso when its transform was committed. */
 @Entity(
     tableName = "ink_move_targets",
     primaryKeys = ["moveId", "strokeId"],

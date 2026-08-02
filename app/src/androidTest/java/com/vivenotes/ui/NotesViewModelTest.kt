@@ -40,6 +40,7 @@ import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkLassoMove
+import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.projectionKey
 import com.vivenotes.model.Block
@@ -422,6 +423,88 @@ class NotesViewModelTest {
         vm.openPage(pageId)
         advanceUntilIdle()
         assertEquals("the redone move was not replayed after reload", 100f, vm.strokes.value.single().offsetX, 0.01f)
+    }
+
+    @Test
+    fun selectedInkCanBeRecoloredGroupedAndReloaded() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 10f, 20f to 20f))
+        vm.onStrokeFinished(inkStroke(40f to 40f, 50f to 50f))
+        advanceUntilIdle()
+        val ids = vm.strokes.value.map { it.id }.toSet()
+        val blue = 0xFF3B82F6.toInt()
+
+        vm.groupInk(ids)
+        vm.recolorInk(ids, blue)
+        assertEquals(1, vm.strokes.value.mapNotNull { it.groupId }.distinct().size)
+        assertTrue(vm.strokes.value.all { it.stroke.brush.colorIntArgb == blue })
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        assertEquals("group membership was not persisted", 1, vm.strokes.value.mapNotNull { it.groupId }.distinct().size)
+        assertTrue("the selected colour was not persisted", vm.strokes.value.all { it.stroke.brush.colorIntArgb == blue })
+    }
+
+    @Test
+    fun copyingInkCreatesAnOffsetUndoableDuplicate() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 10f, 20f to 20f))
+        advanceUntilIdle()
+        val originalId = vm.strokes.value.single().id
+
+        vm.copyInk(setOf(originalId))
+        assertEquals(2, vm.strokes.value.size)
+        assertTrue(vm.strokes.value.any { it.id != originalId && it.stroke.shape.computeBoundingBox()!!.xMin > 20f })
+        vm.undoInk()
+        assertEquals(1, vm.strokes.value.size)
+        vm.redoInk()
+        assertEquals(2, vm.strokes.value.size)
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals("the copied object did not survive reload", 2, vm.strokes.value.size)
+    }
+
+    @Test
+    fun resizingInkIsUndoableAndReplaysAfterReload() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 10f, 30f to 30f))
+        advanceUntilIdle()
+        val original = vm.strokes.value.single()
+
+        vm.resizeInk(
+            InkLassoResize(
+                path = listOf(
+                    InkPoint(0f, 0f),
+                    InkPoint(40f, 0f),
+                    InkPoint(40f, 40f),
+                    InkPoint(0f, 40f),
+                ),
+                targetIds = setOf(original.id),
+                projections = setOf(original.projectionKey),
+                anchor = InkPoint(0f, 0f),
+                scaleX = 2f,
+                scaleY = 1.5f,
+            ),
+        )
+        assertEquals(2f, vm.strokes.value.single().scaleX, 0.001f)
+        vm.undoInk()
+        assertEquals(1f, vm.strokes.value.single().scaleX, 0.001f)
+        vm.redoInk()
+        assertEquals(2f, vm.strokes.value.single().scaleX, 0.001f)
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        assertEquals("the resize did not replay", 2f, vm.strokes.value.single().scaleX, 0.001f)
+        assertEquals(1.5f, vm.strokes.value.single().scaleY, 0.001f)
     }
 
     @Test

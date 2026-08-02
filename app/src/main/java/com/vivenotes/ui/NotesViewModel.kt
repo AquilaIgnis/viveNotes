@@ -42,12 +42,19 @@ import com.vivenotes.data.db.InkEraseWithTargets
 import com.vivenotes.data.db.InkMoveWithTargets
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkLassoMove
+import com.vivenotes.ink.InkLassoResize
+import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.eraseObjects
 import com.vivenotes.ink.moveSelected
+import com.vivenotes.ink.recolor
+import com.vivenotes.ink.regroup
 import com.vivenotes.ink.replayMove
+import com.vivenotes.ink.replayResize
+import com.vivenotes.ink.resizeSelected
 import com.vivenotes.ink.subtract
 import com.vivenotes.ink.targetsFor
+import com.vivenotes.ink.translatedCopy
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.Orientation
@@ -108,6 +115,16 @@ private sealed interface InkHistoryMutation {
 
     data class EraseOperation(val id: String) : InkHistoryMutation
     data class MoveOperation(val id: String) : InkHistoryMutation
+
+    data class RecolorStrokes(
+        val before: Map<String, Int>,
+        val after: Map<String, Int>,
+    ) : InkHistoryMutation
+
+    data class RegroupStrokes(
+        val before: Map<String, String?>,
+        val after: Map<String, String?>,
+    ) : InkHistoryMutation
 }
 
 private data class InkHistoryEntry(
@@ -590,7 +607,16 @@ class NotesViewModel(
     private suspend fun loadInk(pageId: String): List<PageStroke> {
         // A stroke or operation that cannot be decoded costs only that item, not the page.
         val baseStrokes = repository.inkFor(pageId).mapNotNull { row ->
-            InkCodec.decode(row)?.let { PageStroke(row.id, it) }
+            InkCodec.decode(row)?.let {
+                PageStroke(
+                    id = row.id,
+                    stroke = it,
+                    brushFamily = row.brushFamily,
+                    brushVersion = row.brushVersion,
+                    stabilization = row.stabilization,
+                    groupId = row.groupId,
+                )
+            }
         }
         val storedOperations = buildList {
             repository.partialErasesFor(pageId).forEach { add(StoredInkOperation.Erase(it)) }
@@ -616,11 +642,18 @@ class NotesViewModel(
                     is StoredInkOperation.Move -> {
                         val stored = operation.stored
                         val path = InkCodec.decodeMove(stored.move) ?: return@fold current
-                        current.replayMove(
+                        val moved = current.replayMove(
                             path = path,
                             targetIds = stored.targets.map { it.strokeId },
                             dx = stored.move.dxDp,
                             dy = stored.move.dyDp,
+                        )
+                        moved.replayResize(
+                            path = path,
+                            targetIds = stored.targets.map { it.strokeId },
+                            anchor = InkPoint(stored.move.anchorX, stored.move.anchorY),
+                            scaleX = stored.move.scaleX,
+                            scaleY = stored.move.scaleY,
                         )
                     }
                 }
@@ -662,7 +695,13 @@ class NotesViewModel(
         commitInkEdit(
             pageId = pageId,
             before = before,
-            after = before + PageStroke(entity.id, stroke),
+            after = before + PageStroke(
+                id = entity.id,
+                stroke = stroke,
+                brushFamily = entity.brushFamily,
+                brushVersion = entity.brushVersion,
+                stabilization = entity.stabilization,
+            ),
             mutation = InkHistoryMutation.AddStrokes(listOf(entity.id)),
         )
         viewModelScope.launch {
@@ -723,6 +762,102 @@ class NotesViewModel(
             inkMutations.withLock {
                 repository.addInkMove(entity, move.targetIds)
             }
+        }
+    }
+
+    /** Commits one corner-handle drag as a replayable selection transform. */
+    fun resizeInk(resize: InkLassoResize) {
+        if (resize.projections.isEmpty() || (resize.scaleX == 1f && resize.scaleY == 1f)) return
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val before = _strokes.value
+        if (before.none { it.id in resize.targetIds }) return
+        val entity = InkCodec.encodeResize(resize, pageId, now = nextInkOperationTime())
+        commitInkEdit(
+            pageId = pageId,
+            before = before,
+            after = before.resizeSelected(resize),
+            mutation = InkHistoryMutation.MoveOperation(entity.id),
+        )
+        viewModelScope.launch {
+            inkMutations.withLock { repository.addInkMove(entity, resize.targetIds) }
+        }
+    }
+
+    /** Duplicates selected logical ink objects and offsets the result so the copy is visible. */
+    fun copyInk(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val before = _strokes.value
+        val selected = before.filter { it.id in ids }.distinctBy(PageStroke::id)
+        if (selected.isEmpty()) return
+        val sourceGroup = selected.map(PageStroke::groupId).distinct().singleOrNull()
+        val copiedGroup = sourceGroup?.let { newId() }
+        val now = nextInkOperationTime()
+        val copies = selected.map { source ->
+            val stroke = source.translatedCopy(COPY_OFFSET_DP, COPY_OFFSET_DP)
+            val entity = InkCodec.encodeCopy(source, stroke, pageId, copiedGroup, now)
+            entity to PageStroke(
+                id = entity.id,
+                stroke = stroke,
+                brushFamily = entity.brushFamily,
+                brushVersion = entity.brushVersion,
+                stabilization = entity.stabilization,
+                groupId = entity.groupId,
+            )
+        }
+        commitInkEdit(
+            pageId = pageId,
+            before = before,
+            after = before + copies.map { it.second },
+            mutation = InkHistoryMutation.AddStrokes(copies.map { it.first.id }),
+        )
+        viewModelScope.launch {
+            inkMutations.withLock { repository.addStrokes(copies.map { it.first }) }
+        }
+    }
+
+    fun recolorInk(ids: Set<String>, colorArgb: Int) {
+        if (ids.isEmpty()) return
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val before = _strokes.value
+        val oldColors = before.filter { it.id in ids }
+            .associate { it.id to it.stroke.brush.colorIntArgb }
+        if (oldColors.isEmpty() || oldColors.values.all { it == colorArgb }) return
+        val newColors = oldColors.keys.associateWith { colorArgb }
+        commitInkEdit(
+            pageId = pageId,
+            before = before,
+            after = before.recolor(oldColors.keys, colorArgb),
+            mutation = InkHistoryMutation.RecolorStrokes(oldColors, newColors),
+        )
+        viewModelScope.launch {
+            inkMutations.withLock { repository.setInkColors(newColors) }
+        }
+    }
+
+    fun groupInk(ids: Set<String>) = setInkGroup(ids, newId())
+
+    fun ungroupInk(ids: Set<String>) = setInkGroup(ids, null)
+
+    private fun setInkGroup(ids: Set<String>, groupId: String?) {
+        if (ids.size < 2 && groupId != null) return
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val before = _strokes.value
+        val oldGroups = before.filter { it.id in ids }.associate { it.id to it.groupId }
+        if (oldGroups.isEmpty() || oldGroups.values.all { it == groupId }) return
+        val newGroups = oldGroups.keys.associateWith { groupId }
+        commitInkEdit(
+            pageId = pageId,
+            before = before,
+            after = before.regroup(newGroups),
+            mutation = InkHistoryMutation.RegroupStrokes(oldGroups, newGroups),
+        )
+        viewModelScope.launch {
+            inkMutations.withLock { repository.setInkGroups(newGroups) }
         }
     }
 
@@ -837,6 +972,10 @@ class NotesViewModel(
                         repository.setPartialEraseActive(mutation.id, applied)
                     is InkHistoryMutation.MoveOperation ->
                         repository.setInkMoveActive(mutation.id, applied)
+                    is InkHistoryMutation.RecolorStrokes ->
+                        repository.setInkColors(if (applied) mutation.after else mutation.before)
+                    is InkHistoryMutation.RegroupStrokes ->
+                        repository.setInkGroups(if (applied) mutation.after else mutation.before)
                 }
             }
         }
@@ -967,6 +1106,7 @@ class NotesViewModel(
     companion object {
         private const val AUTOSAVE_DELAY_MS = 400L
         private const val INK_HISTORY_LIMIT = 100
+        private const val COPY_OFFSET_DP = 18f
         const val MIN_OUTLINE_WIDTH = 120f
         const val MAX_OUTLINE_WIDTH = 2000f
         const val MAX_OUTLINE_HEIGHT = 4000f

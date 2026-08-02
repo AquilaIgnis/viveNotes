@@ -107,11 +107,20 @@ interface InkStrokeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(stroke: InkStrokeEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(strokes: List<InkStrokeEntity>)
+
     @Query("UPDATE ink_strokes SET deletedAt = :now WHERE id IN (:ids)")
     suspend fun softDelete(ids: List<String>, now: Long)
 
     @Query("UPDATE ink_strokes SET deletedAt = NULL WHERE id IN (:ids)")
     suspend fun restore(ids: List<String>)
+
+    @Query("UPDATE ink_strokes SET colorArgb = :colorArgb WHERE id = :id")
+    suspend fun setColor(id: String, colorArgb: Int)
+
+    @Query("UPDATE ink_strokes SET groupId = :groupId WHERE id = :id")
+    suspend fun setGroup(id: String, groupId: String?)
 
     @Query("SELECT COALESCE(MAX(seq), -1) + 1 FROM ink_strokes WHERE pageId = :pageId")
     suspend fun nextSeq(pageId: String): Int

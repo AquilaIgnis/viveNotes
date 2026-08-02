@@ -382,6 +382,12 @@ private fun EditorSurface(
         onPartialErase = viewModel::eraseStrokeParts,
         onObjectErase = viewModel::eraseStrokeObjects,
         onMoveSelection = viewModel::moveInk,
+        onResizeSelection = viewModel::resizeInk,
+        onDeleteInkSelection = { viewModel.eraseStrokes(it.toList()) },
+        onCopyInkSelection = viewModel::copyInk,
+        onRecolorInkSelection = viewModel::recolorInk,
+        onGroupInkSelection = viewModel::groupInk,
+        onUngroupInkSelection = viewModel::ungroupInk,
         showPrintMargins = showPrintMargins,
         modifier = modifier,
     )

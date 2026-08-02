@@ -203,4 +203,58 @@ class MigrationTest {
             }
         }
     }
+
+    @Test
+    fun migration7To8LeavesExistingInkUngrouped() {
+        val driver = AndroidSQLiteDriver()
+
+        driver.open(file.absolutePath).use { connection ->
+            connection.execSQL("CREATE TABLE ink_strokes (id TEXT NOT NULL PRIMARY KEY)")
+            connection.execSQL("INSERT INTO ink_strokes VALUES ('stroke')")
+
+            NotesDatabase.MIGRATION_7_8.migrate(connection)
+
+            connection.prepare("SELECT groupId FROM ink_strokes WHERE id = 'stroke'").use {
+                assertEquals(true, it.step())
+                assertEquals(true, it.isNull(0))
+            }
+        }
+    }
+
+    @Test
+    fun migration8To9KeepsExistingMovesAsTranslationOnly() {
+        val driver = AndroidSQLiteDriver()
+
+        driver.open(file.absolutePath).use { connection ->
+            connection.execSQL(
+                """
+                CREATE TABLE ink_moves (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    pageId TEXT NOT NULL,
+                    dxDp REAL NOT NULL,
+                    dyDp REAL NOT NULL,
+                    points BLOB NOT NULL,
+                    enc TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    deletedAt INTEGER
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                "INSERT INTO ink_moves VALUES ('move', 'page', 4.0, 8.0, X'01', 'ink/lasso-f32le1', 42, NULL)",
+            )
+
+            NotesDatabase.MIGRATION_8_9.migrate(connection)
+
+            connection.prepare(
+                "SELECT scaleX, scaleY, anchorX, anchorY FROM ink_moves WHERE id = 'move'",
+            ).use {
+                assertEquals(true, it.step())
+                assertEquals(1.0, it.getDouble(0), 0.001)
+                assertEquals(1.0, it.getDouble(1), 0.001)
+                assertEquals(0.0, it.getDouble(2), 0.001)
+                assertEquals(0.0, it.getDouble(3), 0.001)
+            }
+        }
+    }
 }
