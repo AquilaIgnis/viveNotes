@@ -67,7 +67,7 @@ class MigrationTest {
     }
 
     @Test
-    fun migration3To4StoresTargetedEraseMasksAndCascadesTheirTargets() {
+    fun migration3To5StoresTypedEraseMasksAndCascadesTheirTargets() {
         val driver = AndroidSQLiteDriver()
 
         driver.open(file.absolutePath).use { connection ->
@@ -85,11 +85,19 @@ class MigrationTest {
             )
             connection.execSQL("INSERT INTO ink_erase_targets VALUES ('erase', 'stroke')")
 
+            NotesDatabase.MIGRATION_4_5.migrate(connection)
+
             connection.prepare(
-                "SELECT strokeId FROM ink_erase_targets WHERE eraseId = 'erase'",
+                """
+                SELECT ink_erase_targets.strokeId, ink_erases.mode
+                FROM ink_erase_targets
+                JOIN ink_erases ON ink_erases.id = ink_erase_targets.eraseId
+                WHERE eraseId = 'erase'
+                """.trimIndent(),
             ).use {
                 assertEquals(true, it.step())
                 assertEquals("stroke", it.getText(0))
+                assertEquals("Normal", it.getText(1))
             }
 
             connection.execSQL("DELETE FROM ink_erases WHERE id = 'erase'")

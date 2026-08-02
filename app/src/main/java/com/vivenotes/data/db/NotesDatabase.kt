@@ -18,7 +18,7 @@ import androidx.sqlite.execSQL
         InkEraseEntity::class,
         InkEraseTargetEntity::class,
     ],
-    version = 4,
+    version = 5,
     // Turn this on together with the androidx.room Gradle plugin and room.schemaLocation before
     // the first release, since the exported schemas are what migration tests assert against.
     exportSchema = false,
@@ -119,9 +119,18 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /** Distinguishes ordinary subtraction masks from connected-component object erases. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "ALTER TABLE ink_erases ADD COLUMN mode TEXT NOT NULL DEFAULT 'Normal'",
+                )
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
     }
 }

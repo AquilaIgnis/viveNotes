@@ -369,7 +369,7 @@ private fun EditorSurface(
         allowFinger = allowFinger,
         onStrokeFinished = viewModel::onStrokeFinished,
         onPartialErase = viewModel::eraseStrokeParts,
-        onErase = viewModel::eraseStrokes,
+        onObjectErase = viewModel::eraseStrokeObjects,
         showPrintMargins = showPrintMargins,
         modifier = modifier,
     )

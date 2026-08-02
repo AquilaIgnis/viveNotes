@@ -5,6 +5,7 @@ import androidx.ink.geometry.ImmutableBox
 import androidx.ink.geometry.ImmutableVec
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.vivenotes.data.EraserMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -50,18 +51,39 @@ class InkEraserTest {
     }
 
     @Test
+    fun objectEraserRemovesOnlyTheDisconnectedRegionItTouches() {
+        val ink = InkCodec.eraseMask(inputs(10f to 50f, 90f to 50f), sizeDp = 6f)
+        val separatingMask = InkCodec.eraseMask(inputs(50f to 35f, 50f to 65f), sizeDp = 18f)
+        val separated = listOf(PageStroke("stroke", ink))
+            .subtract(separatingMask, targetIds = listOf("stroke"))
+        val objectMask = InkCodec.eraseMask(inputs(20f to 45f, 20f to 55f), sizeDp = 12f)
+
+        val erased = separated.eraseObjects(objectMask, targetIds = listOf("stroke")).single().stroke
+
+        assertFalse(erased.shape.overlaps(box(20f, 48f, 30f, 52f)))
+        assertFalse(erased.shape.overlaps(box(48f, 48f, 52f, 52f)))
+        assertTrue(erased.shape.overlaps(box(70f, 48f, 80f, 52f)))
+    }
+
+    @Test
     fun eraseMaskRoundTripsForPageReload() {
         val mask = InkCodec.eraseMask(
             inputs = inputs(12f to 34f, 56f to 78f),
             sizeDp = 23f,
         )
 
-        val row = InkCodec.encodeErase(mask, pageId = "page", now = 42L)
+        val row = InkCodec.encodeErase(
+            mask,
+            pageId = "page",
+            mode = EraserMode.Object,
+            now = 42L,
+        )
         val restored = InkCodec.decodeErase(row)
 
         assertNotNull(restored)
         assertEquals(23f, restored!!.brush.size, 0.001f)
         assertEquals(mask.inputs.size, restored.inputs.size)
+        assertEquals(EraserMode.Object, row.mode)
         assertEquals(42L, row.createdAt)
     }
 

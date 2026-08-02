@@ -235,7 +235,7 @@ class NotesViewModelTest {
     }
 
     @Test
-    fun reopeningAPageReplaysPartialEraseWithoutTouchingInkDrawnLater() = runTest(dispatcher) {
+    fun reopeningReplaysComponentEraseWithoutTouchingInkDrawnLater() = runTest(dispatcher) {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!
         vm.selectTool(DrawTool.Pen(0))
@@ -248,7 +248,12 @@ class NotesViewModelTest {
         advanceUntilIdle()
         assertFalse(vm.strokes.value.single().stroke.overlaps(centerBox()))
 
-        // This crosses the same place after the erase and must not become a target during replay.
+        vm.eraseStrokeObjects(inkStroke(20f to 45f, 20f to 55f, sizeDp = 12f))
+        advanceUntilIdle()
+        assertFalse(vm.strokes.value.single().stroke.overlaps(leftBox()))
+        assertTrue(vm.strokes.value.single().stroke.overlaps(rightBox()))
+
+        // This crosses the same place after both erases and must not become a target during replay.
         vm.onStrokeFinished(inkStroke(50f to 10f, 50f to 90f))
         advanceUntilIdle()
         val newId = vm.strokes.value.first { it.id != oldId }.id
@@ -257,6 +262,8 @@ class NotesViewModelTest {
         advanceUntilIdle()
 
         assertFalse(vm.strokes.value.first { it.id == oldId }.stroke.overlaps(centerBox()))
+        assertFalse(vm.strokes.value.first { it.id == oldId }.stroke.overlaps(leftBox()))
+        assertTrue(vm.strokes.value.first { it.id == oldId }.stroke.overlaps(rightBox()))
         assertTrue(vm.strokes.value.first { it.id == newId }.stroke.overlaps(centerBox()))
     }
 
@@ -316,6 +323,16 @@ class NotesViewModelTest {
     private fun centerBox(): ImmutableBox = ImmutableBox.fromTwoPoints(
         ImmutableVec(48f, 48f),
         ImmutableVec(52f, 52f),
+    )
+
+    private fun leftBox(): ImmutableBox = ImmutableBox.fromTwoPoints(
+        ImmutableVec(20f, 48f),
+        ImmutableVec(30f, 52f),
+    )
+
+    private fun rightBox(): ImmutableBox = ImmutableBox.fromTwoPoints(
+        ImmutableVec(70f, 48f),
+        ImmutableVec(80f, 52f),
     )
 
     private fun Stroke.overlaps(area: ImmutableBox): Boolean =

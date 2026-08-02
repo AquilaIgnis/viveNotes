@@ -68,7 +68,7 @@ class InkOverlayTest {
                         allowFinger = allowFinger,
                         pageToView = { Matrix() },
                         onStrokeFinished = { strokes++ },
-                        onErase = { objectEraseCalls++ },
+                        onObjectErase = { objectEraseCalls++ },
                         onPartialErase = { partialErases++ },
                         pan = recordingPan,
                         modifier = Modifier.fillMaxSize(),

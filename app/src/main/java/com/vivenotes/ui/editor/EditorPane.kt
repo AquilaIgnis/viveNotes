@@ -190,7 +190,7 @@ fun EditorPane(
     allowFinger: Boolean = false,
     onStrokeFinished: (InkStroke) -> Unit = {},
     onPartialErase: (InkStroke) -> Unit = {},
-    onErase: (List<String>) -> Unit = {},
+    onObjectErase: (InkStroke) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val shell = LocalCanvasColors.current
@@ -443,7 +443,7 @@ fun EditorPane(
                 },
                 onStrokeFinished = onStrokeFinished,
                 onPartialErase = onPartialErase,
-                onErase = onErase,
+                onObjectErase = onObjectErase,
                 pan = remember(horizontal, vertical, scope, flingSpec) {
                     ScrollStatePan(horizontal, vertical, scope, flingSpec)
                 },

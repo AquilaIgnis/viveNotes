@@ -36,3 +36,32 @@ internal fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<Strin
         }
     }
 }
+
+/**
+ * Removes only the disconnected regions touched by an Object-mode eraser mask.
+ *
+ * A partially erased stroke still has one database id and one input batch, but its mesh may have
+ * several disconnected regions. Splitting at zero tolerance makes those regions independent; each
+ * survivor becomes its own [PageStroke] projection while retaining the shared storage id needed to
+ * replay later operations.
+ */
+@OptIn(ExperimentalInkEraserApi::class)
+internal fun List<PageStroke>.eraseObjects(
+    mask: Stroke,
+    targetIds: Collection<String>,
+): List<PageStroke> {
+    val targets = targetIds.toSet()
+    if (targets.isEmpty()) return this
+    return flatMap { pageStroke ->
+        if (pageStroke.id !in targets) {
+            listOf(pageStroke)
+        } else {
+            pageStroke.stroke
+                .split(strokeToWorldTransform = AffineTransform.IDENTITY, tolerance = 0f)
+                .filterNot { component ->
+                    component.shape.computeCoverageIsGreaterThan(mask.shape, 0f)
+                }
+                .map { component -> pageStroke.copy(stroke = component) }
+        }
+    }
+}

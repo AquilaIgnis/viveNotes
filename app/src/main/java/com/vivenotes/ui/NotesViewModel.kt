@@ -26,6 +26,7 @@ import kotlinx.coroutines.withContext
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
+import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
@@ -39,6 +40,7 @@ import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.PageStroke
+import com.vivenotes.ink.eraseObjects
 import com.vivenotes.ink.subtract
 import com.vivenotes.ink.targetsFor
 import com.vivenotes.model.Block
@@ -281,7 +283,11 @@ class NotesViewModel(
                 withContext(inkDispatcher) {
                     storedErases.fold(baseStrokes) { current, stored ->
                         val mask = InkCodec.decodeErase(stored.erase) ?: return@fold current
-                        current.subtract(mask, stored.targets.map { it.strokeId })
+                        val targets = stored.targets.map { it.strokeId }
+                        when (stored.erase.mode) {
+                            EraserMode.Normal -> current.subtract(mask, targets)
+                            EraserMode.Object -> current.eraseObjects(mask, targets)
+                        }
                     }
                 }
             }
@@ -583,7 +589,12 @@ class NotesViewModel(
      * Geometry work stays off the input thread; the immutable mask and target set are then stored
      * so reopening the page reconstructs the same cut mesh.
      */
-    fun eraseStrokeParts(mask: Stroke) {
+    fun eraseStrokeParts(mask: Stroke) = erase(mask, EraserMode.Normal)
+
+    /** Deletes only the disconnected stroke regions touched by an Object-mode mask. */
+    fun eraseStrokeObjects(mask: Stroke) = erase(mask, EraserMode.Object)
+
+    private fun erase(mask: Stroke, mode: EraserMode) {
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
         val candidates = _strokes.value
@@ -592,9 +603,12 @@ class NotesViewModel(
                 val targetIds = withContext(inkDispatcher) { candidates.targetsFor(mask) }
                 if (targetIds.isEmpty()) return@withLock
                 val updated = withContext(inkDispatcher) {
-                    _strokes.value.subtract(mask, targetIds)
+                    when (mode) {
+                        EraserMode.Normal -> _strokes.value.subtract(mask, targetIds)
+                        EraserMode.Object -> _strokes.value.eraseObjects(mask, targetIds)
+                    }
                 }
-                val erase = InkCodec.encodeErase(mask, pageId)
+                val erase = InkCodec.encodeErase(mask, pageId, mode)
                 repository.addPartialErase(erase, targetIds)
                 if (_uiState.value.selectedPageId == pageId) _strokes.value = updated
             }

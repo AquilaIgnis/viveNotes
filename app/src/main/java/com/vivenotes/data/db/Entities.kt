@@ -1,11 +1,13 @@
 package com.vivenotes.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Embedded
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
+import com.vivenotes.data.EraserMode
 
 /**
  * These entities are plain data and double as the domain model — there is no separate mapping
@@ -184,7 +186,7 @@ data class InkStrokeEntity(
 }
 
 /**
- * One normal-eraser gesture. Its round brush and input path rebuild the exact mask on load.
+ * One eraser gesture. Its round brush and input path rebuild the exact mask on load.
  *
  * The affected stroke ids live in [InkEraseTargetEntity], rather than applying this mask to every
  * stroke on the page: ink drawn later through the same spot must remain visible.
@@ -204,6 +206,8 @@ data class InkStrokeEntity(
 data class InkEraseEntity(
     @PrimaryKey val id: String,
     val pageId: String,
+    /** Normal subtracts the mask; Object removes every disconnected component the mask touches. */
+    @ColumnInfo(defaultValue = "'Normal'") val mode: EraserMode = EraserMode.Normal,
     /** Eraser diameter in page dp. */
     val sizeDp: Float,
     val points: ByteArray,

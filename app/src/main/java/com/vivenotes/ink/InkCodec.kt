@@ -15,6 +15,7 @@ import androidx.ink.storage.decode
 import androidx.ink.storage.encode
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInputBatch
+import com.vivenotes.data.EraserMode
 import com.vivenotes.data.LineType
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
@@ -249,10 +250,12 @@ object InkCodec {
     fun encodeErase(
         mask: Stroke,
         pageId: String,
+        mode: EraserMode = EraserMode.Normal,
         now: Long = System.currentTimeMillis(),
     ): InkEraseEntity = InkEraseEntity(
         id = newId(),
         pageId = pageId,
+        mode = mode,
         sizeDp = mask.brush.size,
         points = encodeInputs(mask.inputs),
         enc = ENCODING,
