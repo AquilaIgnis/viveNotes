@@ -113,7 +113,7 @@ class SpannableCodecTest {
         val rendered = SpannableCodec.render(listOf(Block.of(source)), style)
         val candidate = findAutoEquationCandidates(source).single()
         rendered.setSpan(
-            LiveEquationSpan(candidate.latex),
+            LiveEquationSpan(candidate.latex, renderSizePx = 24f, renderColor = 0xFF000000.toInt()),
             candidate.start,
             candidate.end,
             android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,

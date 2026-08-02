@@ -73,6 +73,34 @@ class OutlineEditTextTest {
         }
     }
 
+    @Test
+    fun changingSizeAtAnInsertedEquationAppliesToTheEquationObject() {
+        withEditor { view ->
+            val equation = Mark.Equation("x^2")
+            var selection: SelectionState? = null
+            view.setBlocks(
+                listOf(
+                    Block(
+                        id = "b",
+                        runs = listOf(
+                            Run("a"),
+                            Run(OBJECT_REPLACEMENT_CHARACTER.toString(), setOf(equation)),
+                            Run("b"),
+                        ),
+                    ),
+                ),
+            )
+            view.onSelectionStateChanged = { selection = it }
+            view.setSelection(2)
+
+            view.apply(FormatCommand.SetMark(Mark.FontSize(36)))
+
+            val equationRun = view.blocks().single().runs.single { equation in it.marks }
+            assertEquals(setOf<Mark>(equation, Mark.FontSize(36)), equationRun.marks)
+            assertEquals(36, selection?.fontSize)
+        }
+    }
+
     private fun withEditor(body: (OutlineEditText) -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync {

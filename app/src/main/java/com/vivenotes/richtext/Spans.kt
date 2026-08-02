@@ -200,7 +200,13 @@ abstract class RenderedEquationSpan(val latex: String) : ReplacementSpan() {
 class EquationSpan(latex: String) : RenderedEquationSpan(latex)
 
 /** A disposable preview over source text such as `$x^2$`; never read back into the document model. */
-class LiveEquationSpan(latex: String) : RenderedEquationSpan(latex), Derived
+class LiveEquationSpan(
+    latex: String,
+    /** Captured so a font-size change invalidates an otherwise identical source preview. */
+    val renderSizePx: Float,
+    /** RaTeX bakes colour into its display list, so theme changes invalidate it too. */
+    val renderColor: Int,
+) : RenderedEquationSpan(latex), Derived
 
 val BlockType.headingScale: Float?
     get() = when (this) {
