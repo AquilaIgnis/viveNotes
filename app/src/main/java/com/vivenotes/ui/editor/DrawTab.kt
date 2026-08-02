@@ -13,7 +13,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +28,8 @@ import com.vivenotes.data.DrawTool
 import com.vivenotes.data.PenPreset
 import com.vivenotes.ui.ScrollingRow
 import com.vivenotes.ui.icons.penGlyph
+import com.vivenotes.ui.panel.FloatingSettingsPanel
+import com.vivenotes.ui.panel.PenPanelContent
 
 /**
  * What the Draw tab can do. Gathered into one object for the reason [ViewActions] is: the ribbon
@@ -33,8 +38,7 @@ import com.vivenotes.ui.icons.penGlyph
 @Immutable
 data class DrawActions(
     val selectTool: (DrawTool) -> Unit,
-    /** Opens the pen's own settings pane, on the pen that was held. */
-    val openPen: (Int) -> Unit,
+    val updatePen: (Int, PenPreset) -> Unit,
     val setDrawWithFinger: (Boolean) -> Unit,
 )
 
@@ -75,6 +79,8 @@ internal fun DrawTab(
     allowFinger: Boolean,
     actions: DrawActions,
 ) {
+    var openPenIndex by remember { mutableStateOf<Int?>(null) }
+
     ScrollingRow(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
@@ -100,7 +106,10 @@ internal fun DrawTab(
                 pen = pen,
                 selected = tool == DrawTool.Pen(index),
                 onSelect = { actions.selectTool(DrawTool.Pen(index)) },
-                onOpen = { actions.openPen(index) },
+                settingsOpen = openPenIndex == index,
+                onOpen = { openPenIndex = index },
+                onDismiss = { openPenIndex = null },
+                onChange = { actions.updatePen(index, it) },
             )
         }
 
@@ -147,7 +156,10 @@ private fun PenButton(
     pen: PenPreset,
     selected: Boolean,
     onSelect: () -> Unit,
+    settingsOpen: Boolean,
     onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+    onChange: (PenPreset) -> Unit,
 ) {
     val neutral = if (selected) {
         MaterialTheme.colorScheme.onPrimaryContainer
@@ -157,32 +169,41 @@ private fun PenButton(
     val swatch = Color(pen.colorArgb)
     val glyph = remember(neutral, swatch) { penGlyph(neutral, swatch) }
 
-    Box(
-        modifier = Modifier
-            .padding(horizontal = 1.dp)
-            .size(32.dp)
-            .testTag(DrawTags.pen(index))
-            .clip(RoundedCornerShape(4.dp))
-            .background(
-                if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+    Box(modifier = Modifier.padding(horizontal = 1.dp)) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .testTag(DrawTags.pen(index))
+                .clip(RoundedCornerShape(4.dp))
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                )
+                .combinedClickable(
+                    onClick = { if (selected) onOpen() else onSelect() },
+                    // Configuring a pen picks it up as well: the settings you are about to change
+                    // are the ones you would then be drawing with.
+                    onLongClick = {
+                        onSelect()
+                        onOpen()
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = glyph,
+                contentDescription = "Pen ${index + 1}",
+                // See TwoToneRibbonButton: a tint would flatten the swatch into the barrel.
+                tint = Color.Unspecified,
+                modifier = Modifier.size(18.dp),
             )
-            .combinedClickable(
-                onClick = { if (selected) onOpen() else onSelect() },
-                // Configuring a pen picks it up as well: the settings you are about to change are
-                // the ones you would then be drawing with.
-                onLongClick = {
-                    onSelect()
-                    onOpen()
-                },
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = glyph,
-            contentDescription = "Pen ${index + 1}",
-            // See TwoToneRibbonButton: a tint would flatten the swatch into the barrel.
-            tint = Color.Unspecified,
-            modifier = Modifier.size(18.dp),
-        )
+        }
+
+        FloatingSettingsPanel(
+            expanded = settingsOpen,
+            onDismissRequest = onDismiss,
+            title = "Pen ${index + 1}",
+        ) {
+            PenPanelContent(pen = pen, onChange = onChange)
+        }
     }
 }

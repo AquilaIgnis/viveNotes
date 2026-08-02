@@ -21,7 +21,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,7 +42,6 @@ import com.vivenotes.ui.editor.Ribbon
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
 import com.vivenotes.ui.panel.PaperSizePanelContent
-import com.vivenotes.ui.panel.PenPanelContent
 import com.vivenotes.ui.panel.TOOL_PANEL_WIDTH
 import com.vivenotes.ui.panel.ToolPane
 import com.vivenotes.ui.panel.ToolPanel
@@ -79,8 +77,6 @@ fun NotesApp(viewModel: NotesViewModel) {
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
     /** The docked pane, if any. Deliberately not persisted: it is where you are, not what you have. */
     var openPane by remember { mutableStateOf<ToolPane?>(null) }
-    /** Which pen the Pen pane is editing — the one that was held to open it. */
-    var editingPen by remember { mutableIntStateOf(0) }
 
     val viewActions = remember(viewModel) {
         ViewActions(
@@ -100,10 +96,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val drawActions = remember(viewModel) {
         DrawActions(
             selectTool = viewModel::selectTool,
-            openPen = { index ->
-                editingPen = index
-                openPane = ToolPane.Pen
-            },
+            updatePen = viewModel::updatePen,
             setDrawWithFinger = viewModel::setDrawWithFinger,
         )
     }
@@ -207,8 +200,6 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 ToolPaneHost(
                                     pane = toolPane,
                                     style = state.pageStyle,
-                                    pen = pens[editingPen],
-                                    penIndex = editingPen,
                                     viewModel = viewModel,
                                     onClose = { openPane = null },
                                     modifier = Modifier.width(TOOL_PANEL_WIDTH),
@@ -247,8 +238,6 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 ToolPaneHost(
                                     pane = toolPane,
                                     style = state.pageStyle,
-                                    pen = pens[editingPen],
-                                    penIndex = editingPen,
                                     viewModel = viewModel,
                                     onClose = { openPane = null },
                                     modifier = Modifier.fillMaxSize(),
@@ -300,9 +289,6 @@ private fun paneBehind(pane: CompactPane): CompactPane = when (pane) {
 private fun ToolPaneHost(
     pane: ToolPane,
     style: PageStyle,
-    /** The pen the Pen pane edits, and where to write it back. Ignored by every other pane. */
-    pen: PenPreset,
-    penIndex: Int,
     viewModel: NotesViewModel,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -315,10 +301,6 @@ private fun ToolPaneHost(
                 onPickOrientation = viewModel::setOrientation,
                 onSetCustomPaper = viewModel::setCustomPaper,
                 onSetMargins = viewModel::setMargins,
-            )
-            ToolPane.Pen -> PenPanelContent(
-                pen = pen,
-                onChange = { viewModel.updatePen(penIndex, it) },
             )
         }
     }

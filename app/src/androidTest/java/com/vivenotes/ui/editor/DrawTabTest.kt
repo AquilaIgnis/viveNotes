@@ -9,9 +9,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.longClick
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -35,8 +35,8 @@ class DrawTabTest {
     val compose = createComposeRule()
 
     private var selected: DrawTool? = null
-    private var opened: Int? = null
     private var changed: PenPreset? = null
+    private var changedIndex: Int? = null
     private var fingerDrawing: Boolean? = null
 
     private fun setTab(
@@ -52,7 +52,10 @@ class DrawTabTest {
                     allowFinger = allowFinger,
                     actions = DrawActions(
                         selectTool = { selected = it },
-                        openPen = { opened = it },
+                        updatePen = { index, pen ->
+                            changedIndex = index
+                            changed = pen
+                        },
                         setDrawWithFinger = { fingerDrawing = it },
                     ),
                 )
@@ -75,14 +78,15 @@ class DrawTabTest {
         setTab()
         compose.onNodeWithTag(DrawTags.pen(2)).performClick()
         assertEquals(DrawTool.Pen(2), selected)
-        assertNull("selecting a pen should not open its settings", opened)
+        compose.onNodeWithTag(PenPanelTags.PREVIEW).assertDoesNotExist()
     }
 
     @Test
     fun holdingAPenOpensItsSettings() {
         setTab()
         compose.onNodeWithTag(DrawTags.pen(1)).performTouchInput { longClick() }
-        assertEquals(1, opened)
+        compose.onNodeWithText("Pen 2").assertIsDisplayed()
+        compose.onNodeWithTag(PenPanelTags.PREVIEW).assertIsDisplayed()
         // Configuring a pen picks it up: the settings about to change are the ones you would draw with.
         assertEquals(DrawTool.Pen(1), selected)
     }
@@ -91,7 +95,30 @@ class DrawTabTest {
     fun tappingTheSelectedPenOpensItsSettings() {
         setTab(tool = DrawTool.Pen(0))
         compose.onNodeWithTag(DrawTags.pen(0)).performClick()
-        assertEquals(0, opened)
+        compose.onNodeWithText("Pen 1").assertIsDisplayed()
+    }
+
+    @Test
+    fun tappingOutsideThePenSettingsDismissesThem() {
+        setTab(tool = DrawTool.Pen(0))
+        compose.onNodeWithTag(DrawTags.pen(0)).performClick()
+        compose.onNodeWithTag(PenPanelTags.PREVIEW).assertIsDisplayed()
+
+        compose.onNodeWithContentDescription("Undo").performTouchInput { click() }
+
+        compose.onNodeWithTag(PenPanelTags.PREVIEW).assertDoesNotExist()
+    }
+
+    @Test
+    fun floatingSettingsWriteBackToTheirOwnPen() {
+        setTab(tool = DrawTool.Pen(2))
+        compose.onNodeWithTag(DrawTags.pen(2)).performClick()
+        val green = 0xFF00C853.toInt()
+
+        compose.onNodeWithTag(PenPanelTags.color(green)).performClick()
+
+        assertEquals(2, changedIndex)
+        assertEquals(green, changed?.colorArgb)
     }
 
     @Test

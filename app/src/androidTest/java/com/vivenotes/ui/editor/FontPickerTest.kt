@@ -56,7 +56,7 @@ class FontPickerTest {
                     pens = List(PenPreset.COUNT) { PenPreset.starting(it) },
                     tool = DrawTool.None,
                     allowFinger = false,
-                    draw = DrawActions(selectTool = {}, openPen = {}, setDrawWithFinger = {}),
+                    draw = DrawActions(selectTool = {}, updatePen = { _, _ -> }, setDrawWithFinger = {}),
                     pageOpen = true,
                 )
             }

@@ -50,10 +50,8 @@ object PenPanelTags {
 /**
  * The pen settings pane, laid out as `docs/references/pen-tooltip.jpeg` lays it out.
  *
- * Sized to fit a tablet pane without scrolling — every control visible at once, because a settings
- * form you have to scroll to compare is a settings form you cannot compare. The scroll in
- * [ToolPanel] stays as a fallback for a phone-width pane, a large font scale, or a description
- * opened by one of the (i) buttons.
+ * Sized to fit the floating settings surface without scrolling in the common tablet layout. The
+ * popup itself constrains and scrolls the content when the screen or font scale leaves less room.
  *
  * Reached by holding a pen in the Draw tab rather than by a ribbon button, because the pen it edits
  * is the one you held — there is no "which pen?" question to answer first.
