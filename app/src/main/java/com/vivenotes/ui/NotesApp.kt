@@ -68,6 +68,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val selection by viewModel.selection.collectAsStateWithLifecycle()
     val compactPane by viewModel.compactPane.collectAsStateWithLifecycle()
     val navigationVisible by viewModel.navigationVisible.collectAsStateWithLifecycle()
+    val notebookRailVisible by viewModel.notebookRailVisible.collectAsStateWithLifecycle()
     val defaults by viewModel.editorDefaults.collectAsStateWithLifecycle()
     val viewSettings by viewModel.viewSettings.collectAsStateWithLifecycle()
     val pens by viewModel.pens.collectAsStateWithLifecycle()
@@ -166,7 +167,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                     if (medium) {
                         Row(Modifier.fillMaxSize()) {
                             if (navigationVisible) {
-                                if (!horizontalTabs && expanded) {
+                                if (!horizontalTabs && expanded && notebookRailVisible) {
                                     NotebookRail(
                                         tree = state.tree,
                                         selectedSectionId = state.selectedSectionId,
@@ -174,6 +175,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                         onToggleNotebook = viewModel::toggleNotebookExpanded,
                                         onAddSection = { pendingDialog = NameDialog.Section(it) },
                                         onAddNotebook = { pendingDialog = NameDialog.Notebook },
+                                        onSwipeLeft = viewModel::hideNotebookRail,
                                         modifier = Modifier.width(RAIL_WIDTH),
                                     )
                                     VerticalHairline()
@@ -184,6 +186,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                     onSelectPage = viewModel::openPage,
                                     onAddPage = viewModel::addPage,
                                     onDeletePage = viewModel::deletePage,
+                                    onSwipeLeft = viewModel::hideNavigation,
                                     modifier = Modifier.width(PAGE_LIST_WIDTH),
                                 )
                                 VerticalHairline()
@@ -226,6 +229,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 onToggleNotebook = viewModel::toggleNotebookExpanded,
                                 onAddSection = { pendingDialog = NameDialog.Section(it) },
                                 onAddNotebook = { pendingDialog = NameDialog.Notebook },
+                                onSwipeLeft = { viewModel.showCompactPane(CompactPane.Pages) },
                                 modifier = Modifier.fillMaxSize(),
                             )
                             CompactPane.Pages -> PageListPane(
@@ -234,6 +238,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 onSelectPage = viewModel::openPage,
                                 onAddPage = viewModel::addPage,
                                 onDeletePage = viewModel::deletePage,
+                                onSwipeLeft = { viewModel.showCompactPane(CompactPane.Editor) },
                                 modifier = Modifier.fillMaxSize(),
                             )
                             // Too narrow to dock beside the page, so the pane takes the pane slot

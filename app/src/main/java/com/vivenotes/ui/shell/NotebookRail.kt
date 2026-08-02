@@ -46,12 +46,14 @@ fun NotebookRail(
     onToggleNotebook: (String, Boolean) -> Unit,
     onAddSection: (String) -> Unit,
     onAddNotebook: () -> Unit,
+    onSwipeLeft: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainer),
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .swipeLeft(onSwipeLeft),
     ) {
         LazyColumn(
             modifier = Modifier.weight(1f),

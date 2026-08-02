@@ -59,6 +59,7 @@ fun PageListPane(
     onSelectPage: (String) -> Unit,
     onAddPage: () -> Unit,
     onDeletePage: (String) -> Unit,
+    onSwipeLeft: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var sort by remember { mutableStateOf(PageSort.Manual) }
@@ -75,7 +76,8 @@ fun PageListPane(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .swipeLeft(onSwipeLeft),
     ) {
         Row(
             modifier = Modifier
