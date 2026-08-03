@@ -1,5 +1,6 @@
 package com.vivenotes.ink
 
+import androidx.ink.brush.SelfOverlap
 import androidx.ink.geometry.AffineTransform
 import androidx.ink.geometry.ImmutableAffineTransform
 import androidx.ink.geometry.MutableVec
@@ -99,17 +100,42 @@ internal fun PageStroke.strokeToPageTransform(): AffineTransform =
 private fun PageStroke.pageToStrokeTransform(): AffineTransform =
     strokeToPageTransform().computeInverse()
 
+/** Whether this stroke's page-space geometry is touched at all by an eraser mask. */
+internal fun PageStroke.touches(mask: Stroke): Boolean =
+    stroke.shape.computeCoverageIsGreaterThan(
+        other = mask.shape,
+        coverageThreshold = 0f,
+        otherShapeToThis = pageToStrokeTransform(),
+    )
+
 /** The strokes that existed at erase time and actually overlap this mask. */
 internal fun List<PageStroke>.targetsFor(mask: Stroke): List<String> =
-    filter {
-        it.stroke.shape.computeCoverageIsGreaterThan(
-            other = mask.shape,
-            coverageThreshold = 0f,
-            otherShapeToThis = it.pageToStrokeTransform(),
-        )
-    }.map(PageStroke::id).distinct()
+    filter { it.touches(mask) }.map(PageStroke::id).distinct()
 
-/** Replays one persisted normal-eraser operation without changing stroke identity or inputs. */
+/**
+ * Whether this stroke can only be drawn from the outlines of its mesh.
+ *
+ * `SelfOverlap.DISCARD` forces the path renderer — the mesh renderer refuses the mode, and that is
+ * the documented trade for a highlighter that does not double its opacity where it crosses itself.
+ * The path renderer draws from outlines, and draws *nothing* for a mesh that has none.
+ *
+ * That matters because [Stroke.split] returns pieces with no outlines, while [Stroke.subtract]
+ * keeps them. Splitting one of these strokes therefore does not cut it — it erases it from the
+ * screen entirely, while leaving its geometry intact and its row in the database.
+ */
+private val Stroke.isDrawnFromOutlines: Boolean
+    get() = brush.family.coats.any { coat ->
+        coat.paintPreferences.all { it.selfOverlap == SelfOverlap.DISCARD }
+    }
+
+/**
+ * Replays one persisted normal-eraser operation without changing stroke identity or inputs.
+ *
+ * Splitting the cut into its disconnected regions is what gives each piece its own projection, so
+ * that a later Object erase or lasso can take one of them. A stroke that is drawn from its outlines
+ * cannot afford that (see [isDrawnFromOutlines]) and stays a single projection: one highlighter is
+ * one object however many times it has been cut.
+ */
 @OptIn(ExperimentalInkEraserApi::class)
 internal fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<String>): List<PageStroke> {
     val targets = targetIds.toSet()
@@ -118,14 +144,17 @@ internal fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<Strin
         if (pageStroke.id !in targets) {
             listOf(pageStroke)
         } else {
-            pageStroke.stroke
-                .subtract(
-                    maskShape = mask.shape,
-                    maskToWorldTransform = AffineTransform.IDENTITY,
-                    strokeToWorldTransform = pageStroke.strokeToPageTransform(),
-                )
-                .split(strokeToWorldTransform = pageStroke.strokeToPageTransform(), tolerance = 0f)
-                .map { component -> pageStroke.copy(stroke = component) }
+            val cut = pageStroke.stroke.subtract(
+                maskShape = mask.shape,
+                maskToWorldTransform = AffineTransform.IDENTITY,
+                strokeToWorldTransform = pageStroke.strokeToPageTransform(),
+            )
+            if (cut.isDrawnFromOutlines) {
+                listOf(pageStroke.copy(stroke = cut))
+            } else {
+                cut.split(strokeToWorldTransform = pageStroke.strokeToPageTransform(), tolerance = 0f)
+                    .map { component -> pageStroke.copy(stroke = component) }
+            }
         }
     }
 }
@@ -137,6 +166,9 @@ internal fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<Strin
  * several disconnected regions. Splitting at zero tolerance makes those regions independent; each
  * survivor becomes its own [PageStroke] projection while retaining the shared storage id needed to
  * replay later operations.
+ *
+ * A stroke drawn from its outlines is not split — splitting would blank it (see
+ * [isDrawnFromOutlines]) — so it is the object, whole, and touching it removes all of it.
  */
 @OptIn(ExperimentalInkEraserApi::class)
 internal fun List<PageStroke>.eraseObjects(
@@ -148,6 +180,8 @@ internal fun List<PageStroke>.eraseObjects(
     return flatMap { pageStroke ->
         if (pageStroke.id !in targets) {
             listOf(pageStroke)
+        } else if (pageStroke.stroke.isDrawnFromOutlines) {
+            if (pageStroke.touches(mask)) emptyList() else listOf(pageStroke)
         } else {
             pageStroke.stroke
                 .split(strokeToWorldTransform = pageStroke.strokeToPageTransform(), tolerance = 0f)

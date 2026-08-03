@@ -31,7 +31,6 @@ import com.vivenotes.data.PenPreset
 import com.vivenotes.ui.ScrollingRow
 import com.vivenotes.ui.icons.LocalRibbonIcons
 import com.vivenotes.ui.icons.MaterialSymbols
-import com.vivenotes.ui.icons.highlightGlyph
 import com.vivenotes.ui.panel.EraserPanelContent
 import com.vivenotes.ui.panel.FloatingSettingsPanel
 import com.vivenotes.ui.panel.HighlighterPanelContent
@@ -182,13 +181,13 @@ internal fun DrawTab(
 /**
  * The highlighter, wearing the ink it will lay down.
  *
- * The glyph is the same marker the Home tab's text-highlight button uses, for the same reason the
- * two share a palette: highlighting text and drawing over it are one idea with two mechanisms, and
- * a user should not have to learn that twice.
+ * A marker held the way [PenButton]'s stylus is — tip down, whole glyph in its own ink — because the
+ * two are the same kind of thing and the tray should say so before either label does. What separates
+ * them is the shape: a chisel body against a nib.
  *
- * Its swatch bar is drawn opaque even though the ink is not. The bar is a few dp of colour against
- * ribbon chrome with nothing behind it, and at 40% alpha every ink in the palette would read as the
- * same grey — the bar names the colour, the canvas shows the transparency.
+ * The glyph is drawn opaque even though the ink is not. It is a small shape against ribbon chrome
+ * with nothing behind it, and at 40% alpha every ink in the palette would read as the same grey —
+ * the icon names the colour, the canvas shows the transparency.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -201,14 +200,8 @@ private fun HighlighterButton(
     onDismiss: () -> Unit,
     onChange: (HighlighterSettings) -> Unit,
 ) {
-    val neutral = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
     val swatch = Color(settings.colorArgb).copy(alpha = 1f)
-    // Never inside the composable body without this: the ribbon recomposes on every cursor move.
-    val icon = remember(neutral, swatch) { highlightGlyph(neutral, swatch) }
+    val marker = MaterialSymbols.StylusHighlighter
 
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
         Box(
@@ -232,10 +225,12 @@ private fun HighlighterButton(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = icon,
+                imageVector = marker,
                 contentDescription = "Highlighter",
-                tint = Color.Unspecified,
-                modifier = Modifier.size(20.dp),
+                tint = swatch,
+                modifier = Modifier
+                    .size(19.dp)
+                    .rotate(180f),
             )
         }
 

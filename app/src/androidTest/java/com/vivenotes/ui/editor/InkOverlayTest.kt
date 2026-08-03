@@ -2,10 +2,14 @@ package com.vivenotes.ui.editor
 
 import android.graphics.Matrix
 import android.view.MotionEvent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithTag
@@ -19,6 +23,7 @@ import androidx.ink.brush.Brush
 import androidx.ink.brush.InputToolType
 import androidx.ink.brush.StockBrushes
 import androidx.ink.strokes.MutableStrokeInputBatch
+import androidx.ink.strokes.Stroke
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -27,6 +32,7 @@ import org.junit.Rule
 import org.junit.Test
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
@@ -204,6 +210,67 @@ class InkOverlayTest {
         assertEquals("one drag must still persist as one undoable erase", 1, finished)
         assertFalse("finger cursor remained after release", gesture.indicator != null)
     }
+
+    /**
+     * The half of this bug that geometry cannot see. A cut highlighter kept correct bounds and a
+     * correct hole, and drew as nothing: it is path-rendered, `split` returns pieces with no
+     * outlines, and the path renderer draws from outlines. So read the screen, not the mesh.
+     */
+    @Test
+    fun aPartlyErasedHighlighterIsStillOnThePage() {
+        val ink = Stroke(
+            brush = InkCodec.brushFor(HighlighterSettings()),
+            inputs = strokeInputs(60f to 200f, 400f to 200f),
+        )
+        val mask = InkCodec.eraseMask(strokeInputs(230f to 160f, 230f to 240f), sizeDp = 24f)
+
+        setInkOnWhite(listOf(PageStroke("highlighter", ink)).previewErase(mask, EraserMode.Normal))
+
+        assertTrue("the cut highlighter vanished", inkPixels(60, 185, 200, 215) > 0)
+        assertTrue("its far end vanished", inkPixels(260, 185, 400, 215) > 0)
+        assertEquals("the eraser cut nothing", 0, inkPixels(224, 185, 236, 215))
+    }
+
+    private fun setInkOnWhite(pageStrokes: List<PageStroke>) {
+        compose.setContent {
+            ViveNotesTheme {
+                Box(Modifier.fillMaxSize().background(Color.White)) {
+                    InkOverlay(
+                        strokes = pageStrokes,
+                        brush = null,
+                        erasing = false,
+                        lassoing = false,
+                        eraser = EraserSettings(),
+                        allowFinger = true,
+                        pageToView = { Matrix() },
+                        onStrokeFinished = {},
+                        onPartialErase = {},
+                        onObjectErase = {},
+                        onMoveSelection = {},
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Ink pixels inside a page-space rectangle, the page being drawn 1:1 onto the screen here. */
+    private fun inkPixels(left: Int, top: Int, right: Int, bottom: Int): Int {
+        val pixels = compose.onNodeWithTag(INK_OVERLAY_TAG).captureToImage().toPixelMap()
+        var count = 0
+        for (x in left until minOf(right, pixels.width)) {
+            for (y in top until minOf(bottom, pixels.height)) {
+                if (pixels[x, y] != Color.White) count++
+            }
+        }
+        return count
+    }
+
+    private fun strokeInputs(vararg points: Pair<Float, Float>) = MutableStrokeInputBatch().apply {
+        points.forEachIndexed { index, (x, y) ->
+            add(InputToolType.UNKNOWN, x, y, index * 10L)
+        }
+    }.toImmutable()
 
     @Test
     fun lassoSelectsThenMovesInkWhenFingerInputIsEnabled() {

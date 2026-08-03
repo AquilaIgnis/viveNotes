@@ -4,8 +4,11 @@ import androidx.ink.brush.InputToolType
 import androidx.ink.geometry.ImmutableBox
 import androidx.ink.geometry.ImmutableVec
 import androidx.ink.strokes.MutableStrokeInputBatch
+import androidx.ink.strokes.Stroke
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.vivenotes.data.EraserMode
+import com.vivenotes.data.HighlighterSettings
+import com.vivenotes.data.PenPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -48,6 +51,63 @@ class InkEraserTest {
 
         assertFalse(replayed.filter { it.id == "old" }.any { it.stroke.shape.overlaps(box(48f, 48f, 52f, 52f)) })
         assertTrue(replayed.first { it.id == "new" }.stroke.shape.overlaps(box(48f, 48f, 52f, 52f)))
+    }
+
+    /**
+     * A highlighter is drawn from the outlines of its mesh, because `SelfOverlap.DISCARD` is what
+     * stops it doubling its own opacity where it crosses itself, and that mode is path-rendered.
+     * `split` returns pieces with no outlines, so splitting a cut highlighter left correct geometry
+     * that drew as nothing: the stroke vanished the moment the eraser touched it, and flickered back
+     * whenever the mask stopped overlapping. It is therefore cut but never split.
+     */
+    @Test
+    fun aCutHighlighterKeepsTheOutlinesItIsDrawnFrom() {
+        val ink = Stroke(
+            brush = InkCodec.brushFor(HighlighterSettings()),
+            inputs = inputs(10f to 50f, 90f to 50f),
+        )
+        val mask = InkCodec.eraseMask(inputs(50f to 35f, 50f to 65f), sizeDp = 18f)
+
+        val erased = listOf(PageStroke("stroke", ink)).subtract(mask, listOf("stroke"))
+
+        assertEquals("a highlighter stays one object", 1, erased.size)
+        val shape = erased.single().stroke.shape
+        val outlines = (0 until shape.getRenderGroupCount()).sumOf { shape.getOutlineCount(it) }
+        assertTrue("nothing left to draw the stroke from", outlines > 0)
+        // And it is a real cut, not an untouched stroke.
+        assertTrue(shape.overlaps(box(20f, 48f, 30f, 52f)))
+        assertFalse(shape.overlaps(box(48f, 48f, 52f, 52f)))
+        assertTrue(shape.overlaps(box(70f, 48f, 80f, 52f)))
+    }
+
+    /** Pens are split as before: the mesh renderer draws them, and it needs no outlines. */
+    @Test
+    fun aCutPenIsStillSplitIntoIndependentProjections() {
+        val ink = Stroke(
+            brush = InkCodec.brushFor(PenPreset.starting(0)),
+            inputs = inputs(10f to 50f, 90f to 50f),
+        )
+        val mask = InkCodec.eraseMask(inputs(50f to 35f, 50f to 65f), sizeDp = 18f)
+
+        val erased = listOf(PageStroke("stroke", ink)).subtract(mask, listOf("stroke"))
+
+        assertEquals(2, erased.size)
+    }
+
+    /** Object mode takes the whole highlighter, since it was never split into pieces to take. */
+    @Test
+    fun objectEraseRemovesAnEntireHighlighterAtFirstContact() {
+        val highlighter = PageStroke(
+            "highlighter",
+            Stroke(InkCodec.brushFor(HighlighterSettings()), inputs(10f to 50f, 90f to 50f)),
+        )
+        val elsewhere = PageStroke("pen", InkCodec.eraseMask(inputs(10f to 200f, 90f to 200f), 6f))
+        val page = listOf(highlighter, elsewhere)
+        val mask = InkCodec.eraseMask(inputs(20f to 45f, 20f to 55f), sizeDp = 12f)
+
+        val erased = page.eraseObjects(mask, page.targetsFor(mask))
+
+        assertEquals(listOf("pen"), erased.map(PageStroke::id))
     }
 
     @Test

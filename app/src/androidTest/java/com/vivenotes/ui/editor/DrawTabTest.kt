@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHasNoClickAction
@@ -25,6 +26,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.abs
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
@@ -490,6 +492,33 @@ class DrawTabTest {
             "the default ink is not one of the offered ones",
             HighlighterSettings.DEFAULT_COLOR in HIGHLIGHTER_COLORS,
         )
+    }
+
+    /**
+     * The marker wears the ink it will lay down, the way each pen wears the colour it writes in —
+     * and wears it opaque, because at 40% alpha over ribbon chrome every ink in the palette is the
+     * same grey. Read off the rendered button with a colour that is not the default, so a static
+     * glyph cannot pass.
+     */
+    @Test
+    fun theHighlighterWearsTheInkItWillLayDown() {
+        val pink = HIGHLIGHTER_COLORS[3]
+        setTab(highlighter = HighlighterSettings(colorArgb = pink))
+        val want = Color(pink).copy(alpha = 1f)
+
+        val glyph = compose.onNodeWithTag(DrawTags.HIGHLIGHTER).captureToImage().toPixelMap()
+        var found = 0
+        for (x in 0 until glyph.width) {
+            for (y in 0 until glyph.height) {
+                val pixel = glyph[x, y]
+                val hit = abs(pixel.red - want.red) < 0.04f &&
+                    abs(pixel.green - want.green) < 0.04f &&
+                    abs(pixel.blue - want.blue) < 0.04f
+                if (hit && pixel.alpha > 0.99f) found++
+            }
+        }
+
+        assertTrue("the highlighter is not wearing $want", found > 20)
     }
 
     /** Wide by default: a band narrower than a line of text is a pen wearing the wrong icon. */
