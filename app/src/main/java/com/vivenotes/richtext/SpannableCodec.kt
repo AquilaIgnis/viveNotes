@@ -25,6 +25,7 @@ import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
 import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
 import com.vivenotes.model.Run
+import com.vivenotes.model.opposingScript
 import com.vivenotes.model.newId
 
 /** Pixel metrics the codec needs; supplied by the view so the codec stays density-agnostic. */
@@ -170,6 +171,10 @@ object SpannableCodec {
         } else {
             Spannable.SPAN_EXCLUSIVE_INCLUSIVE
         }
+        // Nothing is both raised and lowered. Clearing the opposite script here rather than in the
+        // editor means no caller can produce text carrying two baseline shifts — including [render],
+        // which is what cleans up a document written before this held.
+        mark.opposingScript()?.let { removeMark(text, it, start, end) }
         when (mark) {
             Mark.Bold -> text.setSpan(StyleSpan(Typeface.BOLD), start, end, flags)
             Mark.Italic -> text.setSpan(StyleSpan(Typeface.ITALIC), start, end, flags)
@@ -208,11 +213,20 @@ object SpannableCodec {
      * value against a zeroed one, which never matched — so setting a second size left the first
      * span in place underneath it. The text drew in the newer size while the older span was still
      * there to be read back, which is how a 20pt selection came to report itself as 12.
+     *
+     * A script mark is two spans and only one of them is a [Mark]: the baseline shift, plus the
+     * [ScriptSizeSpan] that shrinks it. Matching on [markOf] alone therefore took the shift and left
+     * the reduction — invisible to everything that reads marks back, so no round-trip test could see
+     * it, and compounded by the next apply. Four taps of the button left five of them and text at
+     * under a quarter size, which is the "stacking rather than toggling" this pairing prevents.
      */
     fun removeMark(text: Spannable, mark: Mark, start: Int, end: Int) {
         val kind = mark.erased()
+        val script = kind == Mark.Subscript || kind == Mark.Superscript
         text.getSpans(start, end, Any::class.java).forEach { span ->
-            if (span is Derived || markOf(span)?.erased() != kind) return@forEach
+            if (span is Derived) return@forEach
+            val matches = markOf(span)?.erased() == kind || (script && span is ScriptSizeSpan)
+            if (!matches) return@forEach
             splitAround(text, span, start, end)
         }
     }

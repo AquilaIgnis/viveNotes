@@ -17,6 +17,7 @@ import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
 import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
+import com.vivenotes.model.opposingScript
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -528,7 +529,8 @@ class OutlineEditText @JvmOverloads constructor(
     }
 
     private fun toggleMark(editable: Editable, mark: Mark, from: Int, to: Int) {
-        val active = SpannableCodec.marksAt(editable, from, to).contains(mark)
+        val here = SpannableCodec.marksAt(editable, from, to)
+        val active = mark in here
         if (from == to) {
             // No selection: arm the mark for what gets typed next, or suppress it if the caret is
             // already inside it.
@@ -538,6 +540,14 @@ class OutlineEditText @JvmOverloads constructor(
             } else {
                 suppressedMarks.remove(mark)
                 pendingMarks.add(mark)
+                // The same exclusion the text gets, applied to what is about to be typed: arming a
+                // script disarms the other one, and suppresses it where the caret already sits in
+                // it. Without this the ribbon would light both up and the first character typed
+                // would silently pick one.
+                mark.opposingScript()?.let { opposite ->
+                    pendingMarks.remove(opposite)
+                    if (opposite in here) suppressedMarks.add(opposite)
+                }
             }
             return
         }

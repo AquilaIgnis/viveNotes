@@ -14,6 +14,7 @@ import org.junit.Test
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.ViewSettings
@@ -58,6 +59,7 @@ class FontPickerTest {
                     pens = List(PenPreset.COUNT) { PenPreset.starting(it) },
                     palette = PEN_COLORS,
                     eraser = EraserSettings(),
+                    highlighter = HighlighterSettings(),
                     tool = DrawTool.None,
                     allowFinger = false,
                     draw = DrawActions(

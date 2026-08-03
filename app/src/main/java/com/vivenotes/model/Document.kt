@@ -358,6 +358,19 @@ val TOGGLEABLE_MARKS: List<Mark> = listOf(
 )
 
 /**
+ * The script mark this one cannot share text with, or null for every other mark.
+ *
+ * Nothing is both raised and lowered, so applying one script replaces the other instead of layering
+ * over it. Stated here rather than in the editor because it is a fact about the marks themselves —
+ * an exporter or the eventual sync server has to honour it without knowing what a span is.
+ */
+fun Mark.opposingScript(): Mark? = when (this) {
+    Mark.Subscript -> Mark.Superscript
+    Mark.Superscript -> Mark.Subscript
+    else -> null
+}
+
+/**
  * Time-ordered identifier. Sortable by creation time and generated on-device, so a note created
  * offline never needs a server round trip to get its identity.
  */

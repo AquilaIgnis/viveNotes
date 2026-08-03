@@ -314,11 +314,57 @@ class NotesViewModelTest {
 
     // --- Draw-toolbar history -----------------------------------------------------------------
 
+    /**
+     * Which tool laid a stroke down decides how it is stored, so a highlighter stroke has to reach
+     * the page as a highlighter — not as whatever pen was last in hand, which is what the old
+     * `activePen() ?: return` would have made of it.
+     */
+    @Test
+    fun aStrokeDrawnWithTheHighlighterIsStoredAsOne() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 20f, 90f to 20f))
+        advanceUntilIdle()
+
+        vm.selectTool(DrawTool.Highlighter)
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+
+        val families = vm.strokes.value.map { it.brushFamily }
+        assertEquals(2, families.size)
+        assertTrue("the highlighter stroke is missing: $families", "highlighter" in families)
+        assertTrue("the pen stroke was restyled: $families", families.any { it != "highlighter" })
+
+        // Reopening is the only proof the row was written rather than merely held in memory.
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals(1, vm.strokes.value.count { it.brushFamily == "highlighter" })
+    }
+
+    /** A tool that is neither a pen nor the highlighter must not invent a stroke of its own. */
+    @Test
+    fun anEraserGestureIsNotRecordedAsInk() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        vm.selectTool(DrawTool.Eraser)
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+
+        assertTrue(vm.strokes.value.isEmpty())
+    }
+
     @Test
     fun selectingAnyCanvasToolDeactivatesTextInput() = runTest(dispatcher) {
         val vm = seededViewModel()
 
-        listOf(DrawTool.Pen(1), DrawTool.Eraser, DrawTool.Lasso).forEach { tool ->
+        listOf(
+            DrawTool.Pen(1),
+            DrawTool.Highlighter,
+            DrawTool.Eraser,
+            DrawTool.Lasso,
+        ).forEach { tool ->
             val nextCommand = async { vm.commands.first() }
             runCurrent()
 

@@ -44,6 +44,50 @@ enum class EraserMode(val label: String) {
     Object("Object"),
 }
 
+/**
+ * The Draw tab's highlighter.
+ *
+ * Not a [PenPreset]. A highlighter answers a different set of questions: it has no line type, no
+ * nib, and no pressure response — a real one lays down the same flat band however hard it is pressed
+ * — so modelling it as a fourth pen would mean a pane of controls that do nothing. What is left is
+ * the two things K2 asks for, colour and thickness, which is why this is its own small record beside
+ * [EraserSettings] rather than a variant of the pen.
+ *
+ * Like both of those, it describes the user rather than a page (ID5), so it lives in DataStore.
+ */
+@Serializable
+data class HighlighterSettings(
+    /** Stored *with* its alpha: translucency is what the colour is, not how it is drawn. */
+    val colorArgb: Int = DEFAULT_COLOR,
+    /** Band width in page dp. */
+    val thickness: Int = DEFAULT_THICKNESS,
+) {
+    companion object {
+        /** Wide enough to cover a line of text at the default size, and no wider. */
+        const val MIN_THICKNESS = 6
+        const val MAX_THICKNESS = 40
+        const val DEFAULT_THICKNESS = 18
+
+        const val DEFAULT_COLOR = 0x66FFEB3B
+    }
+}
+
+/**
+ * The highlighter inks, the same hues at the same alpha as the Home tab's text highlight.
+ *
+ * Deliberately shared with that palette: a page can be highlighted either by marking up text or by
+ * drawing over it, and the two producing different yellows would be a bug the user could see. The
+ * "none" swatch that palette carries is absent here — an ink you cannot see is not a colour, it is
+ * putting the highlighter down.
+ *
+ * `0x66` alpha keeps every literal inside `Int` range, so unlike [PEN_COLORS] these need no
+ * conversion from `Long`.
+ */
+val HIGHLIGHTER_COLORS: List<Int> = listOf(
+    0x66FFEB3B, 0x6676FF03, 0x6640C4FF,
+    0x66FF4081, 0x66FF9100, 0x66B388FF,
+)
+
 /** User-level eraser preferences, shared by the ribbon eraser and a stylus's eraser end. */
 @Serializable
 data class EraserSettings(
@@ -148,6 +192,9 @@ sealed interface DrawTool {
 
     data class Pen(val index: Int) : DrawTool
 
+    /** One highlighter, not three: its colour is the only thing to swap and the row is short. */
+    data object Highlighter : DrawTool
+
     data object Eraser : DrawTool
 
     /** Free-form selection: circle ink, then drag the selected objects. */
@@ -177,6 +224,10 @@ class PenSettingsStore(context: Context) {
 
     val eraser: Flow<EraserSettings> = store.data.map { prefs ->
         prefs[ERASER]?.let(::decodeEraser) ?: EraserSettings()
+    }
+
+    val highlighter: Flow<HighlighterSettings> = store.data.map { prefs ->
+        prefs[HIGHLIGHTER]?.let(::decodeHighlighter) ?: HighlighterSettings()
     }
 
     /**
@@ -226,6 +277,12 @@ class PenSettingsStore(context: Context) {
         store.edit { it[ERASER] = json.encodeToString(EraserSettings.serializer(), settings) }
     }
 
+    suspend fun setHighlighter(settings: HighlighterSettings) {
+        store.edit {
+            it[HIGHLIGHTER] = json.encodeToString(HighlighterSettings.serializer(), settings)
+        }
+    }
+
     private fun decodePen(index: Int, text: String): PenPreset? = runCatching {
         val decoded = json.decodeFromString(PenPreset.serializer(), text)
         val hasThemeFlag = json.parseToJsonElement(text).jsonObject.containsKey("colorFollowsTheme")
@@ -243,6 +300,9 @@ class PenSettingsStore(context: Context) {
     private fun decodeEraser(text: String): EraserSettings? =
         runCatching { json.decodeFromString(EraserSettings.serializer(), text) }.getOrNull()
 
+    private fun decodeHighlighter(text: String): HighlighterSettings? =
+        runCatching { json.decodeFromString(HighlighterSettings.serializer(), text) }.getOrNull()
+
     /**
      * A stored row shorter or longer than the current [PALETTE_SIZE] is trimmed rather than
      * rejected, so changing how many swatches fit is not a migration. An empty one is nothing to
@@ -259,6 +319,7 @@ class PenSettingsStore(context: Context) {
 
         val DRAW_WITH_FINGER = booleanPreferencesKey("draw_with_finger")
         val ERASER = stringPreferencesKey("eraser")
+        val HIGHLIGHTER = stringPreferencesKey("highlighter")
         val PALETTE = stringPreferencesKey("palette")
 
         /**

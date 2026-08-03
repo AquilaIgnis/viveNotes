@@ -26,12 +26,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.ui.ScrollingRow
 import com.vivenotes.ui.icons.LocalRibbonIcons
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.icons.highlightGlyph
 import com.vivenotes.ui.panel.EraserPanelContent
 import com.vivenotes.ui.panel.FloatingSettingsPanel
+import com.vivenotes.ui.panel.HighlighterPanelContent
 import com.vivenotes.ui.panel.PenPanelContent
 
 /**
@@ -43,6 +46,7 @@ data class DrawActions(
     val selectTool: (DrawTool) -> Unit,
     val updatePen: (Int, PenPreset) -> Unit,
     val updateEraser: (EraserSettings) -> Unit,
+    val updateHighlighter: (HighlighterSettings) -> Unit = {},
     val setDrawWithFinger: (Boolean) -> Unit,
     /** Puts a colour off the wheel at the head of the swatch row. Not the same write as a pen. */
     val addPaletteColor: (Int) -> Unit = {},
@@ -55,6 +59,7 @@ internal object DrawTags {
     const val UNDO = "draw-undo"
     const val REDO = "draw-redo"
     const val ERASER = "draw-eraser"
+    const val HIGHLIGHTER = "draw-highlighter"
     const val LASSO = "draw-lasso"
     const val FINGER = "draw-finger"
     fun pen(index: Int) = "draw-pen-$index"
@@ -83,6 +88,7 @@ internal fun DrawTab(
     pens: List<PenPreset>,
     palette: List<Int>,
     eraser: EraserSettings,
+    highlighter: HighlighterSettings,
     tool: DrawTool,
     allowFinger: Boolean,
     actions: DrawActions,
@@ -91,6 +97,7 @@ internal fun DrawTab(
 ) {
     var openPenIndex by remember { mutableStateOf<Int?>(null) }
     var eraserSettingsOpen by remember { mutableStateOf(false) }
+    var highlighterSettingsOpen by remember { mutableStateOf(false) }
 
     ScrollingRow(
         modifier = Modifier.fillMaxWidth(),
@@ -126,6 +133,18 @@ internal fun DrawTab(
             )
         }
 
+        // Beside the pens rather than beside the eraser: it is a thing you draw with, and the
+        // grouping is what says so before the icon does.
+        HighlighterButton(
+            settings = highlighter,
+            selected = tool == DrawTool.Highlighter,
+            settingsOpen = highlighterSettingsOpen,
+            onSelect = { actions.selectTool(DrawTool.Highlighter) },
+            onOpen = { highlighterSettingsOpen = true },
+            onDismiss = { highlighterSettingsOpen = false },
+            onChange = actions.updateHighlighter,
+        )
+
         Divider()
 
         Box(Modifier.testTag(DrawTags.FINGER)) {
@@ -156,6 +175,76 @@ internal fun DrawTab(
                 active = tool == DrawTool.Lasso,
                 onClick = { actions.selectTool(DrawTool.Lasso) },
             )
+        }
+    }
+}
+
+/**
+ * The highlighter, wearing the ink it will lay down.
+ *
+ * The glyph is the same marker the Home tab's text-highlight button uses, for the same reason the
+ * two share a palette: highlighting text and drawing over it are one idea with two mechanisms, and
+ * a user should not have to learn that twice.
+ *
+ * Its swatch bar is drawn opaque even though the ink is not. The bar is a few dp of colour against
+ * ribbon chrome with nothing behind it, and at 40% alpha every ink in the palette would read as the
+ * same grey — the bar names the colour, the canvas shows the transparency.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HighlighterButton(
+    settings: HighlighterSettings,
+    selected: Boolean,
+    settingsOpen: Boolean,
+    onSelect: () -> Unit,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+    onChange: (HighlighterSettings) -> Unit,
+) {
+    val neutral = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val swatch = Color(settings.colorArgb).copy(alpha = 1f)
+    // Never inside the composable body without this: the ribbon recomposes on every cursor move.
+    val icon = remember(neutral, swatch) { highlightGlyph(neutral, swatch) }
+
+    Box(modifier = Modifier.padding(horizontal = 1.dp)) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .testTag(DrawTags.HIGHLIGHTER)
+                .clip(RoundedCornerShape(4.dp))
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                )
+                .combinedClickable(
+                    onClick = {
+                        onSelect()
+                        if (selected) onOpen()
+                    },
+                    onLongClick = {
+                        onSelect()
+                        onOpen()
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = "Highlighter",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+
+        FloatingSettingsPanel(
+            expanded = settingsOpen,
+            onDismissRequest = onDismiss,
+            title = "Highlighter",
+        ) {
+            HighlighterPanelContent(settings = settings, onChange = onChange)
         }
     }
 }

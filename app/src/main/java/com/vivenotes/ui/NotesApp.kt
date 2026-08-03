@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
@@ -75,6 +76,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val pens by viewModel.pens.collectAsStateWithLifecycle()
     val palette by viewModel.palette.collectAsStateWithLifecycle()
     val eraser by viewModel.eraser.collectAsStateWithLifecycle()
+    val highlighter by viewModel.highlighter.collectAsStateWithLifecycle()
     val tool by viewModel.tool.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
     val inkUndoState by viewModel.inkUndoState.collectAsStateWithLifecycle()
@@ -109,6 +111,7 @@ fun NotesApp(viewModel: NotesViewModel) {
             },
             updatePen = viewModel::updatePen,
             updateEraser = viewModel::updateEraser,
+            updateHighlighter = viewModel::updateHighlighter,
             addPaletteColor = viewModel::addPaletteColor,
             setDrawWithFinger = viewModel::setDrawWithFinger,
             undo = viewModel::undoInk,
@@ -152,6 +155,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                         pens = themedPens,
                         palette = palette,
                         eraser = eraser,
+                        highlighter = highlighter,
                         tool = tool,
                         allowFinger = drawWithFinger,
                         draw = drawActions,
@@ -215,6 +219,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 tool = tool,
                                 pens = themedPens,
                                 eraser = eraser,
+                                highlighter = highlighter,
                                 allowFinger = drawWithFinger,
                                 hasInkClipboard = hasInkClipboard,
                                 modifier = Modifier.weight(1f),
@@ -275,6 +280,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 tool = tool,
                                 pens = themedPens,
                                 eraser = eraser,
+                                highlighter = highlighter,
                                 allowFinger = drawWithFinger,
                                 hasInkClipboard = hasInkClipboard,
                                 modifier = Modifier.fillMaxSize(),
@@ -342,6 +348,7 @@ private fun EditorSurface(
     tool: DrawTool,
     pens: List<PenPreset>,
     eraser: EraserSettings,
+    highlighter: HighlighterSettings,
     allowFinger: Boolean,
     hasInkClipboard: Boolean,
     modifier: Modifier = Modifier,
@@ -382,8 +389,12 @@ private fun EditorSurface(
         strokes = strokes,
         // Rebuilt only when the pen actually changes, not on every recomposition: a Brush holds a
         // native handle, and the ribbon recomposes whenever the selection moves.
-        brush = remember(tool, pens) {
-            (tool as? DrawTool.Pen)?.let { pens.getOrNull(it.index) }?.let(InkCodec::brushFor)
+        brush = remember(tool, pens, highlighter) {
+            when (tool) {
+                is DrawTool.Pen -> pens.getOrNull(tool.index)?.let(InkCodec::brushFor)
+                DrawTool.Highlighter -> InkCodec.brushFor(highlighter)
+                else -> null
+            }
         },
         erasing = tool == DrawTool.Eraser,
         lassoing = tool == DrawTool.Lasso,

@@ -5,6 +5,7 @@ import androidx.ink.brush.BrushBehavior
 import androidx.ink.brush.BrushFamily
 import androidx.ink.brush.BrushTip
 import androidx.ink.brush.InputToolType
+import androidx.ink.brush.SelfOverlap
 import androidx.ink.brush.StockBrushes
 import androidx.ink.brush.behavior.DampingNode
 import androidx.ink.brush.behavior.ProgressDomain
@@ -16,6 +17,7 @@ import androidx.ink.storage.encode
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInputBatch
 import com.vivenotes.data.EraserMode
+import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.LineType
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
@@ -83,7 +85,17 @@ object InkCodec {
     private fun family(id: String): BrushFamily = when (id) {
         FAMILY_DASHED -> StockBrushes.dashedLine(StockBrushes.DashedLineVersion.V1)
         FAMILY_MARKER -> StockBrushes.marker(StockBrushes.MarkerVersion.V1)
-        FAMILY_HIGHLIGHTER -> StockBrushes.highlighter()
+        FAMILY_HIGHLIGHTER -> StockBrushes.highlighter(
+            // A highlighter that doubles back over itself must not darken where it crosses, which
+            // is exactly what ACCUMULATE does to a translucent colour — and on minSdk 35, ANY *is*
+            // ACCUMULATE, since that is its default from Android U up. DISCARD is the only option
+            // that draws one flat band per stroke, which is what a real highlighter leaves.
+            selfOverlap = SelfOverlap.DISCARD,
+            // Pinned, never LATEST: ID6. This id has never been written by any build — the mapping
+            // existed before anything could produce it — so choosing its meaning now restyles no
+            // saved ink.
+            version = StockBrushes.HighlighterVersion.V1,
+        )
         FAMILY_PRESSURE_PEN -> StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1)
         else -> if (id.startsWith(FAMILY_CALLIGRAPHY_PREFIX)) {
             val pressure = id.removePrefix(FAMILY_CALLIGRAPHY_PREFIX).toIntOrNull()
@@ -190,6 +202,21 @@ object InkCodec {
         epsilon = EPSILON,
     )
 
+    /**
+     * The brush the highlighter draws with.
+     *
+     * The colour is passed through with its alpha intact, because the stock highlighter is a plain
+     * chisel nib that is only a highlighter *when given a translucent colour* — the family supplies
+     * the shape, the colour supplies the transparency. Handing it an opaque colour would produce a
+     * wide marker that blots out whatever it is drawn over.
+     */
+    fun brushFor(highlighter: HighlighterSettings): Brush = Brush.createWithColorIntArgb(
+        family = family(FAMILY_HIGHLIGHTER),
+        colorIntArgb = highlighter.colorArgb,
+        size = highlighter.thickness.toFloat(),
+        epsilon = EPSILON,
+    )
+
     /** A round, opaque stroke used only as the geometric mask for a normal eraser gesture. */
     fun eraseMask(inputs: StrokeInputBatch, sizeDp: Float): Stroke = Stroke(
         brush = Brush.createWithColorIntArgb(
@@ -207,6 +234,30 @@ object InkCodec {
         seq: Int,
         pen: PenPreset,
         now: Long = System.currentTimeMillis(),
+    ): InkStrokeEntity = encode(stroke, pageId, seq, familyId(pen), pen.stabilization, now)
+
+    /**
+     * A highlighter stroke.
+     *
+     * Stabilization is recorded as 0 because the highlighter has no such setting — a band that wide
+     * hides the shake a pen would show, so the control would be one nobody could see the effect of.
+     * The column is per-stroke, so this is a statement about the stroke rather than a placeholder.
+     */
+    fun encode(
+        stroke: Stroke,
+        pageId: String,
+        seq: Int,
+        highlighter: HighlighterSettings,
+        now: Long = System.currentTimeMillis(),
+    ): InkStrokeEntity = encode(stroke, pageId, seq, FAMILY_HIGHLIGHTER, stabilization = 0, now)
+
+    private fun encode(
+        stroke: Stroke,
+        pageId: String,
+        seq: Int,
+        brushFamily: String,
+        stabilization: Int,
+        now: Long,
     ): InkStrokeEntity {
         val box = stroke.shape.computeBoundingBox()
         val points = encodeInputs(stroke.inputs)
@@ -214,12 +265,12 @@ object InkCodec {
             id = newId(),
             pageId = pageId,
             seq = seq,
-            brushFamily = familyId(pen),
+            brushFamily = brushFamily,
             brushVersion = BRUSH_VERSION,
             sizeDp = stroke.brush.size,
             colorArgb = stroke.brush.colorIntArgb,
             epsilon = stroke.brush.epsilon,
-            stabilization = pen.stabilization,
+            stabilization = stabilization,
             // An empty stroke has no bounding box. It also has nothing to draw, so zeroes are the
             // truth rather than a fallback.
             minX = box?.xMin ?: 0f,

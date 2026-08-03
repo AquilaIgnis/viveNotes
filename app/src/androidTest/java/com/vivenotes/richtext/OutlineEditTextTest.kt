@@ -209,6 +209,71 @@ class OutlineEditTextTest {
         }
     }
 
+    /**
+     * The ribbon path for the stacking bug. Every off/on cycle used to leave the size reduction
+     * that goes with a script behind and add another on the way back, so the text shrank a little
+     * further on each tap while reading back as an ordinary subscript. Nothing that inspected marks
+     * could see it; the drawn height is what gives it away.
+     */
+    @Test
+    fun tappingAScriptButtonRepeatedlyReturnsToTheSizeItStarted() {
+        withEditor { view ->
+            listOf(Mark.Subscript, Mark.Superscript).forEach { mark ->
+                view.setBlocks(listOf(Block(id = "b", runs = listOf(Run("hello world")))))
+                view.setSelection(0, 5)
+                val editable = requireNotNull(view.text)
+
+                view.apply(FormatCommand.ToggleMark(mark))
+                val once = editable.getSpans(0, 5, ScriptSizeSpan::class.java).size
+
+                repeat(4) {
+                    view.apply(FormatCommand.ToggleMark(mark))
+                    view.apply(FormatCommand.ToggleMark(mark))
+                }
+
+                assertEquals(
+                    "$mark stacked its size reduction across taps",
+                    once,
+                    editable.getSpans(0, 5, ScriptSizeSpan::class.java).size,
+                )
+                assertTrue(mark in view.blocks().first().runs.first().marks)
+            }
+        }
+    }
+
+    /** One script replaces the other over a selection, rather than both landing on the text. */
+    @Test
+    fun oneScriptButtonReplacesTheOtherOverASelection() {
+        withEditor { view ->
+            view.setBlocks(listOf(Block(id = "b", runs = listOf(Run("hello world")))))
+            view.setSelection(0, 5)
+
+            view.apply(FormatCommand.ToggleMark(Mark.Subscript))
+            view.apply(FormatCommand.ToggleMark(Mark.Superscript))
+
+            val marks = view.blocks().first().runs.first().marks
+            assertTrue("superscript did not take, got $marks", Mark.Superscript in marks)
+            assertTrue("subscript survived underneath, got $marks", Mark.Subscript !in marks)
+        }
+    }
+
+    /** And at a caret, where the exclusion has to hold over what is typed next instead. */
+    @Test
+    fun armingOneScriptDisarmsTheOtherForTextTypedNext() {
+        withEditor { view ->
+            view.setBlocks(listOf(Block(id = "b", runs = listOf(Run("abc")))))
+            view.setSelection(3)
+
+            view.apply(FormatCommand.ToggleMark(Mark.Subscript))
+            view.apply(FormatCommand.ToggleMark(Mark.Superscript))
+            view.text?.insert(3, "XY")
+
+            val typed = view.blocks().first().runs.last()
+            assertTrue("superscript was not armed, got ${typed.marks}", Mark.Superscript in typed.marks)
+            assertTrue("subscript stayed armed, got ${typed.marks}", Mark.Subscript !in typed.marks)
+        }
+    }
+
     @Test
     fun armsEveryToggleableMarkForTextTypedNext() {
         // Toggling with no selection is the common gesture: put the caret down, hit the button,

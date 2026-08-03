@@ -379,4 +379,63 @@ class SpannableCodecTest {
         assertTrue(Mark.Bold in runs[2].marks)
         assertEquals("aaabbbccc", runs.joinToString("") { it.text })
     }
+
+    // --- sub- and superscript --------------------------------------------------------------------
+
+    private fun plain(text: String = "text") =
+        SpannableCodec.render(listOf(Block(id = "b", runs = listOf(Run(text)))), style)
+
+    private fun scriptSizes(text: android.text.Spannable) =
+        text.getSpans(0, text.length, ScriptSizeSpan::class.java)
+
+    /**
+     * Each script mark is two spans — the baseline shift and the 0.75 size reduction — and only the
+     * shift is a [Mark]. Removing has to take the pair, or the reduction is invisible to every
+     * assertion that reads marks back while still being on the text.
+     */
+    @Test
+    fun removingAScriptTakesItsSizeReductionWithIt() {
+        listOf(Mark.Subscript, Mark.Superscript).forEach { mark ->
+            val text = plain()
+            SpannableCodec.applyMark(text, mark, 0, text.length)
+            SpannableCodec.removeMark(text, mark, 0, text.length)
+
+            assertEquals("$mark left its size behind", 0, scriptSizes(text).size)
+        }
+    }
+
+    /**
+     * The bug this guards: toggling off left the reduction in place, so toggling back on added a
+     * second one and the text came back smaller than it went. Four cycles compounded 0.75 to under
+     * a third of the base size, which reads as the button stacking rather than toggling.
+     */
+    @Test
+    fun togglingAScriptOffAndOnDoesNotCompoundItsSize() {
+        listOf(Mark.Subscript, Mark.Superscript).forEach { mark ->
+            val text = plain()
+            repeat(4) {
+                SpannableCodec.applyMark(text, mark, 0, text.length)
+                SpannableCodec.removeMark(text, mark, 0, text.length)
+            }
+            SpannableCodec.applyMark(text, mark, 0, text.length)
+
+            assertEquals("$mark stacked", 1, scriptSizes(text).size)
+        }
+    }
+
+    /**
+     * Nothing is both raised and lowered. Applying one script over the other replaces it, rather
+     * than leaving two baseline shifts and two size reductions fighting over the same characters.
+     */
+    @Test
+    fun oneScriptReplacesTheOther() {
+        val text = plain()
+        SpannableCodec.applyMark(text, Mark.Subscript, 0, text.length)
+        SpannableCodec.applyMark(text, Mark.Superscript, 0, text.length)
+
+        val marks = SpannableCodec.marksAt(text, 0, text.length)
+        assertTrue("superscript did not take", Mark.Superscript in marks)
+        assertTrue("subscript survived underneath", Mark.Subscript !in marks)
+        assertEquals("and left its size behind", 1, scriptSizes(text).size)
+    }
 }

@@ -45,6 +45,7 @@ import kotlinx.coroutines.delay
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.Align
@@ -127,6 +128,7 @@ fun Ribbon(
     pens: List<PenPreset>,
     palette: List<Int>,
     eraser: EraserSettings,
+    highlighter: HighlighterSettings,
     tool: DrawTool,
     allowFinger: Boolean,
     draw: DrawActions,
@@ -174,6 +176,7 @@ fun Ribbon(
                 pens = pens,
                 palette = palette,
                 eraser = eraser,
+                highlighter = highlighter,
                 tool = tool,
                 allowFinger = allowFinger,
                 actions = draw,

@@ -28,6 +28,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
 import androidx.ink.strokes.Stroke
@@ -198,6 +199,10 @@ class NotesViewModel(
     /** Partial/object mode and diameter are user preferences, not properties of a page. */
     val eraser: StateFlow<EraserSettings> = penSettingsStore.eraser
         .stateIn(viewModelScope, SharingStarted.Eagerly, EraserSettings())
+
+    /** Colour and width of the one highlighter, on the same terms as the pens and the eraser. */
+    val highlighter: StateFlow<HighlighterSettings> = penSettingsStore.highlighter
+        .stateIn(viewModelScope, SharingStarted.Eagerly, HighlighterSettings())
 
     /** Whether a finger draws or scrolls. A property of this device, so it persists. */
     val drawWithFinger: StateFlow<Boolean> = penSettingsStore.drawWithFinger
@@ -685,6 +690,10 @@ class NotesViewModel(
         viewModelScope.launch { penSettingsStore.setEraser(settings) }
     }
 
+    fun updateHighlighter(settings: HighlighterSettings) {
+        viewModelScope.launch { penSettingsStore.setHighlighter(settings) }
+    }
+
     /** The pen currently in hand, or null when the armed tool is not a pen. */
     fun activePen(): PenPreset? =
         (_tool.value as? DrawTool.Pen)?.let { pens.value.getOrNull(it.index) }
@@ -700,8 +709,15 @@ class NotesViewModel(
         val pageId = _uiState.value.selectedPageId ?: return
         // An unreadable page is never written to, and that has to include its ink.
         if (readOnlyPageId == pageId) return
-        val pen = activePen() ?: return
-        val entity = InkCodec.encode(stroke, pageId, seq = 0, pen = pen)
+        // Which tool laid the stroke down decides how it is stored, because the brush family and
+        // the stabilization on the row come from the tool rather than from the geometry.
+        val entity = when (val tool = _tool.value) {
+            is DrawTool.Pen -> pens.value.getOrNull(tool.index)
+                ?.let { InkCodec.encode(stroke, pageId, seq = 0, pen = it) }
+            DrawTool.Highlighter ->
+                InkCodec.encode(stroke, pageId, seq = 0, highlighter = highlighter.value)
+            else -> null
+        } ?: return
         val before = _strokes.value
         commitInkEdit(
             pageId = pageId,

@@ -28,6 +28,8 @@ import org.junit.Test
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.HIGHLIGHTER_COLORS
+import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.LineType
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenKind
@@ -39,6 +41,8 @@ import com.vivenotes.ui.panel.PenPanelTags
 import com.vivenotes.ui.panel.PanelTags
 import com.vivenotes.ui.panel.EraserPanelContent
 import com.vivenotes.ui.panel.EraserPanelTags
+import com.vivenotes.ui.panel.HighlighterPanelContent
+import com.vivenotes.ui.panel.HighlighterPanelTags
 import com.vivenotes.ui.theme.ViveNotesTheme
 
 /**
@@ -56,6 +60,7 @@ class DrawTabTest {
     private var changed: PenPreset? = null
     private var changedIndex: Int? = null
     private var changedEraser: EraserSettings? = null
+    private var changedHighlighter: HighlighterSettings? = null
     private var palette: MutableState<List<Int>>? = null
     private var fingerDrawing: Boolean? = null
     private var undoCount = 0
@@ -65,6 +70,7 @@ class DrawTabTest {
         tool: DrawTool = DrawTool.None,
         pens: List<PenPreset> = List(PenPreset.COUNT) { PenPreset.starting(it) },
         eraser: EraserSettings = EraserSettings(),
+        highlighter: HighlighterSettings = HighlighterSettings(),
         allowFinger: Boolean = false,
         canUndo: Boolean = false,
         canRedo: Boolean = false,
@@ -75,6 +81,7 @@ class DrawTabTest {
                     pens = pens,
                     palette = PEN_COLORS,
                     eraser = eraser,
+                    highlighter = highlighter,
                     tool = tool,
                     allowFinger = allowFinger,
                     actions = DrawActions(
@@ -84,6 +91,7 @@ class DrawTabTest {
                             changed = pen
                         },
                         updateEraser = { changedEraser = it },
+                        updateHighlighter = { changedHighlighter = it },
                         setDrawWithFinger = { fingerDrawing = it },
                         undo = { undoCount++ },
                         redo = { redoCount++ },
@@ -112,6 +120,20 @@ class DrawTabTest {
                         },
                         onAddColor = { row.value = row.value.withColorInFront(it) },
                     )
+                }
+            }
+        }
+    }
+
+    private fun setHighlighterPanel(settings: HighlighterSettings = HighlighterSettings()) {
+        val current = mutableStateOf(settings)
+        compose.setContent {
+            ViveNotesTheme {
+                Column {
+                    HighlighterPanelContent(settings = current.value) {
+                        current.value = it
+                        changedHighlighter = it
+                    }
                 }
             }
         }
@@ -407,6 +429,78 @@ class DrawTabTest {
         setPanel()
         compose.onNodeWithContentDescription("Add color").assertIsDisplayed()
         assertTrue("nothing should have been written by merely showing the pane", changed == null)
+    }
+
+    // --- the highlighter -------------------------------------------------------------------------
+
+    @Test
+    fun theHighlighterIsATrayToolOfItsOwn() {
+        setTab()
+        compose.onNodeWithTag(DrawTags.HIGHLIGHTER).assertIsDisplayed()
+
+        compose.onNodeWithTag(DrawTags.HIGHLIGHTER).performClick()
+
+        assertEquals(DrawTool.Highlighter, selected)
+        assertTrue("picking it up is not a settings change", changedHighlighter == null)
+    }
+
+    /** Same two-meanings-one-target gesture as a pen and the eraser: tap to pick up, hold to set up. */
+    @Test
+    fun holdingTheHighlighterOpensItsSettings() {
+        setTab()
+        compose.onNodeWithTag(HighlighterPanelTags.PREVIEW).assertDoesNotExist()
+
+        compose.onNodeWithTag(DrawTags.HIGHLIGHTER).performTouchInput { longClick() }
+
+        assertEquals(DrawTool.Highlighter, selected)
+        compose.onNodeWithTag(HighlighterPanelTags.PREVIEW).assertIsDisplayed()
+    }
+
+    @Test
+    fun tappingTheHighlighterAgainOpensItsSettings() {
+        setTab(tool = DrawTool.Highlighter)
+
+        compose.onNodeWithTag(DrawTags.HIGHLIGHTER).performClick()
+
+        compose.onNodeWithTag(HighlighterPanelTags.PREVIEW).assertIsDisplayed()
+    }
+
+    @Test
+    fun theHighlighterPaneChangesOnlyTheFieldItNames() {
+        val settings = HighlighterSettings()
+        setHighlighterPanel(settings)
+        val green = HIGHLIGHTER_COLORS[1]
+
+        compose.onNodeWithTag(HighlighterPanelTags.color(green)).performClick()
+
+        assertEquals(settings.copy(colorArgb = green), changedHighlighter)
+    }
+
+    /**
+     * A highlighter ink is translucent by definition — that is what lets the text show through it —
+     * so every colour it offers has to carry alpha. An opaque one would be a marker.
+     */
+    @Test
+    fun everyHighlighterInkIsTranslucent() {
+        HIGHLIGHTER_COLORS.forEach { argb ->
+            val alpha = AndroidColor.alpha(argb)
+            assertTrue("$argb is opaque", alpha in 1..254)
+        }
+        assertTrue(
+            "the default ink is not one of the offered ones",
+            HighlighterSettings.DEFAULT_COLOR in HIGHLIGHTER_COLORS,
+        )
+    }
+
+    /** Wide by default: a band narrower than a line of text is a pen wearing the wrong icon. */
+    @Test
+    fun theHighlighterIsWiderThanAPen() {
+        assertTrue(
+            "highlighter ${HighlighterSettings.DEFAULT_THICKNESS} vs pen ${PenPreset().thickness}",
+            HighlighterSettings.DEFAULT_THICKNESS > PenPreset().thickness,
+        )
+        assertTrue(HighlighterSettings.DEFAULT_THICKNESS in
+            HighlighterSettings.MIN_THICKNESS..HighlighterSettings.MAX_THICKNESS)
     }
 
     // --- the colour wheel ------------------------------------------------------------------------

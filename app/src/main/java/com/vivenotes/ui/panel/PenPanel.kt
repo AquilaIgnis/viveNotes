@@ -428,7 +428,7 @@ private fun ColorSwatches(
  * sitting beside the palette instead of the last member of it.
  */
 @Composable
-private fun Swatch(
+internal fun Swatch(
     selected: Boolean,
     tag: String,
     description: String? = null,
@@ -465,7 +465,7 @@ private fun Swatch(
  * Ten targets have to fit one 320dp panel without wrapping, which is what sets this rather than
  * taste. The row stays one line because the reference draws it as one.
  */
-private val SWATCH_SIZE = 26.dp
+internal val SWATCH_SIZE = 26.dp
 
 /** Placed but not wired, so it holds the reference's layout without pretending to work. */
 private const val INERT_ALPHA = 0.42f
