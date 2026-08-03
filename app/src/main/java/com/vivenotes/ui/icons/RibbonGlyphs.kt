@@ -460,34 +460,10 @@ fun pageColorGlyph(neutral: Color, swatch: Color): ImageVector = glyph("PageColo
 }
 
 /**
- * A pen whose nib and bar carry the colour it writes in.
- *
- * Parameterised for the same reason [fontColorGlyph] is, and more urgently: the Draw tab shows three
- * of these side by side and colour is the *only* thing distinguishing them, so a static asset could
- * not express the row at all.
- */
-fun penGlyph(neutral: Color, swatch: Color): ImageVector = glyph("Pen") {
-    path(fill = SolidColor(neutral)) {          // barrel
-        moveTo(14.8f, 2.8f)
-        lineTo(18.6f, 5.4f)
-        lineTo(11.4f, 15.8f)
-        lineTo(7.6f, 13.2f)
-        close()
-    }
-    path(fill = SolidColor(swatch)) {           // nib
-        moveTo(7.6f, 13.2f)
-        lineTo(11.4f, 15.8f)
-        lineTo(5.6f, 17.6f)
-        close()
-    }
-    swatchBar(swatch)
-}
-
-/**
  * The eraser, accented in the colour this icon set reserves for what a glyph removes.
  *
- * No swatch, so unlike [penGlyph] it takes only theme colours and is built once with the rest in
- * [AppIcons] rather than at its call site.
+ * It takes only theme colours and is built once with the rest in [AppIcons] rather than at its
+ * call site.
  */
 fun eraserGlyph(neutral: Color, warn: Color): ImageVector = glyph("Eraser") {
     path(fill = SolidColor(warn)) {             // the end doing the erasing

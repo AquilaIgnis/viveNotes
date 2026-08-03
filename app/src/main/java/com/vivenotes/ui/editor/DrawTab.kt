@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -29,7 +30,6 @@ import com.vivenotes.data.PenPreset
 import com.vivenotes.ui.ScrollingRow
 import com.vivenotes.ui.icons.LocalRibbonIcons
 import com.vivenotes.ui.icons.MaterialSymbols
-import com.vivenotes.ui.icons.penGlyph
 import com.vivenotes.ui.panel.EraserPanelContent
 import com.vivenotes.ui.panel.FloatingSettingsPanel
 import com.vivenotes.ui.panel.PenPanelContent
@@ -63,8 +63,7 @@ internal object DrawTags {
  *
  * The pens are deliberately identical — they exist so that three colours are one tap apart instead
  * of a trip through a menu, which is the whole reason a pen tray has more than one pen in it. What
- * distinguishes them on screen is therefore colour alone, which is why [penGlyph] takes its swatch
- * as a parameter rather than being a static asset.
+ * distinguishes them on screen is therefore the colour of each pencil itself.
  *
  * Holding a pen opens its settings (`docs/references/pen-tooltip.jpeg`). Tapping the pen that is
  * already selected does the same thing, because a gesture nobody discovers is a gesture nobody uses.
@@ -212,9 +211,7 @@ private fun EraserButton(
  * A pen in the tray.
  *
  * Not [RibbonButtonSlot], because that takes a single click and this control has two meanings for
- * one target: select, and configure. The glyph is built through [remember] on its two colours —
- * building an `ImageVector` in a composable body would rebuild it on every recomposition, and the
- * ribbon recomposes whenever the selection moves.
+ * one target: select, and configure.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -228,13 +225,8 @@ private fun PenButton(
     onDismiss: () -> Unit,
     onChange: (PenPreset) -> Unit,
 ) {
-    val neutral = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
     val swatch = Color(pen.colorArgb)
-    val glyph = remember(neutral, swatch) { penGlyph(neutral, swatch) }
+    val stylus = MaterialSymbols.Stylus
 
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
         Box(
@@ -260,11 +252,12 @@ private fun PenButton(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = glyph,
+                imageVector = stylus,
                 contentDescription = "Pen ${index + 1}",
-                // See TwoToneRibbonButton: a tint would flatten the swatch into the barrel.
-                tint = Color.Unspecified,
-                modifier = Modifier.size(18.dp),
+                tint = swatch,
+                modifier = Modifier
+                    .size(19.dp)
+                    .rotate(180f),
             )
         }
 
