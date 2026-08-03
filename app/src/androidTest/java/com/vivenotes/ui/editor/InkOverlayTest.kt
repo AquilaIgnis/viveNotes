@@ -206,14 +206,14 @@ class InkOverlayTest {
     }
 
     @Test
-    fun lassoSelectsThenMovesInkEvenWhenFingerDrawingIsOff() {
+    fun lassoSelectsThenMovesInkWhenFingerInputIsEnabled() {
         val inputs = MutableStrokeInputBatch().apply {
             add(InputToolType.UNKNOWN, 90f, 100f, 0L)
             add(InputToolType.UNKNOWN, 110f, 100f, 10L)
         }.toImmutable()
         val ink = PageStroke("stroke", InkCodec.eraseMask(inputs, 6f))
         setOverlay(
-            allowFinger = false,
+            allowFinger = true,
             lassoing = true,
             pageStrokes = listOf(ink),
         )
@@ -239,6 +239,18 @@ class InkOverlayTest {
     }
 
     @Test
+    fun aFingerPansInsteadOfLassoingWhenFingerInputIsOff() {
+        setOverlay(allowFinger = false, lassoing = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+
+        assertTrue("lasso claimed a finger drag instead of panning", dragged != 0f)
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
+        assertEquals(null, lassoMove)
+    }
+
+    @Test
     fun aCompletedInkSelectionShowsTheReferenceStyleActions() {
         val first = PageStroke(
             "first",
@@ -260,7 +272,7 @@ class InkOverlayTest {
                 6f,
             ),
         )
-        setOverlay(allowFinger = false, lassoing = true, pageStrokes = listOf(first, second))
+        setOverlay(allowFinger = true, lassoing = true, pageStrokes = listOf(first, second))
 
         compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
             down(Offset(60f, 60f))
@@ -296,7 +308,7 @@ class InkOverlayTest {
                 6f,
             ),
         )
-        setOverlay(allowFinger = false, lassoing = true, pageStrokes = listOf(ink))
+        setOverlay(allowFinger = true, lassoing = true, pageStrokes = listOf(ink))
 
         compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
             down(Offset(70f, 70f))
@@ -323,7 +335,7 @@ class InkOverlayTest {
                 6f,
             ),
         )
-        setOverlay(allowFinger = false, lassoing = true, pageStrokes = listOf(ink))
+        setOverlay(allowFinger = true, lassoing = true, pageStrokes = listOf(ink))
         val overlay = compose.onNodeWithTag(INK_OVERLAY_TAG)
         overlay.performTouchInput {
             down(Offset(70f, 70f))

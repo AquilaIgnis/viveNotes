@@ -479,19 +479,23 @@ private fun handleInk(
 ): Boolean {
     val index = event.actionIndex
     val toolType = event.getToolType(index)
+    // An emulator reports a mouse, and a mouse is the only pointing device it has — so it counts as
+    // direct touch here, which also keeps the finger-drawing toggle testable without a stylus.
+    val isDirectTouch = toolType == MotionEvent.TOOL_TYPE_FINGER ||
+        toolType == MotionEvent.TOOL_TYPE_MOUSE
 
-    // Lasso is a direct manipulation tool, so touch selects even when finger drawing is disabled.
-    // It needs no front-buffer authoring view; its path is ordinary overlay geometry.
+    // Lasso used to claim every finger drag even in stylus-only mode. That made the page impossible
+    // to pan with one hand while the lasso was armed. It follows the same finger setting as ink and
+    // the eraser now: stylus always selects, while a disallowed finger moves the page.
     if (lassoing) {
+        if (isDirectTouch && !allowFinger) {
+            return panPage(event, pan, velocity, panning, lastPan, setPanning)
+        }
         val toPage = Matrix().also { transform.invert(it) }
         return lassoGesture.handle(event, toPage, strokes, onMoveSelection, onResizeSelection)
     }
 
     if (view == null) return false
-
-    // An emulator reports a mouse, and a mouse is the only pointing device it has — so it counts as
-    // a finger here, which is what makes the finger toggle testable without a stylus.
-    val isDirectTouch = toolType == MotionEvent.TOOL_TYPE_FINGER || toolType == MotionEvent.TOOL_TYPE_MOUSE
 
     // A touch that is not allowed to draw pans instead. Consumed rather than declined, because
     // declining leaves it with nobody: the scroll container is a sibling, and a sibling under a hit
