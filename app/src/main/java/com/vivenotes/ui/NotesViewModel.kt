@@ -31,6 +31,7 @@ import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
 import androidx.ink.strokes.Stroke
+import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.TabsLayout
@@ -189,6 +190,10 @@ class NotesViewModel(
             SharingStarted.Eagerly,
             List(PenPreset.COUNT) { PenPreset.starting(it) },
         )
+
+    /** The pen pane's swatch row. Shared by the three pens, and rolling — see [addPaletteColor]. */
+    val palette: StateFlow<List<Int>> = penSettingsStore.palette
+        .stateIn(viewModelScope, SharingStarted.Eagerly, PEN_COLORS)
 
     /** Partial/object mode and diameter are user preferences, not properties of a page. */
     val eraser: StateFlow<EraserSettings> = penSettingsStore.eraser
@@ -1016,6 +1021,16 @@ class NotesViewModel(
      */
     fun updatePen(index: Int, preset: PenPreset) {
         viewModelScope.launch { penSettingsStore.setPen(index, preset) }
+    }
+
+    /**
+     * Puts a colour mixed on the wheel at the head of the swatch row, dropping its tail.
+     *
+     * Separate from [updatePen] because the two write different things: the pen takes the colour,
+     * and the row remembers it. A pen picking an existing swatch does not disturb the row.
+     */
+    fun addPaletteColor(argb: Int) {
+        viewModelScope.launch { penSettingsStore.addPaletteColor(argb) }
     }
 
     // --- pages, sections, notebooks -------------------------------------------------------------

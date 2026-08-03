@@ -44,6 +44,8 @@ data class DrawActions(
     val updatePen: (Int, PenPreset) -> Unit,
     val updateEraser: (EraserSettings) -> Unit,
     val setDrawWithFinger: (Boolean) -> Unit,
+    /** Puts a colour off the wheel at the head of the swatch row. Not the same write as a pen. */
+    val addPaletteColor: (Int) -> Unit = {},
     val undo: () -> Unit = {},
     val redo: () -> Unit = {},
 )
@@ -79,6 +81,7 @@ internal object DrawTags {
 @Composable
 internal fun DrawTab(
     pens: List<PenPreset>,
+    palette: List<Int>,
     eraser: EraserSettings,
     tool: DrawTool,
     allowFinger: Boolean,
@@ -112,12 +115,14 @@ internal fun DrawTab(
             PenButton(
                 index = index,
                 pen = pen,
+                palette = palette,
                 selected = tool == DrawTool.Pen(index),
                 onSelect = { actions.selectTool(DrawTool.Pen(index)) },
                 settingsOpen = openPenIndex == index,
                 onOpen = { openPenIndex = index },
                 onDismiss = { openPenIndex = null },
                 onChange = { actions.updatePen(index, it) },
+                onAddColor = actions.addPaletteColor,
             )
         }
 
@@ -218,12 +223,14 @@ private fun EraserButton(
 private fun PenButton(
     index: Int,
     pen: PenPreset,
+    palette: List<Int>,
     selected: Boolean,
     onSelect: () -> Unit,
     settingsOpen: Boolean,
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
     onChange: (PenPreset) -> Unit,
+    onAddColor: (Int) -> Unit,
 ) {
     val swatch = Color(pen.colorArgb)
     val stylus = MaterialSymbols.Stylus
@@ -266,7 +273,12 @@ private fun PenButton(
             onDismissRequest = onDismiss,
             title = "Pen ${index + 1}",
         ) {
-            PenPanelContent(pen = pen, onChange = onChange)
+            PenPanelContent(
+                pen = pen,
+                palette = palette,
+                onChange = onChange,
+                onAddColor = onAddColor,
+            )
         }
     }
 }

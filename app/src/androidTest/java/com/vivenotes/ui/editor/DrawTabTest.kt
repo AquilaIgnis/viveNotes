@@ -1,13 +1,18 @@
 package com.vivenotes.ui.editor
 
+import android.graphics.Color as AndroidColor
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -28,6 +33,7 @@ import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.forCanvasTheme
+import com.vivenotes.data.withColorInFront
 import com.vivenotes.ui.panel.PenPanelContent
 import com.vivenotes.ui.panel.PenPanelTags
 import com.vivenotes.ui.panel.PanelTags
@@ -50,6 +56,7 @@ class DrawTabTest {
     private var changed: PenPreset? = null
     private var changedIndex: Int? = null
     private var changedEraser: EraserSettings? = null
+    private var palette: MutableState<List<Int>>? = null
     private var fingerDrawing: Boolean? = null
     private var undoCount = 0
     private var redoCount = 0
@@ -66,6 +73,7 @@ class DrawTabTest {
             ViveNotesTheme {
                 DrawTab(
                     pens = pens,
+                    palette = PEN_COLORS,
                     eraser = eraser,
                     tool = tool,
                     allowFinger = allowFinger,
@@ -87,15 +95,23 @@ class DrawTabTest {
         }
     }
 
+    /** The pane with a live palette behind it, so a colour added on the wheel lands in the row. */
     private fun setPanel(pen: PenPreset = PenPreset.starting(0)) {
         val current = mutableStateOf(pen)
+        val row = mutableStateOf(PEN_COLORS)
+        palette = row
         compose.setContent {
             ViveNotesTheme {
                 Column {
-                    PenPanelContent(pen = current.value) {
-                        current.value = it
-                        changed = it
-                    }
+                    PenPanelContent(
+                        pen = current.value,
+                        palette = row.value,
+                        onChange = {
+                            current.value = it
+                            changed = it
+                        },
+                        onAddColor = { row.value = row.value.withColorInFront(it) },
+                    )
                 }
             }
         }
@@ -323,12 +339,6 @@ class DrawTabTest {
     }
 
     @Test
-    fun whiteAndBlackAlwaysLeadThePenPalette() {
-        assertEquals(0xFFFFFFFF.toInt(), PEN_COLORS[0])
-        assertEquals(0xFF000000.toInt(), PEN_COLORS[1])
-    }
-
-    @Test
     fun untouchedDefaultInkContrastsWithTheCanvasTheme() {
         val automatic = PenPreset.starting(0)
         assertEquals(0xFFFFFFFF.toInt(), automatic.forCanvasTheme(isDark = true).colorArgb)
@@ -398,6 +408,184 @@ class DrawTabTest {
         compose.onNodeWithContentDescription("Add color").assertIsDisplayed()
         assertTrue("nothing should have been written by merely showing the pane", changed == null)
     }
+
+    // --- the colour wheel ------------------------------------------------------------------------
+
+    /** The row starts as the shipped palette with the wheel after it — nothing displaced yet. */
+    @Test
+    fun theWheelEndsTheRowWithoutTakingASwatchWithIt() {
+        setPanel()
+        PEN_COLORS.forEach {
+            compose.onNodeWithTag(PenPanelTags.color(it)).assertIsDisplayed()
+        }
+        compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).assertIsDisplayed()
+        assertTrue("showing the palette must not write a pen", changed == null)
+    }
+
+    /**
+     * The row rolls: what you mixed becomes the first swatch, and the row stays the length that
+     * fits the panel, so the oldest colour on the end falls off to make room.
+     */
+    @Test
+    fun aMixedColorTakesTheFrontOfTheRowAndPushesTheLastOneOff() {
+        setPanel(PenPreset.starting(0).copy(colorArgb = 0xFFFFFFFF.toInt()))
+        compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).performClick()
+        compose.onNodeWithTag(PenPanelTags.WHEEL).performTouchInput {
+            down(Offset(width - 1f, height / 2f))
+            up()
+        }
+        compose.onNodeWithText("Done").performClick()
+
+        val picked = requireNonNull(changed).colorArgb
+        val row = requireNotNull(palette).value
+        assertEquals("the mixed colour leads the row", picked, row.first())
+        assertEquals("the row is the width it fits in", PEN_COLORS.size, row.size)
+        assertTrue("the tail makes room", PEN_COLORS.last() !in row)
+
+        compose.onNodeWithTag(PenPanelTags.color(picked)).assertIsDisplayed()
+        compose.onNodeWithTag(PenPanelTags.color(PEN_COLORS.last())).assertDoesNotExist()
+    }
+
+    /**
+     * Hunting for a colour means trying several. Charging the row a swatch per touch would spend
+     * the whole palette on the near-misses, so a visit to the wheel costs exactly one — the colour
+     * it was left on.
+     */
+    @Test
+    fun clickingAroundTheWheelCostsTheRowOneSpotAndNoMore() {
+        setPanel(PenPreset.starting(0).copy(colorArgb = 0xFFFFFFFF.toInt()))
+        compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).performClick()
+        val wheel = compose.onNodeWithTag(PenPanelTags.WHEEL)
+
+        listOf(0.24f to 0.30f, 0.78f to 0.36f, 0.50f to 0.84f).forEach { (x, y) ->
+            wheel.performTouchInput {
+                down(Offset(width * x, height * y))
+                up()
+            }
+            assertEquals(
+                "the row must not move while the wheel is still open",
+                PEN_COLORS,
+                requireNotNull(palette).value,
+            )
+        }
+
+        compose.onNodeWithText("Done").performClick()
+
+        val row = requireNotNull(palette).value
+        assertEquals("the colour it was left on", requireNonNull(changed).colorArgb, row.first())
+        assertEquals("one spot taken, not three", PEN_COLORS.dropLast(1), row.drop(1))
+    }
+
+    /** Opening the picker and thinking better of it is not a choice, so it costs the row nothing. */
+    @Test
+    fun leavingTheWheelUntouchedLeavesTheRowAlone() {
+        setPanel()
+        compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).performClick()
+        compose.onNodeWithText("Done").performClick()
+
+        assertEquals(PEN_COLORS, requireNotNull(palette).value)
+        assertTrue("and writes no pen", changed == null)
+    }
+
+    /**
+     * The mixed colour belongs to its own swatch, not to the wheel. Read off the rendered button:
+     * its middle is the pale centre of the disc, and must not have become the ink just chosen.
+     */
+    @Test
+    fun theWheelDoesNotWearTheColorItMixed() {
+        setPanel(PenPreset.starting(0).copy(colorArgb = 0xFFFFFFFF.toInt()))
+        compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).performClick()
+        compose.onNodeWithTag(PenPanelTags.WHEEL).performTouchInput {
+            down(Offset(width - 1f, height / 2f))
+            up()
+        }
+        compose.onNodeWithText("Done").performClick()
+
+        val button = compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).captureToImage().toPixelMap()
+        val middle = button[button.width / 2, button.height / 2]
+        assertTrue(
+            "the wheel is wearing the picked red: $middle",
+            middle.green > 0.75f && middle.blue > 0.75f,
+        )
+    }
+
+    @Test
+    fun theWheelSwatchOpensThePicker() {
+        setPanel()
+        compose.onNodeWithTag(PenPanelTags.WHEEL).assertDoesNotExist()
+
+        compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).performClick()
+
+        compose.onNodeWithTag(PenPanelTags.WHEEL).assertIsDisplayed()
+        compose.onNodeWithTag(PenPanelTags.BRIGHTNESS).assertIsDisplayed()
+        assertTrue("opening the picker is not yet a choice", changed == null)
+    }
+
+    /**
+     * The whole point of the wheel: a colour the fixed row cannot reach. Sampling the right-hand edge
+     * is hue 0 at full saturation, so the ink comes back red — and a red no swatch offers.
+     */
+    @Test
+    fun theWheelPicksAColorThePaletteDoesNotCarry() {
+        setPanel(PenPreset.starting(0).copy(colorArgb = 0xFFFFFFFF.toInt()))
+        compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).performClick()
+
+        compose.onNodeWithTag(PenPanelTags.WHEEL).performTouchInput {
+            down(Offset(width - 1f, height / 2f))
+            up()
+        }
+
+        val picked = requireNonNull(changed).colorArgb
+        assertEquals(255, AndroidColor.red(picked))
+        assertTrue("hue 0 is red, not $picked", AndroidColor.green(picked) < 20)
+        assertTrue("hue 0 is red, not $picked", AndroidColor.blue(picked) < 20)
+        assertTrue("a wheel colour is an explicit one", !requireNonNull(changed).colorFollowsTheme)
+        assertTrue("$picked is a palette colour, so the wheel proved nothing", picked !in PEN_COLORS)
+    }
+
+    /**
+     * A drag across the wheel is hundreds of points and every commit is a DataStore write, so the
+     * colour is written when the finger lifts rather than at every point it passes over.
+     */
+    @Test
+    fun theWheelWritesThePenOnceTheGestureEnds() {
+        setPanel(PenPreset.starting(0).copy(colorArgb = 0xFFFFFFFF.toInt()))
+        compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).performClick()
+        val wheel = compose.onNodeWithTag(PenPanelTags.WHEEL)
+
+        wheel.performTouchInput { down(Offset(width - 1f, height / 2f)) }
+        assertTrue("mid-gesture is not a decision", changed == null)
+
+        wheel.performTouchInput { up() }
+        assertTrue("lifting off is", changed != null)
+    }
+
+    /** Without the bar the wheel could only reach fully lit colours — the dark half is most ink. */
+    @Test
+    fun theBrightnessBarReachesTheDarkEndOfTheWheel() {
+        setPanel(PenPreset.starting(0).copy(colorArgb = 0xFFE53935.toInt()))
+        compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).performClick()
+
+        compose.onNodeWithTag(PenPanelTags.BRIGHTNESS).performTouchInput {
+            down(Offset(0f, height / 2f))
+            up()
+        }
+
+        assertEquals(0xFF000000.toInt(), requireNonNull(changed).colorArgb)
+    }
+
+    @Test
+    fun doneClosesThePickerAndLeavesThePenPaneOpen() {
+        setPanel()
+        compose.onNodeWithTag(PenPanelTags.CUSTOM_COLOR).performClick()
+        compose.onNodeWithText("Done").performClick()
+
+        compose.onNodeWithTag(PenPanelTags.WHEEL).assertDoesNotExist()
+        compose.onNodeWithTag(PenPanelTags.PREVIEW).assertIsDisplayed()
+    }
+
+    private fun requireNonNull(pen: PenPreset?): PenPreset =
+        requireNotNull(pen) { "the pane wrote nothing back" }
 
     /** Popup dismissal is window-level, so inject through Android rather than one Compose owner. */
     private fun tapOutsidePopup() {

@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.PageStyle
@@ -41,6 +42,7 @@ class InsertTabTest {
                     viewSettings = ViewSettings(),
                     view = noopViewActions(),
                     pens = List(PenPreset.COUNT) { PenPreset.starting(it) },
+                    palette = PEN_COLORS,
                     eraser = EraserSettings(),
                     tool = DrawTool.None,
                     allowFinger = false,

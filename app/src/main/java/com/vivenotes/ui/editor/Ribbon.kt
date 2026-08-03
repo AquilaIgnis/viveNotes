@@ -123,8 +123,9 @@ fun Ribbon(
     pageStyle: PageStyle,
     viewSettings: ViewSettings,
     view: ViewActions,
-    /** The Draw tab's pens, and which tool is currently in hand. */
+    /** The Draw tab's pens, the swatch row they share, and which tool is currently in hand. */
     pens: List<PenPreset>,
+    palette: List<Int>,
     eraser: EraserSettings,
     tool: DrawTool,
     allowFinger: Boolean,
@@ -171,6 +172,7 @@ fun Ribbon(
             RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
             RibbonTab.Draw -> DrawTab(
                 pens = pens,
+                palette = palette,
                 eraser = eraser,
                 tool = tool,
                 allowFinger = allowFinger,

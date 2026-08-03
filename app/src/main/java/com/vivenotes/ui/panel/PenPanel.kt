@@ -20,15 +20,22 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -38,7 +45,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.LineType
-import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
 
@@ -46,6 +52,13 @@ import com.vivenotes.data.PenPreset
 object PenPanelTags {
     const val PREVIEW = "pen-preview"
     const val ADD_COLOR = "pen-add-color"
+
+    /** The rainbow swatch that ends the palette, and the picker it opens. */
+    const val CUSTOM_COLOR = "pen-color-custom"
+    const val WHEEL = "pen-color-wheel"
+    const val WHEEL_PREVIEW = "pen-color-wheel-preview"
+    const val BRIGHTNESS = "pen-color-brightness"
+
     fun kind(kind: PenKind) = "pen-kind-${kind.name}"
     fun lineType(lineType: LineType) = "pen-line-${lineType.name}"
     fun color(argb: Int) = "pen-color-$argb"
@@ -67,10 +80,17 @@ object PenPanelTags {
  * is absent entirely rather than disabled; and the overflow beside Hold to draw shape, which chooses
  * *which* shapes are recognised, waits for shape recognition to exist at all (`docs/inkPlan.md` §5).
  * Add colour is placed and inert, the same way the View tab places Full Page View: it holds the spot
- * the reference gives it and plainly does not work yet.
+ * the reference gives it and plainly does not work yet. It is not the wheel at the end of the
+ * palette in disguise — that picks an ink, where + would add a swatch to the row and keep it, which
+ * needs a stored custom palette this does not have.
  */
 @Composable
-fun ColumnScope.PenPanelContent(pen: PenPreset, onChange: (PenPreset) -> Unit) {
+fun ColumnScope.PenPanelContent(
+    pen: PenPreset,
+    palette: List<Int>,
+    onChange: (PenPreset) -> Unit,
+    onAddColor: (Int) -> Unit = {},
+) {
     StrokePreview(pen)
 
     Spacer(Modifier.height(8.dp))
@@ -169,10 +189,13 @@ fun ColumnScope.PenPanelContent(pen: PenPreset, onChange: (PenPreset) -> Unit) {
                 .alpha(INERT_ALPHA),
         )
     }
-    ColorSwatches(pen.colorArgb) {
+    ColorSwatches(
+        palette = palette,
+        current = pen.colorArgb,
         // A tap is an explicit choice. It must stay black or white across future theme changes.
-        onChange(pen.copy(colorArgb = it, colorFollowsTheme = false))
-    }
+        onPick = { onChange(pen.copy(colorArgb = it, colorFollowsTheme = false)) },
+        onAddColor = onAddColor,
+    )
     Spacer(Modifier.height(6.dp))
 }
 
@@ -307,41 +330,142 @@ private fun PenKindCard(
 }
 
 /**
- * The colour row.
+ * The colour row: the swatches, then the wheel that covers everything they leave out.
  *
  * A ring rather than a tick marks the current colour: a tick has to be drawn in something, and no
  * one colour reads on both the black swatch and the yellow one.
+ *
+ * The row rolls. A colour mixed on the wheel is inserted at the front and the tail is dropped, so
+ * the wheel stays a wheel rather than doubling as a swatch for whatever was last mixed — what you
+ * picked is a swatch like any other, in the place your eye goes first. The cost is that the row is
+ * finite: nine custom colours will push the shipped palette out entirely, black and white included.
+ * They are one trip back through the wheel away, which is why nothing here is pinned.
+ *
+ * That cost is why the row is charged **once per visit to the wheel, when the wheel closes**, and
+ * not once per touch on it. Hunting for a colour means trying several, and a row that took a spot
+ * for each would spend the whole palette on the near-misses; only the colour someone left the
+ * picker on was actually chosen. The pen still follows every touch, because that is the preview.
  */
 @Composable
-private fun ColorSwatches(current: Int, onPick: (Int) -> Unit) {
+private fun ColorSwatches(
+    palette: List<Int>,
+    current: Int,
+    onPick: (Int) -> Unit,
+    onAddColor: (Int) -> Unit,
+) {
+    var wheelOpen by remember { mutableStateOf(false) }
+    // What the wheel has been left on. Null until it is touched, which is what makes opening the
+    // picker and thinking better of it cost nothing.
+    var mixed by remember { mutableStateOf<Int?>(null) }
+
+    fun closeWheel() {
+        wheelOpen = false
+        mixed?.let(onAddColor)
+        mixed = null
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        PEN_COLORS.forEach { argb ->
-            val selected = argb == current
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .testTag(PenPanelTags.color(argb))
-                    .border(
-                        width = if (selected) 2.dp else 0.dp,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            Color.Transparent
-                        },
-                        shape = RoundedCornerShape(50),
-                    )
-                    .padding(if (selected) 4.dp else 2.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(argb))
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
-                    .clickable { onPick(argb) },
-            )
+        palette.forEach { argb ->
+            Swatch(
+                selected = argb == current,
+                tag = PenPanelTags.color(argb),
+                onClick = { onPick(argb) },
+            ) {
+                drawRect(Color(argb))
+            }
+        }
+
+        Box {
+            Swatch(
+                // Normally false, since a colour off the wheel joins the row and is ringed there.
+                // It survives for the ink a rolled-off swatch left behind, which has nothing else
+                // to mark it.
+                selected = current !in palette,
+                tag = PenPanelTags.CUSTOM_COLOR,
+                description = "Custom color",
+                onClick = { wheelOpen = true },
+            ) {
+                drawRect(Brush.sweepGradient(HUE_STOPS, center))
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(Color.White, Color.Transparent),
+                        center = center,
+                        radius = size.minDimension / 2f,
+                    ),
+                    radius = size.minDimension / 2f,
+                )
+            }
+
+            // Both ways out lead to the same place: Done and a tap outside are the same decision,
+            // so a colour must not depend on which one closed the picker.
+            FloatingSettingsPanel(
+                expanded = wheelOpen,
+                onDismissRequest = { closeWheel() },
+                title = "Custom color",
+            ) {
+                ColorWheelContent(
+                    initialArgb = current,
+                    onPick = {
+                        mixed = it
+                        onPick(it)
+                    },
+                    onDone = { closeWheel() },
+                )
+            }
         }
     }
 }
+
+/**
+ * One round target in the colour row, painted by [fill] and ringed when it is the current one.
+ *
+ * The paint is a draw lambda rather than a colour because the last swatch is a gradient, and a
+ * background modifier that took only a solid would have forced the wheel to be a different control
+ * sitting beside the palette instead of the last member of it.
+ */
+@Composable
+private fun Swatch(
+    selected: Boolean,
+    tag: String,
+    description: String? = null,
+    onClick: () -> Unit,
+    fill: DrawScope.() -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(SWATCH_SIZE)
+            .testTag(tag)
+            .border(
+                width = if (selected) 2.dp else 0.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(50),
+            )
+            .padding(if (selected) 4.dp else 2.dp)
+            .clip(RoundedCornerShape(50))
+            // Draw modifiers paint in the order they are chained, so the fill goes down first and
+            // the hairline outline over it — the same layering the solid swatches had.
+            .drawBehind(fill)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .then(
+                if (description == null) {
+                    Modifier
+                } else {
+                    Modifier.semantics { contentDescription = description }
+                },
+            ),
+    )
+}
+
+/**
+ * Ten targets have to fit one 320dp panel without wrapping, which is what sets this rather than
+ * taste. The row stays one line because the reference draws it as one.
+ */
+private val SWATCH_SIZE = 26.dp
 
 /** Placed but not wired, so it holds the reference's layout without pretending to work. */
 private const val INERT_ALPHA = 0.42f

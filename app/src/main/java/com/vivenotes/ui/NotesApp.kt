@@ -73,6 +73,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val defaults by viewModel.editorDefaults.collectAsStateWithLifecycle()
     val viewSettings by viewModel.viewSettings.collectAsStateWithLifecycle()
     val pens by viewModel.pens.collectAsStateWithLifecycle()
+    val palette by viewModel.palette.collectAsStateWithLifecycle()
     val eraser by viewModel.eraser.collectAsStateWithLifecycle()
     val tool by viewModel.tool.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
@@ -108,6 +109,7 @@ fun NotesApp(viewModel: NotesViewModel) {
             },
             updatePen = viewModel::updatePen,
             updateEraser = viewModel::updateEraser,
+            addPaletteColor = viewModel::addPaletteColor,
             setDrawWithFinger = viewModel::setDrawWithFinger,
             undo = viewModel::undoInk,
             redo = viewModel::redoInk,
@@ -148,6 +150,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                         viewSettings = viewSettings,
                         view = viewActions,
                         pens = themedPens,
+                        palette = palette,
                         eraser = eraser,
                         tool = tool,
                         allowFinger = drawWithFinger,

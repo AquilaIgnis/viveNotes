@@ -10,6 +10,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
@@ -112,13 +114,29 @@ fun PenPreset.forCanvasTheme(isDark: Boolean): PenPreset =
     }
 
 /**
- * The colours a pen can be set to, from the swatch row in `docs/references/pen-tooltip.jpeg`.
+ * The palette a pen starts with, from the swatch row in `docs/references/pen-tooltip.jpeg`.
+ *
+ * Only the starting state: the row is a rolling list, so a colour taken off the wheel takes the
+ * front and the tail falls off. White and black lead it as shipped, but they are not pinned — nine
+ * custom colours will push them out, and the wheel is how they come back.
  */
 val PEN_COLORS: List<Int> = listOf(
-    // Keep the two neutral inks in fixed, predictable positions before every accent colour.
     0xFFFFFFFF, 0xFF000000, 0xFFE53935, 0xFF00BCD4, 0xFF00C853,
     0xFFFFD600, 0xFFFF9100, 0xFF9C27B0, 0xFF2962FF,
 ).map { it.toInt() }
+
+/** How many swatches the row shows. Fixed, because ten targets are what fit the panel's width. */
+val PALETTE_SIZE: Int = PEN_COLORS.size
+
+/**
+ * The palette with [argb] at the front, one swatch longer at the head and one shorter at the tail.
+ *
+ * A colour already in the row moves rather than repeats, which is what keeps re-picking a colour
+ * from costing the row an entry. That also means the length only ever changes when the colour is
+ * genuinely new — the tail is evicted to make room, never to make a duplicate.
+ */
+fun List<Int>.withColorInFront(argb: Int): List<Int> =
+    (listOf(argb) + filterNot { it == argb }).take(PALETTE_SIZE)
 
 /**
  * Which drawing tool is armed.
@@ -159,6 +177,28 @@ class PenSettingsStore(context: Context) {
 
     val eraser: Flow<EraserSettings> = store.data.map { prefs ->
         prefs[ERASER]?.let(::decodeEraser) ?: EraserSettings()
+    }
+
+    /**
+     * The swatch row, which the wheel adds to.
+     *
+     * Stored beside the pens rather than on one of them: the row is the same in all three panes, so
+     * a colour mixed while holding pen 2 is there when pen 1 is picked up. It is a property of the
+     * user by ID5 — the colours someone reaches for — not of a device or of any page.
+     */
+    val palette: Flow<List<Int>> = store.data.map { prefs ->
+        prefs[PALETTE]?.let(::decodePalette) ?: PEN_COLORS
+    }
+
+    /** Read-modify-write inside one `edit`, so two quick picks cannot lose each other. */
+    suspend fun addPaletteColor(argb: Int) {
+        store.edit { prefs ->
+            val current = prefs[PALETTE]?.let(::decodePalette) ?: PEN_COLORS
+            prefs[PALETTE] = json.encodeToString(
+                ListSerializer(Int.serializer()),
+                current.withColorInFront(argb),
+            )
+        }
     }
 
     /**
@@ -203,11 +243,23 @@ class PenSettingsStore(context: Context) {
     private fun decodeEraser(text: String): EraserSettings? =
         runCatching { json.decodeFromString(EraserSettings.serializer(), text) }.getOrNull()
 
+    /**
+     * A stored row shorter or longer than the current [PALETTE_SIZE] is trimmed rather than
+     * rejected, so changing how many swatches fit is not a migration. An empty one is nothing to
+     * show, which is the one case worth falling back to the shipped palette for.
+     */
+    private fun decodePalette(text: String): List<Int>? = runCatching {
+        json.decodeFromString(ListSerializer(Int.serializer()), text)
+            .take(PALETTE_SIZE)
+            .ifEmpty { null }
+    }.getOrNull()
+
     private companion object {
         fun key(index: Int) = stringPreferencesKey("pen_$index")
 
         val DRAW_WITH_FINGER = booleanPreferencesKey("draw_with_finger")
         val ERASER = stringPreferencesKey("eraser")
+        val PALETTE = stringPreferencesKey("palette")
 
         /**
          * `ignoreUnknownKeys` covers a field this build does not have; `coerceInputValues` covers a
