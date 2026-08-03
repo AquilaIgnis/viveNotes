@@ -36,6 +36,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.TabsLayout
+import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.model.PageStyle
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ui.editor.DrawActions
@@ -116,6 +117,9 @@ fun NotesApp(viewModel: NotesViewModel) {
     val horizontalTabs = viewSettings.tabsLayout == TabsLayout.Horizontal
     // Switch Background pins the canvas light or dark; until it is used it follows the theme.
     val canvas = viewSettings.canvasDark?.let { canvasColorsFor(it) } ?: LocalCanvasColors.current
+    val themedPens = remember(pens, canvas.isDark) {
+        pens.map { it.forCanvasTheme(canvas.isDark) }
+    }
     // Where "back" stops. With the sections on screen as tabs there is no notebook pane behind the
     // page list to return to.
     val rootPane = if (horizontalTabs) CompactPane.Pages else CompactPane.Notebooks
@@ -143,7 +147,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                         pageStyle = state.pageStyle,
                         viewSettings = viewSettings,
                         view = viewActions,
-                        pens = pens,
+                        pens = themedPens,
                         eraser = eraser,
                         tool = tool,
                         allowFinger = drawWithFinger,
@@ -206,7 +210,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 viewSettings.zoom,
                                 showPrintMargins = openPane == ToolPane.PaperSize,
                                 tool = tool,
-                                pens = pens,
+                                pens = themedPens,
                                 eraser = eraser,
                                 allowFinger = drawWithFinger,
                                 hasInkClipboard = hasInkClipboard,
@@ -266,7 +270,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 viewSettings.zoom,
                                 showPrintMargins = false,
                                 tool = tool,
-                                pens = pens,
+                                pens = themedPens,
                                 eraser = eraser,
                                 allowFinger = drawWithFinger,
                                 hasInkClipboard = hasInkClipboard,

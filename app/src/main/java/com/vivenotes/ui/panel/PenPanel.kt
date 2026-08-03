@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +32,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.LineType
@@ -44,6 +47,7 @@ object PenPanelTags {
     const val PREVIEW = "pen-preview"
     const val ADD_COLOR = "pen-add-color"
     fun kind(kind: PenKind) = "pen-kind-${kind.name}"
+    fun lineType(lineType: LineType) = "pen-line-${lineType.name}"
     fun color(argb: Int) = "pen-color-$argb"
 }
 
@@ -88,18 +92,9 @@ fun ColumnScope.PenPanelContent(pen: PenPreset, onChange: (PenPreset) -> Unit) {
         ) { onChange(pen.copy(kind = PenKind.Calligraphy)) }
     }
 
-    Spacer(Modifier.height(2.dp))
-    PanelSetting("Line type") {
-        Box(Modifier.width(120.dp)) {
-            PanelChoice(
-                field = "Line type",
-                current = pen.lineType,
-                options = LineType.entries,
-                label = { it.label },
-                onPick = { onChange(pen.copy(lineType = it)) },
-            )
-        }
-    }
+    Spacer(Modifier.height(8.dp))
+    LineTypePicker(pen.lineType) { onChange(pen.copy(lineType = it)) }
+    Spacer(Modifier.height(4.dp))
 
     PanelSetting(
         label = "Hold to draw shape",
@@ -118,15 +113,6 @@ fun ColumnScope.PenPanelContent(pen: PenPreset, onChange: (PenPreset) -> Unit) {
             onChange(pen.copy(scribbleToErase = it))
         }
     }
-    PanelSetting(
-        label = "Circle to lasso",
-        info = "Draw a closed loop around strokes to select them instead of inking over them.",
-    ) {
-        PanelToggle("Circle to lasso", pen.circleToLasso) {
-            onChange(pen.copy(circleToLasso = it))
-        }
-    }
-
     PanelSlider(
         field = "Thickness",
         label = "Thickness",
@@ -183,8 +169,57 @@ fun ColumnScope.PenPanelContent(pen: PenPreset, onChange: (PenPreset) -> Unit) {
                 .alpha(INERT_ALPHA),
         )
     }
-    ColorSwatches(pen.colorArgb) { onChange(pen.copy(colorArgb = it)) }
+    ColorSwatches(pen.colorArgb) {
+        // A tap is an explicit choice. It must stay black or white across future theme changes.
+        onChange(pen.copy(colorArgb = it, colorFollowsTheme = false))
+    }
     Spacer(Modifier.height(6.dp))
+}
+
+/** Three compact line samples; their shape is the label, so no redundant "Line type" row. */
+@Composable
+private fun LineTypePicker(current: LineType, onPick: (LineType) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LineType.entries.forEach { lineType ->
+            val selected = current == lineType
+            val lineColor = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            Box(
+                modifier = Modifier
+                    .size(width = 58.dp, height = 34.dp)
+                    .testTag(PenPanelTags.lineType(lineType))
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                    )
+                    .selectable(selected = selected, onClick = { onPick(lineType) })
+                    .semantics {
+                        contentDescription = "${lineType.label} line"
+                        this.selected = selected
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Canvas(Modifier.size(width = 38.dp, height = 12.dp)) {
+                    val strokeWidth = 2.dp.toPx()
+                    drawLine(
+                        color = lineColor,
+                        start = Offset(1.dp.toPx(), center.y),
+                        end = Offset(size.width - 1.dp.toPx(), center.y),
+                        strokeWidth = strokeWidth,
+                        cap = StrokeCap.Round,
+                        pathEffect = lineType.pathEffect(strokeWidth),
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**

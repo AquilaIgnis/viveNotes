@@ -23,8 +23,11 @@ import org.junit.Test
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.LineType
+import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.ui.panel.PenPanelContent
 import com.vivenotes.ui.panel.PenPanelTags
 import com.vivenotes.ui.panel.PanelTags
@@ -280,13 +283,34 @@ class DrawTabTest {
     // --- the pen pane --------------------------------------------------------------------------
 
     @Test
-    fun eachToggleWritesItsOwnField() {
+    fun eachRemainingToggleWritesItsOwnField() {
         setPanel()
-        compose.onNodeWithTag(PanelTags.field("Circle to lasso")).performClick()
-        assertEquals(true, changed?.circleToLasso)
-        // Nothing else moved: the copy() went to the field the row is named after.
-        assertEquals(PenPreset.starting(0).holdToDrawShape, changed?.holdToDrawShape)
-        assertEquals(PenPreset.starting(0).scribbleToErase, changed?.scribbleToErase)
+        compose.onNodeWithTag(PanelTags.field("Hold to draw shape")).performClick()
+        assertEquals(false, changed?.holdToDrawShape)
+
+        compose.onNodeWithTag(PanelTags.field("Scribble to erase")).performClick()
+        assertEquals(false, changed?.scribbleToErase)
+        assertEquals(false, changed?.holdToDrawShape)
+    }
+
+    @Test
+    fun circleToLassoIsRemoved() {
+        setPanel()
+        compose.onNodeWithText("Circle to lasso").assertDoesNotExist()
+        compose.onNodeWithTag(PanelTags.field("Circle to lasso")).assertDoesNotExist()
+    }
+
+    @Test
+    fun lineTypesAreThreeCenteredIconsWithoutARowLabel() {
+        setPanel()
+
+        compose.onNodeWithText("Line type").assertDoesNotExist()
+        LineType.entries.forEach {
+            compose.onNodeWithTag(PenPanelTags.lineType(it)).assertIsDisplayed()
+        }
+
+        compose.onNodeWithTag(PenPanelTags.lineType(LineType.Dashed)).performClick()
+        assertEquals(LineType.Dashed, changed?.lineType)
     }
 
     @Test
@@ -295,7 +319,23 @@ class DrawTabTest {
         setPanel(pen)
         val green = 0xFF00C853.toInt()
         compose.onNodeWithTag(PenPanelTags.color(green)).performClick()
-        assertEquals(pen.copy(colorArgb = green), changed)
+        assertEquals(pen.copy(colorArgb = green, colorFollowsTheme = false), changed)
+    }
+
+    @Test
+    fun whiteAndBlackAlwaysLeadThePenPalette() {
+        assertEquals(0xFFFFFFFF.toInt(), PEN_COLORS[0])
+        assertEquals(0xFF000000.toInt(), PEN_COLORS[1])
+    }
+
+    @Test
+    fun untouchedDefaultInkContrastsWithTheCanvasTheme() {
+        val automatic = PenPreset.starting(0)
+        assertEquals(0xFFFFFFFF.toInt(), automatic.forCanvasTheme(isDark = true).colorArgb)
+        assertEquals(0xFF000000.toInt(), automatic.forCanvasTheme(isDark = false).colorArgb)
+
+        val explicitBlack = automatic.copy(colorFollowsTheme = false)
+        assertEquals(0xFF000000.toInt(), explicitBlack.forCanvasTheme(isDark = true).colorArgb)
     }
 
     @Test

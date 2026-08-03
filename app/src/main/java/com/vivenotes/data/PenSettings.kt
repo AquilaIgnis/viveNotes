@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 private val Context.penPreferences: DataStore<Preferences> by preferencesDataStore("pens")
 
@@ -71,12 +72,13 @@ data class PenPreset(
     val kind: PenKind = PenKind.Fountain,
     val lineType: LineType = LineType.Solid,
     val colorArgb: Int = 0xFF000000.toInt(),
+    /** True only while this pen is using the automatic high-contrast starter colour. */
+    val colorFollowsTheme: Boolean = false,
     val thickness: Int = 5,
     val pressure: Int = 3,
     val stabilization: Int = 1,
     val holdToDrawShape: Boolean = true,
     val scribbleToErase: Boolean = true,
-    val circleToLasso: Boolean = false,
 ) {
     companion object {
         /** Three pens, per the Draw tab. They differ only by colour, which is their whole purpose. */
@@ -92,16 +94,29 @@ data class PenPreset(
         /** What each pen starts as. Different colours, because swapping colour is why there are three. */
         private val STARTING_COLORS = listOf(0xFF000000, 0xFFE53935, 0xFF1E88E5).map { it.toInt() }
 
-        fun starting(index: Int): PenPreset =
-            PenPreset(colorArgb = STARTING_COLORS[index % STARTING_COLORS.size])
+        fun starting(index: Int): PenPreset = PenPreset(
+            colorArgb = STARTING_COLORS[index % STARTING_COLORS.size],
+            // Pen 1 is the notebook's automatic default. The red and blue pens are intentional
+            // shortcuts, so changing the theme must not erase their identity.
+            colorFollowsTheme = index == 0,
+        )
     }
 }
+
+/** Resolves the automatic starter colour without changing a colour the user explicitly picked. */
+fun PenPreset.forCanvasTheme(isDark: Boolean): PenPreset =
+    if (colorFollowsTheme) {
+        copy(colorArgb = if (isDark) 0xFFFFFFFF.toInt() else 0xFF000000.toInt())
+    } else {
+        this
+    }
 
 /**
  * The colours a pen can be set to, from the swatch row in `docs/references/pen-tooltip.jpeg`.
  */
 val PEN_COLORS: List<Int> = listOf(
-    0xFF000000, 0xFFE53935, 0xFF00BCD4, 0xFF00C853,
+    // Keep the two neutral inks in fixed, predictable positions before every accent colour.
+    0xFFFFFFFF, 0xFF000000, 0xFFE53935, 0xFF00BCD4, 0xFF00C853,
     0xFFFFD600, 0xFFFF9100, 0xFF9C27B0, 0xFF2962FF,
 ).map { it.toInt() }
 
@@ -138,7 +153,7 @@ class PenSettingsStore(context: Context) {
 
     val pens: Flow<List<PenPreset>> = store.data.map { prefs ->
         List(PenPreset.COUNT) { index ->
-            prefs[key(index)]?.let(::decodePen) ?: PenPreset.starting(index)
+            prefs[key(index)]?.let { decodePen(index, it) } ?: PenPreset.starting(index)
         }
     }
 
@@ -171,8 +186,19 @@ class PenSettingsStore(context: Context) {
         store.edit { it[ERASER] = json.encodeToString(EraserSettings.serializer(), settings) }
     }
 
-    private fun decodePen(text: String): PenPreset? =
-        runCatching { json.decodeFromString(PenPreset.serializer(), text) }.getOrNull()
+    private fun decodePen(index: Int, text: String): PenPreset? = runCatching {
+        val decoded = json.decodeFromString(PenPreset.serializer(), text)
+        val hasThemeFlag = json.parseToJsonElement(text).jsonObject.containsKey("colorFollowsTheme")
+        if (hasThemeFlag) {
+            decoded
+        } else {
+            // Before the flag existed, an untouched first pen was stored as black. Preserve any
+            // other saved colour as an explicit choice; only that old factory state is migrated.
+            decoded.copy(
+                colorFollowsTheme = index == 0 && decoded.colorArgb == 0xFF000000.toInt(),
+            )
+        }
+    }.getOrNull()
 
     private fun decodeEraser(text: String): EraserSettings? =
         runCatching { json.decodeFromString(EraserSettings.serializer(), text) }.getOrNull()
@@ -190,7 +216,9 @@ class PenSettingsStore(context: Context) {
          * as `DocumentJson`.
          */
         val json = Json {
-            encodeDefaults = false
+            // The false value is meaningful: it distinguishes an explicitly chosen black/white
+            // from an old preset that predates colorFollowsTheme, so it must be written as well.
+            encodeDefaults = true
             ignoreUnknownKeys = true
             coerceInputValues = true
         }
