@@ -1097,7 +1097,7 @@ private fun PageHeader(
 }
 
 /**
- * The ruled or squared page background from the reference UI.
+ * The ruled, squared, or dotted page background from the View menu.
  *
  * Spacing comes from the document, so a page ruled on a tablet is ruled identically on a phone —
  * the lines are part of the page, not of the window it is being read in.
@@ -1116,6 +1116,20 @@ private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
         val visible = window().intersect(Rect(Offset.Zero, size))
         if (visible.isEmpty) return@Canvas
 
+        if (rules.dotted) {
+            val radius = DOTTED_RULE_RADIUS_DP.dp.toPx()
+            var y = maxOf(stepPx, ceil(visible.top / stepPx) * stepPx)
+            while (y < visible.bottom) {
+                var x = maxOf(stepPx, ceil(visible.left / stepPx) * stepPx)
+                while (x < visible.right) {
+                    drawCircle(color = color, radius = radius, center = Offset(x, y))
+                    x += stepPx
+                }
+                y += stepPx
+            }
+            return@Canvas
+        }
+
         // Snapped to the ruling's own grid, not to the window, so the lines stay where the page puts
         // them however far it has been scrolled. The first line is a whole step in, as it always was.
         var y = maxOf(stepPx, ceil(visible.top / stepPx) * stepPx)
@@ -1131,6 +1145,8 @@ private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
         }
     }
 }
+
+private const val DOTTED_RULE_RADIUS_DP = 0.8f
 
 private val createdFormat = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault())
 private val createdTimeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())

@@ -62,9 +62,9 @@ private fun Outline.shiftedDown(dy: Float): Outline = when (this) {
  * How a page is presented: its ruling, colour, paper bounds and whether it shows a title.
  *
  * These belong to the document rather than to preferences, because they are properties of the page
- * itself — a squared page stays squared when it reaches another device, and an exporter needs them
- * to reproduce the page. Contrast `data/EditorDefaults.kt`, which describes how the user likes to
- * write and so must *not* travel with any one document.
+ * itself — squared or dotted paper stays that way when it reaches another device, and an exporter
+ * needs the setting to reproduce the page. Contrast `data/EditorDefaults.kt`, which describes how
+ * the user likes to write and so must *not* travel with any one document.
  *
  * Every field has a default, so a page written before the View tab existed decodes to the same
  * appearance it already had.
@@ -160,19 +160,24 @@ data class PrintMargins(
 }
 
 /**
- * Page ruling. Spacing is carried here rather than in the renderer because dp is already the
+ * Page ruling. Pattern and spacing are carried here rather than in the renderer because dp is the
  * document's unit — outline positions are stored in it — so this stays a description of the page
  * rather than of one screen. Only the enum's *name* is serialized, so the spacings can be retuned
  * without touching a stored document.
  */
 @Serializable
-enum class RuleLines(val spacingDp: Float, val squared: Boolean) {
+enum class RuleLines(
+    val spacingDp: Float,
+    val squared: Boolean,
+    val dotted: Boolean = false,
+) {
     None(0f, false),
     Narrow(18f, false),
     College(22f, false),
     Standard(26f, false),
     Wide(32f, false),
     GridSmall(14f, true),
+    Dotted(26f, false, dotted = true),
     GridMedium(26f, true),
     GridLarge(38f, true),
 }

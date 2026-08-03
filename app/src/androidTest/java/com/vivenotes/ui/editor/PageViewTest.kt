@@ -402,6 +402,13 @@ class PageViewTest {
         assertTrue("nothing was painted on a squared page", distinctColoursInsideThePage() > 1)
     }
 
+    @Test
+    fun aDottedPageActuallyPaintsDots() {
+        setPage(style = PageStyle(hideTitle = true, paper = PaperSize.A6, ruleLines = RuleLines.Dotted))
+
+        assertTrue("nothing was painted on a dotted page", distinctColoursInsideThePage() > 1)
+    }
+
     /** Colours within the sheet, kept clear of its own border. */
     private fun distinctColoursInsideThePage(): Int {
         val image = compose.onNodeWithTag(PageTags.SURFACE).captureToImage()

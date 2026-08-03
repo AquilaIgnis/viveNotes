@@ -76,11 +76,9 @@ private val PAGE_COLORS = listOf(
 
 private val RULE_LINE_LABELS = listOf(
     RuleLines.None to "None",
-    RuleLines.Narrow to "Narrow Ruled",
-    RuleLines.College to "College Ruled",
     RuleLines.Standard to "Standard Ruled",
     RuleLines.Wide to "Wide Ruled",
-    RuleLines.GridSmall to "Small Grid",
+    RuleLines.Dotted to "Dotted Paper",
     RuleLines.GridMedium to "Medium Grid",
     RuleLines.GridLarge to "Large Grid",
 )
@@ -258,7 +256,7 @@ private fun RuleLinesMenu(current: RuleLines, pageOpen: Boolean, onPick: (RuleLi
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             RULE_LINE_LABELS.forEach { (rule, label) ->
-                if (rule == RuleLines.GridSmall) HorizontalDivider()
+                if (rule == RuleLines.Dotted) HorizontalDivider()
                 CheckableItem(label, rule == current) {
                     open = false
                     onPick(rule)

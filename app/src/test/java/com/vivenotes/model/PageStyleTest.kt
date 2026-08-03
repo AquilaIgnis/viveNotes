@@ -44,14 +44,14 @@ class PageStyleTest {
      * covers the reverse case — a document written by a newer build with a size this one lacks.
      */
     @Test
-    fun `a page naming a size this build does not have still opens`() {
+    fun `a page naming a paper size this build does not have still opens`() {
         val json = """{"schema":1,"outlines":[{"t":"text","id":"o","blocks":[{"id":"b","runs":[{"text":"hi"}]}]}],
             "style":{"paper":"Letter","ruleLines":"Dotted","hideTitle":true}}"""
 
         val decoded = decodePageDoc(json)
 
         assertEquals(PaperSize.Auto, decoded.style.paper)
-        assertEquals(RuleLines.GridMedium, decoded.style.ruleLines)
+        assertEquals(RuleLines.Dotted, decoded.style.ruleLines)
         // Everything the build *does* understand still has to survive the fallback.
         assertEquals(true, decoded.style.hideTitle)
         assertEquals("hi", (decoded.outlines.first() as Outline.Text).blocks.first().text)
@@ -101,7 +101,7 @@ class PageStyleTest {
     }
 
     @Test
-    fun `only ruled variants of rule lines are squared`() {
+    fun `rule line variants describe their pattern`() {
         assertEquals(0f, RuleLines.None.spacingDp, 0f)
         RuleLines.entries.filter { it.name.startsWith("Grid") }.forEach {
             assertEquals("${it.name} should be squared", true, it.squared)
@@ -109,5 +109,7 @@ class PageStyleTest {
         listOf(RuleLines.Narrow, RuleLines.College, RuleLines.Standard, RuleLines.Wide).forEach {
             assertEquals("${it.name} should rule horizontally only", false, it.squared)
         }
+        assertEquals(true, RuleLines.Dotted.dotted)
+        assertEquals(false, RuleLines.Dotted.squared)
     }
 }

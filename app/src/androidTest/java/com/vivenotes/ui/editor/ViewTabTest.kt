@@ -71,9 +71,20 @@ class ViewTabTest {
         setTab()
 
         compose.onNodeWithText("Rule Lines").performClick()
-        compose.onNodeWithText("College Ruled").performClick()
+        compose.onNodeWithText("Dotted Paper").performClick()
 
-        assertEquals(RuleLines.College, ruleLines)
+        assertEquals(RuleLines.Dotted, ruleLines)
+    }
+
+    @Test
+    fun removedRuleLineOptionsAreNotOffered() {
+        setTab()
+
+        compose.onNodeWithText("Rule Lines").performClick()
+
+        compose.onNodeWithText("Narrow Ruled").assertDoesNotExist()
+        compose.onNodeWithText("College Ruled").assertDoesNotExist()
+        compose.onNodeWithText("Small Grid").assertDoesNotExist()
     }
 
     @Test
@@ -174,7 +185,7 @@ class ViewTabTest {
 
         compose.onNodeWithText("Rule Lines").performClick()
 
-        compose.onNodeWithText("College Ruled").assertDoesNotExist()
+        compose.onNodeWithText("Standard Ruled").assertDoesNotExist()
         assertNull(ruleLines)
     }
 }
