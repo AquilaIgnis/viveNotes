@@ -70,17 +70,17 @@ class ViewTabTest {
     fun ruleLinesPicksTheChosenRuling() {
         setTab()
 
-        compose.onNodeWithText("Rule Lines").performClick()
-        compose.onNodeWithText("Dotted Paper").performClick()
+        compose.onNodeWithText("Paper").performClick()
+        compose.onNodeWithText("Hexagonal Paper").performClick()
 
-        assertEquals(RuleLines.Dotted, ruleLines)
+        assertEquals(RuleLines.Hexagonal, ruleLines)
     }
 
     @Test
     fun removedRuleLineOptionsAreNotOffered() {
         setTab()
 
-        compose.onNodeWithText("Rule Lines").performClick()
+        compose.onNodeWithText("Paper").performClick()
 
         compose.onNodeWithText("Narrow Ruled").assertDoesNotExist()
         compose.onNodeWithText("College Ruled").assertDoesNotExist()
@@ -183,7 +183,7 @@ class ViewTabTest {
     fun pageControlsAreInertUntilAPageIsOpen() {
         setTab(pageOpen = false)
 
-        compose.onNodeWithText("Rule Lines").performClick()
+        compose.onNodeWithText("Paper").performClick()
 
         compose.onNodeWithText("Standard Ruled").assertDoesNotExist()
         assertNull(ruleLines)

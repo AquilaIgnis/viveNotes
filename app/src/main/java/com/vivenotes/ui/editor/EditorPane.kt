@@ -61,6 +61,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.SolidColor
@@ -115,6 +116,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 private val CANVAS_MIN_HEIGHT = 700.dp
@@ -1116,6 +1118,46 @@ private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
         val visible = window().intersect(Rect(Offset.Zero, size))
         if (visible.isEmpty) return@Canvas
 
+        if (rules.hexagonal) {
+            val side = stepPx
+            val hexHeight = side * HEXAGON_HEIGHT_RATIO
+            val columnStep = side * 1.5f
+            val firstColumn = floor((visible.left - side * 2f) / columnStep)
+                .toInt()
+                .coerceAtLeast(0)
+            val lastColumn = ceil((visible.right + side) / columnStep).toInt()
+            val hexagons = Path()
+
+            for (column in firstColumn..lastColumn) {
+                val centerX = side + column * columnStep
+                val columnOffset = if (column % 2 == 0) 0f else hexHeight / 2f
+                val firstCenterY = hexHeight / 2f + columnOffset
+                val firstRow = floor(
+                    (visible.top - firstCenterY - hexHeight / 2f) / hexHeight,
+                ).toInt().coerceAtLeast(0)
+                val lastRow = ceil(
+                    (visible.bottom - firstCenterY + hexHeight / 2f) / hexHeight,
+                ).toInt()
+
+                for (row in firstRow..lastRow) {
+                    val centerY = firstCenterY + row * hexHeight
+                    hexagons.moveTo(centerX + side, centerY)
+                    hexagons.lineTo(centerX + side / 2f, centerY + hexHeight / 2f)
+                    hexagons.lineTo(centerX - side / 2f, centerY + hexHeight / 2f)
+                    hexagons.lineTo(centerX - side, centerY)
+                    hexagons.lineTo(centerX - side / 2f, centerY - hexHeight / 2f)
+                    hexagons.lineTo(centerX + side / 2f, centerY - hexHeight / 2f)
+                    hexagons.close()
+                }
+            }
+            drawPath(
+                path = hexagons,
+                color = color.copy(alpha = color.alpha * HEXAGON_RULE_ALPHA),
+                style = Stroke(width = 1f),
+            )
+            return@Canvas
+        }
+
         if (rules.dotted) {
             val radius = DOTTED_RULE_RADIUS_DP.dp.toPx()
             var y = maxOf(stepPx, ceil(visible.top / stepPx) * stepPx)
@@ -1147,6 +1189,8 @@ private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
 }
 
 private const val DOTTED_RULE_RADIUS_DP = 0.8f
+private const val HEXAGON_HEIGHT_RATIO = 1.7320508f
+private const val HEXAGON_RULE_ALPHA = 0.5f
 
 private val createdFormat = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault())
 private val createdTimeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())

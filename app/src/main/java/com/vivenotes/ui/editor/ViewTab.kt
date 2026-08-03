@@ -79,6 +79,7 @@ private val RULE_LINE_LABELS = listOf(
     RuleLines.Standard to "Standard Ruled",
     RuleLines.Wide to "Wide Ruled",
     RuleLines.Dotted to "Dotted Paper",
+    RuleLines.Hexagonal to "Hexagonal Paper",
     RuleLines.GridMedium to "Medium Grid",
     RuleLines.GridLarge to "Large Grid",
 )
@@ -247,7 +248,7 @@ private fun RuleLinesMenu(current: RuleLines, pageOpen: Boolean, onPick: (RuleLi
     var open by remember { mutableStateOf(false) }
     Box {
         RibbonCommand(
-            label = "Rule Lines",
+            label = "Paper",
             onClick = { open = true },
             active = current != RuleLines.None,
             enabled = pageOpen,

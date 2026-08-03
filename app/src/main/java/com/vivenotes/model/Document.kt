@@ -170,6 +170,7 @@ enum class RuleLines(
     val spacingDp: Float,
     val squared: Boolean,
     val dotted: Boolean = false,
+    val hexagonal: Boolean = false,
 ) {
     None(0f, false),
     Narrow(18f, false),
@@ -178,6 +179,8 @@ enum class RuleLines(
     Wide(32f, false),
     GridSmall(14f, true),
     Dotted(26f, false, dotted = true),
+    /** Side length of each chemistry-friendly hexagon. */
+    Hexagonal(32f, false, hexagonal = true),
     GridMedium(26f, true),
     GridLarge(38f, true),
 }

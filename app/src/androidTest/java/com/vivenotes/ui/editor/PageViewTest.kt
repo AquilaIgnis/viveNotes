@@ -409,6 +409,13 @@ class PageViewTest {
         assertTrue("nothing was painted on a dotted page", distinctColoursInsideThePage() > 1)
     }
 
+    @Test
+    fun aHexagonalPageActuallyPaintsItsGrid() {
+        setPage(style = PageStyle(hideTitle = true, paper = PaperSize.A6, ruleLines = RuleLines.Hexagonal))
+
+        assertTrue("nothing was painted on a hexagonal page", distinctColoursInsideThePage() > 1)
+    }
+
     /** Colours within the sheet, kept clear of its own border. */
     private fun distinctColoursInsideThePage(): Int {
         val image = compose.onNodeWithTag(PageTags.SURFACE).captureToImage()

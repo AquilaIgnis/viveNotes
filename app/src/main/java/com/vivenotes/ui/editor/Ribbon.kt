@@ -448,7 +448,7 @@ internal fun RibbonButton(
  * A ribbon control that spells out what it does.
  *
  * The View tab's controls are labelled in the reference where Home's are not, and for good reason:
- * "Rule Lines" and "Paper Size" have no glyph anyone would recognise cold, while bold and italic do.
+ * "Paper" and "Paper Size" have no glyph anyone would recognise cold, while bold and italic do.
  *
  * [enabled] renders the control without wiring it up. That is the honest way to show a button whose
  * feature is not built — it holds its place in the layout and plainly does not work, rather than

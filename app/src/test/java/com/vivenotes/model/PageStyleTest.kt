@@ -65,6 +65,15 @@ class PageStyleTest {
     }
 
     @Test
+    fun `hexagonal paper survives document storage`() {
+        val document = PageDoc.empty().copy(
+            style = PageStyle(ruleLines = RuleLines.Hexagonal),
+        )
+
+        assertEquals(RuleLines.Hexagonal, decodePageDoc(document.encode()).style.ruleLines)
+    }
+
+    @Test
     fun `paper sizes are physical, and orientation swaps them`() {
         val portrait = PageStyle(paper = PaperSize.A5)
         val landscape = portrait.copy(orientation = Orientation.Landscape)
@@ -111,5 +120,7 @@ class PageStyleTest {
         }
         assertEquals(true, RuleLines.Dotted.dotted)
         assertEquals(false, RuleLines.Dotted.squared)
+        assertEquals(true, RuleLines.Hexagonal.hexagonal)
+        assertEquals(false, RuleLines.Hexagonal.squared)
     }
 }
