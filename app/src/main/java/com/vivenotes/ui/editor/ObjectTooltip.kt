@@ -5,8 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,9 +40,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.vivenotes.ink.InkLassoSelection
-import com.vivenotes.ink.PageStroke
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.panel.PanelSlider
+import com.vivenotes.data.ShapeSettings
 import kotlin.math.roundToInt
 
 internal const val OBJECT_TOOLTIP_TAG = "object-tooltip"
@@ -47,6 +50,7 @@ internal const val OBJECT_COLOR_TAG = "object-tooltip-color"
 internal const val OBJECT_COPY_TAG = "object-tooltip-copy"
 internal const val OBJECT_GROUP_TAG = "object-tooltip-group"
 internal const val OBJECT_DELETE_TAG = "object-tooltip-delete"
+internal const val OBJECT_THICKNESS_TAG = "object-tooltip-thickness"
 
 private val INK_COLORS = listOf(
     "White" to 0xFFFFFFFF.toInt(),
@@ -61,24 +65,40 @@ private val INK_COLORS = listOf(
     "Pink" to 0xFFEC4899.toInt(),
 )
 
-/** Context actions for a lasso-selected ink object, positioned against its live screen bounds. */
+/*
+ * The ink-only wrapper that used to sit here is gone. Its whole job was deriving a swatch and a
+ * grouping state from a stroke list, which it could only ever do for ink — `EditorPane` now derives
+ * both from the page's `CanvasSelection`, which holds either kind, and calls [ObjectTooltip] directly.
+ * One bar, one call site (AD7).
+ */
+
+/**
+ * The base object toolkit — `docs/diagram.md`, and `docs/plan.md` AD7.
+ *
+ * Colour, copy, delete: the three things that mean something for *anything* placed on the canvas.
+ * Deliberately not ink's own — it takes a swatch and three callbacks rather than a stroke list, so a
+ * shape raises the same bar ink does.
+ *
+ * **Extended, not edited.** Anything true of one kind and not another goes in [extras], between copy
+ * and delete: grouping for ink, which is meaningless for a shape that is already one object, and line
+ * thickness for a shape, which is meaningless for a stroke whose width is baked into its mesh. Adding
+ * a kind means passing different [extras], never adding another flag here — which is what stopped
+ * this growing a `canGroup` for every kind that ever arrives.
+ *
+ * An action a kind cannot perform is absent for it rather than shown and dead, the same rule the
+ * ribbon follows for crossed-out controls.
+ */
 @Composable
-internal fun InkObjectTooltip(
-    selection: InkLassoSelection,
-    strokes: List<PageStroke>,
+internal fun ObjectTooltip(
+    swatch: Color,
     selectionBoundsInView: () -> RectF?,
     viewportSize: IntSize,
     onDelete: () -> Unit,
     onCopy: () -> Unit,
     onRecolor: (Int) -> Unit,
-    onGroup: () -> Unit,
-    onUngroup: () -> Unit,
+    /** The kind-specific half of the toolkit. Empty for a selection holding more than one kind. */
+    extras: @Composable RowScope.() -> Unit = {},
 ) {
-    val selected = strokes.filter { it.id in selection.targetIds }
-    val selectedColors = selected.map { it.stroke.brush.colorIntArgb }.distinct()
-    val swatch = selectedColors.singleOrNull()?.let(::Color) ?: Color.White
-    val groups = selected.map(PageStroke::groupId).distinct()
-    val isOneGroup = selection.targetIds.size > 1 && groups.size == 1 && groups.single() != null
     var paletteOpen by remember { mutableStateOf(false) }
     var tooltipSize by remember { mutableStateOf(IntSize.Zero) }
 
@@ -160,19 +180,7 @@ internal fun InkObjectTooltip(
                 )
             }
 
-            if (selection.targetIds.size > 1) {
-                TextButton(
-                    onClick = if (isOneGroup) onUngroup else onGroup,
-                    contentPadding = PaddingValues(horizontal = 7.dp),
-                    modifier = Modifier.height(32.dp).testTag(OBJECT_GROUP_TAG),
-                ) {
-                    Text(
-                        text = if (isOneGroup) "Ungroup" else "Group",
-                        color = Color(0xFFE8EAED),
-                        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-                    )
-                }
-            }
+            extras()
 
             IconButton(
                 onClick = onDelete,
@@ -183,6 +191,75 @@ internal fun InkObjectTooltip(
                     contentDescription = "Delete selected ink",
                     tint = Color(0xFFFFA8A8),
                     modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Ink's half of the toolkit: several strokes can be one object.
+ *
+ * Absent for shapes — not disabled — because a shape is already a single object and has nothing to
+ * group with. `docs/diagram.md` puts grouping outside the base toolkit for exactly that reason.
+ */
+@Composable
+internal fun RowScope.GroupAction(
+    isOneGroup: Boolean,
+    onGroup: () -> Unit,
+    onUngroup: () -> Unit,
+) {
+    TextButton(
+        onClick = if (isOneGroup) onUngroup else onGroup,
+        contentPadding = PaddingValues(horizontal = 7.dp),
+        modifier = Modifier.height(32.dp).testTag(OBJECT_GROUP_TAG),
+    ) {
+        Text(
+            text = if (isOneGroup) "Ungroup" else "Group",
+            color = Color(0xFFE8EAED),
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+/**
+ * A shape's half of the toolkit: the border it is stroked with — `docs/diagram.md`, Shapes Class.
+ *
+ * **Not the same setting as the pane's Border width**, which is the user's default for the *next*
+ * shape and lives in DataStore (`docs/inkPlan.md` SD4). This edits the object in the document. The two
+ * look alike deliberately — it is the same [PanelSlider] — and must not be merged: one is a property
+ * of the user, the other of the page, and collapsing them is a sync bug, not a refactor.
+ *
+ * The button previews its own value rather than carrying an icon, the way the colour button is a
+ * swatch: a bar at the current width says more than a glyph, and adds no asset.
+ */
+@Composable
+internal fun RowScope.ThicknessAction(width: Int, onChange: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { open = true },
+            modifier = Modifier
+                .size(32.dp)
+                .testTag(OBJECT_THICKNESS_TAG)
+                .semantics { contentDescription = "Change border width" },
+        ) {
+            Box(
+                Modifier
+                    .width(18.dp)
+                    .height(width.dp.coerceIn(1.dp, 10.dp))
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFFE8EAED)),
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            Column(Modifier.width(220.dp).padding(horizontal = 12.dp, vertical = 4.dp)) {
+                PanelSlider(
+                    field = "Border width",
+                    label = "Border width",
+                    value = width,
+                    range = ShapeSettings.MIN_BORDER_WIDTH..ShapeSettings.MAX_BORDER_WIDTH,
+                    onChange = onChange,
                 )
             }
         }

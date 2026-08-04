@@ -28,6 +28,7 @@ import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.ShapeSettings
 import com.vivenotes.ui.ScrollingRow
 import com.vivenotes.ui.icons.LocalRibbonIcons
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -46,6 +47,7 @@ data class DrawActions(
     val updatePen: (Int, PenPreset) -> Unit,
     val updateEraser: (EraserSettings) -> Unit,
     val updateHighlighter: (HighlighterSettings) -> Unit = {},
+    val updateShape: (ShapeSettings) -> Unit = {},
     val setDrawWithFinger: (Boolean) -> Unit,
     /** Puts a colour off the wheel at the head of the swatch row. Not the same write as a pen. */
     val addPaletteColor: (Int) -> Unit = {},
@@ -88,9 +90,11 @@ internal fun DrawTab(
     palette: List<Int>,
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
+    shape: ShapeSettings,
     tool: DrawTool,
     allowFinger: Boolean,
     actions: DrawActions,
+    pageOpen: Boolean = true,
     canUndo: Boolean = false,
     canRedo: Boolean = false,
 ) {
@@ -142,6 +146,18 @@ internal fun DrawTab(
             onOpen = { highlighterSettingsOpen = true },
             onDismiss = { highlighterSettingsOpen = false },
             onChange = actions.updateHighlighter,
+        )
+
+        // Beside the pens and the highlighter for the same reason they are beside each other: it is
+        // a thing that puts marks on the page. Its twin on the Insert tab is the same composable.
+        ShapeButton(
+            shape = shape,
+            palette = palette,
+            selected = tool == DrawTool.Shape,
+            enabled = pageOpen,
+            onSelect = { actions.selectTool(DrawTool.Shape) },
+            onChange = actions.updateShape,
+            onAddColor = actions.addPaletteColor,
         )
 
         Divider()

@@ -44,7 +44,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ui.icons.MaterialSymbols
-import com.vivenotes.data.LineType
+import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
 
@@ -199,9 +199,18 @@ fun ColumnScope.PenPanelContent(
     Spacer(Modifier.height(6.dp))
 }
 
-/** Three compact line samples; their shape is the label, so no redundant "Line type" row. */
+/**
+ * Three compact line samples; their shape is the label, so no redundant "Line type" row.
+ *
+ * Shared with the Shape pane, which asks the same question about a border that this asks about a
+ * nib. [tag] is a parameter rather than a constant so each pane keeps its own test-tag namespace.
+ */
 @Composable
-private fun LineTypePicker(current: LineType, onPick: (LineType) -> Unit) {
+internal fun LineTypePicker(
+    current: LineType,
+    tag: (LineType) -> String = PenPanelTags::lineType,
+    onPick: (LineType) -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
@@ -217,7 +226,7 @@ private fun LineTypePicker(current: LineType, onPick: (LineType) -> Unit) {
             Box(
                 modifier = Modifier
                     .size(width = 58.dp, height = 34.dp)
-                    .testTag(PenPanelTags.lineType(lineType))
+                    .testTag(tag(lineType))
                     .clip(RoundedCornerShape(8.dp))
                     .background(
                         if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
@@ -347,11 +356,13 @@ private fun PenKindCard(
  * picker on was actually chosen. The pen still follows every touch, because that is the preview.
  */
 @Composable
-private fun ColorSwatches(
+internal fun ColorSwatches(
     palette: List<Int>,
     current: Int,
     onPick: (Int) -> Unit,
     onAddColor: (Int) -> Unit,
+    colorTag: (Int) -> String = PenPanelTags::color,
+    customTag: String = PenPanelTags.CUSTOM_COLOR,
 ) {
     var wheelOpen by remember { mutableStateOf(false) }
     // What the wheel has been left on. Null until it is touched, which is what makes opening the
@@ -372,7 +383,7 @@ private fun ColorSwatches(
         palette.forEach { argb ->
             Swatch(
                 selected = argb == current,
-                tag = PenPanelTags.color(argb),
+                tag = colorTag(argb),
                 onClick = { onPick(argb) },
             ) {
                 drawRect(Color(argb))
@@ -385,7 +396,7 @@ private fun ColorSwatches(
                 // It survives for the ink a rolled-off swatch left behind, which has nothing else
                 // to mark it.
                 selected = current !in palette,
-                tag = PenPanelTags.CUSTOM_COLOR,
+                tag = customTag,
                 description = "Custom color",
                 onClick = { wheelOpen = true },
             ) {
@@ -468,4 +479,4 @@ internal fun Swatch(
 internal val SWATCH_SIZE = 26.dp
 
 /** Placed but not wired, so it holds the reference's layout without pretending to work. */
-private const val INERT_ALPHA = 0.42f
+internal const val INERT_ALPHA = 0.42f

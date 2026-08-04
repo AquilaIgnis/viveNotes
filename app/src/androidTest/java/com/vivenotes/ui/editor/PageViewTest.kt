@@ -65,7 +65,7 @@ class PageViewTest {
     private lateinit var density: Density
     private var created: Pair<Float, Float>? = null
     private var pasted: InkPoint? = null
-    private val hasInkClipboard = mutableStateOf(false)
+    private val hasClipboard = mutableStateOf(false)
     private val commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 4)
     private val selection = mutableStateOf(SelectionState())
 
@@ -74,11 +74,11 @@ class PageViewTest {
         zoom: Float = 1f,
         title: String = "A page",
         outlines: List<OutlineBox> = emptyList(),
-        hasInkClipboard: Boolean = false,
+        hasClipboard: Boolean = false,
     ) {
         created = null
         pasted = null
-        this.hasInkClipboard.value = hasInkClipboard
+        this.hasClipboard.value = hasClipboard
         this.style.value = style
         this.zoom.floatValue = zoom
         this.title.value = title
@@ -108,8 +108,8 @@ class PageViewTest {
                         onSetOutlineMinHeight = { _, _ -> },
                         onOutlineBlurred = {},
                         onCanvasMeasured = { _, _ -> },
-                        hasInkClipboard = this.hasInkClipboard.value,
-                        onPasteInk = { pasted = it },
+                        hasClipboard = this.hasClipboard.value,
+                        onPaste = { pasted = it },
                         showPrintMargins = false,
                     )
                 }
@@ -177,7 +177,7 @@ class PageViewTest {
 
     @Test
     fun aFingerDoubleTapOffersPasteAtThatPagePositionWithoutCreatingText() {
-        setPage(style = PageStyle(hideTitle = true), hasInkClipboard = true)
+        setPage(style = PageStyle(hideTitle = true), hasClipboard = true)
         val offset = with(density) { Offset(220.dp.toPx(), 310.dp.toPx()) }
 
         compose.onRoot().performTouchInput { doubleClick(offset) }
@@ -193,7 +193,7 @@ class PageViewTest {
 
     @Test
     fun aDoubleTapHasNoPasteActionWhenTheInkClipboardIsEmpty() {
-        setPage(style = PageStyle(hideTitle = true), hasInkClipboard = false)
+        setPage(style = PageStyle(hideTitle = true), hasClipboard = false)
         val offset = with(density) { Offset(220.dp.toPx(), 310.dp.toPx()) }
 
         compose.onRoot().performTouchInput { doubleClick(offset) }

@@ -35,10 +35,13 @@ import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
 import com.vivenotes.data.PenSettingsStore
+import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.ink.InkCodec
+import com.vivenotes.ink.InkBounds
+import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkPoint
@@ -121,6 +124,16 @@ class NotesViewModelTest {
         assertNotNull("expected the seeded page to be open", vm.uiState.value.selectedPageId)
         return vm
     }
+
+    /** A selection naming objects by id. Bounds do not matter to the clipboard, only membership. */
+    private fun selectionOf(
+        inkIds: Set<String> = emptySet(),
+        shapeIds: Set<String> = emptySet(),
+    ) = CanvasSelection(
+        inkIds = inkIds,
+        shapeIds = shapeIds,
+        bounds = InkBounds(0f, 0f, 0f, 0f),
+    )
 
     private fun storedText(pageId: String): String = runBlocking {
         when (val load = repository.loadDoc(pageId)) {
@@ -495,6 +508,45 @@ class NotesViewModelTest {
     }
 
     @Test
+    fun oneClipboardHoldsAShapeAndAStrokeTogether() = runTest(dispatcher) {
+        // The diagram's "shared prime object clipboard": one clipboard for every kind, not one each.
+        val vm = seededViewModel()
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 10f, 20f to 20f))
+        advanceUntilIdle()
+        val strokeId = vm.strokes.value.single().id
+        val shapeId = vm.insertShape(ShapeSettings(), 40f, 40f, 80f, 80f)!!
+        advanceUntilIdle()
+
+        vm.copySelection(selectionOf(inkIds = setOf(strokeId), shapeIds = setOf(shapeId)))
+        assertTrue(vm.hasClipboard.value)
+        assertEquals("copy is not duplicate: the page must not change", 1, vm.uiState.value.shapes.size)
+        assertEquals(1, vm.strokes.value.size)
+
+        vm.pasteObjects(InkPoint(300f, 300f))
+        advanceUntilIdle()
+
+        assertEquals("the shape half of the clipboard did not paste", 2, vm.uiState.value.shapes.size)
+        assertEquals("the ink half of the clipboard did not paste", 2, vm.strokes.value.size)
+        val pasted = vm.uiState.value.shapes.first { it.id != shapeId }
+        assertTrue("the pasted shape kept the original's segment ids",
+            pasted.segments.map { it.id }.none { id -> id in vm.uiState.value.shapes.first { s -> s.id == shapeId }.segments.map { it.id } })
+    }
+
+    @Test
+    fun copyingAShapeLeavesThePageAloneUntilItIsPasted() = runTest(dispatcher) {
+        // It used to drop a duplicate 16dp down and right the moment Copy was pressed.
+        val vm = seededViewModel()
+        val shapeId = vm.insertShape(ShapeSettings(), 40f, 40f, 80f, 80f)!!
+        advanceUntilIdle()
+
+        vm.copySelection(selectionOf(shapeIds = setOf(shapeId)))
+
+        assertEquals("Copy duplicated the shape instead of filling the clipboard", 1, vm.uiState.value.shapes.size)
+        assertTrue(vm.hasClipboard.value)
+    }
+
+    @Test
     fun copyingInkChangesNothingUntilPasteThenCreatesAnUndoableObjectAtTheTap() = runTest(dispatcher) {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!
@@ -503,11 +555,11 @@ class NotesViewModelTest {
         advanceUntilIdle()
         val originalId = vm.strokes.value.single().id
 
-        vm.copyInk(setOf(originalId))
+        vm.copySelection(selectionOf(inkIds = setOf(originalId)))
         assertEquals("Copy must not clone ink onto the page", 1, vm.strokes.value.size)
-        assertTrue(vm.hasInkClipboard.value)
+        assertTrue(vm.hasClipboard.value)
 
-        vm.pasteInk(InkPoint(100f, 120f))
+        vm.pasteObjects(InkPoint(100f, 120f))
         assertEquals(2, vm.strokes.value.size)
         val pastedBounds = vm.strokes.value.first { it.id != originalId }.stroke.shape.computeBoundingBox()!!
         assertEquals(100f, (pastedBounds.xMin + pastedBounds.xMax) / 2f, 1f)

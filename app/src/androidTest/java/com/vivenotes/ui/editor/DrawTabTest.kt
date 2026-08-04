@@ -32,10 +32,11 @@ import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HIGHLIGHTER_COLORS
 import com.vivenotes.data.HighlighterSettings
-import com.vivenotes.data.LineType
+import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.data.withColorInFront
 import com.vivenotes.ui.panel.PenPanelContent
@@ -84,6 +85,7 @@ class DrawTabTest {
                     palette = PEN_COLORS,
                     eraser = eraser,
                     highlighter = highlighter,
+                    shape = ShapeSettings(),
                     tool = tool,
                     allowFinger = allowFinger,
                     actions = DrawActions(

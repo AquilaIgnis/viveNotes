@@ -18,7 +18,7 @@ import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInputBatch
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.HighlighterSettings
-import com.vivenotes.data.LineType
+import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.db.InkEraseEntity
@@ -258,6 +258,7 @@ object InkCodec {
         brushFamily: String,
         stabilization: Int,
         now: Long,
+        groupId: String? = null,
     ): InkStrokeEntity {
         val box = stroke.shape.computeBoundingBox()
         val points = encodeInputs(stroke.inputs)
@@ -280,6 +281,7 @@ object InkCodec {
             points = points,
             enc = ENCODING,
             createdAt = now,
+            groupId = groupId,
         )
     }
 

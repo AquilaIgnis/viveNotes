@@ -213,7 +213,7 @@ internal fun List<PageStroke>.selectWithLasso(
     // geometry that was not represented by the selection rectangle.
     val selected = filter { it.id in hitIds || it.groupId != null && it.groupId in hitGroups }
     if (selected.isEmpty()) return null
-    val bounds = selected.mapNotNull(PageStroke::pageBounds).union() ?: return null
+    val bounds = selected.mapNotNull(PageStroke::pageBounds).unionBounds() ?: return null
     return InkLassoSelection(
         path = path,
         targetIds = selected.map(PageStroke::id).toSet(),
@@ -325,18 +325,6 @@ internal fun List<PageStroke>.replayResize(
     }
 }
 
-private fun List<InkBounds>.union(): InkBounds? {
-    val first = firstOrNull() ?: return null
-    return drop(1).fold(first) { result, next ->
-        InkBounds(
-            left = minOf(result.left, next.left),
-            top = minOf(result.top, next.top),
-            right = maxOf(result.right, next.right),
-            bottom = maxOf(result.bottom, next.bottom),
-        )
-    }
-}
-
 private fun pointInPolygon(point: InkPoint, polygon: List<InkPoint>): Boolean {
     var inside = false
     var previous = polygon.last()
@@ -377,7 +365,7 @@ private fun PageStroke.isInsideLasso(polygon: List<InkPoint>, edgeTolerance: Flo
     return outlineVertexCount > 0
 }
 
-private fun pointInOrNearPolygon(
+internal fun pointInOrNearPolygon(
     point: InkPoint,
     polygon: List<InkPoint>,
     edgeTolerance: Float,
@@ -411,4 +399,4 @@ private fun InkPoint.distanceSquaredToSegment(start: InkPoint, end: InkPoint): F
     return pointDx * pointDx + pointDy * pointDy
 }
 
-private const val DEFAULT_LASSO_EDGE_TOLERANCE = 4f
+internal const val DEFAULT_LASSO_EDGE_TOLERANCE = 4f

@@ -1,5 +1,8 @@
 package com.vivenotes.model
 
+import com.vivenotes.model.ink.LineType
+import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.ShapeSegment
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -56,6 +59,9 @@ private fun Outline.shiftedDown(dy: Float): Outline = when (this) {
     is Outline.Text -> copy(y = y + dy)
     is Outline.Image -> copy(y = y + dy)
     is Outline.Ink -> copy(y = y + dy)
+    // Unreachable in practice — shapes postdate schema 2 — but exhaustive rather than `else`, so
+    // that a variant added later fails here at compile time instead of silently not being migrated.
+    is Outline.Shape -> translated(0f, dy)
 }
 
 /**
@@ -257,6 +263,95 @@ sealed interface Outline {
         val attachmentId: String,
         val height: Float,
     ) : Outline
+
+    /**
+     * A shape placed on the canvas — `docs/inkPlan.md` §5.4.
+     *
+     * **An object, not ink.** A handful of numbers rather than a blob of digitizer samples, so ID2's
+     * argument for keeping strokes in their own table does not apply: a shape belongs in the
+     * document, where it travels with the page, exports with it, and can be read by the MCP server
+     * without a device.
+     *
+     * **The segments are the shape.** Geometry is stored rather than derived from [kind] and a box,
+     * because every segment can be selected on its own and either of its ends dragged — once a corner
+     * has moved, no box describes it any more. [kind] is therefore what the shape was *created* as:
+     * it names the shape, picks its icon, and seeds the segments, but it does not constrain them
+     * afterwards.
+     *
+     * [x], [y], [width] and [height] are the bounds the segments currently occupy, kept in sync so
+     * the canvas can lay out and hit-test without walking every segment.
+     *
+     * [fillArgb] is null for no fill, which is a different thing from transparent black and is the
+     * state a shape starts in.
+     */
+    @Serializable
+    @SerialName("shape")
+    data class Shape(
+        override val id: String,
+        override val x: Float = 0f,
+        override val y: Float = 0f,
+        override val width: Float = DEFAULT_WIDTH,
+        val height: Float = DEFAULT_HEIGHT,
+        val kind: ShapeKind = ShapeKind.DEFAULT,
+        val segments: List<ShapeSegment> = emptyList(),
+        val borderArgb: Int = 0xFF000000.toInt(),
+        val borderWidth: Float = 2f,
+        val lineType: LineType = LineType.Solid,
+        val fillArgb: Int? = null,
+    ) : Outline {
+
+        /** Recomputed after any segment moves, so the stored bounds never drift from the geometry. */
+        fun withRecomputedBounds(): Shape {
+            if (segments.isEmpty()) return this
+            var minX = Float.MAX_VALUE
+            var minY = Float.MAX_VALUE
+            var maxX = -Float.MAX_VALUE
+            var maxY = -Float.MAX_VALUE
+            segments.forEach { segment ->
+                val points = segment.polyline()
+                for (index in points.indices step 2) {
+                    minX = minOf(minX, points[index])
+                    maxX = maxOf(maxX, points[index])
+                    minY = minOf(minY, points[index + 1])
+                    maxY = maxOf(maxY, points[index + 1])
+                }
+            }
+            return copy(x = minX, y = minY, width = maxX - minX, height = maxY - minY)
+        }
+
+        fun translated(dx: Float, dy: Float): Shape = copy(
+            x = x + dx,
+            y = y + dy,
+            segments = segments.map { it.translated(dx, dy) },
+        )
+
+        /**
+         * Scales every segment about [anchorX], [anchorY] — a corner-handle drag, per AD7.
+         *
+         * The anchor is the corner opposite the one being dragged, which is what makes the far
+         * corner stay put while the near one follows the finger. Bulge is a *fraction* of the chord
+         * rather than a length, so an arc keeps its curvature through a resize with nothing to
+         * recompute — one of the reasons it is stored that way.
+         */
+        fun scaledAbout(anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float): Shape = copy(
+            segments = segments.map { segment ->
+                segment.copy(
+                    x1 = anchorX + (segment.x1 - anchorX) * scaleX,
+                    y1 = anchorY + (segment.y1 - anchorY) * scaleY,
+                    x2 = anchorX + (segment.x2 - anchorX) * scaleX,
+                    y2 = anchorY + (segment.y2 - anchorY) * scaleY,
+                    // A negative scale mirrors the segment, which flips which side the arc bows to.
+                    bulge = if (scaleX * scaleY < 0f) -segment.bulge else segment.bulge,
+                )
+            },
+        ).withRecomputedBounds()
+
+        companion object {
+            /** What a tap drops, matching the gesture's default box. */
+            const val DEFAULT_WIDTH = 120f
+            const val DEFAULT_HEIGHT = 80f
+        }
+    }
 
     /**
      * Reserved. Stylus input is deferred (docs/inital.md), but declaring the variant now means

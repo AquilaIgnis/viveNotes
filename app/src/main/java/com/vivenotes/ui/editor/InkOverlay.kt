@@ -44,6 +44,9 @@ import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.model.ink.LineType
+import com.vivenotes.data.ShapeSettings
+import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.InkLassoMove
@@ -57,6 +60,8 @@ import com.vivenotes.ink.selectWithLasso
 import com.vivenotes.ink.targetsFor
 import com.vivenotes.ink.subtract
 import com.vivenotes.ink.eraseObjects
+import com.vivenotes.model.Outline
+import com.vivenotes.model.ink.trace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
@@ -106,23 +111,37 @@ internal object NoPan : CanvasPan {
 @Composable
 internal fun InkOverlay(
     strokes: List<PageStroke>,
+    /** Shapes on the page, so a lasso loop can take one — AD7's first row. */
+    shapes: List<Outline.Shape> = emptyList(),
+    /**
+     * What is selected, across kinds. Owned by the page rather than by this overlay: a shape can be in
+     * it, and `ShapeLayer` has to draw the same selection this does. See [CanvasSelection].
+     */
+    selection: CanvasSelection? = null,
+    onSelect: (CanvasSelection?) -> Unit = {},
+    /** The lasso's live gesture, also owned by the page so both layers read one transform. */
+    lassoGesture: LassoGesture,
     /** The brush to draw with, or null when the armed tool does not lay down ink. */
     brush: Brush?,
     erasing: Boolean,
     lassoing: Boolean,
+    /** The armed shape's settings, or null when Insert Shape is not the tool in hand. */
+    shaping: ShapeSettings?,
     eraser: EraserSettings,
     /** Whether a finger — or, on an emulator, a mouse — may draw as well as a stylus. */
     allowFinger: Boolean,
     /** Page units (dp) to view pixels: scale by zoom and density, then subtract the scroll. */
     pageToView: () -> Matrix,
     onStrokeFinished: (Stroke) -> Unit,
+    onInsertShape: (InkPoint, InkPoint) -> Unit = { _, _ -> },
     onPartialErase: (Stroke) -> Unit,
     onObjectErase: (Stroke) -> Unit,
     onMoveSelection: (InkLassoMove) -> Unit,
     onResizeSelection: (InkLassoResize) -> Unit = {},
+    onMoveShapes: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onDeleteSelection: (Set<String>) -> Unit = {},
-    onCopySelection: (Set<String>) -> Unit = {},
-    hasInkClipboard: Boolean = false,
+    hasClipboard: Boolean = false,
     onRequestPaste: (InkPoint) -> Unit = {},
     onRecolorSelection: (Set<String>, Int) -> Unit = { _, _ -> },
     onGroupSelection: (Set<String>) -> Unit = {},
@@ -145,17 +164,23 @@ internal fun InkOverlay(
     val currentStrokes by rememberUpdatedState(strokes)
     val currentErasing by rememberUpdatedState(erasing)
     val currentLassoing by rememberUpdatedState(lassoing)
+    val currentShaping by rememberUpdatedState(shaping)
     val currentEraser by rememberUpdatedState(eraser)
     val currentAllowFinger by rememberUpdatedState(allowFinger)
     val currentTransform by rememberUpdatedState(pageToView)
     val currentOnFinished by rememberUpdatedState(onStrokeFinished)
+    val currentOnInsertShape by rememberUpdatedState(onInsertShape)
     val currentOnPartialErase by rememberUpdatedState(onPartialErase)
     val currentOnObjectErase by rememberUpdatedState(onObjectErase)
+    val currentShapes by rememberUpdatedState(shapes)
+    val currentSelection by rememberUpdatedState(selection)
+    val currentOnSelect by rememberUpdatedState(onSelect)
+    val currentOnMoveShapes by rememberUpdatedState(onMoveShapes)
+    val currentOnResizeShapes by rememberUpdatedState(onResizeShapes)
     val currentOnMoveSelection by rememberUpdatedState(onMoveSelection)
     val currentOnResizeSelection by rememberUpdatedState(onResizeSelection)
     val currentOnDeleteSelection by rememberUpdatedState(onDeleteSelection)
-    val currentOnCopySelection by rememberUpdatedState(onCopySelection)
-    val currentHasInkClipboard by rememberUpdatedState(hasInkClipboard)
+    val currentHasInkClipboard by rememberUpdatedState(hasClipboard)
     val currentOnRequestPaste by rememberUpdatedState(onRequestPaste)
     val currentOnRecolorSelection by rememberUpdatedState(onRecolorSelection)
     val currentOnGroupSelection by rememberUpdatedState(onGroupSelection)
@@ -167,7 +192,7 @@ internal fun InkOverlay(
     var liveStroke by remember { mutableStateOf<InProgressStrokeId?>(null) }
     var livePointer by remember { mutableStateOf(-1) }
     val eraseGesture = remember { EraseGesture() }
-    val lassoGesture = remember { LassoGesture() }
+    val shapeGesture = remember { ShapeGesture() }
     val viewConfiguration = LocalViewConfiguration.current
     val fingerDoubleTap = remember(viewConfiguration) {
         FingerDoubleTapGesture(
@@ -180,15 +205,17 @@ internal fun InkOverlay(
     LaunchedEffect(lassoing) {
         if (!lassoing) lassoGesture.clear()
     }
+    LaunchedEffect(shaping == null) {
+        if (shaping == null) shapeGesture.clear()
+    }
     LaunchedEffect(strokes) {
         eraseGesture.reconcileCommittedStrokes()
-        lassoGesture.reconcile(strokes)
     }
     LaunchedEffect(erasing) {
         if (!erasing) eraseGesture.clear()
     }
-    LaunchedEffect(hasInkClipboard) {
-        if (!hasInkClipboard) fingerDoubleTap.reset()
+    LaunchedEffect(hasClipboard) {
+        if (!hasClipboard) fingerDoubleTap.reset()
     }
 
     // Velocity for the fling, measured from the same events the pan is driven by.
@@ -228,6 +255,7 @@ internal fun InkOverlay(
             // Reading this explicit revision in the draw phase guarantees every sample invalidates
             // the native canvas, including the free-form trace and the live move/resize preview.
             val gestureRevision = lassoGesture.renderRevision
+            val shapeRevision = shapeGesture.renderRevision
             val matrix = currentTransform()
             drawIntoCanvas { canvas ->
                 val native = canvas.nativeCanvas
@@ -238,7 +266,9 @@ internal fun InkOverlay(
                 // not what moves it.
                 (liveErasedStrokes ?: currentStrokes).forEach { pageStroke ->
                     val strokeMatrix = Matrix(matrix).apply {
-                        lassoGesture.applyPreview(this, pageStroke)
+                        if (pageStroke.projectionKey in currentSelection?.projections.orEmpty()) {
+                            lassoGesture.applyPreview(this)
+                        }
                         preTranslate(pageStroke.offsetX, pageStroke.offsetY)
                         preScale(pageStroke.scaleX, pageStroke.scaleY)
                     }
@@ -248,7 +278,10 @@ internal fun InkOverlay(
                     native.restoreToCount(checkpoint)
                 }
                 if (currentLassoing && gestureRevision >= 0) {
-                    drawLasso(native, matrix, lassoGesture, lassoColor)
+                    drawLasso(native, matrix, lassoGesture, currentSelection, lassoColor)
+                }
+                currentShaping?.takeIf { shapeRevision >= 0 }?.let { settings ->
+                    drawShapePreview(native, matrix, shapeGesture, settings)
                 }
                 eraseGesture.indicator?.let { indicator ->
                     drawEraserIndicator(native, matrix, indicator)
@@ -301,7 +334,7 @@ internal fun InkOverlay(
             )
         }
 
-        if (brush != null || erasing || lassoing) {
+        if (brush != null || erasing || lassoing || shaping != null) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -320,6 +353,7 @@ internal fun InkOverlay(
                             brush = currentBrush,
                             erasing = currentErasing,
                             lassoing = currentLassoing,
+                            shaping = currentShaping,
                             eraser = currentEraser,
                             strokes = currentStrokes,
                             allowFinger = currentAllowFinger,
@@ -344,6 +378,14 @@ internal fun InkOverlay(
                             },
                             eraseGesture = eraseGesture,
                             lassoGesture = lassoGesture,
+                            shapes = currentShapes,
+                            selection = currentSelection,
+                            onSelect = currentOnSelect,
+                            onMoveShapes = currentOnMoveShapes,
+                            onResizeShapes = currentOnResizeShapes,
+                            shapeGesture = shapeGesture,
+                            onInsertShape = currentOnInsertShape,
+                            touchSlop = viewConfiguration.touchSlop,
                         )
                         pastePoint?.let(currentOnRequestPaste)
                         handled
@@ -351,31 +393,9 @@ internal fun InkOverlay(
             )
         }
 
-        if (lassoing) {
-            lassoGesture.selection?.let { selection ->
-                InkObjectTooltip(
-                    selection = selection,
-                    strokes = currentStrokes,
-                    selectionBoundsInView = {
-                        lassoGesture.selectionBoundsInView(currentTransform())
-                    },
-                    viewportSize = viewportSize,
-                    onDelete = {
-                        currentOnDeleteSelection(selection.targetIds)
-                        lassoGesture.clear()
-                    },
-                    onCopy = {
-                        currentOnCopySelection(selection.targetIds)
-                        lassoGesture.clear()
-                    },
-                    onRecolor = { color ->
-                        currentOnRecolorSelection(selection.targetIds, color)
-                    },
-                    onGroup = { currentOnGroupSelection(selection.targetIds) },
-                    onUngroup = { currentOnUngroupSelection(selection.targetIds) },
-                )
-            }
-        }
+        // The object tooltip is raised by `EditorPane` from the page's selection, not here. A shape
+        // can be in that selection, and a bar that appeared twice — once per layer — could not
+        // describe a loop holding both (AD7).
     }
 
     DisposableEffect(Unit) {
@@ -458,14 +478,20 @@ private fun handleInk(
     brush: Brush?,
     erasing: Boolean,
     lassoing: Boolean,
+    shaping: ShapeSettings?,
     eraser: EraserSettings,
     strokes: List<PageStroke>,
+    shapes: List<Outline.Shape>,
+    selection: CanvasSelection?,
+    onSelect: (CanvasSelection?) -> Unit,
     allowFinger: Boolean,
     transform: Matrix,
     onPartialErase: (Stroke) -> Unit,
     onObjectErase: (Stroke) -> Unit,
     onMoveSelection: (InkLassoMove) -> Unit,
     onResizeSelection: (InkLassoResize) -> Unit,
+    onMoveShapes: (Set<String>, Float, Float) -> Unit,
+    onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit,
     liveStroke: InProgressStrokeId?,
     livePointer: Int,
     setLive: (InProgressStrokeId?, Int) -> Unit,
@@ -476,6 +502,9 @@ private fun handleInk(
     setPanning: (Boolean, Pair<Float, Float>) -> Unit,
     eraseGesture: EraseGesture,
     lassoGesture: LassoGesture,
+    shapeGesture: ShapeGesture,
+    onInsertShape: (InkPoint, InkPoint) -> Unit,
+    touchSlop: Float,
 ): Boolean {
     val index = event.actionIndex
     val toolType = event.getToolType(index)
@@ -487,12 +516,33 @@ private fun handleInk(
     // Lasso used to claim every finger drag even in stylus-only mode. That made the page impossible
     // to pan with one hand while the lasso was armed. It follows the same finger setting as ink and
     // the eraser now: stylus always selects, while a disallowed finger moves the page.
+    // Ahead of every other mode for the same reason lasso is ahead of ink: it is a tool that owns
+    // the whole gesture, and a shape drag must not also start a stroke.
+    if (shaping != null) {
+        if (isDirectTouch && !allowFinger) {
+            return panPage(event, pan, velocity, panning, lastPan, setPanning)
+        }
+        val toPage = Matrix().also { transform.invert(it) }
+        return shapeGesture.handle(event, toPage, touchSlop, onInsertShape)
+    }
+
     if (lassoing) {
         if (isDirectTouch && !allowFinger) {
             return panPage(event, pan, velocity, panning, lastPan, setPanning)
         }
         val toPage = Matrix().also { transform.invert(it) }
-        return lassoGesture.handle(event, toPage, strokes, onMoveSelection, onResizeSelection)
+        return lassoGesture.handle(
+            event = event,
+            toPage = toPage,
+            strokes = strokes,
+            shapes = shapes,
+            selection = selection,
+            onSelect = onSelect,
+            onMove = onMoveSelection,
+            onResize = onResizeSelection,
+            onMoveShapes = onMoveShapes,
+            onResizeShapes = onResizeShapes,
+        )
     }
 
     if (view == null) return false
@@ -609,6 +659,7 @@ private fun drawLasso(
     canvas: android.graphics.Canvas,
     pageToView: Matrix,
     gesture: LassoGesture,
+    selection: CanvasSelection?,
     color: Int,
 ) {
     val values = FloatArray(9)
@@ -630,7 +681,7 @@ private fun drawLasso(
         }
         canvas.drawPath(path, tracePaint)
     }
-    gesture.selectionBounds()?.let { bounds ->
+    gesture.previewBounds(selection)?.let { bounds ->
         val padding = 4f / scale
         val selectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
@@ -658,6 +709,53 @@ private fun drawLasso(
         }
     }
     canvas.restoreToCount(checkpoint)
+}
+
+/**
+ * The shape under the pointer, mid-drag.
+ *
+ * Drawn from the same [trace] call the commit will run, so the preview cannot show one thing and
+ * land another — that is the whole reason SD6 has the picker chips draw themselves too. Everything
+ * here is in page space, so the border width is in page units and scales with zoom exactly as the
+ * committed ink will.
+ */
+private fun drawShapePreview(
+    canvas: android.graphics.Canvas,
+    pageToView: Matrix,
+    gesture: ShapeGesture,
+    settings: ShapeSettings,
+) {
+    val start = gesture.start ?: return
+    val end = gesture.current
+    val tracing = trace(settings.kind, start.x, start.y, end.x, end.y)
+    val width = settings.borderWidth.toFloat()
+
+    fun paintFor(lineType: LineType) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = settings.borderColorArgb
+        style = Paint.Style.STROKE
+        strokeWidth = width
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+        pathEffect = when (lineType) {
+            LineType.Solid -> null
+            LineType.Dashed -> DashPathEffect(floatArrayOf(width * 2.6f, width * 1.8f), 0f)
+            LineType.Dotted -> DashPathEffect(floatArrayOf(0.01f, width * 2f), 0f)
+        }
+    }
+
+    val checkpoint = canvas.save()
+    canvas.concat(pageToView)
+    val visible = paintFor(settings.lineType)
+    val occluded = paintFor(LineType.Dotted)
+    tracing.solid.forEach { canvas.drawPath(it.toPath(), visible) }
+    tracing.hidden.forEach { canvas.drawPath(it.toPath(), occluded) }
+    canvas.restoreToCount(checkpoint)
+}
+
+private fun FloatArray.toPath(): Path = Path().apply {
+    if (size < 4) return@apply
+    moveTo(this@toPath[0], this@toPath[1])
+    for (index in 2 until size step 2) lineTo(this@toPath[index], this@toPath[index + 1])
 }
 
 internal data class EraserIndicator(val center: InkPoint, val diameterDp: Float)
@@ -718,7 +816,113 @@ internal fun List<PageStroke>.previewErase(mask: Stroke, mode: EraserMode): List
     }
 }
 
-/** Owns one lasso loop, then moves or corner-resizes the selected page-space objects. */
+/**
+ * Owns one drag that becomes a shape — `docs/inkPlan.md` §5.4.
+ *
+ * Deliberately not routed through `InProgressStrokesView` like freehand ink is. A shape is not
+ * captured, it is *constructed*: the front buffer renders one continuous stroke where a cube is
+ * twelve, and there is nothing about a traced path that needs low-latency wet rendering. So this
+ * owns two page-space points and the overlay draws the preview from them, the same way it draws the
+ * lasso.
+ */
+internal class ShapeGesture {
+    private var pointerId: Int = -1
+
+    /** Null while idle, which is also what says whether there is a preview to draw. */
+    var start by mutableStateOf<InkPoint?>(null)
+        private set
+    var current by mutableStateOf(InkPoint(0f, 0f))
+        private set
+    var renderRevision by mutableIntStateOf(0)
+        private set
+
+    fun handle(
+        event: MotionEvent,
+        toPage: Matrix,
+        touchSlop: Float,
+        onInsert: (InkPoint, InkPoint) -> Unit,
+    ): Boolean {
+        return when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                pointerId = event.getPointerId(event.actionIndex)
+                val point = event.pagePoint(event.actionIndex, toPage)
+                start = point
+                current = point
+                invalidateDraw()
+                true
+            }
+            // A second contact is a palm or a pinch, never a wider shape.
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                clear()
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val index = event.findPointerIndex(pointerId)
+                if (index < 0 || start == null) return false
+                current = event.pagePoint(index, toPage)
+                invalidateDraw()
+                true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                val began = start ?: return false
+                if (event.getPointerId(event.actionIndex) != pointerId) return false
+                val ended = event.pagePoint(event.actionIndex, toPage)
+                clear()
+                // A tap is not a mis-drag. Dropping a default-sized shape where it landed is what
+                // keeps the tool from feeling dead when someone taps instead of dragging, and the
+                // corner handles are there to resize it.
+                if (hypot(ended.x - began.x, ended.y - began.y) <= toPageLength(toPage, touchSlop)) {
+                    onInsert(
+                        InkPoint(began.x - DEFAULT_SHAPE_WIDTH / 2f, began.y - DEFAULT_SHAPE_HEIGHT / 2f),
+                        InkPoint(began.x + DEFAULT_SHAPE_WIDTH / 2f, began.y + DEFAULT_SHAPE_HEIGHT / 2f),
+                    )
+                } else {
+                    onInsert(began, ended)
+                }
+                true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                clear()
+                true
+            }
+            else -> false
+        }
+    }
+
+    fun clear() {
+        pointerId = -1
+        start = null
+        invalidateDraw()
+    }
+
+    private fun invalidateDraw() {
+        renderRevision = if (renderRevision == Int.MAX_VALUE) 0 else renderRevision + 1
+    }
+
+    /** View-pixel slop expressed in page units, so the tap threshold does not change with zoom. */
+    private fun toPageLength(toPage: Matrix, pixels: Float): Float {
+        val values = FloatArray(9)
+        toPage.getValues(values)
+        return pixels * hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y])
+    }
+}
+
+/** What a tap drops, in page units. A shape you can see and grab, not a speck. */
+private const val DEFAULT_SHAPE_WIDTH = 120f
+private const val DEFAULT_SHAPE_HEIGHT = 80f
+
+/**
+ * Owns one lasso loop and the live move or corner-resize that follows it — but **not** the selection.
+ *
+ * What is selected is a page-level fact ([CanvasSelection], AD7) held by `EditorPane`, because a
+ * shape can be in it and a shape is not ink. This class holds only what is true for the length of one
+ * gesture: which corner is being dragged, how far, and the loop being traced. It reads the current
+ * selection as an argument and reports a new one through a callback.
+ *
+ * The live transform is therefore readable by every layer that draws a selected object — the ink
+ * canvas here and `ShapeLayer` inside the zoom — from one place, in page units, rather than each
+ * keeping its own idea of how far the finger has travelled.
+ */
 internal class LassoGesture {
     private enum class Mode { Idle, Drawing, Moving, Resizing }
     private enum class Corner { TopLeft, TopRight, BottomRight, BottomLeft }
@@ -727,8 +931,6 @@ internal class LassoGesture {
     private var pointerId: Int = -1
     private var start = InkPoint(0f, 0f)
     private val path = mutableStateListOf<InkPoint>()
-    var selection by mutableStateOf<InkLassoSelection?>(null)
-        private set
     var preview by mutableStateOf(InkPoint(0f, 0f))
         private set
     private var resizeAnchor = InkPoint(0f, 0f)
@@ -737,11 +939,13 @@ internal class LassoGesture {
     var renderRevision by mutableIntStateOf(0)
         private set
 
-    val selectedProjections get() = selection?.projections.orEmpty()
+    /** True while a move or resize is being dragged, so a draw knows to apply [applyPreview]. */
+    val isTransforming: Boolean get() = mode == Mode.Moving || mode == Mode.Resizing
 
     fun drawingPath(): List<InkPoint> = if (mode == Mode.Drawing) path else emptyList()
 
-    fun selectionBounds(): InkBounds? = selection?.bounds?.let { bounds ->
+    /** The selection's rectangle with the live gesture folded in, which is what gets drawn. */
+    fun previewBounds(selection: CanvasSelection?): InkBounds? = selection?.bounds?.let { bounds ->
         when (mode) {
             Mode.Moving -> bounds.translated(preview.x, preview.y)
             Mode.Resizing -> bounds.scaled(resizeAnchor, resizeScale.x, resizeScale.y)
@@ -749,16 +953,15 @@ internal class LassoGesture {
         }
     }
 
-    fun selectionBoundsInView(pageToView: Matrix): android.graphics.RectF? =
-        selectionBounds()?.let { bounds ->
+    fun previewBoundsInView(selection: CanvasSelection?, pageToView: Matrix): android.graphics.RectF? =
+        previewBounds(selection)?.let { bounds ->
             android.graphics.RectF(bounds.left, bounds.top, bounds.right, bounds.bottom).also {
                 pageToView.mapRect(it)
             }
         }
 
-    /** Appends the live gesture transform before the stroke's committed page transform. */
-    fun applyPreview(matrix: Matrix, stroke: PageStroke) {
-        if (stroke.projectionKey !in selectedProjections) return
+    /** Appends the live gesture transform before an object's own committed page transform. */
+    fun applyPreview(matrix: Matrix) {
         when (mode) {
             Mode.Moving -> matrix.preTranslate(preview.x, preview.y)
             Mode.Resizing -> {
@@ -770,70 +973,56 @@ internal class LassoGesture {
         }
     }
 
-    fun reconcile(strokes: List<PageStroke>) {
-        val selected = selection ?: return
-        val direct = strokes.filter { it.id in selected.targetIds }
-        if (direct.isEmpty()) {
-            clear()
-            return
-        }
-        val groups = direct.mapNotNull(PageStroke::groupId).toSet()
-        val expanded = strokes.filter { it.id in selected.targetIds || it.groupId in groups }
-        val bounds = expanded.mapNotNull(PageStroke::pageBounds).reduceOrNull { result, next ->
-            InkBounds(
-                minOf(result.left, next.left),
-                minOf(result.top, next.top),
-                maxOf(result.right, next.right),
-                maxOf(result.bottom, next.bottom),
-            )
-        } ?: run {
-            clear()
-            return
-        }
-        selection = selected.copy(
-            targetIds = expanded.map(PageStroke::id).toSet(),
-            projections = expanded.map(PageStroke::projectionKey).toSet(),
-            bounds = bounds,
-        )
-        invalidateDraw()
-    }
+    /** The same transform for a layer that works in page units directly rather than in a matrix. */
+    fun previewOffset(): InkPoint = if (mode == Mode.Moving) preview else InkPoint(0f, 0f)
+    fun previewScale(): InkPoint = if (mode == Mode.Resizing) resizeScale else InkPoint(1f, 1f)
+    fun previewAnchor(): InkPoint = resizeAnchor
 
+    /** Abandons the live gesture. The selection is the caller's to clear, not this class's. */
     fun clear() {
         mode = Mode.Idle
         pointerId = -1
         path.clear()
-        selection = null
         preview = InkPoint(0f, 0f)
         resizeScale = InkPoint(1f, 1f)
         invalidateDraw()
     }
 
+    /**
+     * @param selection what is currently selected, across kinds. Read, never written.
+     * @param onSelect a new selection, or null when the loop caught nothing. Called on the up.
+     * @param onMove the ink half of a finished move. [onMoveShapes] is the shape half.
+     */
     fun handle(
         event: MotionEvent,
         toPage: Matrix,
         strokes: List<PageStroke>,
+        shapes: List<Outline.Shape>,
+        selection: CanvasSelection?,
+        onSelect: (CanvasSelection?) -> Unit,
         onMove: (InkLassoMove) -> Unit,
         onResize: (InkLassoResize) -> Unit,
+        onMoveShapes: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+        onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     ): Boolean {
         return when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 pointerId = event.getPointerId(event.actionIndex)
                 val point = event.pagePoint(event.actionIndex, toPage)
-                val selected = selection
-                val corner = selected?.bounds?.cornerNear(point, handleHitRadius(toPage))
-                if (selected != null && corner != null) {
+                val corner = selection?.bounds?.cornerNear(point, handleHitRadius(toPage))
+                if (selection != null && corner != null) {
                     mode = Mode.Resizing
-                    resizeStart = corner.point(selected.bounds)
-                    resizeAnchor = corner.opposite().point(selected.bounds)
+                    resizeStart = corner.point(selection.bounds)
+                    resizeAnchor = corner.opposite().point(selection.bounds)
                     resizeScale = InkPoint(1f, 1f)
                     preview = InkPoint(0f, 0f)
-                } else if (selected != null && selected.bounds.contains(point)) {
+                } else if (selection != null && selection.bounds.contains(point)) {
                     mode = Mode.Moving
                     start = point
                     preview = InkPoint(0f, 0f)
                 } else {
                     mode = Mode.Drawing
-                    selection = null
+                    onSelect(null)
                     path.clear()
                     path += point
                     preview = InkPoint(0f, 0f)
@@ -865,53 +1054,62 @@ internal class LassoGesture {
                 when (mode) {
                     Mode.Drawing -> {
                         appendSamples(event, event.actionIndex, toPage)
-                        selection = strokes.selectWithLasso(
-                            path = path.toList(),
-                            edgeTolerance = lassoEdgeTolerance(toPage),
+                        onSelect(
+                            selectWithLasso(
+                                strokes = strokes,
+                                shapes = shapes,
+                                path = path.toList(),
+                                edgeTolerance = lassoEdgeTolerance(toPage),
+                            ),
                         )
                         path.clear()
                     }
                     Mode.Moving -> {
                         val point = event.pagePoint(event.actionIndex, toPage)
                         val delta = InkPoint(point.x - start.x, point.y - start.y)
-                        val selected = selection
-                        if (selected != null && (delta.x != 0f || delta.y != 0f)) {
-                            onMove(
-                                InkLassoMove(
-                                    path = selected.path,
-                                    targetIds = selected.targetIds,
-                                    projections = selected.projections,
-                                    dx = delta.x,
-                                    dy = delta.y,
-                                ),
-                            )
-                            val movedPath = selected.path.map {
-                                InkPoint(it.x + delta.x, it.y + delta.y)
+                        if (selection != null && (delta.x != 0f || delta.y != 0f)) {
+                            // One gesture, one payload per kind: ink persists a move for replay,
+                            // a shape translates its own segments. AD7's second consequence —
+                            // "move and resize are transforms on an object, not on its
+                            // representation" — is why the gesture states the delta once and lets
+                            // each kind apply it its own way.
+                            selection.inkHalf()?.let { ink ->
+                                onMove(
+                                    InkLassoMove(
+                                        path = ink.path,
+                                        targetIds = ink.targetIds,
+                                        projections = ink.projections,
+                                        dx = delta.x,
+                                        dy = delta.y,
+                                    ),
+                                )
                             }
-                            selection = selected.copy(
-                                path = movedPath,
-                                bounds = selected.bounds.translated(delta.x, delta.y),
-                            )
+                            if (selection.shapeIds.isNotEmpty()) {
+                                onMoveShapes(selection.shapeIds, delta.x, delta.y)
+                            }
+                            onSelect(selection.translated(delta.x, delta.y))
                         }
                     }
                     Mode.Resizing -> {
                         updateResize(event.pagePoint(event.actionIndex, toPage))
-                        val selected = selection
                         val scale = resizeScale
-                        if (selected != null && (scale.x != 1f || scale.y != 1f)) {
-                            val resize = InkLassoResize(
-                                path = selected.path,
-                                targetIds = selected.targetIds,
-                                projections = selected.projections,
-                                anchor = resizeAnchor,
-                                scaleX = scale.x,
-                                scaleY = scale.y,
-                            )
-                            onResize(resize)
-                            selection = selected.copy(
-                                path = selected.path.map { it.scaled(resizeAnchor, scale.x, scale.y) },
-                                bounds = selected.bounds.scaled(resizeAnchor, scale.x, scale.y),
-                            )
+                        if (selection != null && (scale.x != 1f || scale.y != 1f)) {
+                            selection.inkHalf()?.let { ink ->
+                                onResize(
+                                    InkLassoResize(
+                                        path = ink.path,
+                                        targetIds = ink.targetIds,
+                                        projections = ink.projections,
+                                        anchor = resizeAnchor,
+                                        scaleX = scale.x,
+                                        scaleY = scale.y,
+                                    ),
+                                )
+                            }
+                            if (selection.shapeIds.isNotEmpty()) {
+                                onResizeShapes(selection.shapeIds, resizeAnchor, scale.x, scale.y)
+                            }
+                            onSelect(selection.scaled(resizeAnchor, scale.x, scale.y))
                         }
                     }
                     Mode.Idle -> Unit

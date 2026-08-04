@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
+import com.vivenotes.model.ink.LineType
+import com.vivenotes.model.ink.ShapeKind
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
@@ -27,14 +29,6 @@ private val Context.penPreferences: DataStore<Preferences> by preferencesDataSto
 enum class PenKind(val label: String) {
     Fountain("Fountain"),
     Calligraphy("Calligraphy"),
-}
-
-/** Solid, dashed or dotted ink. Maps to a brush family once strokes exist — `docs/inkPlan.md` §6. */
-@Serializable
-enum class LineType(val label: String) {
-    Solid("Solid"),
-    Dashed("Dashed"),
-    Dotted("Dotted"),
 }
 
 /** Whether the eraser cuts through ink or removes a complete stroke at the first contact. */
@@ -101,6 +95,54 @@ data class EraserSettings(
         const val DEFAULT_SIZE = 18
     }
 }
+
+/**
+ * The Insert Shape tool — `docs/inkPlan.md` §5.4.
+ *
+ * Not a [PenPreset], for the reason [HighlighterSettings] is not: the questions differ. A shape has
+ * no nib, no pressure response and no stabilization — it is traced along an ideal path, so there is
+ * no shake to smooth — and it has two things a pen has no use for, a border width measured
+ * separately from a pen's thickness and, eventually, a fill.
+ *
+ * Every field here describes *the user*, per ID5: how you like to draw shapes. What the traced
+ * strokes carry is a property of the shape you drew and travels with the page. Getting that boundary
+ * wrong is a sync bug rather than a refactor.
+ *
+ * [kind] lives here rather than on [DrawTool.Shape] deliberately. Which shape is armed is a setting
+ * the way a highlighter's ink is a setting: the tool in your hand is not persisted, but what it is
+ * set to is.
+ */
+@Serializable
+data class ShapeSettings(
+    val kind: ShapeKind = ShapeKind.DEFAULT,
+    val lineType: LineType = LineType.Solid,
+    /** Border width in page dp. */
+    val borderWidth: Int = DEFAULT_BORDER_WIDTH,
+    val borderColorArgb: Int = 0xFF000000.toInt(),
+    /**
+     * Null for no fill, which is what the reference pane shows and what a shape starts with.
+     * Distinct from a transparent colour: "none" is the absence of a fill, not a see-through one.
+     */
+    val fillArgb: Int? = null,
+    /** True only while the border is using the automatic high-contrast starter colour. */
+    val colorFollowsTheme: Boolean = true,
+) {
+    companion object {
+        const val MIN_BORDER_WIDTH = 1
+        const val MAX_BORDER_WIDTH = 24
+
+        /** The value the reference pane is showing. */
+        const val DEFAULT_BORDER_WIDTH = 10
+    }
+}
+
+/** Resolves the automatic border colour without changing one the user explicitly picked. */
+fun ShapeSettings.forCanvasTheme(isDark: Boolean): ShapeSettings =
+    if (colorFollowsTheme) {
+        copy(borderColorArgb = if (isDark) 0xFFFFFFFF.toInt() else 0xFF000000.toInt())
+    } else {
+        this
+    }
 
 /**
  * One of the Draw tab's pens.
@@ -197,6 +239,14 @@ sealed interface DrawTool {
 
     data object Eraser : DrawTool
 
+    /**
+     * Insert Shape: drag out a box and the chosen shape is traced into it.
+     *
+     * One tool rather than sixteen, because *which* shape it draws is [ShapeSettings.kind] — the
+     * same split [Highlighter] has from [HighlighterSettings].
+     */
+    data object Shape : DrawTool
+
     /** Free-form selection: circle ink, then drag the selected objects. */
     data object Lasso : DrawTool
 
@@ -228,6 +278,15 @@ class PenSettingsStore(context: Context) {
 
     val highlighter: Flow<HighlighterSettings> = store.data.map { prefs ->
         prefs[HIGHLIGHTER]?.let(::decodeHighlighter) ?: HighlighterSettings()
+    }
+
+    /**
+     * Shares [palette] rather than carrying a swatch row of its own: the colours someone reaches for
+     * are one property of the user (ID5), not one per tool. A colour mixed holding a pen is there
+     * when a shape is drawn.
+     */
+    val shape: Flow<ShapeSettings> = store.data.map { prefs ->
+        prefs[SHAPE]?.let(::decodeShape) ?: ShapeSettings()
     }
 
     /**
@@ -283,6 +342,10 @@ class PenSettingsStore(context: Context) {
         }
     }
 
+    suspend fun setShape(settings: ShapeSettings) {
+        store.edit { it[SHAPE] = json.encodeToString(ShapeSettings.serializer(), settings) }
+    }
+
     private fun decodePen(index: Int, text: String): PenPreset? = runCatching {
         val decoded = json.decodeFromString(PenPreset.serializer(), text)
         val hasThemeFlag = json.parseToJsonElement(text).jsonObject.containsKey("colorFollowsTheme")
@@ -304,6 +367,14 @@ class PenSettingsStore(context: Context) {
         runCatching { json.decodeFromString(HighlighterSettings.serializer(), text) }.getOrNull()
 
     /**
+     * A shape kind this build does not have — one added later, or one dropped from the picker —
+     * falls back to the default rather than throwing away the width and colour beside it. That is
+     * `coerceInputValues` doing its job; see the note on [json].
+     */
+    private fun decodeShape(text: String): ShapeSettings? =
+        runCatching { json.decodeFromString(ShapeSettings.serializer(), text) }.getOrNull()
+
+    /**
      * A stored row shorter or longer than the current [PALETTE_SIZE] is trimmed rather than
      * rejected, so changing how many swatches fit is not a migration. An empty one is nothing to
      * show, which is the one case worth falling back to the shipped palette for.
@@ -320,6 +391,7 @@ class PenSettingsStore(context: Context) {
         val DRAW_WITH_FINGER = booleanPreferencesKey("draw_with_finger")
         val ERASER = stringPreferencesKey("eraser")
         val HIGHLIGHTER = stringPreferencesKey("highlighter")
+        val SHAPE = stringPreferencesKey("shape")
         val PALETTE = stringPreferencesKey("palette")
 
         /**

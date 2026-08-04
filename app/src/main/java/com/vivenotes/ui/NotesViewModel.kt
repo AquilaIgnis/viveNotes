@@ -35,6 +35,7 @@ import androidx.ink.strokes.Stroke
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.PenSettingsStore
+import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.data.ViewSettingsStore
@@ -43,6 +44,9 @@ import com.vivenotes.data.db.PageEntity
 import com.vivenotes.data.db.InkEraseWithTargets
 import com.vivenotes.data.db.InkMoveWithTargets
 import com.vivenotes.ink.InkCodec
+import com.vivenotes.ink.unionBounds
+import com.vivenotes.ink.CanvasClipboard
+import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkPoint
@@ -64,6 +68,7 @@ import com.vivenotes.model.Orientation
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
 import com.vivenotes.model.PageStyle
+import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.model.PaperDimensions
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.PrintMargins
@@ -149,6 +154,8 @@ data class NotesUiState(
     val title: String = "",
     val createdAt: Long = 0L,
     val outlines: List<OutlineBox> = emptyList(),
+    /** Shapes on the canvas. Whole objects, so unlike ink they live in the document. */
+    val shapes: List<Outline.Shape> = emptyList(),
     /** The open page's own appearance, loaded and saved with its content. */
     val pageStyle: PageStyle = PageStyle(),
     /** Bumped when a different page loads, so the canvas rebuilds its editors. */
@@ -204,6 +211,10 @@ class NotesViewModel(
     val highlighter: StateFlow<HighlighterSettings> = penSettingsStore.highlighter
         .stateIn(viewModelScope, SharingStarted.Eagerly, HighlighterSettings())
 
+    /** The armed shape and how it is drawn — `docs/inkPlan.md` §5.4. A property of the user (ID5). */
+    val shape: StateFlow<ShapeSettings> = penSettingsStore.shape
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ShapeSettings())
+
     /** Whether a finger draws or scrolls. A property of this device, so it persists. */
     val drawWithFinger: StateFlow<Boolean> = penSettingsStore.drawWithFinger
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -227,10 +238,16 @@ class NotesViewModel(
     private val _inkUndoState = MutableStateFlow(InkUndoState())
     val inkUndoState: StateFlow<InkUndoState> = _inkUndoState.asStateFlow()
 
-    /** Session-local object clipboard. Native strokes are immutable, so shallow snapshots are safe. */
-    private var inkClipboard: List<PageStroke> = emptyList()
-    private val _hasInkClipboard = MutableStateFlow(false)
-    val hasInkClipboard: StateFlow<Boolean> = _hasInkClipboard.asStateFlow()
+    /**
+     * The shared prime object clipboard — `docs/diagram.md`.
+     *
+     * One clipboard for every kind on the canvas, not one per kind: copy a stroke and a shape in the
+     * same loop and both come back on the same paste. Session-local, and shallow — native strokes are
+     * immutable and an `Outline.Shape` is a data class, so snapshots are safe to share.
+     */
+    private var clipboard = CanvasClipboard()
+    private val _hasClipboard = MutableStateFlow(false)
+    val hasClipboard: StateFlow<Boolean> = _hasClipboard.asStateFlow()
 
     /** Snapshots are shallow lists: native strokes are immutable and safely shared between entries. */
     private val inkHistoryByPage = mutableMapOf<String, PageInkHistory>()
@@ -367,7 +384,8 @@ class NotesViewModel(
             // Taken from the document rather than from [loaded], which is the text containers alone
             // and may have been substituted for an empty one. An unreadable page decodes to
             // PageDoc.empty(), so this clears — the outgoing page's outlines must not follow it.
-            unmanagedOutlines = doc.outlines.withIndex().filterNot { it.value is Outline.Text }
+            unmanagedOutlines = doc.outlines.withIndex()
+                .filterNot { it.value is Outline.Text || it.value is Outline.Shape }
             // Loading joins the same serialization lane as edits. Otherwise a fast page switch can
             // read an operation between its immediate canvas update and its database tombstone.
             _strokes.value = inkMutations.withLock { loadInk(pageId) }
@@ -377,6 +395,7 @@ class NotesViewModel(
                 title = page?.title.orEmpty(),
                 createdAt = page?.createdAt ?: System.currentTimeMillis(),
                 outlines = loaded.map { OutlineBox(it.id, it.x, it.y, it.width, it.minHeight) },
+                shapes = doc.outlines.filterIsInstance<Outline.Shape>(),
                 pageStyle = doc.style,
                 pageRevision = _uiState.value.pageRevision + 1,
                 contentError = if (readOnlyPageId == pageId) {
@@ -694,6 +713,10 @@ class NotesViewModel(
         viewModelScope.launch { penSettingsStore.setHighlighter(settings) }
     }
 
+    fun updateShape(settings: ShapeSettings) {
+        viewModelScope.launch { penSettingsStore.setShape(settings) }
+    }
+
     /** The pen currently in hand, or null when the armed tool is not a pen. */
     fun activePen(): PenPreset? =
         (_tool.value as? DrawTool.Pen)?.let { pens.value.getOrNull(it.index) }
@@ -734,6 +757,110 @@ class NotesViewModel(
         viewModelScope.launch {
             inkMutations.withLock { repository.addStroke(entity) }
         }
+    }
+
+    // --- shapes ---------------------------------------------------------------------------------
+
+    /**
+     * Seeds a shape into the box just dragged and adds it to the document.
+     *
+     * A document edit rather than an ink write: a shape is an object, so it goes through the same
+     * autosave the text containers do rather than through `ink_strokes`. That is also why there is
+     * no undo entry here — shapes ride the document's history, not the ink history ring.
+     *
+     * The shape is selected on arrival, because the handles are how it is adjusted and a shape you
+     * have to hunt for before you can move a corner is a shape you would rather have redrawn.
+     */
+    fun insertShape(
+        shape: ShapeSettings,
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+    ): String? {
+        val pageId = _uiState.value.selectedPageId ?: return null
+        if (readOnlyPageId == pageId) return null
+
+        val segments = seedSegments(shape.kind, startX, startY, endX, endY, ::newId)
+        if (segments.isEmpty()) return null
+
+        val created = Outline.Shape(
+            id = newId(),
+            kind = shape.kind,
+            segments = segments,
+            borderArgb = shape.borderColorArgb,
+            borderWidth = shape.borderWidth.toFloat(),
+            lineType = shape.lineType,
+            fillArgb = shape.fillArgb,
+        ).withRecomputedBounds()
+
+        _uiState.value = _uiState.value.copy(shapes = _uiState.value.shapes + created)
+        // Drawing one shape puts the tool down. The handles are the point of a shape being an
+        // object, and they are unreachable while the tool that draws new ones is still armed —
+        // so placing one hands it straight to you, ready to adjust.
+        _tool.value = DrawTool.None
+        edits.tryEmit(Unit)
+        return created.id
+    }
+
+    fun moveShape(shapeId: String, dx: Float, dy: Float) {
+        if (dx == 0f && dy == 0f) return
+        updateShapeOutline(shapeId) { it.translated(dx, dy) }
+    }
+
+    /**
+     * Scales a shape about the corner opposite the one being dragged — AD7's four-corner resize.
+     *
+     * Takes an absolute scale against the shape as it was when the drag began rather than a
+     * per-frame delta, which is why [ShapeLayer] captures the original: a chain of relative scales
+     * accumulates rounding, and a drag back to where it started would not restore the size it began
+     * at.
+     */
+    fun resizeShape(shapeId: String, anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float) {
+        if (scaleX == 1f && scaleY == 1f) return
+        updateShapeOutline(shapeId) { it.scaledAbout(anchorX, anchorY, scaleX, scaleY) }
+    }
+
+    /**
+     * Sets the border width of every selected shape — the shape half of the object toolkit.
+     *
+     * Not the same thing as `ShapeSettings.borderWidth`, which is how the *user* likes to draw shapes
+     * and lives in DataStore (`docs/inkPlan.md` SD4). This edits the document. Changing one must never
+     * change the other: one travels with the page, the other with the person.
+     */
+    fun setShapeBorderWidth(shapeIds: Set<String>, width: Float) {
+        val clamped = width.coerceIn(
+            ShapeSettings.MIN_BORDER_WIDTH.toFloat(),
+            ShapeSettings.MAX_BORDER_WIDTH.toFloat(),
+        )
+        shapeIds.forEach { id -> updateShapeOutline(id) { it.copy(borderWidth = clamped) } }
+    }
+
+    /** Recolours the border of every selected shape — the tooltip's swatch, per AD7. */
+    fun recolorShapes(shapeIds: Set<String>, argb: Int) {
+        shapeIds.forEach { id -> updateShapeOutline(id) { it.copy(borderArgb = argb) } }
+    }
+
+    /** Deletes every selected shape, in one document edit rather than one per shape. */
+    fun deleteShapes(shapeIds: Set<String>) {
+        if (shapeIds.isEmpty()) return
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val state = _uiState.value
+        if (state.shapes.none { it.id in shapeIds }) return
+        _uiState.value = state.copy(shapes = state.shapes.filterNot { it.id in shapeIds })
+        edits.tryEmit(Unit)
+    }
+
+    private inline fun updateShapeOutline(shapeId: String, change: (Outline.Shape) -> Outline.Shape) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val state = _uiState.value
+        if (state.shapes.none { it.id == shapeId }) return
+        _uiState.value = state.copy(
+            shapes = state.shapes.map { if (it.id == shapeId) change(it) else it },
+        )
+        edits.tryEmit(Unit)
     }
 
     /** Erases by tombstone. Same ordering as [onStrokeFinished], for the same reason. */
@@ -811,27 +938,56 @@ class NotesViewModel(
         }
     }
 
-    /** Copies selected logical ink objects without changing the page. */
-    fun copyInk(ids: Set<String>) {
-        if (ids.isEmpty()) return
-        val selected = _strokes.value.filter { it.id in ids }.distinctBy(PageStroke::id)
-        if (selected.isEmpty()) return
-        inkClipboard = selected
-        _hasInkClipboard.value = true
+    /**
+     * Puts the selection on the shared clipboard, whatever it holds. The page does not change.
+     *
+     * Copy *is* copy: it does not drop a duplicate on the page, because the diagram pairs it with
+     * double-tapping empty space to choose where the copy lands.
+     */
+    fun copySelection(selection: CanvasSelection) {
+        val strokes = _strokes.value.filter { it.id in selection.inkIds }.distinctBy(PageStroke::id)
+        val shapes = _uiState.value.shapes.filter { it.id in selection.shapeIds }
+        if (strokes.isEmpty() && shapes.isEmpty()) return
+        clipboard = CanvasClipboard(strokes = strokes, shapes = shapes)
+        _hasClipboard.value = true
     }
 
-    /** Pastes the clipboard with its union centre at [at], preserving styles and remapping groups. */
-    fun pasteInk(at: InkPoint) {
+    /**
+     * Pastes the clipboard with its union centre at [at], whatever kinds it holds.
+     *
+     * The centre is measured across **both** kinds, so a copied stroke-and-shape pair lands in the
+     * same relative arrangement it was copied in rather than each kind centring itself.
+     *
+     * Each kind commits the way it already does — ink through the history ring and `ink_strokes`, a
+     * shape through the document's autosave — which is exactly AD7's second consequence: the same
+     * operation, applied by each kind to its own representation.
+     */
+    fun pasteObjects(at: InkPoint) {
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
-        val sources = inkClipboard
+        val sources = clipboard.strokes
+        val sourceShapes = clipboard.shapes
+        if (sources.isEmpty() && sourceShapes.isEmpty()) return
+
+        val bounds = sources.mapNotNull(PageStroke::pageBounds) + sourceShapes.map(Outline.Shape::pageBounds)
+        val union = bounds.unionBounds() ?: return
+        val dx = at.x - union.center.x
+        val dy = at.y - union.center.y
+
+        if (sourceShapes.isNotEmpty()) {
+            val pastedShapes = sourceShapes.map { source ->
+                source.translated(dx, dy).copy(
+                    id = newId(),
+                    segments = source.segments
+                        .map { it.copy(id = newId()) }
+                        .map { it.translated(dx, dy) },
+                )
+            }
+            _uiState.value = _uiState.value.copy(shapes = _uiState.value.shapes + pastedShapes)
+            edits.tryEmit(Unit)
+        }
+
         if (sources.isEmpty()) return
-        val sourceBounds = sources.mapNotNull(PageStroke::pageBounds)
-        if (sourceBounds.isEmpty()) return
-        val centreX = (sourceBounds.minOf { it.left } + sourceBounds.maxOf { it.right }) / 2f
-        val centreY = (sourceBounds.minOf { it.top } + sourceBounds.maxOf { it.bottom }) / 2f
-        val dx = at.x - centreX
-        val dy = at.y - centreY
         val pastedGroups = sources.mapNotNull(PageStroke::groupId).distinct()
             .associateWith { newId() }
         val before = _strokes.value
@@ -1139,7 +1295,10 @@ class NotesViewModel(
                 blocks = blocks,
             )
         }
-        repository.saveDoc(pageId, PageDoc(outlines = merged(outlines), style = state.pageStyle))
+        repository.saveDoc(
+            pageId,
+            PageDoc(outlines = merged(state.shapes + outlines), style = state.pageStyle),
+        )
     }
 
     /**
@@ -1151,9 +1310,9 @@ class NotesViewModel(
      * created and deleted while the page is open, so a recorded position can be past the end of the
      * list it is being restored into.
      */
-    private fun merged(text: List<Outline.Text>): List<Outline> {
-        if (unmanagedOutlines.isEmpty()) return text
-        val outlines = ArrayList<Outline>(text)
+    private fun merged(managed: List<Outline>): List<Outline> {
+        if (unmanagedOutlines.isEmpty()) return managed
+        val outlines = ArrayList<Outline>(managed)
         unmanagedOutlines.forEach { (index, outline) ->
             outlines.add(index.coerceAtMost(outlines.size), outline)
         }
@@ -1162,6 +1321,9 @@ class NotesViewModel(
 
     companion object {
         private const val AUTOSAVE_DELAY_MS = 400L
+
+        /** Far enough that a duplicate is not mistaken for the original not having copied. */
+        private const val DUPLICATE_OFFSET = 16f
         private const val INK_HISTORY_LIMIT = 100
         const val MIN_OUTLINE_WIDTH = 120f
         const val MAX_OUTLINE_WIDTH = 2000f

@@ -47,6 +47,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.Align
 import com.vivenotes.model.BlockType
@@ -129,6 +130,7 @@ fun Ribbon(
     palette: List<Int>,
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
+    shape: ShapeSettings,
     tool: DrawTool,
     allowFinger: Boolean,
     draw: DrawActions,
@@ -177,13 +179,25 @@ fun Ribbon(
                 palette = palette,
                 eraser = eraser,
                 highlighter = highlighter,
+                shape = shape,
                 tool = tool,
                 allowFinger = allowFinger,
                 actions = draw,
+                pageOpen = pageOpen,
                 canUndo = canUndoInk,
                 canRedo = canRedoInk,
             )
-            RibbonTab.Insert -> InsertTab(selection, onCommand, pageOpen)
+            RibbonTab.Insert -> InsertTab(
+                selection = selection,
+                onCommand = onCommand,
+                pageOpen = pageOpen,
+                shape = shape,
+                palette = palette,
+                tool = tool,
+                onSelectTool = draw.selectTool,
+                onChangeShape = draw.updateShape,
+                onAddColor = draw.addPaletteColor,
+            )
             else -> PlaceholderTab(activeTab)
         }
     }

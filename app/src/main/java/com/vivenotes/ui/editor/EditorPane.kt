@@ -78,6 +78,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -94,8 +95,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.ShapeSettings
+import com.vivenotes.model.Outline
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.InkPoint
+import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.model.Block
@@ -200,19 +204,30 @@ fun EditorPane(
      */
     strokes: List<PageStroke> = emptyList(),
     brush: Brush? = null,
+    /** The armed shape's settings, or null when Insert Shape is not the tool in hand. */
+    shaping: ShapeSettings? = null,
+    shapes: List<Outline.Shape> = emptyList(),
+    onMoveShape: (String, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeShape: (String, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    onDeleteShapes: (Set<String>) -> Unit = {},
+    onRecolorShapes: (Set<String>, Int) -> Unit = { _, _ -> },
+    onSetShapeBorderWidth: (Set<String>, Float) -> Unit = { _, _ -> },
     erasing: Boolean = false,
     lassoing: Boolean = false,
     eraser: EraserSettings = EraserSettings(),
     allowFinger: Boolean = false,
     onStrokeFinished: (InkStroke) -> Unit = {},
+    /** Returns the new shape's id, so the page can select it — see the call site below. */
+    onInsertShape: (ShapeSettings, Float, Float, Float, Float) -> String? = { _, _, _, _, _ -> null },
     onPartialErase: (InkStroke) -> Unit = {},
     onObjectErase: (InkStroke) -> Unit = {},
     onMoveSelection: (InkLassoMove) -> Unit = {},
     onResizeSelection: (InkLassoResize) -> Unit = {},
     onDeleteInkSelection: (Set<String>) -> Unit = {},
-    onCopyInkSelection: (Set<String>) -> Unit = {},
-    hasInkClipboard: Boolean = false,
-    onPasteInk: (InkPoint) -> Unit = {},
+    /** Puts the whole selection on the shared clipboard — every kind it holds, in one call. */
+    onCopySelection: (CanvasSelection) -> Unit = {},
+    hasClipboard: Boolean = false,
+    onPaste: (InkPoint) -> Unit = {},
     onRecolorInkSelection: (Set<String>, Int) -> Unit = { _, _ -> },
     onGroupInkSelection: (Set<String>) -> Unit = {},
     onUngroupInkSelection: (Set<String>) -> Unit = {},
@@ -234,7 +249,26 @@ fun EditorPane(
     var pastePopupAt by remember { mutableStateOf<InkPoint?>(null) }
     val heights = remember { mutableStateMapOf<String, Int>() }
 
-    LaunchedEffect(pageRevision, hasInkClipboard) {
+    /**
+     * What is selected on this page, across kinds — AD7's "selection is a page-level concept".
+     *
+     * Held here rather than in the ViewModel because nothing about it is persisted and a live drag
+     * rewrites its bounds: a `StateFlow` write per gesture end is fine, one per frame is not. Cleared
+     * with the page, since ids from the last page mean nothing on this one.
+     */
+    var selection by remember(pageRevision) { mutableStateOf<CanvasSelection?>(null) }
+    val lassoGesture = remember { LassoGesture() }
+
+    // Re-read against the page whenever either kind changes, so a deleted or undone object takes its
+    // handles with it instead of leaving a rectangle over nothing.
+    LaunchedEffect(strokes, shapes) {
+        selection = selection?.reconcile(strokes, shapes)
+    }
+    LaunchedEffect(lassoing) {
+        if (!lassoing) lassoGesture.clear()
+    }
+
+    LaunchedEffect(pageRevision, hasClipboard) {
         pastePopupAt = null
     }
 
@@ -419,7 +453,7 @@ fun EditorPane(
             with(density) { InkPoint(offset.x.toDp().value, offset.y.toDp().value) }
         }
         val requestPasteAt: (InkPoint) -> Unit = { point ->
-            if (hasInkClipboard && canPlaceAt(point)) pastePopupAt = point
+            if (hasClipboard && canPlaceAt(point)) pastePopupAt = point
         }
 
         // Provided so containers and the title read the page's colours, which may be nothing like
@@ -454,7 +488,7 @@ fun EditorPane(
                                 fits,
                                 pageSize,
                                 style.hideTitle,
-                                hasInkClipboard,
+                                hasClipboard,
                             ) {
                                 val onTap: (Offset) -> Unit = tap@ { offset ->
                                     pastePopupAt = null
@@ -462,7 +496,7 @@ fun EditorPane(
                                     if (!canPlaceAt(point)) return@tap
                                     pendingFocusId = onCreateOutline(point.x - 8f, point.y - 8f)
                                 }
-                                if (hasInkClipboard) {
+                                if (hasClipboard) {
                                     detectCanvasTapGestures(
                                         onTap = onTap,
                                         onFingerDoubleTap = { requestPasteAt(offsetToPage(it)) },
@@ -471,7 +505,30 @@ fun EditorPane(
                                     detectTapGestures(onTap = onTap)
                                 }
                             },
-                    )
+                    ) {
+                        // A child of the tap target rather than a sibling above it, which is what
+                        // orders the two: the main pass bubbles, so a child is asked first, and the
+                        // detectors above wait for an *unconsumed* down. A shape therefore takes the
+                        // gesture off the bare canvas, and everything the layer declines falls
+                        // through to the tap that opens a text container. As siblings, hit testing
+                        // stopped at whichever was on top and the other never saw the gesture at all.
+                        //
+                        // Inside the zoom, too — see ShapeLayer for why a shape can live in the page
+                        // where ink cannot — and still beneath the text containers, so a shape drawn
+                        // behind one cannot steal its caret.
+                        ShapeLayer(
+                            shapes = shapes,
+                            selection = selection,
+                            lassoGesture = lassoGesture.takeIf { lassoing },
+                            // While the shape tool is armed a drag draws a new shape, and while the
+                            // lasso is the overlay owns every gesture on the page — in neither case
+                            // may this layer also try to edit what is under the pointer.
+                            interactive = shaping == null && !lassoing,
+                            onSelect = { selection = it },
+                            onMoveShape = onMoveShape,
+                            onResizeShape = onResizeShape,
+                        )
+                    }
 
                     if (!style.hideTitle) {
                         PageHeader(
@@ -526,9 +583,14 @@ fun EditorPane(
             // opens a text container.
             InkOverlay(
                 strokes = strokes,
+                shapes = shapes,
+                selection = selection,
+                onSelect = { selection = it },
+                lassoGesture = lassoGesture,
                 brush = brush,
                 erasing = erasing,
                 lassoing = lassoing,
+                shaping = shaping,
                 eraser = eraser,
                 allowFinger = allowFinger,
                 pageToView = {
@@ -542,12 +604,25 @@ fun EditorPane(
                     )
                 },
                 onStrokeFinished = onStrokeFinished,
+                onInsertShape = { start, end ->
+                    // Selected on arrival: the handles are the point of a shape being an object, and
+                    // the insert is the only thing that knows which id it just created.
+                    shaping?.let { settings ->
+                        onInsertShape(settings, start.x, start.y, end.x, end.y)?.let { id ->
+                            selection = shapes.firstOrNull { it.id == id }
+                                ?.let(CanvasSelection::ofShape)
+                        }
+                    }
+                },
                 onPartialErase = onPartialErase,
                 onObjectErase = onObjectErase,
                 onMoveSelection = onMoveSelection,
                 onResizeSelection = onResizeSelection,
+                onMoveShapes = { ids, dx, dy -> ids.forEach { onMoveShape(it, dx, dy) } },
+                onResizeShapes = { ids, anchor, scaleX, scaleY ->
+                    ids.forEach { onResizeShape(it, anchor.x, anchor.y, scaleX, scaleY) }
+                },
                 onDeleteSelection = onDeleteInkSelection,
-                onCopySelection = onCopyInkSelection,
                 onRecolorSelection = onRecolorInkSelection,
                 onGroupSelection = onGroupInkSelection,
                 onUngroupSelection = onUngroupInkSelection,
@@ -555,22 +630,100 @@ fun EditorPane(
                     ScrollStatePan(horizontal, vertical, scope, flingSpec)
                 },
                 modifier = Modifier.fillMaxSize(),
-                hasInkClipboard = hasInkClipboard,
+                hasClipboard = hasClipboard,
                 onRequestPaste = requestPasteAt,
             )
 
-            pastePopupAt?.takeIf { hasInkClipboard }?.let { point ->
-                InkPastePopup(
+            // One bar over whatever is selected, whatever kind it is — AD7. Raised here rather than
+            // inside a layer because a selection can hold both kinds, and because the bar is chrome:
+            // out here it keeps its own size at any zoom and is clamped against the *window*, where a
+            // bar drawn inside the zoomed page grew with it and could be clamped off-screen.
+            selection?.takeIf { !it.isEmpty }?.let { held ->
+                ObjectTooltip(
+                    swatch = held.swatch(strokes, shapes),
+                    selectionBoundsInView = {
+                        lassoGesture.previewBoundsInView(held, inkPageToView(
+                            zoom = zoom,
+                            density = density.density,
+                            scrollX = horizontal.value.toFloat(),
+                            scrollY = vertical.value.toFloat(),
+                        ))
+                    },
+                    viewportSize = with(density) {
+                        IntSize(window.width.roundToPx(), window.height.roundToPx())
+                    },
+                    onDelete = {
+                        if (held.inkIds.isNotEmpty()) onDeleteInkSelection(held.inkIds)
+                        if (held.shapeIds.isNotEmpty()) onDeleteShapes(held.shapeIds)
+                        selection = null
+                        lassoGesture.clear()
+                    },
+                    onCopy = {
+                        onCopySelection(held)
+                        lassoGesture.clear()
+                    },
+                    onRecolor = { color ->
+                        if (held.inkIds.isNotEmpty()) onRecolorInkSelection(held.inkIds, color)
+                        if (held.shapeIds.isNotEmpty()) onRecolorShapes(held.shapeIds, color)
+                    },
+                    // The kind-specific half. Only a selection of one kind has one: over a mixed
+                    // loop there is nothing both halves agree on, so the bar shows its base alone.
+                    extras = {
+                        if (held.isInkOnly && held.inkIds.size > 1) {
+                            GroupAction(
+                                isOneGroup = held.isOneInkGroup(strokes),
+                                onGroup = { onGroupInkSelection(held.inkIds) },
+                                onUngroup = { onUngroupInkSelection(held.inkIds) },
+                            )
+                        }
+                        if (held.isShapeOnly) {
+                            val widths = shapes.filter { it.id in held.shapeIds }
+                                .map { it.borderWidth.roundToInt() }
+                            ThicknessAction(
+                                width = widths.distinct().singleOrNull()
+                                    ?: ShapeSettings.MIN_BORDER_WIDTH,
+                                onChange = { onSetShapeBorderWidth(held.shapeIds, it.toFloat()) },
+                            )
+                        }
+                    },
+                )
+            }
+
+            pastePopupAt?.takeIf { hasClipboard }?.let { point ->
+                ObjectPastePopup(
                     point = point,
                     onDismiss = { pastePopupAt = null },
                     onPaste = {
-                        onPasteInk(point)
+                        onPaste(point)
                         pastePopupAt = null
                     },
                 )
             }
         }
     }
+}
+
+/**
+ * The colour the tooltip's swatch shows: the selection's own, when it has exactly one.
+ *
+ * White otherwise, because a bar over a red stroke and a blue shape cannot claim either. Reads both
+ * kinds through their own accessor — a stroke's colour lives on its brush, a shape's on its border —
+ * which is the whole of what "the same bar over every kind" costs.
+ */
+private fun CanvasSelection.swatch(
+    strokes: List<PageStroke>,
+    shapes: List<Outline.Shape>,
+): Color {
+    val inkColors = strokes.filter { it.id in inkIds }.map { it.stroke.brush.colorIntArgb }
+    val shapeColors = shapes.filter { it.id in shapeIds }.map(Outline.Shape::borderArgb)
+    return (inkColors + shapeColors).distinct().singleOrNull()?.let(::Color) ?: Color.White
+}
+
+/** Whether the ink held is one existing group, which is what makes the button say Ungroup. */
+private fun CanvasSelection.isOneInkGroup(strokes: List<PageStroke>): Boolean {
+    if (inkIds.size <= 1) return false
+    val groups = strokes.filter { it.id in inkIds }.map(PageStroke::groupId).distinct()
+    return groups.size == 1 && groups.single() != null
 }
 
 /**
@@ -778,7 +931,7 @@ private suspend fun PointerInputScope.detectCanvasTapGestures(
 }
 
 @Composable
-private fun BoxScope.InkPastePopup(
+private fun BoxScope.ObjectPastePopup(
     point: InkPoint,
     onDismiss: () -> Unit,
     onPaste: () -> Unit,

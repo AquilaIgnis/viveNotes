@@ -17,6 +17,7 @@ import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.Mark
 import com.vivenotes.model.PageStyle
@@ -60,6 +61,7 @@ class FontPickerTest {
                     palette = PEN_COLORS,
                     eraser = EraserSettings(),
                     highlighter = HighlighterSettings(),
+                    shape = ShapeSettings(),
                     tool = DrawTool.None,
                     allowFinger = false,
                     draw = DrawActions(

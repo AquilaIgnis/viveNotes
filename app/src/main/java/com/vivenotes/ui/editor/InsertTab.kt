@@ -31,6 +31,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.vivenotes.data.DrawTool
+import com.vivenotes.data.ShapeSettings
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.richtext.createEquationRenderer
@@ -50,12 +52,23 @@ internal object InsertTags {
 
 private const val EXAMPLE_EQUATION = "{\\displaystyle \\int _{a}^{b}f'(t)\\,dt=f(b)-f(a)}"
 
-/** The first working part of Insert: an inline native LaTeX equation. */
+/**
+ * Insert: an inline native LaTeX equation, and the shape picker.
+ *
+ * The Shape button is the same composable the Draw tab shows, sharing one armed tool and one set of
+ * settings — see [ShapeButton] for why it has two homes rather than one.
+ */
 @Composable
 internal fun InsertTab(
     selection: SelectionState,
     onCommand: (FormatCommand) -> Unit,
     pageOpen: Boolean,
+    shape: ShapeSettings,
+    palette: List<Int>,
+    tool: DrawTool,
+    onSelectTool: (DrawTool) -> Unit,
+    onChangeShape: (ShapeSettings) -> Unit,
+    onAddColor: (Int) -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
@@ -92,6 +105,18 @@ internal fun InsertTab(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
+        ShapeButton(
+            shape = shape,
+            palette = palette,
+            selected = tool == DrawTool.Shape,
+            enabled = pageOpen,
+            onSelect = { onSelectTool(DrawTool.Shape) },
+            onChange = onChangeShape,
+            onAddColor = onAddColor,
+        )
+
+        Divider()
+
         Box {
             RibbonButton(
                 icon = MaterialSymbols.Function,

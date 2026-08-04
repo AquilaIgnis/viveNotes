@@ -36,6 +36,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.model.PageStyle
@@ -77,10 +78,11 @@ fun NotesApp(viewModel: NotesViewModel) {
     val palette by viewModel.palette.collectAsStateWithLifecycle()
     val eraser by viewModel.eraser.collectAsStateWithLifecycle()
     val highlighter by viewModel.highlighter.collectAsStateWithLifecycle()
+    val shape by viewModel.shape.collectAsStateWithLifecycle()
     val tool by viewModel.tool.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
     val inkUndoState by viewModel.inkUndoState.collectAsStateWithLifecycle()
-    val hasInkClipboard by viewModel.hasInkClipboard.collectAsStateWithLifecycle()
+    val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
 
     var activeTab by remember { mutableStateOf(RibbonTab.Home) }
@@ -112,6 +114,7 @@ fun NotesApp(viewModel: NotesViewModel) {
             updatePen = viewModel::updatePen,
             updateEraser = viewModel::updateEraser,
             updateHighlighter = viewModel::updateHighlighter,
+            updateShape = viewModel::updateShape,
             addPaletteColor = viewModel::addPaletteColor,
             setDrawWithFinger = viewModel::setDrawWithFinger,
             undo = viewModel::undoInk,
@@ -125,6 +128,9 @@ fun NotesApp(viewModel: NotesViewModel) {
     val themedPens = remember(pens, canvas.isDark) {
         pens.map { it.forCanvasTheme(canvas.isDark) }
     }
+    // Same resolution the pens get: a black border on a dark page would be invisible, and a colour
+    // the user actually picked must survive the theme changing under it.
+    val themedShape = remember(shape, canvas.isDark) { shape.forCanvasTheme(canvas.isDark) }
     // Where "back" stops. With the sections on screen as tabs there is no notebook pane behind the
     // page list to return to.
     val rootPane = if (horizontalTabs) CompactPane.Pages else CompactPane.Notebooks
@@ -156,6 +162,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                         palette = palette,
                         eraser = eraser,
                         highlighter = highlighter,
+                        shape = themedShape,
                         tool = tool,
                         allowFinger = drawWithFinger,
                         draw = drawActions,
@@ -220,8 +227,9 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 pens = themedPens,
                                 eraser = eraser,
                                 highlighter = highlighter,
+                                shape = themedShape,
                                 allowFinger = drawWithFinger,
-                                hasInkClipboard = hasInkClipboard,
+                                hasClipboard = hasClipboard,
                                 modifier = Modifier.weight(1f),
                             )
                             openPane?.let { toolPane ->
@@ -281,8 +289,9 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 pens = themedPens,
                                 eraser = eraser,
                                 highlighter = highlighter,
+                                shape = themedShape,
                                 allowFinger = drawWithFinger,
-                                hasInkClipboard = hasInkClipboard,
+                                hasClipboard = hasClipboard,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -349,8 +358,9 @@ private fun EditorSurface(
     pens: List<PenPreset>,
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
+    shape: ShapeSettings,
     allowFinger: Boolean,
-    hasInkClipboard: Boolean,
+    hasClipboard: Boolean,
     modifier: Modifier = Modifier,
 ) {
     if (state.selectedPageId == null) {
@@ -398,17 +408,26 @@ private fun EditorSurface(
         },
         erasing = tool == DrawTool.Eraser,
         lassoing = tool == DrawTool.Lasso,
+        shaping = if (tool == DrawTool.Shape) shape else null,
+        shapes = state.shapes,
+        onMoveShape = viewModel::moveShape,
+        onResizeShape = viewModel::resizeShape,
+        onDeleteShapes = viewModel::deleteShapes,
+        onRecolorShapes = viewModel::recolorShapes,
+        onSetShapeBorderWidth = viewModel::setShapeBorderWidth,
         eraser = eraser,
         allowFinger = allowFinger,
-        hasInkClipboard = hasInkClipboard,
+        hasClipboard = hasClipboard,
         onStrokeFinished = viewModel::onStrokeFinished,
+        onInsertShape = viewModel::insertShape,
         onPartialErase = viewModel::eraseStrokeParts,
         onObjectErase = viewModel::eraseStrokeObjects,
         onMoveSelection = viewModel::moveInk,
         onResizeSelection = viewModel::resizeInk,
         onDeleteInkSelection = { viewModel.eraseStrokes(it.toList()) },
-        onCopyInkSelection = viewModel::copyInk,
-        onPasteInk = viewModel::pasteInk,
+        onCopySelection = viewModel::copySelection,
+        
+        onPaste = viewModel::pasteObjects,
         onRecolorInkSelection = viewModel::recolorInk,
         onGroupInkSelection = viewModel::groupInk,
         onUngroupInkSelection = viewModel::ungroupInk,
