@@ -3,7 +3,9 @@ agp = "9.2.1"
 # Kotlin version bundled by AGP 9.2.1's built-in Kotlin support. The compose and
 # serialization compiler plugins must track this exactly. See docs/plan.md §11.
 kotlin = "2.2.10"
-ksp = "2.2.10-2.0.2"
+# Independently versioned since KSP 2.3.0 — it no longer tracks `kotlin` above. 2.3.6 is the
+# minimum that registers generated sources without `android.disallowKotlinSourceSets=false`.
+ksp = "2.3.6"
 
 activityCompose = "1.10.1"
 composeBom = "2025.09.00"
