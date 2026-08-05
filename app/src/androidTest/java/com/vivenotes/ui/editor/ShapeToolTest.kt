@@ -32,6 +32,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
 import com.vivenotes.data.DrawTool
@@ -203,13 +205,45 @@ class ShapeToolTest {
         compose.onNodeWithTag(ShapePanelTags.page(PAGE_SOLID)).performClick()
 
         val solids = ShapeKind.onPage(PAGE_SOLID)
-        assertEquals(4, solids.size)
+        assertEquals(6, solids.size)
         solids.forEach { compose.onNodeWithTag(ShapePanelTags.kind(it)).assertIsDisplayed() }
         // Page 1's shapes are gone rather than merely scrolled past.
         compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.Rectangle)).assertDoesNotExist()
 
         compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.Cube)).performClick()
         assertEquals(ShapeKind.Cube, changed?.kind)
+    }
+
+    @Test
+    fun swipingTheGridTurnsThePage() {
+        setPanel()
+
+        // Left, i.e. dragging the page's contents leftwards, brings the next page in — the direction
+        // every paged surface on the platform uses.
+        compose.onNodeWithTag(ShapePanelTags.GRID).performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.Cylinder)).assertIsDisplayed()
+        compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.Rectangle)).assertDoesNotExist()
+
+        compose.onNodeWithTag(ShapePanelTags.GRID).performTouchInput { swipeRight() }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.Rectangle)).assertIsDisplayed()
+    }
+
+    @Test
+    fun swipingPastTheLastPageStaysThere() {
+        // The pages are a short list, not a carousel: swiping off the end must not wrap round to the
+        // start, which would make "which page am I on" unanswerable without counting.
+        setPanel(ShapeSettings(kind = ShapeKind.Cube))
+
+        repeat(2) {
+            compose.onNodeWithTag(ShapePanelTags.GRID).performTouchInput { swipeLeft() }
+            compose.waitForIdle()
+        }
+
+        compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.Cube)).assertIsDisplayed()
     }
 
     @Test
@@ -339,6 +373,7 @@ class ShapeToolTest {
     private var selectedId: String? = null
     private var canvasTaps = 0
     private var borderWidth: Int? = null
+    private var resizeCalls = 0
 
     /** A square, in page dp, seeded the way [com.vivenotes.ui.NotesViewModel.insertShape] seeds one. */
     private fun square(left: Float, top: Float, side: Float): Outline.Shape {
@@ -400,7 +435,10 @@ class ShapeToolTest {
                                             if (it.id == id) it.translated(dx, dy) else it
                                         }
                                     },
+                                    // Exactly what NotesViewModel.resizeShape does with it, so the
+                                    // harness cannot be right about a contract the app gets wrong.
                                     onResizeShape = { id, ax, ay, sx, sy ->
+                                        resizeCalls++
                                         shapes = shapes.map {
                                             if (it.id == id) it.scaledAbout(ax, ay, sx, sy) else it
                                         }
@@ -478,14 +516,37 @@ class ShapeToolTest {
         setPage(square(left = 40f, top = 40f, side = 80f), selected = "square")
         val bottomRight = at(120f, 120f)
 
-        drag(bottomRight, listOf(bottomRight + Offset(60f, 60f), bottomRight + Offset(200f, 200f)))
+        // Waypoints in page units, not pixels, because the size this asserts is in page units. Two
+        // of them, because one frame could never have caught the bug this pins: each frame of a drag
+        // reports the scale since the finger went down, so applying them one after another
+        // multiplied them together and the shape left the page. The corner ends at 320dp over an
+        // anchor at 40dp, so the shape is exactly 280dp — whatever route the finger took there.
+        drag(bottomRight, listOf(at(180f, 180f), at(320f, 320f)))
 
         val resized = onPage.single()
-        assertTrue("the corner did not grow the shape: width ${resized.width}dp", resized.width > 90f)
+        assertEquals("the shape is not the size the corner was dragged to", 280f, resized.width, 1f)
+        assertEquals("the shape is not the size the corner was dragged to", 280f, resized.height, 1f)
         assertEquals("the anchored corner moved", 40f, resized.x, 1f)
         assertEquals("the anchored corner moved", 40f, resized.y, 1f)
         assertEquals("the page panned instead of the shape resizing", 0, horizontal.value)
         assertEquals("the page panned instead of the shape resizing", 0, vertical.value)
+    }
+
+    @Test
+    fun aCornerDragIsOneEditNoMatterHowManyFramesItTakes() {
+        // The other half of it: the resize is drawn while the finger is down and written once when
+        // it lifts. A write per frame is what let the frames compound in the first place, and it put
+        // a page's worth of autosaves and undo steps through a single drag.
+        setPage(square(left = 40f, top = 40f, side = 80f), selected = "square")
+        val bottomRight = at(120f, 120f)
+        resizeCalls = 0
+
+        drag(
+            bottomRight,
+            (1..8).map { bottomRight + Offset(it * 25f, it * 25f) },
+        )
+
+        assertEquals("a corner drag should commit exactly once", 1, resizeCalls)
     }
 
     @Test

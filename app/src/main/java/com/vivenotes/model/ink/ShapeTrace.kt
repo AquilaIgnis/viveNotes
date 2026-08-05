@@ -51,7 +51,6 @@ const val PAGE_SOLID = 1
 enum class ShapeKind(val label: String, val page: Int) {
     Line("Line", PAGE_BASIC),
     Arrow("Arrow", PAGE_BASIC),
-    DoubleArrow("Double arrow", PAGE_BASIC),
     Rectangle("Rectangle", PAGE_BASIC),
     RoundedRectangle("Rounded rectangle", PAGE_BASIC),
     Ellipse("Ellipse", PAGE_BASIC),
@@ -60,12 +59,13 @@ enum class ShapeKind(val label: String, val page: Int) {
     Diamond("Diamond", PAGE_BASIC),
     Pentagon("Pentagon", PAGE_BASIC),
     Hexagon("Hexagon", PAGE_BASIC),
-    Star("Star", PAGE_BASIC),
 
     Cube("Cube", PAGE_SOLID),
     Pyramid("Pyramid", PAGE_SOLID),
     Wedge("Wedge", PAGE_SOLID),
     Sphere("Sphere", PAGE_SOLID),
+    Cone("Cone", PAGE_SOLID),
+    Cylinder("Cylinder", PAGE_SOLID),
     ;
 
     val isSolid: Boolean get() = page == PAGE_SOLID
@@ -135,8 +135,7 @@ fun trace(
 
     return when (kind) {
         ShapeKind.Line -> ShapeTracing(listOf(floatArrayOf(startX, startY, endX, endY)))
-        ShapeKind.Arrow -> arrow(startX, startY, endX, endY, headAtStart = false)
-        ShapeKind.DoubleArrow -> arrow(startX, startY, endX, endY, headAtStart = true)
+        ShapeKind.Arrow -> arrow(startX, startY, endX, endY)
         ShapeKind.Rectangle -> closedShape(
             closed(left, top, right, top, right, bottom, left, bottom),
         )
@@ -159,12 +158,13 @@ fun trace(
         // Points left and right, which is the orientation that gives the flat top a hexagon is
         // recognised by.
         ShapeKind.Hexagon -> closedShape(regular(left, top, right, bottom, 6, 0f))
-        ShapeKind.Star -> closedShape(star(left, top, right, bottom))
 
         ShapeKind.Cube -> cube(left, top, right, bottom)
         ShapeKind.Pyramid -> pyramid(left, top, right, bottom)
         ShapeKind.Wedge -> wedge(left, top, right, bottom)
         ShapeKind.Sphere -> sphere(left, top, right, bottom)
+        ShapeKind.Cone -> cone(left, top, right, bottom)
+        ShapeKind.Cylinder -> cylinder(left, top, right, bottom)
     }
 }
 
@@ -172,21 +172,13 @@ fun trace(
 // Flat shapes
 // ---------------------------------------------------------------------------------------------
 
-/** Shaft plus one or two heads. The head is its own polyline so it is not closed into the shaft. */
-private fun arrow(
-    startX: Float,
-    startY: Float,
-    endX: Float,
-    endY: Float,
-    headAtStart: Boolean,
-): ShapeTracing {
+/** Shaft plus a head. The head is its own polyline so it is not closed into the shaft. */
+private fun arrow(startX: Float, startY: Float, endX: Float, endY: Float): ShapeTracing {
     val shaft = floatArrayOf(startX, startY, endX, endY)
     val length = hypot(endX - startX, endY - startY)
     if (length <= 0f) return ShapeTracing(listOf(shaft))
     val head = (length * HEAD_FRACTION).coerceAtMost(HEAD_MAX_DP)
-    val polylines = mutableListOf(shaft, arrowHead(startX, startY, endX, endY, head))
-    if (headAtStart) polylines += arrowHead(endX, endY, startX, startY, head)
-    return ShapeTracing(polylines)
+    return ShapeTracing(listOf(shaft, arrowHead(startX, startY, endX, endY, head)))
 }
 
 /** The two wings at ([tipX], [tipY]), opening back along the line from ([fromX], [fromY]). */
@@ -254,17 +246,6 @@ internal fun regularPoints(
     return fitted(unit.toFloatArray(), left, top, right, bottom)
 }
 
-/** The ten alternating vertices of a five-point star, open. */
-internal fun starPoints(left: Float, top: Float, right: Float, bottom: Float): FloatArray {
-    val unit = mutableListOf<Float>()
-    repeat(STAR_POINTS * 2) { index ->
-        val angle = -HALF_PI + PI.toFloat() * index / STAR_POINTS
-        val scale = if (index % 2 == 0) 1f else STAR_WAIST
-        unit.add(scale * cos(angle))
-        unit.add(scale * sin(angle))
-    }
-    return fitted(unit.toFloatArray(), left, top, right, bottom)
-}
 
 private fun FloatArray.closedLoop(): FloatArray = this + floatArrayOf(this[0], this[1])
 
@@ -278,15 +259,12 @@ private fun regular(
     startAngle: Float,
 ): FloatArray = regularPoints(left, top, right, bottom, sides, startAngle).closedLoop()
 
-private fun star(left: Float, top: Float, right: Float, bottom: Float): FloatArray =
-    starPoints(left, top, right, bottom).closedLoop()
-
 /**
  * Stretches vertices given on the unit circle so their own bounding box becomes the drag box.
  *
  * Placing them on the inscribed *ellipse* instead is the obvious thing and is wrong: a hexagon's
  * vertices sit at ±60°, so it would reach only 86.6% of the way down a box the user dragged, and a
- * pentagon and a star leave slack of their own. Every shape here fills what was dragged, so this
+ * a pentagon leaves slack of its own. Every shape here fills what was dragged, so this
  * normalises each polygon against its own extent rather than against the circle it came from.
  */
 private fun fitted(
@@ -451,6 +429,93 @@ private fun sphere(left: Float, top: Float, right: Float, bottom: Float): ShapeT
     )
 }
 
+/**
+ * A cone: apex at the top of the box, an elliptical base at the bottom of it.
+ *
+ * The base reads as a circle seen from the same angle everything else here is seen from, so its
+ * flattening is [EQUATOR_FLATTEN] against the *base's* own radius rather than the box's height — a
+ * cone drawn tall must not get a base ellipse as deep as it is high.
+ *
+ * The sides run from the apex to the base's widest points, which for an ellipse are its ends, so
+ * they meet it tangentially and the silhouette closes without a notch.
+ */
+private fun cone(left: Float, top: Float, right: Float, bottom: Float): ShapeTracing {
+    val centreX = (left + right) / 2f
+    val radiusX = (right - left) / 2f
+    val baseY = baseDepth(radiusX, bottom - top)
+    val centreY = bottom - baseY
+
+    val near = mutableListOf<Float>()
+    appendArc(near, centreX, centreY, radiusX, baseY, 0f, PI.toFloat())
+    val far = mutableListOf<Float>()
+    appendArc(far, centreX, centreY, radiusX, baseY, PI.toFloat(), TWO_PI)
+
+    // Apex, down the right side, round the front of the base, back up the left to the apex.
+    val silhouette = mutableListOf(centreX, top, right, centreY)
+    appendArc(silhouette, centreX, centreY, radiusX, baseY, 0f, PI.toFloat())
+    silhouette.add(centreX); silhouette.add(top)
+
+    return ShapeTracing(
+        solid = listOf(
+            floatArrayOf(centreX, top, left, centreY),
+            floatArrayOf(centreX, top, right, centreY),
+            near.toFloatArray(),
+        ),
+        hidden = listOf(far.toFloatArray()),
+        fill = listOf(silhouette.toFloatArray()),
+    )
+}
+
+/**
+ * A cylinder: two elliptical caps and the two sides between them.
+ *
+ * The top cap is drawn whole and solid — from above it is a rim you see all of. The bottom is the
+ * sphere's equator again: near half solid, far half occluded by the body and so dotted. That
+ * asymmetry is the entire cue that it is a tube rather than a rectangle with lens ends.
+ */
+private fun cylinder(left: Float, top: Float, right: Float, bottom: Float): ShapeTracing {
+    val centreX = (left + right) / 2f
+    val radiusX = (right - left) / 2f
+    val capY = baseDepth(radiusX, bottom - top)
+    val topY = top + capY
+    val bottomY = bottom - capY
+
+    val cap = mutableListOf<Float>()
+    appendArc(cap, centreX, topY, radiusX, capY, 0f, TWO_PI)
+    val near = mutableListOf<Float>()
+    appendArc(near, centreX, bottomY, radiusX, capY, 0f, PI.toFloat())
+    val far = mutableListOf<Float>()
+    appendArc(far, centreX, bottomY, radiusX, capY, PI.toFloat(), TWO_PI)
+
+    // Over the top cap, down the right side, round the front of the base, back up the left.
+    val silhouette = mutableListOf<Float>()
+    appendArc(silhouette, centreX, topY, radiusX, capY, PI.toFloat(), TWO_PI)
+    silhouette.add(right); silhouette.add(bottomY)
+    appendArc(silhouette, centreX, bottomY, radiusX, capY, 0f, PI.toFloat())
+    silhouette.add(left); silhouette.add(topY)
+
+    return ShapeTracing(
+        solid = listOf(
+            cap.toFloatArray(),
+            floatArrayOf(left, topY, left, bottomY),
+            floatArrayOf(right, topY, right, bottomY),
+            near.toFloatArray(),
+        ),
+        hidden = listOf(far.toFloatArray()),
+        fill = listOf(silhouette.toFloatArray()),
+    )
+}
+
+/**
+ * How deep the elliptical base of a cone or cylinder sits, in page units.
+ *
+ * Measured against the base's own radius so the viewing angle stays the same whatever the box's
+ * proportions, then capped at a share of the height so a wide flat box cannot hand a cylinder two
+ * caps taller than the body between them.
+ */
+private fun baseDepth(radiusX: Float, height: Float): Float =
+    (radiusX * EQUATOR_FLATTEN).coerceAtMost(height * MAX_CAP_FRACTION)
+
 // ---------------------------------------------------------------------------------------------
 // Sampling
 // ---------------------------------------------------------------------------------------------
@@ -508,16 +573,20 @@ private const val HEAD_FRACTION = 0.22f
 private const val HEAD_MAX_DP = 26f
 
 private const val CORNER_FRACTION = 0.18f
-private const val STAR_POINTS = 5
-
-/** The golden ratio's reciprocal squared — the waist that makes a five-point star look like one. */
-private const val STAR_WAIST = 0.382f
 
 private const val DEPTH_FRACTION = 0.28f
 private const val PROJECTION_ANGLE = 0.5236f
 
-/** How flat the equator ellipse sits, i.e. how far above the sphere the viewer is. */
-private const val EQUATOR_FLATTEN = 0.28f
+/**
+ * How flat a rim ellipse sits, i.e. how far above the shape the viewer is.
+ *
+ * Shared with `ShapeSeed`, which has to place the same rim in segments: a preview and a committed
+ * shape that disagree about the viewing angle are two different drawings of the same thing.
+ */
+internal const val EQUATOR_FLATTEN = 0.28f
+
+/** Ceiling on a cone or cylinder cap, so a wide short box still leaves a body between its ends. */
+internal const val MAX_CAP_FRACTION = 0.22f
 
 private const val SEGMENT_DP = 3.5f
 private const val MIN_ARC_SAMPLES = 12

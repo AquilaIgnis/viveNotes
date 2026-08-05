@@ -811,10 +811,12 @@ class NotesViewModel(
     /**
      * Scales a shape about the corner opposite the one being dragged — AD7's four-corner resize.
      *
-     * Takes an absolute scale against the shape as it was when the drag began rather than a
-     * per-frame delta, which is why [ShapeLayer] captures the original: a chain of relative scales
-     * accumulates rounding, and a drag back to where it started would not restore the size it began
-     * at.
+     * **Once per gesture, not once per frame.** The scale is absolute — where the finger ended up,
+     * against the geometry the drag started from — so it is only correct applied to that starting
+     * geometry, which is the shape this still holds precisely because the drag wrote nothing while
+     * it was in flight. Both callers are built that way: the corner handles draw a preview and
+     * commit on the lift, and the lasso has always done the same. Calling this per frame multiplies
+     * a drag's scales into each other and the shape explodes.
      */
     fun resizeShape(shapeId: String, anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float) {
         if (scaleX == 1f && scaleY == 1f) return

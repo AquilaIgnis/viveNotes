@@ -329,21 +329,18 @@ sealed interface Outline {
          * Scales every segment about [anchorX], [anchorY] — a corner-handle drag, per AD7.
          *
          * The anchor is the corner opposite the one being dragged, which is what makes the far
-         * corner stay put while the near one follows the finger. Bulge is a *fraction* of the chord
-         * rather than a length, so an arc keeps its curvature through a resize with nothing to
-         * recompute — one of the reasons it is stored that way.
+         * corner stay put while the near one follows the finger.
+         *
+         * **Absolute, against the shape it is called on.** A corner drag reports where the finger
+         * is now, measured from the geometry the drag started with, so this must be applied to that
+         * same starting geometry once — never to the result of the previous frame, which multiplies
+         * a drag's own scales together and sends the shape off the page.
+         *
+         * How one segment carries a scale, arcs included, is
+         * [ShapeSegment.scaledAbout][com.vivenotes.model.ink.ShapeSegment.scaledAbout].
          */
         fun scaledAbout(anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float): Shape = copy(
-            segments = segments.map { segment ->
-                segment.copy(
-                    x1 = anchorX + (segment.x1 - anchorX) * scaleX,
-                    y1 = anchorY + (segment.y1 - anchorY) * scaleY,
-                    x2 = anchorX + (segment.x2 - anchorX) * scaleX,
-                    y2 = anchorY + (segment.y2 - anchorY) * scaleY,
-                    // A negative scale mirrors the segment, which flips which side the arc bows to.
-                    bulge = if (scaleX * scaleY < 0f) -segment.bulge else segment.bulge,
-                )
-            },
+            segments = segments.map { it.scaledAbout(anchorX, anchorY, scaleX, scaleY) },
         ).withRecomputedBounds()
 
         companion object {

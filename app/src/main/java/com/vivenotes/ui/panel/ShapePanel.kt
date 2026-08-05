@@ -3,6 +3,7 @@ package com.vivenotes.ui.panel
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +36,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -47,10 +50,13 @@ import com.vivenotes.model.ink.ShapeKind
 import com.vivenotes.model.ink.ShapeTracing
 import com.vivenotes.model.ink.trace
 import com.vivenotes.ui.icons.MaterialSymbols
+import kotlin.math.abs
+import kotlin.math.sign
 
 /** Test tags for the parts of the pane that show state without showing text. */
 object ShapePanelTags {
     const val PREVIEW = "shape-preview"
+    const val GRID = "shape-grid"
     const val FILL = "shape-fill"
     const val CUSTOM_COLOR = "shape-color-custom"
 
@@ -92,6 +98,7 @@ fun ColumnScope.ShapePanelContent(
         page = page,
         current = shape.kind,
         onPick = { onChange(shape.copy(kind = it)) },
+        onPage = { page = it },
     )
 
     Spacer(Modifier.height(6.dp))
@@ -201,11 +208,45 @@ private val NOMINAL_HEIGHT: Dp = 150.dp
  * rather than a picture of it — §5.4 SD6. That is also why there are no drawables here: there is no
  * Material Symbol for a wedge with dotted hidden edges, and sixteen hand-drawn glyphs would be
  * sixteen chances to drift from the geometry they illustrate.
+ *
+ * **Swipe sideways to change page**, as well as tapping the dots. The dots are 8dp targets and the
+ * grid is the whole width of the pane, so the gesture is by far the larger of the two — the dots
+ * stay because they are what says there is a second page at all.
  */
 @Composable
-private fun ShapeGrid(page: Int, current: ShapeKind, onPick: (ShapeKind) -> Unit) {
+private fun ShapeGrid(
+    page: Int,
+    current: ShapeKind,
+    onPick: (ShapeKind) -> Unit,
+    onPage: (Int) -> Unit,
+) {
+    // Read by the gesture rather than captured: the handler is keyed on nothing so that a page turn
+    // cannot cancel the swipe that asked for it, which means it outlives the value it needs.
+    val currentPage = rememberUpdatedState(page)
+    val currentOnPage = rememberUpdatedState(onPage)
+
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(ShapePanelTags.GRID)
+            .pointerInput(Unit) {
+                var travelled = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { travelled = 0f },
+                    onDragEnd = {
+                        // One page per swipe however far it went: the pages are a short list to be
+                        // flicked through, not a strip to be scrolled along.
+                        if (abs(travelled) >= SWIPE_THRESHOLD.toPx()) {
+                            val next = currentPage.value - travelled.sign.toInt()
+                            if (next in 0 until ShapeKind.PAGE_COUNT) currentOnPage.value(next)
+                        }
+                    },
+                ) { change, amount ->
+                    travelled += amount
+                    // Taken, so the pane it sits in cannot read the same drag as a scroll.
+                    change.consume()
+                }
+            },
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         ShapeKind.onPage(page).chunked(COLUMNS).forEach { row ->
@@ -338,6 +379,15 @@ private fun LineType.pathEffectFor(width: Float): PathEffect? = when (this) {
 
 /** Six to a row, which is what the reference shows and what fits the 320dp panel. */
 private const val COLUMNS = 6
+
+/**
+ * Far enough that a tap that wandered is not a page turn, short enough to flick.
+ *
+ * Measured *after* touch slop, which the drag detector eats before reporting anything — so the
+ * finger travels this plus about 8dp, and a threshold set by eye against the panel's width comes
+ * out longer than it looks.
+ */
+private val SWIPE_THRESHOLD: Dp = 28.dp
 
 private val CHIP_SIZE: Dp = 44.dp
 private val CHIP_INSET: Dp = 9.dp

@@ -82,11 +82,11 @@ class ShapeTraceTest {
 
     @Test
     fun `closed shapes close and open ones do not`() {
-        val open = setOf(ShapeKind.Line, ShapeKind.Arrow, ShapeKind.DoubleArrow)
+        val open = setOf(ShapeKind.Line, ShapeKind.Arrow)
         val closed = setOf(
             ShapeKind.Rectangle, ShapeKind.RoundedRectangle, ShapeKind.Ellipse,
             ShapeKind.Triangle, ShapeKind.RightTriangle, ShapeKind.Diamond,
-            ShapeKind.Pentagon, ShapeKind.Hexagon, ShapeKind.Star,
+            ShapeKind.Pentagon, ShapeKind.Hexagon,
         )
 
         closed.forEach { kind ->
@@ -177,14 +177,10 @@ class ShapeTraceTest {
     private fun tipOf(tracing: ShapeTracing): Float = tracing.solid[1][2]
 
     @Test
-    fun `a double arrow is a single arrow plus one more head`() {
+    fun `an arrow is a shaft plus a head`() {
         val single = trace(ShapeKind.Arrow, 0f, 0f, 100f, 40f).solid
-        val double = trace(ShapeKind.DoubleArrow, 0f, 0f, 100f, 40f).solid
 
         assertEquals(2, single.size)
-        assertEquals(3, double.size)
-        assertEquals(0f, double[2][2], TOLERANCE)
-        assertEquals(0f, double[2][3], TOLERANCE)
     }
 
     @Test
@@ -210,7 +206,7 @@ class ShapeTraceTest {
     @Test
     fun `an inverted drag traces the same closed shape as an upright one`() {
         // Closed shapes normalise; only the line and the arrows read the drag's direction.
-        ShapeKind.entries.filterNot { it in setOf(ShapeKind.Line, ShapeKind.Arrow, ShapeKind.DoubleArrow) }
+        ShapeKind.entries.filterNot { it in setOf(ShapeKind.Line, ShapeKind.Arrow) }
             .forEach { kind ->
                 val upright = trace(kind, 10f, 20f, 210f, 180f)
                 val inverted = trace(kind, 210f, 180f, 10f, 20f)
@@ -226,8 +222,9 @@ class ShapeTraceTest {
 
         assertEquals(ShapeKind.entries.toSet(), paged.toSet())
         assertEquals("a kind is on two pages at once", ShapeKind.entries.size, paged.size)
-        assertEquals(12, ShapeKind.onPage(PAGE_BASIC).size)
-        assertEquals(4, ShapeKind.onPage(PAGE_SOLID).size)
+        assertEquals(10, ShapeKind.onPage(PAGE_BASIC).size)
+        // Six, which is exactly one row of the picker's grid.
+        assertEquals(6, ShapeKind.onPage(PAGE_SOLID).size)
         assertTrue(ShapeKind.onPage(PAGE_SOLID).all(ShapeKind::isSolid))
     }
 

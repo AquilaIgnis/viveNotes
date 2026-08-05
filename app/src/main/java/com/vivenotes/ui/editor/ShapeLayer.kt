@@ -31,7 +31,9 @@ import androidx.compose.ui.unit.dp
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.model.Outline
 import com.vivenotes.model.ink.LineType
+import com.vivenotes.model.ink.ShapeContour
 import com.vivenotes.model.ink.ShapeSegment
+import com.vivenotes.model.ink.contours
 
 internal const val SHAPE_LAYER_TAG = "shape-layer"
 
@@ -90,6 +92,11 @@ internal fun ShapeLayer(
     val currentOnSelect = rememberUpdatedState(onSelect)
     val currentOnMove = rememberUpdatedState(onMoveShape)
     val currentOnResize = rememberUpdatedState(onResizeShape)
+
+    // The corner drag in flight, drawn but not yet written — see [ShapeResize]. A holder rather than
+    // a delegated `var` for the same reason as the states above: the gesture handler below outlives
+    // every recomposition and can only reach what has a stable identity.
+    val resize = remember { mutableStateOf<ShapeResize?>(null) }
 
     Box(
         modifier
@@ -168,6 +175,17 @@ internal fun ShapeLayer(
                             if (!dragging) {
                                 currentOnSelect.value(target?.let(CanvasSelection::ofShape))
                             }
+                            // The resize lands here, in one write, against the geometry it was
+                            // measured from — see [ShapeResize].
+                            resize.value?.let { pending ->
+                                currentOnResize.value(
+                                    pending.shapeId,
+                                    pending.anchorX,
+                                    pending.anchorY,
+                                    pending.scaleX,
+                                    pending.scaleY,
+                                )
+                            }
                             break
                         }
                         if (!dragging && (change.position - down.position).getDistance() > slop) {
@@ -180,15 +198,15 @@ internal fun ShapeLayer(
                         }
                         if (dragging && target != null) {
                             if (corner != null) {
-                                // Scaled against the shape as it was when the drag began, so a run of
-                                // frames cannot compound its own rounding.
+                                // Measured against the shape as it was when the drag began, and only
+                                // drawn: nothing is written until the finger lifts. See [ShapeResize].
                                 target.scaleFor(
                                     corner,
                                     change.position.x / density,
                                     change.position.y / density,
                                 )?.let { (scaleX, scaleY) ->
                                     val (anchorX, anchorY) = target.anchorFor(corner)
-                                    currentOnResize.value(
+                                    resize.value = ShapeResize(
                                         target.id, anchorX, anchorY, scaleX, scaleY,
                                     )
                                 }
@@ -201,6 +219,10 @@ internal fun ShapeLayer(
                             }
                         }
                     }
+                    // Whatever ended the gesture — the lift above, or a cancel that took the pointer
+                    // away mid-drag. A cancel therefore discards the resize rather than committing a
+                    // size the finger was still moving away from.
+                    resize.value = null
                 }
             },
     ) {
@@ -210,30 +232,57 @@ internal fun ShapeLayer(
             val revision = lassoGesture?.renderRevision ?: 0
             val moving = lassoGesture?.takeIf { it.isTransforming && revision >= 0 }
             val held = selection?.shapeIds.orEmpty()
+            val resizing = resize.value
+
+            // The corner drag and the lasso are both preview-only, so both are applied here rather
+            // than read back out of the document — and to the chrome as well as to the shape, or the
+            // handles would sit around the size the drag started at.
+            fun previewOf(shape: Outline.Shape): Outline.Shape = when {
+                resizing?.shapeId == shape.id -> shape.scaledAbout(
+                    resizing.anchorX, resizing.anchorY, resizing.scaleX, resizing.scaleY,
+                )
+                // The lasso's transform is in page units, which is what a shape's coordinates
+                // already are — so it applies with no conversion, unlike ink, which needs it
+                // folded into a matrix.
+                moving != null && shape.id in held -> shape.withLassoPreview(moving)
+                else -> shape
+            }
 
             // Page units are dp, the same units an outline's (x, y) is in, so the geometry is scaled
             // by density. The selection box is not: it is chrome, and chrome keeps its weight.
             val pageScale = density
             withTransform({ scale(pageScale, pageScale, Offset.Zero) }) {
-                shapes.forEach { shape ->
-                    // The lasso's transform is in page units, which is what a shape's coordinates
-                    // already are — so it applies with no conversion, unlike ink, which needs it
-                    // folded into a matrix.
-                    val previewed = if (moving != null && shape.id in held) {
-                        shape.withLassoPreview(moving)
-                    } else {
-                        shape
-                    }
-                    drawShape(previewed)
-                }
+                shapes.forEach { shape -> drawShape(previewOf(shape)) }
             }
             // Handles only for a lone shape. A selection holding more than one object draws its
             // rectangle over in the overlay, around everything it holds, ink included.
             shapes.singleOrNull { selection?.isShapeOnly == true && it.id in held }
-                ?.let { drawSelection(it, accent, handleFill, pageScale) }
+                ?.let { drawSelection(previewOf(it), accent, handleFill, pageScale) }
         }
     }
 }
+
+/**
+ * A corner drag in flight: where the finger has taken the shape, measured from the geometry the drag
+ * began with.
+ *
+ * **Preview only, committed once on the lift** — which is the whole point of it existing, and the
+ * same way the lasso's own resize works. Applying it every frame instead was the bug: each frame
+ * reported an absolute scale against the *starting* size, `resizeShape` applied it to the *current*
+ * one, and a drag's frames multiplied together. Twenty frames of a smooth drag out to twice the size
+ * came to roughly three thousand times it, and because the two axes compound at different rates the
+ * shape lost its proportions on the way.
+ *
+ * A move stays per-frame, because a move reports a delta from the last frame rather than a total,
+ * and deltas may safely be applied one after another.
+ */
+private data class ShapeResize(
+    val shapeId: String,
+    val anchorX: Float,
+    val anchorY: Float,
+    val scaleX: Float,
+    val scaleY: Float,
+)
 
 /** The live lasso move or resize, applied for the draw only — nothing is written until the up. */
 private fun Outline.Shape.withLassoPreview(gesture: LassoGesture): Outline.Shape {
@@ -261,14 +310,16 @@ private fun DrawScope.drawShape(shape: Outline.Shape) {
     }
 
     val border = Color(shape.borderArgb)
-    shape.segments.forEach { segment ->
-        val effect = if (segment.hidden) {
+    // By contour rather than by segment: a dash pattern restarts on every path it is given, so
+    // stroking a rim's arcs one at a time doubles the dots at each joint. See [ShapeContour].
+    shape.segments.contours().forEach { contour ->
+        val effect = if (contour.hidden) {
             LineType.Dotted.effect(shape.borderWidth)
         } else {
             shape.lineType.effect(shape.borderWidth)
         }
         drawPath(
-            path = segment.path(),
+            path = contour.path(),
             color = border,
             style = Stroke(
                 width = shape.borderWidth,
@@ -366,10 +417,12 @@ private fun Outline.Shape.scaleFor(corner: Corner, x: Float, y: Float): Pair<Flo
     return scaleX.coerceAtLeast(MIN_SCALE) to scaleY.coerceAtLeast(MIN_SCALE)
 }
 
-private fun ShapeSegment.path(): Path = Path().apply {
+private fun ShapeContour.path(): Path = Path().apply {
     val points = polyline()
     moveTo(points[0], points[1])
     for (index in 2 until points.size step 2) lineTo(points[index], points[index + 1])
+    // A ring closed by the stroker joins at the seam instead of butting two caps together.
+    if (isClosed) close()
 }
 
 private fun LineType.effect(width: Float): PathEffect? = when (this) {
