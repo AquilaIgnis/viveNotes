@@ -82,7 +82,12 @@ internal suspend fun PointerInputScope.detectPinchZoom(
     awaitEachGesture {
         // Unconsumed is not required: the first finger is somebody else's until a second one lands,
         // and by then whoever took it has already consumed it.
-        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        // Except for one claim, which is settled before this ever runs. `detectRulerDrag` is mounted
+        // ahead of this on the same node, so a gesture that began on the ruler arrives here already
+        // consumed — and two fingers on a ruler turn the ruler, not the page. Anywhere else, the
+        // down is untouched and this owns the pinch as before.
+        if (down.isConsumed) return@awaitEachGesture
 
         var zooming = false
         var spread = 1f

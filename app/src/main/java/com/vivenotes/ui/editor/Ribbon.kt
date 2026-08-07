@@ -47,6 +47,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.Align
@@ -131,6 +132,9 @@ fun Ribbon(
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
+    /** The ruler that is out, and whether it is — `docs/rulerPlan.md`. */
+    ruler: RulerSettings = RulerSettings(),
+    rulerOut: Boolean = false,
     tool: DrawTool,
     allowFinger: Boolean,
     draw: DrawActions,
@@ -185,6 +189,8 @@ fun Ribbon(
                 eraser = eraser,
                 highlighter = highlighter,
                 shape = shape,
+                ruler = ruler,
+                rulerOut = rulerOut,
                 tool = tool,
                 allowFinger = allowFinger,
                 actions = draw,

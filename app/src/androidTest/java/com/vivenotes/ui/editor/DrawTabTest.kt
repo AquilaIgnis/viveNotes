@@ -36,6 +36,8 @@ import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.RulerKind
+import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.data.withColorInFront
@@ -46,6 +48,7 @@ import com.vivenotes.ui.panel.EraserPanelContent
 import com.vivenotes.ui.panel.EraserPanelTags
 import com.vivenotes.ui.panel.HighlighterPanelContent
 import com.vivenotes.ui.panel.HighlighterPanelTags
+import com.vivenotes.ui.panel.RulerPanelTags
 import com.vivenotes.ui.theme.ViveNotesTheme
 
 /**
@@ -66,6 +69,8 @@ class DrawTabTest {
     private var changedHighlighter: HighlighterSettings? = null
     private var palette: MutableState<List<Int>>? = null
     private var fingerDrawing: Boolean? = null
+    private var rulerToggles = 0
+    private var changedRuler: RulerSettings? = null
     private var undoCount = 0
     private var redoCount = 0
 
@@ -77,6 +82,8 @@ class DrawTabTest {
         allowFinger: Boolean = false,
         canUndo: Boolean = false,
         canRedo: Boolean = false,
+        ruler: RulerSettings = RulerSettings(),
+        rulerOut: Boolean = false,
     ) {
         compose.setContent {
             ViveNotesTheme {
@@ -86,6 +93,8 @@ class DrawTabTest {
                     eraser = eraser,
                     highlighter = highlighter,
                     shape = ShapeSettings(),
+                    ruler = ruler,
+                    rulerOut = rulerOut,
                     tool = tool,
                     allowFinger = allowFinger,
                     actions = DrawActions(
@@ -96,6 +105,8 @@ class DrawTabTest {
                         },
                         updateEraser = { changedEraser = it },
                         updateHighlighter = { changedHighlighter = it },
+                        updateRuler = { changedRuler = it },
+                        toggleRuler = { rulerToggles++ },
                         setDrawWithFinger = { fingerDrawing = it },
                         undo = { undoCount++ },
                         redo = { redoCount++ },
@@ -355,6 +366,96 @@ class DrawTabTest {
         setTab(allowFinger = true)
         compose.onNodeWithTag(DrawTags.FINGER).performClick()
         assertEquals(false, fingerDrawing)
+    }
+
+
+    // --- the ruler -------------------------------------------------------------------------------
+
+    /**
+     * A ruler is not a tool — `docs/rulerPlan.md` RD1. It is something you draw *against*, so it
+     * must not disarm the pen you were going to draw along it with.
+     */
+    @Test
+    fun theRulerTogglesWithoutTakingTheToolOutOfYourHand() {
+        setTab(tool = DrawTool.Pen(1))
+
+        compose.onNodeWithTag(DrawTags.RULER).performClick()
+
+        assertEquals(1, rulerToggles)
+        assertTrue("laying down a ruler changed the armed tool", selected == null)
+    }
+
+    /** Its tap has to be able to mean *away*, or the ruler could never be put down — RD7. */
+    @Test
+    fun tappingTheRulerWhileItIsOutPutsItAwayRatherThanOpeningSettings() {
+        setTab(rulerOut = true)
+
+        compose.onNodeWithTag(DrawTags.RULER).performClick()
+
+        assertEquals(1, rulerToggles)
+        compose.onNodeWithTag(RulerPanelTags.kind(RulerKind.Straight)).assertDoesNotExist()
+    }
+
+    /** Which is why the settings are on the hold — the one gesture left that can carry them. */
+    @Test
+    fun holdingTheRulerOpensItsSettingsAndBringsItOut() {
+        setTab(rulerOut = false)
+
+        compose.onNodeWithTag(DrawTags.RULER).performTouchInput { longClick() }
+
+        assertEquals("holding it should also lay it down", 1, rulerToggles)
+        compose.onNodeWithText("Ruler").assertIsDisplayed()
+        compose.onNodeWithTag(RulerPanelTags.kind(RulerKind.Straight)).assertIsDisplayed()
+        compose.onNodeWithTag(RulerPanelTags.kind(RulerKind.Protractor)).assertIsDisplayed()
+    }
+
+    @Test
+    fun holdingTheRulerWhileItIsOutOpensSettingsWithoutPuttingItAway() {
+        setTab(rulerOut = true)
+
+        compose.onNodeWithTag(DrawTags.RULER).performTouchInput { longClick() }
+
+        assertEquals("the hold put an already-laid ruler away", 0, rulerToggles)
+        compose.onNodeWithTag(RulerPanelTags.kind(RulerKind.Straight)).assertIsDisplayed()
+    }
+
+    @Test
+    fun theSemicircleIsChosenFromThePane() {
+        setTab(rulerOut = true)
+        compose.onNodeWithTag(DrawTags.RULER).performTouchInput { longClick() }
+
+        compose.onNodeWithTag(RulerPanelTags.kind(RulerKind.Protractor)).performClick()
+
+        assertEquals(RulerKind.Protractor, changedRuler?.kind)
+        assertEquals("choosing a kind must not resize it", RulerSettings().diameterDp, changedRuler?.diameterDp)
+    }
+
+    /**
+     * The straightedge has no size to set — it spans the viewport — so its pane has no slider at
+     * all, and the semicircle's is a diameter.
+     */
+    @Test
+    fun onlyTheSemicircleHasASizeToSet() {
+        setTab(rulerOut = true, ruler = RulerSettings(kind = RulerKind.Straight))
+        compose.onNodeWithTag(DrawTags.RULER).performTouchInput { longClick() }
+
+        compose.onNodeWithTag(PanelTags.field("Ruler size")).assertDoesNotExist()
+    }
+
+    @Test
+    fun theSemicircleDiameterCanBeChangedAndStepsByMoreThanADp() {
+        setTab(rulerOut = true, ruler = RulerSettings(kind = RulerKind.Protractor))
+        compose.onNodeWithTag(DrawTags.RULER).performTouchInput { longClick() }
+
+        compose.onNodeWithText("Diameter").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Increase Diameter").performClick()
+
+        val size = changedRuler?.diameterDp ?: error("the pane wrote nothing back")
+        assertTrue(
+            "a ruler stepping by 1dp would make the button ornamental: $size",
+            size >= RulerSettings.DEFAULT_DIAMETER + 10,
+        )
+        assertTrue(size <= RulerSettings.MAX_DIAMETER)
     }
 
     // --- the pen pane --------------------------------------------------------------------------

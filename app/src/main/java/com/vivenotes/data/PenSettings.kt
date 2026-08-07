@@ -38,6 +38,43 @@ enum class EraserMode(val label: String) {
     Object("Object"),
 }
 
+/** The two rulers — `docs/rulerPlan.md`. A straightedge, and a semicircle for arcs. */
+@Serializable
+enum class RulerKind(val label: String) {
+    Straight("Straight"),
+    Protractor("Semicircle"),
+}
+
+/**
+ * The ruler you draw against — `docs/rulerPlan.md` RD2.
+ *
+ * Only what describes *the user*: which ruler they reach for and how big they like it. Whether it is
+ * currently out, and where it is lying, are facts about this moment rather than about anyone, so they
+ * are transient state in the ViewModel and in `EditorPane` — the same split [ShapeSettings] draws
+ * between its [kind] and `DrawTool.Shape`.
+ */
+@Serializable
+data class RulerSettings(
+    val kind: RulerKind = RulerKind.Straight,
+    /**
+     * How far across the semicircle is, in page dp.
+     *
+     * **The straightedge has no length here**, and that is the point: it always spans the viewport
+     * (RD3a), so its length is a layout fact rather than a preference. It was a setting until the
+     * reference plate settled the question — the ruler in `docs/references/ruler.png` runs off both
+     * edges of the frame, which is what a straightedge you lay across your work does.
+     */
+    val diameterDp: Int = DEFAULT_DIAMETER,
+) {
+    companion object {
+        const val MIN_DIAMETER = 240
+        const val MAX_DIAMETER = 1200
+
+        /** Four inches across, so the whole arc is in view when it arrives. */
+        const val DEFAULT_DIAMETER = 640
+    }
+}
+
 /**
  * The Draw tab's highlighter.
  *
@@ -302,6 +339,11 @@ class PenSettingsStore(context: Context) {
         prefs[SHAPE]?.let(::decodeShape) ?: ShapeSettings()
     }
 
+    /** Which ruler, and how big. Not whether it is out — see [RulerSettings]. */
+    val ruler: Flow<RulerSettings> = store.data.map { prefs ->
+        prefs[RULER]?.let(::decodeRuler) ?: RulerSettings()
+    }
+
     /**
      * The swatch row, which the wheel adds to.
      *
@@ -359,6 +401,10 @@ class PenSettingsStore(context: Context) {
         store.edit { it[SHAPE] = json.encodeToString(ShapeSettings.serializer(), settings) }
     }
 
+    suspend fun setRuler(settings: RulerSettings) {
+        store.edit { it[RULER] = json.encodeToString(RulerSettings.serializer(), settings) }
+    }
+
     private fun decodePen(index: Int, text: String): PenPreset? = runCatching {
         val decoded = json.decodeFromString(PenPreset.serializer(), text)
         val hasThemeFlag = json.parseToJsonElement(text).jsonObject.containsKey("colorFollowsTheme")
@@ -387,6 +433,10 @@ class PenSettingsStore(context: Context) {
     private fun decodeShape(text: String): ShapeSettings? =
         runCatching { json.decodeFromString(ShapeSettings.serializer(), text) }.getOrNull()
 
+    /** A ruler kind this build does not have falls back to the default, as [decodeShape] does. */
+    private fun decodeRuler(text: String): RulerSettings? =
+        runCatching { json.decodeFromString(RulerSettings.serializer(), text) }.getOrNull()
+
     /**
      * A stored row shorter or longer than the current [PALETTE_SIZE] is trimmed rather than
      * rejected, so changing how many swatches fit is not a migration. An empty one is nothing to
@@ -405,6 +455,7 @@ class PenSettingsStore(context: Context) {
         val ERASER = stringPreferencesKey("eraser")
         val HIGHLIGHTER = stringPreferencesKey("highlighter")
         val SHAPE = stringPreferencesKey("shape")
+        val RULER = stringPreferencesKey("ruler")
         val PALETTE = stringPreferencesKey("palette")
 
         /**

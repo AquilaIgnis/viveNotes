@@ -39,6 +39,8 @@ import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageStroke
+import com.vivenotes.data.RulerKind
+import com.vivenotes.ink.Ruler
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +51,8 @@ import com.vivenotes.model.Outline
 import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.model.ink.ShapeKind
 import com.vivenotes.ui.theme.ViveNotesTheme
+import kotlin.math.abs
+import kotlin.math.hypot
 
 /**
  * Who gets a gesture on the drawing surface.
@@ -66,6 +70,7 @@ class InkOverlayTest {
     private var dragged = 0f
     private var flung = false
     private var strokes = 0
+    private var lastStroke: Stroke? = null
     private var partialErases = 0
     private var objectEraseCalls = 0
     private var lassoMove: InkLassoMove? = null
@@ -91,6 +96,7 @@ class InkOverlayTest {
         eraser: EraserSettings = EraserSettings(),
         pageStrokes: List<PageStroke> = emptyList(),
         hasClipboard: Boolean = false,
+        ruler: Ruler? = null,
     ) {
         compose.setContent {
             ViveNotesTheme {
@@ -113,10 +119,14 @@ class InkOverlayTest {
                         erasing = erasing,
                         lassoing = lassoing,
                         shaping = null,
+                        ruler = ruler,
                         eraser = eraser,
                         allowFinger = allowFinger,
                         pageToView = { Matrix() },
-                        onStrokeFinished = { strokes++ },
+                        onStrokeFinished = {
+                            strokes++
+                            lastStroke = it
+                        },
                         onObjectErase = { objectEraseCalls++ },
                         onPartialErase = { partialErases++ },
                         onMoveSelection = { lassoMove = it },
@@ -148,6 +158,103 @@ class InkOverlayTest {
                     }
                 }
             }
+        }
+    }
+
+
+    // --- the ruler -------------------------------------------------------------------------------
+
+    /**
+     * A ruled stroke comes out straight however badly the hand wobbles — `docs/rulerPlan.md` RD5.
+     *
+     * The one assertion that says the feature works. The gesture below wanders 30px either side of
+     * the ruler's edge as it travels; unruled, the recorded stroke follows that wander, and the
+     * cross product below is nowhere near zero.
+     *
+     * The overlay's transform is identity here, so view pixels and page units are the same thing.
+     */
+    @Test
+    fun aWobblingStrokeAlongTheRulerIsRecordedStraight() {
+        val ruler = Ruler(
+            centerX = 400f,
+            centerY = 300f,
+            angleRadians = 0f,
+            kind = RulerKind.Straight,
+            sizeDp = 800f,
+        )
+        setOverlay(allowFinger = true, ruler = ruler)
+        val edge = 300f - Ruler.BAND_DP / 2f
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(120f, edge - 6f))
+            (1..8).forEach { step ->
+                moveTo(Offset(120f + step * 60f, edge - 6f + if (step % 2 == 0) 26f else -22f))
+            }
+            up()
+        }
+        compose.waitForIdle()
+
+        val inputs = lastStroke?.inputs ?: error("the ruled gesture recorded no stroke")
+        assertTrue("a stroke needs more than one point to be straight", inputs.size >= 2)
+
+        val first = inputs.get(0)
+        val last = inputs.get(inputs.size - 1)
+        val length = hypot(last.x - first.x, last.y - first.y)
+        assertTrue("the stroke went nowhere", length > 100f)
+        (0 until inputs.size).forEach { index ->
+            val point = inputs.get(index)
+            val cross = (last.x - first.x) * (point.y - first.y) -
+                (last.y - first.y) * (point.x - first.x)
+            assertEquals("point $index is off the ruler's line", 0f, cross / length, 1.5f)
+        }
+    }
+
+    /** Start away from it and the ruler is not involved at all — RD5's engagement rule. */
+    @Test
+    fun aStrokeStartedAwayFromTheRulerIsNotSnapped() {
+        val ruler = Ruler(400f, 300f, 0f, RulerKind.Straight, 800f)
+        setOverlay(allowFinger = true, ruler = ruler)
+
+        // Well below the band, and travelling further away.
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(200f, 700f))
+            moveTo(Offset(300f, 780f))
+            moveTo(Offset(400f, 860f))
+            up()
+        }
+        compose.waitForIdle()
+
+        val inputs = lastStroke?.inputs ?: error("the gesture recorded no stroke")
+        val onTheRuler = (0 until inputs.size).count {
+            abs(inputs.get(it).y - (300f - Ruler.BAND_DP / 2f)) < 1f
+        }
+        assertEquals("freehand ink was dragged onto the ruler", 0, onTheRuler)
+    }
+
+    /** The semicircle bends a stroke onto its arc instead of a line — every point at the radius. */
+    @Test
+    fun theSemicircleRecordsItsStrokeOnTheArc() {
+        val ruler = Ruler(400f, 500f, 0f, RulerKind.Protractor, 600f)
+        setOverlay(allowFinger = true, ruler = ruler)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(150f, 480f))
+            moveTo(Offset(300f, 300f))
+            moveTo(Offset(430f, 260f))
+            moveTo(Offset(600f, 400f))
+            up()
+        }
+        compose.waitForIdle()
+
+        val inputs = lastStroke?.inputs ?: error("the ruled gesture recorded no stroke")
+        (0 until inputs.size).forEach { index ->
+            val point = inputs.get(index)
+            assertEquals(
+                "point $index is off the arc",
+                300f,
+                hypot(point.x - 400f, point.y - 500f),
+                1.5f,
+            )
         }
     }
 

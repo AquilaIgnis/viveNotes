@@ -54,6 +54,7 @@ import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkLassoSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageStroke
+import com.vivenotes.ink.Ruler
 import com.vivenotes.ink.pageBounds
 import com.vivenotes.ink.projectionKey
 import com.vivenotes.ink.selectWithLasso
@@ -62,6 +63,7 @@ import com.vivenotes.ink.subtract
 import com.vivenotes.ink.eraseObjects
 import com.vivenotes.model.Outline
 import com.vivenotes.model.ink.trace
+import com.vivenotes.ui.theme.LocalCanvasColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
@@ -127,6 +129,14 @@ internal fun InkOverlay(
     lassoing: Boolean,
     /** The armed shape's settings, or null when Insert Shape is not the tool in hand. */
     shaping: ShapeSettings?,
+    /**
+     * The ruler lying on the page, or null when it is away — `docs/rulerPlan.md`.
+     *
+     * Drawn here because this canvas is composed in every tool state, and applied here because RD5's
+     * snapping has to reach the wet stroke rather than the finished one. Moving it is somebody
+     * else's job: see `detectRulerDrag` for why that lives on an ancestor.
+     */
+    ruler: Ruler? = null,
     eraser: EraserSettings,
     /** Whether a finger — or, on an emulator, a mouse — may draw as well as a stylus. */
     allowFinger: Boolean,
@@ -168,6 +178,7 @@ internal fun InkOverlay(
     val currentErasing by rememberUpdatedState(erasing)
     val currentLassoing by rememberUpdatedState(lassoing)
     val currentShaping by rememberUpdatedState(shaping)
+    val currentRuler by rememberUpdatedState(ruler)
     val currentEraser by rememberUpdatedState(eraser)
     val currentAllowFinger by rememberUpdatedState(allowFinger)
     val currentTransform by rememberUpdatedState(pageToView)
@@ -194,6 +205,14 @@ internal fun InkOverlay(
     /** The stroke being drawn, and the pointer drawing it. One at a time: this is a pen, not a rake. */
     var liveStroke by remember { mutableStateOf<InProgressStrokeId?>(null) }
     var livePointer by remember { mutableStateOf(-1) }
+
+    /**
+     * Whether the stroke in progress is a ruled one — RD5.
+     *
+     * Decided on the down and held for the whole stroke, so a hand drifting off the ruler still
+     * draws the line it started; the alternative is a stroke that changes character halfway.
+     */
+    var ruledStroke by remember { mutableStateOf(false) }
     val eraseGesture = remember { EraseGesture() }
     val shapeGesture = remember { ShapeGesture() }
     val viewConfiguration = LocalViewConfiguration.current
@@ -248,6 +267,16 @@ internal fun InkOverlay(
     // took the ACTION_DOWN, which is right (a stroke must not break because the pen left the page),
     // so the fix belongs in what is drawn, not in what is delivered.
     val lassoColor = MaterialTheme.colorScheme.primary.toArgb()
+    // Frosted plastic in the *canvas's* own ink, not the app's accent: a ruler is an object lying on
+    // the paper, and one painted in the selection colour reads as a selection. See `RulerPaint`.
+    val canvasInk = LocalCanvasColors.current.text
+    val rulerPaint = remember(canvasInk) {
+        RulerPaint(
+            body = canvasInk.copy(alpha = 0.16f).toArgb(),
+            edge = canvasInk.copy(alpha = 0.55f).toArgb(),
+            mark = canvasInk.copy(alpha = 0.72f).toArgb(),
+        )
+    }
     Box(modifier.clipToBounds().testTag(INK_OVERLAY_TAG).onSizeChanged { viewportSize = it }) {
         // Finished ink, drawn by us rather than left in the authoring view: the authoring view
         // renders with the transform it was given when the stroke started, so it would not follow a
@@ -289,6 +318,8 @@ internal fun InkOverlay(
                 eraseGesture.indicator?.let { indicator ->
                     drawEraserIndicator(native, matrix, indicator)
                 }
+                // Last, so it lies on top of the ink the way a ruler lies on top of the paper.
+                currentRuler?.let { drawRuler(native, matrix, it, rulerPaint) }
             }
         }
 
@@ -357,6 +388,7 @@ internal fun InkOverlay(
                             erasing = currentErasing,
                             lassoing = currentLassoing,
                             shaping = currentShaping,
+                            ruler = currentRuler,
                             eraser = currentEraser,
                             strokes = currentStrokes,
                             allowFinger = currentAllowFinger,
@@ -367,9 +399,11 @@ internal fun InkOverlay(
                             onResizeSelection = currentOnResizeSelection,
                             liveStroke = liveStroke,
                             livePointer = livePointer,
-                            setLive = { id, pointer ->
+                            ruledStroke = ruledStroke,
+                            setLive = { id, pointer, ruled ->
                                 liveStroke = id
                                 livePointer = pointer
+                                ruledStroke = ruled
                             },
                             pan = currentPan,
                             velocity = velocity,
@@ -482,6 +516,7 @@ private fun handleInk(
     erasing: Boolean,
     lassoing: Boolean,
     shaping: ShapeSettings?,
+    ruler: Ruler?,
     eraser: EraserSettings,
     strokes: List<PageStroke>,
     shapes: List<Outline.Shape>,
@@ -497,7 +532,8 @@ private fun handleInk(
     onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit,
     liveStroke: InProgressStrokeId?,
     livePointer: Int,
-    setLive: (InProgressStrokeId?, Int) -> Unit,
+    ruledStroke: Boolean,
+    setLive: (InProgressStrokeId?, Int, Boolean) -> Unit,
     pan: CanvasPan,
     velocity: VelocityTracker,
     panning: Boolean,
@@ -575,6 +611,48 @@ private fun handleInk(
     if (brush == null) return false
     val toWorld = Matrix().also { transform.invert(it) }
 
+    // A ruled stroke is fed rewritten coordinates rather than the ones the hand produced — RD5. The
+    // substitution happens here, at the one seam every branch below passes through, so the stroke
+    // lifecycle underneath is the same code whether the ruler is out or not.
+    val ruled = ruledStroke ||
+        (event.actionMasked == MotionEvent.ACTION_DOWN && ruler != null &&
+            ruler.engages(event.pagePoint(index, toWorld), Ruler.SNAP_TOLERANCE_DP))
+    val drawn = if (ruled && ruler != null) event.snappedTo(ruler, toWorld, transform) else null
+
+    try {
+        return handleInkStroke(
+            event = drawn ?: event,
+            view = view,
+            brush = brush,
+            toWorld = toWorld,
+            index = index,
+            liveStroke = liveStroke,
+            livePointer = livePointer,
+            ruled = ruled,
+            setLive = setLive,
+        )
+    } finally {
+        drawn?.recycle()
+    }
+}
+
+/**
+ * The stroke lifecycle, once it is settled which points it is being drawn from.
+ *
+ * [event] is either the real one or a snapped copy of it; nothing below cares which, which is the
+ * point of splitting it out.
+ */
+private fun handleInkStroke(
+    event: MotionEvent,
+    view: InProgressStrokesView,
+    brush: Brush,
+    toWorld: Matrix,
+    index: Int,
+    liveStroke: InProgressStrokeId?,
+    livePointer: Int,
+    ruled: Boolean,
+    setLive: (InProgressStrokeId?, Int, Boolean) -> Unit,
+): Boolean {
     when (event.actionMasked) {
         MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
             // A second pointer while drawing is a palm or a pinch, so the stroke is taken back and
@@ -582,7 +660,7 @@ private fun handleInk(
             // while a pen is in hand.
             if (liveStroke != null) {
                 view.cancelStroke(liveStroke, event)
-                setLive(null, -1)
+                setLive(null, -1, false)
                 return false
             }
             val pointerId = event.getPointerId(index)
@@ -596,7 +674,7 @@ private fun handleInk(
             // The view derives world → view for its own rendering from this matrix and from
             // `motionEventToViewTransform`, which is identity because the overlay is 1:1 with the
             // events it receives.
-            setLive(view.startStroke(event, pointerId, brush, toWorld), pointerId)
+            setLive(view.startStroke(event, pointerId, brush, toWorld), pointerId, ruled)
         }
         MotionEvent.ACTION_MOVE -> {
             val id = liveStroke ?: return false
@@ -606,18 +684,63 @@ private fun handleInk(
             val id = liveStroke ?: return false
             if (event.getPointerId(index) != livePointer) return true
             view.finishStroke(event, livePointer, id)
-            setLive(null, -1)
+            setLive(null, -1, false)
         }
         MotionEvent.ACTION_CANCEL -> {
             // Palm rejection lands here, and on a cancelled pointer post-Android 13 also as
             // FLAG_CANCELED on the up. Both mean: that was not a stroke, take it back.
             val id = liveStroke ?: return false
             view.cancelStroke(id, event)
-            setLive(null, -1)
+            setLive(null, -1, false)
         }
         else -> return false
     }
     return true
+}
+
+/**
+ * A copy of this event with its point moved onto the ruler's edge — `docs/rulerPlan.md` RD5.
+ *
+ * A rewritten `MotionEvent` rather than the `StrokeInput` overloads, because this way the whole
+ * stroke path underneath keeps the matrix arrangement that is already known to be right — the one
+ * this file records getting wrong twice. Pressure, tilt, orientation, tool type and the pointer id
+ * are copied wholesale; only x and y are the ruler's business.
+ *
+ * **Historical samples are dropped**, and lose nothing: a ruled stroke's path is decided by the
+ * ruler rather than by what the hand did between frames, and the points that matter — where it
+ * started and where it is now — are both still here.
+ *
+ * The caller recycles.
+ */
+private fun MotionEvent.snappedTo(ruler: Ruler, toPage: Matrix, toView: Matrix): MotionEvent {
+    val index = actionIndex
+    val snapped = ruler.snap(pagePoint(index, toPage))
+    val viewPoint = floatArrayOf(snapped.x, snapped.y)
+    toView.mapPoints(viewPoint)
+
+    val properties = MotionEvent.PointerProperties().also { getPointerProperties(index, it) }
+    val coords = MotionEvent.PointerCoords().also { getPointerCoords(index, it) }
+    coords.x = viewPoint[0]
+    coords.y = viewPoint[1]
+
+    // One pointer, so the action carries no pointer index and `actionMasked` is the whole of it.
+    // Safe because a stroke is single-pointer by construction: a second contact cancels it above.
+    return MotionEvent.obtain(
+        downTime,
+        eventTime,
+        actionMasked,
+        1,
+        arrayOf(properties),
+        arrayOf(coords),
+        metaState,
+        buttonState,
+        xPrecision,
+        yPrecision,
+        deviceId,
+        edgeFlags,
+        source,
+        flags,
+    )
 }
 
 /**

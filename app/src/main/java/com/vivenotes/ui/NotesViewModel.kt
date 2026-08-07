@@ -36,6 +36,7 @@ import androidx.ink.strokes.Stroke
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.PenSettingsStore
+import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
@@ -290,6 +291,19 @@ class NotesViewModel(
     /** The armed shape and how it is drawn — `docs/inkPlan.md` §5.4. A property of the user (ID5). */
     val shape: StateFlow<ShapeSettings> = penSettingsStore.shape
         .stateIn(viewModelScope, SharingStarted.Eagerly, ShapeSettings())
+
+    /** Which ruler and how big — `docs/rulerPlan.md` RD2. A property of the user, like [shape]. */
+    val ruler: StateFlow<RulerSettings> = penSettingsStore.ruler
+        .stateIn(viewModelScope, SharingStarted.Eagerly, RulerSettings())
+
+    /**
+     * Whether the ruler is lying on the page — see [toggleRuler].
+     *
+     * Beside [_tool] rather than in preferences, and for its reason: this is where you are, not what
+     * you have. Which ruler it is *is* what you have, and that persists.
+     */
+    private val _rulerOut = MutableStateFlow(false)
+    val rulerOut: StateFlow<Boolean> = _rulerOut.asStateFlow()
 
     /** Whether a finger draws or scrolls. A property of this device, so it persists. */
     val drawWithFinger: StateFlow<Boolean> = penSettingsStore.drawWithFinger
@@ -893,6 +907,22 @@ class NotesViewModel(
 
     fun updateShape(settings: ShapeSettings) {
         viewModelScope.launch { penSettingsStore.setShape(settings) }
+    }
+
+    fun updateRuler(settings: RulerSettings) {
+        viewModelScope.launch { penSettingsStore.setRuler(settings) }
+    }
+
+    /**
+     * Lays the ruler on the page, or picks it up — `docs/rulerPlan.md` RD1.
+     *
+     * Not [selectTool], and that is the whole design: a ruler is not something you draw *with*, it is
+     * something you draw *against*, so it composes with whatever is in hand instead of replacing it.
+     * Unpersisted for the reason the armed tool is — reopening the app should not leave a ruler lying
+     * across the page.
+     */
+    fun toggleRuler() {
+        _rulerOut.value = !_rulerOut.value
     }
 
     /** The pen currently in hand, or null when the armed tool is not a pen. */

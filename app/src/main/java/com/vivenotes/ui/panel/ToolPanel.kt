@@ -392,6 +392,10 @@ fun ColumnScope.PanelSlider(
     showTicks: Boolean = true,
     sizePreviewColor: Color? = null,
     outlineSizePreview: Boolean = false,
+    /** How far − and + move. One is right for a nib; a ruler is measured in hundreds of dp. */
+    step: Int = 1,
+    /** How the number reads. A ruler's length means nothing in dp and everything in inches. */
+    format: (Int) -> String = { it.toString() },
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -410,7 +414,7 @@ fun ColumnScope.PanelSlider(
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text = value.toString(),
+            text = format(value),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -420,7 +424,7 @@ fun ColumnScope.PanelSlider(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         StepButton(MaterialSymbols.Remove, "Decrease $label", value > range.first) {
-            onChange(value - 1)
+            onChange((value - step).coerceAtLeast(range.first))
         }
         Box(
             modifier = Modifier
@@ -475,7 +479,7 @@ fun ColumnScope.PanelSlider(
             }
         }
         StepButton(MaterialSymbols.Add, "Increase $label", value < range.last) {
-            onChange(value + 1)
+            onChange((value + step).coerceAtMost(range.last))
         }
     }
 }

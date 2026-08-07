@@ -36,6 +36,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
@@ -79,6 +80,8 @@ fun NotesApp(viewModel: NotesViewModel) {
     val eraser by viewModel.eraser.collectAsStateWithLifecycle()
     val highlighter by viewModel.highlighter.collectAsStateWithLifecycle()
     val shape by viewModel.shape.collectAsStateWithLifecycle()
+    val ruler by viewModel.ruler.collectAsStateWithLifecycle()
+    val rulerOut by viewModel.rulerOut.collectAsStateWithLifecycle()
     val tool by viewModel.tool.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
     val canvasUndoState by viewModel.canvasUndoState.collectAsStateWithLifecycle()
@@ -115,6 +118,8 @@ fun NotesApp(viewModel: NotesViewModel) {
             updateEraser = viewModel::updateEraser,
             updateHighlighter = viewModel::updateHighlighter,
             updateShape = viewModel::updateShape,
+            updateRuler = viewModel::updateRuler,
+            toggleRuler = viewModel::toggleRuler,
             addPaletteColor = viewModel::addPaletteColor,
             setDrawWithFinger = viewModel::setDrawWithFinger,
             undo = viewModel::undoCanvas,
@@ -163,6 +168,8 @@ fun NotesApp(viewModel: NotesViewModel) {
                         eraser = eraser,
                         highlighter = highlighter,
                         shape = themedShape,
+                        ruler = ruler,
+                        rulerOut = rulerOut,
                         tool = tool,
                         allowFinger = drawWithFinger,
                         draw = drawActions,
@@ -228,6 +235,8 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 eraser = eraser,
                                 highlighter = highlighter,
                                 shape = themedShape,
+                                ruler = ruler,
+                                rulerOut = rulerOut,
                                 allowFinger = drawWithFinger,
                                 hasClipboard = hasClipboard,
                                 modifier = Modifier.weight(1f),
@@ -290,6 +299,8 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 eraser = eraser,
                                 highlighter = highlighter,
                                 shape = themedShape,
+                                ruler = ruler,
+                                rulerOut = rulerOut,
                                 allowFinger = drawWithFinger,
                                 hasClipboard = hasClipboard,
                                 modifier = Modifier.fillMaxSize(),
@@ -359,6 +370,8 @@ private fun EditorSurface(
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
+    ruler: RulerSettings,
+    rulerOut: Boolean,
     allowFinger: Boolean,
     hasClipboard: Boolean,
     modifier: Modifier = Modifier,
@@ -415,6 +428,7 @@ private fun EditorSurface(
         erasing = tool == DrawTool.Eraser,
         lassoing = tool == DrawTool.Lasso,
         shaping = if (tool == DrawTool.Shape) shape else null,
+        ruler = ruler.takeIf { rulerOut },
         shapes = state.shapes,
         onMoveShape = viewModel::moveShape,
         onResizeShape = viewModel::resizeShape,

@@ -28,6 +28,7 @@ import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.ui.ScrollingRow
 import com.vivenotes.ui.icons.LocalRibbonIcons
@@ -36,6 +37,7 @@ import com.vivenotes.ui.panel.EraserPanelContent
 import com.vivenotes.ui.panel.FloatingSettingsPanel
 import com.vivenotes.ui.panel.HighlighterPanelContent
 import com.vivenotes.ui.panel.PenPanelContent
+import com.vivenotes.ui.panel.RulerPanelContent
 
 /**
  * What the Draw tab can do. Gathered into one object for the reason [ViewActions] is: the ribbon
@@ -48,6 +50,9 @@ data class DrawActions(
     val updateEraser: (EraserSettings) -> Unit,
     val updateHighlighter: (HighlighterSettings) -> Unit = {},
     val updateShape: (ShapeSettings) -> Unit = {},
+    val updateRuler: (RulerSettings) -> Unit = {},
+    /** Lays the ruler on the page, or picks it up again — `docs/rulerPlan.md` RD1. */
+    val toggleRuler: () -> Unit = {},
     val setDrawWithFinger: (Boolean) -> Unit,
     /** Puts a colour off the wheel at the head of the swatch row. Not the same write as a pen. */
     val addPaletteColor: (Int) -> Unit = {},
@@ -64,6 +69,7 @@ internal object DrawTags {
     const val LASSO = "draw-lasso"
     const val FINGER = "draw-finger"
     const val NONE = "draw-none"
+    const val RULER = "draw-ruler"
     fun pen(index: Int) = "draw-pen-$index"
 }
 
@@ -101,10 +107,14 @@ internal fun DrawTab(
     pageOpen: Boolean = true,
     canUndo: Boolean = false,
     canRedo: Boolean = false,
+    ruler: RulerSettings = RulerSettings(),
+    /** Whether the ruler is lying on the page. Not a tool — see [DrawActions.toggleRuler]. */
+    rulerOut: Boolean = false,
 ) {
     var openPenIndex by remember { mutableStateOf<Int?>(null) }
     var eraserSettingsOpen by remember { mutableStateOf(false) }
     var highlighterSettingsOpen by remember { mutableStateOf(false) }
+    var rulerSettingsOpen by remember { mutableStateOf(false) }
 
     ScrollingRow(
         modifier = Modifier.fillMaxWidth(),
@@ -178,6 +188,18 @@ internal fun DrawTab(
         )
 
         Divider()
+
+        // Beside the finger toggle rather than among the pens: neither of these marks the page, both
+        // change what happens when something else does. RD1 — the ruler is not a tool.
+        RulerButton(
+            settings = ruler,
+            out = rulerOut,
+            settingsOpen = rulerSettingsOpen,
+            onToggle = actions.toggleRuler,
+            onOpen = { rulerSettingsOpen = true },
+            onDismiss = { rulerSettingsOpen = false },
+            onChange = actions.updateRuler,
+        )
 
         Box(Modifier.testTag(DrawTags.FINGER)) {
             RibbonButton(
@@ -273,6 +295,67 @@ private fun HighlighterButton(
             title = "Highlighter",
         ) {
             HighlighterPanelContent(settings = settings, onChange = onChange)
+        }
+    }
+}
+
+/**
+ * The ruler — `docs/rulerPlan.md` RD7.
+ *
+ * **Tap toggles, hold configures**, which is deliberately not the eraser's bargain. Every other
+ * control in this tray is picked *up*, so tapping an already-selected one is free to mean "show me
+ * your settings". This one is a toggle: its tap has to be able to mean *away*, or the ruler could be
+ * laid on the page and never taken off it. So the pane is on the hold alone.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RulerButton(
+    settings: RulerSettings,
+    out: Boolean,
+    settingsOpen: Boolean,
+    onToggle: () -> Unit,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+    onChange: (RulerSettings) -> Unit,
+) {
+    Box(modifier = Modifier.padding(horizontal = 1.dp)) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .testTag(DrawTags.RULER)
+                .clip(RoundedCornerShape(4.dp))
+                .background(
+                    if (out) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                )
+                .combinedClickable(
+                    onClick = onToggle,
+                    // Holding it brings it out as well as configuring it, for the reason holding a
+                    // pen picks it up: the ruler you are about to change is the one you would use.
+                    onLongClick = {
+                        if (!out) onToggle()
+                        onOpen()
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = MaterialSymbols.Straighten,
+                contentDescription = if (out) "Put the ruler away" else "Ruler",
+                tint = if (out) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(18.dp),
+            )
+        }
+
+        FloatingSettingsPanel(
+            expanded = settingsOpen,
+            onDismissRequest = onDismiss,
+            title = "Ruler",
+        ) {
+            RulerPanelContent(settings = settings, onChange = onChange)
         }
     }
 }

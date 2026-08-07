@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew compileDebugKotlin)",
+      "Bash(./gradlew compileDebugKotlin *)",
+      "Bash(./gradlew compileDebugAndroidTestKotlin)",
+      "Bash(./gradlew compileDebugAndroidTestKotlin *)",
+      "Bash(./gradlew testDebugUnitTest)",
+      "Bash(./gradlew testDebugUnitTest *)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(./gradlew assembleDebug *)",
+      "Bash(./gradlew lint)",
+      "Bash(./gradlew lint *)",
+      "Bash(javap *)",
+      "Bash(unzip -l *)",
+      "Bash(adb devices)",
+      "Bash(adb devices *)",
+      "Bash(/home/mahalo/Android/Sdk/platform-tools/adb devices)",
+      "Bash(/home/mahalo/Android/Sdk/platform-tools/adb devices *)",
+      "Bash(adb shell getprop *)",
+      "Bash(adb shell dumpsys *)",
+      "Bash(/home/mahalo/Android/Sdk/platform-tools/adb shell getprop *)",
+      "Bash(/home/mahalo/Android/Sdk/platform-tools/adb shell dumpsys *)",
+      "Bash(~/.local/bin/android layout)",
+      "Bash(~/.local/bin/android layout *)"
+    ]
+  }
+}

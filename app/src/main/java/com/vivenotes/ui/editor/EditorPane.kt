@@ -96,6 +96,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.RulerKind
+import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.model.Outline
 import com.vivenotes.model.ink.LineType
@@ -105,6 +107,8 @@ import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
+import com.vivenotes.ink.Ruler
+import com.vivenotes.ink.RulerPlacement
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.PageStyle
@@ -124,6 +128,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 private val CANVAS_MIN_HEIGHT = 700.dp
@@ -238,6 +243,13 @@ fun EditorPane(
     brush: Brush? = null,
     /** The armed shape's settings, or null when Insert Shape is not the tool in hand. */
     shaping: ShapeSettings? = null,
+    /**
+     * The ruler's settings while it is out, or null while it is away — `docs/rulerPlan.md`.
+     *
+     * Only *which* ruler and how big, per RD2. Where it is lying is this composable's business,
+     * because it is a fact about this moment and nothing outside the canvas has any use for it.
+     */
+    ruler: RulerSettings? = null,
     shapes: List<Outline.Shape> = emptyList(),
     onMoveShape: (String, Float, Float) -> Unit = { _, _, _ -> },
     onResizeShape: (String, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
@@ -453,12 +465,78 @@ fun EditorPane(
     val currentOnZoomPinched = rememberUpdatedState(onZoomPinched)
     val currentOnZoomCommitted = rememberUpdatedState(onZoomCommitted)
 
+    /**
+     * Where the ruler is lying — RD2, held here because it is transient and page-scoped in units
+     * only, not in ownership: it stays put across a page switch, the way a ruler stays on the desk.
+     *
+     * Seeded once, the first time it comes out, from the middle of what is on screen. Kept when it
+     * is put away, so bringing it back does not lose the angle you set.
+     */
+    var rulerPlacement by remember { mutableStateOf<RulerPlacement?>(null) }
+
+    /**
+     * The window, in view dp. A layout fact, captured out of [BoxWithConstraints] because the
+     * straightedge's length is measured from it — RD3a.
+     */
+    var viewport by remember { mutableStateOf(DpSize.Zero) }
+
+    val laidRuler = ruler?.let { settings ->
+        rulerPlacement?.let {
+            // The straightedge spans the viewport's *diagonal*, so it still crosses the whole window
+            // at any rotation rather than falling short of the corners at 45°. Divided by the zoom
+            // because it is placed in page units and has to keep covering the screen as the page
+            // grows under it. The semicircle keeps its own diameter — it is a protractor, not a
+            // horizon.
+            val span = when (settings.kind) {
+                RulerKind.Straight ->
+                    hypot(viewport.width.value, viewport.height.value) / zoom
+                RulerKind.Protractor -> settings.diameterDp.toFloat()
+            }
+            Ruler(it.centerX, it.centerY, it.angleRadians, settings.kind, span)
+        }
+    }
+    val currentRuler = rememberUpdatedState(laidRuler)
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             // Only a page bound by a sheet has an outside. One the content has outgrown is canvas
             // all the way to its edge, and painting a surround there would say otherwise.
             .background(if (fits) MaterialTheme.colorScheme.surfaceContainer else canvas.background)
+            // Ahead of the pinch on the same node, which is the whole of how the two are kept
+            // apart: on the Initial pass modifiers are asked in order, so a gesture that began on
+            // the ruler is claimed here and the pinch below stands down. RD6.
+            .pointerInput(Unit) {
+                detectRulerDrag(
+                    rulerAt = { currentRuler.value },
+                    toPage = {
+                        android.graphics.Matrix().also {
+                            inkPageToView(
+                                zoom = currentZoom.value,
+                                density = density.density,
+                                scrollX = horizontal.value.toFloat(),
+                                scrollY = vertical.value.toFloat(),
+                            ).invert(it)
+                        }
+                    },
+                    onMove = { dx, dy ->
+                        rulerPlacement = rulerPlacement?.let {
+                            it.copy(centerX = it.centerX + dx, centerY = it.centerY + dy)
+                        }
+                    },
+                    onTurn = { radians ->
+                        rulerPlacement = rulerPlacement?.let {
+                            it.copy(angleRadians = it.angleRadians + radians)
+                        }
+                    },
+                    onTapDial = {
+                        currentRuler.value?.let { held ->
+                            rulerPlacement = rulerPlacement
+                                ?.copy(angleRadians = held.turnedToNextEighth().angleRadians)
+                        }
+                    },
+                )
+            }
             // On the outermost node of the pane, because that is the only one that is an ancestor of
             // both the scrolling page and the ink overlay — see `detectPinchZoom` for why nothing
             // less than an ancestor can take a gesture off either of them.
@@ -542,6 +620,22 @@ fun EditorPane(
         // Reported rather than derived by the caller: these are layout facts, known here and
         // nowhere else. Writing them costs nothing and nothing recomposes from them.
         SideEffect { onCanvasMeasured(maxWidth.value, pageSize.width.value) }
+
+        // Guarded, because writing state from a SideEffect on every pass would recompose for ever.
+        val measured = DpSize(maxWidth, maxHeight)
+        if (viewport != measured) SideEffect { viewport = measured }
+
+        // Laid across the middle of what is on screen the first time it is asked for, because a
+        // ruler that arrives off the edge of the window looks like a button that does nothing.
+        LaunchedEffect(ruler != null) {
+            if (ruler != null && rulerPlacement == null) {
+                rulerPlacement = RulerPlacement(
+                    centerX = horizontal.value / (zoom * density.density) + window.width.value / 2f,
+                    centerY = vertical.value / (zoom * density.density) + window.height.value / 2f,
+                    angleRadians = 0f,
+                )
+            }
+        }
 
         // Read while drawing rather than while composing, so scrolling re-runs the ruling's draw
         // and nothing above it. Given as a lambda for exactly that reason — calling it here would
@@ -713,6 +807,7 @@ fun EditorPane(
                 erasing = erasing,
                 lassoing = lassoing,
                 shaping = shaping,
+                ruler = laidRuler,
                 eraser = eraser,
                 allowFinger = allowFinger,
                 pageToView = {
