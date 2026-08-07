@@ -209,6 +209,13 @@ fun EditorPane(
     shapes: List<Outline.Shape> = emptyList(),
     onMoveShape: (String, Float, Float) -> Unit = { _, _, _ -> },
     onResizeShape: (String, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    onResizeShapeArm: (String, String, Boolean, Float) -> Unit = { _, _, _, _ -> },
+    /**
+     * The lasso's halves, taking the whole set at once: one gesture is one edit and so one Undo,
+     * however many shapes it caught.
+     */
+    onMoveShapes: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeShapes: (Set<String>, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     onDeleteShapes: (Set<String>) -> Unit = {},
     onRecolorShapes: (Set<String>, Int) -> Unit = { _, _ -> },
     onSetShapeBorderWidth: (Set<String>, Float) -> Unit = { _, _ -> },
@@ -527,6 +534,7 @@ fun EditorPane(
                             onSelect = { selection = it },
                             onMoveShape = onMoveShape,
                             onResizeShape = onResizeShape,
+                            onResizeShapeArm = onResizeShapeArm,
                         )
                     }
 
@@ -618,9 +626,9 @@ fun EditorPane(
                 onObjectErase = onObjectErase,
                 onMoveSelection = onMoveSelection,
                 onResizeSelection = onResizeSelection,
-                onMoveShapes = { ids, dx, dy -> ids.forEach { onMoveShape(it, dx, dy) } },
+                onMoveShapes = onMoveShapes,
                 onResizeShapes = { ids, anchor, scaleX, scaleY ->
-                    ids.forEach { onResizeShape(it, anchor.x, anchor.y, scaleX, scaleY) }
+                    onResizeShapes(ids, anchor.x, anchor.y, scaleX, scaleY)
                 },
                 onDeleteSelection = onDeleteInkSelection,
                 onRecolorSelection = onRecolorInkSelection,
@@ -647,7 +655,19 @@ fun EditorPane(
                             density = density.density,
                             scrollX = horizontal.value.toFloat(),
                             scrollY = vertical.value.toFloat(),
-                        ))
+                        ))?.also { bounds ->
+                            // What the bar has to clear is the *selection*, not the geometry inside
+                            // it: an arm handle stands off the top or bottom edge, and a bar placed
+                            // against the edge covers it. Page units scale into view units by the
+                            // same zoom × density the matrix above applies.
+                            val (above, below) = shapes
+                                .singleOrNull { held.isShapeOnly && it.id in held.shapeIds }
+                                ?.armChromeExtent()
+                                ?: (0f to 0f)
+                            val scale = zoom * density.density
+                            bounds.top -= above * scale
+                            bounds.bottom += below * scale
+                        }
                     },
                     viewportSize = with(density) {
                         IntSize(window.width.roundToPx(), window.height.roundToPx())

@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -31,9 +32,14 @@ import androidx.compose.ui.unit.dp
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.model.Outline
 import com.vivenotes.model.ink.LineType
+import com.vivenotes.model.ink.ShapeArm
+import com.vivenotes.model.ink.ShapeAxis
 import com.vivenotes.model.ink.ShapeContour
 import com.vivenotes.model.ink.ShapeSegment
+import com.vivenotes.model.ink.arms
 import com.vivenotes.model.ink.contours
+import com.vivenotes.model.ink.withArm
+import kotlin.math.hypot
 
 internal const val SHAPE_LAYER_TAG = "shape-layer"
 
@@ -49,9 +55,12 @@ internal const val SHAPE_LAYER_TAG = "shape-layer"
  * a *child* of the bare-canvas tap target for the same reason in the other direction — see the call
  * site in `EditorPane`, where that nesting is what decides which of the two owns a gesture.
  *
- * A shape is selected and moved **whole**. Its segments are how it is stored and drawn — they are
- * what carries the occluded edges a solid needs dotted — but they are not separately editable, so
- * there are no per-end handles and no way to pull one corner out of shape.
+ * A shape is selected and moved **whole**, and with one exception it is resized whole too. Its
+ * segments are how it is stored and drawn — they are what carries the occluded edges a solid needs
+ * dotted — but they are not separately editable, so there is no way to pull one corner of a hexagon
+ * out of shape. The exception is an *arm end* ([ShapeArm]), on a kind that declares arms: the L has
+ * four, head and tail of each arm, and each drags along its own axis alone. Pulling a tail back past
+ * the corner is what turns an L into a cross. See SD9.
  *
  * Selection, four-corner resize, drag-to-move and double-tap-to-select are `docs/plan.md` AD7: they
  * belong to *an object on the canvas*, not to shapes, and ink already has the same set. The corner
@@ -78,6 +87,9 @@ internal fun ShapeLayer(
     onMoveShape: (shapeId: String, dx: Float, dy: Float) -> Unit,
     onResizeShape: (shapeId: String, anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float) -> Unit =
         { _, _, _, _, _ -> },
+    /** One arm's free end, moved to [along] on its own axis — see [ShapeArm]. */
+    onResizeShapeArm: (shapeId: String, segmentId: String, atEnd: Boolean, along: Float) -> Unit =
+        { _, _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val accent = MaterialTheme.colorScheme.primary
@@ -92,11 +104,18 @@ internal fun ShapeLayer(
     val currentOnSelect = rememberUpdatedState(onSelect)
     val currentOnMove = rememberUpdatedState(onMoveShape)
     val currentOnResize = rememberUpdatedState(onResizeShape)
+    val currentOnResizeArm = rememberUpdatedState(onResizeShapeArm)
 
     // The corner drag in flight, drawn but not yet written — see [ShapeResize]. A holder rather than
     // a delegated `var` for the same reason as the states above: the gesture handler below outlives
     // every recomposition and can only reach what has a stable identity.
     val resize = remember { mutableStateOf<ShapeResize?>(null) }
+
+    /** The arm drag in flight, held and committed the same way the corner drag is. */
+    val armResize = remember { mutableStateOf<ShapeArmResize?>(null) }
+
+    /** And the move, for the reason [ShapeMove] gives — which is undo's, not arithmetic's. */
+    val move = remember { mutableStateOf<ShapeMove?>(null) }
 
     Box(
         modifier
@@ -129,9 +148,16 @@ internal fun ShapeLayer(
                     val selected = shapes.singleOrNull {
                         held != null && held.isShapeOnly && held.holdsShape(it.id)
                     }
-                    // A corner wins over the body: the handles sit on the boundary, so every one of
-                    // them is also inside the move target.
-                    val corner = selected?.cornerNear(startX, startY)
+                    // A handle wins over the body: they sit on the boundary or just outside it, so
+                    // every one of them is also inside the move target.
+                    val handle = selected?.handleNear(startX, startY)
+
+                    // An arm tab sits a little beyond the tip it belongs to, so the finger is never
+                    // on the tip it is about to move. Holding that distance for the gesture keeps the
+                    // arm following the finger instead of jumping to it on the first sample.
+                    val armGrab = (handle as? Handle.Arm)?.arm?.let { arm ->
+                        arm.along - if (arm.axis == ShapeAxis.Horizontal) startX else startY
+                    } ?: 0f
 
                     // The shape this gesture moves, chosen on the down and held for the whole of it:
                     // the selected one when the finger came down inside it, otherwise whatever it
@@ -139,7 +165,7 @@ internal fun ShapeLayer(
                     // motion — demanding a separate tap first is indistinguishable from the drag not
                     // working, because what happens instead is that the page pans.
                     val target = when {
-                        corner != null -> selected
+                        handle != null -> selected
                         selected?.contains(startX, startY) == true -> selected
                         else -> shapes.topmostNear(startX, startY)
                     }
@@ -186,6 +212,17 @@ internal fun ShapeLayer(
                                     pending.scaleY,
                                 )
                             }
+                            armResize.value?.let { pending ->
+                                currentOnResizeArm.value(
+                                    pending.shapeId,
+                                    pending.arm.segmentId,
+                                    pending.arm.atEnd,
+                                    pending.along,
+                                )
+                            }
+                            move.value?.let { pending ->
+                                currentOnMove.value(pending.shapeId, pending.dx, pending.dy)
+                            }
                             break
                         }
                         if (!dragging && (change.position - down.position).getDistance() > slop) {
@@ -197,25 +234,43 @@ internal fun ShapeLayer(
                             }
                         }
                         if (dragging && target != null) {
-                            if (corner != null) {
+                            when (handle) {
                                 // Measured against the shape as it was when the drag began, and only
                                 // drawn: nothing is written until the finger lifts. See [ShapeResize].
-                                target.scaleFor(
-                                    corner,
+                                is Handle.Box -> target.scaleFor(
+                                    handle.corner,
                                     change.position.x / density,
                                     change.position.y / density,
                                 )?.let { (scaleX, scaleY) ->
-                                    val (anchorX, anchorY) = target.anchorFor(corner)
+                                    val (anchorX, anchorY) = target.anchorFor(handle.corner)
                                     resize.value = ShapeResize(
                                         target.id, anchorX, anchorY, scaleX, scaleY,
                                     )
                                 }
-                            } else {
-                                val delta = change.position - last
-                                currentOnMove.value(
-                                    target.id, delta.x / density, delta.y / density,
-                                )
-                                last = change.position
+
+                                // One coordinate, because an arm has one direction to go in. The
+                                // other axis of the finger's travel is deliberately thrown away:
+                                // pulling an L's foot out to the right must not also drift it down.
+                                is Handle.Arm -> {
+                                    val along = if (handle.arm.axis == ShapeAxis.Horizontal) {
+                                        change.position.x / density
+                                    } else {
+                                        change.position.y / density
+                                    }
+                                    armResize.value = ShapeArmResize(
+                                        target.id, handle.arm, along + armGrab,
+                                    )
+                                }
+
+                                // Measured from where the drag began rather than from the last
+                                // sample, so the travel is one number the whole way through and the
+                                // touch slop is not folded into it.
+                                null -> {
+                                    val travel = change.position - last
+                                    move.value = ShapeMove(
+                                        target.id, travel.x / density, travel.y / density,
+                                    )
+                                }
                             }
                         }
                     }
@@ -223,6 +278,8 @@ internal fun ShapeLayer(
                     // away mid-drag. A cancel therefore discards the resize rather than committing a
                     // size the finger was still moving away from.
                     resize.value = null
+                    armResize.value = null
+                    move.value = null
                 }
             },
     ) {
@@ -233,14 +290,19 @@ internal fun ShapeLayer(
             val moving = lassoGesture?.takeIf { it.isTransforming && revision >= 0 }
             val held = selection?.shapeIds.orEmpty()
             val resizing = resize.value
+            val arming = armResize.value
+            val nudging = move.value
 
             // The corner drag and the lasso are both preview-only, so both are applied here rather
             // than read back out of the document — and to the chrome as well as to the shape, or the
-            // handles would sit around the size the drag started at.
+            // handles would sit around the size the drag started at. An arm drag is the same, which
+            // is also what carries its tab along with the tip it is pulling.
             fun previewOf(shape: Outline.Shape): Outline.Shape = when {
                 resizing?.shapeId == shape.id -> shape.scaledAbout(
                     resizing.anchorX, resizing.anchorY, resizing.scaleX, resizing.scaleY,
                 )
+                arming?.shapeId == shape.id -> shape.withArm(arming.arm, arming.along)
+                nudging?.shapeId == shape.id -> shape.translated(nudging.dx, nudging.dy)
                 // The lasso's transform is in page units, which is what a shape's coordinates
                 // already are — so it applies with no conversion, unlike ink, which needs it
                 // folded into a matrix.
@@ -273,8 +335,9 @@ internal fun ShapeLayer(
  * came to roughly three thousand times it, and because the two axes compound at different rates the
  * shape lost its proportions on the way.
  *
- * A move stays per-frame, because a move reports a delta from the last frame rather than a total,
- * and deltas may safely be applied one after another.
+ * The move followed later and for a different reason — see [ShapeMove]. Every gesture on this layer
+ * now previews and commits once, which is also why the tooltip holds still through a drag and lands
+ * with it: the selection it anchors to is the committed geometry, and the preview is only drawn.
  */
 private data class ShapeResize(
     val shapeId: String,
@@ -282,6 +345,34 @@ private data class ShapeResize(
     val anchorY: Float,
     val scaleX: Float,
     val scaleY: Float,
+)
+
+/**
+ * An arm drag in flight: where along its own axis the finger has taken one free end.
+ *
+ * Held and committed exactly as [ShapeResize] is, though for a weaker reason — an arm drag reports
+ * an absolute coordinate rather than a scale, so applying it every frame would not compound and
+ * would not explode. It waits for the lift so that a drag is one document edit and one autosave
+ * instead of sixty, and so that a cancelled gesture leaves nothing behind.
+ */
+private data class ShapeArmResize(
+    val shapeId: String,
+    val arm: ShapeArm,
+    val along: Float,
+)
+
+/**
+ * A move in flight: how far the shape has travelled since the drag began.
+ *
+ * A move used to be the one gesture here that wrote every frame, which was safe arithmetic — deltas
+ * compose — and the wrong *action*. Undo reverses actions, so a drag reported sixty times was sixty
+ * presses of Undo to put back, and sixty autosaves on the way there. It reports the whole travel on
+ * the lift now, like the other two, and the frames in between are drawn from here.
+ */
+private data class ShapeMove(
+    val shapeId: String,
+    val dx: Float,
+    val dy: Float,
 )
 
 /** The live lasso move or resize, applied for the draw only — nothing is written until the up. */
@@ -369,9 +460,70 @@ private fun DrawScope.drawSelection(
         drawCircle(handleFill, radius, Offset(x, y))
         drawCircle(accent, radius, Offset(x, y), style = Stroke(width = SELECTION_STROKE.toPx()))
     }
+
+    shape.arms().forEach { arm -> drawArmHandle(arm, accent, handleFill, scale) }
+}
+
+/**
+ * The tab that moves one end of one arm, out beyond that end on the arm's own line.
+ *
+ * **A bar, not a disc, and not on the end itself.** An L's outer tips are two corners of its own
+ * bounding box, so a handle drawn where an arm ends would sit on top of a corner handle that does
+ * something else entirely — the same grab would scale the whole shape half the time. Pushing it out
+ * along the axis separates the two targets by more than a finger, and the leader back to the end is
+ * what says which arm the tab belongs to rather than leaving it floating beside the box.
+ *
+ * It is also what keeps the *two* tabs at an L's corner apart. They sit on the same point of the
+ * shape, but each is offset along its own arm — one down the upright, one back along the foot — and
+ * those directions are perpendicular, so the tabs land a comfortable distance from each other.
+ *
+ * Same materials as the corner handles — surface fill, accent ring — because it is the same
+ * selection; a different *form*, because it is a different gesture (AD7). It lies across the
+ * direction it drags in, the way a divider does.
+ */
+private fun DrawScope.drawArmHandle(arm: ShapeArm, accent: Color, handleFill: Color, scale: Float) {
+    val horizontal = arm.axis == ShapeAxis.Horizontal
+    val tipX = arm.x * scale
+    val tipY = arm.y * scale
+    val gap = ARM_HANDLE_GAP.toPx() * arm.outward
+    val centreX = if (horizontal) tipX + gap else tipX
+    val centreY = if (horizontal) tipY else tipY + gap
+
+    drawLine(
+        color = accent,
+        start = Offset(tipX, tipY),
+        end = Offset(centreX, centreY),
+        strokeWidth = SELECTION_STROKE.toPx(),
+        pathEffect = PathEffect.dashPathEffect(
+            floatArrayOf(SELECTION_DASH.toPx(), SELECTION_DASH.toPx()),
+        ),
+    )
+
+    val halfLong = ARM_HANDLE_LENGTH.toPx() / 2f
+    val halfThick = ARM_HANDLE_THICKNESS.toPx() / 2f
+    val halfX = if (horizontal) halfThick else halfLong
+    val halfY = if (horizontal) halfLong else halfThick
+    val topLeft = Offset(centreX - halfX, centreY - halfY)
+    val size = Size(halfX * 2f, halfY * 2f)
+    val corner = CornerRadius(halfThick, halfThick)
+
+    drawRoundRect(handleFill, topLeft, size, corner)
+    drawRoundRect(
+        color = accent,
+        topLeft = topLeft,
+        size = size,
+        cornerRadius = corner,
+        style = Stroke(width = SELECTION_STROKE.toPx()),
+    )
 }
 
 private enum class Corner { TopLeft, TopRight, BottomRight, BottomLeft }
+
+/** What the finger came down on: one of the four corners, or one arm's tab. */
+private sealed interface Handle {
+    data class Box(val corner: Corner) : Handle
+    data class Arm(val arm: ShapeArm) : Handle
+}
 
 private fun Outline.Shape.cornerPoint(corner: Corner): Pair<Float, Float> = when (corner) {
     Corner.TopLeft -> x to y
@@ -390,15 +542,65 @@ private fun Outline.Shape.anchorFor(corner: Corner): Pair<Float, Float> = corner
     },
 )
 
-private fun Outline.Shape.cornerNear(x: Float, y: Float): Corner? = Corner.entries
-    .minByOrNull { corner ->
+/**
+ * The handle under the point, or null — corners and arm tabs judged together, nearest wins.
+ *
+ * Together rather than one before the other because on an L they are neighbours: three of its four
+ * arm tabs sit out beyond an end that is itself a corner of the bounding box. Giving either kind
+ * priority would mean a touch squarely on one of them sometimes taking the other, so the only honest
+ * rule is distance — and it is what puts the boundary between the two exactly halfway along the gap
+ * the tab is drawn across.
+ *
+ * Page units, so [HANDLE_REACH] and [ARM_HANDLE_GAP] are read as plain dp — the same numbers the
+ * draw scales by density, and the reason the two cannot disagree about where a handle is.
+ */
+private fun Outline.Shape.handleNear(x: Float, y: Float): Handle? {
+    val candidates = Corner.entries.map { corner ->
         val (cx, cy) = cornerPoint(corner)
-        kotlin.math.hypot(x - cx, y - cy)
+        Handle.Box(corner) to hypot(x - cx, y - cy)
+    } + arms().map { arm ->
+        val (hx, hy) = arm.handlePoint()
+        Handle.Arm(arm) to hypot(x - hx, y - hy)
     }
-    ?.takeIf { corner ->
-        val (cx, cy) = cornerPoint(corner)
-        kotlin.math.hypot(x - cx, y - cy) <= HANDLE_REACH.value
+
+    return candidates
+        .minByOrNull { (_, distance) -> distance }
+        ?.takeIf { (_, distance) -> distance <= HANDLE_REACH.value }
+        ?.first
+}
+
+/** Where an arm end's tab sits: out past that end, on the arm's own line. In page units. */
+private fun ShapeArm.handlePoint(): Pair<Float, Float> {
+    val gap = ARM_HANDLE_GAP.value * outward
+    return if (axis == ShapeAxis.Horizontal) (x + gap) to y else x to (y + gap)
+}
+
+/**
+ * How far this shape's chrome stands above and below its own bounds, in page units.
+ *
+ * For the object tooltip, which anchors to the selection and so has to know that a selection is
+ * bigger than its geometry. A vertical arm's tab sits out past the top or the bottom of the shape,
+ * which is exactly where the bar wants to go — and on an L the two coincide, because the arm ends at
+ * the edge of the bounding box the tooltip is measuring from. The bar landed on top of the handle,
+ * and a handle under a bar cannot be grabbed.
+ *
+ * Only the vertical arms, because the tooltip only ever sits above or below. A horizontal tab is out
+ * to the side, where the bar never goes, and inflating sideways would shift the bar off centre for
+ * nothing. Zero for every shape without arms, which is every shape but the L.
+ */
+internal fun Outline.Shape.armChromeExtent(): Pair<Float, Float> {
+    var above = 0f
+    var below = 0f
+    arms().filter { it.axis == ShapeAxis.Vertical }.forEach { arm ->
+        val reach = ARM_HANDLE_GAP.value + ARM_HANDLE_LENGTH.value / 2f
+        if (arm.outward < 0f) {
+            above = maxOf(above, reach - (arm.y - y))
+        } else {
+            below = maxOf(below, reach - ((y + height) - arm.y))
+        }
     }
+    return above.coerceAtLeast(0f) to below.coerceAtLeast(0f)
+}
 
 /**
  * How far the dragged corner has travelled from the anchor, as a scale factor.
@@ -452,6 +654,20 @@ private val HANDLE_RADIUS: Dp = 5.5.dp
 
 /** Matches LassoGesture's own handle reach, so the two selections grab the same way. */
 private val HANDLE_REACH: Dp = 14.dp
+
+/**
+ * How far past its tip an arm's tab sits.
+ *
+ * Set against [HANDLE_REACH] rather than by eye: an L's tip *is* a corner of its bounding box, so
+ * this gap is the whole distance between two handles that do different things. At 20dp the split
+ * between them lands 10dp from each, which is about a finger's width of margin either way — closer
+ * and a deliberate grab starts landing on the wrong one, further and the tab stops reading as part
+ * of the shape it belongs to.
+ */
+private val ARM_HANDLE_GAP: Dp = 20.dp
+
+private val ARM_HANDLE_LENGTH: Dp = 18.dp
+private val ARM_HANDLE_THICKNESS: Dp = 7.dp
 
 /** Never through zero: a shape flipped inside out by a fast drag cannot be dragged back. */
 private const val MIN_SCALE = 0.12f

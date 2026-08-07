@@ -135,8 +135,8 @@ fun Ribbon(
     allowFinger: Boolean,
     draw: DrawActions,
     pageOpen: Boolean,
-    canUndoInk: Boolean = false,
-    canRedoInk: Boolean = false,
+    canUndoCanvas: Boolean = false,
+    canRedoCanvas: Boolean = false,
     showBack: Boolean = false,
     onBack: () -> Unit = {},
     showNavigationToggle: Boolean = false,
@@ -184,8 +184,8 @@ fun Ribbon(
                 allowFinger = allowFinger,
                 actions = draw,
                 pageOpen = pageOpen,
-                canUndo = canUndoInk,
-                canRedo = canRedoInk,
+                canUndo = canUndoCanvas,
+                canRedo = canRedoCanvas,
             )
             RibbonTab.Insert -> InsertTab(
                 selection = selection,

@@ -81,7 +81,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val shape by viewModel.shape.collectAsStateWithLifecycle()
     val tool by viewModel.tool.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
-    val inkUndoState by viewModel.inkUndoState.collectAsStateWithLifecycle()
+    val canvasUndoState by viewModel.canvasUndoState.collectAsStateWithLifecycle()
     val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
 
@@ -117,8 +117,8 @@ fun NotesApp(viewModel: NotesViewModel) {
             updateShape = viewModel::updateShape,
             addPaletteColor = viewModel::addPaletteColor,
             setDrawWithFinger = viewModel::setDrawWithFinger,
-            undo = viewModel::undoInk,
-            redo = viewModel::redoInk,
+            undo = viewModel::undoCanvas,
+            redo = viewModel::redoCanvas,
         )
     }
 
@@ -167,8 +167,8 @@ fun NotesApp(viewModel: NotesViewModel) {
                         allowFinger = drawWithFinger,
                         draw = drawActions,
                         pageOpen = state.selectedPageId != null,
-                        canUndoInk = inkUndoState.canUndo,
-                        canRedoInk = inkUndoState.canRedo,
+                        canUndoCanvas = canvasUndoState.canUndo,
+                        canRedoCanvas = canvasUndoState.canRedo,
                         showBack = !medium && pane != rootPane,
                         onBack = { viewModel.showCompactPane(paneBehind(pane)) },
                         // Only where there is something to collapse: a compact window shows one
@@ -412,6 +412,9 @@ private fun EditorSurface(
         shapes = state.shapes,
         onMoveShape = viewModel::moveShape,
         onResizeShape = viewModel::resizeShape,
+        onResizeShapeArm = viewModel::resizeShapeArm,
+        onMoveShapes = viewModel::moveShapes,
+        onResizeShapes = viewModel::resizeShapes,
         onDeleteShapes = viewModel::deleteShapes,
         onRecolorShapes = viewModel::recolorShapes,
         onSetShapeBorderWidth = viewModel::setShapeBorderWidth,

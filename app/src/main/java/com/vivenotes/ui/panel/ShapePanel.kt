@@ -206,8 +206,8 @@ private val NOMINAL_HEIGHT: Dp = 150.dp
  *
  * Each one is a [Canvas] running the same [trace] the page insert runs, so a chip **is** its shape
  * rather than a picture of it — §5.4 SD6. That is also why there are no drawables here: there is no
- * Material Symbol for a wedge with dotted hidden edges, and sixteen hand-drawn glyphs would be
- * sixteen chances to drift from the geometry they illustrate.
+ * Material Symbol for a wedge with dotted hidden edges, and a hand-drawn glyph per kind would be a
+ * chance each to drift from the geometry it illustrates.
  *
  * **Swipe sideways to change page**, as well as tapping the dots. The dots are 8dp targets and the
  * grid is the whole width of the pane, so the gesture is by far the larger of the two — the dots
@@ -275,7 +275,8 @@ private fun ShapeChip(kind: ShapeKind, selected: Boolean, onPick: () -> Unit) {
     val inset = with(LocalDensity.current) { CHIP_INSET.toPx() }
     val extent = with(LocalDensity.current) { CHIP_SIZE.toPx() } - inset * 2f
     // Traced once per kind and size rather than on every draw: the grid redraws whenever the
-    // selection moves, and re-deriving sixteen shapes for a highlight change is work for nothing.
+    // selection moves, and re-deriving every shape on the page for a highlight change is work for
+    // nothing.
     val tracing = remember(kind, extent) { trace(kind, inset, inset, inset + extent, inset + extent) }
 
     Box(

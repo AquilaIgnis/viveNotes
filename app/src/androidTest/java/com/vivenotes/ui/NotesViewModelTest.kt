@@ -396,19 +396,19 @@ class NotesViewModelTest {
         vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
         advanceUntilIdle()
         assertEquals(1, vm.strokes.value.size)
-        assertEquals(InkUndoState(canUndo = true), vm.inkUndoState.value)
+        assertEquals(CanvasUndoState(canUndo = true), vm.canvasUndoState.value)
 
-        vm.undoInk()
+        vm.undoCanvas()
         assertTrue(vm.strokes.value.isEmpty())
-        assertEquals(InkUndoState(canRedo = true), vm.inkUndoState.value)
+        assertEquals(CanvasUndoState(canRedo = true), vm.canvasUndoState.value)
         advanceUntilIdle()
         vm.openPage(pageId)
         advanceUntilIdle()
         assertTrue("undoing a draw was not persisted", vm.strokes.value.isEmpty())
 
-        vm.redoInk()
+        vm.redoCanvas()
         assertEquals(1, vm.strokes.value.size)
-        assertEquals(InkUndoState(canUndo = true), vm.inkUndoState.value)
+        assertEquals(CanvasUndoState(canUndo = true), vm.canvasUndoState.value)
         advanceUntilIdle()
         vm.openPage(pageId)
         advanceUntilIdle()
@@ -424,19 +424,19 @@ class NotesViewModelTest {
         advanceUntilIdle()
 
         vm.eraseStrokeParts(inkStroke(50f to 35f, 50f to 65f, sizeDp = 18f))
-        assertEquals("history stayed active while erase geometry was unresolved", InkUndoState(), vm.inkUndoState.value)
+        assertEquals("history stayed active while erase geometry was unresolved", CanvasUndoState(), vm.canvasUndoState.value)
         advanceUntilIdle()
         assertFalse(vm.strokes.value.any { it.stroke.overlaps(centerBox()) })
-        assertEquals(InkUndoState(canUndo = true), vm.inkUndoState.value)
+        assertEquals(CanvasUndoState(canUndo = true), vm.canvasUndoState.value)
 
-        vm.undoInk()
+        vm.undoCanvas()
         assertTrue(vm.strokes.value.single().stroke.overlaps(centerBox()))
         advanceUntilIdle()
         vm.openPage(pageId)
         advanceUntilIdle()
         assertTrue("the undone erase still replayed after reload", vm.strokes.value.single().stroke.overlaps(centerBox()))
 
-        vm.redoInk()
+        vm.redoCanvas()
         assertFalse(vm.strokes.value.any { it.stroke.overlaps(centerBox()) })
         advanceUntilIdle()
     }
@@ -467,7 +467,7 @@ class NotesViewModelTest {
         assertEquals(25f, vm.strokes.value.single().offsetY, 0.01f)
         advanceUntilIdle()
 
-        vm.undoInk()
+        vm.undoCanvas()
         assertEquals(0f, vm.strokes.value.single().offsetX, 0.01f)
         assertEquals(0f, vm.strokes.value.single().offsetY, 0.01f)
         advanceUntilIdle()
@@ -475,7 +475,7 @@ class NotesViewModelTest {
         advanceUntilIdle()
         assertEquals("the undone move still replayed after reload", 0f, vm.strokes.value.single().offsetX, 0.01f)
 
-        vm.redoInk()
+        vm.redoCanvas()
         assertEquals(100f, vm.strokes.value.single().offsetX, 0.01f)
         assertEquals(25f, vm.strokes.value.single().offsetY, 0.01f)
         advanceUntilIdle()
@@ -505,6 +505,94 @@ class NotesViewModelTest {
 
         assertEquals("group membership was not persisted", 1, vm.strokes.value.mapNotNull { it.groupId }.distinct().size)
         assertTrue("the selected colour was not persisted", vm.strokes.value.all { it.stroke.brush.colorIntArgb == blue })
+    }
+
+    @Test
+    fun shapeEditsUndoAndRedoOneActionAtATime() = runTest(dispatcher) {
+        // Insert, adjust, delete — each its own step, and each reversible. A shape lives in the
+        // document rather than in `ink_strokes`, but where it is stored has nothing to do with what
+        // the Undo button reverses.
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        val shapeId = vm.insertShape(ShapeSettings(), 40f, 40f, 160f, 120f)!!
+        advanceUntilIdle()
+        assertEquals(CanvasUndoState(canUndo = true), vm.canvasUndoState.value)
+
+        vm.moveShape(shapeId, 60f, 20f)
+        vm.deleteShapes(setOf(shapeId))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.shapes.isEmpty())
+
+        vm.undoCanvas()
+        assertEquals("undo did not bring the shape back", 1, vm.uiState.value.shapes.size)
+        assertEquals("undo went back further than the delete", 100f, vm.uiState.value.shapes.single().x, 0.01f)
+
+        vm.undoCanvas()
+        assertEquals("undo did not take back the move", 40f, vm.uiState.value.shapes.single().x, 0.01f)
+
+        vm.undoCanvas()
+        assertTrue("undo did not take back the insert", vm.uiState.value.shapes.isEmpty())
+        assertEquals(CanvasUndoState(canRedo = true), vm.canvasUndoState.value)
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertTrue("the undone insert came back after a reload", vm.uiState.value.shapes.isEmpty())
+
+        vm.redoCanvas()
+        vm.redoCanvas()
+        assertEquals("redo did not replay the move", 100f, vm.uiState.value.shapes.single().x, 0.01f)
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals("the redone edits were not persisted", 100f, vm.uiState.value.shapes.single().x, 0.01f)
+    }
+
+    @Test
+    fun undoStepsBackThroughInkAndShapesInTheOrderTheyHappened() = runTest(dispatcher) {
+        // One ring across kinds. Two rings could only guess which of them a press belonged to, and
+        // would have got it wrong every time the two were interleaved — which is the normal case.
+        val vm = seededViewModel()
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+        vm.insertShape(ShapeSettings(), 40f, 40f, 160f, 120f)
+        advanceUntilIdle()
+
+        vm.undoCanvas()
+        assertTrue("Undo took the stroke instead of the shape drawn after it", vm.uiState.value.shapes.isEmpty())
+        assertEquals("Undo took the stroke as well", 1, vm.strokes.value.size)
+
+        vm.undoCanvas()
+        assertTrue("the second Undo did not reach the stroke", vm.strokes.value.isEmpty())
+        assertEquals(CanvasUndoState(canRedo = true), vm.canvasUndoState.value)
+        advanceUntilIdle()
+
+        vm.redoCanvas()
+        assertEquals("redo did not replay the stroke first", 1, vm.strokes.value.size)
+        assertTrue("redo replayed the shape out of order", vm.uiState.value.shapes.isEmpty())
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun aRunOfBorderWidthStepsIsOneUndo() = runTest(dispatcher) {
+        // The slider reports every step it passes through. Thirty entries for one drag is not a
+        // history, so a run of them folds into the entry it started.
+        val vm = seededViewModel()
+        val shapeId = vm.insertShape(ShapeSettings(), 40f, 40f, 160f, 120f)!!
+        advanceUntilIdle()
+        val original = vm.uiState.value.shapes.single().borderWidth
+
+        // Against the declared range rather than literals, so tightening it stays a one-line change.
+        val top = minOf(ShapeSettings.MIN_BORDER_WIDTH + 6, ShapeSettings.MAX_BORDER_WIDTH)
+        ((ShapeSettings.MIN_BORDER_WIDTH + 1)..top)
+            .forEach { vm.setShapeBorderWidth(setOf(shapeId), it.toFloat()) }
+        advanceUntilIdle()
+        assertEquals(top.toFloat(), vm.uiState.value.shapes.single().borderWidth, 0.01f)
+
+        vm.undoCanvas()
+
+        assertEquals("the run did not fold into one step", original, vm.uiState.value.shapes.single().borderWidth, 0.01f)
+        assertEquals("folding the run also swallowed the insert", 1, vm.uiState.value.shapes.size)
     }
 
     @Test
@@ -564,9 +652,9 @@ class NotesViewModelTest {
         val pastedBounds = vm.strokes.value.first { it.id != originalId }.stroke.shape.computeBoundingBox()!!
         assertEquals(100f, (pastedBounds.xMin + pastedBounds.xMax) / 2f, 1f)
         assertEquals(120f, (pastedBounds.yMin + pastedBounds.yMax) / 2f, 1f)
-        vm.undoInk()
+        vm.undoCanvas()
         assertEquals(1, vm.strokes.value.size)
-        vm.redoInk()
+        vm.redoCanvas()
         assertEquals(2, vm.strokes.value.size)
         advanceUntilIdle()
         vm.openPage(pageId)
@@ -599,9 +687,9 @@ class NotesViewModelTest {
             ),
         )
         assertEquals(2f, vm.strokes.value.single().scaleX, 0.001f)
-        vm.undoInk()
+        vm.undoCanvas()
         assertEquals(1f, vm.strokes.value.single().scaleX, 0.001f)
-        vm.redoInk()
+        vm.redoCanvas()
         assertEquals(2f, vm.strokes.value.single().scaleX, 0.001f)
         advanceUntilIdle()
         vm.openPage(pageId)
@@ -623,21 +711,21 @@ class NotesViewModelTest {
         val secondPage = repository.createPage(sectionId, "second")
         vm.openPage(secondPage)
         advanceUntilIdle()
-        assertEquals(InkUndoState(), vm.inkUndoState.value)
+        assertEquals(CanvasUndoState(), vm.canvasUndoState.value)
         vm.onStrokeFinished(inkStroke(30f to 30f, 40f to 40f))
-        vm.undoInk()
-        assertEquals(InkUndoState(canRedo = true), vm.inkUndoState.value)
+        vm.undoCanvas()
+        assertEquals(CanvasUndoState(canRedo = true), vm.canvasUndoState.value)
 
         vm.onStrokeFinished(inkStroke(50f to 50f, 60f to 60f))
-        assertEquals(InkUndoState(canUndo = true, canRedo = false), vm.inkUndoState.value)
+        assertEquals(CanvasUndoState(canUndo = true, canRedo = false), vm.canvasUndoState.value)
         val branched = vm.strokes.value
-        vm.redoInk()
+        vm.redoCanvas()
         assertEquals("redo survived a new branch", branched, vm.strokes.value)
 
         advanceUntilIdle()
         vm.openPage(firstPage)
         advanceUntilIdle()
-        assertEquals("the first page lost its independent undo ring", InkUndoState(canUndo = true), vm.inkUndoState.value)
+        assertEquals("the first page lost its independent undo ring", CanvasUndoState(canUndo = true), vm.canvasUndoState.value)
     }
 
     /**

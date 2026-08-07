@@ -49,7 +49,9 @@ import com.vivenotes.model.Outline
 import com.vivenotes.model.ink.PAGE_BASIC
 import com.vivenotes.model.ink.PAGE_SOLID
 import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.arms
 import com.vivenotes.model.ink.seedSegments
+import com.vivenotes.model.ink.withArm
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.panel.ShapePanelContent
 import com.vivenotes.ui.panel.ShapePanelTags
@@ -64,7 +66,7 @@ import org.junit.Test
  * Insert Shape — `docs/inkPlan.md` §5.4.
  *
  * The button has two homes and one armed tool behind them, which is exactly the shape of code where
- * one tab silently stops arming anything. The pane's grid is the other risk: sixteen chips whose
+ * one tab silently stops arming anything. The pane's grid is the other risk: a page of chips whose
  * only difference is the geometry they draw, so picking one and getting its neighbour would look
  * entirely plausible on screen.
  */
@@ -374,6 +376,8 @@ class ShapeToolTest {
     private var canvasTaps = 0
     private var borderWidth: Int? = null
     private var resizeCalls = 0
+    private var armCalls = 0
+    private var moveCalls = 0
 
     /** A square, in page dp, seeded the way [com.vivenotes.ui.NotesViewModel.insertShape] seeds one. */
     private fun square(left: Float, top: Float, side: Float): Outline.Shape {
@@ -383,6 +387,18 @@ class ShapeToolTest {
             kind = ShapeKind.Rectangle,
             segments = seedSegments(
                 ShapeKind.Rectangle, left, top, left + side, top + side,
+            ) { "seg-${next++}" },
+        ).withRecomputedBounds()
+    }
+
+    /** An L in the same terms — corner at the bottom left, an arm up and an arm right. */
+    private fun ell(left: Float, top: Float, side: Float): Outline.Shape {
+        var next = 0
+        return Outline.Shape(
+            id = "ell",
+            kind = ShapeKind.L,
+            segments = seedSegments(
+                ShapeKind.L, left, top, left + side, top + side,
             ) { "seg-${next++}" },
         ).withRecomputedBounds()
     }
@@ -397,6 +413,7 @@ class ShapeToolTest {
         onPage = listOf(shape)
         selectedId = selected
         canvasTaps = 0
+        moveCalls = 0
         compose.setContent {
             ViveNotesTheme {
                 var shapes by remember { mutableStateOf(listOf(shape)) }
@@ -431,6 +448,7 @@ class ShapeToolTest {
                                     interactive = true,
                                     onSelect = { selection = it },
                                     onMoveShape = { id, dx, dy ->
+                                        moveCalls++
                                         shapes = shapes.map {
                                             if (it.id == id) it.translated(dx, dy) else it
                                         }
@@ -441,6 +459,18 @@ class ShapeToolTest {
                                         resizeCalls++
                                         shapes = shapes.map {
                                             if (it.id == id) it.scaledAbout(ax, ay, sx, sy) else it
+                                        }
+                                    },
+                                    // Likewise NotesViewModel.resizeShapeArm, arm lookup included:
+                                    // what is edited is an arm of the shape as it stands now.
+                                    onResizeShapeArm = { id, segmentId, atEnd, along ->
+                                        armCalls++
+                                        shapes = shapes.map { shape ->
+                                            if (shape.id != id) return@map shape
+                                            val arm = shape.arms().firstOrNull {
+                                                it.segmentId == segmentId && it.atEnd == atEnd
+                                            }
+                                            arm?.let { shape.withArm(it, along) } ?: shape
                                         }
                                     },
                                 )
@@ -492,6 +522,30 @@ class ShapeToolTest {
         )
         assertEquals("the page panned instead of the shape moving", 0, horizontal.value)
         assertEquals("the page panned instead of the shape moving", 0, vertical.value)
+    }
+
+    @Test
+    fun aMoveIsOneEditNoMatterHowManyFramesItTakes() {
+        // Same rule the corner drag follows, and for a reason the arithmetic never gave: deltas
+        // compose safely, so per-frame moves were *correct* — they were just sixty actions, which
+        // made Undo useless and autosaved the page sixty times on the way.
+        setPage(square(left = 40f, top = 40f, side = 80f), selected = "square")
+        val inside = at(80f, 80f)
+
+        // The first sample clears the touch slop on its own, so the drag begins there whatever the
+        // density is and the travel this asserts is the seven samples after it.
+        drag(inside, (0..7).map { inside + Offset(80f + it * 20f, 0f) })
+
+        assertEquals("a move should commit exactly once", 1, moveCalls)
+        val moved = onPage.single()
+        // Measured from the sample the drag began on, so the whole travel arrives — and the slop
+        // itself does not, which is what stops the shape jumping the moment it starts moving.
+        assertEquals(
+            "the shape did not travel the whole drag",
+            with(compose.density) { 140f.toDp().value },
+            moved.x - 40f,
+            1f,
+        )
     }
 
     @Test
@@ -547,6 +601,92 @@ class ShapeToolTest {
         )
 
         assertEquals("a corner drag should commit exactly once", 1, resizeCalls)
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // The L's arms, one at a time — SD9
+    // -----------------------------------------------------------------------------------------
+
+    @Test
+    fun draggingTheFootTabLengthensOnlyTheFoot() {
+        // The whole point of the kind: an L whose foot is pulled out to the right keeps the upright
+        // it had. A corner drag is what scales both, and this must not be one.
+        setPage(ell(left = 40f, top = 40f, side = 80f), selected = "ell")
+        // 20dp past the tip at (120, 120), which is where the tab is drawn.
+        val footTab = at(140f, 120f)
+
+        drag(footTab, listOf(at(220f, 120f), at(300f, 130f)))
+
+        val pulled = onPage.single()
+        // The finger grabbed the tab, so the tip trails it by the gap it was grabbed at: 300 - 20.
+        assertEquals("the foot did not follow the finger", 240f, pulled.width, 1f)
+        assertEquals("the upright was stretched too", 80f, pulled.height, 1f)
+        assertEquals("the corner moved", 40f, pulled.x, 1f)
+        assertEquals("the corner moved", 40f, pulled.y, 1f)
+        assertEquals("the page panned instead of the arm moving", 0, horizontal.value)
+    }
+
+    @Test
+    fun draggingTheUprightTabLengthensOnlyTheUpright() {
+        // Placed further down the page than the square is, because this arm is dragged *upwards* —
+        // the direction it runs — and the tab starts 20dp above the tip.
+        setPage(ell(left = 60f, top = 120f, side = 80f), selected = "ell")
+        val uprightTab = at(60f, 100f)
+
+        drag(uprightTab, listOf(at(60f, 80f), at(70f, 40f)))
+
+        val pulled = onPage.single()
+        // Trailing the finger by the same 20dp gap: the tip lands at 40 + 20, over a corner at 200.
+        assertEquals("the upright did not follow the finger", 60f, pulled.y, 1f)
+        assertEquals("the upright is not the length it was dragged to", 140f, pulled.height, 1f)
+        assertEquals("the foot was stretched too", 80f, pulled.width, 1f)
+        assertEquals("the corner moved sideways", 60f, pulled.x, 1f)
+    }
+
+    @Test
+    fun theCornerHandleStillScalesTheWholeLDespiteTheTabBesideIt() {
+        // The two live within a finger of each other — an L's tips *are* two corners of its box — so
+        // this is the arbitration, not a duplicate of the corner test: nearest wins, and a touch
+        // squarely on the corner has to still be the corner.
+        setPage(ell(left = 40f, top = 40f, side = 80f), selected = "ell")
+        val bottomRight = at(120f, 120f)
+
+        drag(bottomRight, listOf(at(180f, 180f), at(280f, 280f)))
+
+        val resized = onPage.single()
+        assertEquals("the corner drag did not scale the shape", 240f, resized.width, 1f)
+        assertEquals("only one axis scaled, so a tab took the drag", 240f, resized.height, 1f)
+        assertEquals("a corner drag should still commit as a resize", 1, resizeCalls)
+        assertEquals("a corner drag committed an arm edit", 0, armCalls)
+    }
+
+    @Test
+    fun draggingAFootsTailBackPastTheUprightMakesACross() {
+        // The shape the tail handles exist for, and the one an L cannot otherwise reach: the foot is
+        // not stretched, it is extended back *through* the corner until it spans the upright.
+        setPage(ell(left = 140f, top = 40f, side = 80f), selected = "ell")
+        // 20dp back along the foot from the corner at (140, 120) — the tail's tab, not the tip's.
+        val footTail = at(120f, 120f)
+
+        drag(footTail, listOf(at(80f, 120f), at(40f, 120f)))
+
+        val crossed = onPage.single()
+        // Trailing the finger by the 20dp it was grabbed at: the foot now starts at 60.
+        assertEquals("the foot did not reach back past the upright", 60f, crossed.x, 1f)
+        assertEquals("the foot's far end moved", 160f, crossed.width, 1f)
+        assertEquals("the upright was dragged too", 40f, crossed.y, 1f)
+        assertEquals("the upright was dragged too", 80f, crossed.height, 1f)
+    }
+
+    @Test
+    fun anArmDragIsOneEditNoMatterHowManyFramesItTakes() {
+        setPage(ell(left = 40f, top = 40f, side = 80f), selected = "ell")
+        val footTab = at(140f, 120f)
+        armCalls = 0
+
+        drag(footTab, (1..8).map { footTab + Offset(it * 25f, 0f) })
+
+        assertEquals("an arm drag should commit exactly once", 1, armCalls)
     }
 
     @Test

@@ -129,10 +129,10 @@ data class ShapeSettings(
 ) {
     companion object {
         const val MIN_BORDER_WIDTH = 1
-        const val MAX_BORDER_WIDTH = 24
+        const val MAX_BORDER_WIDTH = 12
 
         /** The value the reference pane is showing. */
-        const val DEFAULT_BORDER_WIDTH = 10
+        const val DEFAULT_BORDER_WIDTH = 2
     }
 }
 

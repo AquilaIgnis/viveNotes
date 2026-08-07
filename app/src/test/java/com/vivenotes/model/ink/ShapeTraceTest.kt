@@ -82,7 +82,7 @@ class ShapeTraceTest {
 
     @Test
     fun `closed shapes close and open ones do not`() {
-        val open = setOf(ShapeKind.Line, ShapeKind.Arrow)
+        val open = setOf(ShapeKind.Line, ShapeKind.Arrow, ShapeKind.L)
         val closed = setOf(
             ShapeKind.Rectangle, ShapeKind.RoundedRectangle, ShapeKind.Ellipse,
             ShapeKind.Triangle, ShapeKind.RightTriangle, ShapeKind.Diamond,
@@ -163,6 +163,18 @@ class ShapeTraceTest {
     }
 
     @Test
+    fun `an L is a corner at the bottom left with an arm up and an arm right`() {
+        // Which way round it opens is the whole shape: an L drawn any other way is a corner, and the
+        // arm handles are labelled by the axis each one runs along.
+        val outline = ShapeKind.L.traced().solid.single().points()
+
+        assertEquals(3, outline.size)
+        assertEquals("the vertical arm should start at the top", box.left to box.top, outline[0])
+        assertEquals("the corner should be bottom left", box.left to box.bottom, outline[1])
+        assertEquals("the horizontal arm should end at the right", box.right to box.bottom, outline[2])
+    }
+
+    @Test
     fun `an arrow points at the end of the drag, not at a corner of its box`() {
         // The reason trace() takes a drag rather than a normalised rectangle. Dragging right-to-left
         // has to give an arrow pointing left, and there is nowhere downstream to recover that from.
@@ -222,7 +234,7 @@ class ShapeTraceTest {
 
         assertEquals(ShapeKind.entries.toSet(), paged.toSet())
         assertEquals("a kind is on two pages at once", ShapeKind.entries.size, paged.size)
-        assertEquals(10, ShapeKind.onPage(PAGE_BASIC).size)
+        assertEquals(11, ShapeKind.onPage(PAGE_BASIC).size)
         // Six, which is exactly one row of the picker's grid.
         assertEquals(6, ShapeKind.onPage(PAGE_SOLID).size)
         assertTrue(ShapeKind.onPage(PAGE_SOLID).all(ShapeKind::isSolid))

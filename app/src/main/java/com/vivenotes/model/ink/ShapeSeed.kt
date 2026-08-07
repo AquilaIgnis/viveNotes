@@ -73,6 +73,12 @@ fun seedSegments(
         ShapeKind.Pentagon -> closedChain(*regularPoints(left, top, right, bottom, 5, -HALF_PI))
         ShapeKind.Hexagon -> closedChain(*regularPoints(left, top, right, bottom, 6, 0f))
 
+        // One segment per arm, which is the whole point of the kind: a segment is what an arm handle
+        // grabs, so the vertical and the horizontal have to be two records rather than one polyline.
+        // They meet at the bottom-left corner, so that corner is the only endpoint either of them
+        // shares — which is how `arms()` finds the two free ends without being told about L.
+        ShapeKind.L -> chain(left, top, left, bottom, right, bottom)
+
         ShapeKind.Ellipse -> ellipseRing(left, top, right, bottom, nextId)
 
         // A rounded rectangle is four straight sides and four quarter-arc corners, each editable.

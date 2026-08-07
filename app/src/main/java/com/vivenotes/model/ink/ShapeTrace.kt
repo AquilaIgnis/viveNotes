@@ -59,6 +59,7 @@ enum class ShapeKind(val label: String, val page: Int) {
     Diamond("Diamond", PAGE_BASIC),
     Pentagon("Pentagon", PAGE_BASIC),
     Hexagon("Hexagon", PAGE_BASIC),
+    L("L shape", PAGE_BASIC),
 
     Cube("Cube", PAGE_SOLID),
     Pyramid("Pyramid", PAGE_SOLID),
@@ -69,6 +70,16 @@ enum class ShapeKind(val label: String, val page: Int) {
     ;
 
     val isSolid: Boolean get() = page == PAGE_SOLID
+
+    /**
+     * True for the kinds whose arms are resized one at a time, through the handles
+     * [ShapeArm][com.vivenotes.model.ink.ShapeArm] describes, rather than only as a whole.
+     *
+     * A property of the kind rather than of the geometry, because "which free ends may be dragged"
+     * is a question about the *affordance*, and an arrow's three polylines have free ends that mean
+     * nothing to pull on. Naming the kinds keeps that judgement in one place.
+     */
+    val hasArms: Boolean get() = this == L
 
     companion object {
         const val PAGE_COUNT = 2
@@ -158,6 +169,13 @@ fun trace(
         // Points left and right, which is the orientation that gives the flat top a hexagon is
         // recognised by.
         ShapeKind.Hexagon -> closedShape(regular(left, top, right, bottom, 6, 0f))
+        // Corner at the bottom left, one arm up and one to the right — the two axes, which is what
+        // an L is for. Open, so like the line and the arrow it reports no fill region.
+        //
+        // Normalised like every closed kind rather than read off the drag like the line: the L
+        // always opens the same way, so which corner of the box the drag began in says nothing. The
+        // arms are adjusted one at a time afterwards, which is the affordance that replaces it.
+        ShapeKind.L -> ShapeTracing(listOf(floatArrayOf(left, top, left, bottom, right, bottom)))
 
         ShapeKind.Cube -> cube(left, top, right, bottom)
         ShapeKind.Pyramid -> pyramid(left, top, right, bottom)

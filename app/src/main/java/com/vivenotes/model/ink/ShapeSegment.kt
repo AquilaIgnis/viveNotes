@@ -49,6 +49,18 @@ data class ShapeSegment(
         copy(x1 = x1 + dx, y1 = y1 + dy, x2 = x2 + dx, y2 = y2 + dy)
 
     /**
+     * The segment with one of its ends moved — the one edit that moves an endpoint rather than the
+     * whole shape, and so the one an arm handle makes ([ShapeArm]).
+     *
+     * [bulge] rides across unchanged, which is right for the straight segments arms are found on and
+     * is why this is not offered as a general per-end editor: on an arc, moving one end alone turns
+     * the chord without the stored height following it, exactly as
+     * [scaledAbout] describes.
+     */
+    fun withEnd(atEnd: Boolean, x: Float, y: Float): ShapeSegment =
+        if (atEnd) copy(x2 = x, y2 = y) else copy(x1 = x, y1 = y)
+
+    /**
      * The point at the top of the arc, where [bulge] measures its height.
      *
      * `mid + bulge * (dy, -dx)`: the perpendicular to the chord is `(dy, -dx) / chord` and the

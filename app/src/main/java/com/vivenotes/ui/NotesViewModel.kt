@@ -68,7 +68,9 @@ import com.vivenotes.model.Orientation
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
 import com.vivenotes.model.PageStyle
+import com.vivenotes.model.ink.arms
 import com.vivenotes.model.ink.seedSegments
+import com.vivenotes.model.ink.withArm
 import com.vivenotes.model.PaperDimensions
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.PrintMargins
@@ -109,7 +111,7 @@ private sealed interface StoredInkOperation {
 }
 
 /** Whether the open page has a Draw-toolbar action in either direction. */
-data class InkUndoState(
+data class CanvasUndoState(
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
 )
@@ -135,15 +137,48 @@ private sealed interface InkHistoryMutation {
     ) : InkHistoryMutation
 }
 
-private data class InkHistoryEntry(
-    val before: List<PageStroke>,
-    val after: List<PageStroke>,
-    val mutation: InkHistoryMutation,
-)
+/**
+ * One reversible action on the canvas, of whatever kind — `docs/inkPlan.md` §5.4 SD10.
+ *
+ * **One ring across kinds, not one ring per kind.** Undo is a button, not a mode: what it reverses is
+ * the last thing you did on this page, and a user who draws a stroke, drops a shape and presses Undo
+ * expects the shape back — not the stroke, and not nothing. Two rings could only ever guess which of
+ * them a press belonged to, and would have got it wrong every time the two kinds were interleaved.
+ * The same argument AD7 makes for one selection and one tooltip, made again for history.
+ *
+ * The two arms differ in where the truth lives, which is why this is a sealed type rather than a list
+ * of lambdas: ink is rows in `ink_strokes` and its entry names a *mutation* to replay against them,
+ * while a shape is part of the document and its entry is simply the page's shape list on either side.
+ */
+private sealed interface CanvasHistoryEntry {
 
-private data class PageInkHistory(
-    val undo: MutableList<InkHistoryEntry> = mutableListOf(),
-    val redo: MutableList<InkHistoryEntry> = mutableListOf(),
+    data class Ink(
+        val before: List<PageStroke>,
+        val after: List<PageStroke>,
+        val mutation: InkHistoryMutation,
+    ) : CanvasHistoryEntry
+
+    /**
+     * The page's shapes before and after. Whole lists, because a shape edit can add, remove or alter
+     * any number of them and the document is saved whole regardless — the same shallow-snapshot trade
+     * the ink arm makes, over data that is already immutable.
+     *
+     * [coalesceKey] names actions that arrive as a stream but read as one: dragging the tooltip's
+     * border-width slider fires per step, and thirty undo entries for one slider is not a history,
+     * it is a nuisance. Consecutive entries sharing a key, within [SHAPE_COALESCE_MS], are merged.
+     * Null — every other edit — always pushes its own entry.
+     */
+    data class Shapes(
+        val before: List<Outline.Shape>,
+        val after: List<Outline.Shape>,
+        val coalesceKey: String? = null,
+        val atMillis: Long = 0L,
+    ) : CanvasHistoryEntry
+}
+
+private data class PageCanvasHistory(
+    val undo: MutableList<CanvasHistoryEntry> = mutableListOf(),
+    val redo: MutableList<CanvasHistoryEntry> = mutableListOf(),
 )
 
 data class NotesUiState(
@@ -234,9 +269,9 @@ class NotesViewModel(
     private val _strokes = MutableStateFlow<List<PageStroke>>(emptyList())
     val strokes: StateFlow<List<PageStroke>> = _strokes.asStateFlow()
 
-    /** Availability for the open page's bounded, session-local ink history. */
-    private val _inkUndoState = MutableStateFlow(InkUndoState())
-    val inkUndoState: StateFlow<InkUndoState> = _inkUndoState.asStateFlow()
+    /** Availability for the open page's bounded, session-local canvas history — ink and shapes. */
+    private val _canvasUndoState = MutableStateFlow(CanvasUndoState())
+    val canvasUndoState: StateFlow<CanvasUndoState> = _canvasUndoState.asStateFlow()
 
     /**
      * The shared prime object clipboard — `docs/diagram.md`.
@@ -249,8 +284,11 @@ class NotesViewModel(
     private val _hasClipboard = MutableStateFlow(false)
     val hasClipboard: StateFlow<Boolean> = _hasClipboard.asStateFlow()
 
-    /** Snapshots are shallow lists: native strokes are immutable and safely shared between entries. */
-    private val inkHistoryByPage = mutableMapOf<String, PageInkHistory>()
+    /**
+     * Snapshots are shallow lists: native strokes are immutable, an `Outline.Shape` is a data class,
+     * and both are safely shared between entries.
+     */
+    private val canvasHistoryByPage = mutableMapOf<String, PageCanvasHistory>()
 
     /** An erase resolves native geometry off-thread; history pauses until its action is committed. */
     private val pendingInkEditsByPage = mutableMapOf<String, Int>()
@@ -352,7 +390,7 @@ class NotesViewModel(
         selectedSection.value = sectionId
         _uiState.value = _uiState.value.copy(selectedSectionId = sectionId, selectedPageId = null)
         _strokes.value = emptyList()
-        publishInkUndoState(null)
+        publishCanvasUndoState(null)
         _compactPane.value = CompactPane.Pages
     }
 
@@ -404,7 +442,7 @@ class NotesViewModel(
                     null
                 },
             )
-            publishInkUndoState(pageId)
+            publishCanvasUndoState(pageId)
             _selection.value = SelectionState()
             _compactPane.value = CompactPane.Editor
         }
@@ -765,8 +803,10 @@ class NotesViewModel(
      * Seeds a shape into the box just dragged and adds it to the document.
      *
      * A document edit rather than an ink write: a shape is an object, so it goes through the same
-     * autosave the text containers do rather than through `ink_strokes`. That is also why there is
-     * no undo entry here — shapes ride the document's history, not the ink history ring.
+     * autosave the text containers do rather than through `ink_strokes`. It is still one entry on the
+     * canvas history ring, which spans both kinds (SD10): where a shape is *stored* and what Undo
+     * reverses are two different questions, and the answer to the second is always "the last thing
+     * you did".
      *
      * The shape is selected on arrival, because the handles are how it is adjusted and a shape you
      * have to hunt for before you can move a corner is a shape you would rather have redrawn.
@@ -794,18 +834,38 @@ class NotesViewModel(
             fillArgb = shape.fillArgb,
         ).withRecomputedBounds()
 
-        _uiState.value = _uiState.value.copy(shapes = _uiState.value.shapes + created)
+        editShapes { it + created }
         // Drawing one shape puts the tool down. The handles are the point of a shape being an
         // object, and they are unreachable while the tool that draws new ones is still armed —
         // so placing one hands it straight to you, ready to adjust.
         _tool.value = DrawTool.None
-        edits.tryEmit(Unit)
         return created.id
     }
 
+    /**
+     * Moves a shape by a delta — **once per gesture, not once per frame.**
+     *
+     * A delta composes safely, so per-frame calls were correct arithmetic; what they were not was one
+     * *action*. Undo reverses actions, and sixty entries for one drag makes the button useless — as
+     * did sixty autosaves. Both callers now report the whole travel on the lift, the layer from its
+     * own preview and the lasso as it always did.
+     */
     fun moveShape(shapeId: String, dx: Float, dy: Float) {
-        if (dx == 0f && dy == 0f) return
-        updateShapeOutline(shapeId) { it.translated(dx, dy) }
+        moveShapes(setOf(shapeId), dx, dy)
+    }
+
+    /**
+     * The lasso's half of a move: every shape it holds, in **one** edit.
+     *
+     * Not `ids.forEach(::moveShape)`, which is what it was. One gesture that moved three shapes then
+     * cost three presses of Undo to take back, each putting one shape where the others no longer
+     * were — a history that describes the implementation rather than what the user did.
+     */
+    fun moveShapes(shapeIds: Set<String>, dx: Float, dy: Float) {
+        if (shapeIds.isEmpty() || (dx == 0f && dy == 0f)) return
+        editShapes { shapes ->
+            shapes.map { if (it.id in shapeIds) it.translated(dx, dy) else it }
+        }
     }
 
     /**
@@ -819,8 +879,42 @@ class NotesViewModel(
      * a drag's scales into each other and the shape explodes.
      */
     fun resizeShape(shapeId: String, anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float) {
-        if (scaleX == 1f && scaleY == 1f) return
-        updateShapeOutline(shapeId) { it.scaledAbout(anchorX, anchorY, scaleX, scaleY) }
+        resizeShapes(setOf(shapeId), anchorX, anchorY, scaleX, scaleY)
+    }
+
+    /** The lasso's half of a resize: every shape it holds, in one edit — see [moveShapes]. */
+    fun resizeShapes(
+        shapeIds: Set<String>,
+        anchorX: Float,
+        anchorY: Float,
+        scaleX: Float,
+        scaleY: Float,
+    ) {
+        if (shapeIds.isEmpty() || (scaleX == 1f && scaleY == 1f)) return
+        editShapes { shapes ->
+            shapes.map {
+                if (it.id in shapeIds) it.scaledAbout(anchorX, anchorY, scaleX, scaleY) else it
+            }
+        }
+    }
+
+    /**
+     * Moves one arm's free end along its own axis — the L's per-arm handles, `docs/inkPlan.md` SD9.
+     *
+     * The arm is looked up again here rather than passed in, so what is edited is an arm of the
+     * shape as it stands now. That matters because the caller measured it a gesture ago: an arm the
+     * shape no longer has is one this leaves alone rather than one it recreates.
+     *
+     * Absolute, like [resizeShape] and unlike [moveShape] — it says where the tip goes, not how far
+     * it travelled — but unlike a scale it does not compound, so applying it per frame would be
+     * harmless. It is still committed once, on the lift, because a drag that wrote every frame would
+     * be a drag that autosaved every frame.
+     */
+    fun resizeShapeArm(shapeId: String, segmentId: String, atEnd: Boolean, along: Float) {
+        updateShapeOutline(shapeId) { shape ->
+            val arm = shape.arms().firstOrNull { it.segmentId == segmentId && it.atEnd == atEnd }
+            arm?.let { shape.withArm(it, along) } ?: shape
+        }
     }
 
     /**
@@ -831,36 +925,67 @@ class NotesViewModel(
      * change the other: one travels with the page, the other with the person.
      */
     fun setShapeBorderWidth(shapeIds: Set<String>, width: Float) {
+        if (shapeIds.isEmpty()) return
         val clamped = width.coerceIn(
             ShapeSettings.MIN_BORDER_WIDTH.toFloat(),
             ShapeSettings.MAX_BORDER_WIDTH.toFloat(),
         )
-        shapeIds.forEach { id -> updateShapeOutline(id) { it.copy(borderWidth = clamped) } }
+        // The slider reports every step it passes through, so the run of them is one action to undo.
+        editShapes(coalesceKey = "border-width:${shapeIds.sorted().joinToString(",")}") { shapes ->
+            shapes.map { if (it.id in shapeIds) it.copy(borderWidth = clamped) else it }
+        }
     }
 
     /** Recolours the border of every selected shape — the tooltip's swatch, per AD7. */
     fun recolorShapes(shapeIds: Set<String>, argb: Int) {
-        shapeIds.forEach { id -> updateShapeOutline(id) { it.copy(borderArgb = argb) } }
+        if (shapeIds.isEmpty()) return
+        editShapes { shapes ->
+            shapes.map { if (it.id in shapeIds) it.copy(borderArgb = argb) else it }
+        }
     }
 
     /** Deletes every selected shape, in one document edit rather than one per shape. */
     fun deleteShapes(shapeIds: Set<String>) {
         if (shapeIds.isEmpty()) return
-        val pageId = _uiState.value.selectedPageId ?: return
-        if (readOnlyPageId == pageId) return
-        val state = _uiState.value
-        if (state.shapes.none { it.id in shapeIds }) return
-        _uiState.value = state.copy(shapes = state.shapes.filterNot { it.id in shapeIds })
-        edits.tryEmit(Unit)
+        editShapes { shapes -> shapes.filterNot { it.id in shapeIds } }
     }
 
     private inline fun updateShapeOutline(shapeId: String, change: (Outline.Shape) -> Outline.Shape) {
+        editShapes { shapes ->
+            shapes.map { if (it.id == shapeId) change(it) else it }
+        }
+    }
+
+    /**
+     * The one door every shape edit goes through: page guard, state, history, autosave.
+     *
+     * Having exactly one is what stopped shapes being the kind of object that is *almost* undoable —
+     * before this, each mutation wrote the state and emitted an autosave by hand, and adding the ring
+     * to five call sites would have meant forgetting it on the sixth.
+     *
+     * An edit that changes nothing is not an edit: it records no history and wakes no autosave, which
+     * matters because a drag ending exactly where it began still reports itself.
+     */
+    private inline fun editShapes(
+        coalesceKey: String? = null,
+        change: (List<Outline.Shape>) -> List<Outline.Shape>,
+    ) {
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
         val state = _uiState.value
-        if (state.shapes.none { it.id == shapeId }) return
-        _uiState.value = state.copy(
-            shapes = state.shapes.map { if (it.id == shapeId) change(it) else it },
+        val before = state.shapes
+        val after = change(before)
+        if (after == before) return
+
+        _uiState.value = state.copy(shapes = after)
+        pushHistory(
+            pageId,
+            CanvasHistoryEntry.Shapes(
+                before = before,
+                after = after,
+                coalesceKey = coalesceKey,
+                atMillis = System.currentTimeMillis(),
+            ),
         )
         edits.tryEmit(Unit)
     }
@@ -960,9 +1085,11 @@ class NotesViewModel(
      * The centre is measured across **both** kinds, so a copied stroke-and-shape pair lands in the
      * same relative arrangement it was copied in rather than each kind centring itself.
      *
-     * Each kind commits the way it already does — ink through the history ring and `ink_strokes`, a
-     * shape through the document's autosave — which is exactly AD7's second consequence: the same
-     * operation, applied by each kind to its own representation.
+     * Each kind commits the way it already does — ink through `ink_strokes`, a shape through the
+     * document's autosave — which is exactly AD7's second consequence: the same operation, applied by
+     * each kind to its own representation. Both leave one entry on the one history ring (SD10), so a
+     * paste of both kinds takes two presses of Undo to unwind. Worth knowing, and not worth a
+     * cross-kind entry type to fix: each press does visibly undo half of it.
      */
     fun pasteObjects(at: InkPoint) {
         val pageId = _uiState.value.selectedPageId ?: return
@@ -985,8 +1112,7 @@ class NotesViewModel(
                         .map { it.translated(dx, dy) },
                 )
             }
-            _uiState.value = _uiState.value.copy(shapes = _uiState.value.shapes + pastedShapes)
-            edits.tryEmit(Unit)
+            editShapes { it + pastedShapes }
         }
 
         if (sources.isEmpty()) return
@@ -1100,30 +1226,52 @@ class NotesViewModel(
         }
     }
 
-    /** Reverts the last committed ink gesture on the open page. */
-    fun undoInk() {
+    /**
+     * Reverts the last committed action on the open page's canvas, of whichever kind it was.
+     *
+     * The pending-ink guard covers the whole ring rather than the ink half alone. An erase resolves
+     * its geometry off-thread, and until it commits the page's *last action* is not yet known — so
+     * stepping back past it would take out whatever came before while the erase landed on top.
+     */
+    fun undoCanvas() {
         val pageId = _uiState.value.selectedPageId ?: return
         if ((pendingInkEditsByPage[pageId] ?: 0) > 0) return
-        val history = inkHistoryByPage[pageId] ?: return
+        val history = canvasHistoryByPage[pageId] ?: return
         if (history.undo.isEmpty()) return
         val entry = history.undo.removeAt(history.undo.lastIndex)
         history.redo += entry
-        _strokes.value = entry.before
-        publishInkUndoState(pageId)
-        persistHistoryEntry(entry, applied = false)
+        applyHistoryEntry(entry, applied = false)
+        publishCanvasUndoState(pageId)
     }
 
-    /** Reapplies the next ink gesture previously removed by [undoInk]. */
-    fun redoInk() {
+    /** Reapplies the next action previously removed by [undoCanvas]. */
+    fun redoCanvas() {
         val pageId = _uiState.value.selectedPageId ?: return
         if ((pendingInkEditsByPage[pageId] ?: 0) > 0) return
-        val history = inkHistoryByPage[pageId] ?: return
+        val history = canvasHistoryByPage[pageId] ?: return
         if (history.redo.isEmpty()) return
         val entry = history.redo.removeAt(history.redo.lastIndex)
         history.undo += entry
-        _strokes.value = entry.after
-        publishInkUndoState(pageId)
-        persistHistoryEntry(entry, applied = true)
+        applyHistoryEntry(entry, applied = true)
+        publishCanvasUndoState(pageId)
+    }
+
+    /** One step in either direction: [applied] true replays the action, false takes it back. */
+    private fun applyHistoryEntry(entry: CanvasHistoryEntry, applied: Boolean) {
+        when (entry) {
+            is CanvasHistoryEntry.Ink -> {
+                _strokes.value = if (applied) entry.after else entry.before
+                persistInkHistoryEntry(entry, applied)
+            }
+            // The document is the shape's storage, so putting the list back *is* the undo — and the
+            // same autosave every other document edit rides carries it to disk.
+            is CanvasHistoryEntry.Shapes -> {
+                _uiState.value = _uiState.value.copy(
+                    shapes = if (applied) entry.after else entry.before,
+                )
+                edits.tryEmit(Unit)
+            }
+        }
     }
 
     private fun commitInkEdit(
@@ -1132,22 +1280,47 @@ class NotesViewModel(
         after: List<PageStroke>,
         mutation: InkHistoryMutation,
     ) {
-        val history = inkHistoryByPage.getOrPut(pageId, ::PageInkHistory)
-        history.undo += InkHistoryEntry(before, after, mutation)
-        if (history.undo.size > INK_HISTORY_LIMIT) history.undo.removeAt(0)
+        pushHistory(pageId, CanvasHistoryEntry.Ink(before, after, mutation))
+        if (_uiState.value.selectedPageId == pageId) _strokes.value = after
+    }
+
+    /**
+     * Records one action, dropping the redo branch it leaves behind.
+     *
+     * Consecutive shape edits that name the same [CanvasHistoryEntry.Shapes.coalesceKey] within
+     * [SHAPE_COALESCE_MS] are folded into the entry already on the stack: its *before* is the state
+     * the run started from, and its *after* moves forward with each step. That is what makes a slider
+     * one undo rather than one per step, without a gesture protocol reaching all the way up here.
+     */
+    private fun pushHistory(pageId: String, entry: CanvasHistoryEntry) {
+        val history = canvasHistoryByPage.getOrPut(pageId, ::PageCanvasHistory)
+        val previous = history.undo.lastOrNull()
+
+        val coalesced = entry is CanvasHistoryEntry.Shapes &&
+            entry.coalesceKey != null &&
+            previous is CanvasHistoryEntry.Shapes &&
+            previous.coalesceKey == entry.coalesceKey &&
+            entry.atMillis - previous.atMillis <= SHAPE_COALESCE_MS
+
+        if (coalesced) {
+            history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Shapes).copy(
+                after = (entry as CanvasHistoryEntry.Shapes).after,
+                atMillis = entry.atMillis,
+            )
+        } else {
+            history.undo += entry
+            if (history.undo.size > CANVAS_HISTORY_LIMIT) history.undo.removeAt(0)
+        }
         // The abandoned operations are already tombstoned by their undo. Keeping their database
         // rows preserves sync history; only their in-memory route back is discarded.
         history.redo.clear()
-        if (_uiState.value.selectedPageId == pageId) {
-            _strokes.value = after
-            publishInkUndoState(pageId)
-        }
+        if (_uiState.value.selectedPageId == pageId) publishCanvasUndoState(pageId)
     }
 
-    private fun publishInkUndoState(pageId: String? = _uiState.value.selectedPageId) {
-        val history = pageId?.let(inkHistoryByPage::get)
+    private fun publishCanvasUndoState(pageId: String? = _uiState.value.selectedPageId) {
+        val history = pageId?.let(canvasHistoryByPage::get)
         val pending = pageId != null && (pendingInkEditsByPage[pageId] ?: 0) > 0
-        _inkUndoState.value = InkUndoState(
+        _canvasUndoState.value = CanvasUndoState(
             canUndo = !pending && history?.undo?.isNotEmpty() == true,
             canRedo = !pending && history?.redo?.isNotEmpty() == true,
         )
@@ -1156,10 +1329,10 @@ class NotesViewModel(
     private fun changePendingInkEdits(pageId: String, delta: Int) {
         val count = ((pendingInkEditsByPage[pageId] ?: 0) + delta).coerceAtLeast(0)
         if (count == 0) pendingInkEditsByPage.remove(pageId) else pendingInkEditsByPage[pageId] = count
-        if (_uiState.value.selectedPageId == pageId) publishInkUndoState(pageId)
+        if (_uiState.value.selectedPageId == pageId) publishCanvasUndoState(pageId)
     }
 
-    private fun persistHistoryEntry(entry: InkHistoryEntry, applied: Boolean) {
+    private fun persistInkHistoryEntry(entry: CanvasHistoryEntry.Ink, applied: Boolean) {
         viewModelScope.launch {
             inkMutations.withLock {
                 when (val mutation = entry.mutation) {
@@ -1254,7 +1427,7 @@ class NotesViewModel(
                     outlines = emptyList(),
                 )
                 _strokes.value = emptyList()
-                publishInkUndoState(null)
+                publishCanvasUndoState(null)
                 _uiState.value.tree.firstOrNull()?.liveSections?.firstOrNull()?.let { selectSection(it.id) }
             }
         }
@@ -1326,7 +1499,15 @@ class NotesViewModel(
 
         /** Far enough that a duplicate is not mistaken for the original not having copied. */
         private const val DUPLICATE_OFFSET = 16f
-        private const val INK_HISTORY_LIMIT = 100
+        private const val CANVAS_HISTORY_LIMIT = 100
+
+        /**
+         * How long a run of same-key shape edits keeps folding into one undo step.
+         *
+         * Long enough to cover the gaps between steps of a slider being dragged, short enough that
+         * coming back to the same control after looking at the result is a new action to undo.
+         */
+        private const val SHAPE_COALESCE_MS = 1200L
         const val MIN_OUTLINE_WIDTH = 120f
         const val MAX_OUTLINE_WIDTH = 2000f
         const val MAX_OUTLINE_HEIGHT = 4000f
