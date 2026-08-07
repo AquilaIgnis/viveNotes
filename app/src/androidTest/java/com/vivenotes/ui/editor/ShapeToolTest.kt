@@ -20,10 +20,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -53,10 +56,12 @@ import com.vivenotes.model.ink.arms
 import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.model.ink.withArm
 import com.vivenotes.richtext.SelectionState
+import com.vivenotes.ui.panel.PenPanelTags
 import com.vivenotes.ui.panel.ShapePanelContent
 import com.vivenotes.ui.panel.ShapePanelTags
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -278,12 +283,18 @@ class ShapeToolTest {
     @Test
     fun fillColourPicksAndClears() {
         // Was "placed but does nothing" until 2026-08-06 — SD7's inert treatment, on the reasoning
-        // that a stroke has no inside, which stopped being true when SD1 was reversed.
+        // that a stroke has no inside, which stopped being true when SD1 was reversed. The palette
+        // row it grew went again on 2026-08-07: one swatch, and the wheel behind it.
         setPanel()
 
-        compose.onNodeWithTag(ShapePanelTags.fill(PEN_COLORS.first())).performClick()
-        assertEquals("picking a fill did not set one", PEN_COLORS.first(), changed?.fillArgb)
+        compose.onNodeWithTag(ShapePanelTags.FILL).performClick()
+        compose.onNodeWithTag(PenPanelTags.WHEEL).performTouchInput {
+            click(percentOffset(0.8f, 0.5f))
+        }
+        assertNotNull("picking a fill off the wheel did not set one", changed?.fillArgb)
 
+        // The wheel stays open on a pick — trying colours is how it is used — so the way back is
+        // still on screen without reopening anything.
         compose.onNodeWithTag(ShapePanelTags.NO_FILL).performClick()
         assertNull("No fill did not clear it", changed?.fillArgb)
     }
@@ -294,7 +305,43 @@ class ShapeToolTest {
         // the default, not a control that cannot be used.
         assertNull(ShapeSettings().fillArgb)
         setPanel()
+
+        compose.onNodeWithTag(ShapePanelTags.FILL).assertIsDisplayed()
+        compose.onNodeWithTag(ShapePanelTags.FILL).assertContentDescriptionEquals("No fill")
+
+        // "No fill" is inside the picker now rather than beside it, which is the one thing the
+        // collapse could have lost: a shape has to be able to get back to having no inside.
+        compose.onNodeWithTag(ShapePanelTags.NO_FILL).assertDoesNotExist()
+        compose.onNodeWithTag(ShapePanelTags.FILL).performClick()
         compose.onNodeWithTag(ShapePanelTags.NO_FILL).assertIsDisplayed()
+    }
+
+    @Test
+    fun theFillSwatchWearsTheFill() {
+        // Read off the pixels rather than off the state that produced them. The swatch is now the
+        // only thing in the pane that says what the fill *is*, so "correct data, nothing on screen"
+        // is exactly the failure this has to see — the lesson from `docs/plan.md` §1a entry 14.
+        val red = 0xFFE53935.toInt()
+        setPanel(ShapeSettings(fillArgb = red))
+
+        val pixels = compose.onNodeWithTag(ShapePanelTags.FILL).captureToImage().toPixelMap()
+        assertEquals(
+            "the swatch is not wearing the fill",
+            Color(red),
+            pixels[pixels.width / 2, pixels.height / 2],
+        )
+        compose.onNodeWithTag(ShapePanelTags.FILL).assertContentDescriptionEquals("Fill color")
+    }
+
+    @Test
+    fun theFillPaletteRowIsGone() {
+        // It asked the same question the border row directly above it already asks, with the same
+        // ten swatches. Removed 2026-08-07 by request; asserted so it cannot creep back as a
+        // "convenience" beside the swatch.
+        setPanel()
+        PEN_COLORS.forEach {
+            compose.onNodeWithTag("shape-fill-$it").assertDoesNotExist()
+        }
     }
 
     @Test

@@ -371,13 +371,6 @@ internal fun ColorSwatches(
     onAddColor: (Int) -> Unit,
     colorTag: (Int) -> String = PenPanelTags::color,
     customTag: String = PenPanelTags.CUSTOM_COLOR,
-    /**
-     * Whether the wheel's own swatch is the selected one. Defaults to "the current colour is not in
-     * the row", which is what marks a colour that has rolled off the end — but a caller whose value
-     * can be *absent* has to say so, or "no fill" would ring the wheel as though a colour had been
-     * mixed.
-     */
-    customSelected: Boolean = current !in palette,
 ) {
     var wheelOpen by remember { mutableStateOf(false) }
     // What the wheel has been left on. Null until it is touched, which is what makes opening the
@@ -410,7 +403,7 @@ internal fun ColorSwatches(
                 // Normally false, since a colour off the wheel joins the row and is ringed there.
                 // It survives for the ink a rolled-off swatch left behind, which has nothing else
                 // to mark it.
-                selected = customSelected,
+                selected = current !in palette,
                 tag = customTag,
                 description = "Custom color",
                 onClick = { wheelOpen = true },

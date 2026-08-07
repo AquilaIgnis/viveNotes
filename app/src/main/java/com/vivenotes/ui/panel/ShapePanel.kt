@@ -2,6 +2,7 @@ package com.vivenotes.ui.panel
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -22,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -56,15 +59,17 @@ import kotlin.math.sign
 object ShapePanelTags {
     const val PREVIEW = "shape-preview"
     const val GRID = "shape-grid"
+    /** The swatch on the Fill color row, which opens the wheel and wears the fill. */
+    const val FILL = "shape-fill"
+
+    /** The way back to an unfilled shape, inside that wheel's popup. */
     const val NO_FILL = "shape-fill-none"
-    const val CUSTOM_FILL = "shape-fill-custom"
     const val CUSTOM_COLOR = "shape-color-custom"
 
     fun kind(kind: ShapeKind) = "shape-kind-${kind.name}"
     fun page(index: Int) = "shape-page-$index"
     fun lineType(lineType: LineType) = "shape-line-${lineType.name}"
     fun color(argb: Int) = "shape-color-$argb"
-    fun fill(argb: Int) = "shape-fill-$argb"
 }
 
 /**
@@ -80,11 +85,14 @@ object ShapePanelTags {
  * the *default* — none — and that is still where a shape starts, so the screenshot and the shipped
  * behaviour continue to agree.
  *
+ * It is **one swatch**, not a swatch and a row: see [FillSwatch]. Border colour keeps its row, and
+ * that asymmetry is the point — the two settings are no longer two copies of the same control.
+ *
  * The picker is paged because the reference is, and page 1 is inferred — only page 2 was captured.
  *
  * The border colour row shares the pens' rolling palette rather than keeping one of its own. By ID5
  * the colours someone reaches for are a property of the user, not of a tool, so a colour mixed
- * holding a pen is there when a shape is drawn.
+ * holding a pen is there when a shape is drawn — and a colour mixed for a fill joins it too.
  */
 @Composable
 fun ColumnScope.ShapePanelContent(
@@ -142,48 +150,126 @@ fun ColumnScope.ShapePanelContent(
     // Live since 2026-08-06 — SD7 amended. It was placed and inert on the reasoning that a shape was
     // stored as ink and a stroke has no fill, which stopped being true when SD1 was reversed. What
     // the reference actually shows is the *default*: none, which is still where a shape starts.
+    //
+    // One button, not a button and a row (2026-08-07, by request). The palette row that used to sit
+    // under this is gone: a fill is one value and the control shows it, the way the object toolkit's
+    // fill button already did. Everything the row could reach is a tap further in, on the wheel.
     PanelSetting(label = "Fill color") {
-        NoFillSwatch(
-            selected = shape.fillArgb == null,
-            onClick = { onChange(shape.copy(fillArgb = null)) },
+        FillSwatch(
+            fill = shape.fillArgb,
+            // Where the wheel opens when there is no fill to open on. The border is the only other
+            // colour the shape has, and it is one the user has usually already chosen — which beats
+            // a constant, and beats the old row's habit of starting wherever the palette happened
+            // to begin.
+            seedArgb = shape.borderColorArgb,
+            onChange = { onChange(shape.copy(fillArgb = it)) },
+            onAddColor = onAddColor,
         )
     }
-    ColorSwatches(
-        palette = palette,
-        // Ten swatches are what fit the row, so "none" rides up on the label instead of squeezing in
-        // as an eleventh.
-        current = shape.fillArgb ?: NO_FILL,
-        customSelected = shape.fillArgb != null && shape.fillArgb !in palette,
-        onPick = { onChange(shape.copy(fillArgb = it)) },
-        onAddColor = onAddColor,
-        colorTag = ShapePanelTags::fill,
-        customTag = ShapePanelTags.CUSTOM_FILL,
-    )
     Spacer(Modifier.height(6.dp))
 }
 
 /**
- * "No fill", which is a value rather than the absence of one.
+ * The whole of Fill colour: a swatch that *is* the fill, opening the wheel.
  *
- * A shape starts with no inside and has to be able to get back there, so this sits on the label row
- * rather than in the swatches: the row picks a colour, and there is no colour that means "none".
+ * It replaced a 🚫 button plus a ten-swatch row. The row was the same palette the border already
+ * shows directly above it, so the pane asked the same question twice and spent a third of its height
+ * on the second copy; and the 🚫 could only ever say "not filled", never *what* the fill was.
+ *
+ * Which puts **"No fill" inside the popup** rather than beside the swatch, and it has to be
+ * somewhere: a shape starts with no inside and has to be able to get back there, and the wheel has
+ * no colour that means "none" — an absent fill is not a transparent one. It leads the popup for the
+ * reason it used to lead the palette.
+ *
+ * The rolling palette (ID5) is still charged on the way out, and still only for a colour the wheel
+ * was *left* on — but not when the way out was No fill, which is a rejection of whatever was mixed
+ * to get there.
  */
 @Composable
-private fun NoFillSwatch(selected: Boolean, onClick: () -> Unit) {
-    Box(
+private fun FillSwatch(
+    fill: Int?,
+    seedArgb: Int,
+    onChange: (Int?) -> Unit,
+    onAddColor: (Int) -> Unit,
+) {
+    var wheelOpen by remember { mutableStateOf(false) }
+    // What the wheel has been left on, as in [ColorSwatches]: null until it is touched, which is what
+    // makes opening the picker and thinking better of it cost nothing.
+    var mixed by remember { mutableStateOf<Int?>(null) }
+
+    fun closeWheel() {
+        wheelOpen = false
+        mixed?.let(onAddColor)
+        mixed = null
+    }
+
+    fun clearFill() {
+        wheelOpen = false
+        mixed = null
+        onChange(null)
+    }
+
+    Box {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .testTag(ShapePanelTags.FILL)
+                .clip(RoundedCornerShape(6.dp))
+                .background(fill?.let(::Color) ?: Color.Transparent)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp))
+                .clickable { wheelOpen = true }
+                .semantics {
+                    contentDescription = if (fill == null) "No fill" else "Fill color"
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            // Only when there is nothing to show. A swatch wearing the fill says it better than a
+            // glyph can, which is why the glyph is the empty case rather than the label.
+            if (fill == null) {
+                Icon(
+                    imageVector = MaterialSymbols.Block,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+
+        // Both ways out lead to the same place, as in [ColorSwatches]: Done and a tap outside are the
+        // same decision, so a colour must not depend on which one closed the picker.
+        FloatingSettingsPanel(
+            expanded = wheelOpen,
+            onDismissRequest = { closeWheel() },
+            title = "Fill color",
+        ) {
+            NoFillEntry(selected = fill == null, onClick = { clearFill() })
+            Spacer(Modifier.height(10.dp))
+            ColorWheelContent(
+                initialArgb = fill ?: seedArgb,
+                onPick = {
+                    mixed = it
+                    onChange(it)
+                },
+                onDone = { closeWheel() },
+            )
+        }
+    }
+}
+
+/** "No fill", which is a value rather than the absence of one — and the only way back to it. */
+@Composable
+private fun NoFillEntry(selected: Boolean, onClick: () -> Unit) {
+    Row(
         modifier = Modifier
-            .size(28.dp)
+            .fillMaxWidth()
             .testTag(ShapePanelTags.NO_FILL)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(
                 if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
             )
             .selectable(selected = selected, onClick = onClick)
-            .semantics {
-                contentDescription = "No fill"
-                this.selected = selected
-            },
-        contentAlignment = Alignment.Center,
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = MaterialSymbols.Block,
@@ -191,11 +277,14 @@ private fun NoFillSwatch(selected: Boolean, onClick: () -> Unit) {
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp),
         )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = "No fill",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
-
-/** No colour is this one, so the swatch row rings nothing while the fill is none. */
-private const val NO_FILL = 0
 
 /**
  * What the armed shape will look like, drawn with the settings below it.
