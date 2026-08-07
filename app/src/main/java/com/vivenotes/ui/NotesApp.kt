@@ -382,6 +382,8 @@ private fun EditorSurface(
         defaults = defaults,
         style = state.pageStyle,
         zoom = zoom,
+        onZoomPinched = viewModel::pinchZoom,
+        onZoomCommitted = viewModel::commitZoom,
         onTitleChange = viewModel::setTitle,
         outlines = state.outlines,
         pageRevision = state.pageRevision,

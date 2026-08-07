@@ -150,8 +150,11 @@ internal fun InkOverlay(
      * Pans the page. The overlay owns this because it owns the gesture: a hit pointer node blocks
      * its siblings from seeing the event at all, so declining a touch is not enough to hand it to
      * the scroll container underneath — the page simply stopped panning while a pen was in hand.
-     * A drawing surface that dispatches between ink and pan is also the shape this needs anyway,
-     * once two-finger pan and pinch-zoom arrive.
+     * A drawing surface that dispatches between ink and pan is also the shape this needs anyway.
+     *
+     * One finger only. Two are a pinch, which is owned by `detectPinchZoom` on an ancestor of this
+     * whole pane — nothing less than an ancestor can take a gesture off a hit pointer node — so a
+     * second contact ends the pan here rather than dragging the page from the first pointer alone.
      */
     pan: CanvasPan = NoPan,
     modifier: Modifier = Modifier,
@@ -508,8 +511,11 @@ private fun handleInk(
 ): Boolean {
     val index = event.actionIndex
     val toolType = event.getToolType(index)
-    // An emulator reports a mouse, and a mouse is the only pointing device it has — so it counts as
-    // direct touch here, which also keeps the finger-drawing toggle testable without a stylus.
+    // Both count as "a pointer with no pen behind it", which is what the finger setting is really
+    // about. A mouse is here for the emulator, though **not** because the emulator reports one:
+    // checked on the `Medium_Tablet` AVD 2026-08-06, and `dumpsys input` lists eleven
+    // `virtio_input_multi_touch` devices and no mouse at all, so a host click arrives as a finger.
+    // Other emulator configurations do deliver a real mouse, and either way the answer is the same.
     val isDirectTouch = toolType == MotionEvent.TOOL_TYPE_FINGER ||
         toolType == MotionEvent.TOOL_TYPE_MOUSE
 
@@ -633,6 +639,14 @@ private fun panPage(
             velocity.clear()
             velocity.addMovement(event)
             setPanning(true, event.x to event.y)
+        }
+        // A second contact is a pinch, the same reading every tool gesture here gives it. Left
+        // running, this would keep dragging the page from the first pointer alone and fight the
+        // zoom for it. Not a release, so no fling — the fingers have not gone anywhere.
+        MotionEvent.ACTION_POINTER_DOWN -> {
+            if (!panning) return false
+            setPanning(false, 0f to 0f)
+            return false
         }
         MotionEvent.ACTION_MOVE -> {
             if (!panning) return false

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -245,8 +246,25 @@ class NotesViewModel(
     val editorDefaults: StateFlow<EditorDefaults> = editorDefaultsStore.defaults
         .stateIn(viewModelScope, SharingStarted.Eagerly, EditorDefaults())
 
+    /**
+     * The zoom the canvas is actually drawn at, which is not always the one on disk.
+     *
+     * A pinch reports a new zoom every frame, and a preference store is the wrong place to hold
+     * something changing at that rate — sixty file writes for one gesture, with the canvas waiting
+     * on a disk round trip to redraw. So this is where zoom lives while the app is running and the
+     * store is only where it is remembered: every setter writes here first and lands it there
+     * afterwards, and a pinch skips the second half until the fingers come off.
+     *
+     * Null until something sets it, which is what lets the stored value be the starting point
+     * without this having to wait for it.
+     */
+    private val liveZoom = MutableStateFlow<Float?>(null)
+
     /** Zoom, navigation layout and canvas brightness — this device's view, not the document's. */
-    val viewSettings: StateFlow<ViewSettings> = viewSettingsStore.settings
+    val viewSettings: StateFlow<ViewSettings> = combine(
+        viewSettingsStore.settings,
+        liveZoom,
+    ) { stored, live -> if (live == null) stored else stored.copy(zoom = live) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ViewSettings())
 
     /** The Draw tab's three pens. How the user likes to draw, so preferences rather than document. */
@@ -739,6 +757,24 @@ class NotesViewModel(
     }
 
     fun setZoom(zoom: Float) {
+        val clamped = zoom.coerceIn(ViewSettings.MIN_ZOOM, ViewSettings.MAX_ZOOM)
+        liveZoom.value = clamped
+        viewModelScope.launch { viewSettingsStore.setZoom(clamped) }
+    }
+
+    /**
+     * One sample of a pinch — see [liveZoom].
+     *
+     * Deliberately does not write. The gesture is a hundred of these and one decision, and the
+     * decision is [commitZoom].
+     */
+    fun pinchZoom(zoom: Float) {
+        liveZoom.value = zoom.coerceIn(ViewSettings.MIN_ZOOM, ViewSettings.MAX_ZOOM)
+    }
+
+    /** The fingers came off: remember where they left it. */
+    fun commitZoom() {
+        val zoom = liveZoom.value ?: return
         viewModelScope.launch { viewSettingsStore.setZoom(zoom) }
     }
 

@@ -63,11 +63,15 @@ internal object DrawTags {
     const val HIGHLIGHTER = "draw-highlighter"
     const val LASSO = "draw-lasso"
     const val FINGER = "draw-finger"
+    const val NONE = "draw-none"
     fun pen(index: Int) = "draw-pen-$index"
 }
 
 /**
  * The Draw tab: undo and redo, three pens, an eraser.
+ *
+ * The tray opens with the empty hand — the one button that arms nothing, so putting a tool down is a
+ * gesture of its own rather than something you get to by picking up a different tool.
  *
  * The pens are deliberately identical — they exist so that three colours are one tap apart instead
  * of a trip through a menu, which is the whole reason a pen tray has more than one pen in it. What
@@ -120,6 +124,19 @@ internal fun DrawTab(
         )
 
         Divider()
+
+        // The off position of the tray. Every other button here arms something, so without it the
+        // only way to stop drawing was to arm a different tool — and `DrawTool.None` was reachable
+        // only as a side effect, from the Home tab's T toggle or from finishing a shape. Heads the
+        // group rather than sitting apart from it: it is the same choice as the pens, made empty.
+        Box(Modifier.testTag(DrawTags.NONE)) {
+            RibbonButton(
+                icon = MaterialSymbols.ArrowSelectorTool,
+                label = "No tool",
+                active = tool == DrawTool.None,
+                onClick = { actions.selectTool(DrawTool.None) },
+            )
+        }
 
         pens.forEachIndexed { index, pen ->
             PenButton(

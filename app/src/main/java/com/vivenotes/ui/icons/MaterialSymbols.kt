@@ -16,6 +16,7 @@ object MaterialSymbols {
     val Add: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add)
     val ArrowBack: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_back)
     val ArrowDropDown: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_drop_down)
+    val ArrowSelectorTool: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_selector_tool)
     val Article: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_article)
     val Block: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_block)
     val Book: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_book)

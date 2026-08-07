@@ -65,6 +65,8 @@ class PageViewTest {
     private lateinit var density: Density
     private var created: Pair<Float, Float>? = null
     private var pasted: InkPoint? = null
+    private var pinched: Float? = null
+    private var committed = 0
     private val hasClipboard = mutableStateOf(false)
     private val textArmed = mutableStateOf(true)
     private val commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 4)
@@ -80,6 +82,8 @@ class PageViewTest {
     ) {
         created = null
         pasted = null
+        pinched = null
+        committed = 0
         this.hasClipboard.value = hasClipboard
         this.textArmed.value = textArmed
         this.style.value = style
@@ -97,6 +101,13 @@ class PageViewTest {
                         defaults = EditorDefaults(),
                         style = this.style.value,
                         zoom = this.zoom.floatValue,
+                        // Fed straight back in, the way the ViewModel does it: a pinch that does not
+                        // reach the page it is zooming would pass a test and do nothing on screen.
+                        onZoomPinched = {
+                            pinched = it
+                            this.zoom.floatValue = it
+                        },
+                        onZoomCommitted = { committed++ },
                         onTitleChange = {},
                         outlines = this.outlines.value,
                         pageRevision = 0,
@@ -239,6 +250,76 @@ class PageViewTest {
 
         assertClose("drawn sheet width", expected = natural * 2, actual = sheetWidthOnScreen(), tolerance = 4)
         assertEquals("the page itself must not be re-laid out", laidOut, pageSize().width)
+    }
+
+    // --- pinch to zoom ---------------------------------------------------------------------------
+
+    /**
+     * Spreads or closes two fingers about the middle of the window, by [from] and [to] half-widths
+     * in pixels, and lifts them.
+     */
+    private fun pinch(from: Float, to: Float) {
+        compose.onRoot().performTouchInput {
+            down(0, Offset(centerX - from, centerY))
+            down(1, Offset(centerX + from, centerY))
+            moveTo(0, Offset(centerX - to, centerY))
+            moveTo(1, Offset(centerX + to, centerY))
+            up(0)
+            up(1)
+        }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun twoFingersSpreadingZoomInAndClosingZoomOut() {
+        setPage(style = PageStyle(hideTitle = true))
+
+        pinch(from = 100f, to = 300f)
+        val spread = pinched ?: error("a two-finger spread reported no zoom")
+        assertTrue("spreading did not zoom in: $spread", spread > 1.5f)
+
+        setPage(style = PageStyle(hideTitle = true), zoom = spread)
+        pinch(from = 300f, to = 100f)
+        val closed = pinched ?: error("a two-finger pinch reported no zoom")
+        assertTrue("closing did not zoom out: $closed vs $spread", closed < spread)
+    }
+
+    /**
+     * One gesture is one preference write. The live steps go somewhere transient precisely so that
+     * dragging a pinch across the screen is not sixty writes to DataStore.
+     */
+    @Test
+    fun aPinchIsWrittenDownOnceWhenTheFingersLeave() {
+        setPage(style = PageStyle(hideTitle = true))
+
+        pinch(from = 100f, to = 300f)
+
+        assertEquals(1, committed)
+    }
+
+    /**
+     * The reason this detector is hand-written rather than `detectTransformGestures`: that one zooms
+     * with a single finger, which on this page is the scroll and the ink overlay's pan.
+     */
+    @Test
+    fun oneFingerNeverZooms() {
+        setPage(style = PageStyle(hideTitle = true))
+
+        compose.onRoot().performTouchInput { swipeUp() }
+        compose.waitForIdle()
+
+        assertNull("a one-finger drag zoomed the page", pinched)
+        assertEquals(0, committed)
+    }
+
+    /** A pinch is not a tap, so it must not leave an empty text container behind it. */
+    @Test
+    fun aPinchDoesNotOpenATextContainer() {
+        setPage(style = PageStyle(hideTitle = true), textArmed = true)
+
+        pinch(from = 100f, to = 300f)
+
+        assertNull("a pinch opened a text container", created)
     }
 
     /** How far the sheet reaches across the window, in pixels, read off the rendered frame. */

@@ -36,6 +36,7 @@ import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
 import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.ViewSettings
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
@@ -78,6 +79,9 @@ class NotesViewModelTest {
     /** The device's own editor defaults, restored after the tests that overwrite them. */
     private var savedDefaults: EditorDefaults? = null
 
+    /** Same borrowed file, same obligation: the zoom tests put the user's own zoom back. */
+    private var savedZoom: Float? = null
+
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -97,6 +101,7 @@ class NotesViewModelTest {
         // write to it has to be put back — otherwise running the suite silently changes the font
         // the user's own build types in.
         savedDefaults = runBlocking { editorDefaults.defaults.first() }
+        savedZoom = runBlocking { viewSettings.settings.first().zoom }
     }
 
     @After
@@ -107,6 +112,7 @@ class NotesViewModelTest {
                 editorDefaults.setFontFamily(saved.fontFamily)
             }
         }
+        savedZoom?.let { runBlocking { viewSettings.setZoom(it) } }
         db.close()
         Dispatchers.resetMain()
     }
@@ -1080,6 +1086,56 @@ class NotesViewModelTest {
             "arming must not touch the store at all",
             runBlocking { editorDefaults.defaults.first().fontSize } != 48,
         )
+    }
+
+    // --- zoom ------------------------------------------------------------------------------------
+
+    /**
+     * A pinch reports a zoom every frame, and a preferences file is not where something changing at
+     * that rate belongs — one gesture would be sixty writes, with the canvas waiting on a disk round
+     * trip to redraw each time. So the canvas follows immediately and the store hears about it once,
+     * from [NotesViewModel.commitZoom].
+     */
+    @Test
+    fun aPinchMovesTheCanvasWithoutTouchingTheStore() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val before = runBlocking { viewSettings.settings.first().zoom }
+
+        vm.pinchZoom(1.37f)
+        advanceUntilIdle()
+
+        assertEquals("the canvas has to follow the fingers", 1.37f, vm.viewSettings.value.zoom)
+        assertEquals(
+            "a pinch in flight must not touch the store at all",
+            before,
+            runBlocking { viewSettings.settings.first().zoom },
+        )
+    }
+
+    /** Fingers do not stop at 400%, so the clamp has to be on this path and not only the ribbon's. */
+    @Test
+    fun aPinchCannotLeaveTheZoomRange() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        vm.pinchZoom(99f)
+        advanceUntilIdle()
+        assertEquals(ViewSettings.MAX_ZOOM, vm.viewSettings.value.zoom)
+
+        vm.pinchZoom(0.01f)
+        advanceUntilIdle()
+        assertEquals(ViewSettings.MIN_ZOOM, vm.viewSettings.value.zoom)
+    }
+
+    /** Unconfined for the reason [holdingASizeStoresItAsTheDefault] is: this one actually writes. */
+    @Test
+    fun liftingTheFingersWritesTheZoomDown() = runBlocking<Unit> {
+        Dispatchers.setMain(Dispatchers.Unconfined)
+        val vm = NotesViewModel(repository, editorDefaults, viewSettings, penSettings)
+
+        vm.pinchZoom(1.75f)
+        vm.commitZoom()
+
+        withTimeout(STORE_TIMEOUT_MS) { viewSettings.settings.first { it.zoom == 1.75f } }
     }
 
     private companion object {

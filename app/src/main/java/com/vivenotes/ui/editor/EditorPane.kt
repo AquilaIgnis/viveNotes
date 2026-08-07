@@ -180,6 +180,16 @@ fun EditorPane(
     /** The page's own appearance, from the View tab. */
     style: PageStyle,
     zoom: Float,
+    /**
+     * A pinch in flight: the zoom it has reached, not yet written down.
+     *
+     * Separate from the View tab's own `setZoom` because the two ask different things of the store.
+     * A ribbon button is one decision and one write; a pinch is one decision reported sixty times a
+     * second, and putting that through DataStore would be sixty file writes for one gesture.
+     * [onZoomCommitted] is where it lands.
+     */
+    onZoomPinched: (Float) -> Unit = {},
+    onZoomCommitted: () -> Unit = {},
     onTitleChange: (String) -> Unit,
     outlines: List<OutlineBox>,
     pageRevision: Int,
@@ -428,19 +438,68 @@ fun EditorPane(
         )
     }
 
+    // Hoisted above the measurement below because the pinch handler is a modifier *on* it, and a
+    // modifier is built before the block that would otherwise declare these.
+    val horizontal = rememberScrollState()
+    val vertical = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    // The platform's own fling curve, so letting go of the page decelerates the way letting go
+    // of anything else on the device does.
+    val flingSpec = rememberSplineBasedDecay<Float>()
+
+    // Read through holders, never captured: the pinch handler is keyed on nothing and outlives every
+    // recomposition, so a captured zoom would be frozen at whatever it was when the page opened.
+    val currentZoom = rememberUpdatedState(zoom)
+    val currentOnZoomPinched = rememberUpdatedState(onZoomPinched)
+    val currentOnZoomCommitted = rememberUpdatedState(onZoomCommitted)
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             // Only a page bound by a sheet has an outside. One the content has outgrown is canvas
             // all the way to its edge, and painting a surround there would say otherwise.
-            .background(if (fits) MaterialTheme.colorScheme.surfaceContainer else canvas.background),
+            .background(if (fits) MaterialTheme.colorScheme.surfaceContainer else canvas.background)
+            // On the outermost node of the pane, because that is the only one that is an ancestor of
+            // both the scrolling page and the ink overlay — see `detectPinchZoom` for why nothing
+            // less than an ancestor can take a gesture off either of them.
+            .pointerInput(Unit) {
+                /**
+                 * Where the gesture has got to, seeded from the page on the first sample.
+                 *
+                 * Not re-read from [zoom] each time, because pointers arrive faster than frames do:
+                 * two samples in one frame both see the zoom the *last* frame composed, so chaining
+                 * from the prop would apply the second one's scale to the first one's zoom and quietly
+                 * drop a step. The scroll below composes correctly against this without waiting for a
+                 * layout — it is all one scaling of the same content space.
+                 */
+                var live: Float? = null
+                detectPinchZoom(
+                    onPinch = { focus, pan, zoomChange ->
+                        val step = pinchStep(
+                            zoom = live ?: currentZoom.value,
+                            scrollX = horizontal.value.toFloat(),
+                            scrollY = vertical.value.toFloat(),
+                            focus = focus,
+                            pan = pan,
+                            zoomChange = zoomChange,
+                        )
+                        live = step.zoom
+                        currentOnZoomPinched.value(step.zoom)
+                        // Raw deltas for the reason `ScrollStatePan` uses them: the page has to keep
+                        // up with the fingers exactly. Each is clamped to the scroll range the
+                        // *previous* zoom laid out, so a pinch at the far edge of the page lags by a
+                        // frame — the next sample measures from where the scroll actually got to, so
+                        // it corrects itself rather than accumulating.
+                        horizontal.dispatchRawDelta(step.dx)
+                        vertical.dispatchRawDelta(step.dy)
+                    },
+                    onEnd = {
+                        live = null
+                        currentOnZoomCommitted.value()
+                    },
+                )
+            },
     ) {
-        val horizontal = rememberScrollState()
-        val vertical = rememberScrollState()
-        val scope = rememberCoroutineScope()
-        // The platform's own fling curve, so letting go of the page decelerates the way letting go
-        // of anything else on the device does.
-        val flingSpec = rememberSplineBasedDecay<Float>()
         // The window onto the page, in page units: what the user can see at this zoom.
         val window = DpSize(maxWidth / zoom, maxHeight / zoom)
 

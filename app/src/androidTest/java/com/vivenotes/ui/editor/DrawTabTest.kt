@@ -208,6 +208,41 @@ class DrawTabTest {
         assertEquals(green, changed?.colorArgb)
     }
 
+    /**
+     * Every other button in the tray arms something, so this one is the only way to put a tool down
+     * without picking up another. It heads the row, left of the first pen.
+     */
+    @Test
+    fun theEmptyHandPutsTheArmedToolDown() {
+        setTab(tool = DrawTool.Pen(1))
+
+        compose.onNodeWithTag(DrawTags.NONE).performClick()
+
+        assertEquals(DrawTool.None, selected)
+    }
+
+    /** "Left of the first pen" is the whole placement, and a row is easy to reorder by accident. */
+    @Test
+    fun theEmptyHandSitsLeftOfTheFirstPen() {
+        setTab()
+        val hand = compose.onNodeWithTag(DrawTags.NONE).fetchSemanticsNode().boundsInRoot
+        val pen = compose.onNodeWithTag(DrawTags.pen(0)).fetchSemanticsNode().boundsInRoot
+
+        assertTrue("$hand is not left of $pen", hand.right <= pen.left)
+    }
+
+    /** Putting the tool down is not picking one up: it opens no settings of its own. */
+    @Test
+    fun theEmptyHandOpensNoSettings() {
+        setTab(tool = DrawTool.None)
+
+        compose.onNodeWithTag(DrawTags.NONE).performClick()
+
+        assertEquals(DrawTool.None, selected)
+        compose.onNodeWithTag(PenPanelTags.PREVIEW).assertDoesNotExist()
+        compose.onNodeWithTag(HighlighterPanelTags.PREVIEW).assertDoesNotExist()
+    }
+
     @Test
     fun theEraserIsPickedUp() {
         setTab()
