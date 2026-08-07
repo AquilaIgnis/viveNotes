@@ -107,8 +107,17 @@ data class CanvasSelection(
 data class CanvasClipboard(
     val strokes: List<PageStroke> = emptyList(),
     val shapes: List<Outline.Shape> = emptyList(),
+    /**
+     * Text containers, carried whole — `docs/textBoxPlan.md` TD5.
+     *
+     * `Outline.Text` rather than the `OutlineBox` the canvas lays out with, because that one is
+     * geometry alone and a copied text box without its text is a rectangle. This is the one place the
+     * ViewModel's two halves of a container — the box in `uiState` and the blocks in
+     * `blocksByOutline` — are put back together outside of a save.
+     */
+    val texts: List<Outline.Text> = emptyList(),
 ) {
-    val isEmpty: Boolean get() = strokes.isEmpty() && shapes.isEmpty()
+    val isEmpty: Boolean get() = strokes.isEmpty() && shapes.isEmpty() && texts.isEmpty()
 }
 
 /**

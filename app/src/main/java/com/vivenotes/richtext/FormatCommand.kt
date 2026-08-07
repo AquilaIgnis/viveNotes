@@ -46,6 +46,16 @@ sealed interface FormatCommand {
      * clipboard. Reimplementing cut/copy/paste would lose that for no gain.
      */
     data class Clipboard(val action: ClipboardAction) : FormatCommand
+
+    /**
+     * Selects everything in the focused container — the TextBox toolkit's own action,
+     * `docs/textBoxPlan.md` TD4.
+     *
+     * A command rather than a call on the view, even though the bar is raised a few dp from the
+     * editor it is about: AD6's whole point is that there is one way to drive the editor, and a
+     * second one that happens to be shorter is how the two drift apart.
+     */
+    data object SelectAll : FormatCommand
 }
 
 enum class ClipboardAction { Cut, Copy, Paste, PasteAsPlainText }

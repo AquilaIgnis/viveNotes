@@ -596,6 +596,58 @@ class NotesViewModelTest {
     }
 
     @Test
+    fun aTextBoxCopiesPastesDeletesAndUndoesWithItsText() = runTest(dispatcher) {
+        // `docs/textBoxPlan.md` TD5. A container is two halves in two places — the box in `uiState`
+        // and its blocks in a private map — so the thing worth asserting is the *text*, not the
+        // rectangle: every way of getting this wrong produces a box of the right size and no words.
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        val id = vm.createOutline(120f, 140f)
+        vm.onBlocksChanged(id, listOf(Block.of("carry me")))
+        advanceUntilIdle()
+
+        vm.copyOutline(id)
+        assertTrue(vm.hasClipboard.value)
+        assertEquals("copy is not duplicate: the page must not change", 2, vm.uiState.value.outlines.size)
+
+        vm.pasteObjects(InkPoint(400f, 500f))
+        advanceUntilIdle()
+        assertEquals(3, vm.uiState.value.outlines.size)
+        assertEquals(
+            "the pasted box did not bring its text",
+            2,
+            storedText(pageId).split("carry me").size - 1,
+        )
+
+        vm.deleteOutlines(setOf(id))
+        advanceUntilIdle()
+        assertTrue("delete left the container behind", vm.uiState.value.outlines.none { it.id == id })
+
+        vm.undoCanvas()
+        assertTrue("undo did not bring the container back", vm.uiState.value.outlines.any { it.id == id })
+        advanceUntilIdle()
+        assertTrue(
+            "the restored container came back blank",
+            storedText(pageId).contains("carry me"),
+        )
+
+        vm.undoCanvas()
+        assertEquals("undo did not take back the paste", 2, vm.uiState.value.outlines.size)
+    }
+
+    @Test
+    fun deletingTheLastTextBoxIsAllowed() = runTest(dispatcher) {
+        // The "last container always survives" rule guards against *stray taps* leaving empty boxes.
+        // An explicit delete is not a stray tap, and a page with no container is not broken.
+        val vm = seededViewModel()
+        val ids = vm.uiState.value.outlines.map { it.id }.toSet()
+
+        vm.deleteOutlines(ids)
+
+        assertTrue(vm.uiState.value.outlines.isEmpty())
+    }
+
+    @Test
     fun oneClipboardHoldsAShapeAndAStrokeTogether() = runTest(dispatcher) {
         // The diagram's "shared prime object clipboard": one clipboard for every kind, not one each.
         val vm = seededViewModel()

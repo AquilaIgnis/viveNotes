@@ -47,6 +47,7 @@ import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.unionBounds
 import com.vivenotes.ink.CanvasClipboard
 import com.vivenotes.ink.CanvasSelection
+import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkPoint
@@ -69,6 +70,8 @@ import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.ink.arms
+import com.vivenotes.model.ink.canFill
+import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.model.ink.withArm
 import com.vivenotes.model.PaperDimensions
@@ -174,6 +177,26 @@ private sealed interface CanvasHistoryEntry {
         val coalesceKey: String? = null,
         val atMillis: Long = 0L,
     ) : CanvasHistoryEntry
+
+    /**
+     * A structural edit to the text containers — `docs/textBoxPlan.md` TD5: delete and paste, the two
+     * things the TextBox toolkit can do.
+     *
+     * **The blocks half is scoped to the containers this edit touched, and the geometry half is not.**
+     * The whole outline list is safe to snapshot because typing never changes it; the blocks map is
+     * not, because typing changes it constantly. A snapshot of the whole map, restored later, would
+     * quietly take back every keystroke made in *other* containers since — an undo that reaches
+     * sideways into text nobody was undoing.
+     *
+     * A null value in either map means "this container did not exist", which is what restores a
+     * delete and takes back a paste.
+     */
+    data class Texts(
+        val before: List<OutlineBox>,
+        val after: List<OutlineBox>,
+        val blocksBefore: Map<String, List<Block>?>,
+        val blocksAfter: Map<String, List<Block>?>,
+    ) : CanvasHistoryEntry
 }
 
 private data class PageCanvasHistory(
@@ -260,7 +283,7 @@ class NotesViewModel(
      *
      * A pen by default, because this is a notebook you draw in — text is what the Home tab's T
      * button is for. With a pen armed a tap on bare canvas leaves a mark rather than opening a
-     * caret, which is why [createOutline] is reached only in [DrawTool.None].
+     * caret, which is why [createOutline] is reached only in [DrawTool.Text].
      */
     private val _tool = MutableStateFlow<DrawTool>(DrawTool.Pen(0))
     val tool: StateFlow<DrawTool> = _tool.asStateFlow()
@@ -527,6 +550,85 @@ class NotesViewModel(
     }
 
     /**
+     * Deletes containers outright — the TextBox toolkit's Delete, `docs/textBoxPlan.md` TD5.
+     *
+     * **The "last container always survives" rule in [onOutlineBlurred] does not apply here.** That
+     * one exists to sweep up boxes nobody asked for; this is a box someone asked to be rid of, and a
+     * page with no text container on it is not broken — the next tap with the text tool armed makes
+     * another.
+     */
+    fun deleteOutlines(outlineIds: Set<String>) {
+        if (outlineIds.isEmpty()) return
+        editTexts(outlineIds) { outlines ->
+            outlineIds.forEach(blocksByOutline::remove)
+            outlines.filterNot { it.id in outlineIds }
+        }
+    }
+
+    /**
+     * Puts one container on the shared clipboard, text and all.
+     *
+     * Separate from [copySelection] because a text box is not in a `CanvasSelection` — TD1 declined
+     * the object-selection half of AD7 — so what the toolkit is about is the *focused* container, and
+     * that is an id rather than a selection.
+     */
+    fun copyOutline(outlineId: String) {
+        val box = _uiState.value.outlines.firstOrNull { it.id == outlineId } ?: return
+        val blocks = blocksByOutline[outlineId].orEmpty()
+        if (blocks.all { it.text.isBlank() }) return
+        clipboard = CanvasClipboard(
+            texts = listOf(
+                Outline.Text(
+                    id = box.id,
+                    x = box.x,
+                    y = box.y,
+                    width = box.width,
+                    minHeight = box.minHeight,
+                    blocks = blocks,
+                ),
+            ),
+        )
+        _hasClipboard.value = true
+    }
+
+    /**
+     * The one door every structural text edit goes through: page guard, both halves of the state,
+     * history, autosave — `editShapes`' counterpart, and for the same reason.
+     *
+     * [touched] names the containers whose *blocks* this edit adds, removes or replaces, and is what
+     * keeps the history entry from reaching sideways into text that was only being typed in. Geometry
+     * is snapshotted whole, which is safe because typing never moves a box.
+     */
+    private inline fun editTexts(
+        touched: Set<String>,
+        change: (List<OutlineBox>) -> List<OutlineBox>,
+    ) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val state = _uiState.value
+        val before = state.outlines
+        // Read before the change runs, because a caller is entitled to rewrite `blocksByOutline`
+        // inside it — which is how a delete takes the text with the box.
+        val blocksBefore = touched.associateWith { blocksByOutline[it] }
+        val after = change(before)
+        if (after == before && touched.all { blocksByOutline[it] == blocksBefore[it] }) return
+
+        _uiState.value = state.copy(outlines = after, pageRevision = state.pageRevision + 1)
+        pushHistory(
+            pageId,
+            CanvasHistoryEntry.Texts(
+                before = before,
+                after = after,
+                blocksBefore = blocksBefore,
+                // Read after the change, so a caller that rewrote `blocksByOutline` inside [change]
+                // is recorded by what it left behind rather than by what it promised.
+                blocksAfter = touched.associateWith { blocksByOutline[it] },
+            ),
+        )
+        edits.tryEmit(Unit)
+    }
+
+    /**
      * Discards a container the user tapped into but never typed in, so clicking around the page
      * does not litter it with empty boxes. The last remaining container always survives.
      */
@@ -735,7 +837,9 @@ class NotesViewModel(
     }
 
     fun selectTool(tool: DrawTool) {
-        if (tool != DrawTool.None) _commands.tryEmit(FormatCommand.DeactivateTextInput)
+        // Text is the one tool that wants the caret and the IME; every other one — including
+        // nothing at all — takes the page's gestures and should put them away first.
+        if (tool != DrawTool.Text) _commands.tryEmit(FormatCommand.DeactivateTextInput)
         _tool.value = tool
     }
 
@@ -837,7 +941,8 @@ class NotesViewModel(
         editShapes { it + created }
         // Drawing one shape puts the tool down. The handles are the point of a shape being an
         // object, and they are unreachable while the tool that draws new ones is still armed —
-        // so placing one hands it straight to you, ready to adjust.
+        // so placing one hands it straight to you, ready to adjust. Nothing armed genuinely means
+        // nothing since TD2, so the next stray tap no longer opens a text container either.
         _tool.value = DrawTool.None
         return created.id
     }
@@ -933,6 +1038,29 @@ class NotesViewModel(
         // The slider reports every step it passes through, so the run of them is one action to undo.
         editShapes(coalesceKey = "border-width:${shapeIds.sorted().joinToString(",")}") { shapes ->
             shapes.map { if (it.id in shapeIds) it.copy(borderWidth = clamped) else it }
+        }
+    }
+
+    /**
+     * Fills every selected shape, or clears the fill with null.
+     *
+     * Null is not transparent black: it is the *absence* of a fill, which is what a shape starts with
+     * and what "None" on the toolkit's palette puts back. A shape with no inside — a line, an arrow,
+     * an L — is filtered out here rather than trusted not to arrive, because the bar hides Fill for
+     * those and a hidden control is not a guarantee.
+     */
+    fun setShapeFill(shapeIds: Set<String>, argb: Int?) {
+        if (shapeIds.isEmpty()) return
+        editShapes { shapes ->
+            shapes.map { if (it.id in shapeIds && it.canFill) it.copy(fillArgb = argb) else it }
+        }
+    }
+
+    /** Sets the border's line type on every selected shape — solid, dashed or dotted. */
+    fun setShapeLineType(shapeIds: Set<String>, lineType: LineType) {
+        if (shapeIds.isEmpty()) return
+        editShapes { shapes ->
+            shapes.map { if (it.id in shapeIds) it.copy(lineType = lineType) else it }
         }
     }
 
@@ -1096,12 +1224,41 @@ class NotesViewModel(
         if (readOnlyPageId == pageId) return
         val sources = clipboard.strokes
         val sourceShapes = clipboard.shapes
-        if (sources.isEmpty() && sourceShapes.isEmpty()) return
+        val sourceTexts = clipboard.texts
+        if (sources.isEmpty() && sourceShapes.isEmpty() && sourceTexts.isEmpty()) return
 
-        val bounds = sources.mapNotNull(PageStroke::pageBounds) + sourceShapes.map(Outline.Shape::pageBounds)
+        val bounds = sources.mapNotNull(PageStroke::pageBounds) +
+            sourceShapes.map(Outline.Shape::pageBounds) +
+            // A container's height is whatever its text wraps to and only the canvas knows it, so
+            // the floor stands in. It is off by however far the text runs past it, which moves a
+            // pasted box up by half of that — visible only when a text box is pasted together with
+            // something else, and cheaper to accept than to plumb a measurement into the ViewModel.
+            sourceTexts.map { InkBounds(it.x, it.y, it.x + it.width, it.y + it.minHeight) }
         val union = bounds.unionBounds() ?: return
         val dx = at.x - union.center.x
         val dy = at.y - union.center.y
+
+        if (sourceTexts.isNotEmpty()) {
+            val pasted = sourceTexts.map { source ->
+                source.copy(
+                    id = newId(),
+                    x = (source.x + dx).coerceAtLeast(0f),
+                    y = (source.y + dy).coerceAtLeast(0f),
+                )
+            }
+            editTexts(pasted.map { it.id }.toSet()) { outlines ->
+                pasted.forEach { blocksByOutline[it.id] = it.blocks }
+                outlines + pasted.map { text ->
+                    OutlineBox(
+                        id = text.id,
+                        x = text.x,
+                        y = text.y,
+                        width = text.width,
+                        minHeight = text.minHeight,
+                    )
+                }
+            }
+        }
 
         if (sourceShapes.isNotEmpty()) {
             val pastedShapes = sourceShapes.map { source ->
@@ -1268,6 +1425,21 @@ class NotesViewModel(
             is CanvasHistoryEntry.Shapes -> {
                 _uiState.value = _uiState.value.copy(
                     shapes = if (applied) entry.after else entry.before,
+                )
+                edits.tryEmit(Unit)
+            }
+            // A container is two halves in two places, so both move together or a restored box comes
+            // back blank — see [CanvasHistoryEntry.Texts].
+            is CanvasHistoryEntry.Texts -> {
+                val blocks = if (applied) entry.blocksAfter else entry.blocksBefore
+                blocks.forEach { (id, value) ->
+                    if (value == null) blocksByOutline.remove(id) else blocksByOutline[id] = value
+                }
+                _uiState.value = _uiState.value.copy(
+                    outlines = if (applied) entry.after else entry.before,
+                    // The containers are rebuilt from scratch, because an `OutlineEditText` holds its
+                    // own text and will not notice that the list behind it changed.
+                    pageRevision = _uiState.value.pageRevision + 1,
                 )
                 edits.tryEmit(Unit)
             }

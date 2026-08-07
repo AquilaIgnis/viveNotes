@@ -250,7 +250,20 @@ sealed interface DrawTool {
     /** Free-form selection: circle ink, then drag the selected objects. */
     data object Lasso : DrawTool
 
-    /** Nothing armed: taps reach the text containers, and the canvas behaves as it does today. */
+    /**
+     * Text: a tap on bare canvas opens a container and puts a caret in it —
+     * `docs/textBoxPlan.md` TD2.
+     *
+     * This *was* [None], which is why the Home tab's **T** button could be pressed but never
+     * unpressed: the name said "nothing armed" and the behaviour said "text armed", so there was
+     * nothing to turn off to. Naming it is what makes the button a toggle.
+     */
+    data object Text : DrawTool
+
+    /**
+     * Nothing armed. Taps still reach the text containers — that is text *processing*, which no
+     * tool owns — but bare canvas does nothing at all: no mark, and no new container.
+     */
     data object None : DrawTool
 }
 

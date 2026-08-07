@@ -66,6 +66,7 @@ class PageViewTest {
     private var created: Pair<Float, Float>? = null
     private var pasted: InkPoint? = null
     private val hasClipboard = mutableStateOf(false)
+    private val textArmed = mutableStateOf(true)
     private val commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 4)
     private val selection = mutableStateOf(SelectionState())
 
@@ -75,10 +76,12 @@ class PageViewTest {
         title: String = "A page",
         outlines: List<OutlineBox> = emptyList(),
         hasClipboard: Boolean = false,
+        textArmed: Boolean = true,
     ) {
         created = null
         pasted = null
         this.hasClipboard.value = hasClipboard
+        this.textArmed.value = textArmed
         this.style.value = style
         this.zoom.floatValue = zoom
         this.title.value = title
@@ -103,6 +106,7 @@ class PageViewTest {
                         onSelectionChanged = { selection.value = it },
                         onMarkArmed = {},
                         onCreateOutline = { x, y -> created = x to y; "new-outline" },
+                        textArmed = this.textArmed.value,
                         onMoveOutline = { _, _, _ -> },
                         onResizeOutline = { _, _ -> },
                         onSetOutlineMinHeight = { _, _ -> },
@@ -126,6 +130,22 @@ class PageViewTest {
     }
 
     private fun pageSize() = compose.onNodeWithTag(PageTags.SURFACE).fetchSemanticsNode().size
+
+    @Test
+    fun tappingBareCanvasCreatesAContainerOnlyWhileTheTextToolIsArmed() {
+        // `docs/textBoxPlan.md` TD2. The T button had no off state because `DrawTool.None` *was*
+        // text mode; with the two separated, putting the tool down has to actually stop the taps.
+        setPage(style = PageStyle(hideTitle = true), textArmed = false)
+
+        tapScreen(200f, 300f)
+
+        assertNull("a tap opened a container with the text tool put down", created)
+
+        setPage(style = PageStyle(hideTitle = true), textArmed = true)
+        tapScreen(200f, 300f)
+
+        assertNotNull("a tap did not open a container with the text tool armed", created)
+    }
 
     @Test
     fun pickingADrawToolDismissesTheActiveTextCursor() {

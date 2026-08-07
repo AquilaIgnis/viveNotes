@@ -37,8 +37,10 @@ import com.vivenotes.model.ink.ShapeAxis
 import com.vivenotes.model.ink.ShapeContour
 import com.vivenotes.model.ink.ShapeSegment
 import com.vivenotes.model.ink.arms
+import com.vivenotes.model.ink.fillRegion
 import com.vivenotes.model.ink.contours
 import com.vivenotes.model.ink.withArm
+import com.vivenotes.ui.panel.pathEffect
 import kotlin.math.hypot
 
 internal const val SHAPE_LAYER_TAG = "shape-layer"
@@ -389,15 +391,14 @@ private fun Outline.Shape.withLassoPreview(gesture: LassoGesture): Outline.Shape
 
 /** Fill first, then the border, so a stroke is never half-covered by the paint it surrounds. */
 private fun DrawScope.drawShape(shape: Outline.Shape) {
+    // What a shape covers, which is not the path it is stroked along — see `fillRegion`. Walking the
+    // visible segments as one path is what this did, and it was only ever right for a shape with a
+    // single closed contour: it filled a cube's twelve edges as one self-crossing loop, and would
+    // have closed an L into a triangle the moment fill became reachable.
     shape.fillArgb?.let { argb ->
-        val region = Path()
-        shape.segments.filterNot(ShapeSegment::hidden).forEachIndexed { index, segment ->
-            val points = segment.polyline()
-            if (index == 0) region.moveTo(points[0], points[1])
-            for (i in 2 until points.size step 2) region.lineTo(points[i], points[i + 1])
+        shape.fillRegion().forEach { region ->
+            drawPath(region.asClosedPath(), Color(argb))
         }
-        region.close()
-        drawPath(region, Color(argb))
     }
 
     val border = Color(shape.borderArgb)
@@ -405,9 +406,9 @@ private fun DrawScope.drawShape(shape: Outline.Shape) {
     // stroking a rim's arcs one at a time doubles the dots at each joint. See [ShapeContour].
     shape.segments.contours().forEach { contour ->
         val effect = if (contour.hidden) {
-            LineType.Dotted.effect(shape.borderWidth)
+            LineType.Dotted.pathEffect(shape.borderWidth)
         } else {
-            shape.lineType.effect(shape.borderWidth)
+            shape.lineType.pathEffect(shape.borderWidth)
         }
         drawPath(
             path = contour.path(),
@@ -619,6 +620,15 @@ private fun Outline.Shape.scaleFor(corner: Corner, x: Float, y: Float): Pair<Flo
     return scaleX.coerceAtLeast(MIN_SCALE) to scaleY.coerceAtLeast(MIN_SCALE)
 }
 
+/** A region as a closed path, for filling. */
+private fun FloatArray.asClosedPath(): Path = Path().apply {
+    moveTo(this@asClosedPath[0], this@asClosedPath[1])
+    for (index in 2 until this@asClosedPath.size step 2) {
+        lineTo(this@asClosedPath[index], this@asClosedPath[index + 1])
+    }
+    close()
+}
+
 private fun ShapeContour.path(): Path = Path().apply {
     val points = polyline()
     moveTo(points[0], points[1])
@@ -627,11 +637,6 @@ private fun ShapeContour.path(): Path = Path().apply {
     if (isClosed) close()
 }
 
-private fun LineType.effect(width: Float): PathEffect? = when (this) {
-    LineType.Solid -> null
-    LineType.Dashed -> PathEffect.dashPathEffect(floatArrayOf(width * 2.6f, width * 1.8f))
-    LineType.Dotted -> PathEffect.dashPathEffect(floatArrayOf(0.01f, width * 2f))
-}
 
 /** The topmost shape within reach of the point, or null. Drawing order decides ties. */
 private fun List<Outline.Shape>.topmostNear(x: Float, y: Float): Outline.Shape? = asReversed()

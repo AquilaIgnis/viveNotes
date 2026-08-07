@@ -1,5 +1,6 @@
 package com.vivenotes.ui.editor
 
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.InputType
 import android.util.TypedValue
@@ -97,6 +98,8 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.model.Outline
+import com.vivenotes.model.ink.LineType
+import com.vivenotes.model.ink.canFill
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.CanvasSelection
@@ -187,10 +190,29 @@ fun EditorPane(
     /** A mark applied with no selection — the editor's new default, not an edit. */
     onMarkArmed: (Mark) -> Unit,
     onCreateOutline: (Float, Float) -> String,
+    /**
+     * Whether the Home tab's **T** is pressed — `docs/textBoxPlan.md` TD2.
+     *
+     * A tap on bare canvas opens a container only while it is, which is the whole of what the toggle
+     * toggles. Defaulted true so the canvas can be exercised in isolation, and because a test that
+     * taps to make a container should not have to arm anything first.
+     */
+    textArmed: Boolean = true,
     onMoveOutline: (String, Float, Float) -> Unit,
     onResizeOutline: (String, Float) -> Unit,
     onSetOutlineMinHeight: (String, Float) -> Unit,
     onOutlineBlurred: (String) -> Unit,
+    /** The TextBox toolkit — `docs/textBoxPlan.md` TD3–TD5. */
+    onCopyOutline: (String) -> Unit = {},
+    onDeleteOutlines: (Set<String>) -> Unit = {},
+    /**
+     * Back into the command bus, for the toolkit's Select all.
+     *
+     * The bar is raised a few dp from the editor it is about and could reach for it directly; it does
+     * not, because AD6's point is that there is one way to drive the editor and a second shorter one
+     * is how the two drift apart. This goes out to the ViewModel and comes back through [commands].
+     */
+    onCommand: (FormatCommand) -> Unit = {},
     /** Window width and page width in dp, which is all Zoom to Page Width needs. */
     onCanvasMeasured: (Float, Float) -> Unit,
     /** Drawn while the Paper Size pane is open, so the margins being edited are visible. */
@@ -219,6 +241,9 @@ fun EditorPane(
     onDeleteShapes: (Set<String>) -> Unit = {},
     onRecolorShapes: (Set<String>, Int) -> Unit = { _, _ -> },
     onSetShapeBorderWidth: (Set<String>, Float) -> Unit = { _, _ -> },
+    onSetShapeLineType: (Set<String>, LineType) -> Unit = { _, _ -> },
+    /** Null clears the fill: an absent inside, not a transparent one. */
+    onSetShapeFill: (Set<String>, Int?) -> Unit = { _, _ -> },
     erasing: Boolean = false,
     lassoing: Boolean = false,
     eraser: EraserSettings = EraserSettings(),
@@ -255,6 +280,24 @@ fun EditorPane(
     var pendingFocusId by remember { mutableStateOf<String?>(null) }
     var pastePopupAt by remember { mutableStateOf<InkPoint?>(null) }
     val heights = remember { mutableStateMapOf<String, Int>() }
+
+    /**
+     * Whether the text tool is armed, reachable from a gesture handler that outlives it.
+     *
+     * The canvas tap detector is keyed on page geometry and is deliberately not rebuilt when a tool
+     * is picked up or put down — `ShapeLayer` learned the same lesson the harder way, where keying a
+     * handler on state that changes mid-gesture killed the gesture that had asked for the change.
+     */
+    val currentTextArmed = rememberUpdatedState(textArmed)
+
+    /**
+     * Which containers currently hold text — `docs/textBoxPlan.md` TD3.
+     *
+     * The toolkit appears under the same rule the container's own chrome does, *focused and
+     * non-empty*, and that second half is known here rather than in the ViewModel: an empty
+     * container is a caret position, and a page of stray taps must not sprout toolbars.
+     */
+    val nonEmpty = remember { mutableStateMapOf<String, Boolean>() }
 
     /**
      * What is selected on this page, across kinds — AD7's "selection is a page-level concept".
@@ -499,6 +542,15 @@ fun EditorPane(
                             ) {
                                 val onTap: (Offset) -> Unit = tap@ { offset ->
                                     pastePopupAt = null
+                                    // Dismissing the popup is not the text tool's business, so it
+                                    // happens either way; opening a container is, so it does not.
+                                    //
+                                    // Read through the holder, never captured. This block is keyed
+                                    // on page geometry and outlives every other recomposition, so a
+                                    // captured `textArmed` would be frozen at whatever it was when
+                                    // the page first composed — false, since the app opens with a
+                                    // pen — and arming Text would then do nothing at all, for ever.
+                                    if (!currentTextArmed.value) return@tap
                                     val point = offsetToPage(offset)
                                     if (!canPlaceAt(point)) return@tap
                                     pendingFocusId = onCreateOutline(point.x - 8f, point.y - 8f)
@@ -572,7 +624,10 @@ fun EditorPane(
                                     }
                                     if (retainedEquationOutlineId != box.id) onOutlineBlurred(box.id)
                                 },
-                                onBlocksChanged = { blocks -> onBlocksChanged(box.id, blocks) },
+                                onBlocksChanged = { blocks ->
+                                    nonEmpty[box.id] = blocks.any { it.text.isNotBlank() }
+                                    onBlocksChanged(box.id, blocks)
+                                },
                                 onSelectionChanged = onSelectionChanged,
                                 onMarkArmed = onMarkArmed,
                                 onMove = { x, y -> onMoveOutline(box.id, x, y) },
@@ -697,17 +752,85 @@ fun EditorPane(
                             )
                         }
                         if (held.isShapeOnly) {
-                            val widths = shapes.filter { it.id in held.shapeIds }
-                                .map { it.borderWidth.roundToInt() }
+                            val selectedShapes = shapes.filter { it.id in held.shapeIds }
+                            val widths = selectedShapes.map { it.borderWidth.roundToInt() }
                             ThicknessAction(
                                 width = widths.distinct().singleOrNull()
                                     ?: ShapeSettings.MIN_BORDER_WIDTH,
                                 onChange = { onSetShapeBorderWidth(held.shapeIds, it.toFloat()) },
                             )
+                            LineTypeAction(
+                                // A mixed selection has no one answer, so it shows the default rather
+                                // than one member's — picking any type then sets all of them.
+                                current = selectedShapes.map { it.lineType }.distinct().singleOrNull()
+                                    ?: LineType.Solid,
+                                onChange = { onSetShapeLineType(held.shapeIds, it) },
+                            )
+                            // Absent for a line, an arrow or an L: an open figure has no inside, and
+                            // the rule for the whole bar is that an action a kind cannot perform is
+                            // missing for it rather than shown and dead.
+                            if (selectedShapes.any { it.canFill }) {
+                                FillAction(
+                                    fill = selectedShapes.map { it.fillArgb }.distinct().singleOrNull(),
+                                    onChange = { onSetShapeFill(held.shapeIds, it) },
+                                )
+                            }
                         }
                     },
                 )
             }
+
+            // The TextBox toolkit — `docs/textBoxPlan.md` TD3. It hangs off the *focused* container
+            // rather than off a selection, because TD1 declined the object-selection half of AD7:
+            // there is exactly one container a bar could be about, and it is the one you are in.
+            //
+            // Suppressed while a canvas selection is up, so a shape's bar and a text box's bar are
+            // never on screen together arguing about which object "copy" means.
+            outlines
+                .firstOrNull {
+                    // The map only hears about text as it is *typed*; a container loaded with
+                    // writing already in it never fires that callback, so the document is the
+                    // fallback and the map is the live override. `OutlineContainer` seeds its own
+                    // chrome from exactly the same pair.
+                    it.id == focusedOutlineId &&
+                        (nonEmpty[it.id] ?: initialBlocksFor(it.id).any { block -> block.text.isNotBlank() })
+                }
+                ?.takeIf { selection?.isEmpty != false }
+                ?.let { box ->
+                    ObjectTooltip(
+                        // Absent, per the diagram: a text box's colour is a mark on a run, and the
+                        // Home tab already owns it.
+                        swatch = null,
+                        selectionBoundsInView = {
+                            // Page units into view pixels, the same conversion the canvas selection
+                            // uses. The height is the measured one — the model stores a floor, and a
+                            // bar placed against that would sit inside a container of any real size.
+                            val heightPx = heights[box.id] ?: 0
+                            val rect = RectF(
+                                box.x,
+                                box.y,
+                                box.x + box.width,
+                                box.y + with(density) { heightPx.toDp().value },
+                            )
+                            inkPageToView(
+                                zoom = zoom,
+                                density = density.density,
+                                scrollX = horizontal.value.toFloat(),
+                                scrollY = vertical.value.toFloat(),
+                            ).mapRect(rect)
+                            rect
+                        },
+                        viewportSize = with(density) {
+                            IntSize(window.width.roundToPx(), window.height.roundToPx())
+                        },
+                        onDelete = { onDeleteOutlines(setOf(box.id)) },
+                        onCopy = { onCopyOutline(box.id) },
+                        // Unreachable with no swatch, and passed rather than defaulted so that
+                        // deleting the colour button never silently deletes a behaviour with it.
+                        onRecolor = {},
+                        extras = { SelectAllAction { onCommand(FormatCommand.SelectAll) } },
+                    )
+                }
 
             pastePopupAt?.takeIf { hasClipboard }?.let { point ->
                 ObjectPastePopup(

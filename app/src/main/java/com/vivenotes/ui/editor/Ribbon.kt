@@ -170,8 +170,13 @@ fun Ribbon(
                 defaults = defaults,
                 onCommand = onCommand,
                 onSetDefault = onSetDefault,
-                textMode = tool == DrawTool.None,
-                onTextMode = { draw.selectTool(DrawTool.None) },
+                textMode = tool == DrawTool.Text,
+                // A toggle, per `docs/textBoxPlan.md` TD2: pressing it again puts the tool down
+                // rather than doing nothing, and with nothing in hand a tap on bare canvas stops
+                // opening containers.
+                onTextMode = {
+                    draw.selectTool(if (tool == DrawTool.Text) DrawTool.None else DrawTool.Text)
+                },
             )
             RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
             RibbonTab.Draw -> DrawTab(

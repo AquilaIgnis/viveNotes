@@ -337,6 +337,9 @@ class OutlineEditText @JvmOverloads constructor(
                 }
                 pendingMarks.clear()
             }
+            // Selection only: no span is touched, so `emitSelectionState` below is what the ribbon
+            // and the toolkit see change.
+            FormatCommand.SelectAll -> selectAll()
             FormatCommand.DeactivateTextInput,
             FormatCommand.RetainEquationTarget,
             FormatCommand.ReleaseEquationTarget,

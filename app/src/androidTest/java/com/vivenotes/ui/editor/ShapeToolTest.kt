@@ -276,12 +276,25 @@ class ShapeToolTest {
     }
 
     @Test
-    fun fillColourIsPlacedButDoesNothing() {
-        // Crossed-out controls are absent; not-yet-built ones hold their place and plainly do not
-        // work. Fill is the second kind, because a stroke has no inside — §5.4 SD7.
+    fun fillColourPicksAndClears() {
+        // Was "placed but does nothing" until 2026-08-06 — SD7's inert treatment, on the reasoning
+        // that a stroke has no inside, which stopped being true when SD1 was reversed.
         setPanel()
-        compose.onNodeWithTag(ShapePanelTags.FILL).assertIsDisplayed()
-        compose.onNodeWithTag(ShapePanelTags.FILL).assertHasNoClickAction()
+
+        compose.onNodeWithTag(ShapePanelTags.fill(PEN_COLORS.first())).performClick()
+        assertEquals("picking a fill did not set one", PEN_COLORS.first(), changed?.fillArgb)
+
+        compose.onNodeWithTag(ShapePanelTags.NO_FILL).performClick()
+        assertNull("No fill did not clear it", changed?.fillArgb)
+    }
+
+    @Test
+    fun aShapeStartsWithNoFill() {
+        // The reference shows the control set to 🚫, and that much has not changed: what it shows is
+        // the default, not a control that cannot be used.
+        assertNull(ShapeSettings().fillArgb)
+        setPanel()
+        compose.onNodeWithTag(ShapePanelTags.NO_FILL).assertIsDisplayed()
     }
 
     @Test
@@ -375,6 +388,8 @@ class ShapeToolTest {
     private var selectedId: String? = null
     private var canvasTaps = 0
     private var borderWidth: Int? = null
+    private var lineType: LineType? = null
+    private var fill: Int? = null
     private var resizeCalls = 0
     private var armCalls = 0
     private var moveCalls = 0
@@ -763,6 +778,43 @@ class ShapeToolTest {
         // What a shape adds, and what it does not: a shape is already one object.
         compose.onNodeWithTag(OBJECT_THICKNESS_TAG).assertIsDisplayed()
         compose.onNodeWithTag(OBJECT_GROUP_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun aShapeToolkitCarriesLineThicknessLineTypeAndFill() {
+        // `docs/diagram.md` names the Shapes Class toolkit exactly: "line thickness, line type, fill".
+        setToolkit {
+            ThicknessAction(width = 3) { borderWidth = it }
+            LineTypeAction(current = LineType.Solid) { lineType = it }
+            FillAction(fill = null) { fill = it }
+        }
+
+        compose.onNodeWithTag(OBJECT_THICKNESS_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_LINE_TYPE_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_FILL_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    fun theToolkitPicksALineTypeAndPutsTheMenuAway() {
+        setToolkit { LineTypeAction(current = LineType.Solid) { lineType = it } }
+
+        compose.onNodeWithTag(OBJECT_LINE_TYPE_TAG).performClick()
+        compose.onNodeWithTag(ObjectLineTypeTags.lineType(LineType.Dashed)).performClick()
+
+        assertEquals(LineType.Dashed, lineType)
+    }
+
+    @Test
+    fun theToolkitFillsAndUnfills() {
+        setToolkit { FillAction(fill = null) { fill = it } }
+
+        compose.onNodeWithTag(OBJECT_FILL_TAG).performClick()
+        compose.onNodeWithContentDescription("Red fill").performClick()
+        assertEquals(0xFFEF4444.toInt(), fill)
+
+        compose.onNodeWithTag(OBJECT_FILL_TAG).performClick()
+        compose.onNodeWithTag(OBJECT_FILL_NONE_TAG).performClick()
+        assertNull("No fill did not clear the fill", fill)
     }
 
     @Test

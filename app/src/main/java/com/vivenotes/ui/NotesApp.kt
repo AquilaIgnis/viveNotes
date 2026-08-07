@@ -108,7 +108,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val drawActions = remember(viewModel, focusManager) {
         DrawActions(
             selectTool = { selected ->
-                if (selected != DrawTool.None) focusManager.clearFocus(force = true)
+                if (selected != DrawTool.Text) focusManager.clearFocus(force = true)
                 viewModel.selectTool(selected)
             },
             updatePen = viewModel::updatePen,
@@ -391,10 +391,14 @@ private fun EditorSurface(
         onSelectionChanged = viewModel::onSelectionChanged,
         onMarkArmed = viewModel::onMarkArmed,
         onCreateOutline = viewModel::createOutline,
+        textArmed = tool == DrawTool.Text,
         onMoveOutline = viewModel::moveOutline,
         onResizeOutline = viewModel::resizeOutline,
         onSetOutlineMinHeight = viewModel::setOutlineMinHeight,
         onOutlineBlurred = viewModel::onOutlineBlurred,
+        onCopyOutline = viewModel::copyOutline,
+        onDeleteOutlines = viewModel::deleteOutlines,
+        onCommand = viewModel::send,
         onCanvasMeasured = viewModel::onCanvasMeasured,
         strokes = strokes,
         // Rebuilt only when the pen actually changes, not on every recomposition: a Brush holds a
@@ -418,6 +422,8 @@ private fun EditorSurface(
         onDeleteShapes = viewModel::deleteShapes,
         onRecolorShapes = viewModel::recolorShapes,
         onSetShapeBorderWidth = viewModel::setShapeBorderWidth,
+        onSetShapeLineType = viewModel::setShapeLineType,
+        onSetShapeFill = viewModel::setShapeFill,
         eraser = eraser,
         allowFinger = allowFinger,
         hasClipboard = hasClipboard,

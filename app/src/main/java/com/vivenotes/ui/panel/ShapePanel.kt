@@ -27,7 +27,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -57,24 +56,29 @@ import kotlin.math.sign
 object ShapePanelTags {
     const val PREVIEW = "shape-preview"
     const val GRID = "shape-grid"
-    const val FILL = "shape-fill"
+    const val NO_FILL = "shape-fill-none"
+    const val CUSTOM_FILL = "shape-fill-custom"
     const val CUSTOM_COLOR = "shape-color-custom"
 
     fun kind(kind: ShapeKind) = "shape-kind-${kind.name}"
     fun page(index: Int) = "shape-page-$index"
     fun lineType(lineType: LineType) = "shape-line-${lineType.name}"
     fun color(argb: Int) = "shape-color-$argb"
+    fun fill(argb: Int) = "shape-fill-$argb"
 }
 
 /**
  * The Insert Shape pane, laid out as `docs/references/shapes-tooltip.jpeg` lays it out —
  * `docs/inkPlan.md` §5.4.
  *
- * Two things in the reference are deliberately handled differently, each the way this codebase
- * already handles its case. **Show 3D lines** is crossed out, so it is absent entirely rather than
- * disabled — the treatment the middle pen kind gets in [PenPanelContent]. **Fill colour** is placed
- * and inert, the treatment `+ Add color` and Full Page View get: a shape is stored as ink and a
- * stroke has no fill, and the reference itself shows the control set to "none".
+ * **Show 3D lines** is crossed out in the reference, so it is absent entirely rather than disabled —
+ * the treatment the middle pen kind gets in [PenPanelContent].
+ *
+ * **Fill colour** was given the other treatment, placed and inert, on the reasoning that a shape was
+ * stored as ink and a stroke has no fill. That stopped being true when SD1 was reversed and a shape
+ * became an object carrying `fillArgb`, so it is live as of 2026-08-06. What the reference shows is
+ * the *default* — none — and that is still where a shape starts, so the screenshot and the shipped
+ * behaviour continue to agree.
  *
  * The picker is paged because the reference is, and page 1 is inferred — only page 2 was captured.
  *
@@ -135,23 +139,63 @@ fun ColumnScope.ShapePanelContent(
     )
 
     Spacer(Modifier.height(6.dp))
-    PanelSetting(
-        label = "Fill color",
-        info = "Shapes are drawn as ink, and ink has an outline rather than an inside. Filling one " +
-            "needs a shape to be stored as more than the strokes that draw it.",
+    // Live since 2026-08-06 — SD7 amended. It was placed and inert on the reasoning that a shape was
+    // stored as ink and a stroke has no fill, which stopped being true when SD1 was reversed. What
+    // the reference actually shows is the *default*: none, which is still where a shape starts.
+    PanelSetting(label = "Fill color") {
+        NoFillSwatch(
+            selected = shape.fillArgb == null,
+            onClick = { onChange(shape.copy(fillArgb = null)) },
+        )
+    }
+    ColorSwatches(
+        palette = palette,
+        // Ten swatches are what fit the row, so "none" rides up on the label instead of squeezing in
+        // as an eleventh.
+        current = shape.fillArgb ?: NO_FILL,
+        customSelected = shape.fillArgb != null && shape.fillArgb !in palette,
+        onPick = { onChange(shape.copy(fillArgb = it)) },
+        onAddColor = onAddColor,
+        colorTag = ShapePanelTags::fill,
+        customTag = ShapePanelTags.CUSTOM_FILL,
+    )
+    Spacer(Modifier.height(6.dp))
+}
+
+/**
+ * "No fill", which is a value rather than the absence of one.
+ *
+ * A shape starts with no inside and has to be able to get back there, so this sits on the label row
+ * rather than in the swatches: the row picks a colour, and there is no colour that means "none".
+ */
+@Composable
+private fun NoFillSwatch(selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .testTag(ShapePanelTags.NO_FILL)
+            .clip(RoundedCornerShape(6.dp))
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+            )
+            .selectable(selected = selected, onClick = onClick)
+            .semantics {
+                contentDescription = "No fill"
+                this.selected = selected
+            },
+        contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = MaterialSymbols.Block,
-            contentDescription = "Fill color: none",
+            contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .size(20.dp)
-                .testTag(ShapePanelTags.FILL)
-                .alpha(INERT_ALPHA),
+            modifier = Modifier.size(18.dp),
         )
     }
-    Spacer(Modifier.height(6.dp))
 }
+
+/** No colour is this one, so the swatch row rings nothing while the fill is none. */
+private const val NO_FILL = 0
 
 /**
  * What the armed shape will look like, drawn with the settings below it.
@@ -192,6 +236,7 @@ private fun ShapePreview(shape: ShapeSettings) {
                 color = color,
                 width = shape.borderWidth.dp.toPx() * scale,
                 lineType = shape.lineType,
+                fill = shape.fillArgb?.let(::Color),
             )
         }
     }
@@ -343,9 +388,25 @@ internal fun DrawScope.drawTracing(
     color: Color,
     width: Float,
     lineType: LineType,
+    /** The inside, painted first so the border is never half-covered by the paint it surrounds. */
+    fill: Color? = null,
 ) {
-    tracing.solid.forEach { drawPolyline(it, color, width, lineType.pathEffectFor(width)) }
-    tracing.hidden.forEach { drawPolyline(it, color, width, LineType.Dotted.pathEffectFor(width)) }
+    if (fill != null) {
+        tracing.fill.forEach { region ->
+            if (region.size >= 6) {
+                drawPath(
+                    Path().apply {
+                        moveTo(region[0], region[1])
+                        for (index in 2 until region.size step 2) lineTo(region[index], region[index + 1])
+                        close()
+                    },
+                    fill,
+                )
+            }
+        }
+    }
+    tracing.solid.forEach { drawPolyline(it, color, width, lineType.pathEffect(width)) }
+    tracing.hidden.forEach { drawPolyline(it, color, width, LineType.Dotted.pathEffect(width)) }
 }
 
 private fun DrawScope.drawPolyline(
@@ -371,12 +432,6 @@ private fun DrawScope.drawPolyline(
     )
 }
 
-/** Same three effects [PenPanelContent]'s preview uses, so a dashed border previews as one. */
-private fun LineType.pathEffectFor(width: Float): PathEffect? = when (this) {
-    LineType.Solid -> null
-    LineType.Dashed -> PathEffect.dashPathEffect(floatArrayOf(width * 2.6f, width * 1.8f))
-    LineType.Dotted -> PathEffect.dashPathEffect(floatArrayOf(0.01f, width * 2f))
-}
 
 /** Six to a row, which is what the reference shows and what fits the 320dp panel. */
 private const val COLUMNS = 6
