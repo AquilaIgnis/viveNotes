@@ -552,7 +552,7 @@ private fun ColumnHandle(
                 .width(3.dp)
                 .height(TABLE_GUTTER - 6.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(accent),
+                .background(HANDLE_KNOB),
         )
     }
 }
@@ -589,7 +589,7 @@ private fun RowHandle(
                 .height(3.dp)
                 .width(TABLE_GUTTER - 6.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(accent),
+                .background(HANDLE_KNOB),
         )
     }
 }
@@ -737,6 +737,19 @@ private fun Modifier.pointerInputScale(
 
 private val CELL_PADDING: Dp = 6.dp
 private val HANDLE_RADIUS: Dp = 7.dp
+
+/**
+ * The grab bar inside a gutter handle — the little knob you actually put a finger on.
+ *
+ * A literal rather than a scheme colour, and it does not follow the theme, because what it has to
+ * read against is not the page: it sits on the handle's own azure field, which is azure in both
+ * themes. That is the same reasoning the object toolkit's `#E8EAED` follows — chrome painted on
+ * chrome answers to the thing underneath it, not to the app around it.
+ *
+ * It was `primary` before, which meant an accent bar on a 30%-accent background: the knob and its
+ * handle were the same hue, and the part you grab was the part hardest to see.
+ */
+private val HANDLE_KNOB: Color = Color(0xFFF2F0EF)
 
 /** Faint enough to read as paper, strong enough to tell a header row from the rest. */
 private const val HEADER_TINT_ALPHA = 0.10f

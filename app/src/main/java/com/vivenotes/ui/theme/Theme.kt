@@ -17,13 +17,28 @@ import androidx.compose.ui.unit.sp
 import com.vivenotes.ui.icons.LocalRibbonIcons
 import com.vivenotes.ui.icons.rememberRibbonIcons
 
-/** Chrome greys, matching the reference screenshots' dark shell. */
+/**
+ * Chrome greys, matching the reference screenshots' dark shell, and **azure** as the brand colour.
+ *
+ * Every value in the primary family is taken from the Azure ramp at
+ * <https://www.figma.com/colors/azure/> rather than mixed by hand, so the tints and shades are
+ * consistent with each other and with the base — `#007FFF`.
+ *
+ * The dark scheme wears the base itself: it reaches 4.25:1 against the `#1F1F1F` background, which
+ * is what the accent is used for — handles, selection chrome, active states — rather than body text.
+ * The light scheme takes a shade instead; see [LightColors].
+ */
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF8B5CF6),
+    primary = Color(0xFF007FFF),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF3B2E5A),
-    onPrimaryContainer = Color(0xFFE9DDFF),
-    secondary = Color(0xFF7E57C2),
+    // A shade rather than the near-black end of the ramp. This is the background of a *pressed*
+    // ribbon button, sitting on a `#2B2B2B` surface, and the two deepest azures are darker than that
+    // surface — a selected button that reads as a hole rather than as a highlight.
+    primaryContainer = Color(0xFF00478E),
+    onPrimaryContainer = Color(0xFFB3D9FF),
+    // A step down in emphasis from [primary], which is what secondary is for — so a shade, not a
+    // tint: a secondary brighter than the primary inverts the hierarchy it exists to express.
+    secondary = Color(0xFF0063C6),
     background = Color(0xFF1F1F1F),
     onBackground = Color(0xFFE6E6E6),
     surface = Color(0xFF2B2B2B),
@@ -37,12 +52,23 @@ private val DarkColors = darkColorScheme(
     outlineVariant = Color(0xFF3A3A3A),
 )
 
+/**
+ * The same azure, one shade down.
+ *
+ * **`#007FFF` itself is not used here, and the reason is contrast.** The base manages only 3.65:1
+ * against the light background — enough for a graphic, short of the 4.5:1 that body text needs, and
+ * `primary` is text here: it is what colours the ribbon's active tab. `#0063C6` is the next shade on
+ * the same ramp and reaches 5.6:1.
+ *
+ * The scheme this replaced did exactly the same thing with purple — `#8B5CF6` dark, the darker
+ * `#6D3FD1` light — so this is the existing pattern in a new hue rather than a new rule.
+ */
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF6D3FD1),
+    primary = Color(0xFF0063C6),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE9DDFF),
-    onPrimaryContainer = Color(0xFF23005C),
-    secondary = Color(0xFF6750A4),
+    primaryContainer = Color(0xFFB3D9FF),
+    onPrimaryContainer = Color(0xFF001C39),
+    secondary = Color(0xFF0055AA),
     background = Color(0xFFFAFAFA),
     onBackground = Color(0xFF1B1B1B),
     surface = Color(0xFFFFFFFF),
@@ -61,9 +87,17 @@ private val LightColors = lightColorScheme(
  *
  * These are deliberately *not* part of the [androidx.compose.material3.ColorScheme]. An accent
  * here marks what a glyph means — blue for emphasis, green for create, gold for tag — so it
- * belongs to the icon, not to the theme. Tying them to `primary` would turn the green "+" purple
- * the moment the app theme changed, which is not what the reference does: its ribbon accents stay
- * put while the brand colour appears only on primary actions like Add Page.
+ * belongs to the icon, not to the theme. Tying them to `primary` would have turned the green "+"
+ * purple the moment the app theme changed, and azure the moment it changed again, which is not what
+ * the reference does: its ribbon accents stay put while the brand colour appears only on primary
+ * actions like Add Page.
+ *
+ * **That rule now costs something worth knowing about.** With the brand colour azure, [blue] and
+ * `primary` are neighbours rather than opposites, so a glyph's "this is emphasis" blue and the
+ * shell's "this is the app" blue no longer separate on hue alone. They still separate on *place* —
+ * an accent is inside an icon, the brand colour is chrome around it — and the sampled blue is what
+ * `docs/references/generalUI.png` actually shows. Left alone deliberately; if the two ever read as
+ * one thing, the fix is to move this blue, never to point it at the scheme.
  *
  * They are still theme-*aware*, because a colour picked to read against the dark ribbon does not
  * survive a white surface — the sampled `#3B9ADC` manages only about 2.5:1 on the light theme's
