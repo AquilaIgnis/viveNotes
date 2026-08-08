@@ -76,8 +76,8 @@ enum class RibbonTab(val label: String) {
     Home("Home"),
     Insert("Insert"),
     Draw("Draw"),
-    History("History"),
-    Review("Review"),
+    Math("Math"),
+    AI("AI"),
     View("View"),
     Help("Help"),
 }
@@ -127,6 +127,7 @@ fun Ribbon(
     pageStyle: PageStyle,
     viewSettings: ViewSettings,
     view: ViewActions,
+    ai: AiActions = AiActions(openIntegrated = {}),
     /** The Draw tab's pens, the swatch row they share, and which tool is currently in hand. */
     pens: List<PenPreset>,
     palette: List<Int>,
@@ -215,6 +216,7 @@ fun Ribbon(
                 onChangeTable = draw.updateTable,
                 onAddColor = draw.addPaletteColor,
             )
+            RibbonTab.AI -> AiTab(ai)
             else -> PlaceholderTab(activeTab)
         }
     }

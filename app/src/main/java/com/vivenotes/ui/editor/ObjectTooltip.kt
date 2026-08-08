@@ -63,6 +63,9 @@ internal const val OBJECT_FILL_TAG = "object-tooltip-fill"
 internal const val OBJECT_FILL_NONE_TAG = "object-tooltip-fill-none"
 internal const val OBJECT_LINE_TYPE_TAG = "object-tooltip-line-type"
 internal const val OBJECT_SELECT_ALL_TAG = "object-tooltip-select-all"
+internal const val OBJECT_RECOGNIZE_TAG = "object-tooltip-recognize"
+internal const val OBJECT_RECOGNIZE_TEXT_TAG = "object-tooltip-recognize-text"
+internal const val OBJECT_RECOGNIZE_FORMULA_TAG = "object-tooltip-recognize-formula"
 
 /** The Table Class's half of the toolkit — `docs/tablePlan.md` TA6. */
 internal object TableActionTags {
@@ -258,6 +261,55 @@ internal fun RowScope.GroupAction(
             color = Color(0xFFE8EAED),
             style = MaterialTheme.typography.labelSmall,
         )
+    }
+}
+
+/** Ink recognition is explicit: the user chooses prose or formula rather than trusting a guess. */
+@Composable
+internal fun RowScope.RecognitionAction(
+    textAvailable: Boolean,
+    formulaAvailable: Boolean,
+    enabled: Boolean,
+    onText: () -> Unit,
+    onFormula: () -> Unit,
+) {
+    if (!textAvailable && !formulaAvailable) return
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TextButton(
+            onClick = { open = true },
+            enabled = enabled,
+            contentPadding = PaddingValues(horizontal = 7.dp),
+            modifier = Modifier.height(32.dp).testTag(OBJECT_RECOGNIZE_TAG),
+        ) {
+            Text(
+                text = "Recognize",
+                color = if (enabled) Color(0xFFE8EAED) else Color(0xFF9AA0A6),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (textAvailable) {
+                DropdownMenuItem(
+                    text = { Text("As text") },
+                    onClick = {
+                        open = false
+                        onText()
+                    },
+                    modifier = Modifier.testTag(OBJECT_RECOGNIZE_TEXT_TAG),
+                )
+            }
+            if (formulaAvailable) {
+                DropdownMenuItem(
+                    text = { Text("As equation") },
+                    onClick = {
+                        open = false
+                        onFormula()
+                    },
+                    modifier = Modifier.testTag(OBJECT_RECOGNIZE_FORMULA_TAG),
+                )
+            }
+        }
     }
 }
 

@@ -313,6 +313,11 @@ fun EditorPane(
     onRecolorInkSelection: (Set<String>, Int) -> Unit = { _, _ -> },
     onGroupInkSelection: (Set<String>) -> Unit = {},
     onUngroupInkSelection: (Set<String>) -> Unit = {},
+    textRecognitionAvailable: Boolean = false,
+    formulaRecognitionAvailable: Boolean = false,
+    recognitionRunning: Boolean = false,
+    onRecognizeText: (CanvasSelection) -> Unit = {},
+    onRecognizeFormula: (CanvasSelection) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val shell = LocalCanvasColors.current
@@ -1111,6 +1116,15 @@ fun EditorPane(
                     // The kind-specific half. Only a selection of one kind has one: over a mixed
                     // loop there is nothing both halves agree on, so the bar shows its base alone.
                     extras = {
+                        if (held.isInkOnly) {
+                            RecognitionAction(
+                                textAvailable = textRecognitionAvailable,
+                                formulaAvailable = formulaRecognitionAvailable,
+                                enabled = !recognitionRunning,
+                                onText = { onRecognizeText(held) },
+                                onFormula = { onRecognizeFormula(held) },
+                            )
+                        }
                         if (held.isInkOnly && held.inkIds.size > 1) {
                             GroupAction(
                                 isOneGroup = held.isOneInkGroup(strokes),

@@ -19,6 +19,7 @@ kotlinxSerialization = "1.7.3"
 lifecycle = "2.8.7"
 room = "2.8.1"
 ratex = "0.1.13"
+onnxRuntime = "1.27.0"
 
 [libraries]
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
@@ -51,6 +52,7 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 kotlinx-serialization-cbor = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-cbor", version.ref = "kotlinxSerialization" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 ratex-android = { group = "io.github.erweixin", name = "ratex-android", version.ref = "ratex" }
+onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxRuntime" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

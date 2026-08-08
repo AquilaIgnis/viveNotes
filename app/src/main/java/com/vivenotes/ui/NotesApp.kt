@@ -23,10 +23,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -41,14 +43,25 @@ import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
-import com.vivenotes.model.PageStyle
+import com.vivenotes.ai.AiModelStore
+import com.vivenotes.ai.AiModelInstallState
+import com.vivenotes.ai.AiModelsState
+import com.vivenotes.ai.InkRecognitionEngine
+import com.vivenotes.ai.renderInkSelection
 import com.vivenotes.ink.InkCodec
+import com.vivenotes.ink.PageStroke
+import com.vivenotes.model.PageStyle
 import com.vivenotes.ui.editor.DrawActions
+import com.vivenotes.ui.editor.AiActions
 import com.vivenotes.ui.editor.EditorPane
 import com.vivenotes.ui.editor.Ribbon
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
+import com.vivenotes.ui.panel.AiModelsPanelContent
 import com.vivenotes.ui.panel.PaperSizePanelContent
+import com.vivenotes.ui.panel.RecognitionOutputKind
+import com.vivenotes.ui.panel.RecognitionPanelContent
+import com.vivenotes.ui.panel.RecognitionPanelState
 import com.vivenotes.ui.panel.TOOL_PANEL_WIDTH
 import com.vivenotes.ui.panel.ToolPane
 import com.vivenotes.ui.panel.ToolPanel
@@ -57,6 +70,9 @@ import com.vivenotes.ui.shell.PageListPane
 import com.vivenotes.ui.shell.SectionTabsBar
 import com.vivenotes.ui.theme.LocalCanvasColors
 import com.vivenotes.ui.theme.canvasColorsFor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val RAIL_WIDTH = 232.dp
 private val PAGE_LIST_WIDTH = 260.dp
@@ -68,7 +84,11 @@ private val MEDIUM_BREAKPOINT = 720.dp
 private val EXPANDED_BREAKPOINT = 1040.dp
 
 @Composable
-fun NotesApp(viewModel: NotesViewModel) {
+fun NotesApp(
+    viewModel: NotesViewModel,
+    aiModelStore: AiModelStore,
+    recognitionEngine: InkRecognitionEngine,
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
     val compactPane by viewModel.compactPane.collectAsStateWithLifecycle()
@@ -88,12 +108,53 @@ fun NotesApp(viewModel: NotesViewModel) {
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
     val canvasUndoState by viewModel.canvasUndoState.collectAsStateWithLifecycle()
     val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
+    val strokes by viewModel.strokes.collectAsStateWithLifecycle()
+    val aiModels by aiModelStore.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    val recognitionScope = rememberCoroutineScope()
 
     var activeTab by remember { mutableStateOf(RibbonTab.Home) }
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
     /** The docked pane, if any. Deliberately not persisted: it is where you are, not what you have. */
     var openPane by remember { mutableStateOf<ToolPane?>(null) }
+    var recognition by remember { mutableStateOf<RecognitionPanelState?>(null) }
+    var recognitionRunning by remember { mutableStateOf(false) }
+
+    fun recognize(
+        selection: com.vivenotes.ink.CanvasSelection,
+        kind: RecognitionOutputKind,
+    ) {
+        if (recognitionRunning) return
+        recognitionRunning = true
+        recognition = RecognitionPanelState(kind = kind, running = true)
+        openPane = ToolPane.Recognition
+        val selectedStrokes = strokes
+        recognitionScope.launch {
+            var bitmap: android.graphics.Bitmap? = null
+            try {
+                val rendered = withContext(Dispatchers.Default) {
+                    renderInkSelection(selectedStrokes, selection)
+                }
+                bitmap = rendered
+                recognition = RecognitionPanelState(
+                    kind = kind,
+                    value = when (kind) {
+                        RecognitionOutputKind.Text -> recognitionEngine.recognizeText(rendered).text
+                        RecognitionOutputKind.Formula -> recognitionEngine.recognizeFormula(rendered).latex
+                    },
+                )
+            } catch (failure: Exception) {
+                recognition = RecognitionPanelState(
+                    kind = kind,
+                    error = failure.message ?: "The selected ink could not be recognized.",
+                )
+            } finally {
+                bitmap?.recycle()
+                recognitionRunning = false
+            }
+        }
+    }
 
     val viewActions = remember(viewModel) {
         ViewActions(
@@ -128,6 +189,10 @@ fun NotesApp(viewModel: NotesViewModel) {
             undo = viewModel::undoCanvas,
             redo = viewModel::redoCanvas,
         )
+    }
+
+    val aiActions = remember {
+        AiActions(openIntegrated = { openPane = ToolPane.AiModels })
     }
 
     val horizontalTabs = viewSettings.tabsLayout == TabsLayout.Horizontal
@@ -167,6 +232,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                         pageStyle = state.pageStyle,
                         viewSettings = viewSettings,
                         view = viewActions,
+                        ai = aiActions,
                         pens = themedPens,
                         palette = palette,
                         eraser = eraser,
@@ -245,6 +311,11 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 rulerOut = rulerOut,
                                 allowFinger = drawWithFinger,
                                 hasClipboard = hasClipboard,
+                                strokes = strokes,
+                                aiModels = aiModels,
+                                recognitionRunning = recognitionRunning,
+                                onRecognizeText = { recognize(it, RecognitionOutputKind.Text) },
+                                onRecognizeFormula = { recognize(it, RecognitionOutputKind.Formula) },
                                 modifier = Modifier.weight(1f),
                             )
                             openPane?.let { toolPane ->
@@ -252,6 +323,20 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 ToolPaneHost(
                                     pane = toolPane,
                                     style = state.pageStyle,
+                                    aiModels = aiModels,
+                                    onDownloadFormula = aiModelStore::downloadFormula,
+                                    recognition = recognition,
+                                    onRecognitionChange = { value ->
+                                        recognition = recognition?.copy(value = value)
+                                    },
+                                    onCopyRecognition = { value ->
+                                        val label = if (recognition?.kind == RecognitionOutputKind.Formula) {
+                                            "Recognized LaTeX"
+                                        } else {
+                                            "Recognized text"
+                                        }
+                                        copyRecognizedText(context, label, value)
+                                    },
                                     viewModel = viewModel,
                                     onClose = { openPane = null },
                                     modifier = Modifier.width(TOOL_PANEL_WIDTH),
@@ -290,6 +375,20 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 ToolPaneHost(
                                     pane = toolPane,
                                     style = state.pageStyle,
+                                    aiModels = aiModels,
+                                    onDownloadFormula = aiModelStore::downloadFormula,
+                                    recognition = recognition,
+                                    onRecognitionChange = { value ->
+                                        recognition = recognition?.copy(value = value)
+                                    },
+                                    onCopyRecognition = { value ->
+                                        val label = if (recognition?.kind == RecognitionOutputKind.Formula) {
+                                            "Recognized LaTeX"
+                                        } else {
+                                            "Recognized text"
+                                        }
+                                        copyRecognizedText(context, label, value)
+                                    },
                                     viewModel = viewModel,
                                     onClose = { openPane = null },
                                     modifier = Modifier.fillMaxSize(),
@@ -310,6 +409,11 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 rulerOut = rulerOut,
                                 allowFinger = drawWithFinger,
                                 hasClipboard = hasClipboard,
+                                strokes = strokes,
+                                aiModels = aiModels,
+                                recognitionRunning = recognitionRunning,
+                                onRecognizeText = { recognize(it, RecognitionOutputKind.Text) },
+                                onRecognizeFormula = { recognize(it, RecognitionOutputKind.Formula) },
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -348,6 +452,11 @@ private fun paneBehind(pane: CompactPane): CompactPane = when (pane) {
 private fun ToolPaneHost(
     pane: ToolPane,
     style: PageStyle,
+    aiModels: AiModelsState,
+    onDownloadFormula: () -> Unit,
+    recognition: RecognitionPanelState?,
+    onRecognitionChange: (String) -> Unit,
+    onCopyRecognition: (String) -> Unit,
     viewModel: NotesViewModel,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -360,6 +469,20 @@ private fun ToolPaneHost(
                 onPickOrientation = viewModel::setOrientation,
                 onSetCustomPaper = viewModel::setCustomPaper,
                 onSetMargins = viewModel::setMargins,
+            )
+            ToolPane.AiModels -> AiModelsPanelContent(
+                state = aiModels,
+                onDownloadFormula = onDownloadFormula,
+            )
+            ToolPane.Recognition -> recognition?.let { result ->
+                RecognitionPanelContent(
+                    state = result,
+                    onValueChange = onRecognitionChange,
+                    onCopy = onCopyRecognition,
+                )
+            } ?: Text(
+                text = "Select ink and choose Recognize to see a result here.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -383,6 +506,11 @@ private fun EditorSurface(
     rulerOut: Boolean,
     allowFinger: Boolean,
     hasClipboard: Boolean,
+    strokes: List<PageStroke>,
+    aiModels: AiModelsState,
+    recognitionRunning: Boolean,
+    onRecognizeText: (com.vivenotes.ink.CanvasSelection) -> Unit,
+    onRecognizeFormula: (com.vivenotes.ink.CanvasSelection) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (state.selectedPageId == null) {
@@ -395,8 +523,6 @@ private fun EditorSurface(
         }
         return
     }
-
-    val strokes by viewModel.strokes.collectAsStateWithLifecycle()
 
     EditorPane(
         title = state.title,
@@ -480,11 +606,15 @@ private fun EditorSurface(
         onResizeSelection = viewModel::resizeInk,
         onDeleteInkSelection = { viewModel.eraseStrokes(it.toList()) },
         onCopySelection = viewModel::copySelection,
-        
         onPaste = viewModel::pasteObjects,
         onRecolorInkSelection = viewModel::recolorInk,
         onGroupInkSelection = viewModel::groupInk,
         onUngroupInkSelection = viewModel::ungroupInk,
+        textRecognitionAvailable = aiModels.handwritingText == AiModelInstallState.Installed,
+        formulaRecognitionAvailable = aiModels.formulaLatex == AiModelInstallState.Installed,
+        recognitionRunning = recognitionRunning,
+        onRecognizeText = onRecognizeText,
+        onRecognizeFormula = onRecognizeFormula,
         showPrintMargins = showPrintMargins,
         modifier = modifier,
     )

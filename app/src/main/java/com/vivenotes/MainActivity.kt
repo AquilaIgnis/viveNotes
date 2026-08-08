@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ViveNotesTheme {
-                NotesApp(viewModel)
+                NotesApp(viewModel, app.aiModels, app.recognitionEngine)
             }
         }
     }
