@@ -67,7 +67,7 @@ internal val TABLE_GUTTER: Dp = 16.dp
  * One row or one column of one table, held — `docs/tablePlan.md` TA16.
  *
  * **Not a `CanvasSelection`.** That one holds *objects on the page*, across kinds; this is a place
- * inside a single object, and it exists for one reason: so that Insert above / Insert below know
+ * inside a single object, and it exists for one reason: so that Insert below and Delete row know
  * which row they mean without a caret. The two coexist — holding a column implies its table is
  * selected, which is what raises the bar the buttons live on.
  *
@@ -138,8 +138,8 @@ internal fun TableContainer(
     /**
      * The row or column currently held, if it belongs to this table — TA16.
      *
-     * Drawn as a band across the grid and a filled handle, so what the bar's Insert above / Insert
-     * left are about is visible rather than remembered.
+     * Drawn as a band across the grid and a filled handle, so what the bar's row and column verbs
+     * are about is visible rather than remembered.
      */
     held: TableAxis? = null,
     /** A tap on a gutter handle. Null clears the hold, which a second tap on the same handle does. */
@@ -512,9 +512,9 @@ private fun SelectionOutline(accent: Color, left: Dp, top: Dp, width: Dp, height
  * One column's width handle: a bar lying across the direction it drags in.
  *
  * **Two gestures on one target** — `docs/tablePlan.md` TA16. Dragging it sets the column's width,
- * which is what it has always done; *tapping* it holds that column, which is what makes Insert left
- * and Insert right mean something without a caret. The two cannot collide: one has travelled and the
- * other has not.
+ * which is what it has always done; *tapping* it holds that column, which is what makes Insert right
+ * and Delete column mean something without a caret. The two cannot collide: one has travelled and
+ * the other has not.
  *
  * A held handle is filled rather than tinted, and the column it names is banded across the grid — a
  * hold nobody can see is a hold nobody acts on with confidence.

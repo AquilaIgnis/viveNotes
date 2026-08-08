@@ -14,9 +14,7 @@ import com.vivenotes.R
  */
 object MaterialSymbols {
     val Add: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add)
-    val AddColumnLeft: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_column_left)
     val AddColumnRight: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_column_right)
-    val AddRowAbove: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_row_above)
     val AddRowBelow: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_row_below)
     val ArrowBack: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_back)
     val ArrowDropDown: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_drop_down)

@@ -68,10 +68,8 @@ internal const val OBJECT_SELECT_ALL_TAG = "object-tooltip-select-all"
 internal object TableActionTags {
     const val ROW = "object-tooltip-row"
     const val COLUMN = "object-tooltip-column"
-    const val ROW_ABOVE = "object-tooltip-row-above"
     const val ROW_BELOW = "object-tooltip-row-below"
     const val ROW_DELETE = "object-tooltip-row-delete"
-    const val COLUMN_LEFT = "object-tooltip-column-left"
     const val COLUMN_RIGHT = "object-tooltip-column-right"
     const val COLUMN_DELETE = "object-tooltip-column-delete"
 }
@@ -339,11 +337,14 @@ internal fun RowScope.ThicknessAction(
  * remove column"*, and `docs/tablePlan.md` TA6.
  *
  * **Two menus rather than four buttons.** As four the bar is nine controls wide; as two it is five,
- * and each menu has room for the distinction the reference bar draws between inserting before and
- * inserting after — which the diagram's four verbs leave open and every table needs.
+ * and each menu has room for the verbs the diagram's four leave open.
+ *
+ * **Insertion goes one way only**, after rather than before: "insert above" and "insert left" were
+ * both dropped on 2026-08-08 because neither did anything on the device. What is left is the pair
+ * that works, and a row is still reachable above another one by inserting below the row before it.
  *
  * Everything is relative to the cell with the caret in it, which the caller resolves. With no caret,
- * "above" means the top and "below" means the bottom, so the actions always mean something.
+ * "below" means the bottom and "right" means the far edge, so the actions always mean something.
  *
  * **Delete is absent, not disabled, at the last row or column**, which is the rule the whole bar
  * follows: an action a kind cannot perform is missing for it. A table with no rows is not a table.
@@ -351,7 +352,6 @@ internal fun RowScope.ThicknessAction(
 @Composable
 internal fun RowScope.TableRowAction(
     canDelete: Boolean,
-    onInsertAbove: () -> Unit,
     onInsertBelow: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -360,7 +360,6 @@ internal fun RowScope.TableRowAction(
         icon = MaterialSymbols.TableRows,
         label = "Rows",
         entries = listOfNotNull(
-            GridMenuEntry("Insert above", TableActionTags.ROW_ABOVE, onInsertAbove),
             GridMenuEntry("Insert below", TableActionTags.ROW_BELOW, onInsertBelow),
             GridMenuEntry("Delete row", TableActionTags.ROW_DELETE, onDelete).takeIf { canDelete },
         ),
@@ -370,7 +369,6 @@ internal fun RowScope.TableRowAction(
 @Composable
 internal fun RowScope.TableColumnAction(
     canDelete: Boolean,
-    onInsertLeft: () -> Unit,
     onInsertRight: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -379,7 +377,6 @@ internal fun RowScope.TableColumnAction(
         icon = MaterialSymbols.ViewColumn,
         label = "Columns",
         entries = listOfNotNull(
-            GridMenuEntry("Insert left", TableActionTags.COLUMN_LEFT, onInsertLeft),
             GridMenuEntry("Insert right", TableActionTags.COLUMN_RIGHT, onInsertRight),
             GridMenuEntry("Delete column", TableActionTags.COLUMN_DELETE, onDelete).takeIf { canDelete },
         ),
@@ -390,23 +387,23 @@ internal fun RowScope.TableColumnAction(
  * The row half of the toolkit **when a row is held** — `docs/tablePlan.md` TA16.
  *
  * The menus above are what the bar shows when there is nothing but a caret to go on. Tap a row's
- * handle and the verbs stop needing a menu: there is one row this is about, so the three actions
- * become three buttons, and each wears the Material Symbol that draws exactly what it does —
- * `add_row_above` is a picture of a row arriving above a grid.
+ * handle and the verbs stop needing a menu: there is one row this is about, so the actions become
+ * buttons, and each wears the Material Symbol that draws exactly what it does — `add_row_below` is
+ * a picture of a row arriving under a grid.
+ *
+ * Insert-above is gone here for the reason it is gone from the menu above: it did nothing.
  *
  * **Delete is a minus, not a second trash.** The base bar's trash means "delete the selected object"
  * for every kind on the canvas, and a trash beside it that meant "delete one row instead" would be
- * the one thing AD7 forbids: the same affordance changing meaning with state. A minus among two
- * pluses says "take one away" without ever competing for that.
+ * the one thing AD7 forbids: the same affordance changing meaning with state. A minus beside a plus
+ * says "take one away" without ever competing for that.
  */
 @Composable
 internal fun RowScope.HeldRowActions(
     canDelete: Boolean,
-    onInsertAbove: () -> Unit,
     onInsertBelow: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    AxisButton(TableActionTags.ROW_ABOVE, MaterialSymbols.AddRowAbove, "Insert row above", onInsertAbove)
     AxisButton(TableActionTags.ROW_BELOW, MaterialSymbols.AddRowBelow, "Insert row below", onInsertBelow)
     if (canDelete) {
         AxisButton(
@@ -419,15 +416,13 @@ internal fun RowScope.HeldRowActions(
     }
 }
 
-/** The same three, turned through a right angle — TA16. */
+/** The same pair, turned through a right angle — TA16. */
 @Composable
 internal fun RowScope.HeldColumnActions(
     canDelete: Boolean,
-    onInsertLeft: () -> Unit,
     onInsertRight: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    AxisButton(TableActionTags.COLUMN_LEFT, MaterialSymbols.AddColumnLeft, "Insert column left", onInsertLeft)
     AxisButton(
         tag = TableActionTags.COLUMN_RIGHT,
         icon = MaterialSymbols.AddColumnRight,

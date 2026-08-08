@@ -9,6 +9,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.IntSize
@@ -371,13 +372,11 @@ class TableToolkitTest {
                         extras = {
                             TableRowAction(
                                 canDelete = table.rowCount > 1,
-                                onInsertAbove = { rowAt = at?.first ?: 0 },
                                 onInsertBelow = { rowAt = (at?.first ?: table.rowCount - 1) + 1 },
                                 onDelete = { rowAt = -1 },
                             )
                             TableColumnAction(
                                 canDelete = table.columnCount > 1,
-                                onInsertLeft = { columnAt = at?.second ?: 0 },
                                 onInsertRight = {
                                     columnAt = (at?.second ?: table.columnCount - 1) + 1
                                 },
@@ -418,7 +417,7 @@ class TableToolkitTest {
      */
     @Test
     fun aHeldRowReplacesTheMenusWithItsOwnIcons() {
-        var above = false
+        var below = false
         compose.setContent {
             ViveNotesTheme {
                 Box(Modifier.size(600.dp)) {
@@ -432,8 +431,7 @@ class TableToolkitTest {
                         extras = {
                             HeldRowActions(
                                 canDelete = true,
-                                onInsertAbove = { above = true },
-                                onInsertBelow = {},
+                                onInsertBelow = { below = true },
                                 onDelete = {},
                             )
                         },
@@ -447,9 +445,9 @@ class TableToolkitTest {
         compose.onNodeWithTag(TableActionTags.ROW_DELETE).assertIsDisplayed()
 
         // One tap, not a menu and then an item.
-        compose.onNodeWithTag(TableActionTags.ROW_ABOVE).performClick()
+        compose.onNodeWithTag(TableActionTags.ROW_BELOW).performClick()
 
-        assertTrue(above)
+        assertTrue(below)
     }
 
     /** Delete stays absent rather than dead at the last row, held or not. */
@@ -468,7 +466,6 @@ class TableToolkitTest {
                         extras = {
                             HeldColumnActions(
                                 canDelete = false,
-                                onInsertLeft = {},
                                 onInsertRight = {},
                                 onDelete = {},
                             )
@@ -478,21 +475,44 @@ class TableToolkitTest {
             }
         }
 
-        compose.onNodeWithTag(TableActionTags.COLUMN_LEFT).assertIsDisplayed()
         compose.onNodeWithTag(TableActionTags.COLUMN_RIGHT).assertIsDisplayed()
         compose.onNodeWithTag(TableActionTags.COLUMN_DELETE).assertDoesNotExist()
     }
 
-    /** With no caret the verbs still mean something: the ends of the table. */
+    /** With no caret the verbs still mean something: the far end of the table. */
     @Test
-    fun withNoCaretInsertAboveMeansTheTop() {
+    fun withNoCaretInsertBelowMeansTheBottom() {
         val table = table(rows = 4)
         setBar(table, focusedCell = null)
 
         compose.onNodeWithTag(TableActionTags.ROW).performClick()
-        compose.onNodeWithTag(TableActionTags.ROW_ABOVE).performClick()
+        compose.onNodeWithTag(TableActionTags.ROW_BELOW).performClick()
 
-        assertEquals(0, rowAt)
+        assertEquals(4, rowAt)
+    }
+
+    /**
+     * **Insertion goes one way only.** "Insert above" and "insert left" did nothing on the device
+     * and were removed on 2026-08-08; these two keep them from drifting back in as dead entries.
+     */
+    @Test
+    fun theRowMenuOffersNoInsertAbove() {
+        setBar(table(rows = 3), focusedCell = null)
+
+        compose.onNodeWithTag(TableActionTags.ROW).performClick()
+
+        compose.onNodeWithText("Insert above").assertDoesNotExist()
+        compose.onNodeWithText("Insert below").assertIsDisplayed()
+    }
+
+    @Test
+    fun theColumnMenuOffersNoInsertLeft() {
+        setBar(table(columns = 3), focusedCell = null)
+
+        compose.onNodeWithTag(TableActionTags.COLUMN).performClick()
+
+        compose.onNodeWithText("Insert left").assertDoesNotExist()
+        compose.onNodeWithText("Insert right").assertIsDisplayed()
     }
 
     /**
@@ -505,7 +525,7 @@ class TableToolkitTest {
         setBar(single, focusedCell = null)
 
         compose.onNodeWithTag(TableActionTags.ROW).performClick()
-        compose.onNodeWithTag(TableActionTags.ROW_ABOVE).assertIsDisplayed()
+        compose.onNodeWithTag(TableActionTags.ROW_BELOW).assertIsDisplayed()
         compose.onNodeWithTag(TableActionTags.ROW_DELETE).assertDoesNotExist()
 
         assertNull(rowAt)

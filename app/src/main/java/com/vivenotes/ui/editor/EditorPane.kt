@@ -1127,21 +1127,19 @@ fun EditorPane(
                             )
                             selectedTables.singleOrNull()?.let { table ->
                                 // Where the caret is, or the edges of the table when there is none:
-                                // "above" then means the top and "below" the bottom, so the verbs
-                                // always mean something.
+                                // "below" then means the bottom and "right" the far edge, so the
+                                // verbs always mean something.
                                 val at = focusedCellId?.let(table::locate)
                                 val axis = heldAxis?.takeIf { it.tableId == table.id }
                                 val row = (axis as? TableAxis.Row)?.index ?: at?.first
                                 val column = (axis as? TableAxis.Column)?.index ?: at?.second
 
-                                val insertRowAbove = { onInsertTableRow(table.id, row ?: 0) }
                                 val insertRowBelow =
                                     { onInsertTableRow(table.id, (row ?: table.rowCount - 1) + 1) }
                                 val deleteRow = {
                                     onDeleteTableRow(table.id, row ?: table.rowCount - 1)
                                     heldAxis = null
                                 }
-                                val insertColumnLeft = { onInsertTableColumn(table.id, column ?: 0) }
                                 val insertColumnRight = {
                                     onInsertTableColumn(table.id, (column ?: table.columnCount - 1) + 1)
                                 }
@@ -1159,26 +1157,22 @@ fun EditorPane(
                                 when (axis) {
                                     is TableAxis.Row -> HeldRowActions(
                                         canDelete = table.canRemoveRow,
-                                        onInsertAbove = insertRowAbove,
                                         onInsertBelow = insertRowBelow,
                                         onDelete = deleteRow,
                                     )
                                     is TableAxis.Column -> HeldColumnActions(
                                         canDelete = table.canRemoveColumn,
-                                        onInsertLeft = insertColumnLeft,
                                         onInsertRight = insertColumnRight,
                                         onDelete = deleteColumn,
                                     )
                                     null -> {
                                         TableRowAction(
                                             canDelete = table.canRemoveRow,
-                                            onInsertAbove = insertRowAbove,
                                             onInsertBelow = insertRowBelow,
                                             onDelete = deleteRow,
                                         )
                                         TableColumnAction(
                                             canDelete = table.canRemoveColumn,
-                                            onInsertLeft = insertColumnLeft,
                                             onInsertRight = insertColumnRight,
                                             onDelete = deleteColumn,
                                         )
