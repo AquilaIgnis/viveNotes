@@ -451,6 +451,28 @@ sealed interface Outline {
             return null
         }
 
+        /**
+         * Where Tab goes from [cellId], or null when there is nowhere further — `docs/tablePlan.md`
+         * TA17.
+         *
+         * **Reading order, not the row alone.** The last cell of a row hands on to the first of the
+         * next, which is what Tab does in every table anyone has used; stopping at the right-hand
+         * edge would make the key useless on the one row where a writer most wants it. Null at the
+         * very last cell, where the editor falls back to what Tab does everywhere else — this
+         * deliberately does *not* grow a row, because a keystroke that silently edits the document
+         * is a different promise from one that moves the caret.
+         */
+        fun cellAfter(cellId: String): String? = cellBeside(cellId, step = 1)
+
+        /** Shift+Tab's destination, by the same rule read backwards. */
+        fun cellBefore(cellId: String): String? = cellBeside(cellId, step = -1)
+
+        private fun cellBeside(cellId: String, step: Int): String? {
+            val ids = cellIds()
+            val at = ids.indexOf(cellId)
+            return if (at < 0) null else ids.getOrNull(at + step)
+        }
+
         /** Recomputed after any column changes width, so [width] never drifts from [columns]. */
         fun withRecomputedWidth(): Table = copy(width = columns.sum())
 

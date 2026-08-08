@@ -237,6 +237,51 @@ class TableOpsTest {
         assertNull(table.locate("not-mine"))
     }
 
+    // -------------------------------------------------------------------------------------------
+    // Where Tab goes — TA17
+    // -------------------------------------------------------------------------------------------
+
+    @Test
+    fun tabWalksTheRowAndThenWrapsToTheNextOne() {
+        val table = grid(columns = 3, rows = 2)
+
+        assertEquals(table.cellAt(0, 1)?.id, table.cellAfter(table.cellAt(0, 0)!!.id))
+        // The end of a row hands on to the start of the next, which is the half that makes the key
+        // worth having: stopping at the right-hand edge is where a writer needs it most.
+        assertEquals(table.cellAt(1, 0)?.id, table.cellAfter(table.cellAt(0, 2)!!.id))
+    }
+
+    @Test
+    fun shiftTabReadsTheSameOrderBackwards() {
+        val table = grid(columns = 3, rows = 2)
+
+        assertEquals(table.cellAt(1, 0)?.id, table.cellBefore(table.cellAt(1, 1)!!.id))
+        assertEquals(table.cellAt(0, 2)?.id, table.cellBefore(table.cellAt(1, 0)!!.id))
+    }
+
+    /** Nowhere to go is reported rather than wrapped, so the editor can fall back to the indent. */
+    @Test
+    fun theEndsOfTheGridHaveNoNextCell() {
+        val table = grid(columns = 2, rows = 2)
+
+        assertNull(table.cellAfter(table.cellAt(1, 1)!!.id))
+        assertNull(table.cellBefore(table.cellAt(0, 0)!!.id))
+        assertNull(table.cellAfter("not-mine"))
+        assertNull(table.cellBefore("not-mine"))
+    }
+
+    @Test
+    fun aColumnInsertedBesideTheCaretChangesWhereTabGoes() {
+        val table = grid(columns = 2, rows = 1)
+        val first = table.cellAt(0, 0)!!.id
+        val wasNext = table.cellAfter(first)
+
+        val grown = table.withColumnInserted(1)
+
+        assertNotEquals("the new column is what Tab reaches now", wasNext, grown.cellAfter(first))
+        assertEquals(grown.cellAt(0, 1)?.id, grown.cellAfter(first))
+    }
+
     @Test
     fun aPastedCopySharesNoIdWithItsOriginal() {
         var next = 0

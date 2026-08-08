@@ -28,9 +28,11 @@ import org.junit.Test
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.model.Block
 import com.vivenotes.model.Orientation
+import com.vivenotes.model.Outline
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.RuleLines
+import com.vivenotes.model.newTable
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.SelectionState
@@ -61,6 +63,7 @@ class PageViewTest {
     private val zoom = mutableFloatStateOf(1f)
     private val title = mutableStateOf("A page")
     private val outlines = mutableStateOf(emptyList<OutlineBox>())
+    private val tables = mutableStateOf(emptyList<Outline.Table>())
     private var composed = false
     private lateinit var density: Density
     private var created: Pair<Float, Float>? = null
@@ -77,6 +80,7 @@ class PageViewTest {
         zoom: Float = 1f,
         title: String = "A page",
         outlines: List<OutlineBox> = emptyList(),
+        tables: List<Outline.Table> = emptyList(),
         hasClipboard: Boolean = false,
         textArmed: Boolean = true,
     ) {
@@ -90,6 +94,7 @@ class PageViewTest {
         this.zoom.floatValue = zoom
         this.title.value = title
         this.outlines.value = outlines
+        this.tables.value = tables
         if (!composed) {
             composed = true
             compose.setContent {
@@ -122,6 +127,7 @@ class PageViewTest {
                         onResizeOutline = { _, _ -> },
                         onSetOutlineMinHeight = { _, _ -> },
                         onOutlineBlurred = {},
+                        tables = this.tables.value,
                         onCanvasMeasured = { _, _ -> },
                         hasClipboard = this.hasClipboard.value,
                         onPaste = { pasted = it },
@@ -172,6 +178,34 @@ class PageViewTest {
             emitted = commands.tryEmit(FormatCommand.DeactivateTextInput)
         }
         assertTrue(emitted)
+
+        compose.waitUntil(timeoutMillis = 2_000) { !selection.value.editorFocused }
+    }
+
+    /**
+     * A tap on bare canvas ends text input, wherever it was — `docs/tablePlan.md` TA11.
+     *
+     * The table is the case that made this a bug worth a test. TA11 clears the *selection* through
+     * `ShapeLayer`, which knows nothing about editors, so the table stopped showing a single handle
+     * while the cell it had gone on holding kept the caret and the keyboard. Nothing else would have
+     * taken them: a cell is a real `EditText` and Compose does not touch the focus of a View it is
+     * only hosting.
+     */
+    @Test
+    fun tappingBareCanvasEndsTextInputInATableCell() {
+        var next = 0
+        val table = newTable(columns = 2, rows = 2, x = 60f, y = 60f) { "cell-${next++}" }
+        setPage(
+            style = PageStyle(hideTitle = true),
+            tables = listOf(table),
+            textArmed = false,
+        )
+
+        compose.onNodeWithTag(TableTags.cell(table.cellAt(0, 0)!!.id)).performClick()
+        compose.waitUntil(timeoutMillis = 2_000) { selection.value.editorFocused }
+
+        // Well below the grid: two default rows and the gutter reach about 160dp down the page.
+        tapScreen(200f, 420f)
 
         compose.waitUntil(timeoutMillis = 2_000) { !selection.value.editorFocused }
     }

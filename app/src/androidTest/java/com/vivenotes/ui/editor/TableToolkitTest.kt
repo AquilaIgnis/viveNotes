@@ -1,6 +1,8 @@
 package com.vivenotes.ui.editor
 
 import android.graphics.RectF
+import android.os.SystemClock
+import android.view.KeyEvent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +29,7 @@ import com.vivenotes.model.Outline
 import com.vivenotes.model.newTable
 import com.vivenotes.richtext.EditorStyle
 import com.vivenotes.richtext.SelectionState
+import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.ui.panel.TablePanelTags
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
@@ -232,6 +235,9 @@ class TableToolkitTest {
     private val heldState = mutableStateOf<TableAxis?>(null)
     private val heldAxis: TableAxis? get() = heldState.value
 
+    /** Which cell holds the caret, as the container reports it — what Tab is asserted through. */
+    private var focusedCell: String? = null
+
     private fun setTable(
         table: Outline.Table,
         selected: Boolean = false,
@@ -241,6 +247,7 @@ class TableToolkitTest {
     ) {
         selectedState.value = selected
         heldState.value = null
+        focusedCell = null
         compose.setContent {
             ViveNotesTheme {
                 TableContainer(
@@ -252,8 +259,8 @@ class TableToolkitTest {
                     editorStyle = style,
                     defaults = EditorDefaults(),
                     initialBlocksFor = { listOf(Block.empty()) },
-                    onCellFocused = { _, _ -> },
-                    onCellBlurred = {},
+                    onCellFocused = { cellId, _ -> focusedCell = cellId },
+                    onCellBlurred = { if (focusedCell == it) focusedCell = null },
                     onCellBlocksChanged = onCellBlocks,
                     onSelectionChanged = {},
                     onMove = { _, _ -> },
@@ -273,6 +280,85 @@ class TableToolkitTest {
         table.cellIds().forEach { id ->
             compose.onNodeWithTag(TableTags.cell(id)).assertIsDisplayed()
         }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Tab walks the grid — TA17
+    // -----------------------------------------------------------------------------------------
+
+    /**
+     * Sent through the instrumentation rather than through a Compose node, deliberately.
+     *
+     * A cell is a real `EditText` (AD6) and it is the *window's* focused view, so a key press that
+     * matters is one that arrives the way the hardware sends it. Dispatching into the Compose node
+     * tree instead would prove that Compose can be made to route a key, which is not the claim.
+     */
+    private fun pressTab(shift: Boolean = false) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val meta = if (shift) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
+        listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP).forEach { action ->
+            val now = SystemClock.uptimeMillis()
+            instrumentation.sendKeySync(
+                KeyEvent(now, now, action, KeyEvent.KEYCODE_TAB, 0, meta),
+            )
+        }
+        compose.waitForIdle()
+    }
+
+    private fun focusCell(table: Outline.Table, row: Int, column: Int) {
+        val id = table.cellAt(row, column)!!.id
+        compose.onNodeWithTag(TableTags.cell(id)).performClick()
+        compose.waitUntil(timeoutMillis = 2_000) { focusedCell == id }
+    }
+
+    @Test
+    fun tabMovesTheCaretToTheNextColumn() {
+        val table = table(columns = 3, rows = 2)
+        setTable(table)
+        focusCell(table, row = 0, column = 0)
+
+        pressTab()
+
+        assertEquals(table.cellAt(0, 1)?.id, focusedCell)
+    }
+
+    /** The half that makes the key worth having: the end of a row is not the end of the table. */
+    @Test
+    fun tabAtTheLastColumnWrapsToTheStartOfTheNextRow() {
+        val table = table(columns = 3, rows = 2)
+        setTable(table)
+        focusCell(table, row = 0, column = 2)
+
+        pressTab()
+
+        assertEquals(table.cellAt(1, 0)?.id, focusedCell)
+    }
+
+    @Test
+    fun shiftTabWalksBackTheSameWay() {
+        val table = table(columns = 3, rows = 2)
+        setTable(table)
+        focusCell(table, row = 1, column = 0)
+
+        pressTab(shift = true)
+
+        assertEquals(table.cellAt(0, 2)?.id, focusedCell)
+    }
+
+    /**
+     * The last cell has nowhere to hand on to, so the caret stays put and Tab is the indent it is
+     * everywhere else — TA17 declines to grow a row here, because a keystroke that edits the
+     * document is a different promise from one that moves the caret.
+     */
+    @Test
+    fun tabInTheLastCellKeepsTheCaretWhereItIs() {
+        val table = table(columns = 2, rows = 2)
+        setTable(table)
+        focusCell(table, row = 1, column = 1)
+
+        pressTab()
+
+        assertEquals(table.cellAt(1, 1)?.id, focusedCell)
     }
 
     /**

@@ -334,6 +334,23 @@ fun EditorPane(
     var focusedCellId by remember { mutableStateOf<String?>(null) }
 
     /**
+     * Puts text input away, wherever on the page it is — `docs/tablePlan.md` TA11.
+     *
+     * **Nothing else on this canvas ever would.** An editor is a real `EditText` (AD6), and Compose
+     * does not touch the focus of a View it is only hosting, so a tap that lands anywhere but in
+     * another editor leaves the caret exactly where it was with the keyboard still up. TA11 had the
+     * *selection* cleared by such a tap and stopped there, which is how a table finished with could
+     * keep the caret in a cell that no longer showed any chrome saying so.
+     *
+     * The ids and the ribbon are left to the blur that follows: `clearFocus` fires the same listener
+     * a tap on another editor would, so there is one path out of a focused editor rather than two.
+     *
+     * Reads through the state itself rather than being captured, because the gesture handlers that
+     * call it are keyed on page geometry and outlive the composition that built them.
+     */
+    val dismissTextInput: () -> Unit = { focusedEditor?.deactivateTextInput() }
+
+    /**
      * The row or column held by a tap on its gutter handle — `docs/tablePlan.md` TA16.
      *
      * Beside the selection rather than inside it, for the reason [TableAxis] gives: a `CanvasSelection`
@@ -796,6 +813,14 @@ fun EditorPane(
                                     // the page first composed — false, since the app opens with a
                                     // pen — and arming Text would then do nothing at all, for ever.
                                     val point = offsetToPage(offset)
+                                    // A tap that is not about to open a container is a dismissal: it
+                                    // takes the caret out of whatever holds it and puts the keyboard
+                                    // away. Only the text tool is excepted, and only because the
+                                    // container it is about to open wants both — hiding the keyboard
+                                    // a frame before something asks for it again is worse than
+                                    // leaving it up. Ahead of `canPlaceAt`, since a tap off the sheet
+                                    // is still a tap away from the writing.
+                                    if (!currentTextArmed.value) dismissTextInput()
                                     if (!canPlaceAt(point)) return@tap
                                     if (currentTableArmed.value) {
                                         // Selected on arrival, as an inserted shape is: the handles
@@ -841,7 +866,15 @@ fun EditorPane(
                             // lasso is the overlay owns every gesture on the page — in neither case
                             // may this layer also try to edit what is under the pointer.
                             interactive = shaping == null && !lassoing,
-                            onSelect = { selection = it },
+                            // This layer's tap is what clears the page's selection (TA11), and with
+                            // a table selected it is the *only* thing that hears a tap on bare
+                            // canvas — it consumes the down, so the detector above never runs. The
+                            // caret has to leave here too, or it stays behind in a cell whose
+                            // handles have just disappeared.
+                            onSelect = {
+                                dismissTextInput()
+                                selection = it
+                            },
                             onMoveShape = onMoveShape,
                             onResizeShape = onResizeShape,
                             onResizeShapeArm = onResizeShapeArm,

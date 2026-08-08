@@ -74,6 +74,12 @@ internal val APP_SHORTCUTS: List<AppShortcut> = listOf(
     AppShortcut("Underline", "Formatting", KeyEvent.KEYCODE_U, CTRL),
     AppShortcut("Indent", "Paragraph", KeyEvent.KEYCODE_TAB, modifiers = 0),
     AppShortcut("Outdent", "Paragraph", KeyEvent.KEYCODE_TAB, KeyEvent.META_SHIFT_ON),
+
+    // The same key, listed twice on purpose — `docs/tablePlan.md` TA17. Inside a table Tab walks the
+    // grid and only indents where the walk runs out, so a panel that named one meaning would be
+    // wrong wherever the caret actually was.
+    AppShortcut("Next cell", "Table", KeyEvent.KEYCODE_TAB, modifiers = 0),
+    AppShortcut("Previous cell", "Table", KeyEvent.KEYCODE_TAB, KeyEvent.META_SHIFT_ON),
 )
 
 /**

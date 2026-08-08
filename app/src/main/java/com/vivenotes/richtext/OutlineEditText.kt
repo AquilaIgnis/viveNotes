@@ -80,6 +80,19 @@ class OutlineEditText @JvmOverloads constructor(
     var onSelectionStateChanged: ((SelectionState) -> Unit)? = null
 
     /**
+     * What Tab does when this editor is a table cell: move the caret on, and say whether it moved —
+     * `docs/tablePlan.md` TA17.
+     *
+     * Null in a text container, which is the common case and the one Tab already had an answer for:
+     * inside a note, indent is what a writer means. A cell is where that stops being true, because
+     * the grid is the structure and walking it is what the key is for everywhere else.
+     *
+     * Set from outside because this view knows nothing about grids — it is one editor, and which
+     * cell it is (if it is one at all) is `TableContainer`'s business, not its own.
+     */
+    var onTabNavigate: ((forward: Boolean) -> Boolean)? = null
+
+    /**
      * Fired when a [FormatCommand.SetMark] lands on a collapsed caret.
      *
      * That is the case where the mark describes what the user is about to type rather than editing
@@ -249,9 +262,13 @@ class OutlineEditText @JvmOverloads constructor(
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        // Tab indents rather than moving focus — inside a note, indent is what a writer means.
+        // Tab indents rather than moving focus — inside a note, indent is what a writer means. In a
+        // table cell it walks the grid instead (TA17), and falls back to the indent in the last cell,
+        // where there is nowhere left to walk.
         if (keyCode == KeyEvent.KEYCODE_TAB) {
-            apply(FormatCommand.Indent(if (event.isShiftPressed) -1 else 1))
+            val forward = !event.isShiftPressed
+            if (onTabNavigate?.invoke(forward) == true) return true
+            apply(FormatCommand.Indent(if (forward) 1 else -1))
             return true
         }
         if (event.isCtrlPressed) {

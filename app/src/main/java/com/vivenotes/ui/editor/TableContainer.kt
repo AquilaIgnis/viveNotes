@@ -20,7 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -380,6 +382,23 @@ private fun TableGrid(
     fill: Color?,
     headerTint: Color,
 ) {
+    /**
+     * Every cell's editor, so Tab can put the caret in the next one — `docs/tablePlan.md` TA17.
+     *
+     * Held here because this is the one place that knows both halves: the grid says which cell comes
+     * next, and only the composition that made the editors can reach the one that renders it. The
+     * alternative — hoisting a "focus this cell" flag up to `EditorPane` and waiting a frame for it
+     * to come back down — turns one keystroke into a recomposition, and a key press has to be
+     * answered before the next character arrives.
+     *
+     * Entries are removed as their cells leave, so a deleted column takes its Views with it.
+     */
+    val cellEditors = remember(table.id) { mutableStateMapOf<String, OutlineEditText>() }
+
+    // Read through a holder: the callback below is assigned to a View that outlives the composition
+    // that built it, and a captured grid would still be the one the cell was created in.
+    val currentTable = rememberUpdatedState(table)
+
     Column(
         Modifier
             .width(table.width.dp)
@@ -447,43 +466,80 @@ private fun TableGrid(
                     .onSizeChanged { onRowMeasured(rowIndex, it.height) },
             ) {
                 row.cells.forEachIndexed { columnIndex, cell ->
-                    Box(
-                        Modifier
-                            .width(table.columns.getOrElse(columnIndex) { 0f }.dp)
-                            .padding(CELL_PADDING),
-                    ) {
-                        if (table.inkOnly) {
-                            // **Empty space, and empty on purpose** — `docs/tablePlan.md` TA15.
-                            //
-                            // Not a disabled editor, not a read-only one: nothing at all. A cell
-                            // with any pointer input in it consumes the touch, and the whole point
-                            // of this table is that a pen reaches the page through it. The box is
-                            // here only to hold the row open to the width its column claims.
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .testTag(TableTags.cell(cell.id)),
-                            )
-                        } else {
-                            NoteEditor(
-                                initialBlocks = initialBlocksFor(cell.id),
-                                editorStyle = editorStyle,
-                                defaults = defaults,
-                                onFocused = { editor -> onCellFocused(cell.id, editor) },
-                                onBlurred = { onCellBlurred(cell.id) },
-                                onBlocksChanged = { blocks -> onCellBlocksChanged(cell.id, blocks) },
-                                onSelectionChanged = onSelectionChanged,
-                                onMarkArmed = onMarkArmed,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag(TableTags.cell(cell.id)),
-                            )
+                    // Keyed by the cell rather than by its position, so that removing a column can
+                    // never hand one cell's editor — and the text in it — to the cell that shifted
+                    // into its place.
+                    key(cell.id) {
+                        Box(
+                            Modifier
+                                .width(table.columns.getOrElse(columnIndex) { 0f }.dp)
+                                .padding(CELL_PADDING),
+                        ) {
+                            if (table.inkOnly) {
+                                // **Empty space, and empty on purpose** — `docs/tablePlan.md` TA15.
+                                //
+                                // Not a disabled editor, not a read-only one: nothing at all. A cell
+                                // with any pointer input in it consumes the touch, and the whole
+                                // point of this table is that a pen reaches the page through it. The
+                                // box is here only to hold the row open to its column's width.
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .testTag(TableTags.cell(cell.id)),
+                                )
+                            } else {
+                                DisposableEffect(cell.id) {
+                                    onDispose { cellEditors.remove(cell.id) }
+                                }
+                                NoteEditor(
+                                    initialBlocks = initialBlocksFor(cell.id),
+                                    editorStyle = editorStyle,
+                                    defaults = defaults,
+                                    onFocused = { editor -> onCellFocused(cell.id, editor) },
+                                    onBlurred = { onCellBlurred(cell.id) },
+                                    onBlocksChanged = { onCellBlocksChanged(cell.id, it) },
+                                    onSelectionChanged = onSelectionChanged,
+                                    onMarkArmed = onMarkArmed,
+                                    onTabNavigate = { forward ->
+                                        moveCaret(currentTable.value, cellEditors, cell.id, forward)
+                                    },
+                                    onViewCreated = { editor -> cellEditors[cell.id] = editor },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag(TableTags.cell(cell.id)),
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Tab's whole behaviour inside a grid — `docs/tablePlan.md` TA17.
+ *
+ * The caret lands at the *end* of the destination's text rather than selecting it. Selecting is what
+ * a spreadsheet does, because there a cell holds one value that Tab is usually about to replace; this
+ * is a note, the cell holds prose, and arriving with everything highlighted means the next keystroke
+ * silently deletes a sentence.
+ *
+ * Returns false when there is nowhere to go — the last cell going forward, the first coming back, or
+ * a destination whose editor has not been composed — which is what leaves Tab as the indent it is
+ * everywhere else in the app.
+ */
+private fun moveCaret(
+    table: Outline.Table,
+    editors: Map<String, OutlineEditText>,
+    from: String,
+    forward: Boolean,
+): Boolean {
+    val to = if (forward) table.cellAfter(from) else table.cellBefore(from)
+    val editor = to?.let(editors::get) ?: return false
+    if (!editor.requestFocus()) return false
+    editor.setSelection(editor.text?.length ?: 0)
+    return true
 }
 
 /** A dashed box around the selected table, drawn the way a shape's selection is drawn (AD7). */

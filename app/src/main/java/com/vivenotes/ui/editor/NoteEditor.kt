@@ -41,6 +41,11 @@ internal fun NoteEditor(
     onBlocksChanged: (List<Block>) -> Unit,
     onSelectionChanged: (SelectionState) -> Unit,
     onMarkArmed: (Mark) -> Unit = {},
+    /**
+     * Where Tab goes, for an editor that is a table cell — `docs/tablePlan.md` TA17. Returns whether
+     * it moved; null, and false, both leave Tab as the indent it is in a text container.
+     */
+    onTabNavigate: ((forward: Boolean) -> Boolean)? = null,
     /** Handed the view once, so a caller can hold it for focus requests. */
     onViewCreated: (OutlineEditText) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -85,6 +90,10 @@ internal fun NoteEditor(
         },
         update = { editor ->
             editor.editorStyle = editorStyle
+            // Here rather than in the factory, unlike the callbacks above: this one closes over the
+            // *grid*, and a column inserted beside the cell must not leave Tab walking the table as
+            // it was when the editor was made.
+            editor.onTabNavigate = onTabNavigate
             editor.setTextColor(canvas.text.toArgb())
             editor.equationColor = canvas.text.toArgb()
             editor.setHintTextColor(canvas.secondaryText.toArgb())
