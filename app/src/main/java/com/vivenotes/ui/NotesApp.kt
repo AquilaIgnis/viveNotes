@@ -38,6 +38,7 @@ import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.model.PageStyle
@@ -80,6 +81,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     val eraser by viewModel.eraser.collectAsStateWithLifecycle()
     val highlighter by viewModel.highlighter.collectAsStateWithLifecycle()
     val shape by viewModel.shape.collectAsStateWithLifecycle()
+    val table by viewModel.table.collectAsStateWithLifecycle()
     val ruler by viewModel.ruler.collectAsStateWithLifecycle()
     val rulerOut by viewModel.rulerOut.collectAsStateWithLifecycle()
     val tool by viewModel.tool.collectAsStateWithLifecycle()
@@ -118,6 +120,7 @@ fun NotesApp(viewModel: NotesViewModel) {
             updateEraser = viewModel::updateEraser,
             updateHighlighter = viewModel::updateHighlighter,
             updateShape = viewModel::updateShape,
+            updateTable = viewModel::updateTable,
             updateRuler = viewModel::updateRuler,
             toggleRuler = viewModel::toggleRuler,
             addPaletteColor = viewModel::addPaletteColor,
@@ -136,6 +139,7 @@ fun NotesApp(viewModel: NotesViewModel) {
     // Same resolution the pens get: a black border on a dark page would be invisible, and a colour
     // the user actually picked must survive the theme changing under it.
     val themedShape = remember(shape, canvas.isDark) { shape.forCanvasTheme(canvas.isDark) }
+    val themedTable = remember(table, canvas.isDark) { table.forCanvasTheme(canvas.isDark) }
     // Where "back" stops. With the sections on screen as tabs there is no notebook pane behind the
     // page list to return to.
     val rootPane = if (horizontalTabs) CompactPane.Pages else CompactPane.Notebooks
@@ -168,6 +172,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                         eraser = eraser,
                         highlighter = highlighter,
                         shape = themedShape,
+                        table = themedTable,
                         ruler = ruler,
                         rulerOut = rulerOut,
                         tool = tool,
@@ -235,6 +240,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 eraser = eraser,
                                 highlighter = highlighter,
                                 shape = themedShape,
+                                themedTable = themedTable,
                                 ruler = ruler,
                                 rulerOut = rulerOut,
                                 allowFinger = drawWithFinger,
@@ -299,6 +305,7 @@ fun NotesApp(viewModel: NotesViewModel) {
                                 eraser = eraser,
                                 highlighter = highlighter,
                                 shape = themedShape,
+                                themedTable = themedTable,
                                 ruler = ruler,
                                 rulerOut = rulerOut,
                                 allowFinger = drawWithFinger,
@@ -370,6 +377,8 @@ private fun EditorSurface(
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
+    /** Themed for the canvas, like [shape] — a hairline grid the colour of the page is no grid. */
+    themedTable: TableSettings,
     ruler: RulerSettings,
     rulerOut: Boolean,
     allowFinger: Boolean,
@@ -400,6 +409,7 @@ private fun EditorSurface(
         onTitleChange = viewModel::setTitle,
         outlines = state.outlines,
         pageRevision = state.pageRevision,
+        pageId = state.selectedPageId,
         initialBlocksFor = viewModel::initialBlocksFor,
         commands = viewModel.commands,
         onBlocksChanged = viewModel::onBlocksChanged,
@@ -429,6 +439,25 @@ private fun EditorSurface(
         lassoing = tool == DrawTool.Lasso,
         shaping = if (tool == DrawTool.Shape) shape else null,
         ruler = ruler.takeIf { rulerOut },
+        tables = state.tables,
+        // Both tools place a table on the next tap; which *kind* is decided here rather than in the
+        // canvas, which has no business knowing there are two — `docs/tablePlan.md` TA15.
+        tableArmed = tool == DrawTool.Table || tool == DrawTool.InkTable,
+        onInsertTable = { x, y ->
+            viewModel.insertTable(themedTable, x, y, inkOnly = tool == DrawTool.InkTable)
+        },
+        onMoveTables = viewModel::moveTables,
+        onResizeTables = viewModel::resizeTables,
+        onDeleteTables = viewModel::deleteTables,
+        onRecolorTables = viewModel::recolorTables,
+        onSetTableBorderWidth = viewModel::setTableBorderWidth,
+        onSetTableFill = viewModel::setTableFill,
+        onSetTableColumnWidth = viewModel::setTableColumnWidth,
+        onSetTableRowMinHeight = viewModel::setTableRowMinHeight,
+        onInsertTableRow = viewModel::insertTableRow,
+        onDeleteTableRow = viewModel::deleteTableRow,
+        onInsertTableColumn = viewModel::insertTableColumn,
+        onDeleteTableColumn = viewModel::deleteTableColumn,
         shapes = state.shapes,
         onMoveShape = viewModel::moveShape,
         onResizeShape = viewModel::resizeShape,

@@ -49,6 +49,7 @@ import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.TableSettings
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.Align
 import com.vivenotes.model.BlockType
@@ -132,6 +133,8 @@ fun Ribbon(
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
+    /** How the next table arrives — `docs/tablePlan.md` TA7. Insert tab only. */
+    table: TableSettings = TableSettings(),
     /** The ruler that is out, and whether it is — `docs/rulerPlan.md`. */
     ruler: RulerSettings = RulerSettings(),
     rulerOut: Boolean = false,
@@ -189,6 +192,7 @@ fun Ribbon(
                 eraser = eraser,
                 highlighter = highlighter,
                 shape = shape,
+                table = table,
                 ruler = ruler,
                 rulerOut = rulerOut,
                 tool = tool,
@@ -203,10 +207,12 @@ fun Ribbon(
                 onCommand = onCommand,
                 pageOpen = pageOpen,
                 shape = shape,
+                table = table,
                 palette = palette,
                 tool = tool,
                 onSelectTool = draw.selectTool,
                 onChangeShape = draw.updateShape,
+                onChangeTable = draw.updateTable,
                 onAddColor = draw.addPaletteColor,
             )
             else -> PlaceholderTab(activeTab)

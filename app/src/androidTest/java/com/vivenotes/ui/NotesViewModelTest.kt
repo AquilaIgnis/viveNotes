@@ -36,6 +36,7 @@ import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
 import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.TableSettings
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
@@ -1136,6 +1137,236 @@ class NotesViewModelTest {
         vm.commitZoom()
 
         withTimeout(STORE_TIMEOUT_MS) { viewSettings.settings.first { it.zoom == 1.75f } }
+    }
+
+    // --- tables — `docs/tablePlan.md` ----------------------------------------------------------
+
+    /** The cell at [row], [column] of the only table on the page. */
+    private fun NotesViewModel.cellId(row: Int, column: Int): String =
+        uiState.value.tables.single().cellAt(row, column)!!.id
+
+    /**
+     * The whole cycle a table has to survive: placed, typed in, saved, reopened.
+     *
+     * The trap this guards is TA2's: a cell's live text lives in the ViewModel's block map and the
+     * cells carried on `uiState.tables` go stale the moment anything is typed. A save that read the
+     * stale copy would store an empty grid, and nothing before the reload would show it.
+     */
+    @Test
+    fun aTableIsSavedWithWhatWasTypedInIt() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+
+        vm.insertTable(TableSettings(columns = 2, rows = 2), 40f, 40f)
+        advanceUntilIdle()
+        vm.onBlocksChanged(vm.cellId(0, 1), listOf(Block.of("in a cell")))
+        advanceUntilIdle()
+
+        assertTrue(storedText(pageId).contains("in a cell"))
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        val reloaded = vm.uiState.value.tables.single()
+        assertEquals(2, reloaded.columnCount)
+        assertEquals("in a cell", vm.initialBlocksFor(reloaded.cellAt(0, 1)!!.id).single().text)
+    }
+
+    /**
+     * A blank cell is written where a blank container is skipped — TA12.
+     *
+     * The two rules look contradictory and are not: an empty container is a caret position nobody
+     * typed in, and an empty cell is part of the grid's shape. Dropping one would resize the table
+     * on reload, which is the failure this pins.
+     */
+    @Test
+    fun aTableWithNothingInItStillHasItsShapeAfterAReload() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+
+        vm.insertTable(TableSettings(columns = 3, rows = 2), 40f, 40f)
+        advanceUntilIdle()
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        val reloaded = vm.uiState.value.tables.single()
+        assertEquals(3, reloaded.columnCount)
+        assertEquals(2, reloaded.rowCount)
+        assertEquals(6, reloaded.cellIds().size)
+    }
+
+    /**
+     * TR3, the risk this feature's history was written around: a deleted row's *text* has to come
+     * back, not merely its cells.
+     *
+     * Asserted on the text rather than on the row count, because a row restored with blank cells
+     * passes every count.
+     */
+    @Test
+    fun deletingARowTakesItsTextAndUndoBringsItBack() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        vm.insertTable(TableSettings(columns = 1, rows = 3), 40f, 40f)
+        advanceUntilIdle()
+        val doomed = vm.cellId(1, 0)
+        vm.onBlocksChanged(doomed, listOf(Block.of("second row")))
+        advanceUntilIdle()
+
+        vm.deleteTableRow(vm.uiState.value.tables.single().id, 1)
+        advanceUntilIdle()
+        assertEquals(2, vm.uiState.value.tables.single().rowCount)
+
+        vm.undoCanvas()
+        val restored = vm.uiState.value.tables.single()
+        assertEquals(3, restored.rowCount)
+        assertEquals(
+            "the row came back empty",
+            "second row",
+            vm.initialBlocksFor(restored.cellAt(1, 0)!!.id).single().text,
+        )
+    }
+
+    @Test
+    fun addingAColumnGivesEveryRowACellAndUndoTakesThemAway() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        vm.insertTable(TableSettings(columns = 2, rows = 3), 40f, 40f)
+        advanceUntilIdle()
+        val tableId = vm.uiState.value.tables.single().id
+
+        vm.insertTableColumn(tableId, 0)
+        advanceUntilIdle()
+        val grown = vm.uiState.value.tables.single()
+        assertEquals(3, grown.columnCount)
+        grown.rows.forEach { assertEquals(3, it.cells.size) }
+
+        vm.undoCanvas()
+        assertEquals(2, vm.uiState.value.tables.single().columnCount)
+    }
+
+    /** The last row is not removable, so the action must leave no history entry behind either. */
+    @Test
+    fun deletingTheLastRowIsRefusedAndCostsNoUndoStep() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        vm.insertTable(TableSettings(columns = 1, rows = 1), 40f, 40f)
+        advanceUntilIdle()
+        val tableId = vm.uiState.value.tables.single().id
+
+        vm.deleteTableRow(tableId, 0)
+        advanceUntilIdle()
+        assertEquals(1, vm.uiState.value.tables.single().rowCount)
+
+        // One press of Undo takes back the insert, which is the only thing that happened.
+        vm.undoCanvas()
+        assertTrue(vm.uiState.value.tables.isEmpty())
+    }
+
+    /** TR6: a pasted table without its text is a grid of lines, and a copy is nothing without one. */
+    @Test
+    fun copyingATableAndPastingItCarriesTheText() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        vm.insertTable(TableSettings(columns = 2, rows = 1), 40f, 40f)
+        advanceUntilIdle()
+        val source = vm.uiState.value.tables.single()
+        vm.onBlocksChanged(vm.cellId(0, 0), listOf(Block.of("copied")))
+        advanceUntilIdle()
+
+        vm.copySelection(
+            CanvasSelection(tableIds = setOf(source.id), bounds = InkBounds(0f, 0f, 0f, 0f)),
+        )
+        vm.pasteObjects(InkPoint(400f, 400f))
+        advanceUntilIdle()
+
+        val tables = vm.uiState.value.tables
+        assertEquals(2, tables.size)
+        val pasted = tables.first { it.id != source.id }
+        assertEquals("copied", vm.initialBlocksFor(pasted.cellAt(0, 0)!!.id).single().text)
+        // Fresh ids all the way down, or typing in one would appear in the other.
+        assertTrue(pasted.cellIds().none { it in source.cellIds() })
+    }
+
+    /** Undo is one ring across kinds (SD10), and a table is the third thing to join it. */
+    @Test
+    fun undoReachesBackPastATableToTheShapeBeforeIt() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        vm.insertShape(ShapeSettings(), 40f, 40f, 160f, 120f)
+        advanceUntilIdle()
+        vm.insertTable(TableSettings(), 200f, 200f)
+        advanceUntilIdle()
+
+        vm.undoCanvas()
+        assertTrue("Undo took the shape instead of the table placed after it", vm.uiState.value.tables.isEmpty())
+        assertEquals("Undo took the shape as well", 1, vm.uiState.value.shapes.size)
+
+        vm.undoCanvas()
+        assertTrue("the second Undo did not reach the shape", vm.uiState.value.shapes.isEmpty())
+    }
+
+    /**
+     * A cell that happens to be blank must not be swept up by the container sweep.
+     *
+     * `onOutlineBlurred` discards empty *containers*, and since TA2 it is handed ids out of a map
+     * that now also holds cells. Without its guard, tabbing through a blank cell would delete that
+     * cell's entry — and the next save writes a table with a hole in it.
+     */
+    @Test
+    fun blurringABlankCellDoesNotDiscardIt() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        vm.insertTable(TableSettings(columns = 2, rows = 1), 40f, 40f)
+        advanceUntilIdle()
+        val cell = vm.cellId(0, 1)
+
+        vm.onOutlineBlurred(cell)
+        advanceUntilIdle()
+
+        assertEquals(2, vm.uiState.value.tables.single().columnCount)
+        assertEquals(1, vm.initialBlocksFor(cell).size)
+    }
+
+    /**
+     * The Draw tab's table — TA15. **A page holding only a ruling still saves.**
+     *
+     * This is the regression the ink table can cause and nothing else can: `persist` refuses to write
+     * while any content box's blocks are unknown, and an ink table's cells have no blocks by design.
+     * Route them through the same map as a typed cell's and the guard is never satisfied, so the page
+     * silently stops saving — no error, no crash, just work that is gone the next time it opens.
+     */
+    @Test
+    fun aPageHoldingOnlyAnInkTableIsStillWritten() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+
+        vm.insertTable(TableSettings(columns = 3, rows = 4), 40f, 40f, inkOnly = true)
+        advanceUntilIdle()
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        val reloaded = vm.uiState.value.tables.single()
+        assertTrue("it came back as a grid of text fields", reloaded.inkOnly)
+        assertEquals(3, reloaded.columnCount)
+        assertEquals(4, reloaded.rowCount)
+    }
+
+    /** Rows and columns work the same on either kind; only what is *in* a cell differs. */
+    @Test
+    fun anInkTableGrowsWithoutEverTouchingTheBlockMap() = runTest(dispatcher) {
+        val vm = seededViewModel()
+
+        vm.insertTable(TableSettings(columns = 2, rows = 2), 40f, 40f, inkOnly = true)
+        advanceUntilIdle()
+        val table = vm.uiState.value.tables.single()
+        assertTrue(table.contentCellIds().isEmpty())
+
+        vm.insertTableRow(table.id, 0)
+        advanceUntilIdle()
+        val grown = vm.uiState.value.tables.single()
+        assertEquals(3, grown.rowCount)
+
+        vm.undoCanvas()
+        assertEquals(2, vm.uiState.value.tables.single().rowCount)
     }
 
     private companion object {

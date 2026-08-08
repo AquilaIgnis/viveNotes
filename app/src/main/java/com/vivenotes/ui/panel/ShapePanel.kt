@@ -186,11 +186,14 @@ fun ColumnScope.ShapePanelContent(
  * to get there.
  */
 @Composable
-private fun FillSwatch(
+internal fun FillSwatch(
     fill: Int?,
     seedArgb: Int,
     onChange: (Int?) -> Unit,
     onAddColor: (Int) -> Unit,
+    /** Overridden by the Table pane, whose fill is a different control on a different object. */
+    tag: String = ShapePanelTags.FILL,
+    noFillTag: String = ShapePanelTags.NO_FILL,
 ) {
     var wheelOpen by remember { mutableStateOf(false) }
     // What the wheel has been left on, as in [ColorSwatches]: null until it is touched, which is what
@@ -213,7 +216,7 @@ private fun FillSwatch(
         Box(
             modifier = Modifier
                 .size(28.dp)
-                .testTag(ShapePanelTags.FILL)
+                .testTag(tag)
                 .clip(RoundedCornerShape(6.dp))
                 .background(fill?.let(::Color) ?: Color.Transparent)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp))
@@ -242,7 +245,7 @@ private fun FillSwatch(
             onDismissRequest = { closeWheel() },
             title = "Fill color",
         ) {
-            NoFillEntry(selected = fill == null, onClick = { clearFill() })
+            NoFillEntry(selected = fill == null, tag = noFillTag, onClick = { clearFill() })
             Spacer(Modifier.height(10.dp))
             ColorWheelContent(
                 initialArgb = fill ?: seedArgb,
@@ -258,11 +261,11 @@ private fun FillSwatch(
 
 /** "No fill", which is a value rather than the absence of one — and the only way back to it. */
 @Composable
-private fun NoFillEntry(selected: Boolean, onClick: () -> Unit) {
+private fun NoFillEntry(selected: Boolean, tag: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag(ShapePanelTags.NO_FILL)
+            .testTag(tag)
             .clip(RoundedCornerShape(8.dp))
             .background(
                 if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,

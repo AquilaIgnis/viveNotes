@@ -173,6 +173,53 @@ data class ShapeSettings(
     }
 }
 
+/**
+ * The Insert Table tool — `docs/tablePlan.md` TA7, and `docs/references/table-opts.jpeg` field for
+ * field.
+ *
+ * Every value here describes *the user*, per ID5: how you like a table to start. What the table
+ * carries in the document is a property of that table and travels with the page — the same boundary
+ * [ShapeSettings] draws against `Outline.Shape`, and with the same warning attached. The two panes
+ * look alike deliberately and must never be merged: one is a preference, the other is an edit, and
+ * collapsing them is a sync bug rather than a refactor.
+ *
+ * The plate's fill reads "none", which is where a table starts and is not the same thing as a
+ * transparent one.
+ */
+@Serializable
+data class TableSettings(
+    val columns: Int = DEFAULT_COLUMNS,
+    val rows: Int = DEFAULT_ROWS,
+    val headerRow: Boolean = true,
+    val headerColumn: Boolean = false,
+    /** Border width in page dp. */
+    val borderWidth: Int = DEFAULT_BORDER_WIDTH,
+    val borderColorArgb: Int = 0xFF9AA0A6.toInt(),
+    val fillArgb: Int? = null,
+    /** True only while the border is using the automatic high-contrast starter colour. */
+    val colorFollowsTheme: Boolean = true,
+) {
+    companion object {
+        /** What the reference panel is showing. */
+        const val DEFAULT_COLUMNS = 3
+        const val DEFAULT_ROWS = 3
+
+        const val MIN_BORDER_WIDTH = 1
+        const val MAX_BORDER_WIDTH = 8
+        const val DEFAULT_BORDER_WIDTH = 1
+    }
+}
+
+/** Resolves the automatic border colour, as a pen and a shape do — see [PenPreset.forCanvasTheme]. */
+fun TableSettings.forCanvasTheme(isDark: Boolean): TableSettings =
+    if (colorFollowsTheme) {
+        // Not pure white or black: a table is a grid of hairlines, and at full contrast the rules
+        // shout over the text they are there to organise.
+        copy(borderColorArgb = if (isDark) 0xFF9AA0A6.toInt() else 0xFF80868B.toInt())
+    } else {
+        this
+    }
+
 /** Resolves the automatic border colour without changing one the user explicitly picked. */
 fun ShapeSettings.forCanvasTheme(isDark: Boolean): ShapeSettings =
     if (colorFollowsTheme) {
@@ -284,6 +331,24 @@ sealed interface DrawTool {
      */
     data object Shape : DrawTool
 
+    /**
+     * Insert Table: the next tap on bare canvas puts a table there — `docs/tablePlan.md` TA7.
+     *
+     * A tool rather than a button that drops one, for the reason [Shape] is one: a page is a canvas,
+     * and what goes on it goes where you put it. How many rows and columns it arrives with is
+     * [TableSettings], the same split [Shape] has from [ShapeSettings].
+     */
+    data object Table : DrawTool
+
+    /**
+     * Insert a table to **write in with a stylus** — `docs/tablePlan.md` TA15, the Draw tab's table.
+     *
+     * A second tool rather than a flag on [Table], because the two place different objects: one is a
+     * grid of text fields and the other is a ruling with nothing in it. `TableSettings` is shared —
+     * how many rows, how thick the rules, what colour — since that is the same question for both.
+     */
+    data object InkTable : DrawTool
+
     /** Free-form selection: circle ink, then drag the selected objects. */
     data object Lasso : DrawTool
 
@@ -342,6 +407,11 @@ class PenSettingsStore(context: Context) {
     /** Which ruler, and how big. Not whether it is out — see [RulerSettings]. */
     val ruler: Flow<RulerSettings> = store.data.map { prefs ->
         prefs[RULER]?.let(::decodeRuler) ?: RulerSettings()
+    }
+
+    /** How a table starts — see [TableSettings]. Shares [palette] for the reason [shape] does. */
+    val table: Flow<TableSettings> = store.data.map { prefs ->
+        prefs[TABLE]?.let(::decodeTable) ?: TableSettings()
     }
 
     /**
@@ -405,6 +475,10 @@ class PenSettingsStore(context: Context) {
         store.edit { it[RULER] = json.encodeToString(RulerSettings.serializer(), settings) }
     }
 
+    suspend fun setTable(settings: TableSettings) {
+        store.edit { it[TABLE] = json.encodeToString(TableSettings.serializer(), settings) }
+    }
+
     private fun decodePen(index: Int, text: String): PenPreset? = runCatching {
         val decoded = json.decodeFromString(PenPreset.serializer(), text)
         val hasThemeFlag = json.parseToJsonElement(text).jsonObject.containsKey("colorFollowsTheme")
@@ -437,6 +511,9 @@ class PenSettingsStore(context: Context) {
     private fun decodeRuler(text: String): RulerSettings? =
         runCatching { json.decodeFromString(RulerSettings.serializer(), text) }.getOrNull()
 
+    private fun decodeTable(text: String): TableSettings? =
+        runCatching { json.decodeFromString(TableSettings.serializer(), text) }.getOrNull()
+
     /**
      * A stored row shorter or longer than the current [PALETTE_SIZE] is trimmed rather than
      * rejected, so changing how many swatches fit is not a migration. An empty one is nothing to
@@ -456,6 +533,7 @@ class PenSettingsStore(context: Context) {
         val HIGHLIGHTER = stringPreferencesKey("highlighter")
         val SHAPE = stringPreferencesKey("shape")
         val RULER = stringPreferencesKey("ruler")
+        val TABLE = stringPreferencesKey("table")
         val PALETTE = stringPreferencesKey("palette")
 
         /**

@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,6 +63,18 @@ internal const val OBJECT_FILL_TAG = "object-tooltip-fill"
 internal const val OBJECT_FILL_NONE_TAG = "object-tooltip-fill-none"
 internal const val OBJECT_LINE_TYPE_TAG = "object-tooltip-line-type"
 internal const val OBJECT_SELECT_ALL_TAG = "object-tooltip-select-all"
+
+/** The Table Class's half of the toolkit — `docs/tablePlan.md` TA6. */
+internal object TableActionTags {
+    const val ROW = "object-tooltip-row"
+    const val COLUMN = "object-tooltip-column"
+    const val ROW_ABOVE = "object-tooltip-row-above"
+    const val ROW_BELOW = "object-tooltip-row-below"
+    const val ROW_DELETE = "object-tooltip-row-delete"
+    const val COLUMN_LEFT = "object-tooltip-column-left"
+    const val COLUMN_RIGHT = "object-tooltip-column-right"
+    const val COLUMN_DELETE = "object-tooltip-column-delete"
+}
 
 private val INK_COLORS = listOf(
     "White" to 0xFFFFFFFF.toInt(),
@@ -283,7 +297,12 @@ internal fun RowScope.SelectAllAction(onSelectAll: () -> Unit) {
  * swatch: a bar at the current width says more than a glyph, and adds no asset.
  */
 @Composable
-internal fun RowScope.ThicknessAction(width: Int, onChange: (Int) -> Unit) {
+internal fun RowScope.ThicknessAction(
+    width: Int,
+    /** A table's rules go no thicker than a table's rules do; the shape keeps its own range. */
+    range: IntRange = ShapeSettings.MIN_BORDER_WIDTH..ShapeSettings.MAX_BORDER_WIDTH,
+    onChange: (Int) -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(
@@ -307,8 +326,175 @@ internal fun RowScope.ThicknessAction(width: Int, onChange: (Int) -> Unit) {
                     field = "Border width",
                     label = "Border width",
                     value = width,
-                    range = ShapeSettings.MIN_BORDER_WIDTH..ShapeSettings.MAX_BORDER_WIDTH,
+                    range = range,
                     onChange = onChange,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The Table Class's half of the toolkit — `docs/diagram.md`: *"add row, remove row, add column,
+ * remove column"*, and `docs/tablePlan.md` TA6.
+ *
+ * **Two menus rather than four buttons.** As four the bar is nine controls wide; as two it is five,
+ * and each menu has room for the distinction the reference bar draws between inserting before and
+ * inserting after — which the diagram's four verbs leave open and every table needs.
+ *
+ * Everything is relative to the cell with the caret in it, which the caller resolves. With no caret,
+ * "above" means the top and "below" means the bottom, so the actions always mean something.
+ *
+ * **Delete is absent, not disabled, at the last row or column**, which is the rule the whole bar
+ * follows: an action a kind cannot perform is missing for it. A table with no rows is not a table.
+ */
+@Composable
+internal fun RowScope.TableRowAction(
+    canDelete: Boolean,
+    onInsertAbove: () -> Unit,
+    onInsertBelow: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    GridMenu(
+        tag = TableActionTags.ROW,
+        icon = MaterialSymbols.TableRows,
+        label = "Rows",
+        entries = listOfNotNull(
+            GridMenuEntry("Insert above", TableActionTags.ROW_ABOVE, onInsertAbove),
+            GridMenuEntry("Insert below", TableActionTags.ROW_BELOW, onInsertBelow),
+            GridMenuEntry("Delete row", TableActionTags.ROW_DELETE, onDelete).takeIf { canDelete },
+        ),
+    )
+}
+
+@Composable
+internal fun RowScope.TableColumnAction(
+    canDelete: Boolean,
+    onInsertLeft: () -> Unit,
+    onInsertRight: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    GridMenu(
+        tag = TableActionTags.COLUMN,
+        icon = MaterialSymbols.ViewColumn,
+        label = "Columns",
+        entries = listOfNotNull(
+            GridMenuEntry("Insert left", TableActionTags.COLUMN_LEFT, onInsertLeft),
+            GridMenuEntry("Insert right", TableActionTags.COLUMN_RIGHT, onInsertRight),
+            GridMenuEntry("Delete column", TableActionTags.COLUMN_DELETE, onDelete).takeIf { canDelete },
+        ),
+    )
+}
+
+/**
+ * The row half of the toolkit **when a row is held** — `docs/tablePlan.md` TA16.
+ *
+ * The menus above are what the bar shows when there is nothing but a caret to go on. Tap a row's
+ * handle and the verbs stop needing a menu: there is one row this is about, so the three actions
+ * become three buttons, and each wears the Material Symbol that draws exactly what it does —
+ * `add_row_above` is a picture of a row arriving above a grid.
+ *
+ * **Delete is a minus, not a second trash.** The base bar's trash means "delete the selected object"
+ * for every kind on the canvas, and a trash beside it that meant "delete one row instead" would be
+ * the one thing AD7 forbids: the same affordance changing meaning with state. A minus among two
+ * pluses says "take one away" without ever competing for that.
+ */
+@Composable
+internal fun RowScope.HeldRowActions(
+    canDelete: Boolean,
+    onInsertAbove: () -> Unit,
+    onInsertBelow: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    AxisButton(TableActionTags.ROW_ABOVE, MaterialSymbols.AddRowAbove, "Insert row above", onInsertAbove)
+    AxisButton(TableActionTags.ROW_BELOW, MaterialSymbols.AddRowBelow, "Insert row below", onInsertBelow)
+    if (canDelete) {
+        AxisButton(
+            tag = TableActionTags.ROW_DELETE,
+            icon = MaterialSymbols.Remove,
+            label = "Delete row",
+            tint = Color(0xFFFFA8A8),
+            onClick = onDelete,
+        )
+    }
+}
+
+/** The same three, turned through a right angle — TA16. */
+@Composable
+internal fun RowScope.HeldColumnActions(
+    canDelete: Boolean,
+    onInsertLeft: () -> Unit,
+    onInsertRight: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    AxisButton(TableActionTags.COLUMN_LEFT, MaterialSymbols.AddColumnLeft, "Insert column left", onInsertLeft)
+    AxisButton(
+        tag = TableActionTags.COLUMN_RIGHT,
+        icon = MaterialSymbols.AddColumnRight,
+        label = "Insert column right",
+        onClick = onInsertRight,
+    )
+    if (canDelete) {
+        AxisButton(
+            tag = TableActionTags.COLUMN_DELETE,
+            icon = MaterialSymbols.Remove,
+            label = "Delete column",
+            tint = Color(0xFFFFA8A8),
+            onClick = onDelete,
+        )
+    }
+}
+
+@Composable
+private fun AxisButton(
+    tag: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    /** The bar's own content colour unless the action is destructive, which wears the trash's red. */
+    tint: Color = LocalContentColor.current,
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(32.dp)
+            .testTag(tag)
+            .semantics { contentDescription = label },
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+    }
+}
+
+private data class GridMenuEntry(val label: String, val tag: String, val onClick: () -> Unit)
+
+/** One icon that opens three verbs. Shared by the row and column halves, which differ only in words. */
+@Composable
+private fun GridMenu(
+    tag: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    entries: List<GridMenuEntry>,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { open = true },
+            modifier = Modifier
+                .size(32.dp)
+                .testTag(tag)
+                .semantics { contentDescription = label },
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            entries.forEach { entry ->
+                DropdownMenuItem(
+                    text = { Text(entry.label) },
+                    onClick = {
+                        open = false
+                        entry.onClick()
+                    },
+                    modifier = Modifier.testTag(entry.tag),
                 )
             }
         }

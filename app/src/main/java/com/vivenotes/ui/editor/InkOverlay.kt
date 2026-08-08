@@ -55,6 +55,7 @@ import com.vivenotes.ink.InkLassoSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.Ruler
+import com.vivenotes.ink.TableBounds
 import com.vivenotes.ink.pageBounds
 import com.vivenotes.ink.projectionKey
 import com.vivenotes.ink.selectWithLasso
@@ -116,6 +117,11 @@ internal fun InkOverlay(
     /** Shapes on the page, so a lasso loop can take one — AD7's first row. */
     shapes: List<Outline.Shape> = emptyList(),
     /**
+     * The tables, as rectangles the *canvas* measured — `docs/tablePlan.md` TA4, and [TableBounds]
+     * for why the model's own height will not do here.
+     */
+    tables: List<TableBounds> = emptyList(),
+    /**
      * What is selected, across kinds. Owned by the page rather than by this overlay: a shape can be in
      * it, and `ShapeLayer` has to draw the same selection this does. See [CanvasSelection].
      */
@@ -150,6 +156,8 @@ internal fun InkOverlay(
     onResizeSelection: (InkLassoResize) -> Unit = {},
     onMoveShapes: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+    onMoveTables: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onDeleteSelection: (Set<String>) -> Unit = {},
     hasClipboard: Boolean = false,
     onRequestPaste: (InkPoint) -> Unit = {},
@@ -189,8 +197,11 @@ internal fun InkOverlay(
     val currentShapes by rememberUpdatedState(shapes)
     val currentSelection by rememberUpdatedState(selection)
     val currentOnSelect by rememberUpdatedState(onSelect)
+    val currentTables by rememberUpdatedState(tables)
     val currentOnMoveShapes by rememberUpdatedState(onMoveShapes)
     val currentOnResizeShapes by rememberUpdatedState(onResizeShapes)
+    val currentOnMoveTables by rememberUpdatedState(onMoveTables)
+    val currentOnResizeTables by rememberUpdatedState(onResizeTables)
     val currentOnMoveSelection by rememberUpdatedState(onMoveSelection)
     val currentOnResizeSelection by rememberUpdatedState(onResizeSelection)
     val currentOnDeleteSelection by rememberUpdatedState(onDeleteSelection)
@@ -416,10 +427,13 @@ internal fun InkOverlay(
                             eraseGesture = eraseGesture,
                             lassoGesture = lassoGesture,
                             shapes = currentShapes,
+                            tables = currentTables,
                             selection = currentSelection,
                             onSelect = currentOnSelect,
                             onMoveShapes = currentOnMoveShapes,
                             onResizeShapes = currentOnResizeShapes,
+                            onMoveTables = currentOnMoveTables,
+                            onResizeTables = currentOnResizeTables,
                             shapeGesture = shapeGesture,
                             onInsertShape = currentOnInsertShape,
                             touchSlop = viewConfiguration.touchSlop,
@@ -520,6 +534,7 @@ private fun handleInk(
     eraser: EraserSettings,
     strokes: List<PageStroke>,
     shapes: List<Outline.Shape>,
+    tables: List<TableBounds>,
     selection: CanvasSelection?,
     onSelect: (CanvasSelection?) -> Unit,
     allowFinger: Boolean,
@@ -530,6 +545,8 @@ private fun handleInk(
     onResizeSelection: (InkLassoResize) -> Unit,
     onMoveShapes: (Set<String>, Float, Float) -> Unit,
     onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit,
+    onMoveTables: (Set<String>, Float, Float) -> Unit,
+    onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit,
     liveStroke: InProgressStrokeId?,
     livePointer: Int,
     ruledStroke: Boolean,
@@ -578,12 +595,15 @@ private fun handleInk(
             toPage = toPage,
             strokes = strokes,
             shapes = shapes,
+            tables = tables,
             selection = selection,
             onSelect = onSelect,
             onMove = onMoveSelection,
             onResize = onResizeSelection,
             onMoveShapes = onMoveShapes,
             onResizeShapes = onResizeShapes,
+            onMoveTables = onMoveTables,
+            onResizeTables = onResizeTables,
         )
     }
 
@@ -1135,12 +1155,15 @@ internal class LassoGesture {
         toPage: Matrix,
         strokes: List<PageStroke>,
         shapes: List<Outline.Shape>,
+        tables: List<TableBounds> = emptyList(),
         selection: CanvasSelection?,
         onSelect: (CanvasSelection?) -> Unit,
         onMove: (InkLassoMove) -> Unit,
         onResize: (InkLassoResize) -> Unit,
         onMoveShapes: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
         onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+        onMoveTables: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+        onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     ): Boolean {
         return when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -1195,6 +1218,7 @@ internal class LassoGesture {
                             selectWithLasso(
                                 strokes = strokes,
                                 shapes = shapes,
+                                tables = tables,
                                 path = path.toList(),
                                 edgeTolerance = lassoEdgeTolerance(toPage),
                             ),
@@ -1224,6 +1248,9 @@ internal class LassoGesture {
                             if (selection.shapeIds.isNotEmpty()) {
                                 onMoveShapes(selection.shapeIds, delta.x, delta.y)
                             }
+                            if (selection.tableIds.isNotEmpty()) {
+                                onMoveTables(selection.tableIds, delta.x, delta.y)
+                            }
                             onSelect(selection.translated(delta.x, delta.y))
                         }
                     }
@@ -1245,6 +1272,9 @@ internal class LassoGesture {
                             }
                             if (selection.shapeIds.isNotEmpty()) {
                                 onResizeShapes(selection.shapeIds, resizeAnchor, scale.x, scale.y)
+                            }
+                            if (selection.tableIds.isNotEmpty()) {
+                                onResizeTables(selection.tableIds, resizeAnchor, scale.x, scale.y)
                             }
                             onSelect(selection.scaled(resizeAnchor, scale.x, scale.y))
                         }

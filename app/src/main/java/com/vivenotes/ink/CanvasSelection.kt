@@ -27,15 +27,18 @@ data class CanvasSelection(
     val path: List<InkPoint> = emptyList(),
     val inkIds: Set<String> = emptySet(),
     val shapeIds: Set<String> = emptySet(),
+    /** Tables — `docs/tablePlan.md` TA4. The third id set, added for the third kind. */
+    val tableIds: Set<String> = emptySet(),
     /** Live ink projections, including pieces that share a row id after a partial erase. */
     val projections: Set<InkProjectionKey> = emptySet(),
     val bounds: InkBounds,
 ) {
-    val isEmpty: Boolean get() = inkIds.isEmpty() && shapeIds.isEmpty()
+    val isEmpty: Boolean get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isEmpty()
 
     /** True when only one kind is held, which is what decides the per-kind half of the toolkit. */
-    val isInkOnly: Boolean get() = shapeIds.isEmpty() && inkIds.isNotEmpty()
-    val isShapeOnly: Boolean get() = inkIds.isEmpty() && shapeIds.isNotEmpty()
+    val isInkOnly: Boolean get() = shapeIds.isEmpty() && tableIds.isEmpty() && inkIds.isNotEmpty()
+    val isShapeOnly: Boolean get() = inkIds.isEmpty() && tableIds.isEmpty() && shapeIds.isNotEmpty()
+    val isTableOnly: Boolean get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isNotEmpty()
 
     fun holdsShape(shapeId: String): Boolean = shapeId in shapeIds
 
@@ -45,6 +48,8 @@ data class CanvasSelection(
     } else {
         InkLassoSelection(path = path, targetIds = inkIds, projections = projections, bounds = bounds)
     }
+
+    fun holdsTable(tableId: String): Boolean = tableId in tableIds
 
     fun translated(dx: Float, dy: Float): CanvasSelection = copy(
         path = path.map { InkPoint(it.x + dx, it.y + dy) },
@@ -70,19 +75,27 @@ data class CanvasSelection(
      * because touching any member of a group selects all of it (`selectWithLasso`); a shape is already
      * one object and has nothing to expand into.
      */
-    fun reconcile(strokes: List<PageStroke>, shapes: List<Outline.Shape>): CanvasSelection? {
+    fun reconcile(
+        strokes: List<PageStroke>,
+        shapes: List<Outline.Shape>,
+        tables: List<TableBounds> = emptyList(),
+    ): CanvasSelection? {
         val liveShapes = shapes.filter { it.id in shapeIds }
+        val liveTables = tables.filter { it.id in tableIds }
         val directInk = strokes.filter { it.id in inkIds }
-        if (liveShapes.isEmpty() && directInk.isEmpty()) return null
+        if (liveShapes.isEmpty() && directInk.isEmpty() && liveTables.isEmpty()) return null
 
         val groups = directInk.mapNotNull(PageStroke::groupId).toSet()
         val expandedInk = strokes.filter { it.id in inkIds || it.groupId != null && it.groupId in groups }
-        val measured = expandedInk.mapNotNull(PageStroke::pageBounds) + liveShapes.map(Outline.Shape::pageBounds)
+        val measured = expandedInk.mapNotNull(PageStroke::pageBounds) +
+            liveShapes.map(Outline.Shape::pageBounds) +
+            liveTables.map(TableBounds::bounds)
         val union = measured.unionBounds() ?: return null
 
         return copy(
             inkIds = expandedInk.map(PageStroke::id).toSet(),
             shapeIds = liveShapes.map(Outline.Shape::id).toSet(),
+            tableIds = liveTables.map(TableBounds::id).toSet(),
             projections = expandedInk.map(PageStroke::projectionKey).toSet(),
             bounds = union,
         )
@@ -94,8 +107,27 @@ data class CanvasSelection(
             shapeIds = setOf(shape.id),
             bounds = shape.pageBounds(),
         )
+
+        /** One table, selected by putting a caret in any of its cells — `docs/tablePlan.md` TA11. */
+        fun ofTable(table: TableBounds): CanvasSelection = CanvasSelection(
+            tableIds = setOf(table.id),
+            bounds = table.bounds,
+        )
     }
 }
+
+/**
+ * A table as the selection sees it: an id, and the rectangle the **canvas** measured for it.
+ *
+ * Not `Outline.Table`, deliberately. A table's height is whatever its cells' text wraps to, and the
+ * document only stores each row's floor (`docs/tablePlan.md` TA3) — so the model's idea of how tall a
+ * table is runs short the moment a cell overflows, and a selection rectangle that runs short is a
+ * lasso that misses and a toolbar that sits on top of the thing it belongs to. The canvas knows the
+ * true height because it laid the table out, so it is the canvas that says.
+ *
+ * Bounds are in page units, like everything else here.
+ */
+data class TableBounds(val id: String, val bounds: InkBounds)
 
 /**
  * The shared prime object clipboard's contents — `docs/diagram.md`.
@@ -113,11 +145,20 @@ data class CanvasClipboard(
      * `Outline.Text` rather than the `OutlineBox` the canvas lays out with, because that one is
      * geometry alone and a copied text box without its text is a rectangle. This is the one place the
      * ViewModel's two halves of a container — the box in `uiState` and the blocks in
-     * `blocksByOutline` — are put back together outside of a save.
+     * `blocksById` — are put back together outside of a save.
      */
     val texts: List<Outline.Text> = emptyList(),
+    /**
+     * Tables, carried with every cell's blocks — `docs/tablePlan.md` TA4.
+     *
+     * Read out of the ViewModel's block map on the way in rather than off `uiState.tables`, whose
+     * cells hold what the page was *loaded* with and go stale the moment anything is typed. A table
+     * copied without what is in it is a grid of lines.
+     */
+    val tables: List<Outline.Table> = emptyList(),
 ) {
-    val isEmpty: Boolean get() = strokes.isEmpty() && shapes.isEmpty() && texts.isEmpty()
+    val isEmpty: Boolean
+        get() = strokes.isEmpty() && shapes.isEmpty() && texts.isEmpty() && tables.isEmpty()
 }
 
 /**
@@ -131,24 +172,44 @@ data class CanvasClipboard(
 internal fun selectWithLasso(
     strokes: List<PageStroke>,
     shapes: List<Outline.Shape>,
+    tables: List<TableBounds> = emptyList(),
     path: List<InkPoint>,
     edgeTolerance: Float = DEFAULT_LASSO_EDGE_TOLERANCE,
 ): CanvasSelection? {
     if (path.size < 3) return null
     val ink = strokes.selectWithLasso(path, edgeTolerance)
     val caughtShapes = shapes.filter { it.isInsideLasso(path, edgeTolerance) }
-    if (ink == null && caughtShapes.isEmpty()) return null
+    val caughtTables = tables.filter { it.bounds.isInsideLasso(path, edgeTolerance) }
+    if (ink == null && caughtShapes.isEmpty() && caughtTables.isEmpty()) return null
 
-    val measured = (ink?.let { listOf(it.bounds) } ?: emptyList()) + caughtShapes.map(Outline.Shape::pageBounds)
+    val measured = (ink?.let { listOf(it.bounds) } ?: emptyList()) +
+        caughtShapes.map(Outline.Shape::pageBounds) +
+        caughtTables.map(TableBounds::bounds)
     val union = measured.unionBounds() ?: return null
     return CanvasSelection(
         path = path,
         inkIds = ink?.targetIds.orEmpty(),
         shapeIds = caughtShapes.map(Outline.Shape::id).toSet(),
+        tableIds = caughtTables.map(TableBounds::id).toSet(),
         projections = ink?.projections.orEmpty(),
         bounds = union,
     )
 }
+
+/**
+ * All four corners inside the loop — the rule a stroke and a shape are both held to.
+ *
+ * A table is a rectangle, so its corners are the whole of it: nothing between them can be outside a
+ * loop that contains all four. Half-circling one leaves it alone, exactly as half-circling anything
+ * else does.
+ */
+private fun InkBounds.isInsideLasso(polygon: List<InkPoint>, edgeTolerance: Float): Boolean =
+    listOf(
+        InkPoint(left, top),
+        InkPoint(right, top),
+        InkPoint(right, bottom),
+        InkPoint(left, bottom),
+    ).all { pointInOrNearPolygon(it, polygon, edgeTolerance) }
 
 /** Every vertex of every segment inside the loop, the rule a stroke is held to. */
 private fun Outline.Shape.isInsideLasso(polygon: List<InkPoint>, edgeTolerance: Float): Boolean {

@@ -46,6 +46,7 @@ import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.TableSettings
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.model.Outline
@@ -120,6 +121,7 @@ class ShapeToolTest {
                     onCommand = {},
                     pageOpen = pageOpen,
                     shape = ShapeSettings(),
+                    table = TableSettings(),
                     palette = PEN_COLORS,
                     tool = tool,
                     onSelectTool = { selected = it },

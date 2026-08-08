@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.TableSettings
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.richtext.createEquationRenderer
@@ -53,10 +54,12 @@ internal object InsertTags {
 private const val EXAMPLE_EQUATION = "{\\displaystyle \\int _{a}^{b}f'(t)\\,dt=f(b)-f(a)}"
 
 /**
- * Insert: an inline native LaTeX equation, and the shape picker.
+ * Insert: a table, an inline native LaTeX equation, and the shape picker.
  *
  * The Shape button is the same composable the Draw tab shows, sharing one armed tool and one set of
- * settings — see [ShapeButton] for why it has two homes rather than one.
+ * settings — see [ShapeButton] for why it has two homes rather than one. Table leads the row, where
+ * `docs/references/insertTab.png` puts it, and lives only here: it makes no marks, so it has no
+ * business on Draw.
  */
 @Composable
 internal fun InsertTab(
@@ -64,10 +67,12 @@ internal fun InsertTab(
     onCommand: (FormatCommand) -> Unit,
     pageOpen: Boolean,
     shape: ShapeSettings,
+    table: TableSettings,
     palette: List<Int>,
     tool: DrawTool,
     onSelectTool: (DrawTool) -> Unit,
     onChangeShape: (ShapeSettings) -> Unit,
+    onChangeTable: (TableSettings) -> Unit = {},
     onAddColor: (Int) -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -105,6 +110,16 @@ internal fun InsertTab(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
+        TableButton(
+            table = table,
+            palette = palette,
+            selected = tool == DrawTool.Table,
+            enabled = pageOpen,
+            onSelect = { onSelectTool(DrawTool.Table) },
+            onChange = onChangeTable,
+            onAddColor = onAddColor,
+        )
+
         ShapeButton(
             shape = shape,
             palette = palette,

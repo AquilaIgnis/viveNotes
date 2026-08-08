@@ -30,6 +30,7 @@ import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.TableSettings
 import com.vivenotes.ui.ScrollingRow
 import com.vivenotes.ui.icons.LocalRibbonIcons
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -50,6 +51,8 @@ data class DrawActions(
     val updateEraser: (EraserSettings) -> Unit,
     val updateHighlighter: (HighlighterSettings) -> Unit = {},
     val updateShape: (ShapeSettings) -> Unit = {},
+    /** How the next table arrives — `docs/tablePlan.md` TA7. A preference, never an edit. */
+    val updateTable: (TableSettings) -> Unit = {},
     val updateRuler: (RulerSettings) -> Unit = {},
     /** Lays the ruler on the page, or picks it up again — `docs/rulerPlan.md` RD1. */
     val toggleRuler: () -> Unit = {},
@@ -101,6 +104,8 @@ internal fun DrawTab(
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
+    /** Shared with the Insert tab: how many rows and how thick the rules is the same question. */
+    table: TableSettings = TableSettings(),
     tool: DrawTool,
     allowFinger: Boolean,
     actions: DrawActions,
@@ -185,6 +190,21 @@ internal fun DrawTab(
             onSelect = { actions.selectTool(DrawTool.Shape) },
             onChange = actions.updateShape,
             onAddColor = actions.addPaletteColor,
+        )
+
+        // The Draw tab's table — `docs/tablePlan.md` TA15. The same button the Insert tab carries,
+        // placing a different object: **a ruling to write in**, with no editors in its cells, so a
+        // pen goes straight through it onto the page. That is why it is here and not only there —
+        // it belongs with the things you use a stylus on, not with the things you type into.
+        TableButton(
+            table = table,
+            palette = palette,
+            selected = tool == DrawTool.InkTable,
+            enabled = pageOpen,
+            onSelect = { actions.selectTool(DrawTool.InkTable) },
+            onChange = actions.updateTable,
+            onAddColor = actions.addPaletteColor,
+            inkOnly = true,
         )
 
         Divider()

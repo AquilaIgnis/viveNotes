@@ -38,6 +38,7 @@ import com.vivenotes.data.PenPreset
 import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.data.ViewSettingsStore
@@ -81,6 +82,15 @@ import com.vivenotes.model.PaperSize
 import com.vivenotes.model.PrintMargins
 import com.vivenotes.model.RuleLines
 import com.vivenotes.model.newId
+import com.vivenotes.model.newTable
+import com.vivenotes.model.withCellBlocks
+import com.vivenotes.model.withColumnInserted
+import com.vivenotes.model.withColumnRemoved
+import com.vivenotes.model.withColumnWidth
+import com.vivenotes.model.withNewIds
+import com.vivenotes.model.withRowInserted
+import com.vivenotes.model.withRowMinHeight
+import com.vivenotes.model.withRowRemoved
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.richtext.sameKindAs
@@ -199,6 +209,30 @@ private sealed interface CanvasHistoryEntry {
         val blocksBefore: Map<String, List<Block>?>,
         val blocksAfter: Map<String, List<Block>?>,
     ) : CanvasHistoryEntry
+
+    /**
+     * An edit to the tables — `docs/tablePlan.md` TA10.
+     *
+     * The same two-halves shape [Texts] has, for the same reason: the table list is safe to snapshot
+     * whole because typing never changes it, and the block map is not, because typing changes it
+     * constantly. A snapshot of the whole map would take back every keystroke made anywhere else on
+     * the page since.
+     *
+     * [touchedCells] is scoped to the cells this edit added or removed. A null value means "this cell
+     * did not exist", which is what restores a deleted row's text and takes away an undone insert's
+     * blank cells.
+     *
+     * [coalesceKey] does the job it does for [Shapes]: a dragged column boundary reports every step
+     * it passes through, and thirty undo entries for one drag is a nuisance rather than a history.
+     */
+    data class Tables(
+        val before: List<Outline.Table>,
+        val after: List<Outline.Table>,
+        val blocksBefore: Map<String, List<Block>?> = emptyMap(),
+        val blocksAfter: Map<String, List<Block>?> = emptyMap(),
+        val coalesceKey: String? = null,
+        val atMillis: Long = 0L,
+    ) : CanvasHistoryEntry
 }
 
 private data class PageCanvasHistory(
@@ -216,6 +250,18 @@ data class NotesUiState(
     val outlines: List<OutlineBox> = emptyList(),
     /** Shapes on the canvas. Whole objects, so unlike ink they live in the document. */
     val shapes: List<Outline.Shape> = emptyList(),
+    /**
+     * The tables on the canvas — `docs/tablePlan.md`. **The grid, not the writing in it.**
+     *
+     * Split the way a text container is split, and for that reason: this changes when a row is added
+     * or a column dragged, and a cell's text changes on every keystroke, so keeping the two together
+     * would recompose the whole canvas as someone types. The cells carried here therefore hold
+     * whatever they were *loaded* with and go stale the moment anything is typed; the live content is
+     * in the ViewModel's block map, and `withCellBlocks` is what puts them back together at save time.
+     *
+     * Nothing else may read a cell's `blocks` from here. It is the one trap this shape sets.
+     */
+    val tables: List<Outline.Table> = emptyList(),
     /** The open page's own appearance, loaded and saved with its content. */
     val pageStyle: PageStyle = PageStyle(),
     /** Bumped when a different page loads, so the canvas rebuilds its editors. */
@@ -296,6 +342,10 @@ class NotesViewModel(
     val ruler: StateFlow<RulerSettings> = penSettingsStore.ruler
         .stateIn(viewModelScope, SharingStarted.Eagerly, RulerSettings())
 
+    /** How the next table arrives — `docs/tablePlan.md` TA7. A property of the user, like [shape]. */
+    val table: StateFlow<TableSettings> = penSettingsStore.table
+        .stateIn(viewModelScope, SharingStarted.Eagerly, TableSettings())
+
     /**
      * Whether the ruler is lying on the page — see [toggleRuler].
      *
@@ -370,9 +420,14 @@ class NotesViewModel(
     val notebookRailVisible: StateFlow<Boolean> = _notebookRailVisible.asStateFlow()
 
     /**
-     * Live block content per outline. Held outside [uiState] on purpose — see [OutlineBox].
+     * Live block content per **content box** — a text container, or one cell of a table.
+     *
+     * Held outside [uiState] on purpose, for the reason [OutlineBox] gives. Keyed by an id rather
+     * than by an outline since `docs/tablePlan.md` TA2: a cell is a box that holds blocks and has no
+     * geometry of its own, so it belongs in the same map a container's content does — which is what
+     * puts the whole Home ribbon inside a table without a second content path to keep in step.
      */
-    private val blocksByOutline = mutableMapOf<String, List<Block>>()
+    private val blocksById = mutableMapOf<String, List<Block>>()
 
     /**
      * Outlines this ViewModel does not manage — images and ink — with the position each held in the
@@ -472,13 +527,28 @@ class NotesViewModel(
                 // the title rather than under it — outline coordinates start at the page's corner.
                 .ifEmpty { listOf(Outline.Text.empty(y = if (doc.style.hideTitle) 0f else PageStyle.TITLE_BAND_DP)) }
 
-            blocksByOutline.clear()
-            loaded.forEach { blocksByOutline[it.id] = it.blocks }
+            val tables = doc.outlines.filterIsInstance<Outline.Table>()
+
+            blocksById.clear()
+            loaded.forEach { blocksById[it.id] = it.blocks }
+            // Cells join the same map, per TA2 — one content path for containers and cells alike,
+            // which is what lets `initialBlocksFor` and `onBlocksChanged` serve both unchanged. An
+            // ink table's cells are not in it at all (TA15): nothing types in them, so an entry
+            // would be a promise of content that never arrives.
+            tables.forEach { table ->
+                val cells = table.contentCellIds().toSet()
+                table.rows.forEach { row ->
+                    row.cells.forEach { cell ->
+                        if (cell.id in cells) blocksById[cell.id] = cell.blocks
+                    }
+                }
+            }
             // Taken from the document rather than from [loaded], which is the text containers alone
             // and may have been substituted for an empty one. An unreadable page decodes to
             // PageDoc.empty(), so this clears — the outgoing page's outlines must not follow it.
-            unmanagedOutlines = doc.outlines.withIndex()
-                .filterNot { it.value is Outline.Text || it.value is Outline.Shape }
+            unmanagedOutlines = doc.outlines.withIndex().filterNot {
+                it.value is Outline.Text || it.value is Outline.Shape || it.value is Outline.Table
+            }
             // Loading joins the same serialization lane as edits. Otherwise a fast page switch can
             // read an operation between its immediate canvas update and its database tombstone.
             _strokes.value = inkMutations.withLock { loadInk(pageId) }
@@ -489,6 +559,7 @@ class NotesViewModel(
                 createdAt = page?.createdAt ?: System.currentTimeMillis(),
                 outlines = loaded.map { OutlineBox(it.id, it.x, it.y, it.width, it.minHeight) },
                 shapes = doc.outlines.filterIsInstance<Outline.Shape>(),
+                tables = tables,
                 pageStyle = doc.style,
                 pageRevision = _uiState.value.pageRevision + 1,
                 contentError = if (readOnlyPageId == pageId) {
@@ -534,7 +605,7 @@ class NotesViewModel(
     // --- outlines ------------------------------------------------------------------------------
 
     fun initialBlocksFor(outlineId: String): List<Block> =
-        blocksByOutline[outlineId] ?: listOf(Block.empty())
+        blocksById[outlineId] ?: listOf(Block.empty())
 
     /**
      * Creates a container where the user tapped empty canvas. This is what makes a page a canvas
@@ -542,7 +613,7 @@ class NotesViewModel(
      */
     fun createOutline(x: Float, y: Float): String {
         val id = newId()
-        blocksByOutline[id] = listOf(Block.empty())
+        blocksById[id] = listOf(Block.empty())
         _uiState.value = _uiState.value.copy(
             outlines = _uiState.value.outlines + OutlineBox(
                 id = id,
@@ -592,7 +663,7 @@ class NotesViewModel(
     fun deleteOutlines(outlineIds: Set<String>) {
         if (outlineIds.isEmpty()) return
         editTexts(outlineIds) { outlines ->
-            outlineIds.forEach(blocksByOutline::remove)
+            outlineIds.forEach(blocksById::remove)
             outlines.filterNot { it.id in outlineIds }
         }
     }
@@ -606,7 +677,7 @@ class NotesViewModel(
      */
     fun copyOutline(outlineId: String) {
         val box = _uiState.value.outlines.firstOrNull { it.id == outlineId } ?: return
-        val blocks = blocksByOutline[outlineId].orEmpty()
+        val blocks = blocksById[outlineId].orEmpty()
         if (blocks.all { it.text.isBlank() }) return
         clipboard = CanvasClipboard(
             texts = listOf(
@@ -639,11 +710,11 @@ class NotesViewModel(
         if (readOnlyPageId == pageId) return
         val state = _uiState.value
         val before = state.outlines
-        // Read before the change runs, because a caller is entitled to rewrite `blocksByOutline`
+        // Read before the change runs, because a caller is entitled to rewrite `blocksById`
         // inside it — which is how a delete takes the text with the box.
-        val blocksBefore = touched.associateWith { blocksByOutline[it] }
+        val blocksBefore = touched.associateWith { blocksById[it] }
         val after = change(before)
-        if (after == before && touched.all { blocksByOutline[it] == blocksBefore[it] }) return
+        if (after == before && touched.all { blocksById[it] == blocksBefore[it] }) return
 
         _uiState.value = state.copy(outlines = after, pageRevision = state.pageRevision + 1)
         pushHistory(
@@ -652,9 +723,9 @@ class NotesViewModel(
                 before = before,
                 after = after,
                 blocksBefore = blocksBefore,
-                // Read after the change, so a caller that rewrote `blocksByOutline` inside [change]
+                // Read after the change, so a caller that rewrote `blocksById` inside [change]
                 // is recorded by what it left behind rather than by what it promised.
-                blocksAfter = touched.associateWith { blocksByOutline[it] },
+                blocksAfter = touched.associateWith { blocksById[it] },
             ),
         )
         edits.tryEmit(Unit)
@@ -665,14 +736,18 @@ class NotesViewModel(
      * does not litter it with empty boxes. The last remaining container always survives.
      */
     fun onOutlineBlurred(outlineId: String) {
+        // Containers only. Since TA2 the block map also holds table cells, and a cell that happened
+        // to be blank would otherwise be swept away here — taking its entry with it and leaving the
+        // grid with a hole the next save would write out.
+        if (_uiState.value.outlines.none { it.id == outlineId }) return
         // No recorded content means "unknown", not "empty" — an absent entry must never be
         // grounds for deleting a container, since `emptyList().all { }` is vacuously true.
-        val blocks = blocksByOutline[outlineId] ?: return
+        val blocks = blocksById[outlineId] ?: return
         if (blocks.isEmpty()) return
         val isEmpty = blocks.all { it.text.isBlank() }
         if (!isEmpty || _uiState.value.outlines.size <= 1) return
 
-        blocksByOutline.remove(outlineId)
+        blocksById.remove(outlineId)
         _uiState.value = _uiState.value.copy(
             outlines = _uiState.value.outlines.filterNot { it.id == outlineId },
         )
@@ -680,7 +755,7 @@ class NotesViewModel(
     }
 
     fun onBlocksChanged(outlineId: String, blocks: List<Block>) {
-        blocksByOutline[outlineId] = blocks
+        blocksById[outlineId] = blocks
         edits.tryEmit(Unit)
     }
 
@@ -907,6 +982,10 @@ class NotesViewModel(
 
     fun updateShape(settings: ShapeSettings) {
         viewModelScope.launch { penSettingsStore.setShape(settings) }
+    }
+
+    fun updateTable(settings: TableSettings) {
+        viewModelScope.launch { penSettingsStore.setTable(settings) }
     }
 
     fun updateRuler(settings: RulerSettings) {
@@ -1184,6 +1263,222 @@ class NotesViewModel(
         edits.tryEmit(Unit)
     }
 
+    // --- tables ---------------------------------------------------------------------------------
+
+    /**
+     * Puts a table where the user tapped — `docs/tablePlan.md` TA7.
+     *
+     * A document edit on the same footing as [insertShape], and it ends the same way: the tool goes
+     * back down and the new object is handed to the caller so the page can select it. The handles are
+     * the point of it being an object, and they are unreachable while the tool that makes new ones is
+     * still armed.
+     */
+    fun insertTable(
+        settings: TableSettings,
+        x: Float,
+        y: Float,
+        /** A ruling for the stylus rather than a grid of text fields — `docs/tablePlan.md` TA15. */
+        inkOnly: Boolean = false,
+    ): String? {
+        val pageId = _uiState.value.selectedPageId ?: return null
+        if (readOnlyPageId == pageId) return null
+
+        val created = newTable(
+            columns = settings.columns,
+            rows = settings.rows,
+            x = x.coerceAtLeast(0f),
+            y = y.coerceAtLeast(0f),
+            headerRow = settings.headerRow,
+            headerColumn = settings.headerColumn,
+            borderArgb = settings.borderColorArgb,
+            borderWidth = settings.borderWidth.toFloat(),
+            fillArgb = settings.fillArgb,
+            inkOnly = inkOnly,
+        )
+
+        editTables(created.contentCellIds().toSet()) { tables ->
+            created.contentCellIds().forEach { blocksById[it] = listOf(Block.empty()) }
+            tables + created
+        }
+        _tool.value = DrawTool.None
+        return created.id
+    }
+
+    /** Deletes whole tables, cells and all — the toolkit's Delete. */
+    fun deleteTables(tableIds: Set<String>) {
+        if (tableIds.isEmpty()) return
+        val gone = _uiState.value.tables.filter { it.id in tableIds }
+        if (gone.isEmpty()) return
+        editTables(gone.flatMap { it.contentCellIds() }.toSet()) { tables ->
+            gone.forEach { table -> table.contentCellIds().forEach(blocksById::remove) }
+            tables.filterNot { it.id in tableIds }
+        }
+    }
+
+    fun moveTables(tableIds: Set<String>, dx: Float, dy: Float) {
+        if (tableIds.isEmpty() || (dx == 0f && dy == 0f)) return
+        editTables { tables ->
+            tables.map { if (it.id in tableIds) it.translated(dx, dy) else it }
+        }
+    }
+
+    /** The corner handles, and the lasso's half of a resize — once per gesture, per [resizeShapes]. */
+    fun resizeTables(
+        tableIds: Set<String>,
+        anchorX: Float,
+        anchorY: Float,
+        scaleX: Float,
+        scaleY: Float,
+    ) {
+        if (tableIds.isEmpty() || (scaleX == 1f && scaleY == 1f)) return
+        editTables { tables ->
+            tables.map {
+                if (it.id in tableIds) it.scaledAbout(anchorX, anchorY, scaleX, scaleY) else it
+            }
+        }
+    }
+
+    /**
+     * One column's width, from its handle in the top gutter — TA5.
+     *
+     * Coalesced, like the border-width slider: a drag reports every step it passes through, and one
+     * drag is one thing to undo.
+     */
+    fun setTableColumnWidth(tableId: String, column: Int, width: Float) {
+        editTables(coalesceKey = "column-width:$tableId:$column") { tables ->
+            tables.map { if (it.id == tableId) it.withColumnWidth(column, width) else it }
+        }
+    }
+
+    /** One row's floor, from its handle in the left gutter. A floor, never a height — TA3. */
+    fun setTableRowMinHeight(tableId: String, row: Int, minHeight: Float) {
+        editTables(coalesceKey = "row-height:$tableId:$row") { tables ->
+            tables.map { if (it.id == tableId) it.withRowMinHeight(row, minHeight) else it }
+        }
+    }
+
+    /**
+     * The four actions the diagram asks of the class — `docs/diagram.md`, Table Class.
+     *
+     * All four take the row or column to act *at*, which the bar works out from where the caret is
+     * (TA6). The model refuses what the caps or the last-row rule forbid, and [editTables] treats an
+     * edit that changed nothing as no edit at all — so a refused action leaves no history entry
+     * behind and wakes no autosave.
+     */
+    fun insertTableRow(tableId: String, at: Int) {
+        val table = _uiState.value.tables.firstOrNull { it.id == tableId } ?: return
+        val grown = table.withRowInserted(at)
+        val added = grown.contentCellIds().toSet() - table.contentCellIds().toSet()
+        editTables(added) { tables ->
+            added.forEach { blocksById[it] = listOf(Block.empty()) }
+            tables.map { if (it.id == tableId) grown else it }
+        }
+    }
+
+    fun deleteTableRow(tableId: String, at: Int) {
+        val table = _uiState.value.tables.firstOrNull { it.id == tableId } ?: return
+        val shrunk = table.withRowRemoved(at)
+        val removed = table.contentCellIds().toSet() - shrunk.contentCellIds().toSet()
+        editTables(removed) { tables ->
+            removed.forEach(blocksById::remove)
+            tables.map { if (it.id == tableId) shrunk else it }
+        }
+    }
+
+    fun insertTableColumn(tableId: String, at: Int) {
+        val table = _uiState.value.tables.firstOrNull { it.id == tableId } ?: return
+        val grown = table.withColumnInserted(at)
+        val added = grown.contentCellIds().toSet() - table.contentCellIds().toSet()
+        editTables(added) { tables ->
+            added.forEach { blocksById[it] = listOf(Block.empty()) }
+            tables.map { if (it.id == tableId) grown else it }
+        }
+    }
+
+    fun deleteTableColumn(tableId: String, at: Int) {
+        val table = _uiState.value.tables.firstOrNull { it.id == tableId } ?: return
+        val shrunk = table.withColumnRemoved(at)
+        val removed = table.contentCellIds().toSet() - shrunk.contentCellIds().toSet()
+        editTables(removed) { tables ->
+            removed.forEach(blocksById::remove)
+            tables.map { if (it.id == tableId) shrunk else it }
+        }
+    }
+
+    /** The border colour of every selected table — the tooltip's swatch, as it is for a shape. */
+    fun recolorTables(tableIds: Set<String>, argb: Int) {
+        if (tableIds.isEmpty()) return
+        editTables { tables ->
+            tables.map { if (it.id in tableIds) it.copy(borderArgb = argb) else it }
+        }
+    }
+
+    /** Not the same setting as `TableSettings.borderWidth`, which is how the *next* table arrives. */
+    fun setTableBorderWidth(tableIds: Set<String>, width: Float) {
+        if (tableIds.isEmpty()) return
+        val clamped = width.coerceIn(
+            TableSettings.MIN_BORDER_WIDTH.toFloat(),
+            TableSettings.MAX_BORDER_WIDTH.toFloat(),
+        )
+        editTables(coalesceKey = "table-border:${tableIds.sorted().joinToString(",")}") { tables ->
+            tables.map { if (it.id in tableIds) it.copy(borderWidth = clamped) else it }
+        }
+    }
+
+    /** Null is the absence of a fill, not a transparent one — the same value "None" restores. */
+    fun setTableFill(tableIds: Set<String>, argb: Int?) {
+        if (tableIds.isEmpty()) return
+        editTables { tables ->
+            tables.map { if (it.id in tableIds) it.copy(fillArgb = argb) else it }
+        }
+    }
+
+    /**
+     * The one door every table edit goes through: page guard, state, cell blocks, history, autosave —
+     * `editShapes`' counterpart, and `docs/tablePlan.md` TA10.
+     *
+     * [touched] names the cells whose *blocks* this edit adds or removes, and is what keeps the
+     * history entry from reaching sideways into cells that were only being typed in. The grid is
+     * snapshotted whole, which is safe because typing never changes it.
+     *
+     * Structural edits bump `pageRevision`: an `OutlineEditText` holds its own text and will not
+     * notice that the grid around it changed shape.
+     */
+    private inline fun editTables(
+        touched: Set<String> = emptySet(),
+        coalesceKey: String? = null,
+        change: (List<Outline.Table>) -> List<Outline.Table>,
+    ) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val state = _uiState.value
+        val before = state.tables
+        // Read before the change runs, because a caller is entitled to rewrite `blocksById` inside
+        // it — which is how a deleted row takes its text with it.
+        val blocksBefore = touched.associateWith { blocksById[it] }
+        val after = change(before)
+        if (after == before && touched.all { blocksById[it] == blocksBefore[it] }) return
+
+        _uiState.value = state.copy(
+            tables = after,
+            // Only when the grid gained or lost cells. A column dragged wider must not rebuild every
+            // editor on the page and take the caret with it.
+            pageRevision = if (touched.isEmpty()) state.pageRevision else state.pageRevision + 1,
+        )
+        pushHistory(
+            pageId,
+            CanvasHistoryEntry.Tables(
+                before = before,
+                after = after,
+                blocksBefore = blocksBefore,
+                blocksAfter = touched.associateWith { blocksById[it] },
+                coalesceKey = coalesceKey,
+                atMillis = System.currentTimeMillis(),
+            ),
+        )
+        edits.tryEmit(Unit)
+    }
+
     /** Erases by tombstone. Same ordering as [onStrokeFinished], for the same reason. */
     fun eraseStrokes(ids: List<String>) {
         if (ids.isEmpty()) return
@@ -1268,8 +1563,13 @@ class NotesViewModel(
     fun copySelection(selection: CanvasSelection) {
         val strokes = _strokes.value.filter { it.id in selection.inkIds }.distinctBy(PageStroke::id)
         val shapes = _uiState.value.shapes.filter { it.id in selection.shapeIds }
-        if (strokes.isEmpty() && shapes.isEmpty()) return
-        clipboard = CanvasClipboard(strokes = strokes, shapes = shapes)
+        // Read back through the block map, never off `uiState.tables`, whose cells go stale the
+        // moment anything is typed — TA2. A table copied without what is in it is a grid of lines.
+        val tables = _uiState.value.tables
+            .filter { it.id in selection.tableIds }
+            .map { table -> table.withCellBlocks(table.contentCellIds().associateWith { blocksById[it].orEmpty() }) }
+        if (strokes.isEmpty() && shapes.isEmpty() && tables.isEmpty()) return
+        clipboard = CanvasClipboard(strokes = strokes, shapes = shapes, tables = tables)
         _hasClipboard.value = true
     }
 
@@ -1291,10 +1591,14 @@ class NotesViewModel(
         val sources = clipboard.strokes
         val sourceShapes = clipboard.shapes
         val sourceTexts = clipboard.texts
-        if (sources.isEmpty() && sourceShapes.isEmpty() && sourceTexts.isEmpty()) return
+        val sourceTables = clipboard.tables
+        if (sources.isEmpty() && sourceShapes.isEmpty() && sourceTexts.isEmpty() && sourceTables.isEmpty()) return
 
         val bounds = sources.mapNotNull(PageStroke::pageBounds) +
             sourceShapes.map(Outline.Shape::pageBounds) +
+            // The sum of the row floors, which is the height the document can know — TA3. Off by
+            // however far a cell's text runs past its row, exactly as a text box's floor is.
+            sourceTables.map { InkBounds(it.x, it.y, it.x + it.width, it.y + it.height) } +
             // A container's height is whatever its text wraps to and only the canvas knows it, so
             // the floor stands in. It is off by however far the text runs past it, which moves a
             // pasted box up by half of that — visible only when a text box is pasted together with
@@ -1313,7 +1617,7 @@ class NotesViewModel(
                 )
             }
             editTexts(pasted.map { it.id }.toSet()) { outlines ->
-                pasted.forEach { blocksByOutline[it.id] = it.blocks }
+                pasted.forEach { blocksById[it.id] = it.blocks }
                 outlines + pasted.map { text ->
                     OutlineBox(
                         id = text.id,
@@ -1323,6 +1627,26 @@ class NotesViewModel(
                         minHeight = text.minHeight,
                     )
                 }
+            }
+        }
+
+        if (sourceTables.isNotEmpty()) {
+            // Fresh ids all the way down — table, rows and cells. Two tables sharing a cell id would
+            // share the block map entry behind it, so typing in one would appear in the other.
+            val pastedTables = sourceTables.map { source ->
+                source.withNewIds().copy(
+                    x = (source.x + dx).coerceAtLeast(0f),
+                    y = (source.y + dy).coerceAtLeast(0f),
+                )
+            }
+            editTables(pastedTables.flatMap { it.contentCellIds() }.toSet()) { tables ->
+                pastedTables.forEach { table ->
+                    val cells = table.contentCellIds().toSet()
+                    table.rows.forEach { row ->
+                        row.cells.forEach { if (it.id in cells) blocksById[it.id] = it.blocks }
+                    }
+                }
+                tables + pastedTables
             }
         }
 
@@ -1499,12 +1823,25 @@ class NotesViewModel(
             is CanvasHistoryEntry.Texts -> {
                 val blocks = if (applied) entry.blocksAfter else entry.blocksBefore
                 blocks.forEach { (id, value) ->
-                    if (value == null) blocksByOutline.remove(id) else blocksByOutline[id] = value
+                    if (value == null) blocksById.remove(id) else blocksById[id] = value
                 }
                 _uiState.value = _uiState.value.copy(
                     outlines = if (applied) entry.after else entry.before,
                     // The containers are rebuilt from scratch, because an `OutlineEditText` holds its
                     // own text and will not notice that the list behind it changed.
+                    pageRevision = _uiState.value.pageRevision + 1,
+                )
+                edits.tryEmit(Unit)
+            }
+            // Both halves together, or an undone row deletion comes back with empty cells — the same
+            // discipline [Texts] keeps, one dimension larger.
+            is CanvasHistoryEntry.Tables -> {
+                val blocks = if (applied) entry.blocksAfter else entry.blocksBefore
+                blocks.forEach { (id, value) ->
+                    if (value == null) blocksById.remove(id) else blocksById[id] = value
+                }
+                _uiState.value = _uiState.value.copy(
+                    tables = if (applied) entry.after else entry.before,
                     pageRevision = _uiState.value.pageRevision + 1,
                 )
                 edits.tryEmit(Unit)
@@ -1534,15 +1871,31 @@ class NotesViewModel(
         val history = canvasHistoryByPage.getOrPut(pageId, ::PageCanvasHistory)
         val previous = history.undo.lastOrNull()
 
-        val coalesced = entry is CanvasHistoryEntry.Shapes &&
+        val shapesCoalesce = entry is CanvasHistoryEntry.Shapes &&
             entry.coalesceKey != null &&
             previous is CanvasHistoryEntry.Shapes &&
             previous.coalesceKey == entry.coalesceKey &&
             entry.atMillis - previous.atMillis <= SHAPE_COALESCE_MS
 
-        if (coalesced) {
+        // The same rule for a table's dragged column boundary or border-width slider. Only entries
+        // that touched no cells may fold together — one that added or removed a row carries a block
+        // map, and merging two of those would drop the first one's.
+        val tablesCoalesce = entry is CanvasHistoryEntry.Tables &&
+            entry.coalesceKey != null &&
+            entry.blocksAfter.isEmpty() &&
+            previous is CanvasHistoryEntry.Tables &&
+            previous.coalesceKey == entry.coalesceKey &&
+            previous.blocksAfter.isEmpty() &&
+            entry.atMillis - previous.atMillis <= SHAPE_COALESCE_MS
+
+        if (shapesCoalesce) {
             history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Shapes).copy(
                 after = (entry as CanvasHistoryEntry.Shapes).after,
+                atMillis = entry.atMillis,
+            )
+        } else if (tablesCoalesce) {
+            history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Tables).copy(
+                after = (entry as CanvasHistoryEntry.Tables).after,
                 atMillis = entry.atMillis,
             )
         } else {
@@ -1685,7 +2038,11 @@ class NotesViewModel(
     private suspend fun persist() {
         val state = _uiState.value
         val pageId = state.selectedPageId ?: return
-        if (state.outlines.isEmpty()) return
+        // "Nothing loaded", which is what an empty page state means before `openPage` has filled it
+        // in — a loaded page always has at least one container. Tables count, because deleting the
+        // last container on a page that has one is a thing the toolkit can do, and a page that is
+        // all table is still a page with work on it.
+        if (state.outlines.isEmpty() && state.tables.isEmpty()) return
         // The page's stored content could not be read, so anything shown is a placeholder rather
         // than the user's work. Writing it would destroy the real content.
         if (readOnlyPageId == pageId) return
@@ -1695,7 +2052,7 @@ class NotesViewModel(
             // A missing entry means "content not known", never "content is empty". Writing an
             // empty outline for one would silently blank it, so an incomplete picture skips the
             // write entirely and waits for the next edit.
-            val blocks = blocksByOutline[box.id] ?: return
+            val blocks = blocksById[box.id] ?: return
             // Containers the user tapped into but never typed in are not written; they exist only
             // as a caret position until there is something to hold.
             if (blocks.all { it.text.isBlank() }) continue
@@ -1708,9 +2065,20 @@ class NotesViewModel(
                 blocks = blocks,
             )
         }
+
+        // The same "content unknown → write nothing at all" guard, over cells. What is *not* the
+        // same is the blank case: a blank cell is written where a blank container is skipped —
+        // `docs/tablePlan.md` TA12. An empty container is a caret position nobody typed in; an empty
+        // cell is part of the grid's shape, and dropping it would resize the table on reload.
+        val tables = mutableListOf<Outline.Table>()
+        for (table in state.tables) {
+            val cells = table.contentCellIds().associateWith { blocksById[it] ?: return }
+            tables += table.withCellBlocks(cells)
+        }
+
         repository.saveDoc(
             pageId,
-            PageDoc(outlines = merged(state.shapes + outlines), style = state.pageStyle),
+            PageDoc(outlines = merged(state.shapes + tables + outlines), style = state.pageStyle),
         )
     }
 

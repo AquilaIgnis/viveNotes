@@ -1,10 +1,6 @@
 package com.vivenotes.ui.editor
 
 import android.graphics.RectF
-import android.graphics.Typeface
-import android.text.InputType
-import android.util.TypedValue
-import android.view.ViewGroup
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -84,7 +80,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.ink.brush.Brush
 import androidx.ink.strokes.Stroke as InkStroke
 import androidx.compose.animation.core.AnimationState
@@ -99,7 +94,10 @@ import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.RulerKind
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.TableSettings
 import com.vivenotes.model.Outline
+import com.vivenotes.model.canRemoveColumn
+import com.vivenotes.model.canRemoveRow
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.canFill
 import com.vivenotes.ink.PageStroke
@@ -107,8 +105,10 @@ import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
+import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.Ruler
 import com.vivenotes.ink.RulerPlacement
+import com.vivenotes.ink.TableBounds
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.PageStyle
@@ -173,9 +173,9 @@ private fun Density.clampToConstraints(size: DpSize, zoom: Float): DpSize {
  *
  * A page is not one linear document. Text lives in independently positioned containers
  * ("outlines"): tapping empty canvas starts a new one, and each can be dragged and resized.
- * Each container is an [OutlineEditText] hosted through [AndroidView] — the one place the Compose
- * shell hands off to a View, so that span-based editing, IME handling, selection UI and
- * accessibility come from the platform rather than being reimplemented.
+ * Each container — and each table cell — is an [OutlineEditText] hosted through [NoteEditor], the one
+ * place the Compose shell hands off to a View, so that span-based editing, IME handling, selection UI
+ * and accessibility come from the platform rather than being reimplemented.
  */
 @Composable
 fun EditorPane(
@@ -198,6 +198,13 @@ fun EditorPane(
     onTitleChange: (String) -> Unit,
     outlines: List<OutlineBox>,
     pageRevision: Int,
+    /**
+     * Which page is open. **Not the same signal as [pageRevision]**, and the difference is what the
+     * selection hangs on: a revision bump means "the containers were rebuilt", which a row added to a
+     * table is, and clearing the selection there would take the toolbar away from under the finger
+     * that had just used it. A page *change* is what makes ids from somewhere else meaningless.
+     */
+    pageId: String? = null,
     initialBlocksFor: (String) -> List<Block>,
     commands: Flow<FormatCommand>,
     onBlocksChanged: (String, List<Block>) -> Unit,
@@ -250,6 +257,27 @@ fun EditorPane(
      * because it is a fact about this moment and nothing outside the canvas has any use for it.
      */
     ruler: RulerSettings? = null,
+    /**
+     * The tables on the page, and everything the Table Class can do to one — `docs/tablePlan.md`.
+     *
+     * `tableArmed` is Insert Table in hand (TA7): the next tap on bare canvas puts one there, and
+     * [onInsertTable] returns its id so the page can select what it just made.
+     */
+    tables: List<Outline.Table> = emptyList(),
+    tableArmed: Boolean = false,
+    onInsertTable: (Float, Float) -> String? = { _, _ -> null },
+    onMoveTables: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeTables: (Set<String>, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    onDeleteTables: (Set<String>) -> Unit = {},
+    onRecolorTables: (Set<String>, Int) -> Unit = { _, _ -> },
+    onSetTableBorderWidth: (Set<String>, Float) -> Unit = { _, _ -> },
+    onSetTableFill: (Set<String>, Int?) -> Unit = { _, _ -> },
+    onSetTableColumnWidth: (String, Int, Float) -> Unit = { _, _, _ -> },
+    onSetTableRowMinHeight: (String, Int, Float) -> Unit = { _, _, _ -> },
+    onInsertTableRow: (String, Int) -> Unit = { _, _ -> },
+    onDeleteTableRow: (String, Int) -> Unit = { _, _ -> },
+    onInsertTableColumn: (String, Int) -> Unit = { _, _ -> },
+    onDeleteTableColumn: (String, Int) -> Unit = { _, _ -> },
     shapes: List<Outline.Shape> = emptyList(),
     onMoveShape: (String, Float, Float) -> Unit = { _, _, _ -> },
     onResizeShape: (String, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
@@ -294,6 +322,24 @@ fun EditorPane(
 
     var focusedEditor by remember { mutableStateOf<OutlineEditText?>(null) }
     var focusedOutlineId by remember { mutableStateOf<String?>(null) }
+
+    /**
+     * The table cell with the caret in it, if any — `docs/tablePlan.md` TA6.
+     *
+     * Beside [focusedOutlineId] rather than folded into it: the two never both hold something (one
+     * editor has focus), but they mean different things to everything downstream. A container id
+     * names something the text toolkit is about; a cell id names *where in a grid* the Row and Column
+     * menus should insert.
+     */
+    var focusedCellId by remember { mutableStateOf<String?>(null) }
+
+    /**
+     * The row or column held by a tap on its gutter handle — `docs/tablePlan.md` TA16.
+     *
+     * Beside the selection rather than inside it, for the reason [TableAxis] gives: a `CanvasSelection`
+     * holds objects on the page, and this is a place inside one of them.
+     */
+    var heldAxis by remember(pageId) { mutableStateOf<TableAxis?>(null) }
     var lastFocusedEditor by remember { mutableStateOf<OutlineEditText?>(null) }
     var lastFocusedOutlineId by remember { mutableStateOf<String?>(null) }
     var retainedEquationEditor by remember { mutableStateOf<OutlineEditText?>(null) }
@@ -312,6 +358,10 @@ fun EditorPane(
      */
     val currentTextArmed = rememberUpdatedState(textArmed)
 
+    /** Insert Table in hand, read the same way and for the same reason. */
+    val currentTableArmed = rememberUpdatedState(tableArmed)
+    val currentOnInsertTable = rememberUpdatedState(onInsertTable)
+
     /**
      * Which containers currently hold text — `docs/textBoxPlan.md` TD3.
      *
@@ -328,13 +378,48 @@ fun EditorPane(
      * rewrites its bounds: a `StateFlow` write per gesture end is fine, one per frame is not. Cleared
      * with the page, since ids from the last page mean nothing on this one.
      */
-    var selection by remember(pageRevision) { mutableStateOf<CanvasSelection?>(null) }
+    var selection by remember(pageId) { mutableStateOf<CanvasSelection?>(null) }
     val lassoGesture = remember { LassoGesture() }
 
-    // Re-read against the page whenever either kind changes, so a deleted or undone object takes its
+    /**
+     * The tables as rectangles, measured — `docs/tablePlan.md` TA3 and [TableBounds].
+     *
+     * A table's height is whatever its cells' text wraps to and the document stores only each row's
+     * floor, so the model runs short the moment a cell overflows. The canvas laid the table out, so
+     * the canvas is what says how tall it is; the floors stand in for the one frame before it has.
+     */
+    val tableBounds = remember(tables, heights.toMap()) {
+        tables.map { table ->
+            val measured = heights[table.id]?.let { with(density) { it.toDp().value } }
+            TableBounds(
+                id = table.id,
+                bounds = InkBounds(
+                    left = table.x,
+                    top = table.y,
+                    right = table.x + TABLE_GUTTER.value + table.width,
+                    bottom = table.y + (measured ?: (TABLE_GUTTER.value + table.height)),
+                ),
+            )
+        }
+    }
+
+    // Re-read against the page whenever any kind changes, so a deleted or undone object takes its
     // handles with it instead of leaving a rectangle over nothing.
-    LaunchedEffect(strokes, shapes) {
-        selection = selection?.reconcile(strokes, shapes)
+    LaunchedEffect(strokes, shapes, tableBounds) {
+        selection = selection?.reconcile(strokes, shapes, tableBounds)
+    }
+
+    // A hold outlives neither its table's selection nor the row it named. Selecting something else
+    // is the common way out; an index past the end is the one that would otherwise turn a shrinking
+    // table into a bar whose buttons act on a row that is not there.
+    LaunchedEffect(selection, tables) {
+        heldAxis = heldAxis?.takeIf { axis ->
+            val table = tables.firstOrNull { it.id == axis.tableId }
+            selection?.holdsTable(axis.tableId) == true && when (axis) {
+                is TableAxis.Row -> axis.index in table?.rows.orEmpty().indices
+                is TableAxis.Column -> axis.index in table?.columns.orEmpty().indices
+            }
+        }
     }
     LaunchedEffect(lassoing) {
         if (!lassoing) lassoGesture.clear()
@@ -369,6 +454,7 @@ fun EditorPane(
                     pendingFocusId = null
                     focusedEditor = null
                     focusedOutlineId = null
+                    focusedCellId = null
                     lastFocusedEditor = null
                     lastFocusedOutlineId = null
                     retainedEquationEditor = null
@@ -420,13 +506,19 @@ fun EditorPane(
     // What the content occupies, measured from the page's own top-left corner and including the
     // band the title sits in. Derived rather than recomputed: the canvas now grows as the user
     // scrolls, so this is read on far more recompositions than it used to be.
-    val contentBounds by remember(outlines, style.hideTitle, density) {
+    val contentBounds by remember(outlines, tables, style.hideTitle, density) {
         derivedStateOf {
             var width = 0.dp
             var height = if (style.hideTitle) 0.dp else PageStyle.TITLE_BAND_DP.dp
             outlines.forEach { box ->
                 width = maxOf(width, (box.x + box.width).dp)
                 height = maxOf(height, box.y.dp + with(density) { (heights[box.id] ?: 0).toDp() })
+            }
+            // A table's box is its grid plus the gutter reserved for its handles, and its height is
+            // measured for the reason `tableBounds` gives.
+            tables.forEach { table ->
+                width = maxOf(width, table.x.dp + TABLE_GUTTER + table.width.dp)
+                height = maxOf(height, table.y.dp + with(density) { (heights[table.id] ?: 0).toDp() })
             }
             DpSize(width, height)
         }
@@ -695,17 +787,30 @@ fun EditorPane(
                             ) {
                                 val onTap: (Offset) -> Unit = tap@ { offset ->
                                     pastePopupAt = null
-                                    // Dismissing the popup is not the text tool's business, so it
-                                    // happens either way; opening a container is, so it does not.
+                                    // Dismissing the popup is not a tool's business, so it happens
+                                    // either way; placing something is, so it does not.
                                     //
-                                    // Read through the holder, never captured. This block is keyed
+                                    // Read through the holders, never captured. This block is keyed
                                     // on page geometry and outlives every other recomposition, so a
                                     // captured `textArmed` would be frozen at whatever it was when
                                     // the page first composed — false, since the app opens with a
                                     // pen — and arming Text would then do nothing at all, for ever.
-                                    if (!currentTextArmed.value) return@tap
                                     val point = offsetToPage(offset)
                                     if (!canPlaceAt(point)) return@tap
+                                    if (currentTableArmed.value) {
+                                        // Selected on arrival, as an inserted shape is: the handles
+                                        // are the point of it being an object. The rectangle here is
+                                        // the document's own guess at its height; the measurement
+                                        // corrects it on the next frame, through `tableBounds`.
+                                        currentOnInsertTable.value(point.x - 8f, point.y - 8f)
+                                            ?.let { id ->
+                                                selection = CanvasSelection.ofTable(
+                                                    TableBounds(id, InkBounds(point.x, point.y, point.x, point.y)),
+                                                )
+                                            }
+                                        return@tap
+                                    }
+                                    if (!currentTextArmed.value) return@tap
                                     pendingFocusId = onCreateOutline(point.x - 8f, point.y - 8f)
                                 }
                                 if (hasClipboard) {
@@ -754,6 +859,74 @@ fun EditorPane(
                         )
                     }
 
+                    // Between the shapes and the text containers — `docs/tablePlan.md` TA11. Compose
+                    // hit-tests the last child first, so this is also the order in which the three
+                    // compete for a touch: a table takes its own taps from a shape drawn under it,
+                    // and a container drawn over a table keeps its caret.
+                    tables.forEach { table ->
+                        key(pageRevision, table.id) {
+                            TableContainer(
+                                table = table,
+                                selected = selection?.holdsTable(table.id) == true,
+                                editorStyle = editorStyle,
+                                defaults = defaults,
+                                initialBlocksFor = initialBlocksFor,
+                                held = heldAxis?.takeIf { it.tableId == table.id },
+                                onHold = { axis ->
+                                    heldAxis = axis
+                                    // A hold is also a selection of its table: the handles are only
+                                    // reachable while it is selected, but a tap on one must not
+                                    // *lose* that selection either.
+                                    tableBounds.firstOrNull { it.id == table.id }
+                                        ?.let { selection = CanvasSelection.ofTable(it) }
+                                },
+                                onCellFocused = { cellId, view ->
+                                    focusedEditor = view
+                                    focusedOutlineId = null
+                                    focusedCellId = cellId
+                                    // A caret is a different way of saying where you are, so it
+                                    // takes over from a held row rather than sitting beside it.
+                                    heldAxis = null
+                                    lastFocusedEditor = view
+                                    lastFocusedOutlineId = null
+                                    // Putting a caret in a cell selects the table it belongs to —
+                                    // TA11. It costs one tap where AD7's double-tap row asks for
+                                    // two, and it is what raises the bar the Row and Column menus
+                                    // live on.
+                                    if (selection?.holdsTable(table.id) != true) {
+                                        tableBounds.firstOrNull { it.id == table.id }
+                                            ?.let { selection = CanvasSelection.ofTable(it) }
+                                    }
+                                },
+                                onCellBlurred = { cellId ->
+                                    if (focusedCellId == cellId) {
+                                        focusedCellId = null
+                                        focusedEditor = null
+                                    }
+                                },
+                                onCellBlocksChanged = onBlocksChanged,
+                                onSelectionChanged = onSelectionChanged,
+                                onMarkArmed = onMarkArmed,
+                                onMove = { dx, dy -> onMoveTables(setOf(table.id), dx, dy) },
+                                onResize = { scaleX, scaleY ->
+                                    onResizeTables(setOf(table.id), table.x, table.y, scaleX, scaleY)
+                                },
+                                onColumnWidth = { column, width ->
+                                    onSetTableColumnWidth(table.id, column, width)
+                                },
+                                onRowMinHeight = { row, height ->
+                                    onSetTableRowMinHeight(table.id, row, height)
+                                },
+                                // An ink table has no caret to select it by — TA15.
+                                onSelect = {
+                                    tableBounds.firstOrNull { it.id == table.id }
+                                        ?.let { selection = CanvasSelection.ofTable(it) }
+                                },
+                                onMeasured = { heightPx -> heights[table.id] = heightPx },
+                            )
+                        }
+                    }
+
                     outlines.forEach { box ->
                         key(pageRevision, box.id) {
                             OutlineContainer(
@@ -800,6 +973,7 @@ fun EditorPane(
             InkOverlay(
                 strokes = strokes,
                 shapes = shapes,
+                tables = tableBounds,
                 selection = selection,
                 onSelect = { selection = it },
                 lassoGesture = lassoGesture,
@@ -839,6 +1013,10 @@ fun EditorPane(
                 onResizeShapes = { ids, anchor, scaleX, scaleY ->
                     onResizeShapes(ids, anchor.x, anchor.y, scaleX, scaleY)
                 },
+                onMoveTables = onMoveTables,
+                onResizeTables = { ids, anchor, scaleX, scaleY ->
+                    onResizeTables(ids, anchor.x, anchor.y, scaleX, scaleY)
+                },
                 onDeleteSelection = onDeleteInkSelection,
                 onRecolorSelection = onRecolorInkSelection,
                 onGroupSelection = onGroupInkSelection,
@@ -857,7 +1035,7 @@ fun EditorPane(
             // bar drawn inside the zoomed page grew with it and could be clamped off-screen.
             selection?.takeIf { !it.isEmpty }?.let { held ->
                 ObjectTooltip(
-                    swatch = held.swatch(strokes, shapes),
+                    swatch = held.swatch(strokes, shapes, tables),
                     selectionBoundsInView = {
                         lassoGesture.previewBoundsInView(held, inkPageToView(
                             zoom = zoom,
@@ -884,6 +1062,7 @@ fun EditorPane(
                     onDelete = {
                         if (held.inkIds.isNotEmpty()) onDeleteInkSelection(held.inkIds)
                         if (held.shapeIds.isNotEmpty()) onDeleteShapes(held.shapeIds)
+                        if (held.tableIds.isNotEmpty()) onDeleteTables(held.tableIds)
                         selection = null
                         lassoGesture.clear()
                     },
@@ -894,6 +1073,7 @@ fun EditorPane(
                     onRecolor = { color ->
                         if (held.inkIds.isNotEmpty()) onRecolorInkSelection(held.inkIds, color)
                         if (held.shapeIds.isNotEmpty()) onRecolorShapes(held.shapeIds, color)
+                        if (held.tableIds.isNotEmpty()) onRecolorTables(held.tableIds, color)
                     },
                     // The kind-specific half. Only a selection of one kind has one: over a mixed
                     // loop there is nothing both halves agree on, so the bar shows its base alone.
@@ -928,6 +1108,82 @@ fun EditorPane(
                                     fill = selectedShapes.map { it.fillArgb }.distinct().singleOrNull(),
                                     onChange = { onSetShapeFill(held.shapeIds, it) },
                                 )
+                            }
+                        }
+                        // The Table Class's half — `docs/tablePlan.md` TA6. The row and column
+                        // actions need *one* table to act on and a place in it, so they appear for a
+                        // single held table; the rules and the fill apply to any number.
+                        if (held.isTableOnly) {
+                            val selectedTables = tables.filter { it.id in held.tableIds }
+                            ThicknessAction(
+                                width = selectedTables.map { it.borderWidth.roundToInt() }
+                                    .distinct().singleOrNull() ?: TableSettings.MIN_BORDER_WIDTH,
+                                range = TableSettings.MIN_BORDER_WIDTH..TableSettings.MAX_BORDER_WIDTH,
+                                onChange = { onSetTableBorderWidth(held.tableIds, it.toFloat()) },
+                            )
+                            FillAction(
+                                fill = selectedTables.map { it.fillArgb }.distinct().singleOrNull(),
+                                onChange = { onSetTableFill(held.tableIds, it) },
+                            )
+                            selectedTables.singleOrNull()?.let { table ->
+                                // Where the caret is, or the edges of the table when there is none:
+                                // "above" then means the top and "below" the bottom, so the verbs
+                                // always mean something.
+                                val at = focusedCellId?.let(table::locate)
+                                val axis = heldAxis?.takeIf { it.tableId == table.id }
+                                val row = (axis as? TableAxis.Row)?.index ?: at?.first
+                                val column = (axis as? TableAxis.Column)?.index ?: at?.second
+
+                                val insertRowAbove = { onInsertTableRow(table.id, row ?: 0) }
+                                val insertRowBelow =
+                                    { onInsertTableRow(table.id, (row ?: table.rowCount - 1) + 1) }
+                                val deleteRow = {
+                                    onDeleteTableRow(table.id, row ?: table.rowCount - 1)
+                                    heldAxis = null
+                                }
+                                val insertColumnLeft = { onInsertTableColumn(table.id, column ?: 0) }
+                                val insertColumnRight = {
+                                    onInsertTableColumn(table.id, (column ?: table.columnCount - 1) + 1)
+                                }
+                                val deleteColumn = {
+                                    onDeleteTableColumn(table.id, column ?: table.columnCount - 1)
+                                    heldAxis = null
+                                }
+
+                                // **The bar follows what is held** — `docs/tablePlan.md` TA16, and
+                                // what `table-tooltip1.jpeg` and `2` differ by. With a row or a
+                                // column held there is one thing the verbs are about, so they stop
+                                // needing a menu and become the Material Symbols that draw them.
+                                // With nothing held there are two axes and only a caret to go on,
+                                // which is what the menus are for.
+                                when (axis) {
+                                    is TableAxis.Row -> HeldRowActions(
+                                        canDelete = table.canRemoveRow,
+                                        onInsertAbove = insertRowAbove,
+                                        onInsertBelow = insertRowBelow,
+                                        onDelete = deleteRow,
+                                    )
+                                    is TableAxis.Column -> HeldColumnActions(
+                                        canDelete = table.canRemoveColumn,
+                                        onInsertLeft = insertColumnLeft,
+                                        onInsertRight = insertColumnRight,
+                                        onDelete = deleteColumn,
+                                    )
+                                    null -> {
+                                        TableRowAction(
+                                            canDelete = table.canRemoveRow,
+                                            onInsertAbove = insertRowAbove,
+                                            onInsertBelow = insertRowBelow,
+                                            onDelete = deleteRow,
+                                        )
+                                        TableColumnAction(
+                                            canDelete = table.canRemoveColumn,
+                                            onInsertLeft = insertColumnLeft,
+                                            onInsertRight = insertColumnRight,
+                                            onDelete = deleteColumn,
+                                        )
+                                    }
+                                }
                             }
                         }
                     },
@@ -1010,10 +1266,13 @@ fun EditorPane(
 private fun CanvasSelection.swatch(
     strokes: List<PageStroke>,
     shapes: List<Outline.Shape>,
+    tables: List<Outline.Table>,
 ): Color {
     val inkColors = strokes.filter { it.id in inkIds }.map { it.stroke.brush.colorIntArgb }
     val shapeColors = shapes.filter { it.id in shapeIds }.map(Outline.Shape::borderArgb)
-    return (inkColors + shapeColors).distinct().singleOrNull()?.let(::Color) ?: Color.White
+    val tableColors = tables.filter { it.id in tableIds }.map(Outline.Table::borderArgb)
+    return (inkColors + shapeColors + tableColors).distinct().singleOrNull()?.let(::Color)
+        ?: Color.White
 }
 
 /** Whether the ink held is one existing group, which is what makes the button say Ungroup. */
@@ -1162,18 +1421,6 @@ private fun Zoomed(zoom: Float, content: @Composable () -> Unit) {
             }
         }
     }
-}
-
-/**
- * The default expressed as marks, empty where it already matches the editor's fixed base.
- *
- * Skipping the matching case is what keeps documents clean for anyone who never changes the
- * setting: their text renders from the base and carries no font marks at all. Because that base is
- * a constant, such text also stays put forever, whatever the default becomes later.
- */
-private fun EditorDefaults.asMarks(): Set<Mark> = buildSet {
-    if (fontFamily != EditorDefaults.FALLBACK_FONT_FAMILY) add(Mark.FontFamily(fontFamily))
-    if (fontSize != EditorDefaults.FALLBACK_FONT_SIZE) add(Mark.FontSize(fontSize))
 }
 
 /** Test tags for the page itself, whose geometry the View tab changes. */
@@ -1326,56 +1573,20 @@ internal fun OutlineContainer(
                         textHeightDp = with(density) { it.height.toDp().value }
                     },
             ) {
-                AndroidView(
-                factory = { context ->
-                    OutlineEditText(context).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                        )
-                        background = null
-                        setPadding(0, 0, 0, 0)
-                        // Fixed, never the current default: this is what every character with no
-                        // span of its own renders as, so changing it would restyle old writing.
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, EditorDefaults.FALLBACK_FONT_SIZE.toFloat())
-                        setLineSpacing(0f, 1.25f)
-                        typeface = Typeface.SANS_SERIF
-                        // Named here because a Typeface cannot be mapped back to an id, and the
-                        // ribbon has to be able to say what unmarked text is written in.
-                        baseFontFamily = EditorDefaults.FALLBACK_FONT_FAMILY
-                        gravity = android.view.Gravity.TOP or android.view.Gravity.START
-                        inputType = InputType.TYPE_CLASS_TEXT or
-                            InputType.TYPE_TEXT_FLAG_MULTI_LINE or
-                            InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-                        isVerticalScrollBarEnabled = false
-                        maxLines = Int.MAX_VALUE
-                        // Qualified because the composable's parameters of the same name would
-                        // otherwise shadow the view's properties inside apply.
-                        this@apply.editorStyle = editorStyle
-                        this@apply.onBlocksChanged = { blocks ->
-                            hasContent = blocks.any { it.text.isNotBlank() }
-                            onBlocksChanged(blocks)
-                        }
-                        this@apply.onSelectionStateChanged = { state -> onSelectionChanged(state) }
-                        this@apply.onMarkArmed = { mark -> onMarkArmed(mark) }
-                        setOnFocusChangeListener { v, hasFocus ->
-                            if (hasFocus) onFocused(v as OutlineEditText) else onBlurred()
-                        }
-                        setBlocks(initialBlocks)
-                        view = this
-                    }
-                },
-                update = { editor ->
-                    editor.editorStyle = editorStyle
-                    editor.setTextColor(canvas.text.toArgb())
-                    editor.equationColor = canvas.text.toArgb()
-                    editor.setHintTextColor(canvas.secondaryText.toArgb())
-                    editor.defaultMarks = defaults.asMarks()
-                    // Applied to the view rather than as a Compose height constraint: constraining
-                    // the wrapper only grows the box around the editor, leaving the text area
-                    // itself — and its touch target — at the height of its content.
-                    editor.minimumHeight = with(density) { box.minHeight.dp.roundToPx() }
-                },
+                NoteEditor(
+                    initialBlocks = initialBlocks,
+                    editorStyle = editorStyle,
+                    defaults = defaults,
+                    minHeightPx = with(density) { box.minHeight.dp.roundToPx() },
+                    onFocused = onFocused,
+                    onBlurred = onBlurred,
+                    onBlocksChanged = { blocks ->
+                        hasContent = blocks.any { it.text.isNotBlank() }
+                        onBlocksChanged(blocks)
+                    },
+                    onSelectionChanged = onSelectionChanged,
+                    onMarkArmed = onMarkArmed,
+                    onViewCreated = { view = it },
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(OutlineTags.EDITOR)

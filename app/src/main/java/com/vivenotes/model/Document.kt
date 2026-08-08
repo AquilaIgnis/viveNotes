@@ -59,9 +59,11 @@ private fun Outline.shiftedDown(dy: Float): Outline = when (this) {
     is Outline.Text -> copy(y = y + dy)
     is Outline.Image -> copy(y = y + dy)
     is Outline.Ink -> copy(y = y + dy)
-    // Unreachable in practice — shapes postdate schema 2 — but exhaustive rather than `else`, so
-    // that a variant added later fails here at compile time instead of silently not being migrated.
+    // Unreachable in practice — shapes and tables postdate schema 2 — but exhaustive rather than
+    // `else`, so that a variant added later fails here at compile time instead of silently not
+    // being migrated.
     is Outline.Shape -> translated(0f, dy)
+    is Outline.Table -> translated(0f, dy)
 }
 
 /**
@@ -351,6 +353,156 @@ sealed interface Outline {
     }
 
     /**
+     * A table placed on the canvas — `docs/tablePlan.md`.
+     *
+     * **An object, not a block.** `docs/plan.md` §4 sketched a table as `BlockType.Table` inside a
+     * text container, which predates AD7; TA1 supersedes it. The diagram says the class *implements
+     * Prime Object*, and every row of that — lassoed, dragged, resized by its corners, copied,
+     * deleted, undone — belongs to something placed on the page rather than to a paragraph inside
+     * something else.
+     *
+     * **Columns are widths; rows are floors.** [columns] is one width per column, in page dp, and
+     * [width] is their sum, stored so the page can lay out and hit-test without measuring text.
+     * [TableRow.minHeight] is a *floor* for the same reason [Text.minHeight] is — a cell's text wraps,
+     * and a stored height would eventually clip what someone wrote. So the document does not know how
+     * tall a table is; only the canvas does, once it has measured (TA3). [height] is the honest
+     * approximation of it: exact until some cell overflows its row.
+     *
+     * [headerRow] and [headerColumn] are properties of the table rather than marks on the cells they
+     * style (TA8) — a bold mark would be indistinguishable from the user's own bolding, so turning the
+     * header off again would have to guess what to un-bold, and an exporter needs the flag to emit a
+     * `<th>` rather than a `<td>` that looks like one.
+     *
+     * [fillArgb] is null for no fill, which is what a table starts with and a different thing from
+     * transparent black — the same distinction [Shape.fillArgb] draws.
+     */
+    @Serializable
+    @SerialName("table")
+    data class Table(
+        override val id: String,
+        override val x: Float = 0f,
+        override val y: Float = 0f,
+        /** The sum of [columns]. Stored rather than derived at every use; see [withRecomputedWidth]. */
+        override val width: Float = 0f,
+        val columns: List<Float> = emptyList(),
+        val rows: List<TableRow> = emptyList(),
+        val headerRow: Boolean = false,
+        val headerColumn: Boolean = false,
+        val borderArgb: Int = 0xFF000000.toInt(),
+        val borderWidth: Float = 1f,
+        val fillArgb: Int? = null,
+        /**
+         * **A ruling to write on with a stylus, not a grid of text fields** — `docs/tablePlan.md`
+         * TA15, the Draw tab's table.
+         *
+         * The same object with the same toolkit, geometry and history; the difference is what a cell
+         * *is*. Here it is empty space: no editor, no caret, nothing that consumes a touch, so the
+         * pen reaches the page through it. [TableCell.blocks] stays empty for every cell, and the
+         * cells exist only so that adding and removing rows and columns is one operation rather than
+         * two.
+         *
+         * A document property rather than a preference, because it changes what the object *is* —
+         * two tables on one page can differ, and an exporter has to know which is a `<table>` of text
+         * and which is a drawn grid.
+         *
+         * Defaulted false so every table written before this existed decodes as what it was.
+         */
+        val inkOnly: Boolean = false,
+    ) : Outline {
+
+        val columnCount: Int get() = columns.size
+        val rowCount: Int get() = rows.size
+        val cellCount: Int get() = columnCount * rowCount
+
+        /**
+         * The table's height as the document can know it: the sum of its row floors.
+         *
+         * Exact until a cell holds more text than its row's floor, after which it is an
+         * underestimate — the canvas is authoritative for anything it draws, and it hands the true
+         * rectangle to the selection itself (`CanvasSelection.TableBounds`). This is what the paste
+         * point is measured from, where the same approximation is already accepted for a text box.
+         *
+         * Always exact for an [inkOnly] table, which has no text to overflow a row.
+         */
+        val height: Float get() = rows.sumOf { it.minHeight.toDouble() }.toFloat()
+
+        fun cellAt(row: Int, column: Int): TableCell? = rows.getOrNull(row)?.cells?.getOrNull(column)
+
+        /** Every cell id, in reading order. */
+        fun cellIds(): List<String> = rows.flatMap { row -> row.cells.map(TableCell::id) }
+
+        /**
+         * The cells that hold *text* — what the ViewModel keys its block map by (TA2), and empty for
+         * an [inkOnly] table.
+         *
+         * One accessor rather than an `if (inkOnly)` at each of the eight places that seed, remove,
+         * snapshot or restore cell content. Forgetting one of those is not a visible bug: it is a
+         * block-map entry for a cell nobody types in, or — the expensive direction — a save that
+         * blocks for ever waiting on content that will never arrive.
+         */
+        fun contentCellIds(): List<String> = if (inkOnly) emptyList() else cellIds()
+
+        /** Where a cell sits, or null when it is not this table's — `row to column`. */
+        fun locate(cellId: String): Pair<Int, Int>? {
+            rows.forEachIndexed { rowIndex, row ->
+                val column = row.cells.indexOfFirst { it.id == cellId }
+                if (column >= 0) return rowIndex to column
+            }
+            return null
+        }
+
+        /** Recomputed after any column changes width, so [width] never drifts from [columns]. */
+        fun withRecomputedWidth(): Table = copy(width = columns.sum())
+
+        fun translated(dx: Float, dy: Float): Table = copy(x = x + dx, y = y + dy)
+
+        /**
+         * Scales the grid about [anchorX], [anchorY] — a corner-handle drag, per AD7.
+         *
+         * Columns carry the horizontal scale and row floors carry the vertical one, which is the
+         * whole reason a table may keep the corner handles a text box had to decline (TA4): it has
+         * two real axes of geometry rather than one wrap width. Cells re-wrap inside exactly as they
+         * do when a single column is dragged, and because rows are floors, scaling down can never
+         * clip.
+         *
+         * **Absolute, against the table it is called on** — the same contract [Shape.scaledAbout]
+         * has, and it fails the same way if applied to its own result frame after frame.
+         */
+        fun scaledAbout(anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float): Table = copy(
+            x = anchorX + (x - anchorX) * scaleX,
+            y = anchorY + (y - anchorY) * scaleY,
+            columns = columns.map { (it * scaleX).coerceAtLeast(MIN_COLUMN_WIDTH) },
+            rows = rows.map { it.copy(minHeight = (it.minHeight * scaleY).coerceAtLeast(MIN_ROW_HEIGHT)) },
+        ).withRecomputedWidth()
+
+        companion object {
+            /**
+             * Caps on the grid — TA9.
+             *
+             * One `EditText` per cell is what buys the whole Home ribbon inside a table; it is also
+             * what would make an uncapped table a way to put a thousand Android Views on one page.
+             * They live here rather than in the picker because paste, undo and a document written by
+             * hand all reach the same lists.
+             */
+            const val MAX_COLUMNS = 12
+            const val MAX_ROWS = 50
+            const val MAX_CELLS = 200
+
+            const val MIN_COLUMN_WIDTH = 48f
+            const val MAX_COLUMN_WIDTH = 1200f
+            const val DEFAULT_COLUMN_WIDTH = 160f
+
+            /**
+             * Row floors start at a real value rather than at zero, so that a corner drag has
+             * something to scale on the vertical axis from the moment a table is placed.
+             */
+            const val MIN_ROW_HEIGHT = 24f
+            const val MAX_ROW_HEIGHT = 800f
+            const val DEFAULT_ROW_HEIGHT = 42f
+        }
+    }
+
+    /**
      * Reserved. Stylus input is deferred (docs/inital.md), but declaring the variant now means
      * adding ink later is additive rather than a migration.
      */
@@ -363,6 +515,41 @@ sealed interface Outline {
         override val width: Float = Text.DEFAULT_WIDTH,
         val height: Float = 0f,
     ) : Outline
+}
+
+/**
+ * One row of an [Outline.Table]: a height floor, and one cell per column.
+ *
+ * [minHeight] is a floor rather than a height — `docs/tablePlan.md` TA3. The row renders as tall as
+ * its tallest cell needs and never shorter than this, which is the same promise the text container's
+ * bottom edge makes.
+ */
+@Serializable
+data class TableRow(
+    val id: String,
+    val minHeight: Float = Outline.Table.DEFAULT_ROW_HEIGHT,
+    val cells: List<TableCell> = emptyList(),
+)
+
+/**
+ * One cell: an id, and the blocks it holds — `docs/tablePlan.md` TA2.
+ *
+ * **Content-shaped like a text container and geometry-shaped like nothing.** The blocks are the same
+ * type a container's are, held in the ViewModel under the same map and rendered by the same
+ * `OutlineEditText`, which is what puts the entire Home ribbon inside a table for free (AD6). What a
+ * cell does not have is an x, a y or a width: where it sits is decided by its row and its column,
+ * and that is the whole difference between a table and three loose text boxes.
+ */
+@Serializable
+data class TableCell(
+    val id: String,
+    val blocks: List<Block> = emptyList(),
+) {
+    val plainText: String get() = blocks.joinToString("\n") { it.text }
+
+    companion object {
+        fun empty(id: String): TableCell = TableCell(id = id, blocks = listOf(Block.empty()))
+    }
 }
 
 /** A paragraph-level unit. Block traits map to leading-margin and alignment spans. */
@@ -496,8 +683,22 @@ fun PageDoc.encode(): String = JsonDocumentCodec.encodeToString(this)
 
 fun decodePageDoc(json: String): PageDoc = JsonDocumentCodec.decodeFromString(json)
 
-/** Flattened plain text for search indexing and page-list previews. */
+/**
+ * Flattened plain text for search indexing and page-list previews.
+ *
+ * Table cells are in it for the reason containers are: text someone typed on this page is text they
+ * will search for, and a table is not a picture.
+ */
 fun PageDoc.plainText(): String = outlines
-    .filterIsInstance<Outline.Text>()
-    .flatMap { it.blocks }
-    .joinToString("\n") { it.text }
+    .mapNotNull { outline ->
+        when (outline) {
+            is Outline.Text -> outline.blocks.joinToString("\n") { it.text }
+            is Outline.Table -> outline.rows
+                .flatMap { row -> row.cells.map(TableCell::plainText) }
+                .filter { it.isNotBlank() }
+                .joinToString("\n")
+                .ifBlank { null }
+            is Outline.Image, is Outline.Ink, is Outline.Shape -> null
+        }
+    }
+    .joinToString("\n")
