@@ -90,6 +90,22 @@ private val MEDIUM_BREAKPOINT = 720.dp
 private val EXPANDED_BREAKPOINT = 1040.dp
 private const val MATH_ANALYSIS_DEBOUNCE_MS = 350L
 
+/**
+ * What the recognition panel runs by itself once a formula is understood, in order of preference.
+ *
+ * The two that *answer* the formula come first — Solve for an equation, Evaluate for an integral,
+ * derivative, sum, product or limit — and Simplify last, since it only restates what is already on
+ * screen. See `docs/calculator.md` for which objects offer which.
+ *
+ * The order is currently belt and braces: no object offers more than one of these, because `_classify`
+ * gives an unevaluated operation `evaluate` alone and gives nothing else `evaluate` at all. It is
+ * written as a preference anyway so that adding a fourth entry cannot silently depend on that.
+ *
+ * Ids rather than labels: these are matched against the action list SymPy returns, and a label is
+ * display text that may change.
+ */
+private val AUTOMATIC_MATH_ACTIONS = listOf("solve", "evaluate", "simplify")
+
 @Composable
 fun NotesApp(
     viewModel: NotesViewModel,
@@ -216,6 +232,24 @@ fun NotesApp(
                 )
             }
         }
+    }
+
+    /**
+     * Run the obvious operation without waiting to be asked — Solve where the formula is a question,
+     * Simplify where it is a mess.
+     *
+     * A recognised equation almost always wants solving, and making the user tap Solve to find that
+     * out spends a tap on a foregone conclusion. Anything with neither action — a matrix, an integral
+     * — is left alone rather than given an arbitrary default.
+     *
+     * Keyed on the analysis rather than on the LaTeX, so it fires once when a new analysis lands and
+     * not again: `executeMathAction` only ever `copy`s the state, which leaves `analysis` the same
+     * instance. Tapping a different action afterwards therefore sticks.
+     */
+    LaunchedEffect(formulaTools.analysis) {
+        val available = formulaTools.analysis?.actions?.map { it.id }.orEmpty()
+        val automatic = AUTOMATIC_MATH_ACTIONS.firstOrNull { it in available }
+        if (automatic != null) executeMathAction(automatic)
     }
 
     val viewActions = remember(viewModel) {

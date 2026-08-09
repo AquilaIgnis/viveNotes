@@ -8,11 +8,19 @@
 .externalNativeBuild
 .cxx
 local.properties
-docs/
 gradlew
 gradlew.bat
 CLAUDE.md
+memory
+
+#python
+.venv
+.python-version
+**__pycache__**
 
 # Models
 app/src/debug/assets/ai/dev/pp-formulanet-s.onnx
 app/src/main/assets/ai/en_pp-ocrv5_mobile_rec.onnx
+
+#jsc
+.env
