@@ -376,7 +376,6 @@ fun NotesApp(
                                 strokes = strokes,
                                 aiModels = aiModels,
                                 recognitionRunning = recognitionRunning,
-                                onRecognizeText = { recognize(it, RecognitionOutputKind.Text) },
                                 onRecognizeFormula = { recognize(it, RecognitionOutputKind.Formula) },
                                 modifier = Modifier.weight(1f),
                             )
@@ -488,7 +487,6 @@ fun NotesApp(
                                 strokes = strokes,
                                 aiModels = aiModels,
                                 recognitionRunning = recognitionRunning,
-                                onRecognizeText = { recognize(it, RecognitionOutputKind.Text) },
                                 onRecognizeFormula = { recognize(it, RecognitionOutputKind.Formula) },
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -601,7 +599,6 @@ private fun EditorSurface(
     strokes: List<PageStroke>,
     aiModels: AiModelsState,
     recognitionRunning: Boolean,
-    onRecognizeText: (com.vivenotes.ink.CanvasSelection) -> Unit,
     onRecognizeFormula: (com.vivenotes.ink.CanvasSelection) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -702,10 +699,8 @@ private fun EditorSurface(
         onRecolorInkSelection = viewModel::recolorInk,
         onGroupInkSelection = viewModel::groupInk,
         onUngroupInkSelection = viewModel::ungroupInk,
-        textRecognitionAvailable = aiModels.handwritingText == AiModelInstallState.Installed,
         formulaRecognitionAvailable = aiModels.formulaLatex == AiModelInstallState.Installed,
         recognitionRunning = recognitionRunning,
-        onRecognizeText = onRecognizeText,
         onRecognizeFormula = onRecognizeFormula,
         showPrintMargins = showPrintMargins,
         modifier = modifier,

@@ -8,9 +8,19 @@ plugins {
 
 android {
     namespace = "com.vivenotes"
+    // 37, because Compose 1.12 refuses to be compiled against anything older — see the material3
+    // note in `gradle/libs.versions.toml`.
+    //
+    // **Compile-only, and that distinction is the whole point.** `compileSdk` picks the API stubs to
+    // build against; it does not ship in the APK, does not gate installs, and does not change
+    // behaviour on any device. Installability is `minSdk` (35, Android 15) and behaviour opt-ins are
+    // `targetSdk` (36) — both **deliberately unchanged**, and the min is the user's own floor, not
+    // something to raise for a library's convenience. Android 17's install base is irrelevant here.
+    //
+    // Side benefit: it clears the one thing blocking AppFunctions (feature I7, `docs/plan.md` §12).
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
+        version = release(37) {
+            minorApiLevel = 0
         }
     }
 

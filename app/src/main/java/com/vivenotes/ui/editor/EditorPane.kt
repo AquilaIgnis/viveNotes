@@ -313,10 +313,8 @@ fun EditorPane(
     onRecolorInkSelection: (Set<String>, Int) -> Unit = { _, _ -> },
     onGroupInkSelection: (Set<String>) -> Unit = {},
     onUngroupInkSelection: (Set<String>) -> Unit = {},
-    textRecognitionAvailable: Boolean = false,
     formulaRecognitionAvailable: Boolean = false,
     recognitionRunning: Boolean = false,
-    onRecognizeText: (CanvasSelection) -> Unit = {},
     onRecognizeFormula: (CanvasSelection) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -1118,10 +1116,8 @@ fun EditorPane(
                     extras = {
                         if (held.isInkOnly) {
                             RecognitionAction(
-                                textAvailable = textRecognitionAvailable,
                                 formulaAvailable = formulaRecognitionAvailable,
                                 enabled = !recognitionRunning,
-                                onText = { onRecognizeText(held) },
                                 onFormula = { onRecognizeFormula(held) },
                             )
                         }

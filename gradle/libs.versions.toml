@@ -9,6 +9,27 @@ ksp = "2.3.6"
 
 activityCompose = "1.10.1"
 composeBom = "2025.09.00"
+
+# M3 Expressive, on purpose and on pre-release — decided 2026-08-09, `docs/plan.md` §1a.
+#
+# `ContainedLoadingIndicator` exists in **no stable material3 and in no Compose BOM**. Verified by
+# reading the AARs, not the release notes: 1.4.0 (which even the newest BOM, 2026.06.01, pins) ships
+# `LoadingIndicatorTokens` but no `LoadingIndicatorKt` — the composables were in the 1.4.0 alphas and
+# pulled before stable. They are in the 1.5.0-alpha line only.
+#
+# material3 1.5.0-alpha25's POM requires Compose core 1.12.0-beta01, so taking it moves the whole UI
+# stack off the BOM's 1.9.1. `composeCore` therefore pins every `androidx.compose.ui` artifact this
+# project declares — **including the test and tooling ones**. That is the point of pinning them rather
+# than letting material3 drag them transitively: material3 does not depend on `ui-test-junit4` or
+# `ui-test-manifest`, so those would have stayed at the BOM's 1.9.1 while `ui` went to 1.12.0-beta01,
+# and Compose's test artifacts must match `ui` exactly.
+#
+# The BOM stays because it still constrains the Compose artifacts nothing here names. Retire both pins
+# together once a BOM ships a material3 that has the component.
+material3 = "1.5.0-alpha25"
+# rc01 rather than the beta01 material3 asks for: it is the same API a step further along the
+# stability track, and a floor is a minimum, not a pin.
+composeCore = "1.12.0-rc01"
 coreKtx = "1.10.1"
 datastore = "1.1.1"
 espressoCore = "3.5.1"
@@ -25,13 +46,13 @@ chaquopy = "17.0.0"
 [libraries]
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
-androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-androidx-compose-material3-window-size = { group = "androidx.compose.material3", name = "material3-window-size-class" }
-androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
-androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
-androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
-androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
-androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
+androidx-compose-material3-window-size = { group = "androidx.compose.material3", name = "material3-window-size-class", version.ref = "material3" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "composeCore" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4", version.ref = "composeCore" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest", version.ref = "composeCore" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling", version.ref = "composeCore" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview", version.ref = "composeCore" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

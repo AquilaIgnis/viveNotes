@@ -63,9 +63,12 @@ internal const val OBJECT_FILL_TAG = "object-tooltip-fill"
 internal const val OBJECT_FILL_NONE_TAG = "object-tooltip-fill-none"
 internal const val OBJECT_LINE_TYPE_TAG = "object-tooltip-line-type"
 internal const val OBJECT_SELECT_ALL_TAG = "object-tooltip-select-all"
+
+/**
+ * The Math button. The two menu-item tags beside it are gone with the menu itself — see
+ * [RecognitionAction].
+ */
 internal const val OBJECT_RECOGNIZE_TAG = "object-tooltip-recognize"
-internal const val OBJECT_RECOGNIZE_TEXT_TAG = "object-tooltip-recognize-text"
-internal const val OBJECT_RECOGNIZE_FORMULA_TAG = "object-tooltip-recognize-formula"
 
 /** The Table Class's half of the toolkit — `docs/tablePlan.md` TA6. */
 internal object TableActionTags {
@@ -264,52 +267,51 @@ internal fun RowScope.GroupAction(
     }
 }
 
-/** Ink recognition is explicit: the user chooses prose or formula rather than trusting a guess. */
+/**
+ * Hand it to the math engine: the ∫ glyph and the word **Math**.
+ *
+ * **One button, not a menu.** This was *Recognize* opening a drop-down of "As text" and "As equation";
+ * the text option was removed on 2026-08-09 at the user's request, and one item behind a menu is a tap
+ * spent on a choice that no longer exists. So the remaining action is promoted to the bar itself and
+ * named for what it gets you rather than for the machinery — you press Math and the panel comes back
+ * with the equation and the things SymPy can do to it, which is the same word that panel's own
+ * sections use.
+ *
+ * The glyph is Σ ([MaterialSymbols.Functions]), **not** the ƒ the Insert tab's Equation button uses —
+ * one letter apart in Material's naming and two different jobs: ƒ means "an equation goes here", Σ
+ * means "hand this ink to the math engine". It carries the meaning at a glance, which matters more
+ * here than in the ribbon: this bar floats over the page and is read in a hurry. `Group` and
+ * `Select all` beside it stay icon-free for the opposite reason — there is no symbol that reads as
+ * "select all" without a caption.
+ *
+ * Absent, not disabled, when the formula model is not installed: there is nothing to hand the ink to.
+ */
 @Composable
 internal fun RowScope.RecognitionAction(
-    textAvailable: Boolean,
     formulaAvailable: Boolean,
     enabled: Boolean,
-    onText: () -> Unit,
     onFormula: () -> Unit,
 ) {
-    if (!textAvailable && !formulaAvailable) return
-    var open by remember { mutableStateOf(false) }
-    Box {
-        TextButton(
-            onClick = { open = true },
-            enabled = enabled,
-            contentPadding = PaddingValues(horizontal = 7.dp),
-            modifier = Modifier.height(32.dp).testTag(OBJECT_RECOGNIZE_TAG),
-        ) {
-            Text(
-                text = "Recognize",
-                color = if (enabled) Color(0xFFE8EAED) else Color(0xFF9AA0A6),
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            if (textAvailable) {
-                DropdownMenuItem(
-                    text = { Text("As text") },
-                    onClick = {
-                        open = false
-                        onText()
-                    },
-                    modifier = Modifier.testTag(OBJECT_RECOGNIZE_TEXT_TAG),
-                )
-            }
-            if (formulaAvailable) {
-                DropdownMenuItem(
-                    text = { Text("As equation") },
-                    onClick = {
-                        open = false
-                        onFormula()
-                    },
-                    modifier = Modifier.testTag(OBJECT_RECOGNIZE_FORMULA_TAG),
-                )
-            }
-        }
+    if (!formulaAvailable) return
+    val tint = if (enabled) Color(0xFFE8EAED) else Color(0xFF9AA0A6)
+    TextButton(
+        onClick = onFormula,
+        enabled = enabled,
+        contentPadding = PaddingValues(horizontal = 7.dp),
+        modifier = Modifier.height(32.dp).testTag(OBJECT_RECOGNIZE_TAG),
+    ) {
+        Icon(
+            imageVector = MaterialSymbols.Functions,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(5.dp))
+        Text(
+            text = "Math",
+            color = tint,
+            style = MaterialTheme.typography.labelSmall,
+        )
     }
 }
 

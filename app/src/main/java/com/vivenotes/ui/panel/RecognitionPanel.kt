@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -64,7 +66,25 @@ internal object RecognitionPanelTags {
     fun action(id: String) = "recognition-math-action-$id"
 }
 
-/** Editable recognition output, with a native RaTeX preview directly below formula source. */
+/**
+ * How big the in-button indicator is drawn.
+ *
+ * Not `LoadingIndicatorDefaults.IndicatorSize`, which is sized for a wait that owns its own space.
+ * Inside an `OutlinedButton` it stands in for a text label, so it matches roughly what that label
+ * occupied — a full-size indicator would resize the button the moment an action started running.
+ */
+private val IN_BUTTON_INDICATOR = 20.dp
+
+/**
+ * Editable recognition output, with a native RaTeX preview directly below formula source.
+ *
+ * **The waits are M3 Expressive loading indicators**, which is why this file opts in to
+ * [ExperimentalMaterial3ExpressiveApi] and why `gradle/libs.versions.toml` pins material3 to a
+ * pre-release: `ContainedLoadingIndicator` ships in no stable material3 and in no Compose BOM. The
+ * catalog comment has the evidence and the exit condition; the opt-in is per-composable rather than a
+ * module-wide compiler flag so the blast radius of the experimental API is visible at each use.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ColumnScope.RecognitionPanelContent(
     state: RecognitionPanelState,
@@ -80,7 +100,7 @@ internal fun ColumnScope.RecognitionPanelContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            CircularProgressIndicator(
+            ContainedLoadingIndicator(
                 modifier = Modifier.testTag(RecognitionPanelTags.PROGRESS),
             )
             Text("Processing selected ink on this device…")
@@ -150,6 +170,7 @@ internal fun ColumnScope.RecognitionPanelContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ColumnScope.FormulaToolsContent(
     state: FormulaToolsState,
@@ -163,7 +184,7 @@ private fun ColumnScope.FormulaToolsContent(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.testTag(RecognitionPanelTags.MATH_ANALYZING),
             ) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                ContainedLoadingIndicator()
                 Text("Understanding the LaTeX with SymPy…")
             }
         }
@@ -212,7 +233,10 @@ private fun ColumnScope.FormulaToolsContent(
                     modifier = Modifier.testTag(RecognitionPanelTags.action(action.id)),
                 ) {
                     if (state.executingActionId == action.id) {
-                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        // The uncontained one, deliberately: this sits *inside* a button, which is
+                        // already a container, and the contained form would be a box in a box. Sized
+                        // down to the label it replaces so the button does not jump when it appears.
+                        LoadingIndicator(Modifier.size(IN_BUTTON_INDICATOR))
                     } else {
                         Text(action.label)
                     }
