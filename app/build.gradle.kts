@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.chaquopy.python)
 }
 
 android {
@@ -43,6 +44,21 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+}
+
+chaquopy {
+    defaultConfig {
+        // 3.13 has current arm64/x86-64 support and Chaquopy's 16 KB-page compatibility fixes.
+        version = "3.13"
+        // Avoid the developer machine's `uv` shim: its symlink location produces a broken venv
+        // prefix when Chaquopy invokes `python -m venv`.
+        buildPython("/usr/bin/python3.13")
+        pip {
+            install("sympy==1.14.0")
+            // SymPy 1.14's generated LaTeX parser requires this ANTLR generation line.
+            install("antlr4-python3-runtime==4.11.1")
+        }
     }
 }
 

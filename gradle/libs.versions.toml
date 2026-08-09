@@ -20,6 +20,7 @@ lifecycle = "2.8.7"
 room = "2.8.1"
 ratex = "0.1.13"
 onnxRuntime = "1.27.0"
+chaquopy = "17.0.0"
 
 [libraries]
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
@@ -59,3 +60,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+chaquopy-python = { id = "com.chaquo.python", version.ref = "chaquopy" }

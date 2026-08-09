@@ -6,9 +6,11 @@ import com.vivenotes.ai.OnnxInkRecognitionEngine
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PenSettingsStore
+import com.vivenotes.data.StarterInkPageFixture
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.richtext.FontRegistry
+import com.vivenotes.math.SympyMathEngine
 
 /**
  * Manual dependency container.
@@ -19,12 +21,18 @@ import com.vivenotes.richtext.FontRegistry
 class NotesApplication : Application() {
 
     val database: NotesDatabase by lazy { NotesDatabase.create(this) }
-    val repository: NotesRepository by lazy { NotesRepository(database) }
+    val repository: NotesRepository by lazy {
+        NotesRepository(
+            database,
+            starterInkPage = StarterInkPageFixture.load(this),
+        )
+    }
     val editorDefaults: EditorDefaultsStore by lazy { EditorDefaultsStore(this) }
     val viewSettings: ViewSettingsStore by lazy { ViewSettingsStore(this) }
     val penSettings: PenSettingsStore by lazy { PenSettingsStore(this) }
     val aiModels: AiModelStore by lazy { AiModelStore(this) }
     val recognitionEngine: OnnxInkRecognitionEngine by lazy { OnnxInkRecognitionEngine(aiModels) }
+    val mathEngine: SympyMathEngine by lazy { SympyMathEngine(this) }
 
     override fun onCreate() {
         super.onCreate()

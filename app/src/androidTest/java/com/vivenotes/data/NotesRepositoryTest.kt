@@ -5,7 +5,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -107,6 +109,62 @@ class NotesRepositoryTest {
         assertTrue((load as PageLoad.Loaded).doc.plainText().isBlank())
     }
 
+    @Test
+    fun aFreshInstallSeedsTheBundledTabletInkAsPageTwo() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val fixture = StarterInkPageFixture.load(context)
+        repository = NotesRepository(db, starterInkPage = fixture)
+
+        repository.seedIfEmpty()
+
+        val pages = db.query(
+            "SELECT id, title FROM pages WHERE deletedAt IS NULL ORDER BY sortIndex",
+            emptyArray(),
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) add(cursor.getString(0) to cursor.getString(1))
+            }
+        }
+        assertEquals(listOf("Welcome", "Recognition Test"), pages.map(Pair<String, String>::second))
+
+        val fixturePageId = pages[1].first
+        val strokes = repository.inkFor(fixturePageId)
+        val erases = repository.partialErasesFor(fixturePageId)
+        assertEquals(66, strokes.size)
+        assertEquals(7, erases.size)
+        assertEquals(15, erases.sumOf { it.targets.size })
+        assertTrue(strokes.all { it.pageId == fixturePageId && it.deletedAt == null })
+        assertTrue(erases.all { it.erase.pageId == fixturePageId && it.erase.deletedAt == null })
+
+        val sourcesBySequence = fixture.strokes.associateBy { it.seq }
+        strokes.forEach { stored ->
+            val source = sourcesBySequence.getValue(stored.seq)
+            assertNotEquals("source ids must be remapped per install", source.id, stored.id)
+            assertEquals(source.brushFamily, stored.brushFamily)
+            assertEquals(source.sizeDp, stored.sizeDp)
+            assertEquals(source.minX, stored.minX)
+            assertEquals(source.minY, stored.minY)
+            assertEquals(source.maxX, stored.maxX)
+            assertEquals(source.maxY, stored.maxY)
+            assertArrayEquals(source.pointsHex.hexBytesForTest(), stored.points)
+        }
+        fixture.erases.sortedBy { it.createdAt }.zip(erases).forEach { (source, stored) ->
+            assertNotEquals("source erase ids must be remapped per install", source.id, stored.erase.id)
+            assertEquals(source.mode, stored.erase.mode)
+            assertEquals(source.sizeDp, stored.erase.sizeDp)
+            assertEquals(source.createdAt, stored.erase.createdAt)
+            assertArrayEquals(source.pointsHex.hexBytesForTest(), stored.erase.points)
+            assertEquals(
+                fixture.eraseTargets.count { it.eraseId == source.id },
+                stored.targets.size,
+            )
+        }
+
+        val load = repository.loadDoc(fixturePageId)
+        assertTrue(load is PageLoad.Loaded)
+        assertTrue((load as PageLoad.Loaded).doc.plainText().isBlank())
+    }
+
     /** Deletion is soft, so a future sync can replicate it rather than silently resurrecting rows. */
     @Test
     fun deletingAPageLeavesATombstone() = runBlocking {
@@ -122,4 +180,9 @@ class NotesRepositoryTest {
             assertTrue("deletedAt was not stamped", !it.isNull(0))
         }
     }
+}
+
+private fun String.hexBytesForTest(): ByteArray = ByteArray(length / 2) { index ->
+    val offset = index * 2
+    ((this[offset].digitToInt(16) shl 4) or this[offset + 1].digitToInt(16)).toByte()
 }

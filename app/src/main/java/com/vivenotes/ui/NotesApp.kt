@@ -21,6 +21,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,6 +52,8 @@ import com.vivenotes.ai.renderInkSelection
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.model.PageStyle
+import com.vivenotes.math.FormulaToolsState
+import com.vivenotes.math.MathEngine
 import com.vivenotes.ui.editor.DrawActions
 import com.vivenotes.ui.editor.AiActions
 import com.vivenotes.ui.editor.EditorPane
@@ -71,6 +74,7 @@ import com.vivenotes.ui.shell.SectionTabsBar
 import com.vivenotes.ui.theme.LocalCanvasColors
 import com.vivenotes.ui.theme.canvasColorsFor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -82,12 +86,14 @@ private val MEDIUM_BREAKPOINT = 720.dp
 
 /** Above this the notebook rail is permanently visible alongside the other two panes. */
 private val EXPANDED_BREAKPOINT = 1040.dp
+private const val MATH_ANALYSIS_DEBOUNCE_MS = 350L
 
 @Composable
 fun NotesApp(
     viewModel: NotesViewModel,
     aiModelStore: AiModelStore,
     recognitionEngine: InkRecognitionEngine,
+    mathEngine: MathEngine,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
@@ -120,6 +126,7 @@ fun NotesApp(
     var openPane by remember { mutableStateOf<ToolPane?>(null) }
     var recognition by remember { mutableStateOf<RecognitionPanelState?>(null) }
     var recognitionRunning by remember { mutableStateOf(false) }
+    var formulaTools by remember { mutableStateOf(FormulaToolsState()) }
 
     fun recognize(
         selection: com.vivenotes.ink.CanvasSelection,
@@ -152,6 +159,57 @@ fun NotesApp(
             } finally {
                 bitmap?.recycle()
                 recognitionRunning = false
+            }
+        }
+    }
+
+    val formulaLatex = recognition
+        ?.takeIf { it.kind == RecognitionOutputKind.Formula && !it.running && it.error == null }
+        ?.value
+        .orEmpty()
+    LaunchedEffect(formulaLatex) {
+        formulaTools = FormulaToolsState(sourceLatex = formulaLatex)
+        if (formulaLatex.isBlank()) return@LaunchedEffect
+        delay(MATH_ANALYSIS_DEBOUNCE_MS)
+        formulaTools = FormulaToolsState(sourceLatex = formulaLatex, analyzing = true)
+        formulaTools = try {
+            val analysis = mathEngine.analyze(formulaLatex)
+            FormulaToolsState(
+                sourceLatex = formulaLatex,
+                analysis = analysis.takeIf { it.error == null },
+                error = analysis.error,
+            )
+        } catch (failure: Exception) {
+            FormulaToolsState(
+                sourceLatex = formulaLatex,
+                error = failure.message ?: "The local math engine could not start.",
+            )
+        }
+    }
+
+    fun executeMathAction(actionId: String) {
+        val source = formulaLatex.takeIf { it.isNotBlank() } ?: return
+        if (formulaTools.executingActionId != null) return
+        formulaTools = formulaTools.copy(executingActionId = actionId, result = null, error = null)
+        recognitionScope.launch {
+            val result = try {
+                mathEngine.execute(source, actionId)
+            } catch (failure: Exception) {
+                null.also {
+                    if (formulaLatex == source) {
+                        formulaTools = formulaTools.copy(
+                            executingActionId = null,
+                            error = failure.message ?: "The math operation failed.",
+                        )
+                    }
+                }
+            }
+            if (result != null && formulaLatex == source) {
+                formulaTools = formulaTools.copy(
+                    executingActionId = null,
+                    result = result.takeIf { it.error == null },
+                    error = result.error,
+                )
             }
         }
     }
@@ -326,6 +384,7 @@ fun NotesApp(
                                     aiModels = aiModels,
                                     onDownloadFormula = aiModelStore::downloadFormula,
                                     recognition = recognition,
+                                    formulaTools = formulaTools,
                                     onRecognitionChange = { value ->
                                         recognition = recognition?.copy(value = value)
                                     },
@@ -336,6 +395,10 @@ fun NotesApp(
                                             "Recognized text"
                                         }
                                         copyRecognizedText(context, label, value)
+                                    },
+                                    onMathAction = ::executeMathAction,
+                                    onCopyMathResult = { value ->
+                                        copyRecognizedText(context, "SymPy result", value)
                                     },
                                     viewModel = viewModel,
                                     onClose = { openPane = null },
@@ -378,6 +441,7 @@ fun NotesApp(
                                     aiModels = aiModels,
                                     onDownloadFormula = aiModelStore::downloadFormula,
                                     recognition = recognition,
+                                    formulaTools = formulaTools,
                                     onRecognitionChange = { value ->
                                         recognition = recognition?.copy(value = value)
                                     },
@@ -388,6 +452,10 @@ fun NotesApp(
                                             "Recognized text"
                                         }
                                         copyRecognizedText(context, label, value)
+                                    },
+                                    onMathAction = ::executeMathAction,
+                                    onCopyMathResult = { value ->
+                                        copyRecognizedText(context, "SymPy result", value)
                                     },
                                     viewModel = viewModel,
                                     onClose = { openPane = null },
@@ -455,8 +523,11 @@ private fun ToolPaneHost(
     aiModels: AiModelsState,
     onDownloadFormula: () -> Unit,
     recognition: RecognitionPanelState?,
+    formulaTools: FormulaToolsState,
     onRecognitionChange: (String) -> Unit,
     onCopyRecognition: (String) -> Unit,
+    onMathAction: (String) -> Unit,
+    onCopyMathResult: (String) -> Unit,
     viewModel: NotesViewModel,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -477,8 +548,11 @@ private fun ToolPaneHost(
             ToolPane.Recognition -> recognition?.let { result ->
                 RecognitionPanelContent(
                     state = result,
+                    formulaTools = formulaTools,
                     onValueChange = onRecognitionChange,
                     onCopy = onCopyRecognition,
+                    onMathAction = onMathAction,
+                    onCopyMathResult = onCopyMathResult,
                 )
             } ?: Text(
                 text = "Select ink and choose Recognize to see a result here.",

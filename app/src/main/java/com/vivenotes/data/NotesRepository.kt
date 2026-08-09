@@ -56,6 +56,8 @@ class NotesRepository(
      * to use a compact binary codec independently.
      */
     private val codec: TextDocumentCodec = DocumentCodecs.default,
+    /** Optional real-ink page bundled by the application for clean-install recognition tests. */
+    private val starterInkPage: StarterInkPageFixture? = null,
 ) {
 
     private val notebooks = db.notebookDao()
@@ -314,5 +316,15 @@ class NotesRepository(
                 ),
             ),
         )
+
+        starterInkPage?.let { fixture ->
+            val fixturePageId = createPage(gettingStarted, fixture.title)
+            val rows = fixture.materialize(fixturePageId)
+            db.withTransaction {
+                ink.insert(rows.strokes)
+                rows.erases.forEach { inkErases.insert(it) }
+                inkErases.insertTargets(rows.eraseTargets)
+            }
+        }
     }
 }

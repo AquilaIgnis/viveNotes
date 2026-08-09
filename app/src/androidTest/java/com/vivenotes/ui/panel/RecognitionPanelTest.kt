@@ -12,6 +12,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import com.vivenotes.ui.copyRecognizedText
+import com.vivenotes.math.FormulaToolsState
+import com.vivenotes.math.MathAction
+import com.vivenotes.math.MathAnalysis
+import com.vivenotes.math.MathGraph
+import com.vivenotes.math.MathOperationResult
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -87,17 +92,83 @@ class RecognitionPanelTest {
         }
     }
 
+    @Test
+    fun parsedEquationShowsInterpretationAndRelevantActions() {
+        var action = ""
+        setPanel(
+            state = RecognitionPanelState(
+                kind = RecognitionOutputKind.Formula,
+                value = "x^2-4=0",
+            ),
+            formulaTools = FormulaToolsState(
+                sourceLatex = "x^2-4=0",
+                analysis = MathAnalysis(
+                    normalizedLatex = "x^2 - 4 = 0",
+                    summary = "Equation",
+                    variables = listOf("x"),
+                    actions = listOf(
+                        MathAction("solve", "Solve"),
+                        MathAction("graph", "Graph"),
+                    ),
+                ),
+            ),
+            onMathAction = { action = it },
+        )
+
+        compose.onNodeWithText("Understood as").assertExists()
+        compose.onNodeWithText("Equation · Variables: x").assertExists()
+        compose.onNodeWithTag(RecognitionPanelTags.INTERPRETATION).assertExists()
+        compose.onNodeWithTag(RecognitionPanelTags.action("solve")).performClick()
+        assertEquals("solve", action)
+    }
+
+    @Test
+    fun operationResultShowsRenderedLatexAndNativeGraph() {
+        setPanel(
+            state = RecognitionPanelState(
+                kind = RecognitionOutputKind.Formula,
+                value = "x^2",
+            ),
+            formulaTools = FormulaToolsState(
+                sourceLatex = "x^2",
+                analysis = MathAnalysis(
+                    normalizedLatex = "x^2",
+                    summary = "Expression",
+                    variables = listOf("x"),
+                    actions = listOf(MathAction("graph", "Graph")),
+                ),
+                result = MathOperationResult(
+                    title = "Graph",
+                    latex = "x^2",
+                    graph = MathGraph(
+                        xLabel = "x",
+                        yLabel = "y",
+                        xValues = listOf(-1.0, 0.0, 1.0),
+                        yValues = listOf(1.0, 0.0, 1.0),
+                    ),
+                ),
+            ),
+        )
+
+        compose.onNodeWithTag(RecognitionPanelTags.RESULT).assertExists()
+        compose.onNodeWithTag(RecognitionPanelTags.GRAPH).assertExists()
+    }
+
     private fun setPanel(
         state: RecognitionPanelState,
+        formulaTools: FormulaToolsState = FormulaToolsState(),
         onValueChange: (String) -> Unit = {},
+        onMathAction: (String) -> Unit = {},
     ) {
         compose.setContent {
             ViveNotesTheme {
                 Column {
                     RecognitionPanelContent(
                         state = state,
+                        formulaTools = formulaTools,
                         onValueChange = onValueChange,
                         onCopy = {},
+                        onMathAction = onMathAction,
                     )
                 }
             }
