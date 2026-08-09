@@ -11,8 +11,8 @@ import androidx.lifecycle.ViewModelProvider
 import com.vivenotes.ui.NotesApp
 import com.vivenotes.ui.NotesViewModel
 import com.vivenotes.ui.handleShortcut
+import com.vivenotes.ui.claimsStylusButton
 import com.vivenotes.ui.handleStylusButton
-import com.vivenotes.ui.isStylusButton
 import com.vivenotes.ui.shortcutGroups
 import com.vivenotes.ui.theme.ViveNotesTheme
 
@@ -51,8 +51,9 @@ class MainActivity : ComponentActivity() {
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
         // Claimed but not acted on: a stylus button is handled at up — `ui/StylusButtons.kt` says
-        // why. Claiming the down-press keeps anything else from acting on the same click.
-        isStylusButton(keyCode) ||
+        // why. Claiming the down-press keeps anything else from acting on the same click. Only a
+        // *bound* press is claimed, or an unbound one would be swallowed rather than fall through.
+        viewModel.claimsStylusButton(keyCode) ||
             viewModel.handleShortcut(keyCode, event) ||
             super.onKeyDown(keyCode, event)
 

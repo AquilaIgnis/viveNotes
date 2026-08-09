@@ -55,6 +55,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.shell.swipeRight
@@ -142,24 +143,85 @@ fun ToolPanel(
     }
 }
 
-/** A group of related settings, named the way the reference names them. */
+/**
+ * A group of related settings, named the way the reference names them.
+ *
+ * [info] adds the same (i) a single setting row can carry, for an explanation that belongs to the
+ * whole group rather than to one row of it — the pen-button bindings are three rows explained by one
+ * fact about how a pen reports its clicks.
+ */
 @Composable
-fun ColumnScope.PanelSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+fun ColumnScope.PanelSection(
+    title: String,
+    info: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    var explaining by remember { mutableStateOf(false) }
     Spacer(Modifier.height(10.dp))
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        if (info != null) {
+            Spacer(Modifier.width(6.dp))
+            InfoIcon(title) { explaining = !explaining }
+        }
+    }
+    if (info != null && explaining) {
+        PanelExplanation(info)
+    }
     Spacer(Modifier.height(4.dp))
     content()
     Spacer(Modifier.height(6.dp))
 }
 
-/** One labelled control. The label column is fixed so every field in the pane lines up. */
+/**
+ * The (i) that reveals a line of explanation in place, rather than floating a tooltip: "Hold to draw
+ * shape" is not self-evident, and a description that has to be hovered is no use on a tablet.
+ *
+ * Shared by [PanelSetting] and [PanelSection] so the affordance is one size, one colour and one
+ * content description wherever it appears. The expanded state stays with the caller, which is what
+ * lets a row and its section disclose independently.
+ */
 @Composable
-fun PanelRow(label: String, content: @Composable () -> Unit) {
+private fun InfoIcon(label: String, onClick: () -> Unit) {
+    Icon(
+        imageVector = MaterialSymbols.Info,
+        contentDescription = "About $label",
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .size(17.dp)
+            .clip(RoundedCornerShape(50))
+            .clickable(onClick = onClick),
+    )
+}
+
+@Composable
+private fun PanelExplanation(info: String) {
+    Text(
+        text = info,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 6.dp),
+    )
+}
+
+/**
+ * One labelled control. The label column is fixed so every field in the pane lines up.
+ *
+ * [labelWidth] is per-*group*, not per-row: widening it for one row of a group would break the
+ * alignment the fixed column exists for. The default fits Paper Size, whose labels are one word; the
+ * pen-button bindings name a click count ("Double click") and need more.
+ */
+@Composable
+fun PanelRow(
+    label: String,
+    labelWidth: Dp = LABEL_WIDTH,
+    content: @Composable () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -170,11 +232,14 @@ fun PanelRow(label: String, content: @Composable () -> Unit) {
             text = "$label:",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(LABEL_WIDTH),
+            modifier = Modifier.width(labelWidth),
         )
         content()
     }
 }
+
+/** Wide enough for "Double click:" — see [PanelRow]. */
+val WIDE_LABEL_WIDTH = 104.dp
 
 /** A drop-down that fills the field column, for choices with names rather than numbers. */
 @Composable
@@ -296,9 +361,7 @@ fun PanelMeasure(
  *
  * The Pen pane is laid out this way rather than with [PanelRow]'s fixed label column, because its
  * controls are switches and chips of different widths that the reference aligns to the margin —
- * `docs/references/pen-tooltip.jpeg`. [info] adds the (i) beside the label, which reveals a line of
- * explanation in place rather than floating a tooltip: "Hold to draw shape" is not self-evident, and
- * a description that has to be hovered is no use on a tablet.
+ * `docs/references/pen-tooltip.jpeg`. [info] adds the (i) beside the label — see [InfoIcon].
  */
 @Composable
 fun PanelSetting(label: String, info: String? = null, trailing: @Composable () -> Unit) {
@@ -319,26 +382,13 @@ fun PanelSetting(label: String, info: String? = null, trailing: @Composable () -
                 )
                 if (info != null) {
                     Spacer(Modifier.width(6.dp))
-                    Icon(
-                        imageVector = MaterialSymbols.Info,
-                        contentDescription = "About $label",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .size(17.dp)
-                            .clip(RoundedCornerShape(50))
-                            .clickable { explaining = !explaining },
-                    )
+                    InfoIcon(label) { explaining = !explaining }
                 }
             }
             trailing()
         }
         if (info != null && explaining) {
-            Text(
-                text = info,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 6.dp),
-            )
+            PanelExplanation(info)
         }
     }
 }

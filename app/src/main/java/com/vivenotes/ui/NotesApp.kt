@@ -41,6 +41,7 @@ import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.StylusButtonMap
 import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
@@ -113,6 +114,7 @@ fun NotesApp(
     val rulerOut by viewModel.rulerOut.collectAsStateWithLifecycle()
     val tool by viewModel.tool.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
+    val stylusButtons by viewModel.stylusButtons.collectAsStateWithLifecycle()
     val canvasUndoState by viewModel.canvasUndoState.collectAsStateWithLifecycle()
     val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
     val strokes by viewModel.strokes.collectAsStateWithLifecycle()
@@ -384,6 +386,7 @@ fun NotesApp(
                                     pane = toolPane,
                                     style = state.pageStyle,
                                     allowFinger = drawWithFinger,
+                                    stylusButtons = stylusButtons,
                                     aiModels = aiModels,
                                     onDownloadFormula = aiModelStore::downloadFormula,
                                     recognition = recognition,
@@ -442,6 +445,7 @@ fun NotesApp(
                                     pane = toolPane,
                                     style = state.pageStyle,
                                     allowFinger = drawWithFinger,
+                                    stylusButtons = stylusButtons,
                                     aiModels = aiModels,
                                     onDownloadFormula = aiModelStore::downloadFormula,
                                     recognition = recognition,
@@ -524,8 +528,10 @@ private fun paneBehind(pane: CompactPane): CompactPane = when (pane) {
 private fun ToolPaneHost(
     pane: ToolPane,
     style: PageStyle,
-    /** Hardware pane. A property of this device, which is the whole rule for what that pane holds. */
+    /** Hardware pane, a property of this device — see `HardwarePanelContent` on the pane's two scopes. */
     allowFinger: Boolean,
+    /** Hardware pane, a property of the user — `docs/stylusPlan.md` SB3. */
+    stylusButtons: StylusButtonMap,
     aiModels: AiModelsState,
     onDownloadFormula: () -> Unit,
     recognition: RecognitionPanelState?,
@@ -554,6 +560,8 @@ private fun ToolPaneHost(
             ToolPane.Hardware -> HardwarePanelContent(
                 allowFinger = allowFinger,
                 onSetDrawWithFinger = viewModel::setDrawWithFinger,
+                buttons = stylusButtons,
+                onSetButtons = viewModel::setStylusButtons,
             )
             ToolPane.Recognition -> recognition?.let { result ->
                 RecognitionPanelContent(

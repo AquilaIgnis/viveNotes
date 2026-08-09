@@ -38,6 +38,8 @@ import com.vivenotes.data.PenPreset
 import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.StylusAction
+import com.vivenotes.data.StylusButtonMap
 import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
@@ -361,6 +363,17 @@ class NotesViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /**
+     * What the pen's barrel-button clicks do — [StylusButtonMap], and `docs/stylusPlan.md`.
+     *
+     * `Eagerly` and not lazily, unlike most of the settings flows: key dispatch reads `.value`
+     * synchronously on the UI thread from `MainActivity.onKeyDown`, which can happen before anything
+     * has collected this. The initial value is the default map, which is the hard-coded behaviour the
+     * bindings replaced — so a press arriving in that window does the old thing rather than nothing.
+     */
+    val stylusButtons: StateFlow<StylusButtonMap> = penSettingsStore.stylusButtons
+        .stateIn(viewModelScope, SharingStarted.Eagerly, StylusButtonMap())
+
+    /**
      * The tool in hand. Held here rather than in preferences: it is where you are, not what you
      * have, and an app that reopens with an eraser armed would be startling.
      *
@@ -386,17 +399,32 @@ class NotesViewModel(
     }
 
     /**
-     * A stylus barrel-button press — `ui/StylusButtons.kt` decides what it arms and says why.
+     * Runs the action a stylus barrel-button press is bound to — `ui/StylusButtons.kt` resolves which
+     * one that is and says why the resolution lives there.
      *
      * Stateless, because the pen has already done the counting: a double click arrives as its own
      * keycode rather than as two presses this had to time.
      *
-     * The Draw tab comes forward on every press. A button that silently changes what the pen does,
-     * while the ribbon still shows Home, is a tool swap you have to discover by drawing.
+     * **Only a tool action brings the Draw tab forward** — `docs/stylusPlan.md` SB7. A button that
+     * silently changes what the pen does, while the ribbon still shows Home, is a tool swap you have
+     * to discover by drawing; an undo is already visible on the page, and moving the ribbon for it
+     * would be a second change nobody asked for.
+     *
+     * **A bound Undo is always *canvas* undo** (SB6), even with a caret in a text container. Ctrl+Z is
+     * ambiguous on purpose — the focused `EditText` takes it for its own text undo and only the
+     * presses it declines reach the canvas — but no view claims a stylus keycode, so this reaches the
+     * page from anywhere. That is the right answer for a button on a pen, and an asymmetry with the
+     * keyboard worth knowing about.
      */
-    fun pressStylusButton(press: StylusPress) {
-        selectTool(nextToolForStylusButton(_tool.value, press))
-        selectRibbonTab(RibbonTab.Draw)
+    fun pressStylusButton(action: StylusAction) {
+        when (action) {
+            StylusAction.Undo -> undoCanvas()
+            StylusAction.Redo -> redoCanvas()
+            else -> action.toolFrom(_tool.value)?.let { next ->
+                selectTool(next)
+                selectRibbonTab(RibbonTab.Draw)
+            }
+        }
     }
 
     /** The open page's ink, in draw order. Empty while no page is open. */
@@ -999,6 +1027,10 @@ class NotesViewModel(
 
     fun setDrawWithFinger(enabled: Boolean) {
         viewModelScope.launch { penSettingsStore.setDrawWithFinger(enabled) }
+    }
+
+    fun setStylusButtons(map: StylusButtonMap) {
+        viewModelScope.launch { penSettingsStore.setStylusButtons(map) }
     }
 
     fun updateEraser(settings: EraserSettings) {

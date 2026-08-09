@@ -54,7 +54,6 @@ object MaterialSymbols {
     val Memory: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_memory)
     val Menu: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_menu)
     val MenuOpen: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_menu_open)
-    val Mouse: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_mouse)
     val NoteAdd: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_note_add)
     val Redo: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_redo)
     val Remove: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_remove)

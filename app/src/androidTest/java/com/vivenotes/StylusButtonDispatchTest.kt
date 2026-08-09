@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -84,10 +85,47 @@ class StylusButtonDispatchTest {
         compose.onNodeWithContentDescription("Lasso").assertIsDisplayed()
     }
 
+    /**
+     * A press bound to nothing is **not consumed, at either end** — `docs/stylusPlan.md` SB5.
+     *
+     * Three clicks is unbound by default, and the failure this guards is the tempting one: claiming
+     * every stylus keycode at key-down while acting only on the bound ones at up. That would leave an
+     * unbound press swallowed rather than falling through to whatever else wanted it, which is a
+     * property the feature deliberately has and which nothing else would notice.
+     */
+    @Test
+    fun anUnboundClickCountIsLeftToFallThrough() {
+        compose.runOnUiThread {
+            assertFalse(
+                "an unbound press must not be claimed at down",
+                compose.activity.onKeyDown(
+                    VENDOR_THREE_CLICK,
+                    KeyEvent(KeyEvent.ACTION_DOWN, VENDOR_THREE_CLICK),
+                ),
+            )
+            assertFalse(
+                "an unbound press must not be consumed at up",
+                compose.activity.onKeyUp(
+                    VENDOR_THREE_CLICK,
+                    KeyEvent(KeyEvent.ACTION_UP, VENDOR_THREE_CLICK),
+                ),
+            )
+        }
+        compose.waitForIdle()
+
+        // And it did nothing: still on Home, with no tool armed by it.
+        compose.onNodeWithContentDescription("Pen 1").assertDoesNotExist()
+    }
+
     private fun pressStylusButton(keyCode: Int = KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY) {
         compose.runOnUiThread {
             compose.activity.onKeyUp(keyCode, KeyEvent(KeyEvent.ACTION_UP, keyCode))
         }
         compose.waitForIdle()
+    }
+
+    private companion object {
+        /** `PEN_THREE_CLICK` on the Lenovo pen — `docs/stylusCodes.md`. */
+        const val VENDOR_THREE_CLICK = 602
     }
 }

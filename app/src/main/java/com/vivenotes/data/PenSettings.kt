@@ -359,6 +359,60 @@ sealed interface DrawTool {
 }
 
 /**
+ * What one press of the stylus's barrel button does — `docs/stylusPlan.md` SB2.
+ *
+ * Every entry is something the ribbon can already do, reached through a view-model method that
+ * already exists: this is a second way to reach a capability, never a new one. What is *not* here is
+ * argued in SB2 — the placement tools are left out because a barrel button is pressed with the pen in
+ * the air, and arming one by accident drops an object on the next touch.
+ *
+ * [TogglePenEraser] is not a tool but a rule, and has to stay an action of its own (SB2a): flattening
+ * it into [Eraser] would hand the user a button that arms the eraser and then has nothing left to do.
+ *
+ * Serialized **by name**, so renaming an entry is a stored-value change: an old blob naming the
+ * entry that used to exist decodes to the field's default rather than to its replacement.
+ */
+@Serializable
+enum class StylusAction(val label: String) {
+    /** Unbound. The keycode is left unclaimed so it falls through — SB5, and it is the default for a
+     * press nothing has asked for. */
+    None("Nothing"),
+    TogglePenEraser("Pen / eraser"),
+    CyclePens("Next pen"),
+    Pen1("Pen 1"),
+    Pen2("Pen 2"),
+    Pen3("Pen 3"),
+    Highlighter("Highlighter"),
+    Eraser("Eraser"),
+    Lasso("Lasso select"),
+    Undo("Undo"),
+    Redo("Redo"),
+}
+
+/**
+ * What each click count does — `docs/stylusPlan.md` SB1 and SB3.
+ *
+ * **The unit is a completed click count, not "the button".** The pen reports one, two and three
+ * clicks as three separate keycodes because its firmware has already done the timing, so there are
+ * exactly three fields here and nothing anywhere that measures an interval.
+ *
+ * A property of **the user**, not of this device (SB3): "double click means highlighter" is a working
+ * habit, the same kind of fact as "pen 2 is red", and it should follow its owner to another tablet.
+ * Carrying it there is safe — a pen with no triple click simply never fires that binding, so a
+ * mapping is never *wrong* on unfamiliar hardware, only unused.
+ *
+ * **The defaults are exactly the behaviour the hard-coded version shipped with** (SB4). Someone who
+ * never opens the Hardware pane must not be able to tell that this became configurable.
+ */
+@Serializable
+data class StylusButtonMap(
+    val single: StylusAction = StylusAction.TogglePenEraser,
+    val double: StylusAction = StylusAction.Lasso,
+    /** Unbound, so a third click still falls through to whatever else wants it. */
+    val triple: StylusAction = StylusAction.None,
+)
+
+/**
  * Persists the three pens across launches.
  *
  * One JSON blob per pen rather than a preference key per field: a pen is nine values that are only
@@ -418,7 +472,7 @@ class PenSettingsStore(context: Context) {
     suspend fun addPaletteColor(argb: Int) {
         store.edit { prefs ->
             val current = prefs[PALETTE]?.let(::decodePalette) ?: PEN_COLORS
-            prefs[PALETTE] = json.encodeToString(
+            prefs[PALETTE] = penSettingsJson.encodeToString(
                 ListSerializer(Int.serializer()),
                 current.withColorInFront(argb),
             )
@@ -442,35 +496,47 @@ class PenSettingsStore(context: Context) {
         store.edit { it[DRAW_WITH_FINGER] = enabled }
     }
 
+    /**
+     * What the barrel button's click counts do — see [StylusButtonMap], which explains why this is a
+     * property of the user rather than of the device it is configured on.
+     */
+    val stylusButtons: Flow<StylusButtonMap> = store.data.map { prefs ->
+        prefs[STYLUS_BUTTONS]?.let(::decodeStylusButtons) ?: StylusButtonMap()
+    }
+
+    suspend fun setStylusButtons(map: StylusButtonMap) {
+        store.edit { it[STYLUS_BUTTONS] = penSettingsJson.encodeToString(StylusButtonMap.serializer(), map) }
+    }
+
     suspend fun setPen(index: Int, preset: PenPreset) {
-        store.edit { it[key(index)] = json.encodeToString(PenPreset.serializer(), preset) }
+        store.edit { it[key(index)] = penSettingsJson.encodeToString(PenPreset.serializer(), preset) }
     }
 
     suspend fun setEraser(settings: EraserSettings) {
-        store.edit { it[ERASER] = json.encodeToString(EraserSettings.serializer(), settings) }
+        store.edit { it[ERASER] = penSettingsJson.encodeToString(EraserSettings.serializer(), settings) }
     }
 
     suspend fun setHighlighter(settings: HighlighterSettings) {
         store.edit {
-            it[HIGHLIGHTER] = json.encodeToString(HighlighterSettings.serializer(), settings)
+            it[HIGHLIGHTER] = penSettingsJson.encodeToString(HighlighterSettings.serializer(), settings)
         }
     }
 
     suspend fun setShape(settings: ShapeSettings) {
-        store.edit { it[SHAPE] = json.encodeToString(ShapeSettings.serializer(), settings) }
+        store.edit { it[SHAPE] = penSettingsJson.encodeToString(ShapeSettings.serializer(), settings) }
     }
 
     suspend fun setRuler(settings: RulerSettings) {
-        store.edit { it[RULER] = json.encodeToString(RulerSettings.serializer(), settings) }
+        store.edit { it[RULER] = penSettingsJson.encodeToString(RulerSettings.serializer(), settings) }
     }
 
     suspend fun setTable(settings: TableSettings) {
-        store.edit { it[TABLE] = json.encodeToString(TableSettings.serializer(), settings) }
+        store.edit { it[TABLE] = penSettingsJson.encodeToString(TableSettings.serializer(), settings) }
     }
 
     private fun decodePen(index: Int, text: String): PenPreset? = runCatching {
-        val decoded = json.decodeFromString(PenPreset.serializer(), text)
-        val hasThemeFlag = json.parseToJsonElement(text).jsonObject.containsKey("colorFollowsTheme")
+        val decoded = penSettingsJson.decodeFromString(PenPreset.serializer(), text)
+        val hasThemeFlag = penSettingsJson.parseToJsonElement(text).jsonObject.containsKey("colorFollowsTheme")
         if (hasThemeFlag) {
             decoded
         } else {
@@ -483,25 +549,34 @@ class PenSettingsStore(context: Context) {
     }.getOrNull()
 
     private fun decodeEraser(text: String): EraserSettings? =
-        runCatching { json.decodeFromString(EraserSettings.serializer(), text) }.getOrNull()
+        runCatching { penSettingsJson.decodeFromString(EraserSettings.serializer(), text) }.getOrNull()
 
     private fun decodeHighlighter(text: String): HighlighterSettings? =
-        runCatching { json.decodeFromString(HighlighterSettings.serializer(), text) }.getOrNull()
+        runCatching { penSettingsJson.decodeFromString(HighlighterSettings.serializer(), text) }.getOrNull()
 
     /**
      * A shape kind this build does not have — one added later, or one dropped from the picker —
      * falls back to the default rather than throwing away the width and colour beside it. That is
-     * `coerceInputValues` doing its job; see the note on [json].
+     * `coerceInputValues` doing its job; see the note on [penSettingsJson].
      */
     private fun decodeShape(text: String): ShapeSettings? =
-        runCatching { json.decodeFromString(ShapeSettings.serializer(), text) }.getOrNull()
+        runCatching { penSettingsJson.decodeFromString(ShapeSettings.serializer(), text) }.getOrNull()
 
     /** A ruler kind this build does not have falls back to the default, as [decodeShape] does. */
     private fun decodeRuler(text: String): RulerSettings? =
-        runCatching { json.decodeFromString(RulerSettings.serializer(), text) }.getOrNull()
+        runCatching { penSettingsJson.decodeFromString(RulerSettings.serializer(), text) }.getOrNull()
 
     private fun decodeTable(text: String): TableSettings? =
-        runCatching { json.decodeFromString(TableSettings.serializer(), text) }.getOrNull()
+        runCatching { penSettingsJson.decodeFromString(TableSettings.serializer(), text) }.getOrNull()
+
+    /**
+     * An action this build does not have — one added later, or one renamed — coerces to that field's
+     * default and leaves the two bindings beside it alone. That is `coerceInputValues` again, and it
+     * is why every field of [StylusButtonMap] carries a default: coercion has nothing to coerce *to*
+     * without one.
+     */
+    private fun decodeStylusButtons(text: String): StylusButtonMap? =
+        runCatching { penSettingsJson.decodeFromString(StylusButtonMap.serializer(), text) }.getOrNull()
 
     /**
      * A stored row shorter or longer than the current [PALETTE_SIZE] is trimmed rather than
@@ -509,7 +584,7 @@ class PenSettingsStore(context: Context) {
      * show, which is the one case worth falling back to the shipped palette for.
      */
     private fun decodePalette(text: String): List<Int>? = runCatching {
-        json.decodeFromString(ListSerializer(Int.serializer()), text)
+        penSettingsJson.decodeFromString(ListSerializer(Int.serializer()), text)
             .take(PALETTE_SIZE)
             .ifEmpty { null }
     }.getOrNull()
@@ -518,25 +593,32 @@ class PenSettingsStore(context: Context) {
         fun key(index: Int) = stringPreferencesKey("pen_$index")
 
         val DRAW_WITH_FINGER = booleanPreferencesKey("draw_with_finger")
+        val STYLUS_BUTTONS = stringPreferencesKey("stylus_buttons")
         val ERASER = stringPreferencesKey("eraser")
         val HIGHLIGHTER = stringPreferencesKey("highlighter")
         val SHAPE = stringPreferencesKey("shape")
         val RULER = stringPreferencesKey("ruler")
         val TABLE = stringPreferencesKey("table")
         val PALETTE = stringPreferencesKey("palette")
-
-        /**
-         * `ignoreUnknownKeys` covers a field this build does not have; `coerceInputValues` covers a
-         * *value* it does not have — a pen kind added later, or one dropped from the list — which
-         * would otherwise throw and lose the pen over one setting. Same pair, for the same reason,
-         * as `DocumentJson`.
-         */
-        val json = Json {
-            // The false value is meaningful: it distinguishes an explicitly chosen black/white
-            // from an old preset that predates colorFollowsTheme, so it must be written as well.
-            encodeDefaults = true
-            ignoreUnknownKeys = true
-            coerceInputValues = true
-        }
     }
+}
+
+/**
+ * How every blob in this file is written and read.
+ *
+ * `ignoreUnknownKeys` covers a field this build does not have; `coerceInputValues` covers a *value* it
+ * does not have — a pen kind added later, or a [StylusAction] renamed — which would otherwise throw and
+ * lose the whole record over one setting. Same pair, for the same reason, as `DocumentJson`.
+ *
+ * At file level rather than in [PenSettingsStore]'s companion, and `internal` rather than private, so a
+ * JVM test can exercise **this** configuration rather than a copy of it that would go on passing after
+ * someone removed a flag from here. The store itself needs a `Context`, which puts it out of reach
+ * until Robolectric lands (risk R10); this is the part of it that does not.
+ */
+internal val penSettingsJson: Json = Json {
+    // The false value is meaningful: it distinguishes an explicitly chosen black/white from an old
+    // preset that predates colorFollowsTheme, so it must be written as well.
+    encodeDefaults = true
+    ignoreUnknownKeys = true
+    coerceInputValues = true
 }

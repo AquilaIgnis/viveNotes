@@ -2,7 +2,9 @@ package com.vivenotes.ui
 
 import android.view.KeyEvent
 import com.vivenotes.data.DrawTool
-import com.vivenotes.ui.editor.RibbonTab
+import com.vivenotes.data.PenPreset
+import com.vivenotes.data.StylusAction
+import com.vivenotes.data.StylusButtonMap
 
 /**
  * The stylus's own buttons — the barrel buttons and, on pens that have one, the tail sensor.
@@ -19,6 +21,11 @@ import com.vivenotes.ui.editor.RibbonTab
  * layout — a Lenovo Tab Pen Plus ships `/system/usr/keylayout/Vendor_17ef_Product_617f.kl` with
  * `PEN_ONE_CLICK`, `PEN_TWO_CLICK`, `PEN_THREE_CLICK` and `PEN_LONG_CLICK`.
  *
+ * **What each click count *does* is the user's choice** — `docs/stylusPlan.md`, decisions SB1–SB9.
+ * This file holds the two pure halves of that: which press a keycode is, and what a bound
+ * [StylusAction] arms. The stored bindings are [StylusButtonMap] in `data/PenSettings.kt`, and the
+ * `when` that turns an action into a call is `NotesViewModel.pressStylusButton`.
+ *
  * **Acted on at key *up*, which is not a detail.** Measured on the Lenovo pen: one click and three
  * clicks deliver only `ACTION_UP` to the app — something upstream keeps the down-press — while two
  * clicks delivers both. `onKeyDown` therefore misses two of the three outright. Up is also the
@@ -29,20 +36,46 @@ import com.vivenotes.ui.editor.RibbonTab
  * that table feeds the system's Meta + / panel, and a barrel button is not a keyboard shortcut to
  * list there.
  *
- * A press this table does not name is not claimed, so it falls through to whatever else wants it
+ * A press with no action bound to it is not claimed, so it falls through to whatever else wants it
  * rather than doing something arbitrary.
  */
 internal fun NotesViewModel.handleStylusButton(keyCode: Int): Boolean {
-    val press = stylusPressFor(keyCode) ?: return false
-    pressStylusButton(press)
+    val action = boundStylusAction(keyCode) ?: return false
+    pressStylusButton(action)
     return true
 }
 
-/** Whether a keycode is one of ours, for claiming the down-press we act on at up. */
-internal fun isStylusButton(keyCode: Int): Boolean = stylusPressFor(keyCode) != null
+/**
+ * Whether a keycode is one of ours *and* currently bound, for claiming the down-press we act on at up.
+ *
+ * **Both halves read the same bindings, and must** — `docs/stylusPlan.md` SB5. Claiming every stylus
+ * keycode here while acting on only the bound ones at up would turn an unbound press into a
+ * *swallowed* press: it would stop falling through to whatever else wanted it, which is the property
+ * the feature deliberately has. The two cannot disagree in practice, since changing a binding between
+ * one press's down and up would mean holding the barrel button while tapping the panel.
+ */
+internal fun NotesViewModel.claimsStylusButton(keyCode: Int): Boolean =
+    boundStylusAction(keyCode) != null
+
+/** The action this keycode is bound to, or null if it is not ours or is bound to nothing. */
+private fun NotesViewModel.boundStylusAction(keyCode: Int): StylusAction? =
+    stylusPressFor(keyCode)
+        ?.let { stylusButtons.value.actionFor(it) }
+        ?.takeUnless { it == StylusAction.None }
 
 /** What the pen said it was — already counted, never inferred from timing here. */
-enum class StylusPress { Single, Double }
+enum class StylusPress(val label: String) {
+    Single("Single click"),
+    Double("Double click"),
+    Triple("Triple click"),
+}
+
+/** Which of the three bindings a press reads. */
+internal fun StylusButtonMap.actionFor(press: StylusPress): StylusAction = when (press) {
+    StylusPress.Single -> single
+    StylusPress.Double -> double
+    StylusPress.Triple -> triple
+}
 
 /**
  * Bluetooth pen buttons are **vendor** keycodes, not the AOSP ones.
@@ -55,15 +88,22 @@ enum class StylusPress { Single, Double }
  * [KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY] is kept beside them, not replaced by them: it is what a
  * pen wired through the digitizer sends, and both kinds should work.
  *
- * Three clicks is left unbound on purpose — nothing has asked for a third action, and an unclaimed
- * keycode falls through to whatever else wants it.
+ * **`_SECONDARY` and `_TERTIARY` are deliberately absent** — SB1. Those are what a *second and third
+ * button* send, not what a second and third click send, so binding them to the double- and
+ * triple-click rows would bind the wrong physical thing. A pen with a second barrel button gets its
+ * own row when there is one in the room.
+ *
+ * `PEN_LONG_CLICK` is missing for a plainer reason: its keycode has never been measured, and it is
+ * not 603 by assumption — SB9 has the recipe.
  */
 private const val KEYCODE_PEN_ONE_CLICK = 600
 private const val KEYCODE_PEN_TWO_CLICK = 601
+private const val KEYCODE_PEN_THREE_CLICK = 602
 
 private fun stylusPressFor(keyCode: Int): StylusPress? = when (keyCode) {
     KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY, KEYCODE_PEN_ONE_CLICK -> StylusPress.Single
     KEYCODE_PEN_TWO_CLICK -> StylusPress.Double
+    KEYCODE_PEN_THREE_CLICK -> StylusPress.Triple
     else -> null
 }
 
@@ -71,21 +111,34 @@ private fun stylusPressFor(keyCode: Int): StylusPress? = when (keyCode) {
 private const val FIRST_PEN = 0
 
 /**
- * What the button arms next, given what is in hand and what the pen reported.
+ * The tool a bound action arms, given what is in hand — or null for the actions that arm nothing.
  *
- * A single click swaps between writing and rubbing out: with a pen in hand it reaches for the
- * eraser, with anything else in hand it reaches for pen 1. That makes one button a *toggle* over the
- * two tools a stylus is actually held for, rather than a key that only ever arms one of them and
- * then has nothing left to do. A double click goes to the lasso, from wherever it was — a selection
- * is what you want *after* drawing, so it is as likely to be wanted with a pen in hand as with
- * anything else and cannot sensibly be another position in the toggle.
+ * Null is three different things and they all come to the same: [StylusAction.None] is unbound, and
+ * [StylusAction.Undo] and [StylusAction.Redo] act on the page rather than on the hand. The caller
+ * distinguishes them; this function only answers "what tool does this leave me holding".
  *
- * Pure so the rule is testable without a device: the emulator has no stylus and cannot generate
+ * [StylusAction.TogglePenEraser] is the one entry with a rule rather than an answer, and it is the
+ * default single click: with a pen in hand it reaches for the eraser, with anything else in hand it
+ * reaches for pen 1. That makes one button a *toggle* over the two tools a stylus is actually held
+ * for, rather than a key that only ever arms one of them and then has nothing left to do.
+ * [StylusAction.CyclePens] is the other rule — it walks the three pens and wraps, and arrives at pen 1
+ * from anything that is not a pen.
+ *
+ * Pure so the rules are testable without a device: the emulator has no stylus and cannot generate
  * these presses at all — see the tooling note in `CLAUDE.md` — which makes a JVM test the *only*
  * test available here rather than merely the cheap one.
  */
-internal fun nextToolForStylusButton(current: DrawTool, press: StylusPress): DrawTool = when {
-    press == StylusPress.Double -> DrawTool.Lasso
-    current is DrawTool.Pen -> DrawTool.Eraser
-    else -> DrawTool.Pen(FIRST_PEN)
+internal fun StylusAction.toolFrom(current: DrawTool): DrawTool? = when (this) {
+    StylusAction.None, StylusAction.Undo, StylusAction.Redo -> null
+    StylusAction.TogglePenEraser ->
+        if (current is DrawTool.Pen) DrawTool.Eraser else DrawTool.Pen(FIRST_PEN)
+    StylusAction.CyclePens -> DrawTool.Pen(
+        if (current is DrawTool.Pen) (current.index + 1) % PenPreset.COUNT else FIRST_PEN,
+    )
+    StylusAction.Pen1 -> DrawTool.Pen(0)
+    StylusAction.Pen2 -> DrawTool.Pen(1)
+    StylusAction.Pen3 -> DrawTool.Pen(2)
+    StylusAction.Highlighter -> DrawTool.Highlighter
+    StylusAction.Eraser -> DrawTool.Eraser
+    StylusAction.Lasso -> DrawTool.Lasso
 }
