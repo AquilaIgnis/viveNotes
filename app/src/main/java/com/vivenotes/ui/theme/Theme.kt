@@ -1,7 +1,8 @@
 package com.vivenotes.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -185,6 +186,28 @@ private val AppTypography = Typography(
     labelSmall = TextStyle(fontSize = 11.sp),
 )
 
+/**
+ * **M3 Expressive, applied at the root** — `docs/expressivePlan.md` EX1–EX3.
+ *
+ * [MaterialExpressiveTheme] rather than `MaterialTheme` is nearly the whole of the adoption. Most of
+ * expressive is not a component you call: this flips the CompositionLocal that the ordinary components
+ * read to choose expressive shape, size and motion, so `Slider`, `Switch`, `Button`,
+ * `OutlinedTextField`, `DropdownMenu` and `AlertDialog` all change with no call-site edit. The handful
+ * of places where a *different* component is the expressive answer — wavy progress, the loading
+ * indicators, the Hardware pane's toggle row — are listed in that plan.
+ *
+ * Calling expressive components under a plain `MaterialTheme` would be the half-measure: their
+ * geometry without their motion, which is the part that makes them read as expressive at all.
+ *
+ * **The colour schemes stay hand-written (EX2).** `expressiveLightColorScheme()` is deliberately not
+ * used: the azure ramp below is sampled and contrast-checked — `#0063C6` on light precisely because
+ * the base fails 4.5:1 for text — and [IconAccents] is sampled against these surfaces and nothing
+ * else. Expressive here means shape, motion and component choice; colour is ours.
+ *
+ * [MotionScheme.expressive] is named explicitly rather than left to default (EX3), so a deliberate
+ * decision does not look accidental. Its spatial specs are springs, so chrome overshoots slightly and
+ * settles; nothing on the ink path uses Material animation, which keeps that away from the stylus.
+ */
 @Composable
 fun ViveNotesTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -210,8 +233,11 @@ fun ViveNotesTheme(
         LocalIconAccents provides accents,
         LocalRibbonIcons provides ribbonIcons,
     ) {
-        MaterialTheme(
+        MaterialExpressiveTheme(
             colorScheme = colors,
+            motionScheme = MotionScheme.expressive(),
+            // Shapes left null on purpose: the expressive defaults are the point of the switch.
+            // Typography is not — see [AppTypography], and EX10.
             typography = AppTypography,
             content = content,
         )

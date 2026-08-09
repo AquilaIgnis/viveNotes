@@ -1,22 +1,24 @@
 package com.vivenotes.ui.panel
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -113,6 +115,18 @@ fun ColumnScope.HardwarePanelContent(
     }
 }
 
+/**
+ * One device in the picker — `docs/expressivePlan.md` EX7.
+ *
+ * A real [ToggleButton] rather than the hand-built `Column` with a swapped background colour this
+ * used to be. It is the same control Material already has a name for — a segmented, mutually
+ * exclusive choice — and the expressive one brings the shape morph on press and check that a
+ * background swap cannot express.
+ *
+ * Two `ToggleButton`s in a `Row` rather than a `ButtonGroup`: that component wants an overflow
+ * indicator and exists to collapse a row too long to fit. There are exactly two devices and no third
+ * coming — see [HardwareKind] — so its machinery would answer a question this row does not ask.
+ */
 @Composable
 private fun HardwareTab(
     kind: HardwareKind,
@@ -121,39 +135,23 @@ private fun HardwareTab(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val background = if (selected) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerHighest
-    }
-    val foreground = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(background)
-            .clickable(onClick = onClick)
-            .testTag(HardwareTags.kind(kind))
-            .padding(vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    ToggleButton(
+        checked = selected,
+        // A picker, not a set of switches: pressing the selected one again must not clear it and
+        // leave the pane showing nothing, so an already-checked press is dropped.
+        onCheckedChange = { if (it) onClick() },
+        modifier = modifier.testTag(HardwareTags.kind(kind)),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
     ) {
         Icon(
             imageVector = icon,
-            // Labelled rather than null: the icon *is* the control, so with no text beside it there
-            // would be nothing for TalkBack to announce (L3).
-            contentDescription = kind.label,
-            tint = foreground,
-            modifier = Modifier.size(22.dp),
+            // Null here, unlike the version this replaced: the label is now *inside* the button and
+            // TalkBack reads it, so describing the icon too would announce the device twice (L3).
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
         )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = kind.label,
-            style = MaterialTheme.typography.labelMedium,
-            color = foreground,
-        )
+        Spacer(Modifier.width(6.dp))
+        Text(text = kind.label, style = MaterialTheme.typography.labelMedium)
     }
 }
 

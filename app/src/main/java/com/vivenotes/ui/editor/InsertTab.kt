@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -60,7 +62,13 @@ private const val EXAMPLE_EQUATION = "{\\displaystyle \\int _{a}^{b}f'(t)\\,dt=f
  * settings — see [ShapeButton] for why it has two homes rather than one. Table leads the row, where
  * `docs/references/insertTab.png` puts it, and lives only here: it makes no marks, so it has no
  * business on Draw.
+ *
+ * The opt-in is for the equation button's [LoadingIndicator]. **The loading indicators are the one
+ * part of M3 Expressive still gated in 1.5.0-alpha25** — `MaterialExpressiveTheme`, `MotionScheme`,
+ * `ToggleButton` and the wavy progress indicators have all graduated and need no annotation, which is
+ * worth knowing before adding one reflexively.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun InsertTab(
     selection: SelectionState,
@@ -235,7 +243,11 @@ internal fun InsertTab(
                         modifier = Modifier.testTag(InsertTags.SUBMIT),
                     ) {
                         if (submitting) {
-                            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.height(18.dp))
+                            // Uncontained, and sized to the label it replaces — the same call the
+                            // recognition panel's in-button spinner makes, for the same reason: a
+                            // contained indicator inside a button is a container in a container.
+                            // `docs/expressivePlan.md` EX6.
+                            LoadingIndicator(Modifier.size(18.dp))
                         } else {
                             Text(if (editing) "Update" else "Insert")
                         }

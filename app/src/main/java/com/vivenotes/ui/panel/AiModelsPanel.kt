@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -115,7 +115,7 @@ private fun ModelCard(
             AiModelInstallState.Verifying -> {
                 Text("Verifying…", style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(6.dp))
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
             is AiModelInstallState.Downloading -> {
                 val fraction = if (state.totalBytes == 0L) {
@@ -128,7 +128,10 @@ private fun ModelCard(
                     style = MaterialTheme.typography.labelMedium,
                 )
                 Spacer(Modifier.height(6.dp))
-                LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+                LinearWavyProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
             is AiModelInstallState.Failed -> {
                 Text(
