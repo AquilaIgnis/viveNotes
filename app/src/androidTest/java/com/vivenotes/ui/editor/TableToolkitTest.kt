@@ -131,7 +131,6 @@ class TableToolkitTest {
                     shape = ShapeSettings(),
                     table = TableSettings(),
                     tool = tool,
-                    allowFinger = false,
                     actions = DrawActions(
                         selectTool = { armed = it },
                         updatePen = { _, _ -> },

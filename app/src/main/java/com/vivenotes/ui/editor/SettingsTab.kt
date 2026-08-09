@@ -17,23 +17,30 @@ data class AiActions(
     val openIntegrated: () -> Unit,
 )
 
-internal object AiTabTags {
-    const val INTEGRATED = "ai-integrated"
+internal object SettingsTags {
+    const val INTEGRATED = "settings-integrated"
 }
 
-/** Entry point for local model installation and, later, recognition commands. */
+/**
+ * The Settings tab.
+ *
+ * Integrated — local model installation, and later the recognition commands — lives here rather than
+ * on a tab of its own. Which models are installed is a property of *this device*, the same kind of
+ * answer as the rest of this tab will hold; it is not something you do to a page, which is what
+ * every other tab is for.
+ */
 @Composable
-internal fun AiTab(actions: AiActions) {
+internal fun SettingsTab(ai: AiActions) {
     ScrollingRow(
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
-        Box(Modifier.testTag(AiTabTags.INTEGRATED)) {
+        Box(Modifier.testTag(SettingsTags.INTEGRATED)) {
             RibbonCommand(
                 label = "Integrated",
-                onClick = actions.openIntegrated,
+                onClick = ai.openIntegrated,
                 icon = {
                     Icon(
-                        imageVector = MaterialSymbols.Category,
+                        imageVector = MaterialSymbols.Memory,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

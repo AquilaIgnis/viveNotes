@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
-class AiTabTest {
+class SettingsTabTest {
     @get:Rule
     val compose = createComposeRule()
 
@@ -17,11 +17,11 @@ class AiTabTest {
         var opened = false
         compose.setContent {
             ViveNotesTheme {
-                AiTab(AiActions(openIntegrated = { opened = true }))
+                SettingsTab(AiActions(openIntegrated = { opened = true }))
             }
         }
 
-        compose.onNodeWithTag(AiTabTags.INTEGRATED).performClick()
+        compose.onNodeWithTag(SettingsTags.INTEGRATED).performClick()
 
         assertTrue(opened)
     }

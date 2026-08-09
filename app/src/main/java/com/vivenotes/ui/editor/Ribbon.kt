@@ -76,10 +76,8 @@ enum class RibbonTab(val label: String) {
     Home("Home"),
     Insert("Insert"),
     Draw("Draw"),
-    Math("Math"),
-    AI("AI"),
     View("View"),
-    Help("Help"),
+    RibonSettings("Settings"),
 }
 
 private val TEXT_COLORS = listOf(
@@ -111,6 +109,10 @@ internal object HomeTags {
 internal object FontTags {
     const val SIZE = "font-size-combo"
     const val FAMILY = "font-family-combo"
+}
+
+internal object RibbonTags {
+    const val FINGER = "ribbon-finger"
 }
 
 @Composable
@@ -160,6 +162,8 @@ fun Ribbon(
         TabStrip(
             activeTab = activeTab,
             onTabChange = onTabChange,
+            allowFinger = allowFinger,
+            onToggleFinger = { draw.setDrawWithFinger(!allowFinger) },
             showBack = showBack,
             onBack = onBack,
             showNavigationToggle = showNavigationToggle,
@@ -197,7 +201,6 @@ fun Ribbon(
                 ruler = ruler,
                 rulerOut = rulerOut,
                 tool = tool,
-                allowFinger = allowFinger,
                 actions = draw,
                 pageOpen = pageOpen,
                 canUndo = canUndoCanvas,
@@ -216,7 +219,7 @@ fun Ribbon(
                 onChangeTable = draw.updateTable,
                 onAddColor = draw.addPaletteColor,
             )
-            RibbonTab.AI -> AiTab(ai)
+            RibbonTab.RibonSettings -> SettingsTab(ai)
             else -> PlaceholderTab(activeTab)
         }
     }
@@ -226,6 +229,8 @@ fun Ribbon(
 private fun TabStrip(
     activeTab: RibbonTab,
     onTabChange: (RibbonTab) -> Unit,
+    allowFinger: Boolean,
+    onToggleFinger: () -> Unit,
     showBack: Boolean,
     onBack: () -> Unit,
     showNavigationToggle: Boolean,
@@ -278,6 +283,20 @@ private fun TabStrip(
                 }
             }
         }
+
+        // Who may draw is not a tab, and it is not a Draw-tab setting either: it decides whether a
+        // finger on the canvas marks the page or scrolls it, which is true on every tab. So it sits
+        // here, past the weighted tab list and therefore hard against the right edge, where it stays
+        // put while the tabs scroll.
+        RibbonButton(
+            icon = MaterialSymbols.TouchApp,
+            label = if (allowFinger) "Drawing with finger and stylus" else "Stylus only",
+            active = allowFinger,
+            onClick = onToggleFinger,
+            modifier = Modifier
+                .padding(end = 6.dp)
+                .testTag(RibbonTags.FINGER),
+        )
     }
 }
 

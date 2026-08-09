@@ -99,7 +99,6 @@ class ShapeToolTest {
                     highlighter = HighlighterSettings(),
                     shape = ShapeSettings(),
                     tool = tool,
-                    allowFinger = false,
                     actions = DrawActions(
                         selectTool = { selected = it },
                         updatePen = { _, _ -> },

@@ -79,7 +79,6 @@ class DrawTabTest {
         pens: List<PenPreset> = List(PenPreset.COUNT) { PenPreset.starting(it) },
         eraser: EraserSettings = EraserSettings(),
         highlighter: HighlighterSettings = HighlighterSettings(),
-        allowFinger: Boolean = false,
         canUndo: Boolean = false,
         canRedo: Boolean = false,
         ruler: RulerSettings = RulerSettings(),
@@ -96,7 +95,6 @@ class DrawTabTest {
                     ruler = ruler,
                     rulerOut = rulerOut,
                     tool = tool,
-                    allowFinger = allowFinger,
                     actions = DrawActions(
                         selectTool = { selected = it },
                         updatePen = { index, pen ->
@@ -354,20 +352,16 @@ class DrawTabTest {
         assertEquals(1, redoCount)
     }
 
+    /**
+     * Who may draw moved to the tab strip, where it is reachable from every tab — see
+     * `RibbonTabStripTest`. It is not a Draw-tab control and must not come back as one.
+     */
     @Test
-    fun theFingerButtonTogglesWhoMayDraw() {
-        setTab(allowFinger = false)
-        compose.onNodeWithTag(DrawTags.FINGER).performClick()
-        assertEquals(true, fingerDrawing)
-    }
+    fun theDrawTabDoesNotCarryTheFingerToggle() {
+        setTab()
 
-    @Test
-    fun theFingerButtonTurnsBackOff() {
-        setTab(allowFinger = true)
-        compose.onNodeWithTag(DrawTags.FINGER).performClick()
-        assertEquals(false, fingerDrawing)
+        compose.onNodeWithTag(RibbonTags.FINGER).assertDoesNotExist()
     }
-
 
     // --- the ruler -------------------------------------------------------------------------------
 

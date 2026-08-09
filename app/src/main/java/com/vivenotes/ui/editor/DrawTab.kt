@@ -70,7 +70,6 @@ internal object DrawTags {
     const val ERASER = "draw-eraser"
     const val HIGHLIGHTER = "draw-highlighter"
     const val LASSO = "draw-lasso"
-    const val FINGER = "draw-finger"
     const val NONE = "draw-none"
     const val RULER = "draw-ruler"
     fun pen(index: Int) = "draw-pen-$index"
@@ -107,7 +106,6 @@ internal fun DrawTab(
     /** Shared with the Insert tab: how many rows and how thick the rules is the same question. */
     table: TableSettings = TableSettings(),
     tool: DrawTool,
-    allowFinger: Boolean,
     actions: DrawActions,
     pageOpen: Boolean = true,
     canUndo: Boolean = false,
@@ -209,8 +207,8 @@ internal fun DrawTab(
 
         Divider()
 
-        // Beside the finger toggle rather than among the pens: neither of these marks the page, both
-        // change what happens when something else does. RD1 — the ruler is not a tool.
+        // Set apart from the pens rather than among them: it does not mark the page, it changes what
+        // happens when something else does. RD1 — the ruler is not a tool.
         RulerButton(
             settings = ruler,
             out = rulerOut,
@@ -220,15 +218,6 @@ internal fun DrawTab(
             onDismiss = { rulerSettingsOpen = false },
             onChange = actions.updateRuler,
         )
-
-        Box(Modifier.testTag(DrawTags.FINGER)) {
-            RibbonButton(
-                icon = MaterialSymbols.TouchApp,
-                label = if (allowFinger) "Drawing with finger and stylus" else "Stylus only",
-                active = allowFinger,
-                onClick = { actions.setDrawWithFinger(!allowFinger) },
-            )
-        }
 
         Divider()
 
