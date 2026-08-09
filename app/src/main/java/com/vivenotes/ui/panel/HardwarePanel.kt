@@ -165,9 +165,7 @@ private fun ColumnScope.StylusSettings(
     onSetButtons: (StylusButtonMap) -> Unit,
 ) {
     PanelSetting(
-        label = "Let a finger draw",
-        info = "Off, a finger scrolls the page and only the pen marks it, so a resting palm cannot " +
-            "leave a stroke. On is what makes drawing possible with no stylus in the room.",
+        label = "Let a finger draw"
     ) {
         PanelToggle("Let a finger draw", allowFinger, onSetDrawWithFinger)
     }
@@ -193,9 +191,7 @@ private fun ColumnScope.PenButtonSettings(
 ) {
     PanelSection(
         title = "Pen button",
-        info = "Your pen counts its own clicks: one, two and three arrive as separate presses, " +
-            "already timed by the pen itself. So there is no double-click speed to set here — and a " +
-            "pen that only reports one click simply never fires the other two rows.",
+        info = "Your pen firmware counts its own clicks "
     ) {
         PenButtonRow(StylusPress.Single, buttons.single) { onSetButtons(buttons.copy(single = it)) }
         PenButtonRow(StylusPress.Double, buttons.double) { onSetButtons(buttons.copy(double = it)) }

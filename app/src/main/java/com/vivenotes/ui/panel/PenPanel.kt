@@ -79,8 +79,10 @@ object PenPanelTags {
  * Two things in the reference are deliberately not here. The middle pen type is crossed out, so it
  * is absent entirely rather than disabled; and the overflow beside Hold to draw shape, which chooses
  * *which* shapes are recognised, waits for shape recognition to exist at all (`docs/inkPlan.md` §5).
- * Add colour is placed and inert, the same way the View tab places Full Page View: it holds the spot
- * the reference gives it and plainly does not work yet. It is not the wheel at the end of the
+ * Add colour is placed and inert: it holds the spot the reference gives it and plainly does not work
+ * yet. **It is the last control in the app treated that way** — the View tab's Full Page View and
+ * Normal View were the other two and were removed on 2026-08-09, so weigh the trade before adding a
+ * third rather than pointing at precedent. It is not the wheel at the end of the
  * palette in disguise — that picks an ink, where + would add a swatch to the row and keep it, which
  * needs a stored custom palette this does not have.
  */

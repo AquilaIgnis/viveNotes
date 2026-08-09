@@ -162,20 +162,16 @@ class ViewTabTest {
     }
 
     /**
-     * These belong to the drawing surface, which is not built. They are on screen because the
-     * ribbon's layout is part of the design, but they must not pretend to work.
+     * Dropped at the user's request, not deferred — see `ViewTab`'s KDoc for why this app has nothing
+     * for them to toggle. Asserted absent rather than deleted, so re-adding them is a decision
+     * somebody makes on purpose.
      */
     @Test
-    fun theViewToggleButtonsArePresentButInert() {
+    fun theViewToggleButtonsAreGone() {
         setTab()
 
-        compose.onNodeWithText("Full Page View").assertIsDisplayed()
-        compose.onNodeWithText("Normal View").assertIsDisplayed()
-        compose.onNodeWithText("Full Page View").performClick()
-        compose.onNodeWithText("Normal View").performClick()
-
-        assertNull("an unbuilt feature must not change anything", zoom)
-        assertNull(tabsLayout)
+        compose.onNodeWithText("Full Page View").assertDoesNotExist()
+        compose.onNodeWithText("Normal View").assertDoesNotExist()
     }
 
     /** With no page open there is nothing whose appearance these could change. */

@@ -88,8 +88,14 @@ private val RULE_LINE_LABELS = listOf(
  * The View tab from `docs/references/viewsTab.png`.
  *
  * Dock to Desktop, New Docked Window, New Window and New Quick Note are crossed out in that
- * screenshot and so are not here at all. Full Page View and Normal View are placed but inert: they
- * belong to the drawing surface, which does not exist yet.
+ * screenshot and so are not here at all.
+ *
+ * **Full Page View and Normal View are gone too**, removed at the user's request on 2026-08-09. They
+ * were placed and inert, holding the spot the reference gives them, and that was the wrong trade for
+ * this pair: this app has no chrome to hide that the two would toggle between — the ribbon and the
+ * panes are already the whole window, and the panes hide themselves by swipe. Two dead buttons at the
+ * head of the tab pushed the controls that do work off to the right. Feature F1 in
+ * `docs/features.md` is dropped, not deferred.
  */
 @Composable
 internal fun ViewTab(
@@ -104,21 +110,6 @@ internal fun ViewTab(
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
-        RibbonCommand(
-            label = "Full Page View",
-            onClick = {},
-            enabled = false,
-            icon = { MonoIcon(MaterialSymbols.Fullscreen) },
-        )
-        RibbonCommand(
-            label = "Normal View",
-            onClick = {},
-            enabled = false,
-            icon = { MonoIcon(MaterialSymbols.VerticalSplit) },
-        )
-
-        Divider()
-
         TabsLayoutMenu(settings.tabsLayout, actions.setTabsLayout)
 
         Divider()
