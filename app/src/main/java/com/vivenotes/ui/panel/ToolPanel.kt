@@ -55,6 +55,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ui.icons.MaterialSymbols
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /** Width of a docked pane where there is room to dock one. */
 val TOOL_PANEL_WIDTH = 320.dp
@@ -383,21 +385,24 @@ fun PanelStepper(field: String, value: Int, range: IntRange, onPick: (Int) -> Un
  *
  * The buttons exist because a slider this short cannot be nudged by one: dragging picks a
  * neighbourhood, and − and + pick a number.
+ *
+ * Fractional because a pen's nib is — `PenPreset.thickness` steps by half a dp. Every other setting
+ * on a panel is a whole number and reaches this through the `Int` overload below.
  */
 @Composable
 fun ColumnScope.PanelSlider(
     field: String,
     label: String,
-    value: Int,
-    range: IntRange,
-    onChange: (Int) -> Unit,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onChange: (Float) -> Unit,
     showTicks: Boolean = true,
     sizePreviewColor: Color? = null,
     outlineSizePreview: Boolean = false,
-    /** How far − and + move. One is right for a nib; a ruler is measured in hundreds of dp. */
-    step: Int = 1,
+    /** How far − and + move, and how far apart the stops are when [showTicks] is on. */
+    step: Float = 1f,
     /** How the number reads. A ruler's length means nothing in dp and everything in inches. */
-    format: (Int) -> String = { it.toString() },
+    format: (Float) -> String = ::trimTrailingZero,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -425,8 +430,8 @@ fun ColumnScope.PanelSlider(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StepButton(MaterialSymbols.Remove, "Decrease $label", value > range.first) {
-            onChange((value - step).coerceAtLeast(range.first))
+        StepButton(MaterialSymbols.Remove, "Decrease $label", value > range.start) {
+            onChange((value - step).coerceAtLeast(range.start))
         }
         Box(
             modifier = Modifier
@@ -450,14 +455,16 @@ fun ColumnScope.PanelSlider(
             contentAlignment = Alignment.Center,
         ) {
             Slider(
-                value = value.toFloat(),
-                onValueChange = { onChange(it.toInt()) },
-                valueRange = range.first.toFloat()..range.last.toFloat(),
+                value = value,
+                // Material lands the thumb on a stop, but in track pixels rather than in steps, so
+                // snap before storing: a nib is 5.5, never 5.499998.
+                onValueChange = { onChange(if (showTicks) snapToStep(it, range, step) else it) },
+                valueRange = range,
                 // The eraser is a continuous physical size, while the compact pen range benefits
                 // from discrete stops. Passing false removes Material's tick marks as well as the
-                // stops without changing the integer setting stored by the editor.
+                // stops without changing the setting stored by the editor.
                 steps = if (showTicks) {
-                    (range.last - range.first - 1).coerceAtLeast(0)
+                    (stopCount(range, step) - 1).coerceAtLeast(0)
                 } else {
                     0
                 },
@@ -468,8 +475,8 @@ fun ColumnScope.PanelSlider(
                     .testTag(PanelTags.field(field)),
             )
             if (sizePreviewColor != null && (pointerHeld || pressed || dragged)) {
-                val fraction = (value - range.first).toFloat() /
-                    (range.last - range.first).coerceAtLeast(1)
+                val fraction = (value - range.start) /
+                    (range.endInclusive - range.start).coerceAtLeast(1f)
                 SliderSizePreview(
                     field = field,
                     diameter = value,
@@ -480,17 +487,67 @@ fun ColumnScope.PanelSlider(
                 )
             }
         }
-        StepButton(MaterialSymbols.Add, "Increase $label", value < range.last) {
-            onChange((value + step).coerceAtMost(range.last))
+        StepButton(MaterialSymbols.Add, "Increase $label", value < range.endInclusive) {
+            onChange((value + step).coerceAtMost(range.endInclusive))
         }
     }
 }
+
+/**
+ * The whole-number settings — border widths, eraser and ruler sizes — which are most of them.
+ *
+ * Kept as its own signature rather than pushing `Float` out to every call site: a border is two dp
+ * wide, not 2.0, and a panel that offered half a pixel of table rule would be offering nothing.
+ */
+@Composable
+fun ColumnScope.PanelSlider(
+    field: String,
+    label: String,
+    value: Int,
+    range: IntRange,
+    onChange: (Int) -> Unit,
+    showTicks: Boolean = true,
+    sizePreviewColor: Color? = null,
+    outlineSizePreview: Boolean = false,
+    /** How far − and + move. One is right for a nib; a ruler is measured in hundreds of dp. */
+    step: Int = 1,
+    format: (Int) -> String = { it.toString() },
+) {
+    PanelSlider(
+        field = field,
+        label = label,
+        value = value.toFloat(),
+        range = range.first.toFloat()..range.last.toFloat(),
+        onChange = { onChange(it.toInt()) },
+        showTicks = showTicks,
+        sizePreviewColor = sizePreviewColor,
+        outlineSizePreview = outlineSizePreview,
+        step = step.toFloat(),
+        format = { format(it.toInt()) },
+    )
+}
+
+/** How many stops [step] divides a range into — one more than Material's `steps`, which counts gaps. */
+private fun stopCount(range: ClosedFloatingPointRange<Float>, step: Float): Int =
+    if (step <= 0f) 0 else ((range.endInclusive - range.start) / step).roundToInt()
+
+private fun snapToStep(raw: Float, range: ClosedFloatingPointRange<Float>, step: Float): Float =
+    if (step <= 0f) {
+        raw
+    } else {
+        (range.start + ((raw - range.start) / step).roundToInt() * step)
+            .coerceIn(range.start, range.endInclusive)
+    }
+
+/** Reads a half-step as "5" and "5.5" rather than "5.0" — the trailing zero is noise on a nib. */
+private fun trimTrailingZero(value: Float): String =
+    if (value == floor(value)) value.toInt().toString() else value.toString()
 
 /** A transient, true-to-size sample drawn at the live thumb position while it is held. */
 @Composable
 private fun SliderSizePreview(
     field: String,
-    diameter: Int,
+    diameter: Float,
     color: Color,
     outlined: Boolean,
     fraction: Float,
@@ -545,8 +602,8 @@ private fun SliderSizePreview(
     }
 }
 
-private const val SIZE_PREVIEW_PADDING = 8
-private const val MIN_SIZE_PREVIEW_CONTAINER = 28
+private const val SIZE_PREVIEW_PADDING = 8f
+private const val MIN_SIZE_PREVIEW_CONTAINER = 28f
 private val SLIDER_HORIZONTAL_PADDING = 6.dp
 
 @Composable

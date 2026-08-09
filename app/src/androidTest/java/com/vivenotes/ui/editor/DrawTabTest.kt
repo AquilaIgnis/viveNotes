@@ -466,8 +466,7 @@ class DrawTabTest {
         compose.onNodeWithTag(PanelTags.field("Hold to draw shape")).performClick()
         assertEquals(false, changed?.holdToDrawShape)
 
-        compose.onNodeWithTag(PanelTags.field("Scribble to erase")).performClick()
-        assertEquals(false, changed?.scribbleToErase)
+
         assertEquals(false, changed?.holdToDrawShape)
     }
 
@@ -666,8 +665,10 @@ class DrawTabTest {
             "highlighter ${HighlighterSettings.DEFAULT_THICKNESS} vs pen ${PenPreset().thickness}",
             HighlighterSettings.DEFAULT_THICKNESS > PenPreset().thickness,
         )
-        assertTrue(HighlighterSettings.DEFAULT_THICKNESS in
-            HighlighterSettings.MIN_THICKNESS..HighlighterSettings.MAX_THICKNESS)
+        assertTrue(
+            HighlighterSettings.DEFAULT_THICKNESS in
+                    (HighlighterSettings.MIN_THICKNESS..HighlighterSettings.MAX_THICKNESS)
+        )
     }
 
     // --- the colour wheel ------------------------------------------------------------------------

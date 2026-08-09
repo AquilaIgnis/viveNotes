@@ -198,7 +198,7 @@ object InkCodec {
         family = family(familyId(pen)),
         colorIntArgb = pen.colorArgb,
         // Thickness is in page units, so a stroke is the same width on the page at any zoom.
-        size = pen.thickness.toFloat(),
+        size = pen.thickness,
         epsilon = EPSILON,
     )
 

@@ -295,6 +295,52 @@ class InkEraserTest {
         assertEquals(42L, row.createdAt)
     }
 
+    /**
+     * A highlighter erased down to nothing must not survive as a stroke with an empty mesh.
+     *
+     * It used to. `subtract` keeps a cut highlighter whole rather than splitting it — see
+     * [aCutHighlighterKeepsTheOutlinesItIsDrawnFrom] for why — and that branch had no case for a cut
+     * that removed everything, so the page kept a stroke that drew nothing. The erase is replayed
+     * from storage on every page load, so the empty stroke came back on every launch.
+     */
+    @Test
+    fun aHighlighterErasedAwayEntirelyDoesNotSurviveAsAnEmptyMesh() {
+        val ink = Stroke(
+            brush = InkCodec.brushFor(HighlighterSettings()),
+            inputs = inputs(48f to 50f, 52f to 50f),
+        )
+        val coversEverything = InkCodec.eraseMask(inputs(10f to 50f, 90f to 50f), sizeDp = 64f)
+
+        val erased = listOf(PageStroke("stroke", ink)).subtract(coversEverything, listOf("stroke"))
+
+        assertTrue("an erased highlighter must not survive as an empty mesh", erased.isEmpty())
+    }
+
+    /**
+     * The guard that keeps an empty mesh away from Ink's shape comparison.
+     *
+     * `computeCoverageIsGreaterThan` does not return false for an empty `PartitionedMesh` — it hits
+     * `CHECK failed: !meshes_.empty()` in `partitioned_mesh.cc` and **aborts the process**. Since
+     * `targetsFor` tests every stroke on the page, one empty mesh anywhere in the list killed the app
+     * on the next eraser touch, wherever that touch landed.
+     *
+     * So this test fails by crashing the whole instrumentation run, not by a red assertion. That it
+     * returns at all is the thing being asserted.
+     */
+    @Test
+    fun aStrokeWithNoGeometryIsNeverComparedAgainstAMask() {
+        val empty = Stroke(
+            brush = InkCodec.brushFor(PenPreset.starting(0)),
+            inputs = MutableStrokeInputBatch().toImmutable(),
+        )
+        val real = PageStroke("real", InkCodec.eraseMask(inputs(10f to 50f, 90f to 50f), 6f))
+        val page = listOf(PageStroke("empty", empty), real)
+        val mask = InkCodec.eraseMask(inputs(50f to 35f, 50f to 65f), sizeDp = 18f)
+
+        assertEquals(listOf("real"), page.targetsFor(mask))
+        assertFalse(page.first().touches(mask))
+    }
+
     private fun inputs(vararg points: Pair<Float, Float>) = MutableStrokeInputBatch().apply {
         points.forEachIndexed { index, (x, y) ->
             add(InputToolType.UNKNOWN, x, y, index * 10L)

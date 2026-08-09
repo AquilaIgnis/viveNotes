@@ -246,18 +246,21 @@ data class PenPreset(
     val colorArgb: Int = 0xFF000000.toInt(),
     /** True only while this pen is using the automatic high-contrast starter colour. */
     val colorFollowsTheme: Boolean = false,
-    val thickness: Int = 5,
+    //defaults
+    val thickness: Float = 1.5f,
     val pressure: Int = 3,
     val stabilization: Int = 1,
     val holdToDrawShape: Boolean = true,
-    val scribbleToErase: Boolean = true,
 ) {
     companion object {
         /** Three pens, per the Draw tab. They differ only by colour, which is their whole purpose. */
         const val COUNT = 3
 
-        const val MIN_THICKNESS = 1
-        const val MAX_THICKNESS = 12
+        const val MIN_THICKNESS = 1f
+        const val MAX_THICKNESS = 8f
+
+        /** Half a dp, so the range is 1, 1.5, 2 … 8 rather than eight steps. */
+        const val THICKNESS_STEP = 0.5f
 
         /** 0 is off in both cases: no pressure response, no smoothing. */
         const val MAX_PRESSURE = 5
@@ -283,13 +286,6 @@ fun PenPreset.forCanvasTheme(isDark: Boolean): PenPreset =
         this
     }
 
-/**
- * The palette a pen starts with, from the swatch row in `docs/references/pen-tooltip.jpeg`.
- *
- * Only the starting state: the row is a rolling list, so a colour taken off the wheel takes the
- * front and the tail falls off. White and black lead it as shipped, but they are not pinned — nine
- * custom colours will push them out, and the wheel is how they come back.
- */
 val PEN_COLORS: List<Int> = listOf(
     0xFFFFFFFF, 0xFF000000, 0xFFE53935, 0xFF00BCD4, 0xFF00C853,
     0xFFFFD600, 0xFFFF9100, 0xFF9C27B0, 0xFF2962FF,
@@ -298,13 +294,6 @@ val PEN_COLORS: List<Int> = listOf(
 /** How many swatches the row shows. Fixed, because ten targets are what fit the panel's width. */
 val PALETTE_SIZE: Int = PEN_COLORS.size
 
-/**
- * The palette with [argb] at the front, one swatch longer at the head and one shorter at the tail.
- *
- * A colour already in the row moves rather than repeats, which is what keeps re-picking a colour
- * from costing the row an entry. That also means the length only ever changes when the colour is
- * genuinely new — the tail is evicted to make room, never to make a duplicate.
- */
 fun List<Int>.withColorInFront(argb: Int): List<Int> =
     (listOf(argb) + filterNot { it == argb }).take(PALETTE_SIZE)
 

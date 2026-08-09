@@ -100,13 +100,34 @@ internal fun PageStroke.strokeToPageTransform(): AffineTransform =
 private fun PageStroke.pageToStrokeTransform(): AffineTransform =
     strokeToPageTransform().computeInverse()
 
-/** Whether this stroke's page-space geometry is touched at all by an eraser mask. */
-internal fun PageStroke.touches(mask: Stroke): Boolean =
-    stroke.shape.computeCoverageIsGreaterThan(
+/**
+ * Whether this stroke still has any geometry.
+ *
+ * [Stroke.subtract] can cut a mesh away entirely, and Ink's shape comparisons do not tolerate the
+ * result: `computeCoverageIsGreaterThan` reaches a native `CHECK failed: !meshes_.empty()` and
+ * **aborts the process** rather than returning false. So an empty mesh has to be caught here, in
+ * Kotlin, before it is ever handed to one.
+ *
+ * `computeBoundingBox` is the safe test — it returns null for an empty mesh, which is what
+ * [pageBounds] already relies on.
+ */
+private val Stroke.hasGeometry: Boolean
+    get() = shape.computeBoundingBox() != null
+
+/**
+ * Whether this stroke's page-space geometry is touched at all by an eraser mask.
+ *
+ * Guarded on both sides because this runs over *every* stroke on the page: one empty mesh anywhere
+ * in the list took the whole app down on the next eraser touch, wherever that touch landed.
+ */
+internal fun PageStroke.touches(mask: Stroke): Boolean {
+    if (!stroke.hasGeometry || !mask.hasGeometry) return false
+    return stroke.shape.computeCoverageIsGreaterThan(
         other = mask.shape,
         coverageThreshold = 0f,
         otherShapeToThis = pageToStrokeTransform(),
     )
+}
 
 /** The strokes that existed at erase time and actually overlap this mask. */
 internal fun List<PageStroke>.targetsFor(mask: Stroke): List<String> =
@@ -139,7 +160,7 @@ private val Stroke.isDrawnFromOutlines: Boolean
 @OptIn(ExperimentalInkEraserApi::class)
 internal fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<String>): List<PageStroke> {
     val targets = targetIds.toSet()
-    if (targets.isEmpty()) return this
+    if (targets.isEmpty() || !mask.hasGeometry) return this
     return flatMap { pageStroke ->
         if (pageStroke.id !in targets) {
             listOf(pageStroke)
@@ -150,7 +171,10 @@ internal fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<Strin
                 strokeToWorldTransform = pageStroke.strokeToPageTransform(),
             )
             if (cut.isDrawnFromOutlines) {
-                listOf(pageStroke.copy(stroke = cut))
+                // Erased down to nothing is erased. The other branch gets this for free — an empty
+                // mesh splits into no components — but this one would keep a stroke with no
+                // geometry, invisible on the page and fatal to the next comparison it meets.
+                if (cut.hasGeometry) listOf(pageStroke.copy(stroke = cut)) else emptyList()
             } else {
                 cut.split(strokeToWorldTransform = pageStroke.strokeToPageTransform(), tolerance = 0f)
                     .map { component -> pageStroke.copy(stroke = component) }
@@ -176,7 +200,7 @@ internal fun List<PageStroke>.eraseObjects(
     targetIds: Collection<String>,
 ): List<PageStroke> {
     val targets = targetIds.toSet()
-    if (targets.isEmpty()) return this
+    if (targets.isEmpty() || !mask.hasGeometry) return this
     return flatMap { pageStroke ->
         if (pageStroke.id !in targets) {
             listOf(pageStroke)
@@ -185,6 +209,8 @@ internal fun List<PageStroke>.eraseObjects(
         } else {
             pageStroke.stroke
                 .split(strokeToWorldTransform = pageStroke.strokeToPageTransform(), tolerance = 0f)
+                // A component with no geometry is nothing to keep, and nothing safe to compare.
+                .filter { it.hasGeometry }
                 .filterNot { component ->
                     component.shape.computeCoverageIsGreaterThan(
                         other = mask.shape,

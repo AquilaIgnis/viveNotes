@@ -125,14 +125,7 @@ fun ColumnScope.PenPanelContent(
             onChange(pen.copy(holdToDrawShape = it))
         }
     }
-    PanelSetting(
-        label = "Scribble to erase",
-        info = "Scrub back and forth over ink to rub it out, without switching to the eraser.",
-    ) {
-        PanelToggle("Scribble to erase", pen.scribbleToErase) {
-            onChange(pen.copy(scribbleToErase = it))
-        }
-    }
+   
     PanelSlider(
         field = "Thickness",
         label = "Thickness",
@@ -140,6 +133,9 @@ fun ColumnScope.PenPanelContent(
         range = PenPreset.MIN_THICKNESS..PenPreset.MAX_THICKNESS,
         onChange = { onChange(pen.copy(thickness = it)) },
         sizePreviewColor = Color(pen.colorArgb),
+        // Half a dp per stop. Whole numbers are too coarse where the range starts: 1 to 2 doubles
+        // the line, and that is the end of the range people actually write at.
+        step = PenPreset.THICKNESS_STEP,
     )
 
     Spacer(Modifier.height(2.dp))
