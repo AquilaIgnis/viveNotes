@@ -40,6 +40,18 @@ private val DarkColors = darkColorScheme(
     // A step down in emphasis from [primary], which is what secondary is for — so a shade, not a
     // tint: a secondary brighter than the primary inverts the hierarchy it exists to express.
     secondary = Color(0xFF0063C6),
+    // **The exact complement of the brand azure**, and it belongs in `tertiary` for that reason —
+    // Material's third slot exists for an accent that balances the primary rather than extends it.
+    // #007FFF and #FF8000 are complements to the digit, which is why the pairing reads as deliberate
+    // rather than as a second brand colour. Chosen by the user as the *fill* of the math action
+    // buttons, which is what decides [onTertiary]: a near-black label rides it at 6.55:1.
+    //
+    // Both schemes carry it unaltered — see [LightColors] for why a fill escapes the darkening every
+    // other accent in this file needs.
+    tertiary = Color(0xFFFF8000),
+    onTertiary = Color(0xFF1F1F1F),
+    tertiaryContainer = Color(0xFF7A3D00),
+    onTertiaryContainer = Color(0xFFFFD9B3),
     background = Color(0xFF1F1F1F),
     onBackground = Color(0xFFE6E6E6),
     surface = Color(0xFF2B2B2B),
@@ -70,6 +82,21 @@ private val LightColors = lightColorScheme(
     primaryContainer = Color(0xFFB3D9FF),
     onPrimaryContainer = Color(0xFF001C39),
     secondary = Color(0xFF0055AA),
+    // **The same #FF8000 as the dark scheme, unshaded** — and the reason is that it is a *fill*.
+    //
+    // It was briefly darkened to #B35900 here, on the rule that governs every other accent in this
+    // file: a colour used as a label or an outline must clear 4.5:1 against the surface behind it, and
+    // #FF8000 manages only 2.52:1 on white. That rule does not apply to a button's container. What has
+    // to be legible is the label *on* the fill, which is [onTertiary] at 6.55:1 in both schemes, so
+    // the light theme can wear the exact colour the user picked instead of an approximation of it.
+    //
+    // The one thing it costs: the button's edge against a white pane is 2.52:1, under the 3:1 that
+    // WCAG 1.4.11 asks of a component boundary. A hairline outline would fix that if it ever matters;
+    // the label carries the identification in the meantime.
+    tertiary = Color(0xFFFF8000),
+    onTertiary = Color(0xFF1F1F1F),
+    tertiaryContainer = Color(0xFFFFDCC2),
+    onTertiaryContainer = Color(0xFF3A1A00),
     background = Color(0xFFFAFAFA),
     onBackground = Color(0xFF1B1B1B),
     surface = Color(0xFFFFFFFF),

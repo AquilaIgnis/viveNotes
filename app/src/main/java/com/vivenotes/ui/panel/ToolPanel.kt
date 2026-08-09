@@ -12,10 +12,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
@@ -25,6 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -425,6 +430,43 @@ private const val SWITCH_SCALE = 0.6f
 /** Material 3's own track size, which `Switch` gives no way to ask for. */
 private val SWITCH_WIDTH = 52.dp
 private val SWITCH_HEIGHT = 32.dp
+
+/**
+ * A button at the smallest size M3 Expressive defines, for panes that are a column of controls.
+ *
+ * **Sized through the expressive API rather than by hand.** `ButtonDefaults.ExtraSmallContainerHeight`
+ * comes with `contentPaddingFor`, which is the padding Material intends at that height — writing
+ * `height(32.dp)` and guessing the padding instead is how a button ends up with its label off-centre
+ * or clipped in another locale.
+ *
+ * A default-size button is 40dp plus its padding, which is right for a dialog and wasteful in a 320dp
+ * pane where four of them stack under a preview. This gets a third of that height back per row.
+ *
+ * [colors] is the escape hatch for a row that should read as its own family — pass
+ * `ButtonDefaults.buttonColors(containerColor = colorScheme.tertiary, contentColor = onTertiary)` and
+ * the whole row fills with the complement instead of the brand azure. Taking a `ButtonColors` rather
+ * than a single accent keeps the container/label pairing together, which is the pairing that has to
+ * stay legible.
+ */
+@Composable
+fun PanelButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    colors: ButtonColors = ButtonDefaults.buttonColors(),
+    content: @Composable RowScope.() -> Unit,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = colors,
+        contentPadding = ButtonDefaults.contentPaddingFor(PANEL_BUTTON_HEIGHT),
+        modifier = modifier.heightIn(min = PANEL_BUTTON_HEIGHT),
+        content = content,
+    )
+}
+
+private val PANEL_BUTTON_HEIGHT = ButtonDefaults.ExtraSmallContainerHeight
 
 /**
  * A whole number chosen from a short range, shown as the chip the reference shows.

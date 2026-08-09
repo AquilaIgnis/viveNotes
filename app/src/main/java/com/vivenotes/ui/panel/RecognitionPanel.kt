@@ -2,6 +2,7 @@ package com.vivenotes.ui.panel
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
@@ -11,13 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,14 +28,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vivenotes.math.FormulaToolsState
@@ -70,10 +75,14 @@ internal object RecognitionPanelTags {
  * How big the in-button indicator is drawn.
  *
  * Not `LoadingIndicatorDefaults.IndicatorSize`, which is sized for a wait that owns its own space.
- * Inside an `OutlinedButton` it stands in for a text label, so it matches roughly what that label
- * occupied — a full-size indicator would resize the button the moment an action started running.
+ * Inside a button it stands in for a text label, so it matches roughly what that label occupied — a
+ * full-size indicator would resize the button the moment an action started running.
+ *
+ * 16dp rather than the 20 it started at: the action buttons are now [PanelButton], whose container is
+ * `ButtonDefaults.ExtraSmallContainerHeight`, and 20dp left the indicator touching the padding at top
+ * and bottom.
  */
-private val IN_BUTTON_INDICATOR = 20.dp
+private val IN_BUTTON_INDICATOR = 16.dp
 
 /**
  * Editable recognition output, with a native RaTeX preview directly below formula source.
@@ -122,22 +131,19 @@ internal fun ColumnScope.RecognitionPanelContent(
     var copied by remember(state.kind) { mutableStateOf(false) }
     val sourceLabel = if (state.kind == RecognitionOutputKind.Formula) "LaTeX" else "Text"
     PanelSection(sourceLabel) {
-        OutlinedTextField(
+        SourceField(
             value = state.value,
             onValueChange = {
                 copied = false
                 onValueChange(it)
             },
-            minLines = 3,
-            maxLines = 10,
-            modifier = Modifier.fillMaxWidth().testTag(RecognitionPanelTags.SOURCE),
         )
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Button(
+            PanelButton(
                 onClick = {
                     onCopy(state.value)
                     copied = true
@@ -217,7 +223,7 @@ private fun ColumnScope.FormulaToolsContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Box(Modifier.testTag(RecognitionPanelTags.INTERPRETATION)) {
-            EquationPreview(analysis.normalizedLatex)
+            EquationPreview(analysis.normalizedLatex, scale = INTERPRETATION_SCALE)
         }
     }
 
@@ -227,9 +233,17 @@ private fun ColumnScope.FormulaToolsContent(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             analysis.actions.forEach { action ->
-                OutlinedButton(
+                PanelButton(
                     onClick = { onAction(action.id) },
                     enabled = state.executingActionId == null,
+                    // Filled with the complement of the brand azure — `tertiary`, the user's #FF8000.
+                    // These were outlined and drawn in `primary`, which is what read as washed out.
+                    // Filled also separates them from Copy above, which stays azure: the math actions
+                    // are a family of their own, not more of the same button.
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiary,
+                        contentColor = MaterialTheme.colorScheme.onTertiary,
+                    ),
                     modifier = Modifier.testTag(RecognitionPanelTags.action(action.id)),
                 ) {
                     if (state.executingActionId == action.id) {
@@ -260,7 +274,7 @@ private fun ColumnScope.FormulaToolsContent(
         PanelSection(result.title) {
             result.latex?.takeIf(String::isNotBlank)?.let { latex ->
                 EquationPreview(latex)
-                Button(
+                PanelButton(
                     onClick = { onCopyResult(latex) },
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
@@ -280,6 +294,74 @@ private fun ColumnScope.FormulaToolsContent(
         }
     }
 }
+
+/**
+ * The recognised source, editable — LaTeX or prose.
+ *
+ * **Not an `OutlinedTextField`, and the reason is vertical space.** Material's field is built for a
+ * form: 16dp of padding above and below, `bodyLarge` inside, and a container tall enough to hold a
+ * floating label this one never shows. In a 320dp pane the field is followed by a preview, an
+ * interpretation, a row of actions and often a graph, and the field was eating the room they need.
+ * This is the same construction [PanelMeasure] uses — a `BasicTextField` inside a bordered box — so
+ * the panel keeps one field idiom rather than two.
+ *
+ * **Monospaced, because LaTeX is code.** It is read for its backslashes and braces, where a
+ * proportional face closes up `\\,` and `{}` into mush; monospace also fits more characters per line,
+ * which is the other half of making the box smaller.
+ *
+ * **One line minimum, so the box is the size of what is in it.** This is the part that was actually
+ * wrong: `minLines` held the field open at three lines and then two, so a one-line formula — which is
+ * most of them — was followed by a band of empty field. A minimum is for a box you expect to type a
+ * lot into; this one usually holds a correction. Six maximum, so a long expression still scrolls
+ * inside the field rather than pushing the preview off the pane.
+ */
+@Composable
+private fun SourceField(value: String, onValueChange: (String) -> Unit) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        minLines = 1,
+        maxLines = 6,
+        textStyle = TextStyle(
+            color = MaterialTheme.colorScheme.onSurface,
+            fontFamily = FontFamily.Monospace,
+            fontSize = SOURCE_TEXT_SIZE,
+            lineHeight = SOURCE_LINE_HEIGHT,
+        ),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 4.dp)
+            .testTag(RecognitionPanelTags.SOURCE),
+    )
+}
+
+/**
+ * 12sp — tried at 7.5 and brought back up, because that was too small to read on the device.
+ *
+ * The box is still much shorter than it was, and `minLines = 1` is where nearly all of that came from:
+ * holding the field open for three lines cost more room than the type size ever did. Padding stays
+ * tight at 6/4dp.
+ */
+private val SOURCE_TEXT_SIZE = 12.sp
+private val SOURCE_LINE_HEIGHT = 15.sp
+
+/** What a rendered equation is drawn at, and the box it is drawn in, before any scaling. */
+private val PREVIEW_FONT_SIZE = 24.sp
+private val PREVIEW_MIN_HEIGHT = 96.dp
+private val PREVIEW_PADDING = 32.dp
+
+/**
+ * The interpretation renders at 85%.
+ *
+ * It is the same expression as the Preview above it, re-rendered from SymPy's normalisation — a
+ * confirmation that the engine read it correctly, not the thing you are reading. Drawing it at full
+ * size gave one formula two equal-weight appearances in a pane already short of height. The Preview
+ * and the operation result keep 100%: those are the answers.
+ */
+private const val INTERPRETATION_SCALE = 0.85f
 
 @Composable
 private fun MathGraphPreview(graph: MathGraph) {
@@ -356,11 +438,15 @@ private fun MathGraphPreview(graph: MathGraph) {
 private fun Double.compact(): String = if (this == toLong().toDouble()) toLong().toString() else "%.2f".format(this)
 
 @Composable
-private fun EquationPreview(latex: String) {
+private fun EquationPreview(latex: String, scale: Float = 1f) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val color = MaterialTheme.colorScheme.onSurface.toArgb()
-    val fontSizePx = with(density) { 24.sp.toPx() }
+    // Scaled together, so the block shrinks rather than the glyphs rattling inside a box that did
+    // not: the type, the floor height and the breathing room above and below all take the same factor.
+    val fontSizePx = with(density) { (PREVIEW_FONT_SIZE * scale).toPx() }
+    val minHeight = PREVIEW_MIN_HEIGHT * scale
+    val verticalPadding = PREVIEW_PADDING * scale
     var preview by remember { mutableStateOf<EquationPreviewState>(EquationPreviewState.Empty) }
 
     LaunchedEffect(latex, color, fontSizePx) {
@@ -385,7 +471,7 @@ private fun EquationPreview(latex: String) {
         .testTag(RecognitionPanelTags.PREVIEW)
     when (val current = preview) {
         EquationPreviewState.Empty -> Box(
-            modifier = baseModifier.height(96.dp),
+            modifier = baseModifier.height(minHeight),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -394,7 +480,7 @@ private fun EquationPreview(latex: String) {
             )
         }
         is EquationPreviewState.Failed -> Box(
-            modifier = baseModifier.height(96.dp).padding(12.dp),
+            modifier = baseModifier.height(minHeight).padding(12.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -407,7 +493,7 @@ private fun EquationPreview(latex: String) {
             val renderer = current.renderer
             val contentHeightPx = renderer.heightPx + renderer.depthPx
             val previewHeight = with(density) {
-                (contentHeightPx + 32.dp.toPx()).toDp().coerceAtLeast(96.dp)
+                (contentHeightPx + verticalPadding.toPx()).toDp().coerceAtLeast(minHeight)
             }
             Canvas(modifier = baseModifier.height(previewHeight)) {
                 val x = ((size.width - renderer.widthPx) / 2f).coerceAtLeast(0f)
