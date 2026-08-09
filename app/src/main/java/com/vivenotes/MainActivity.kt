@@ -11,6 +11,8 @@ import androidx.lifecycle.ViewModelProvider
 import com.vivenotes.ui.NotesApp
 import com.vivenotes.ui.NotesViewModel
 import com.vivenotes.ui.handleShortcut
+import com.vivenotes.ui.handleStylusButton
+import com.vivenotes.ui.isStylusButton
 import com.vivenotes.ui.shortcutGroups
 import com.vivenotes.ui.theme.ViveNotesTheme
 
@@ -48,7 +50,15 @@ class MainActivity : ComponentActivity() {
      * presses nothing else wanted reach the canvas.
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
-        viewModel.handleShortcut(keyCode, event) || super.onKeyDown(keyCode, event)
+        // Claimed but not acted on: a stylus button is handled at up — `ui/StylusButtons.kt` says
+        // why. Claiming the down-press keeps anything else from acting on the same click.
+        isStylusButton(keyCode) ||
+            viewModel.handleShortcut(keyCode, event) ||
+            super.onKeyDown(keyCode, event)
+
+    /** Where a stylus barrel button is acted on — see `ui/StylusButtons.kt`. */
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean =
+        viewModel.handleStylusButton(keyCode) || super.onKeyUp(keyCode, event)
 
     /** What the system's Meta + / shortcut panel lists for this app. */
     override fun onProvideKeyboardShortcuts(

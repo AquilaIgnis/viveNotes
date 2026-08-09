@@ -121,7 +121,8 @@ fun NotesApp(
     val focusManager = LocalFocusManager.current
     val recognitionScope = rememberCoroutineScope()
 
-    var activeTab by remember { mutableStateOf(RibbonTab.Home) }
+    // Hoisted into the view model, because a stylus button can change it — see `ui/StylusButtons.kt`.
+    val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
     /** The docked pane, if any. Deliberately not persisted: it is where you are, not what you have. */
     var openPane by remember { mutableStateOf<ToolPane?>(null) }
@@ -284,7 +285,7 @@ fun NotesApp(
                     Ribbon(
                         selection = selection,
                         activeTab = activeTab,
-                        onTabChange = { activeTab = it },
+                        onTabChange = viewModel::selectRibbonTab,
                         onCommand = viewModel::send,
                         defaults = defaults,
                         onSetDefault = viewModel::setDefaultFont,

@@ -65,6 +65,7 @@ import com.vivenotes.ink.replayResize
 import com.vivenotes.ink.resizeSelected
 import com.vivenotes.ink.subtract
 import com.vivenotes.ink.targetsFor
+import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ink.translatedCopy
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
@@ -369,6 +370,34 @@ class NotesViewModel(
      */
     private val _tool = MutableStateFlow<DrawTool>(DrawTool.Pen(0))
     val tool: StateFlow<DrawTool> = _tool.asStateFlow()
+
+    /**
+     * Which ribbon tab is open.
+     *
+     * Held here rather than in `NotesApp`'s `remember` because it is no longer only the tab strip's
+     * business: a stylus button changes the tool, and the tab that shows tools has to come forward
+     * with it — see `ui/StylusButtons.kt`. Transient like [_tool], and for the same reason.
+     */
+    private val _activeTab = MutableStateFlow(RibbonTab.Home)
+    val activeTab: StateFlow<RibbonTab> = _activeTab.asStateFlow()
+
+    fun selectRibbonTab(tab: RibbonTab) {
+        _activeTab.value = tab
+    }
+
+    /**
+     * A stylus barrel-button press — `ui/StylusButtons.kt` decides what it arms and says why.
+     *
+     * Stateless, because the pen has already done the counting: a double click arrives as its own
+     * keycode rather than as two presses this had to time.
+     *
+     * The Draw tab comes forward on every press. A button that silently changes what the pen does,
+     * while the ribbon still shows Home, is a tool swap you have to discover by drawing.
+     */
+    fun pressStylusButton(press: StylusPress) {
+        selectTool(nextToolForStylusButton(_tool.value, press))
+        selectRibbonTab(RibbonTab.Draw)
+    }
 
     /** The open page's ink, in draw order. Empty while no page is open. */
     private val _strokes = MutableStateFlow<List<PageStroke>>(emptyList())
