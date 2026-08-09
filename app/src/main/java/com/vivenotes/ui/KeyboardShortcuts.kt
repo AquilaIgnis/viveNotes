@@ -98,6 +98,39 @@ internal fun NotesViewModel.handleShortcut(keyCode: Int, event: KeyEvent): Boole
     return true
 }
 
+/**
+ * How a shortcut reads on screen — "Ctrl+Shift+Z".
+ *
+ * Spelled out here rather than in the panel that shows it, beside the [keyCode] and [modifiers] it
+ * is derived from: `KeyEvent.keyCodeToString` returns `KEYCODE_EQUALS`, which is not what anyone has
+ * printed on their keyboard, so the mapping is a fact about this table.
+ */
+internal val AppShortcut.chord: String
+    get() = buildString {
+        if (modifiers and KeyEvent.META_CTRL_ON != 0) append("Ctrl+")
+        if (modifiers and KeyEvent.META_SHIFT_ON != 0) append("Shift+")
+        if (modifiers and KeyEvent.META_ALT_ON != 0) append("Alt+")
+        append(keyLabel(keyCode))
+    }
+
+private fun keyLabel(keyCode: Int): String = when (keyCode) {
+    KeyEvent.KEYCODE_EQUALS, KeyEvent.KEYCODE_NUMPAD_ADD -> "="
+    KeyEvent.KEYCODE_MINUS, KeyEvent.KEYCODE_NUMPAD_SUBTRACT -> "−"
+    KeyEvent.KEYCODE_TAB -> "Tab"
+    else -> KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_").removePrefix("NUMPAD_")
+}
+
+/**
+ * The listed shortcuts as the Hardware pane draws them: group heading, then rows.
+ *
+ * Shares [APP_SHORTCUTS] and its `listed` flag with [shortcutGroups] for the reason given in the
+ * KDoc above — a third hand-kept list of shortcuts is a third thing to fall out of date.
+ */
+internal fun shortcutRows(): List<Pair<String, List<AppShortcut>>> =
+    APP_SHORTCUTS.filter { it.listed }
+        .groupBy { it.group }
+        .map { (group, shortcuts) -> group to shortcuts }
+
 /** The same table as the system's Meta + / panel wants it — grouped, in declaration order. */
 internal fun shortcutGroups(): List<KeyboardShortcutGroup> =
     APP_SHORTCUTS.filter { it.listed }

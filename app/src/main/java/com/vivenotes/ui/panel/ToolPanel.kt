@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -41,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -55,6 +57,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.shell.swipeRight
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
@@ -69,12 +72,16 @@ enum class ToolPane(val title: String) {
     PaperSize("Paper Size"),
     AiModels("Integrated AI"),
     Recognition("Recognition"),
+    Hardware("Hardware"),
 }
 
 /** A pane's fields are addressable by the label beside them. */
 internal object PanelTags {
     fun field(label: String) = "panel-field-$label"
     fun sizePreview(label: String) = "panel-size-preview-$label"
+
+    /** The pane itself, which the dismiss swipe is performed on. */
+    const val PANE = "tool-pane"
 }
 
 /**
@@ -96,7 +103,12 @@ fun ToolPanel(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface),
+            .background(MaterialTheme.colorScheme.surface)
+            // Dismissed the way it arrived: this pane is docked on the right, so it is pushed off to
+            // the right. The same gesture and threshold the notebook rail and page list use to hide
+            // themselves leftward — see `shell/SwipeToHide.kt`.
+            .swipeRight(onClose)
+            .testTag(PanelTags.PANE),
     ) {
         Row(
             modifier = Modifier
@@ -331,14 +343,38 @@ fun PanelSetting(label: String, info: String? = null, trailing: @Composable () -
     }
 }
 
+/**
+ * Material's switch at [SWITCH_SCALE], because at full size it is the heaviest thing in a pane of
+ * text and reads as the point of the row rather than the answer to it.
+ *
+ * Drawn small rather than built small: `Switch` has no size parameter, so this is `requiredSize` to
+ * keep its own geometry, `scale` to draw it down, and a box of the scaled size so the row lays out
+ * against what is actually on screen — without that last part every toggle would sit 10dp shy of the
+ * right edge that the other controls line up with.
+ */
 @Composable
 fun PanelToggle(field: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Switch(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        modifier = Modifier.testTag(PanelTags.field(field)),
-    )
+    Box(
+        modifier = Modifier.size(SWITCH_WIDTH * SWITCH_SCALE, SWITCH_HEIGHT * SWITCH_SCALE),
+        contentAlignment = Alignment.Center,
+    ) {
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier
+                .requiredSize(SWITCH_WIDTH, SWITCH_HEIGHT)
+                .scale(SWITCH_SCALE)
+                .testTag(PanelTags.field(field)),
+        )
+    }
 }
+
+/** 40% smaller. */
+private const val SWITCH_SCALE = 0.6f
+
+/** Material 3's own track size, which `Switch` gives no way to ask for. */
+private val SWITCH_WIDTH = 52.dp
+private val SWITCH_HEIGHT = 32.dp
 
 /**
  * A whole number chosen from a short range, shown as the chip the reference shows.

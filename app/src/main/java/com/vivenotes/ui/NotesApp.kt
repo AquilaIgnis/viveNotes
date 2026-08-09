@@ -61,6 +61,7 @@ import com.vivenotes.ui.editor.Ribbon
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
 import com.vivenotes.ui.panel.AiModelsPanelContent
+import com.vivenotes.ui.panel.HardwarePanelContent
 import com.vivenotes.ui.panel.PaperSizePanelContent
 import com.vivenotes.ui.panel.RecognitionOutputKind
 import com.vivenotes.ui.panel.RecognitionPanelContent
@@ -381,6 +382,7 @@ fun NotesApp(
                                 ToolPaneHost(
                                     pane = toolPane,
                                     style = state.pageStyle,
+                                    allowFinger = drawWithFinger,
                                     aiModels = aiModels,
                                     onDownloadFormula = aiModelStore::downloadFormula,
                                     recognition = recognition,
@@ -438,6 +440,7 @@ fun NotesApp(
                                 ToolPaneHost(
                                     pane = toolPane,
                                     style = state.pageStyle,
+                                    allowFinger = drawWithFinger,
                                     aiModels = aiModels,
                                     onDownloadFormula = aiModelStore::downloadFormula,
                                     recognition = recognition,
@@ -520,6 +523,8 @@ private fun paneBehind(pane: CompactPane): CompactPane = when (pane) {
 private fun ToolPaneHost(
     pane: ToolPane,
     style: PageStyle,
+    /** Hardware pane. A property of this device, which is the whole rule for what that pane holds. */
+    allowFinger: Boolean,
     aiModels: AiModelsState,
     onDownloadFormula: () -> Unit,
     recognition: RecognitionPanelState?,
@@ -544,6 +549,10 @@ private fun ToolPaneHost(
             ToolPane.AiModels -> AiModelsPanelContent(
                 state = aiModels,
                 onDownloadFormula = onDownloadFormula,
+            )
+            ToolPane.Hardware -> HardwarePanelContent(
+                allowFinger = allowFinger,
+                onSetDrawWithFinger = viewModel::setDrawWithFinger,
             )
             ToolPane.Recognition -> recognition?.let { result ->
                 RecognitionPanelContent(

@@ -219,7 +219,7 @@ fun Ribbon(
                 onChangeTable = draw.updateTable,
                 onAddColor = draw.addPaletteColor,
             )
-            RibbonTab.RibonSettings -> SettingsTab(ai)
+            RibbonTab.RibonSettings -> SettingsTab(ai = ai, openPane = view.openPane)
             else -> PlaceholderTab(activeTab)
         }
     }

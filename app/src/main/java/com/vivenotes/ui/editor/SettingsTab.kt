@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ui.ScrollingRow
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.panel.ToolPane
 
 @Immutable
 data class AiActions(
@@ -19,6 +20,7 @@ data class AiActions(
 
 internal object SettingsTags {
     const val INTEGRATED = "settings-integrated"
+    const val HARDWARE = "settings-hardware"
 }
 
 /**
@@ -30,7 +32,7 @@ internal object SettingsTags {
  * every other tab is for.
  */
 @Composable
-internal fun SettingsTab(ai: AiActions) {
+internal fun SettingsTab(ai: AiActions, openPane: (ToolPane) -> Unit) {
     ScrollingRow(
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
@@ -41,6 +43,20 @@ internal fun SettingsTab(ai: AiActions) {
                 icon = {
                     Icon(
                         imageVector = MaterialSymbols.Memory,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+            )
+        }
+
+        Box(Modifier.testTag(SettingsTags.HARDWARE)) {
+            RibbonCommand(
+                label = "Hardware",
+                onClick = { openPane(ToolPane.Hardware) },
+                icon = {
+                    Icon(
+                        imageVector = MaterialSymbols.Keyboard,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
