@@ -3,6 +3,8 @@ package com.vivenotes.data
 import android.content.Context
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
+import com.vivenotes.data.db.InkMoveEntity
+import com.vivenotes.data.db.InkMoveTargetEntity
 import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.model.newId
 import kotlinx.serialization.Serializable
@@ -14,6 +16,13 @@ import kotlinx.serialization.json.Json
  * The fixture keeps the original geometry and replay operations, but [materialize] assigns fresh
  * row and group ids on every install. Starter content must not reuse globally visible ids once
  * notebook sync exists.
+ *
+ * **[moves] are as load-bearing as the strokes.** A stroke's stored points are the coordinates the
+ * pen produced and are never rewritten, so where ink sits on the page is the stroke *plus* every
+ * lasso drag replayed over it. Schema 1 carried only strokes and erases, which meant a fixture
+ * exported from a page whose ink had been dragged into place seeded that ink back at its original
+ * scatter. Anything captured from a real page after arranging it needs this list or the arrangement
+ * is silently lost.
  */
 @Serializable
 data class StarterInkPageFixture(
@@ -24,6 +33,8 @@ data class StarterInkPageFixture(
     val strokes: List<StarterStroke>,
     val erases: List<StarterErase>,
     val eraseTargets: List<StarterEraseTarget>,
+    val moves: List<StarterMove> = emptyList(),
+    val moveTargets: List<StarterMoveTarget> = emptyList(),
 ) {
     init {
         require(schemaVersion == SCHEMA_VERSION) { "Unsupported starter-ink schema $schemaVersion" }
@@ -35,10 +46,22 @@ data class StarterInkPageFixture(
         require(erases.map(StarterErase::id).distinct().size == erases.size) {
             "Starter-ink erase ids are not unique"
         }
+        require(moves.map(StarterMove::id).distinct().size == moves.size) {
+            "Starter-ink move ids are not unique"
+        }
         val strokeIds = strokes.mapTo(mutableSetOf(), StarterStroke::id)
         val eraseIds = erases.mapTo(mutableSetOf(), StarterErase::id)
+        val moveIds = moves.mapTo(mutableSetOf(), StarterMove::id)
         require(eraseTargets.all { it.strokeId in strokeIds && it.eraseId in eraseIds }) {
             "Starter-ink erase target references a missing row"
+        }
+        require(moveTargets.all { it.strokeId in strokeIds && it.moveId in moveIds }) {
+            "Starter-ink move target references a missing row"
+        }
+        // A transform with nothing left to transform is not replayed by the canvas, and keeping it
+        // would only invite a later reader to think some stroke was meant to be in its target set.
+        require(moves.all { move -> moveTargets.any { it.moveId == move.id } }) {
+            "Starter-ink move has no targets"
         }
     }
 
@@ -46,6 +69,7 @@ data class StarterInkPageFixture(
         val strokeIds = strokes.associate { it.id to newId() }
         val groupIds = strokes.mapNotNull(StarterStroke::groupId).distinct().associateWith { newId() }
         val eraseIds = erases.associate { it.id to newId() }
+        val moveIds = moves.associate { it.id to newId() }
         return MaterializedStarterInk(
             strokes = strokes.map { source ->
                 InkStrokeEntity(
@@ -85,12 +109,35 @@ data class StarterInkPageFixture(
                     strokeId = strokeIds.getValue(source.strokeId),
                 )
             },
+            moves = moves.map { source ->
+                InkMoveEntity(
+                    id = moveIds.getValue(source.id),
+                    pageId = pageId,
+                    dxDp = source.dxDp,
+                    dyDp = source.dyDp,
+                    scaleX = source.scaleX,
+                    scaleY = source.scaleY,
+                    anchorX = source.anchorX,
+                    anchorY = source.anchorY,
+                    points = source.pointsHex.hexBytes(),
+                    enc = source.enc,
+                    createdAt = source.createdAt,
+                )
+            },
+            moveTargets = moveTargets.map { source ->
+                InkMoveTargetEntity(
+                    moveId = moveIds.getValue(source.moveId),
+                    strokeId = strokeIds.getValue(source.strokeId),
+                )
+            },
         )
     }
 
     companion object {
         const val ASSET_PATH = "default_notebook/recognition_page_2.json"
-        private const val SCHEMA_VERSION = 1
+
+        /** 2 — [moves]; a schema-1 fixture seeded arranged ink back at its unarranged coordinates. */
+        private const val SCHEMA_VERSION = 2
         private val json = Json { ignoreUnknownKeys = true }
 
         fun load(context: Context): StarterInkPageFixture =
@@ -151,10 +198,48 @@ data class StarterEraseTarget(
     val strokeId: String,
 )
 
+/**
+ * One replayed lasso transform: a drag, a corner resize, or both at once.
+ *
+ * [pointsHex] is the lasso path, not the ink. Replay applies the transform only to a target stroke
+ * whose outline still falls inside that path, so the path has to survive the export as exactly as
+ * the stroke payloads do.
+ */
+@Serializable
+data class StarterMove(
+    val id: String,
+    val dxDp: Float,
+    val dyDp: Float,
+    val scaleX: Float,
+    val scaleY: Float,
+    val anchorX: Float,
+    val anchorY: Float,
+    val pointsHex: String,
+    val enc: String,
+    val createdAt: Long,
+) {
+    init {
+        require(dxDp.isFinite() && dyDp.isFinite()) { "Starter move $id has a non-finite offset" }
+        require(scaleX.isFinite() && scaleY.isFinite() && scaleX > 0f && scaleY > 0f) {
+            "Starter move $id has an invalid scale"
+        }
+        require(anchorX.isFinite() && anchorY.isFinite()) { "Starter move $id has a non-finite anchor" }
+        pointsHex.requireHex("Starter move $id")
+    }
+}
+
+@Serializable
+data class StarterMoveTarget(
+    val moveId: String,
+    val strokeId: String,
+)
+
 internal data class MaterializedStarterInk(
     val strokes: List<InkStrokeEntity>,
     val erases: List<InkEraseEntity>,
     val eraseTargets: List<InkEraseTargetEntity>,
+    val moves: List<InkMoveEntity> = emptyList(),
+    val moveTargets: List<InkMoveTargetEntity> = emptyList(),
 )
 
 private fun String.requireHex(label: String) {

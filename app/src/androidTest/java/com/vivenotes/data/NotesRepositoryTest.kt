@@ -130,11 +130,15 @@ class NotesRepositoryTest {
         val fixturePageId = pages[1].first
         val strokes = repository.inkFor(fixturePageId)
         val erases = repository.partialErasesFor(fixturePageId)
-        assertEquals(66, strokes.size)
-        assertEquals(7, erases.size)
-        assertEquals(15, erases.sumOf { it.targets.size })
+        val moves = repository.inkMovesFor(fixturePageId)
+        assertEquals(433, strokes.size)
+        assertEquals(87, erases.size)
+        assertEquals(330, erases.sumOf { it.targets.size })
+        assertEquals(19, moves.size)
+        assertEquals(589, moves.sumOf { it.targets.size })
         assertTrue(strokes.all { it.pageId == fixturePageId && it.deletedAt == null })
         assertTrue(erases.all { it.erase.pageId == fixturePageId && it.erase.deletedAt == null })
+        assertTrue(moves.all { it.move.pageId == fixturePageId && it.move.deletedAt == null })
 
         val sourcesBySequence = fixture.strokes.associateBy { it.seq }
         strokes.forEach { stored ->
@@ -156,6 +160,23 @@ class NotesRepositoryTest {
             assertArrayEquals(source.pointsHex.hexBytesForTest(), stored.erase.points)
             assertEquals(
                 fixture.eraseTargets.count { it.eraseId == source.id },
+                stored.targets.size,
+            )
+        }
+        // The transforms decide where the ink sits, so a fixture that seeds the strokes but loses
+        // these seeds a scattered page that still passes every stroke assertion above.
+        fixture.moves.sortedBy { it.createdAt }.zip(moves).forEach { (source, stored) ->
+            assertNotEquals("source move ids must be remapped per install", source.id, stored.move.id)
+            assertEquals(source.dxDp, stored.move.dxDp)
+            assertEquals(source.dyDp, stored.move.dyDp)
+            assertEquals(source.scaleX, stored.move.scaleX)
+            assertEquals(source.scaleY, stored.move.scaleY)
+            assertEquals(source.anchorX, stored.move.anchorX)
+            assertEquals(source.anchorY, stored.move.anchorY)
+            assertEquals(source.createdAt, stored.move.createdAt)
+            assertArrayEquals(source.pointsHex.hexBytesForTest(), stored.move.points)
+            assertEquals(
+                fixture.moveTargets.count { it.moveId == source.id },
                 stored.targets.size,
             )
         }

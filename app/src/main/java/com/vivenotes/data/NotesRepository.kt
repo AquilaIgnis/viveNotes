@@ -324,6 +324,8 @@ class NotesRepository(
                 ink.insert(rows.strokes)
                 rows.erases.forEach { inkErases.insert(it) }
                 inkErases.insertTargets(rows.eraseTargets)
+                rows.moves.forEach { inkMoves.insert(it) }
+                inkMoves.insertTargets(rows.moveTargets)
             }
         }
     }
