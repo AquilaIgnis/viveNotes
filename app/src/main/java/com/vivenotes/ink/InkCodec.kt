@@ -29,6 +29,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The boundary between the stored ink and `androidx.ink`, exactly as `richtext/SpannableCodec.kt` is
@@ -68,6 +69,9 @@ object InkCodec {
     private const val FAMILY_CALLIGRAPHY_PREFIX = "calligraphy-v1-p"
     private const val CALLIGRAPHY_V1_MAX_PRESSURE = 5
 
+    /** Stock, and measured to be irrelevant to smoothing — see [inputModelFor]. */
+    private const val STABILIZATION_UPSAMPLING_HZ = 180
+
     private fun familyId(pen: PenPreset): String = when {
         pen.lineType != LineType.Solid -> FAMILY_DASHED
         // Fountain is the plain pen: one width for the whole stroke, however hard you press. That
@@ -77,6 +81,96 @@ object InkCodec {
         // Keeping it here makes the rendered stroke independent of future pen-setting changes.
         else -> FAMILY_CALLIGRAPHY_PREFIX + pen.pressure.coerceIn(0, CALLIGRAPHY_V1_MAX_PRESSURE)
     }
+
+    /**
+     * How a stabilization level smooths the input — `docs/inkPlan.md` §4, finally applied.
+     *
+     * **The library does the maths, not us.** `BrushFamily.inputModel` is Ink's own stroke modeller:
+     * a sliding window over recent samples, run in native code *inside* the authoring pipeline. A
+     * hand-rolled filter in front of `addToStroke` would fight the latency prediction and give a wet
+     * stroke whose shape disagreed with the dry one.
+     *
+     * The numbers are measured rather than guessed, against a synthetic straight line with a sine
+     * tremor on it (2026-08-10, tablet AVD, wobble = how far the centreline still strays):
+     *
+     * | window | 10 Hz ±3dp | 4 Hz ±4dp |
+     * |---|---|---|
+     * | passthrough | 2.97 | 3.98 |
+     * | 20 ms | 2.66 | 3.94 |
+     * | 40 ms | 2.32 | 3.80 |
+     * | 60 ms | 2.26 | 3.60 |
+     * | 90 ms | 2.26 | 3.17 |
+     * | 140 ms | 2.26 | 2.91 |
+     * | 200 ms | 2.26 | 2.91 |
+     *
+     * Two things that shaped the scale. It **saturates** — past about 60 ms nothing more happens to a
+     * fast tremor and past about 140 ms nothing happens at all — so 120 ms is the top of the range
+     * rather than an arbitrary stop, and levels beyond it would be steps that did nothing. And the
+     * effect is **gentle**: a quarter of the wobble at best. This takes the edge off shake; it does
+     * not turn unsteady handwriting into a ruled line, and a scale that implied otherwise would be a
+     * lie told in five steps.
+     *
+     * `upsamplingFrequencyHz` is deliberately left at the stock 180. It was measured too, and it does
+     * nothing for smoothing — 60, 180 and 400 gave the same wobble to three decimal places. It only
+     * changes how many points the mesh is built from, so moving it would cost triangles and buy
+     * nothing.
+     *
+     * **Level 1 is the library's own default**, which is what every stroke drawn before this existed
+     * was already getting. That is what makes turning this on a no-op for ink already on the page.
+     *
+     * **This mapping is frozen once shipped**, for the reason the family ids above are: the *level*
+     * is what a row stores, so the level → window table is what its meaning depends on. Changing a
+     * number here restyles every stroke ever drawn at that level. A different curve is a new level,
+     * or a new column — never an edit to this one.
+     *
+     * This reverses `docs/inkPlan.md` **ID4**, which located stabilization in a pre-filter over the
+     * raw samples so the filtered points were what got persisted. The harm ID4 named — "changing the
+     * smoothing slider silently rewrites every drawing ever made" — is answered instead by the
+     * per-stroke column: a stroke replays at the level it was drawn at, not the level in hand. What
+     * ID4 still has right is the residual risk, and it is accepted rather than solved: an input model
+     * is the library's to define, so an Ink upgrade that changes what `SlidingWindowModel(40, 180)`
+     * means will reshape old ink, and there is no equivalent of ID6's version pin for it.
+     */
+    internal fun inputModelFor(stabilization: Int): BrushFamily.InputModel =
+        when (stabilization.coerceIn(0, PenPreset.MAX_STABILIZATION)) {
+            // Off means off: the raw samples, with none of Ink's own smoothing. Visibly rougher than
+            // the default, which is the honest meaning of a zero on this stepper.
+            0 -> BrushFamily.InputModel.PASSTHROUGH_MODEL
+            1 -> slidingWindow(20L)
+            2 -> slidingWindow(40L)
+            3 -> slidingWindow(60L)
+            4 -> slidingWindow(90L)
+            else -> slidingWindow(120L)
+        }
+
+    private fun slidingWindow(windowMillis: Long): BrushFamily.InputModel =
+        BrushFamily.InputModel.SlidingWindowModel(
+            windowDurationMillis = windowMillis,
+            upsamplingFrequencyHz = STABILIZATION_UPSAMPLING_HZ,
+        )
+
+    /**
+     * The family for an id, wearing the input model that stabilization level asks for.
+     *
+     * **The highlighter is exempt, and that is not an oversight.** It has no stabilization control
+     * (see [brushFor] and `HighlighterPanel`), so its rows store 0 to mean *not applicable* rather
+     * than *off* — and 0 maps to passthrough. Handing it that would quietly re-render every
+     * highlighter stroke ever saved, rougher than it was drawn, on the next page load.
+     *
+     * Cached because a page load decodes every stroke on it, and each [BrushFamily.copy] is a native
+     * allocation; the key space is a handful of ids across six levels. Concurrent because decoding
+     * runs off the main thread.
+     */
+    private fun family(id: String, stabilization: Int): BrushFamily {
+        val base = family(id)
+        if (id == FAMILY_HIGHLIGHTER) return base
+        val level = stabilization.coerceIn(0, PenPreset.MAX_STABILIZATION)
+        return stabilizedFamilies.getOrPut("$id#$level") {
+            base.copy(inputModel = inputModelFor(level))
+        }
+    }
+
+    private val stabilizedFamilies = ConcurrentHashMap<String, BrushFamily>()
 
     /**
      * The family for an id. Legacy stock-family ids stay here permanently: changing their meaning
@@ -193,9 +287,9 @@ object InkCodec {
     private fun lerp(start: Float, end: Float, amount: Float): Float =
         start + (end - start) * amount
 
-    /** The brush a pen currently draws with. */
+    /** The brush a pen currently draws with, stabilizer included — see [inputModelFor]. */
     fun brushFor(pen: PenPreset): Brush = Brush.createWithColorIntArgb(
-        family = family(familyId(pen)),
+        family = family(familyId(pen), pen.stabilization),
         colorIntArgb = pen.colorArgb,
         // Thickness is in page units, so a stroke is the same width on the page at any zoom.
         size = pen.thickness,
@@ -327,7 +421,12 @@ object InkCodec {
         return runCatching {
             val inputs = decodeInputs(entity.points)
             val brush = Brush.createWithColorIntArgb(
-                family = family(entity.brushFamily),
+                // The stored level, not the pen's current one: a stroke has to come back looking
+                // like the stroke that was drawn. The mesh is derived from the inputs *through* the
+                // input model, so replaying with the wrong one reshapes ink that is already on the
+                // page — which is exactly what the column has been recorded for since the schema
+                // was written.
+                family = family(entity.brushFamily, entity.stabilization),
                 colorIntArgb = entity.colorArgb,
                 size = entity.sizeDp,
                 epsilon = entity.epsilon,

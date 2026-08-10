@@ -2,6 +2,7 @@ package com.vivenotes.ink
 
 import android.graphics.Color as AndroidColor
 import androidx.ink.brush.Brush
+import androidx.ink.brush.BrushFamily
 import androidx.ink.brush.InputToolType
 import androidx.ink.brush.SelfOverlap
 import androidx.ink.brush.behavior.DampingNode
@@ -136,4 +137,121 @@ class InkCodecTest {
 
     private fun calligraphyPen(pressure: Int) =
         PenPreset.starting(0).copy(kind = PenKind.Calligraphy, pressure = pressure)
+
+    // ---------------------------------------------------------------------------------------
+    // Stabilization — `docs/inkPlan.md` §4, applied 2026-08-10
+    // ---------------------------------------------------------------------------------------
+
+    /** A straight line with a 10 Hz tremor on it, sampled at 120 Hz — the shake a stabilizer is for. */
+    private fun shakyLine(): androidx.ink.strokes.StrokeInputBatch =
+        MutableStrokeInputBatch().apply {
+            for (i in 0 until 120) {
+                val seconds = i / 120f
+                add(
+                    InputToolType.STYLUS,
+                    10f + i * 1.5f,
+                    100f + 3f * kotlin.math.sin(2f * Math.PI.toFloat() * 10f * seconds),
+                    (seconds * 1000f).toLong(),
+                )
+            }
+        }.toImmutable()
+
+    /** How far the drawn centreline still strays from the straight line it was meant to be. */
+    private fun wobbleOf(stroke: Stroke): Float {
+        val box = stroke.shape.computeBoundingBox()!!
+        return ((box.yMax - box.yMin) - stroke.brush.size) / 2f
+    }
+
+    private fun strokeAt(level: Int): Stroke = Stroke(
+        brush = InkCodec.brushFor(PenPreset(stabilization = level, thickness = 2f)),
+        inputs = shakyLine(),
+    )
+
+    @Test
+    fun stabilizationActuallyReachesTheStroke() {
+        // The whole point: the stepper was stored and never applied. Off must be rougher than on,
+        // measured on the mesh rather than on the setting that produced it.
+        val off = wobbleOf(strokeAt(0))
+        val most = wobbleOf(strokeAt(PenPreset.MAX_STABILIZATION))
+
+        assertTrue(
+            "stabilization did nothing: off=$off max=$most",
+            most < off - 0.2f,
+        )
+    }
+
+    @Test
+    fun theScaleIsMonotonicAndNeverReversesItself() {
+        // A stepper whose middle settings undid each other would be worse than none. Equal is
+        // allowed — the window saturates against a fast tremor — but rougher is not.
+        val wobbles = (0..PenPreset.MAX_STABILIZATION).map { wobbleOf(strokeAt(it)) }
+        wobbles.zipWithNext().forEachIndexed { index, (lower, higher) ->
+            assertTrue(
+                "level ${index + 1} is shakier than level $index: $wobbles",
+                higher <= lower + 0.01f,
+            )
+        }
+    }
+
+    @Test
+    fun levelOneIsTheLibraryDefaultSoOldInkIsUnchanged() {
+        // Every stroke drawn before this existed was already getting the stock model, and every one
+        // of those rows stored the default level. If 1 were anything else, turning stabilization on
+        // would silently reshape every page in the notebook.
+        assertEquals(
+            BrushFamily.InputModel.DEFAULT_INPUT_MODEL,
+            InkCodec.inputModelFor(1),
+        )
+        assertEquals(1, PenPreset().stabilization)
+    }
+
+    @Test
+    fun offMeansTheRawSamples() {
+        assertEquals(BrushFamily.InputModel.PASSTHROUGH_MODEL, InkCodec.inputModelFor(0))
+    }
+
+    @Test
+    fun aStoredStrokeIsRebuiltWithTheLevelItWasDrawnAt() {
+        // Not the pen's current level: the pen moves on, the ink must not.
+        val pen = PenPreset(stabilization = PenPreset.MAX_STABILIZATION, thickness = 2f)
+        val drawn = Stroke(InkCodec.brushFor(pen), shakyLine())
+        val row = InkCodec.encode(drawn, pageId = "page", seq = 0, pen = pen, now = 1L)
+
+        assertEquals(PenPreset.MAX_STABILIZATION, row.stabilization)
+        val restored = InkCodec.decode(row)
+        assertNotNull(restored)
+        assertEquals(
+            "a reloaded stroke changed shape",
+            wobbleOf(drawn),
+            wobbleOf(restored!!),
+            0.01f,
+        )
+
+        // And a row that says "off" comes back rough, rather than taking whatever is in hand now.
+        val rough = InkCodec.decode(row.copy(stabilization = 0))
+        assertNotNull(rough)
+        assertTrue(
+            "the stored level was ignored on reload",
+            wobbleOf(rough!!) > wobbleOf(restored) + 0.2f,
+        )
+    }
+
+    @Test
+    fun aHighlighterIgnoresTheStabilizationColumnEntirely() {
+        // Its rows store 0 meaning *not applicable*, not *off*. Reading that as passthrough would
+        // re-render every highlighter stroke ever saved, rougher than it was drawn.
+        val settings = HighlighterSettings()
+        val drawn = Stroke(InkCodec.brushFor(settings), shakyLine())
+        val row = InkCodec.encode(drawn, pageId = "page", seq = 0, highlighter = settings, now = 1L)
+
+        assertEquals(0, row.stabilization)
+        val restored = InkCodec.decode(row)
+        assertNotNull(restored)
+        assertEquals(
+            "the highlighter was re-rendered through the stabilizer",
+            wobbleOf(drawn),
+            wobbleOf(restored!!),
+            0.01f,
+        )
+    }
 }

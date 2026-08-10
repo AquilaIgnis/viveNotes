@@ -302,37 +302,39 @@ class AiModelStore internal constructor(
             "e025a66d31f327ba0c232e03f407ae8d105e1e709e7ccb3f408aa778c24e70d6"
 
         internal const val FORMULA_MODEL_URL =
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-formulanet_plus-s.onnx"
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-formulanet-s.onnx"
         internal const val FORMULA_TOKENIZER_URL =
             "https://huggingface.co/PaddlePaddle/PP-FormulaNet-L_safetensors/resolve/main/" +
                 "tokenizer.json"
 
         /**
-         * PP-FormulaNet**_plus**-S, swapped in for plain -S on 2026-08-10.
+         * PP-FormulaNet-S.
          *
-         * **The same architecture, retrained** — not a bigger model. PaddlePaddle's two `config.json`
-         * files differ by exactly five bytes, the length of `_plus` in the model-name field, so the
-         * graph, the tensor shapes and the vocabulary are identical and the ONNX export lands on the
-         * *same byte count* with different weights inside. That is why [bytes] is unchanged and only
-         * the digest moves, which looks like a copy-paste slip and is not one.
+         * **`PP-FormulaNet_plus-S` was tried on 2026-08-10 and reverted the same day**, because the
+         * user reported handwriting recognition was markedly worse with it. Do not swap it back in
+         * on the strength of its published numbers; they do not measure this app's input.
          *
-         * What it buys: 88.71% vs 87.00% En-BLEU and 53.32% vs 45.71% Zh-BLEU, from training on a
-         * broader corpus (dissertations, textbooks, exam papers, maths journals). Preprocessing,
-         * tokenizer and memory envelope are untouched, so it costs nothing to carry.
+         * The swap looked free, and mechanically it was. Both are the *same architecture retrained*,
+         * verified rather than assumed: walking both ONNX graphs — including the decoder inside the
+         * generation `Loop`, which a top-level read misses — gives 836 tensors and 57,916,120
+         * parameters each, a `[50000, 384]` embedding and a `[384, 50000]` output projection in
+         * both. The `tokenizer.json` is byte-identical (SHA-256 `2811d827…`) across `_plus`,
+         * non-`_plus` and the copy bundled here, so a swap needs no tokenizer change and the export
+         * is not at fault.
          *
-         * **Those figures are for printed formulas.** No published benchmark separates handwriting
-         * for either model, and this app feeds it rendered ink rather than a scan — the open question
-         * in `docs/ai.md` is still open, and this swap is not an answer to it.
+         * **The weights are simply worse on ink.** `_plus` gains 88.71% vs 87.00% En-BLEU and 53.32%
+         * vs 45.71% Zh-BLEU by training on a broader *printed* corpus and on Chinese — and with the
+         * parameter count and vocabulary fixed, that capacity comes from somewhere. English
+         * handwriting is what it came from here. No published benchmark separates handwriting for
+         * either model, so this was found on the device and nowhere else.
          *
-         * PaddleOCR's own table lists `_plus-S` as 248 MB against 224 MB, which is a property of
-         * Paddle's checkpoint format rather than of the model: the `.pdiparams` differ by ~25 MB
-         * while the configs match and the ONNX exports do not. Read the ONNX size, which is what
-         * ships here.
+         * The lesson for the next candidate: printed BLEU does not predict this app's accuracy, and
+         * the eval set in `docs/ai.md` open question 4 is the only thing that will.
          */
         private val FORMULA_MODEL = ModelArtifact(
-            fileName = "pp-formulanet_plus-s.onnx",
+            fileName = "pp-formulanet-s.onnx",
             bytes = 231_878_904L,
-            sha256 = "449d205c8fb2fe0a9b134a5e4a0f2421c2e7812fd902ea67dfda4e9ef4588978",
+            sha256 = "0ee32c7bfbd9e586364f89f71860476ccb5334e35674a61f3df5e0553d6a6dcc",
             url = FORMULA_MODEL_URL,
         )
         private val FORMULA_TOKENIZER = ModelArtifact(

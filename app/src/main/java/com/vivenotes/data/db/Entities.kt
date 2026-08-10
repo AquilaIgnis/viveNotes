@@ -155,11 +155,20 @@ data class InkStrokeEntity(
     val colorArgb: Int,
     val epsilon: Float,
     /**
-     * The pen's stabilization level when the stroke was drawn.
+     * The pen's stabilization level when the stroke was drawn, 0–5.
      *
-     * Recorded rather than applied: stabilization still needs the reproducible pre-filter described
-     * in `docs/inkPlan.md` §4. It is kept here now so that filter can later reproduce the stroke
-     * without a storage migration.
+     * **Applied since 2026-08-10**, which is what this column was always for — it was recorded from
+     * the start precisely so the filter could arrive without a storage migration, and it did.
+     * `InkCodec.inputModelFor` turns it into the `BrushFamily.InputModel` the stroke is rebuilt
+     * through; a stroke's mesh is derived from its inputs *via* that model, so replaying with the
+     * wrong level reshapes ink already on the page.
+     *
+     * Per-stroke rather than per-pen, and read from here rather than from the pen, for the reason
+     * `brushVersion` is: a stroke has to come back looking like the stroke that was drawn, not like
+     * whatever the pen is set to today.
+     *
+     * A highlighter row stores 0 meaning **not applicable** rather than *off* — it has no such
+     * control — and `InkCodec.family` exempts that family so the value is never read as passthrough.
      */
     val stabilization: Int,
     /** Page-unit bounds, so a draw pass can skip a stroke without decoding it. */
