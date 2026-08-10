@@ -55,9 +55,11 @@ fun ColumnScope.AiModelsPanelContent(
         )
         Spacer(Modifier.height(10.dp))
         ModelCard(
-            name = "PP-FormulaNet-S",
+            name = "PP-FormulaNet_plus-S",
             purpose = "Handwritten formulas to LaTeX",
-            size = "224 MB optional download",
+            // The ONNX graph's own size, which is what is actually fetched — not PaddleOCR's
+            // "248 MB", which measures their checkpoint format and would overstate the download.
+            size = "221 MB optional download",
             state = state.formulaLatex,
             onDownload = onDownloadFormula,
             modifier = Modifier.testTag(AiPanelTags.FORMULA_MODEL),

@@ -276,6 +276,17 @@ class AiModelStore internal constructor(
 
     companion object {
         private const val MODELS_DIRECTORY = "ai_models"
+
+        /**
+         * The install slot, **deliberately not renamed** when the model inside it changed.
+         *
+         * It reads like a leftover — it says `-s-` and now holds `_plus-s` — and renaming it is the
+         * obvious tidy-up. Don't. [installStagedDirectory] deletes the destination before moving the
+         * new package in, so reusing one path is what keeps exactly one copy on disk; a new name
+         * would strand the old 231 MB in app-private storage on every device that had already
+         * installed it, invisibly and for good. The name is a slot, not a description of its
+         * contents — [FORMULA_MARKER] is what says which model is in there.
+         */
         private const val FORMULA_DIRECTORY = "pp-formulanet-s-v1"
         private const val VERIFIED_MARKER = ".verified"
         private const val COPY_BUFFER_BYTES = 64 * 1024
@@ -291,14 +302,37 @@ class AiModelStore internal constructor(
             "e025a66d31f327ba0c232e03f407ae8d105e1e709e7ccb3f408aa778c24e70d6"
 
         internal const val FORMULA_MODEL_URL =
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-formulanet-s.onnx"
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-formulanet_plus-s.onnx"
         internal const val FORMULA_TOKENIZER_URL =
             "https://huggingface.co/PaddlePaddle/PP-FormulaNet-L_safetensors/resolve/main/" +
                 "tokenizer.json"
+
+        /**
+         * PP-FormulaNet**_plus**-S, swapped in for plain -S on 2026-08-10.
+         *
+         * **The same architecture, retrained** — not a bigger model. PaddlePaddle's two `config.json`
+         * files differ by exactly five bytes, the length of `_plus` in the model-name field, so the
+         * graph, the tensor shapes and the vocabulary are identical and the ONNX export lands on the
+         * *same byte count* with different weights inside. That is why [bytes] is unchanged and only
+         * the digest moves, which looks like a copy-paste slip and is not one.
+         *
+         * What it buys: 88.71% vs 87.00% En-BLEU and 53.32% vs 45.71% Zh-BLEU, from training on a
+         * broader corpus (dissertations, textbooks, exam papers, maths journals). Preprocessing,
+         * tokenizer and memory envelope are untouched, so it costs nothing to carry.
+         *
+         * **Those figures are for printed formulas.** No published benchmark separates handwriting
+         * for either model, and this app feeds it rendered ink rather than a scan — the open question
+         * in `docs/ai.md` is still open, and this swap is not an answer to it.
+         *
+         * PaddleOCR's own table lists `_plus-S` as 248 MB against 224 MB, which is a property of
+         * Paddle's checkpoint format rather than of the model: the `.pdiparams` differ by ~25 MB
+         * while the configs match and the ONNX exports do not. Read the ONNX size, which is what
+         * ships here.
+         */
         private val FORMULA_MODEL = ModelArtifact(
-            fileName = "pp-formulanet-s.onnx",
+            fileName = "pp-formulanet_plus-s.onnx",
             bytes = 231_878_904L,
-            sha256 = "0ee32c7bfbd9e586364f89f71860476ccb5334e35674a61f3df5e0553d6a6dcc",
+            sha256 = "449d205c8fb2fe0a9b134a5e4a0f2421c2e7812fd902ea67dfda4e9ef4588978",
             url = FORMULA_MODEL_URL,
         )
         private val FORMULA_TOKENIZER = ModelArtifact(

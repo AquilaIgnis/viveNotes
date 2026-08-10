@@ -78,8 +78,8 @@ import com.vivenotes.ui.icons.highlightGlyph
  */
 enum class RibbonTab(val label: String) {
     File("File"),
-    Home("Home"),
     Draw("Draw"),
+    Home("Home"),
     View("View"),
     RibonSettings("Settings"),
 }

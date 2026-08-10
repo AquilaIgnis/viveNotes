@@ -20,7 +20,7 @@ memory
 **__pycache__**
 
 # Models
-app/src/debug/assets/ai/dev/pp-formulanet-s.onnx
+app/src/debug/assets/ai/dev/*.onnx
 app/src/main/assets/ai/en_pp-ocrv5_mobile_rec.onnx
 
 #jsc

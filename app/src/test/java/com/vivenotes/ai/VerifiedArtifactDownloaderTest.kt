@@ -84,7 +84,10 @@ class VerifiedArtifactDownloaderTest {
         val tokenizer = URL(AiModelStore.FORMULA_TOKENIZER_URL)
 
         assertEquals("github.com", model.host)
-        assertEquals("/GreatV/oar-ocr/releases/download/v0.3.0/pp-formulanet-s.onnx", model.path)
+        assertEquals(
+            "/GreatV/oar-ocr/releases/download/v0.3.0/pp-formulanet_plus-s.onnx",
+            model.path,
+        )
         assertEquals("huggingface.co", tokenizer.host)
         assertEquals(
             "/PaddlePaddle/PP-FormulaNet-L_safetensors/resolve/main/tokenizer.json",

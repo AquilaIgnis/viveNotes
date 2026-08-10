@@ -25,7 +25,7 @@ interface InkRecognitionEngine {
     suspend fun recognizeFormula(image: Bitmap): FormulaRecognitionResult
 }
 
-/** Offline PP-OCRv5 and PP-FormulaNet-S inference through Android ONNX Runtime. */
+/** Offline PP-OCRv5 and PP-FormulaNet_plus-S inference through Android ONNX Runtime. */
 class OnnxInkRecognitionEngine(
     private val models: AiModelStore,
     private val inferenceDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -57,7 +57,7 @@ class OnnxInkRecognitionEngine(
         withContext(inferenceDispatcher) {
             mutex.withLock {
                 val files = models.installedFormulaFiles()
-                    ?: error("PP-FormulaNet-S is not installed")
+                    ?: error("PP-FormulaNet_plus-S is not installed")
                 val session = session(ModelKind.Formula)
                 val input = preprocessFormula(image)
                 OnnxTensor.createTensor(
@@ -98,7 +98,7 @@ class OnnxInkRecognitionEngine(
                 }
                 ModelKind.Formula -> {
                     val file = models.installedFormulaFiles()?.model
-                        ?: error("PP-FormulaNet-S is not installed")
+                        ?: error("PP-FormulaNet_plus-S is not installed")
                     environment.createSession(file.absolutePath, options)
                 }
             }
