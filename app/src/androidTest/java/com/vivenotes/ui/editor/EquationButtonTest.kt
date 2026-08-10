@@ -23,7 +23,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
-class InsertTabTest {
+/**
+ * The Home tab's ƒ — the inline equation, which writes a `Mark` into the text under the caret.
+ *
+ * Driven through the whole [Ribbon] rather than through [EquationButton] alone, because the thing
+ * worth pinning is that it is *reachable* — it moved here when the Insert tab was retired, and a
+ * button that quietly stops being composed on the tab that now owns it is exactly the failure this
+ * catches. Its canvas twin is `EquationObjectTest`.
+ */
+class EquationButtonTest {
 
     @get:Rule
     val compose = createComposeRule()
@@ -35,7 +43,7 @@ class InsertTabTest {
             ViveNotesTheme {
                 Ribbon(
                     selection = selection,
-                    activeTab = RibbonTab.Insert,
+                    activeTab = RibbonTab.Home,
                     onTabChange = {},
                     onCommand = { commands += it },
                     defaults = EditorDefaults(),
@@ -66,7 +74,7 @@ class InsertTabTest {
     fun equationRequiresARealEditorCaret() {
         setRibbon(SelectionState(editorFocused = false))
 
-        compose.onNodeWithTag(InsertTags.EQUATION).performClick()
+        compose.onNodeWithTag(EquationTags.INLINE).performClick()
         compose.onNodeWithText("Insert equation").assertDoesNotExist()
     }
 
@@ -74,10 +82,10 @@ class InsertTabTest {
     fun opensWithTheExampleAndRetainsTheEditorTarget() {
         setRibbon(SelectionState(editorFocused = true))
 
-        compose.onNodeWithTag(InsertTags.EQUATION).performClick()
+        compose.onNodeWithTag(EquationTags.INLINE).performClick()
 
         compose.onNodeWithText("Insert equation").assertIsDisplayed()
-        val source = compose.onNodeWithTag(InsertTags.SOURCE)
+        val source = compose.onNodeWithTag(EquationTags.SOURCE)
             .fetchSemanticsNode().config[SemanticsProperties.EditableText].text
         assertTrue(source.contains("\\int"))
         assertTrue(commands.firstOrNull() == FormatCommand.RetainEquationTarget)
@@ -87,10 +95,10 @@ class InsertTabTest {
     fun opensAnExistingEquationForUpdate() {
         setRibbon(SelectionState(equation = "x^2", editorFocused = true))
 
-        compose.onNodeWithTag(InsertTags.EQUATION).performClick()
+        compose.onNodeWithTag(EquationTags.INLINE).performClick()
 
         compose.onNodeWithText("Edit equation").assertIsDisplayed()
-        val source = compose.onNodeWithTag(InsertTags.SOURCE)
+        val source = compose.onNodeWithTag(EquationTags.SOURCE)
             .fetchSemanticsNode().config[SemanticsProperties.EditableText].text
         assertTrue(source.contains("x^2"))
         compose.onNodeWithText("Update").assertIsDisplayed()
@@ -99,10 +107,10 @@ class InsertTabTest {
     @Test
     fun validatesAndSendsDelimiterFreeLatex() {
         setRibbon(SelectionState(editorFocused = true))
-        compose.onNodeWithTag(InsertTags.EQUATION).performClick()
-        compose.onNodeWithTag(InsertTags.SOURCE).performTextReplacement("x^2+y^2=z^2")
+        compose.onNodeWithTag(EquationTags.INLINE).performClick()
+        compose.onNodeWithTag(EquationTags.SOURCE).performTextReplacement("x^2+y^2=z^2")
 
-        compose.onNodeWithTag(InsertTags.SUBMIT).performClick()
+        compose.onNodeWithTag(EquationTags.SUBMIT).performClick()
 
         compose.waitUntil(timeoutMillis = 10_000) {
             commands.any { it == FormatCommand.InsertEquation("x^2+y^2=z^2") }

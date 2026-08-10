@@ -28,11 +28,8 @@ import com.vivenotes.ui.panel.TablePanelContent
 
 internal const val TABLE_BUTTON_TAG = "insert-table"
 
-/** The Draw tab's twin, which places a ruling for the stylus rather than a grid of fields — TA15. */
-internal const val INK_TABLE_BUTTON_TAG = "draw-table"
-
 /**
- * Insert Table — `docs/tablePlan.md` TA7, and the first button of `docs/references/insertTab.png`.
+ * Insert Table — `docs/tablePlan.md` TA7.
  *
  * The interaction is [ShapeButton]'s, deliberately: a tap arms the tool, and holding — or tapping the
  * tool already in hand — opens its settings. Two buttons on the same tab behaving differently would
@@ -43,10 +40,11 @@ internal const val INK_TABLE_BUTTON_TAG = "draw-table"
  * button carries a chevron for the same reason this one opens a pane: how many rows and columns is a
  * question asked before the table exists, not after.
  *
- * **One composable, two tabs, two objects.** [inkOnly] is the Draw tab's version (TA15): the same
- * button, the same pane, the same settings — what changes is that the table it places has no editors
- * in it, so a pen writes straight through the cells. Like [ShapeButton], neither home is the "real"
- * one; unlike it, the two are separate tools, because what they put on the page differs.
+ * **One button, one tool, both kinds of table.** This *was* two buttons on two tabs — a grid of text
+ * fields on Insert and a ruling to write in on Draw (TA15) — wearing the same glyph and the same
+ * pane, distinguished only by which tab you found them on. The kind is now
+ * [TableSettings.inkOnly], asked in the pane beside the rows and columns, and the Insert tab's copy
+ * is gone. What survives lives here on Draw, with the things a stylus uses.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -58,7 +56,6 @@ internal fun TableButton(
     onSelect: () -> Unit,
     onChange: (TableSettings) -> Unit,
     onAddColor: (Int) -> Unit = {},
-    inkOnly: Boolean = false,
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
 
@@ -66,7 +63,7 @@ internal fun TableButton(
         Box(
             modifier = Modifier
                 .size(32.dp)
-                .testTag(if (inkOnly) INK_TABLE_BUTTON_TAG else TABLE_BUTTON_TAG)
+                .testTag(TABLE_BUTTON_TAG)
                 .clip(RoundedCornerShape(4.dp))
                 .background(
                     if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
@@ -92,9 +89,10 @@ internal fun TableButton(
         ) {
             Icon(
                 imageVector = MaterialSymbols.Table,
-                // Named for what it makes, because the two buttons are the same glyph on two tabs
-                // and the label is the only thing that tells them apart to a screen reader.
-                contentDescription = if (inkOnly) "Table to write in" else "Table",
+                // Named for what it will make, not for what it is. One glyph now covers both kinds,
+                // so the label is all a screen reader gets to tell them apart — and it has to follow
+                // the setting, because the setting is what decides.
+                contentDescription = if (table.inkOnly) "Table to write in" else "Table",
                 tint = if (selected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
                 } else {
@@ -107,7 +105,7 @@ internal fun TableButton(
         FloatingSettingsPanel(
             expanded = settingsOpen,
             onDismissRequest = { settingsOpen = false },
-            title = if (inkOnly) "Table to write in" else "Table",
+            title = "Table",
         ) {
             TablePanelContent(
                 table = table,

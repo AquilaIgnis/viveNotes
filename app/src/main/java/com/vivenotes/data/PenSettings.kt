@@ -188,6 +188,19 @@ data class ShapeSettings(
  */
 @Serializable
 data class TableSettings(
+    /**
+     * Whether the next table is a **ruling to write in** rather than a grid of text fields — TA15,
+     * which its cells carry as `Outline.Table.inkOnly`.
+     *
+     * **This was a second tool and is now a setting.** `DrawTool.InkTable` existed because the two
+     * kinds place different objects; what that bought was two Table buttons on two tabs, differing
+     * in a way neither button could show. The kind is a question about the table you are about to
+     * make, which is what every other field here is, so it is asked in the same pane.
+     *
+     * Starts on because the one button that reads it sits on the Draw tab, among the things a stylus
+     * uses.
+     */
+    val inkOnly: Boolean = true,
     val columns: Int = DEFAULT_COLUMNS,
     val rows: Int = DEFAULT_ROWS,
     val headerRow: Boolean = true,
@@ -326,17 +339,24 @@ sealed interface DrawTool {
      * A tool rather than a button that drops one, for the reason [Shape] is one: a page is a canvas,
      * and what goes on it goes where you put it. How many rows and columns it arrives with is
      * [TableSettings], the same split [Shape] has from [ShapeSettings].
+     *
+     * **One tool for both kinds of table.** Whether it places a grid of text fields or a ruling to
+     * write in is [TableSettings.inkOnly] — the same split again, and the reason `InkTable` is gone.
      */
     data object Table : DrawTool
 
     /**
-     * Insert a table to **write in with a stylus** — `docs/tablePlan.md` TA15, the Draw tab's table.
+     * Insert Equation **as an object**: the next tap on bare canvas puts the formula there.
      *
-     * A second tool rather than a flag on [Table], because the two place different objects: one is a
-     * grid of text fields and the other is a ruling with nothing in it. `TableSettings` is shared —
-     * how many rows, how thick the rules, what colour — since that is the same question for both.
+     * A tool rather than a drop, for the reason [Table] and [Shape] are: a page is a canvas and what
+     * goes on it goes where you put it. *Which* formula is not a setting, though — it is content, so
+     * unlike every other tool here what this one carries is held beside it, as the ViewModel's
+     * pending equation, and is gone when the tool is put down.
+     *
+     * The Home tab's ƒ writes into text instead and arms nothing; see `Outline.Equation` for why the
+     * two are different types rather than one with a flag.
      */
-    data object InkTable : DrawTool
+    data object Equation : DrawTool
 
     /** Free-form selection: circle ink, then drag the selected objects. */
     data object Lasso : DrawTool

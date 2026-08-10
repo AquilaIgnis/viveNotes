@@ -46,7 +46,6 @@ import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.ShapeSettings
-import com.vivenotes.data.TableSettings
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.model.Outline
@@ -112,36 +111,10 @@ class ShapeToolTest {
         }
     }
 
-    private fun setInsertTab(tool: DrawTool = DrawTool.None, pageOpen: Boolean = true) {
-        compose.setContent {
-            ViveNotesTheme {
-                InsertTab(
-                    selection = SelectionState(),
-                    onCommand = {},
-                    pageOpen = pageOpen,
-                    shape = ShapeSettings(),
-                    table = TableSettings(),
-                    palette = PEN_COLORS,
-                    tool = tool,
-                    onSelectTool = { selected = it },
-                    onChangeShape = { changed = it },
-                )
-            }
-        }
-    }
 
     @Test
     fun theDrawTabArmsTheShapeTool() {
         setDrawTab()
-        compose.onNodeWithTag(SHAPE_BUTTON_TAG).performClick()
-
-        assertEquals(DrawTool.Shape, selected)
-    }
-
-    @Test
-    fun theInsertTabArmsTheSameShapeTool() {
-        // The point of the feature having two homes: one tool, not one per tab.
-        setInsertTab()
         compose.onNodeWithTag(SHAPE_BUTTON_TAG).performClick()
 
         assertEquals(DrawTool.Shape, selected)
@@ -168,7 +141,7 @@ class ShapeToolTest {
     @Test
     fun withNoPageOpenTheButtonIsInert() {
         // Same treatment Equation gets beside it: shown, and plainly not usable.
-        setInsertTab(pageOpen = false)
+        setDrawTab(pageOpen = false)
         compose.onNodeWithTag(SHAPE_BUTTON_TAG).performClick()
 
         assertNull("a shape was armed with no page to draw it on", selected)

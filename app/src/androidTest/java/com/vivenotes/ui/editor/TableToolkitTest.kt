@@ -28,7 +28,6 @@ import com.vivenotes.model.Block
 import com.vivenotes.model.Outline
 import com.vivenotes.model.newTable
 import com.vivenotes.richtext.EditorStyle
-import com.vivenotes.richtext.SelectionState
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.ui.panel.TablePanelTags
 import com.vivenotes.ui.theme.ViveNotesTheme
@@ -42,11 +41,11 @@ import org.junit.Test
 /**
  * The Table Class — `docs/diagram.md`, planned in `docs/tablePlan.md`.
  *
- * Three things are worth pinning here and none of them is arithmetic; the arithmetic is in
+ * Four things are worth pinning here and none of them is arithmetic; the arithmetic is in
  * `TableOpsTest`, which runs on the JVM. This covers the parts that need a device: that **Insert
- * Table arms a tool** rather than dropping a table (TA7), that **a cell is a real editor** (TA2), and
- * that the bar's **Row and Column menus** act where the caret is and hide Delete at the last one
- * (TA6).
+ * Table arms a tool** rather than dropping a table (TA7), that **which kind of table is a setting**
+ * rather than a second button (TA15), that **a cell is a real editor** (TA2), and that the bar's
+ * **Row and Column menus** act where the caret is and hide Delete at the last one (TA6).
  */
 class TableToolkitTest {
 
@@ -60,67 +59,9 @@ class TableToolkitTest {
     // The tool — TA7
     // -----------------------------------------------------------------------------------------
 
-    private fun setInsertTab(tool: DrawTool = DrawTool.None, table: TableSettings = TableSettings()) {
+    private fun setDrawTab(tool: DrawTool = DrawTool.None, table: TableSettings = TableSettings()) {
         armed = null
         settings = null
-        compose.setContent {
-            ViveNotesTheme {
-                InsertTab(
-                    selection = SelectionState(),
-                    onCommand = {},
-                    pageOpen = true,
-                    shape = ShapeSettings(),
-                    table = table,
-                    palette = PEN_COLORS,
-                    tool = tool,
-                    onSelectTool = { armed = it },
-                    onChangeShape = {},
-                    onChangeTable = { settings = it },
-                )
-            }
-        }
-    }
-
-    @Test
-    fun theInsertTabArmsTheTableTool() {
-        setInsertTab()
-
-        compose.onNodeWithTag(TABLE_BUTTON_TAG).performClick()
-
-        assertEquals(DrawTool.Table, armed)
-    }
-
-    /**
-     * Tapping the tool already in hand opens its settings — [ShapeButton]'s interaction, deliberately
-     * shared. Two buttons on one tab behaving differently would be worse than either behaviour.
-     */
-    @Test
-    fun tappingTheArmedToolOpensItsPane() {
-        setInsertTab(tool = DrawTool.Table)
-
-        compose.onNodeWithTag(TABLE_BUTTON_TAG).performClick()
-
-        compose.onNodeWithTag(TablePanelTags.PREVIEW).assertIsDisplayed()
-    }
-
-    @Test
-    fun thePaneChangesTheSettingsForTheNextTableRatherThanAnyOnThePage() {
-        setInsertTab(tool = DrawTool.Table)
-        compose.onNodeWithTag(TABLE_BUTTON_TAG).performClick()
-
-        compose.onNodeWithTag("panel-field-Header row").performClick()
-
-        // The default is on, so one tap turns it off — and it is a *preference*, which is the whole
-        // point of TA7: nothing on the page moved.
-        assertEquals(false, settings?.headerRow)
-    }
-
-    // -----------------------------------------------------------------------------------------
-    // The Draw tab's table — TA15
-    // -----------------------------------------------------------------------------------------
-
-    private fun setDrawTab(tool: DrawTool = DrawTool.None) {
-        armed = null
         compose.setContent {
             ViveNotesTheme {
                 DrawTab(
@@ -129,7 +70,7 @@ class TableToolkitTest {
                     eraser = EraserSettings(),
                     highlighter = HighlighterSettings(),
                     shape = ShapeSettings(),
-                    table = TableSettings(),
+                    table = table,
                     tool = tool,
                     actions = DrawActions(
                         selectTool = { armed = it },
@@ -143,29 +84,70 @@ class TableToolkitTest {
         }
     }
 
-    /**
-     * The Draw tab's table is a **different tool**, because it places a different object: a ruling
-     * with nothing in its cells, not a grid of text fields.
-     */
     @Test
-    fun theDrawTabArmsTheInkTableRatherThanTheTypedOne() {
+    fun theTableButtonArmsAToolRatherThanPlacingATable() {
         setDrawTab()
 
-        compose.onNodeWithTag(INK_TABLE_BUTTON_TAG).performClick()
+        compose.onNodeWithTag(TABLE_BUTTON_TAG).performClick()
 
-        assertEquals(DrawTool.InkTable, armed)
+        assertEquals(DrawTool.Table, armed)
+    }
+
+    /**
+     * Tapping the tool already in hand opens its settings — [ShapeButton]'s interaction, deliberately
+     * shared. Two buttons on one tab behaving differently would be worse than either behaviour.
+     */
+    @Test
+    fun tappingTheArmedToolOpensItsPane() {
+        setDrawTab(tool = DrawTool.Table)
+
+        compose.onNodeWithTag(TABLE_BUTTON_TAG).performClick()
+
+        compose.onNodeWithTag(TablePanelTags.PREVIEW).assertIsDisplayed()
     }
 
     @Test
-    fun bothTablesShareOneSetOfSettings() {
-        setDrawTab(tool = DrawTool.InkTable)
-        compose.onNodeWithTag(INK_TABLE_BUTTON_TAG).performClick()
+    fun thePaneChangesTheSettingsForTheNextTableRatherThanAnyOnThePage() {
+        setDrawTab(tool = DrawTool.Table)
+        compose.onNodeWithTag(TABLE_BUTTON_TAG).performClick()
 
         compose.onNodeWithTag("panel-field-Header row").performClick()
 
-        // The same `TableSettings` the Insert tab writes: how many rows and how thick the rules is
-        // the same question of both kinds, so there is one answer to it.
+        // The default is on, so one tap turns it off — and it is a *preference*, which is the whole
+        // point of TA7: nothing on the page moved.
         assertEquals(false, settings?.headerRow)
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Which kind of table — TA15, now a setting rather than a second tool
+    // -----------------------------------------------------------------------------------------
+
+    /**
+     * The ruling to write in and the grid of text fields are **one tool with one pane**.
+     *
+     * They were two buttons on two tabs, which is what this replaces: the kind is a `TableSettings`
+     * field now, so the single button on Draw covers both and nothing else in the app has to know
+     * there are two.
+     */
+    @Test
+    fun theKindOfTableIsAnOptionInThePane() {
+        setDrawTab(tool = DrawTool.Table)
+        compose.onNodeWithTag(TABLE_BUTTON_TAG).performClick()
+
+        compose.onNodeWithTag("panel-field-Write in with a pen").performClick()
+
+        // On by default, so one tap asks for the typed grid instead — and only for the *next* table.
+        assertEquals(false, settings?.inkOnly)
+    }
+
+    /** Whichever kind the pane is set to, the button still arms the one tool. */
+    @Test
+    fun theTypedTableIsArmedByTheSameButtonAsTheRuling() {
+        setDrawTab(table = TableSettings(inkOnly = false))
+
+        compose.onNodeWithTag(TABLE_BUTTON_TAG).performClick()
+
+        assertEquals(DrawTool.Table, armed)
     }
 
     /**

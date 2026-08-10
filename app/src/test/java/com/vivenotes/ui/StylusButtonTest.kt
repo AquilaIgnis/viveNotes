@@ -206,7 +206,6 @@ class StylusButtonTest {
             DrawTool.Eraser,
             DrawTool.Shape,
             DrawTool.Table,
-            DrawTool.InkTable,
             DrawTool.Lasso,
             DrawTool.Text,
             DrawTool.None,

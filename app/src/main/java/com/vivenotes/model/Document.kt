@@ -64,6 +64,7 @@ private fun Outline.shiftedDown(dy: Float): Outline = when (this) {
     // being migrated.
     is Outline.Shape -> translated(0f, dy)
     is Outline.Table -> translated(0f, dy)
+    is Outline.Equation -> translated(0f, dy)
 }
 
 /**
@@ -349,6 +350,83 @@ sealed interface Outline {
             /** What a tap drops, matching the gesture's default box. */
             const val DEFAULT_WIDTH = 120f
             const val DEFAULT_HEIGHT = 80f
+        }
+    }
+
+    /**
+     * A formula placed on the canvas — the Draw tab's ƒ.
+     *
+     * **An object, not a mark.** The Home tab's equation is a [Mark.Equation] on a run: a character in
+     * a sentence, which flows with the text around it and has no position of its own. This one
+     * *implements Prime Object* — it is lassoed, dragged, resized by its corners, copied, deleted and
+     * undone like every other thing placed on a page, because that is what "on the canvas" means. The
+     * two are deliberately different types rather than one type with a flag: a table's typed and ink
+     * kinds are one object with different cells, so a setting tells them apart, while these two are a
+     * span of text and a rectangle on a page and share nothing but the LaTeX inside them.
+     *
+     * **The source is the truth; the picture is a view.** [latex] is all that is stored, exactly as
+     * `Mark.Equation` stores it, so the MCP server and an exporter can read the formula without a
+     * device and without a renderer. What the canvas draws is a RaTeX display list built from it at
+     * paint time and thrown away.
+     *
+     * **[width] and [height] are the box it is drawn into, and they are honest.** An equation arrives
+     * at the size RaTeX measured it — the panel has already rendered it once to validate it, so the
+     * measurement costs nothing extra — and a corner drag scales that box. The glyphs scale with it,
+     * the way [Image] scales, rather than reflowing: a formula has no line breaks to reflow, so a box
+     * is the whole of its geometry and the document can hit-test it without measuring anything. That
+     * is the one thing [Table] cannot say about itself (TA3), and it is why this needs no canvas
+     * feedback loop to know how big it is.
+     *
+     * [colorArgb] is null while the formula follows the canvas's own text colour, which is what lets a
+     * page dropped onto a dark background stay legible — the same automatic that
+     * `TableSettings.colorFollowsTheme` describes for a border, stored here as the absence of a
+     * choice rather than as a second flag.
+     */
+    @Serializable
+    @SerialName("equation")
+    data class Equation(
+        override val id: String,
+        override val x: Float = 0f,
+        override val y: Float = 0f,
+        override val width: Float = DEFAULT_WIDTH,
+        val height: Float = DEFAULT_HEIGHT,
+        val latex: String = "",
+        val colorArgb: Int? = null,
+    ) : Outline {
+
+        fun translated(dx: Float, dy: Float): Equation = copy(x = x + dx, y = y + dy)
+
+        /**
+         * Scales the box about [anchorX], [anchorY] — a corner-handle drag, per AD7.
+         *
+         * The anchor is the corner opposite the one being dragged, which is what makes the far corner
+         * stay put while the near one follows the finger. **Absolute, against the geometry the drag
+         * started with**, so it is applied once on the lift rather than per frame — the identical
+         * contract [Shape.scaledAbout] documents, and the identical explosion if it is broken.
+         *
+         * Floored at [MIN_SIZE] rather than allowed through zero. A formula scaled to nothing has no
+         * corners left to grab, so it could never be scaled back up; a negative one would be drawn
+         * inside out. The floor is applied per axis, so squashing one direction flat does not also
+         * pin the other.
+         */
+        fun scaledAbout(anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float): Equation {
+            val nextWidth = (width * scaleX).coerceAtLeast(MIN_SIZE)
+            val nextHeight = (height * scaleY).coerceAtLeast(MIN_SIZE)
+            return copy(
+                x = anchorX + (x - anchorX) * scaleX,
+                y = anchorY + (y - anchorY) * scaleY,
+                width = nextWidth,
+                height = nextHeight,
+            )
+        }
+
+        companion object {
+            /** Only ever seen by a formula that failed to measure; a real one arrives measured. */
+            const val DEFAULT_WIDTH = 160f
+            const val DEFAULT_HEIGHT = 48f
+
+            /** Small enough to be a deliberate choice, large enough to still carry four handles. */
+            const val MIN_SIZE = 8f
         }
     }
 
@@ -720,6 +798,10 @@ fun PageDoc.plainText(): String = outlines
                 .filter { it.isNotBlank() }
                 .joinToString("\n")
                 .ifBlank { null }
+            // Its source, which is the same answer [Run.searchText] gives for the inline equation
+            // mark: someone looking for the page they wrote `\int` on is looking for this one, and
+            // the rendered picture is not a thing anybody can search.
+            is Outline.Equation -> outline.latex.ifBlank { null }
             is Outline.Image, is Outline.Ink, is Outline.Shape -> null
         }
     }

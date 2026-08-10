@@ -70,11 +70,15 @@ import com.vivenotes.ui.icons.highlightGlyph
  * Ribbon tabs from the reference UI. Home, View and Draw are implemented; the rest are shown
  * because the shell is part of the design, and each states plainly that it is not built rather
  * than pretending to work.
+ *
+ * **Insert is gone.** It ended up holding two buttons that both had a better home: Shape, which had
+ * always been the Draw tab's as well, and Equation, which belongs beside the other things you put
+ * into a sentence. Its Table button had already moved to Draw. A tab whose every control is a
+ * duplicate is a tab that costs a tap and teaches nothing.
  */
 enum class RibbonTab(val label: String) {
     File("File"),
     Home("Home"),
-    Insert("Insert"),
     Draw("Draw"),
     View("View"),
     RibonSettings("Settings"),
@@ -136,7 +140,7 @@ fun Ribbon(
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
-    /** How the next table arrives — `docs/tablePlan.md` TA7. Insert tab only. */
+    /** How the next table arrives — `docs/tablePlan.md` TA7. Draw tab only. */
     table: TableSettings = TableSettings(),
     /** The ruler that is out, and whether it is — `docs/rulerPlan.md`. */
     ruler: RulerSettings = RulerSettings(),
@@ -189,6 +193,7 @@ fun Ribbon(
                 onTextMode = {
                     draw.selectTool(if (tool == DrawTool.Text) DrawTool.None else DrawTool.Text)
                 },
+                pageOpen = pageOpen,
             )
             RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
             RibbonTab.Draw -> DrawTab(
@@ -205,19 +210,6 @@ fun Ribbon(
                 pageOpen = pageOpen,
                 canUndo = canUndoCanvas,
                 canRedo = canRedoCanvas,
-            )
-            RibbonTab.Insert -> InsertTab(
-                selection = selection,
-                onCommand = onCommand,
-                pageOpen = pageOpen,
-                shape = shape,
-                table = table,
-                palette = palette,
-                tool = tool,
-                onSelectTool = draw.selectTool,
-                onChangeShape = draw.updateShape,
-                onChangeTable = draw.updateTable,
-                onAddColor = draw.addPaletteColor,
             )
             RibbonTab.RibonSettings -> SettingsTab(ai = ai, openPane = view.openPane)
             else -> PlaceholderTab(activeTab)
@@ -341,6 +333,7 @@ private fun HomeTab(
     onSetDefault: (Mark) -> Unit,
     textMode: Boolean,
     onTextMode: () -> Unit,
+    pageOpen: Boolean,
 ) {
     ScrollingRow(
         modifier = Modifier.fillMaxWidth(),
@@ -353,6 +346,11 @@ private fun HomeTab(
         Box(Modifier.testTag(HomeTags.TEXT)) {
             TwoToneRibbonButton({ it.insertText }, "Text", textMode, onTextMode)
         }
+
+        // Beside Text because it answers the same question — *put something here* — and because an
+        // equation written this way is a character in a sentence rather than an object on the page.
+        // It came off the Insert tab when that tab was retired; the Draw tab carries its twin, which
+        // puts the same formula on the canvas instead. See [EquationButton].
 
         Divider()
 
@@ -474,6 +472,16 @@ private fun HomeTab(
         Divider()
 
         StylesPicker(selection.blockType) { onCommand(FormatCommand.SetBlockType(it)) }
+
+        Divider()
+
+        EquationButton(
+            enabled = pageOpen && selection.editorFocused,
+            existing = selection.equation,
+            onRetainTarget = { onCommand(FormatCommand.RetainEquationTarget) },
+            onReleaseTarget = { onCommand(FormatCommand.ReleaseEquationTarget) },
+            onSubmit = { latex, _ -> onCommand(FormatCommand.InsertEquation(latex)) },
+        )
     }
 }
 

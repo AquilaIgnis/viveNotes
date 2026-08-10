@@ -292,7 +292,8 @@ class OutlineEditText @JvmOverloads constructor(
         if (
             command == FormatCommand.DeactivateTextInput ||
             command == FormatCommand.RetainEquationTarget ||
-            command == FormatCommand.ReleaseEquationTarget
+            command == FormatCommand.ReleaseEquationTarget ||
+            command == FormatCommand.ClearCanvasSelection
         ) return
         val editable = text ?: return
         // Applying spans while the IME holds a composing region corrupts predictive text on many
@@ -360,6 +361,8 @@ class OutlineEditText @JvmOverloads constructor(
             FormatCommand.DeactivateTextInput,
             FormatCommand.RetainEquationTarget,
             FormatCommand.ReleaseEquationTarget,
+            // The canvas's selection, not this view's — `EditorPane` holds it and consumes this.
+            FormatCommand.ClearCanvasSelection,
             -> Unit
         }
         suppressWatcher = false

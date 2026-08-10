@@ -278,6 +278,21 @@ fun EditorPane(
     onDeleteTableRow: (String, Int) -> Unit = { _, _ -> },
     onInsertTableColumn: (String, Int) -> Unit = { _, _ -> },
     onDeleteTableColumn: (String, Int) -> Unit = { _, _ -> },
+    /**
+     * The equations on the page, and everything Prime Object can do to one.
+     *
+     * `equationArmed` is the Draw tab's ƒ in hand: the next tap on bare canvas puts the formula
+     * there, and [onInsertEquation] returns its id so the page can select what it just made — the
+     * same bargain [onInsertTable] and [onInsertShape] strike.
+     */
+    equations: List<Outline.Equation> = emptyList(),
+    equationArmed: Boolean = false,
+    onInsertEquation: (Float, Float) -> String? = { _, _ -> null },
+    onMoveEquations: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeEquations: (Set<String>, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    onDeleteEquations: (Set<String>) -> Unit = {},
+    onRecolorEquations: (Set<String>, Int) -> Unit = { _, _ -> },
+    onEditEquation: (Set<String>, String) -> Unit = { _, _ -> },
     shapes: List<Outline.Shape> = emptyList(),
     onMoveShape: (String, Float, Float) -> Unit = { _, _, _ -> },
     onResizeShape: (String, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
@@ -382,6 +397,11 @@ fun EditorPane(
     val currentTableArmed = rememberUpdatedState(tableArmed)
     val currentOnInsertTable = rememberUpdatedState(onInsertTable)
 
+    /** And the Draw tab's ƒ, whose formula the next tap on bare canvas places. */
+    val currentEquationArmed = rememberUpdatedState(equationArmed)
+    val currentOnInsertEquation = rememberUpdatedState(onInsertEquation)
+    val currentEquations = rememberUpdatedState(equations)
+
     /**
      * Which containers currently hold text — `docs/textBoxPlan.md` TD3.
      *
@@ -425,8 +445,8 @@ fun EditorPane(
 
     // Re-read against the page whenever any kind changes, so a deleted or undone object takes its
     // handles with it instead of leaving a rectangle over nothing.
-    LaunchedEffect(strokes, shapes, tableBounds) {
-        selection = selection?.reconcile(strokes, shapes, tableBounds)
+    LaunchedEffect(strokes, shapes, tableBounds, equations) {
+        selection = selection?.reconcile(strokes, shapes, tableBounds, equations)
     }
 
     // A hold outlives neither its table's selection nor the row it named. Selecting something else
@@ -484,6 +504,15 @@ fun EditorPane(
                     // will not produce another blur callback when the Draw tool releases it.
                     if (!editorWasFocused && outlineId != null) onOutlineBlurred(outlineId)
                     onSelectionChanged(SelectionState())
+                }
+                // Picking up another tool drops the object selection — `docs/diagram.md`, Prime
+                // Object Class. The lasso's preview goes with it for the reason Delete clears both:
+                // it holds the transform the handles were drawn from, and a live one outliving the
+                // selection is a rectangle over nothing. `heldAxis` needs no line here — it is
+                // already tied to the selection still holding its table.
+                FormatCommand.ClearCanvasSelection -> {
+                    selection = null
+                    lassoGesture.clear()
                 }
                 FormatCommand.RetainEquationTarget -> {
                     retainedEquationEditor = focusedEditor ?: lastFocusedEditor
@@ -838,6 +867,19 @@ fun EditorPane(
                                             }
                                         return@tap
                                     }
+                                    if (currentEquationArmed.value) {
+                                        // Placed by its top-left corner, like a table, and handed
+                                        // straight back selected: the handles are the point of it
+                                        // being an object, and they are unreachable while the tool
+                                        // that makes new ones is still armed.
+                                        currentOnInsertEquation.value(point.x - 8f, point.y - 8f)
+                                            ?.let { id ->
+                                                selection = currentEquations.value
+                                                    .firstOrNull { it.id == id }
+                                                    ?.let(CanvasSelection::ofEquation)
+                                            }
+                                        return@tap
+                                    }
                                     if (!currentTextArmed.value) return@tap
                                     pendingFocusId = onCreateOutline(point.x - 8f, point.y - 8f)
                                 }
@@ -881,7 +923,36 @@ fun EditorPane(
                             onMoveShape = onMoveShape,
                             onResizeShape = onResizeShape,
                             onResizeShapeArm = onResizeShapeArm,
-                        )
+                        ) {
+                            // Above the shapes and below the text containers, which is where a table
+                            // sits too (TA11): a formula is something you put *on* a drawing, and a
+                            // container drawn over it keeps its caret. Its own tap has to be declined
+                            // while a tool is armed, or arming ƒ over an existing equation would
+                            // select that one instead of placing a new one beside it.
+                            //
+                            // **Inside the shape layer, not beside it.** As siblings the two filled
+                            // the same page and Compose gave every touch to whichever was on top, so
+                            // this one quietly ate all of them: tapping a shape, dragging one and
+                            // grabbing a corner were all dead, and a tap on a shape opened a text
+                            // container instead. Nested, the child is asked first and the shapes get
+                            // whatever it declines. See `ShapeLayer.above`.
+                            EquationLayer(
+                                equations = equations,
+                                selection = selection,
+                                canvasTextColor = canvas.text,
+                                lassoGesture = lassoGesture.takeIf { lassoing },
+                                interactive = shaping == null && !lassoing && !equationArmed &&
+                                    !tableArmed,
+                                onSelect = {
+                                    dismissTextInput()
+                                    selection = it
+                                },
+                                onMove = { id, dx, dy -> onMoveEquations(setOf(id), dx, dy) },
+                                onResize = { id, anchorX, anchorY, scaleX, scaleY ->
+                                    onResizeEquations(setOf(id), anchorX, anchorY, scaleX, scaleY)
+                                },
+                            )
+                        }
                     }
 
                     if (!style.hideTitle) {
@@ -1010,6 +1081,7 @@ fun EditorPane(
                 strokes = strokes,
                 shapes = shapes,
                 tables = tableBounds,
+                equations = equations,
                 selection = selection,
                 onSelect = { selection = it },
                 lassoGesture = lassoGesture,
@@ -1052,6 +1124,10 @@ fun EditorPane(
                 onMoveTables = onMoveTables,
                 onResizeTables = { ids, anchor, scaleX, scaleY ->
                     onResizeTables(ids, anchor.x, anchor.y, scaleX, scaleY)
+                },
+                onMoveEquations = onMoveEquations,
+                onResizeEquations = { ids, anchor, scaleX, scaleY ->
+                    onResizeEquations(ids, anchor.x, anchor.y, scaleX, scaleY)
                 },
                 onDeleteSelection = onDeleteInkSelection,
                 onRecolorSelection = onRecolorInkSelection,
@@ -1099,6 +1175,7 @@ fun EditorPane(
                         if (held.inkIds.isNotEmpty()) onDeleteInkSelection(held.inkIds)
                         if (held.shapeIds.isNotEmpty()) onDeleteShapes(held.shapeIds)
                         if (held.tableIds.isNotEmpty()) onDeleteTables(held.tableIds)
+                        if (held.equationIds.isNotEmpty()) onDeleteEquations(held.equationIds)
                         selection = null
                         lassoGesture.clear()
                     },
@@ -1110,6 +1187,9 @@ fun EditorPane(
                         if (held.inkIds.isNotEmpty()) onRecolorInkSelection(held.inkIds, color)
                         if (held.shapeIds.isNotEmpty()) onRecolorShapes(held.shapeIds, color)
                         if (held.tableIds.isNotEmpty()) onRecolorTables(held.tableIds, color)
+                        if (held.equationIds.isNotEmpty()) {
+                            onRecolorEquations(held.equationIds, color)
+                        }
                     },
                     // The kind-specific half. Only a selection of one kind has one: over a mixed
                     // loop there is nothing both halves agree on, so the bar shows its base alone.
@@ -1152,6 +1232,19 @@ fun EditorPane(
                                     onChange = { onSetShapeFill(held.shapeIds, it) },
                                 )
                             }
+                        }
+                        // The equation's half: one action, because there is exactly one thing about
+                        // a placed formula that the handles and the base bar cannot already do —
+                        // change what it says. Colour, delete, copy and the four corners are all
+                        // Prime Object's, which is the point of it being one.
+                        if (held.isEquationOnly) {
+                            val selectedEquations = equations.filter { it.id in held.equationIds }
+                            EquationEditAction(
+                                // A mixed selection has no one formula to open, so the action edits
+                                // only when every held equation says the same thing.
+                                latex = selectedEquations.map { it.latex }.distinct().singleOrNull(),
+                                onEdit = { onEditEquation(held.equationIds, it) },
+                            )
                         }
                         // The Table Class's half — `docs/tablePlan.md` TA6. The row and column
                         // actions need *one* table to act on and a place in it, so they appear for a

@@ -63,6 +63,7 @@ internal const val OBJECT_FILL_TAG = "object-tooltip-fill"
 internal const val OBJECT_FILL_NONE_TAG = "object-tooltip-fill-none"
 internal const val OBJECT_LINE_TYPE_TAG = "object-tooltip-line-type"
 internal const val OBJECT_SELECT_ALL_TAG = "object-tooltip-select-all"
+internal const val OBJECT_EQUATION_EDIT_TAG = "object-tooltip-equation-edit"
 
 /**
  * The Math button. The two menu-item tags beside it are gone with the menu itself — see
@@ -333,6 +334,55 @@ internal fun RowScope.SelectAllAction(onSelectAll: () -> Unit) {
             text = "Select all",
             color = Color(0xFFE8EAED),
             style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+/**
+ * An equation's half of the toolkit: **change what it says.**
+ *
+ * One action, because it is the only thing about a placed formula that Prime Object does not already
+ * cover — the corners resize it, the swatch colours it, and Copy and Delete are the base bar's. That
+ * is the whole argument for `Outline.Equation` implementing Prime Object rather than carrying its own
+ * toolkit: everything except the source is somebody else's job already.
+ *
+ * The glyph is ƒ ([MaterialSymbols.Function]) — the same one the ribbon's two equation buttons wear,
+ * and deliberately **not** the Σ that hands ink to the math engine. One letter apart in Material's
+ * naming, three different jobs, and this bar is read in a hurry.
+ *
+ * Absent rather than dead when the selection holds two different formulas: there is no one source to
+ * open, and the rule the whole bar follows is that an action a selection cannot perform is missing
+ * for it rather than shown and inert.
+ */
+@Composable
+internal fun RowScope.EquationEditAction(latex: String?, onEdit: (String) -> Unit) {
+    if (latex == null) return
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(
+            onClick = { open = true },
+            modifier = Modifier
+                .size(32.dp)
+                .testTag(OBJECT_EQUATION_EDIT_TAG)
+                .semantics { contentDescription = "Edit equation" },
+        ) {
+            Icon(
+                imageVector = MaterialSymbols.Function,
+                contentDescription = null,
+                tint = Color(0xFFE8EAED),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        EquationSourceDialog(
+            expanded = open,
+            latex = latex,
+            onDismiss = { open = false },
+            // The measurement is dropped on purpose: this equation already has a box, sized by
+            // whoever last dragged its corners, and rewriting the formula must not undo that.
+            onSubmit = { source, _ ->
+                onEdit(source)
+                open = false
+            },
         )
     }
 }

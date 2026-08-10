@@ -12,6 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -392,6 +394,70 @@ class NotesViewModelTest {
 
             assertEquals(FormatCommand.DeactivateTextInput, nextCommand.await())
         }
+    }
+
+    /**
+     * Prime Object's fourth rule — `docs/diagram.md`: *"Selecting any other tool removes selection
+     * of object."* The pane holds the selection, so what the ViewModel owes it is the command, on a
+     * real change and not otherwise.
+     */
+    @Test
+    fun pickingAnotherToolDropsTheObjectSelectionButRearmingTheSameOneDoesNot() =
+        runTest(dispatcher) {
+            val vm = seededViewModel()
+            val seen = mutableListOf<FormatCommand>()
+            val collector = launch { vm.commands.toList(seen) }
+            runCurrent()
+
+            vm.selectTool(DrawTool.Lasso)
+            runCurrent()
+            assertTrue(
+                "picking another tool left the object selected",
+                FormatCommand.ClearCanvasSelection in seen,
+            )
+
+            // Re-tapping the tool already in hand has not selected another one — and the ribbon does
+            // exactly this, since tapping the armed tool is how its settings pane is opened.
+            seen.clear()
+            vm.selectTool(DrawTool.Lasso)
+            runCurrent()
+            assertFalse(
+                "re-arming the tool in hand dropped the selection",
+                FormatCommand.ClearCanvasSelection in seen,
+            )
+
+            collector.cancel()
+        }
+
+    /**
+     * The other side of that rule, and the reason it is a command rather than an effect on [tool].
+     *
+     * Every insert path puts its own tool down — `insertShape`, `insertTable` and `insertEquation`
+     * all set [DrawTool.None] — and `EditorPane` then selects what the call returned. A clear keyed
+     * on the *armed tool* would fire on that disarm and wipe the selection the insert had just
+     * handed over, so every placed object would arrive with no handles on it.
+     */
+    @Test
+    fun placingAnObjectPutsTheToolDownWithoutDroppingWhatItJustMade() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        vm.selectTool(DrawTool.Shape)
+        runCurrent()
+
+        val seen = mutableListOf<FormatCommand>()
+        val collector = launch { vm.commands.toList(seen) }
+        runCurrent()
+
+        val created = vm.insertShape(ShapeSettings(), 20f, 20f, 120f, 120f)
+        advanceUntilIdle()
+
+        assertNotNull("no shape was placed", created)
+        assertEquals("placing a shape did not put the tool down", DrawTool.None, vm.tool.value)
+        assertFalse(
+            "placing a shape emitted the clear that would deselect it on arrival",
+            FormatCommand.ClearCanvasSelection in seen,
+        )
+
+        collector.cancel()
     }
 
     @Test
@@ -1146,6 +1212,18 @@ class NotesViewModelTest {
         uiState.value.tables.single().cellAt(row, column)!!.id
 
     /**
+     * A table with editors in its cells.
+     *
+     * Spelled out rather than left to `TableSettings()`, whose default is the ruling to write in —
+     * the button that reads it lives on the Draw tab. Every test below that types into a cell needs
+     * the other kind, and needs it to stay the other kind if that default ever moves again.
+     */
+    private fun typed(
+        columns: Int = TableSettings.DEFAULT_COLUMNS,
+        rows: Int = TableSettings.DEFAULT_ROWS,
+    ) = TableSettings(inkOnly = false, columns = columns, rows = rows)
+
+    /**
      * The whole cycle a table has to survive: placed, typed in, saved, reopened.
      *
      * The trap this guards is TA2's: a cell's live text lives in the ViewModel's block map and the
@@ -1157,7 +1235,7 @@ class NotesViewModelTest {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!
 
-        vm.insertTable(TableSettings(columns = 2, rows = 2), 40f, 40f)
+        vm.insertTable(typed(columns = 2, rows = 2), 40f, 40f)
         advanceUntilIdle()
         vm.onBlocksChanged(vm.cellId(0, 1), listOf(Block.of("in a cell")))
         advanceUntilIdle()
@@ -1183,7 +1261,7 @@ class NotesViewModelTest {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!
 
-        vm.insertTable(TableSettings(columns = 3, rows = 2), 40f, 40f)
+        vm.insertTable(typed(columns = 3, rows = 2), 40f, 40f)
         advanceUntilIdle()
 
         vm.openPage(pageId)
@@ -1205,7 +1283,7 @@ class NotesViewModelTest {
     fun deletingARowTakesItsTextAndUndoBringsItBack() = runTest(dispatcher) {
         val vm = seededViewModel()
 
-        vm.insertTable(TableSettings(columns = 1, rows = 3), 40f, 40f)
+        vm.insertTable(typed(columns = 1, rows = 3), 40f, 40f)
         advanceUntilIdle()
         val doomed = vm.cellId(1, 0)
         vm.onBlocksChanged(doomed, listOf(Block.of("second row")))
@@ -1229,7 +1307,7 @@ class NotesViewModelTest {
     fun addingAColumnGivesEveryRowACellAndUndoTakesThemAway() = runTest(dispatcher) {
         val vm = seededViewModel()
 
-        vm.insertTable(TableSettings(columns = 2, rows = 3), 40f, 40f)
+        vm.insertTable(typed(columns = 2, rows = 3), 40f, 40f)
         advanceUntilIdle()
         val tableId = vm.uiState.value.tables.single().id
 
@@ -1248,7 +1326,7 @@ class NotesViewModelTest {
     fun deletingTheLastRowIsRefusedAndCostsNoUndoStep() = runTest(dispatcher) {
         val vm = seededViewModel()
 
-        vm.insertTable(TableSettings(columns = 1, rows = 1), 40f, 40f)
+        vm.insertTable(typed(columns = 1, rows = 1), 40f, 40f)
         advanceUntilIdle()
         val tableId = vm.uiState.value.tables.single().id
 
@@ -1266,7 +1344,7 @@ class NotesViewModelTest {
     fun copyingATableAndPastingItCarriesTheText() = runTest(dispatcher) {
         val vm = seededViewModel()
 
-        vm.insertTable(TableSettings(columns = 2, rows = 1), 40f, 40f)
+        vm.insertTable(typed(columns = 2, rows = 1), 40f, 40f)
         advanceUntilIdle()
         val source = vm.uiState.value.tables.single()
         vm.onBlocksChanged(vm.cellId(0, 0), listOf(Block.of("copied")))
@@ -1293,7 +1371,7 @@ class NotesViewModelTest {
 
         vm.insertShape(ShapeSettings(), 40f, 40f, 160f, 120f)
         advanceUntilIdle()
-        vm.insertTable(TableSettings(), 200f, 200f)
+        vm.insertTable(typed(), 200f, 200f)
         advanceUntilIdle()
 
         vm.undoCanvas()
@@ -1315,7 +1393,7 @@ class NotesViewModelTest {
     fun blurringABlankCellDoesNotDiscardIt() = runTest(dispatcher) {
         val vm = seededViewModel()
 
-        vm.insertTable(TableSettings(columns = 2, rows = 1), 40f, 40f)
+        vm.insertTable(typed(columns = 2, rows = 1), 40f, 40f)
         advanceUntilIdle()
         val cell = vm.cellId(0, 1)
 
@@ -1339,7 +1417,7 @@ class NotesViewModelTest {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!
 
-        vm.insertTable(TableSettings(columns = 3, rows = 4), 40f, 40f, inkOnly = true)
+        vm.insertTable(TableSettings(inkOnly = true, columns = 3, rows = 4), 40f, 40f)
         advanceUntilIdle()
 
         vm.openPage(pageId)
@@ -1355,7 +1433,7 @@ class NotesViewModelTest {
     fun anInkTableGrowsWithoutEverTouchingTheBlockMap() = runTest(dispatcher) {
         val vm = seededViewModel()
 
-        vm.insertTable(TableSettings(columns = 2, rows = 2), 40f, 40f, inkOnly = true)
+        vm.insertTable(TableSettings(inkOnly = true, columns = 2, rows = 2), 40f, 40f)
         advanceUntilIdle()
         val table = vm.uiState.value.tables.single()
         assertTrue(table.contentCellIds().isEmpty())

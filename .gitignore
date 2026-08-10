@@ -12,6 +12,7 @@ gradlew
 gradlew.bat
 CLAUDE.md
 memory
+*.db
 
 #python
 .venv

@@ -29,18 +29,35 @@ data class CanvasSelection(
     val shapeIds: Set<String> = emptySet(),
     /** Tables — `docs/tablePlan.md` TA4. The third id set, added for the third kind. */
     val tableIds: Set<String> = emptySet(),
+    /** Equations placed on the canvas — the fourth kind, and the fourth id set. */
+    val equationIds: Set<String> = emptySet(),
     /** Live ink projections, including pieces that share a row id after a partial erase. */
     val projections: Set<InkProjectionKey> = emptySet(),
     val bounds: InkBounds,
 ) {
-    val isEmpty: Boolean get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isEmpty()
+    val isEmpty: Boolean
+        get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isEmpty() && equationIds.isEmpty()
 
     /** True when only one kind is held, which is what decides the per-kind half of the toolkit. */
-    val isInkOnly: Boolean get() = shapeIds.isEmpty() && tableIds.isEmpty() && inkIds.isNotEmpty()
-    val isShapeOnly: Boolean get() = inkIds.isEmpty() && tableIds.isEmpty() && shapeIds.isNotEmpty()
-    val isTableOnly: Boolean get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isNotEmpty()
+    val isInkOnly: Boolean get() = inkIds.isNotEmpty() && othersEmpty(inkIds)
+    val isShapeOnly: Boolean get() = shapeIds.isNotEmpty() && othersEmpty(shapeIds)
+    val isTableOnly: Boolean get() = tableIds.isNotEmpty() && othersEmpty(tableIds)
+    val isEquationOnly: Boolean get() = equationIds.isNotEmpty() && othersEmpty(equationIds)
+
+    /**
+     * Every id set except the one asked about is empty.
+     *
+     * Written once rather than four times, because the four `is…Only` flags were four hand-rolled
+     * conjunctions that each had to name every *other* kind — so adding equations meant editing all
+     * three of the existing ones, and forgetting one would have quietly claimed a mixed selection was
+     * pure. The next kind adds one line here and one flag, and cannot break the others.
+     */
+    private fun othersEmpty(own: Set<String>): Boolean =
+        listOf(inkIds, shapeIds, tableIds, equationIds).all { it === own || it.isEmpty() }
 
     fun holdsShape(shapeId: String): Boolean = shapeId in shapeIds
+
+    fun holdsEquation(equationId: String): Boolean = equationId in equationIds
 
     /** The ink half, in the shape the ink move/resize/replay path already takes. */
     fun inkHalf(): InkLassoSelection? = if (inkIds.isEmpty()) {
@@ -79,23 +96,31 @@ data class CanvasSelection(
         strokes: List<PageStroke>,
         shapes: List<Outline.Shape>,
         tables: List<TableBounds> = emptyList(),
+        equations: List<Outline.Equation> = emptyList(),
     ): CanvasSelection? {
         val liveShapes = shapes.filter { it.id in shapeIds }
         val liveTables = tables.filter { it.id in tableIds }
+        val liveEquations = equations.filter { it.id in equationIds }
         val directInk = strokes.filter { it.id in inkIds }
-        if (liveShapes.isEmpty() && directInk.isEmpty() && liveTables.isEmpty()) return null
+        if (liveShapes.isEmpty() && directInk.isEmpty() && liveTables.isEmpty() &&
+            liveEquations.isEmpty()
+        ) {
+            return null
+        }
 
         val groups = directInk.mapNotNull(PageStroke::groupId).toSet()
         val expandedInk = strokes.filter { it.id in inkIds || it.groupId != null && it.groupId in groups }
         val measured = expandedInk.mapNotNull(PageStroke::pageBounds) +
             liveShapes.map(Outline.Shape::pageBounds) +
-            liveTables.map(TableBounds::bounds)
+            liveTables.map(TableBounds::bounds) +
+            liveEquations.map(Outline.Equation::pageBounds)
         val union = measured.unionBounds() ?: return null
 
         return copy(
             inkIds = expandedInk.map(PageStroke::id).toSet(),
             shapeIds = liveShapes.map(Outline.Shape::id).toSet(),
             tableIds = liveTables.map(TableBounds::id).toSet(),
+            equationIds = liveEquations.map(Outline.Equation::id).toSet(),
             projections = expandedInk.map(PageStroke::projectionKey).toSet(),
             bounds = union,
         )
@@ -112,6 +137,12 @@ data class CanvasSelection(
         fun ofTable(table: TableBounds): CanvasSelection = CanvasSelection(
             tableIds = setOf(table.id),
             bounds = table.bounds,
+        )
+
+        /** One tapped equation, measured from the box the document already knows. */
+        fun ofEquation(equation: Outline.Equation): CanvasSelection = CanvasSelection(
+            equationIds = setOf(equation.id),
+            bounds = equation.pageBounds(),
         )
     }
 }
@@ -156,9 +187,12 @@ data class CanvasClipboard(
      * copied without what is in it is a grid of lines.
      */
     val tables: List<Outline.Table> = emptyList(),
+    /** Equations, which carry their whole selves: the source is the object. */
+    val equations: List<Outline.Equation> = emptyList(),
 ) {
     val isEmpty: Boolean
-        get() = strokes.isEmpty() && shapes.isEmpty() && texts.isEmpty() && tables.isEmpty()
+        get() = strokes.isEmpty() && shapes.isEmpty() && texts.isEmpty() && tables.isEmpty() &&
+            equations.isEmpty()
 }
 
 /**
@@ -173,6 +207,7 @@ internal fun selectWithLasso(
     strokes: List<PageStroke>,
     shapes: List<Outline.Shape>,
     tables: List<TableBounds> = emptyList(),
+    equations: List<Outline.Equation> = emptyList(),
     path: List<InkPoint>,
     edgeTolerance: Float = DEFAULT_LASSO_EDGE_TOLERANCE,
 ): CanvasSelection? {
@@ -180,17 +215,25 @@ internal fun selectWithLasso(
     val ink = strokes.selectWithLasso(path, edgeTolerance)
     val caughtShapes = shapes.filter { it.isInsideLasso(path, edgeTolerance) }
     val caughtTables = tables.filter { it.bounds.isInsideLasso(path, edgeTolerance) }
-    if (ink == null && caughtShapes.isEmpty() && caughtTables.isEmpty()) return null
+    // A rectangle, so the same four-corner rule a table is held to — see [isInsideLasso].
+    val caughtEquations = equations.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
+    if (ink == null && caughtShapes.isEmpty() && caughtTables.isEmpty() &&
+        caughtEquations.isEmpty()
+    ) {
+        return null
+    }
 
     val measured = (ink?.let { listOf(it.bounds) } ?: emptyList()) +
         caughtShapes.map(Outline.Shape::pageBounds) +
-        caughtTables.map(TableBounds::bounds)
+        caughtTables.map(TableBounds::bounds) +
+        caughtEquations.map(Outline.Equation::pageBounds)
     val union = measured.unionBounds() ?: return null
     return CanvasSelection(
         path = path,
         inkIds = ink?.targetIds.orEmpty(),
         shapeIds = caughtShapes.map(Outline.Shape::id).toSet(),
         tableIds = caughtTables.map(TableBounds::id).toSet(),
+        equationIds = caughtEquations.map(Outline.Equation::id).toSet(),
         projections = ink?.projections.orEmpty(),
         bounds = union,
     )
@@ -226,6 +269,15 @@ private fun Outline.Shape.isInsideLasso(polygon: List<InkPoint>, edgeTolerance: 
 
 /** A shape's stored bounds, in the page units the selection works in. */
 internal fun Outline.Shape.pageBounds(): InkBounds =
+    InkBounds(left = x, top = y, right = x + width, bottom = y + height)
+
+/**
+ * An equation's box, in the same units.
+ *
+ * Read straight off the document, unlike a table's — a formula's box is exact by construction, so
+ * there is nothing here for the canvas to know better (see `Outline.Equation`).
+ */
+internal fun Outline.Equation.pageBounds(): InkBounds =
     InkBounds(left = x, top = y, right = x + width, bottom = y + height)
 
 internal fun List<InkBounds>.unionBounds(): InkBounds? {

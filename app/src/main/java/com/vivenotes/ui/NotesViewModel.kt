@@ -236,7 +236,35 @@ private sealed interface CanvasHistoryEntry {
         val coalesceKey: String? = null,
         val atMillis: Long = 0L,
     ) : CanvasHistoryEntry
+
+    /**
+     * An edit to the equations on the canvas.
+     *
+     * [Shapes]'s shape exactly, and for the same reasons — whole lists over immutable data, because
+     * one edit can add, remove or alter any number of them and the document is saved whole anyway.
+     * It needs none of [Tables]' second half: an equation's content *is* the object, so there is no
+     * block map for it to reach into and nothing that typing can change behind its back.
+     */
+    data class Equations(
+        val before: List<Outline.Equation>,
+        val after: List<Outline.Equation>,
+        val coalesceKey: String? = null,
+        val atMillis: Long = 0L,
+    ) : CanvasHistoryEntry
 }
+
+/**
+ * A formula composed but not yet placed — what [DrawTool.Equation] is holding.
+ *
+ * Carries the box RaTeX measured for it, in page units, so that the tap which finally places it does
+ * not have to render anything to find out how big it is. The panel rendered the formula once already
+ * to check that it parses; this is that measurement, kept rather than thrown away.
+ */
+data class PendingEquation(
+    val latex: String,
+    val width: Float,
+    val height: Float,
+)
 
 private data class PageCanvasHistory(
     val undo: MutableList<CanvasHistoryEntry> = mutableListOf(),
@@ -253,6 +281,8 @@ data class NotesUiState(
     val outlines: List<OutlineBox> = emptyList(),
     /** Shapes on the canvas. Whole objects, so unlike ink they live in the document. */
     val shapes: List<Outline.Shape> = emptyList(),
+    /** Equations placed on the canvas — the Draw tab's ƒ. Objects, like shapes, not marks. */
+    val equations: List<Outline.Equation> = emptyList(),
     /**
      * The tables on the canvas — `docs/tablePlan.md`. **The grid, not the writing in it.**
      *
@@ -383,6 +413,27 @@ class NotesViewModel(
      */
     private val _tool = MutableStateFlow<DrawTool>(DrawTool.Pen(0))
     val tool: StateFlow<DrawTool> = _tool.asStateFlow()
+
+    /**
+     * The formula [DrawTool.Equation] is holding, waiting for a tap to say where it goes.
+     *
+     * **Beside the tool rather than in preferences, because it is content.** Every other object tool
+     * carries settings — how many rows, which shape, how thick the rules — and those describe *the
+     * user*, so they persist (ID5). A formula is the thing itself. Storing it would mean reopening
+     * the app with somebody's half-finished integral still loaded in the ƒ button, which is the same
+     * mistake as persisting which pen is in your hand.
+     *
+     * It carries the measured box with it, so the tap that places the equation already knows how big
+     * it is — see [insertEquation].
+     */
+    private val _pendingEquation = MutableStateFlow<PendingEquation?>(null)
+    val pendingEquation: StateFlow<PendingEquation?> = _pendingEquation.asStateFlow()
+
+    /** Takes the formula in hand: the next tap on bare canvas puts it on the page. */
+    fun armEquation(pending: PendingEquation) {
+        _pendingEquation.value = pending
+        selectTool(DrawTool.Equation)
+    }
 
     /**
      * Which ribbon tab is open.
@@ -604,7 +655,8 @@ class NotesViewModel(
             // and may have been substituted for an empty one. An unreadable page decodes to
             // PageDoc.empty(), so this clears — the outgoing page's outlines must not follow it.
             unmanagedOutlines = doc.outlines.withIndex().filterNot {
-                it.value is Outline.Text || it.value is Outline.Shape || it.value is Outline.Table
+                it.value is Outline.Text || it.value is Outline.Shape || it.value is Outline.Table ||
+                    it.value is Outline.Equation
             }
             // Loading joins the same serialization lane as edits. Otherwise a fast page switch can
             // read an operation between its immediate canvas update and its database tombstone.
@@ -617,6 +669,7 @@ class NotesViewModel(
                 outlines = loaded.map { OutlineBox(it.id, it.x, it.y, it.width, it.minHeight) },
                 shapes = doc.outlines.filterIsInstance<Outline.Shape>(),
                 tables = tables,
+                equations = doc.outlines.filterIsInstance<Outline.Equation>(),
                 pageStyle = doc.style,
                 pageRevision = _uiState.value.pageRevision + 1,
                 contentError = if (readOnlyPageId == pageId) {
@@ -1022,6 +1075,16 @@ class NotesViewModel(
         // Text is the one tool that wants the caret and the IME; every other one — including
         // nothing at all — takes the page's gestures and should put them away first.
         if (tool != DrawTool.Text) _commands.tryEmit(FormatCommand.DeactivateTextInput)
+        // And the same for what is selected *on* the page — `docs/diagram.md`, Prime Object Class:
+        // "Selecting any other tool removes selection of object." Only on an actual change, which is
+        // what "any other tool" says: re-tapping the tool already in hand has not selected another
+        // one, and taking the selection away there would make the armed button feel like a reset.
+        if (tool != _tool.value) _commands.tryEmit(FormatCommand.ClearCanvasSelection)
+        // Picking up anything else drops the formula that was waiting to be placed. It is content
+        // held in the hand, not a setting kept on a shelf, so it has no meaning once the hand is
+        // holding a pen — and leaving it would place a formula the user composed minutes ago the
+        // next time they came back to ƒ.
+        if (tool != DrawTool.Equation) _pendingEquation.value = null
         _tool.value = tool
     }
 
@@ -1324,6 +1387,123 @@ class NotesViewModel(
         edits.tryEmit(Unit)
     }
 
+    // --- equations ------------------------------------------------------------------------------
+
+    /**
+     * Puts a formula where the user tapped.
+     *
+     * [insertShape]'s bargain, kind for kind: a document edit, one entry on the shared history ring,
+     * the tool put down afterwards and the new object handed back so the page can select it. The
+     * handles are the point of it being an object and they are unreachable while the tool that makes
+     * new ones is still in hand.
+     *
+     * **The size arrives with the formula rather than being discovered later.** The panel has already
+     * rendered it once to check it parses, so its measured box comes along for free — which is what
+     * spares this the feedback loop a table needs, where only the canvas knows how tall the thing
+     * really is.
+     */
+    fun insertEquation(
+        latex: String,
+        x: Float,
+        y: Float,
+        width: Float = Outline.Equation.DEFAULT_WIDTH,
+        height: Float = Outline.Equation.DEFAULT_HEIGHT,
+    ): String? {
+        val pageId = _uiState.value.selectedPageId ?: return null
+        if (readOnlyPageId == pageId) return null
+        if (latex.isBlank()) return null
+
+        val created = Outline.Equation(
+            id = newId(),
+            x = x.coerceAtLeast(0f),
+            y = y.coerceAtLeast(0f),
+            width = width.coerceAtLeast(Outline.Equation.MIN_SIZE),
+            height = height.coerceAtLeast(Outline.Equation.MIN_SIZE),
+            latex = latex,
+        )
+
+        editEquations { it + created }
+        _tool.value = DrawTool.None
+        _pendingEquation.value = null
+        return created.id
+    }
+
+    /** One gesture, one edit — [moveShapes]' rule, which is undo's rather than arithmetic's. */
+    fun moveEquations(equationIds: Set<String>, dx: Float, dy: Float) {
+        if (equationIds.isEmpty() || (dx == 0f && dy == 0f)) return
+        editEquations { equations ->
+            equations.map { if (it.id in equationIds) it.translated(dx, dy) else it }
+        }
+    }
+
+    /**
+     * Scales about the corner opposite the one being dragged — AD7's four-corner resize.
+     *
+     * **Absolute, and applied once on the lift.** The same contract [resizeShapes] documents, and the
+     * same failure if it is called per frame: each frame's scale is measured from the geometry the
+     * drag *started* with, so applying them in sequence multiplies them together.
+     */
+    fun resizeEquations(
+        equationIds: Set<String>,
+        anchorX: Float,
+        anchorY: Float,
+        scaleX: Float,
+        scaleY: Float,
+    ) {
+        if (equationIds.isEmpty() || (scaleX == 1f && scaleY == 1f)) return
+        editEquations { equations ->
+            equations.map {
+                if (it.id in equationIds) it.scaledAbout(anchorX, anchorY, scaleX, scaleY) else it
+            }
+        }
+    }
+
+    /** Rewrites the formula in place, keeping the box the user sized. */
+    fun setEquationLatex(equationIds: Set<String>, latex: String) {
+        if (equationIds.isEmpty() || latex.isBlank()) return
+        editEquations { equations ->
+            equations.map { if (it.id in equationIds) it.copy(latex = latex) else it }
+        }
+    }
+
+    /** Colours the formula, and with it drops the automatic that followed the canvas. */
+    fun recolorEquations(equationIds: Set<String>, argb: Int) {
+        if (equationIds.isEmpty()) return
+        editEquations { equations ->
+            equations.map { if (it.id in equationIds) it.copy(colorArgb = argb) else it }
+        }
+    }
+
+    fun deleteEquations(equationIds: Set<String>) {
+        if (equationIds.isEmpty()) return
+        editEquations { equations -> equations.filterNot { it.id in equationIds } }
+    }
+
+    /** The one door every equation edit goes through — see [editShapes] for why there is exactly one. */
+    private inline fun editEquations(
+        coalesceKey: String? = null,
+        change: (List<Outline.Equation>) -> List<Outline.Equation>,
+    ) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val state = _uiState.value
+        val before = state.equations
+        val after = change(before)
+        if (after == before) return
+
+        _uiState.value = state.copy(equations = after)
+        pushHistory(
+            pageId,
+            CanvasHistoryEntry.Equations(
+                before = before,
+                after = after,
+                coalesceKey = coalesceKey,
+                atMillis = System.currentTimeMillis(),
+            ),
+        )
+        edits.tryEmit(Unit)
+    }
+
     // --- tables ---------------------------------------------------------------------------------
 
     /**
@@ -1338,8 +1518,6 @@ class NotesViewModel(
         settings: TableSettings,
         x: Float,
         y: Float,
-        /** A ruling for the stylus rather than a grid of text fields — `docs/tablePlan.md` TA15. */
-        inkOnly: Boolean = false,
     ): String? {
         val pageId = _uiState.value.selectedPageId ?: return null
         if (readOnlyPageId == pageId) return null
@@ -1354,7 +1532,9 @@ class NotesViewModel(
             borderArgb = settings.borderColorArgb,
             borderWidth = settings.borderWidth.toFloat(),
             fillArgb = settings.fillArgb,
-            inkOnly = inkOnly,
+            // A ruling for the stylus rather than a grid of text fields — `docs/tablePlan.md` TA15,
+            // and a setting rather than a second tool since it moved into the Table pane.
+            inkOnly = settings.inkOnly,
         )
 
         editTables(created.contentCellIds().toSet()) { tables ->
@@ -1629,8 +1809,16 @@ class NotesViewModel(
         val tables = _uiState.value.tables
             .filter { it.id in selection.tableIds }
             .map { table -> table.withCellBlocks(table.contentCellIds().associateWith { blocksById[it].orEmpty() }) }
-        if (strokes.isEmpty() && shapes.isEmpty() && tables.isEmpty()) return
-        clipboard = CanvasClipboard(strokes = strokes, shapes = shapes, tables = tables)
+        // Read straight off the state, unlike a table: an equation carries its own content, so there
+        // is no second half of it anywhere else to go stale.
+        val equations = _uiState.value.equations.filter { it.id in selection.equationIds }
+        if (strokes.isEmpty() && shapes.isEmpty() && tables.isEmpty() && equations.isEmpty()) return
+        clipboard = CanvasClipboard(
+            strokes = strokes,
+            shapes = shapes,
+            tables = tables,
+            equations = equations,
+        )
         _hasClipboard.value = true
     }
 
@@ -1653,10 +1841,17 @@ class NotesViewModel(
         val sourceShapes = clipboard.shapes
         val sourceTexts = clipboard.texts
         val sourceTables = clipboard.tables
-        if (sources.isEmpty() && sourceShapes.isEmpty() && sourceTexts.isEmpty() && sourceTables.isEmpty()) return
+        val sourceEquations = clipboard.equations
+        if (sources.isEmpty() && sourceShapes.isEmpty() && sourceTexts.isEmpty() &&
+            sourceTables.isEmpty() && sourceEquations.isEmpty()
+        ) {
+            return
+        }
 
         val bounds = sources.mapNotNull(PageStroke::pageBounds) +
             sourceShapes.map(Outline.Shape::pageBounds) +
+            // Exact, unlike the two approximations below it: an equation's box is its geometry.
+            sourceEquations.map(Outline.Equation::pageBounds) +
             // The sum of the row floors, which is the height the document can know — TA3. Off by
             // however far a cell's text runs past its row, exactly as a text box's floor is.
             sourceTables.map { InkBounds(it.x, it.y, it.x + it.width, it.y + it.height) } +
@@ -1721,6 +1916,15 @@ class NotesViewModel(
                 )
             }
             editShapes { it + pastedShapes }
+        }
+
+        if (sourceEquations.isNotEmpty()) {
+            val pastedEquations = sourceEquations.map { source ->
+                source.translated(dx, dy).copy(id = newId()).let {
+                    it.copy(x = it.x.coerceAtLeast(0f), y = it.y.coerceAtLeast(0f))
+                }
+            }
+            editEquations { it + pastedEquations }
         }
 
         if (sources.isEmpty()) return
@@ -1879,6 +2083,13 @@ class NotesViewModel(
                 )
                 edits.tryEmit(Unit)
             }
+            // One half, one place: an equation's source is the object, so the list is the whole of it.
+            is CanvasHistoryEntry.Equations -> {
+                _uiState.value = _uiState.value.copy(
+                    equations = if (applied) entry.after else entry.before,
+                )
+                edits.tryEmit(Unit)
+            }
             // A container is two halves in two places, so both move together or a restored box comes
             // back blank — see [CanvasHistoryEntry.Texts].
             is CanvasHistoryEntry.Texts -> {
@@ -1949,7 +2160,19 @@ class NotesViewModel(
             previous.blocksAfter.isEmpty() &&
             entry.atMillis - previous.atMillis <= SHAPE_COALESCE_MS
 
-        if (shapesCoalesce) {
+        // And again for an equation, which has one stream worth folding: the toolkit's colour picker.
+        val equationsCoalesce = entry is CanvasHistoryEntry.Equations &&
+            entry.coalesceKey != null &&
+            previous is CanvasHistoryEntry.Equations &&
+            previous.coalesceKey == entry.coalesceKey &&
+            entry.atMillis - previous.atMillis <= SHAPE_COALESCE_MS
+
+        if (equationsCoalesce) {
+            history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Equations).copy(
+                after = (entry as CanvasHistoryEntry.Equations).after,
+                atMillis = entry.atMillis,
+            )
+        } else if (shapesCoalesce) {
             history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Shapes).copy(
                 after = (entry as CanvasHistoryEntry.Shapes).after,
                 atMillis = entry.atMillis,
@@ -2139,7 +2362,10 @@ class NotesViewModel(
 
         repository.saveDoc(
             pageId,
-            PageDoc(outlines = merged(state.shapes + tables + outlines), style = state.pageStyle),
+            PageDoc(
+                outlines = merged(state.shapes + state.equations + tables + outlines),
+                style = state.pageStyle,
+            ),
         )
     }
 

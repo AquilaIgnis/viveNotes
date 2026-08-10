@@ -42,6 +42,12 @@ object TablePanelTags {
  * [PanelStepper]; its headers are switches, which is [PanelToggle]; its fill reads "none", which is
  * where a table starts.
  *
+ * Ahead of the plate's own fields is one it has no equivalent for: **write in with a pen**, which
+ * chooses between a grid of text fields and a ruling with nothing in its cells. That used to be the
+ * difference between two Table buttons on two tabs (TA15) and is a setting here instead, because it
+ * is a question about the table you are about to make — which is what everything else in this pane
+ * is.
+ *
  * **These are the user's defaults, not an edit.** Everything here says how the *next* table arrives
  * (ID5). Changing a table already on the page is the object toolkit's job, and the two must not be
  * merged however alike they look — the Shape pane carries the same warning for the same reason.
@@ -58,6 +64,20 @@ fun ColumnScope.TablePanelContent(
     TablePreview(table)
 
     Spacer(Modifier.height(10.dp))
+    // First, because it is the only field that changes what the table *is* rather than how it looks,
+    // and every field under it means the same thing either way. Off gives the typed table that used
+    // to be the Insert tab's own button — TA15, folded in here.
+    PanelSetting(
+        label = "Write in with a pen",
+        info = "Off, each cell is a text field you type into."
+    ) {
+        PanelToggle(
+            field = "Write in with a pen",
+            checked = table.inkOnly,
+            onCheckedChange = { onChange(table.copy(inkOnly = it)) },
+        )
+    }
+
     PanelSetting(label = "Header column") {
         PanelToggle(
             field = "Header column",

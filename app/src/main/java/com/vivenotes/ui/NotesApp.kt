@@ -129,6 +129,7 @@ fun NotesApp(
     val ruler by viewModel.ruler.collectAsStateWithLifecycle()
     val rulerOut by viewModel.rulerOut.collectAsStateWithLifecycle()
     val tool by viewModel.tool.collectAsStateWithLifecycle()
+    val pendingEquation by viewModel.pendingEquation.collectAsStateWithLifecycle()
     val drawWithFinger by viewModel.drawWithFinger.collectAsStateWithLifecycle()
     val stylusButtons by viewModel.stylusButtons.collectAsStateWithLifecycle()
     val canvasUndoState by viewModel.canvasUndoState.collectAsStateWithLifecycle()
@@ -280,6 +281,11 @@ fun NotesApp(
             updateTable = viewModel::updateTable,
             updateRuler = viewModel::updateRuler,
             toggleRuler = viewModel::toggleRuler,
+            armEquation = { latex, measured ->
+                viewModel.armEquation(
+                    PendingEquation(latex = latex, width = measured.width, height = measured.height),
+                )
+            },
             addPaletteColor = viewModel::addPaletteColor,
             setDrawWithFinger = viewModel::setDrawWithFinger,
             undo = viewModel::undoCanvas,
@@ -411,6 +417,7 @@ fun NotesApp(
                                 aiModels = aiModels,
                                 recognitionRunning = recognitionRunning,
                                 onRecognizeFormula = { recognize(it, RecognitionOutputKind.Formula) },
+                                pendingEquation = pendingEquation,
                                 modifier = Modifier.weight(1f),
                             )
                             openPane?.let { toolPane ->
@@ -522,6 +529,7 @@ fun NotesApp(
                                 aiModels = aiModels,
                                 recognitionRunning = recognitionRunning,
                                 onRecognizeFormula = { recognize(it, RecognitionOutputKind.Formula) },
+                                pendingEquation = pendingEquation,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -634,6 +642,8 @@ private fun EditorSurface(
     aiModels: AiModelsState,
     recognitionRunning: Boolean,
     onRecognizeFormula: (com.vivenotes.ink.CanvasSelection) -> Unit,
+    /** The formula the Draw tab's ƒ is holding, or null when it is holding none. */
+    pendingEquation: PendingEquation?,
     modifier: Modifier = Modifier,
 ) {
     if (state.selectedPageId == null) {
@@ -689,12 +699,24 @@ private fun EditorSurface(
         shaping = if (tool == DrawTool.Shape) shape else null,
         ruler = ruler.takeIf { rulerOut },
         tables = state.tables,
-        // Both tools place a table on the next tap; which *kind* is decided here rather than in the
-        // canvas, which has no business knowing there are two — `docs/tablePlan.md` TA15.
-        tableArmed = tool == DrawTool.Table || tool == DrawTool.InkTable,
-        onInsertTable = { x, y ->
-            viewModel.insertTable(themedTable, x, y, inkOnly = tool == DrawTool.InkTable)
+        // One tool places a table on the next tap; which *kind* rides in on the settings, so the
+        // canvas never learns there are two — `docs/tablePlan.md` TA15.
+        tableArmed = tool == DrawTool.Table,
+        onInsertTable = { x, y -> viewModel.insertTable(themedTable, x, y) },
+        equations = state.equations,
+        // Armed only while it is actually holding something. Losing the formula — a tab switch, a
+        // different tool, an undo — must not leave a tool in hand that would place nothing.
+        equationArmed = tool == DrawTool.Equation && pendingEquation != null,
+        onInsertEquation = { x, y ->
+            pendingEquation?.let {
+                viewModel.insertEquation(it.latex, x, y, it.width, it.height)
+            }
         },
+        onMoveEquations = viewModel::moveEquations,
+        onResizeEquations = viewModel::resizeEquations,
+        onDeleteEquations = viewModel::deleteEquations,
+        onRecolorEquations = viewModel::recolorEquations,
+        onEditEquation = viewModel::setEquationLatex,
         onMoveTables = viewModel::moveTables,
         onResizeTables = viewModel::resizeTables,
         onDeleteTables = viewModel::deleteTables,

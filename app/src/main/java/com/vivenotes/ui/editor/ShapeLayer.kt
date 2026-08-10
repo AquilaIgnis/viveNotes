@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -93,6 +94,26 @@ internal fun ShapeLayer(
     onResizeShapeArm: (shapeId: String, segmentId: String, atEnd: Boolean, along: Float) -> Unit =
         { _, _, _, _ -> },
     modifier: Modifier = Modifier,
+    /**
+     * The object layers that sit **over** the shapes — currently [EquationLayer].
+     *
+     * A slot rather than a sibling, and it is a hit-testing rule rather than a drawing one. Compose
+     * delivers a pointer event to the **topmost** node under it and to that node's ancestors; two
+     * overlapping siblings do not both get a say. So while this was composed beside [ShapeLayer] —
+     * same `fillMaxSize`, same page — the upper one silently took every touch on the page, and a tap
+     * on a shape fell straight past to the bare-canvas tap target above them both: selecting a shape,
+     * dragging one and grabbing a corner all stopped working the day equations arrived, with nothing
+     * to show for it but a text container opening where the shape was.
+     *
+     * As a child it is asked first and this layer is its ancestor, so the order becomes what it reads
+     * as: an equation takes a touch that lands on one, and everything it declines falls through to
+     * the shapes, and then to the canvas. That is the same arrangement, for the same reason, that
+     * makes this layer a child of that tap target rather than a sibling of it — see the call site.
+     *
+     * Composed after the [Canvas] below, so the draw order is unchanged: equations still paint over
+     * shapes, which is what a formula written on top of a drawing should do.
+     */
+    above: @Composable BoxScope.() -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val handleFill = MaterialTheme.colorScheme.surface
@@ -323,6 +344,9 @@ internal fun ShapeLayer(
             shapes.singleOrNull { selection?.isShapeOnly == true && it.id in held }
                 ?.let { drawSelection(previewOf(it), accent, handleFill, pageScale) }
         }
+
+        // Last, so it draws over the shapes and is hit-tested before them — see [above].
+        above()
     }
 }
 
@@ -652,13 +676,33 @@ private fun Outline.Shape.contains(x: Float, y: Float): Boolean {
 
 /** A line is thin; the target for one is not. */
 private val TOUCH_REACH: Dp = 12.dp
-private val SELECTION_PADDING: Dp = 6.dp
-private val SELECTION_STROKE: Dp = 1.5.dp
-private val SELECTION_DASH: Dp = 4.dp
-private val HANDLE_RADIUS: Dp = 5.5.dp
 
-/** Matches LassoGesture's own handle reach, so the two selections grab the same way. */
-private val HANDLE_REACH: Dp = 14.dp
+private val SELECTION_PADDING: Dp = SelectionChrome.PADDING
+private val SELECTION_STROKE: Dp = SelectionChrome.STROKE
+private val SELECTION_DASH: Dp = SelectionChrome.DASH
+private val HANDLE_RADIUS: Dp = SelectionChrome.HANDLE_RADIUS
+private val HANDLE_REACH: Dp = SelectionChrome.HANDLE_REACH
+
+/**
+ * What a selected object on the canvas looks like, and how near a finger has to come to grab it.
+ *
+ * **One set of numbers rather than several that happen to agree.** AD7 makes selection a page-level
+ * idea, so a handle that a finger misses on an equation but catches on a shape is exactly the
+ * inconsistency it argues against — and these are drawn by two layers now ([ShapeLayer] and
+ * [EquationLayer]) with a third kind certain to follow.
+ *
+ * `TableContainer` keeps its own radius on purpose: its handle is a composed target with its own hit
+ * area, not a disc painted into a canvas, so it is a different thing that happens to look similar.
+ */
+internal object SelectionChrome {
+    val PADDING: Dp = 6.dp
+    val STROKE: Dp = 1.5.dp
+    val DASH: Dp = 4.dp
+    val HANDLE_RADIUS: Dp = 5.5.dp
+
+    /** Matches LassoGesture's own handle reach, so every selection grabs the same way. */
+    val HANDLE_REACH: Dp = 14.dp
+}
 
 /**
  * How far past its tip an arm's tab sits.

@@ -32,6 +32,27 @@ sealed interface FormatCommand {
     /** Puts the caret and IME away before a Draw-tab tool starts consuming page gestures. */
     data object DeactivateTextInput : FormatCommand
 
+    /**
+     * Drops whatever is selected on the canvas, because the user picked a different tool —
+     * `docs/diagram.md`, Prime Object Class: *"Selecting any other tool removes selection of
+     * object."*
+     *
+     * The canvas twin of [DeactivateTextInput], emitted from the same line of `selectTool` and for
+     * the same reason: a tool change means the page's gestures now belong to something else, so what
+     * the previous tool left behind is put away first. Text state was already doing this; the
+     * object selection was not, so a dashed box and a floating toolbar stayed over the page while
+     * you drew on it.
+     *
+     * **A command rather than a `LaunchedEffect` on the armed tool**, which is what this looked like
+     * it wanted to be. Placing an object *disarms* the tool that placed it — `insertShape`,
+     * `insertTable` and `insertEquation` all set `DrawTool.None` — and then selects what they just
+     * made, so a clear keyed on the tool's *value* would fire on that transition and wipe the
+     * selection the insert had only just handed over. `selectTool` is the user picking a tool, which
+     * is what the rule is actually about, and a one-shot event down the existing bus cannot race the
+     * state write that follows it.
+     */
+    data object ClearCanvasSelection : FormatCommand
+
     /** Keeps the current editor/caret alive while the focusable equation panel is open. */
     data object RetainEquationTarget : FormatCommand
 

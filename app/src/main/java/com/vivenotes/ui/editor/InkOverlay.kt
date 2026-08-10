@@ -121,6 +121,8 @@ internal fun InkOverlay(
      * for why the model's own height will not do here.
      */
     tables: List<TableBounds> = emptyList(),
+    /** Equations on the page, which a loop takes by their box like a table. */
+    equations: List<Outline.Equation> = emptyList(),
     /**
      * What is selected, across kinds. Owned by the page rather than by this overlay: a shape can be in
      * it, and `ShapeLayer` has to draw the same selection this does. See [CanvasSelection].
@@ -158,6 +160,8 @@ internal fun InkOverlay(
     onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onMoveTables: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+    onMoveEquations: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeEquations: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onDeleteSelection: (Set<String>) -> Unit = {},
     hasClipboard: Boolean = false,
     onRequestPaste: (InkPoint) -> Unit = {},
@@ -198,8 +202,11 @@ internal fun InkOverlay(
     val currentSelection by rememberUpdatedState(selection)
     val currentOnSelect by rememberUpdatedState(onSelect)
     val currentTables by rememberUpdatedState(tables)
+    val currentEquations by rememberUpdatedState(equations)
     val currentOnMoveShapes by rememberUpdatedState(onMoveShapes)
     val currentOnResizeShapes by rememberUpdatedState(onResizeShapes)
+    val currentOnMoveEquations by rememberUpdatedState(onMoveEquations)
+    val currentOnResizeEquations by rememberUpdatedState(onResizeEquations)
     val currentOnMoveTables by rememberUpdatedState(onMoveTables)
     val currentOnResizeTables by rememberUpdatedState(onResizeTables)
     val currentOnMoveSelection by rememberUpdatedState(onMoveSelection)
@@ -428,12 +435,15 @@ internal fun InkOverlay(
                             lassoGesture = lassoGesture,
                             shapes = currentShapes,
                             tables = currentTables,
+                            equations = currentEquations,
                             selection = currentSelection,
                             onSelect = currentOnSelect,
                             onMoveShapes = currentOnMoveShapes,
                             onResizeShapes = currentOnResizeShapes,
                             onMoveTables = currentOnMoveTables,
                             onResizeTables = currentOnResizeTables,
+                            onMoveEquations = currentOnMoveEquations,
+                            onResizeEquations = currentOnResizeEquations,
                             shapeGesture = shapeGesture,
                             onInsertShape = currentOnInsertShape,
                             touchSlop = viewConfiguration.touchSlop,
@@ -535,6 +545,7 @@ private fun handleInk(
     strokes: List<PageStroke>,
     shapes: List<Outline.Shape>,
     tables: List<TableBounds>,
+    equations: List<Outline.Equation>,
     selection: CanvasSelection?,
     onSelect: (CanvasSelection?) -> Unit,
     allowFinger: Boolean,
@@ -547,6 +558,8 @@ private fun handleInk(
     onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit,
     onMoveTables: (Set<String>, Float, Float) -> Unit,
     onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit,
+    onMoveEquations: (Set<String>, Float, Float) -> Unit,
+    onResizeEquations: (Set<String>, InkPoint, Float, Float) -> Unit,
     liveStroke: InProgressStrokeId?,
     livePointer: Int,
     ruledStroke: Boolean,
@@ -596,6 +609,7 @@ private fun handleInk(
             strokes = strokes,
             shapes = shapes,
             tables = tables,
+            equations = equations,
             selection = selection,
             onSelect = onSelect,
             onMove = onMoveSelection,
@@ -604,6 +618,8 @@ private fun handleInk(
             onResizeShapes = onResizeShapes,
             onMoveTables = onMoveTables,
             onResizeTables = onResizeTables,
+            onMoveEquations = onMoveEquations,
+            onResizeEquations = onResizeEquations,
         )
     }
 
@@ -1156,6 +1172,7 @@ internal class LassoGesture {
         strokes: List<PageStroke>,
         shapes: List<Outline.Shape>,
         tables: List<TableBounds> = emptyList(),
+        equations: List<Outline.Equation> = emptyList(),
         selection: CanvasSelection?,
         onSelect: (CanvasSelection?) -> Unit,
         onMove: (InkLassoMove) -> Unit,
@@ -1164,6 +1181,8 @@ internal class LassoGesture {
         onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
         onMoveTables: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
         onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+        onMoveEquations: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+        onResizeEquations: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     ): Boolean {
         return when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -1219,6 +1238,7 @@ internal class LassoGesture {
                                 strokes = strokes,
                                 shapes = shapes,
                                 tables = tables,
+                                equations = equations,
                                 path = path.toList(),
                                 edgeTolerance = lassoEdgeTolerance(toPage),
                             ),
@@ -1251,6 +1271,9 @@ internal class LassoGesture {
                             if (selection.tableIds.isNotEmpty()) {
                                 onMoveTables(selection.tableIds, delta.x, delta.y)
                             }
+                            if (selection.equationIds.isNotEmpty()) {
+                                onMoveEquations(selection.equationIds, delta.x, delta.y)
+                            }
                             onSelect(selection.translated(delta.x, delta.y))
                         }
                     }
@@ -1275,6 +1298,11 @@ internal class LassoGesture {
                             }
                             if (selection.tableIds.isNotEmpty()) {
                                 onResizeTables(selection.tableIds, resizeAnchor, scale.x, scale.y)
+                            }
+                            if (selection.equationIds.isNotEmpty()) {
+                                onResizeEquations(
+                                    selection.equationIds, resizeAnchor, scale.x, scale.y,
+                                )
                             }
                             onSelect(selection.scaled(resizeAnchor, scale.x, scale.y))
                         }

@@ -56,6 +56,13 @@ data class DrawActions(
     val updateRuler: (RulerSettings) -> Unit = {},
     /** Lays the ruler on the page, or picks it up again — `docs/rulerPlan.md` RD1. */
     val toggleRuler: () -> Unit = {},
+    /**
+     * Takes a composed formula in hand: the next tap on bare canvas places it.
+     *
+     * Unlike every other entry here it carries *content* rather than a setting, which is why it is an
+     * action and not an `update…` — see `NotesViewModel.pendingEquation`.
+     */
+    val armEquation: (String, MeasuredEquation) -> Unit = { _, _ -> },
     val setDrawWithFinger: (Boolean) -> Unit,
     /** Puts a colour off the wheel at the head of the swatch row. Not the same write as a pen. */
     val addPaletteColor: (Int) -> Unit = {},
@@ -103,7 +110,7 @@ internal fun DrawTab(
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
-    /** Shared with the Insert tab: how many rows and how thick the rules is the same question. */
+    /** How the next table arrives, kind included — see [TableButton]. */
     table: TableSettings = TableSettings(),
     tool: DrawTool,
     actions: DrawActions,
@@ -166,8 +173,6 @@ internal fun DrawTab(
             )
         }
 
-        // Beside the pens rather than beside the eraser: it is a thing you draw with, and the
-        // grouping is what says so before the icon does.
         HighlighterButton(
             settings = highlighter,
             selected = tool == DrawTool.Highlighter,
@@ -176,47 +181,6 @@ internal fun DrawTab(
             onOpen = { highlighterSettingsOpen = true },
             onDismiss = { highlighterSettingsOpen = false },
             onChange = actions.updateHighlighter,
-        )
-
-        // Beside the pens and the highlighter for the same reason they are beside each other: it is
-        // a thing that puts marks on the page. Its twin on the Insert tab is the same composable.
-        ShapeButton(
-            shape = shape,
-            palette = palette,
-            selected = tool == DrawTool.Shape,
-            enabled = pageOpen,
-            onSelect = { actions.selectTool(DrawTool.Shape) },
-            onChange = actions.updateShape,
-            onAddColor = actions.addPaletteColor,
-        )
-
-        // The Draw tab's table — `docs/tablePlan.md` TA15. The same button the Insert tab carries,
-        // placing a different object: **a ruling to write in**, with no editors in its cells, so a
-        // pen goes straight through it onto the page. That is why it is here and not only there —
-        // it belongs with the things you use a stylus on, not with the things you type into.
-        TableButton(
-            table = table,
-            palette = palette,
-            selected = tool == DrawTool.InkTable,
-            enabled = pageOpen,
-            onSelect = { actions.selectTool(DrawTool.InkTable) },
-            onChange = actions.updateTable,
-            onAddColor = actions.addPaletteColor,
-            inkOnly = true,
-        )
-
-        Divider()
-
-        // Set apart from the pens rather than among them: it does not mark the page, it changes what
-        // happens when something else does. RD1 — the ruler is not a tool.
-        RulerButton(
-            settings = ruler,
-            out = rulerOut,
-            settingsOpen = rulerSettingsOpen,
-            onToggle = actions.toggleRuler,
-            onOpen = { rulerSettingsOpen = true },
-            onDismiss = { rulerSettingsOpen = false },
-            onChange = actions.updateRuler,
         )
 
         Divider()
@@ -239,6 +203,48 @@ internal fun DrawTab(
                 onClick = { actions.selectTool(DrawTool.Lasso) },
             )
         }
+
+        Divider()
+
+        ShapeButton(
+            shape = shape,
+            palette = palette,
+            selected = tool == DrawTool.Shape,
+            enabled = pageOpen,
+            onSelect = { actions.selectTool(DrawTool.Shape) },
+            onChange = actions.updateShape,
+            onAddColor = actions.addPaletteColor,
+        )
+
+        TableButton(
+            table = table,
+            palette = palette,
+            selected = tool == DrawTool.Table,
+            enabled = pageOpen,
+            onSelect = { actions.selectTool(DrawTool.Table) },
+            onChange = actions.updateTable,
+            onAddColor = actions.addPaletteColor,
+        )
+
+        EquationButton(
+            enabled = pageOpen,
+            active = tool == DrawTool.Equation,
+            tag = EquationTags.OBJECT,
+            label = "Equation",
+            onSubmit = { latex, measured -> actions.armEquation(latex, measured) },
+        )
+
+        Divider()
+
+        RulerButton(
+            settings = ruler,
+            out = rulerOut,
+            settingsOpen = rulerSettingsOpen,
+            onToggle = actions.toggleRuler,
+            onOpen = { rulerSettingsOpen = true },
+            onDismiss = { rulerSettingsOpen = false },
+            onChange = actions.updateRuler,
+        )
     }
 }
 
