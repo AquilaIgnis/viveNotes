@@ -13,7 +13,8 @@ gradlew.bat
 CLAUDE.md
 memory
 *.db
-
+*.db-shm
+*.db-wal
 #python
 .venv
 .python-version

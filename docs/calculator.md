@@ -15,7 +15,7 @@ Once a formula is understood, the panel runs one action without being asked — 
 | Object | Runs |
 |---|---|
 | Equation, Relation | Solve |
-| Integral, Derivative, Unevaluated operation | Evaluate |
+| Integral, Derivative, Unevaluated operation, Series | Evaluate |
 | Expression | Simplify |
 | Matrix | nothing — no arbitrary default |
 
@@ -28,7 +28,8 @@ Tapping a different action afterwards sticks; the automatic run fires once per a
 | `MatrixBase`              | `Matrix · R × C`        |
 | `Integral`                | `Integral`              |
 | `Derivative`              | `Derivative`            |
-| `Sum`, `Product`, `Limit` | `Unevaluated operation` |
+| `Sum` over an infinite limit | `Series`             |
+| `Sum` (finite), `Product`, `Limit` | `Unevaluated operation` |
 | `Equality`                | `Equation`              |
 | other `Relational`        | `Relation`              |
 | anything else             | `Expression`            |
@@ -75,7 +76,43 @@ Tapping a different action afterwards sticks; the automatic run fires once per a
 | -------- | --------- | ----------------------- |
 | Evaluate | —         | `simplify(expr.doit())` |
 
-Covers `Sum`, `Product` and `Limit` as well as integrals and derivatives.
+Covers finite `Sum`, `Product` and `Limit` as well as integrals and derivatives.
+
+## Series
+
+A `Sum` with one index running to infinity. Evaluate still applies and still runs automatically;
+Convergence is the added button.
+
+| Button      | Condition | Result                                                        |
+| ----------- | --------- | ------------------------------------------------------------- |
+| Evaluate    | —         | `simplify(expr.doit())` — the closed form, where one exists    |
+| Convergence | —         | Diverges · Converges · Converges absolutely · Converges conditionally · Undetermined |
+
+**SymPy exposes no individually addressable convergence test.** `Sum.is_convergent()` walks a fixed
+cascade internally and returns one boolean without saying which test decided it. The order, read out
+of the 1.14.0 source, is:
+
+> divergence → p-series → comparison → limit comparison → ratio → Raabe → root → alternating series
+> → integral → Dirichlet → bounded-times-convergent
+
+The first branch that reaches a verdict wins and the rest never run. There is no `ratio_test()` or
+`root_test()` to call, so the panel reports a verdict and never names a test — naming one would be a
+guess. "Converges conditionally" is derived: convergent, not absolutely so.
+
+**A divergence verdict is withheld for trigonometric summands.** Traced through 1.14.0: the p-series
+branch *discards the bounded factor* and decides on the `1/n^p` remainder alone, and it sits ahead of
+Dirichlet in the cascade, so Dirichlet never runs. For p > 1 that is harmless — Σsin(n)/n² returns
+`True` correctly. For p ≤ 1 it is wrong on exactly the interesting cases: Σsin(n)/n and Σcos(n)/n
+both converge and both return `False`, identically to the genuinely divergent Σsin(n). Those report
+`Undetermined` rather than stating a false theorem. A `True` is unaffected, because the discarded
+factor only ever helps convergence.
+
+Absolute convergence for those summands is decided by bounding `|sin|` and `|cos|` by 1 and testing
+what remains, which is a valid comparison and avoids the ~5 s `is_absolutely_convergent` spends on
+Σcos(n)/n² before raising. Only the positive answer is a proof; an inconclusive comparison adds
+nothing rather than downgrading the verdict.
+
+Measured on the bundled corpus, desktop CPython: every case above lands under 80 ms.
 
 ## Limits
 
@@ -97,6 +134,16 @@ LaTeX. Matrices accept `bmatrix`, `pmatrix`, `matrix`, `Bmatrix`, `vmatrix`, `Vm
 and `array`, optionally wrapped in `\left[…\right]`, `\left(…\right)` or `\left\{…\right\}`.
 `\limits` / `\nolimits` are stripped before parsing — SymPy's grammar rejects them and they carry no
 mathematics.
+
+**`e` and `\pi` are bound to Euler's number and π after parsing.** `parse_latex` returns them as
+ordinary symbols, so before this every constant was a free variable: `\sin(\pi)` stayed `sin(pi)`
+instead of `0`, and `\sum e^{-7n}` looked like a two-variable series, which made `is_convergent`
+refuse it outright. A formula that genuinely uses `e` as an unknown is therefore read as the
+constant — the deliberate trade, since in recognized handwriting `e` is the constant far more often,
+and inferring it from context would make the same formula mean different things on different pages.
+
+`i` is deliberately **not** bound. It is a summation or matrix index far more often than it is the
+imaginary unit, and binding it would silently rewrite `\sum_{i=1}^{n}`.
 
 ## Adding an operation
 

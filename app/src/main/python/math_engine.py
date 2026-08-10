@@ -95,8 +95,35 @@ def _parse(source: str) -> ParsedInput:
     if expression is None:
         # strict=True prevents the ANTLR backend from accepting only a valid prefix such as `x -`.
         expression = parse_latex(source, backend="antlr", strict=True)
+    expression = _bind_constants(expression)
     _check_complexity(expression)
     return expression
+
+
+#: LaTeX names the ANTLR backend hands back as ordinary symbols rather than the constants they
+#: denote. ``i`` is deliberately absent: it is a summation or matrix index far more often than it is
+#: the imaginary unit, and binding it would silently rewrite ``\sum_{i=1}^{n}``.
+_CONSTANT_SYMBOLS: dict[str, sp.Expr] = {"e": sp.E, "pi": sp.pi}
+
+
+def _bind_constants(expression: ParsedInput) -> ParsedInput:
+    """Bind ``e`` and ``\\pi`` to Euler's number and π.
+
+    ``parse_latex`` returns ``Symbol('e')`` and ``Symbol('pi')``, so without this every constant is
+    a free variable: ``\\sin(\\pi)`` stays ``sin(pi)`` instead of ``0``, and ``\\sum e^{-7n}`` looks
+    like a two-variable series, which is what made ``is_convergent`` refuse it outright.
+
+    A formula that genuinely uses ``e`` as a variable is therefore read as Euler's number. That is
+    the deliberate trade: in recognized handwriting ``e`` is the constant far more often than it is
+    an unknown, and the alternative — guessing from context — would make the same formula mean
+    different things on different pages.
+    """
+    substitutions: list[tuple[sp.Symbol, sp.Expr]] = [
+        (symbol, _CONSTANT_SYMBOLS[str(symbol)])
+        for symbol in _symbols(expression)
+        if str(symbol) in _CONSTANT_SYMBOLS
+    ]
+    return expression.subs(substitutions) if substitutions else expression
 
 
 _LIMIT_PLACEMENT_DIRECTIVE = re.compile(r"\\(?:no)?limits(?![A-Za-z])\s*")
@@ -258,7 +285,13 @@ def _classify(expression: ParsedInput) -> tuple[str, list[Action]]:
         return "Integral", [_action("evaluate", "Evaluate")]
     if isinstance(expression, sp.Derivative):
         return "Derivative", [_action("evaluate", "Evaluate")]
-    if isinstance(expression, (sp.Sum, sp.Product, sp.Limit)):
+    if isinstance(expression, sp.Sum):
+        actions = [_action("evaluate", "Evaluate")]
+        if _infinite_series_index(expression) is not None:
+            actions.append(_action("series_convergence", "Convergence"))
+            return "Series", actions
+        return "Unevaluated operation", actions
+    if isinstance(expression, (sp.Product, sp.Limit)):
         return "Unevaluated operation", [_action("evaluate", "Evaluate")]
 
     if isinstance(expression, Relational):
@@ -319,6 +352,8 @@ def _execute(expression: ParsedInput, action_id: str) -> ResultPayload:
         return payload
     if action_id == "evaluate":
         return _latex_result("Evaluated", sp.simplify(expression.doit()))
+    if action_id == "series_convergence":
+        return _series_convergence(expression)
     if action_id == "decimal":
         return _latex_result("Decimal approximation", sp.N(expression, 12))
     if action_id == "graph":
@@ -439,6 +474,123 @@ def _stacked_latex(equations: list[sp.Equality]) -> str:
 
 def _latex_result(title: str, result: Any, message: str | None = None) -> ResultPayload:
     return {"title": title, "latex": sp.latex(result), "message": message}
+
+
+def _verdict_result(verdict: str, message: str | None = None) -> ResultPayload:
+    """A convergence answer, whose result is a word rather than an expression."""
+    return {"title": "Convergence", "latex": rf"\text{{{verdict}}}", "message": message}
+
+
+def _infinite_series_index(series: sp.Sum) -> sp.Symbol | None:
+    """The summation index of a single-index series running to infinity, else ``None``.
+
+    Multi-index sums are excluded because SymPy's convergence machinery refuses them anyway, and a
+    finite sum has nothing to decide — it is arithmetic, which ``evaluate`` already does.
+    """
+    if len(series.limits) != 1:
+        return None
+    index, lower, upper = series.limits[0]
+    return index if bool(upper.is_infinite) or bool(lower.is_infinite) else None
+
+
+def _tribool(value: Any) -> bool | None:
+    """Normalize a SymPy answer to ``True`` / ``False`` / unknown.
+
+    ``is_convergent`` returns ``BooleanTrue``/``BooleanFalse``, not Python ``bool``, so ``value is
+    True`` is *always* false against it and an identity check silently reports every convergent
+    series as divergent. Anything that is neither boolean is treated as unknown rather than coerced.
+    """
+    if value is True or value is sp.true:
+        return True
+    if value is False or value is sp.false:
+        return False
+    return None
+
+
+def _oscillates_with_index(term: sp.Expr, index: sp.Symbol) -> bool:
+    """Whether the summand carries a trigonometric factor in the summation index."""
+    oscillators = (sp.sin, sp.cos, sp.tan, sp.cot, sp.sec, sp.csc)
+    return any(index in node.free_symbols for node in term.atoms(*oscillators))
+
+
+def _absolutely_convergent_by_comparison(series: sp.Sum, index: sp.Symbol) -> bool | None:
+    """Test absolute convergence of an oscillating summand by bounding its trig factors by 1.
+
+    |sin| and |cos| never exceed 1, so if the summand with those factors removed converges
+    absolutely then the original does too. Returns ``None`` when the comparison is inconclusive,
+    which is not evidence of anything — only the positive answer is a proof.
+    """
+    oscillators = (sp.sin, sp.cos)
+    bounded: sp.Expr = series.function
+    for node in bounded.atoms(*oscillators):
+        if index in node.free_symbols:
+            bounded = bounded.subs(node, sp.Integer(1))
+    if index in bounded.atoms(sp.tan, sp.cot, sp.sec, sp.csc):
+        return None  # Unbounded on the reals; comparison says nothing.
+    try:
+        comparison = sp.Sum(sp.Abs(bounded), series.limits[0])
+        return True if _tribool(comparison.is_convergent()) is True else None
+    except (NotImplementedError, RecursionError, ValueError, TypeError):
+        return None
+
+
+def _series_convergence(series: sp.Sum) -> ResultPayload:
+    """Decide convergence, and refuse to answer where SymPy is known to answer wrongly.
+
+    SymPy exposes no individually addressable test — ``is_convergent`` runs the divergence,
+    p-series, comparison, ratio, Raabe, root, alternating-series, integral and Dirichlet tests
+    internally and returns only a boolean, never which one decided. So this reports the verdict, not
+    a test name, because naming a test here would be a guess.
+
+    **A ``False`` from a summand with a trigonometric factor in the index carries no information.**
+    Traced through SymPy 1.14.0: the p-series branch discards the bounded factor and decides on the
+    ``1/n**p`` remainder alone, and it sits *ahead* of the Dirichlet branch in the cascade, so
+    Dirichlet never runs. That is right whenever the remainder converges absolutely — Σsin(n)/n²
+    returns ``True`` correctly — and wrong for every conditionally convergent case: Σsin(n)/n and
+    Σcos(n)/n both converge and both come back ``False``, identically to the genuinely divergent
+    Σsin(n). Reporting that as "diverges" would state a false theorem, so p ≤ 1 is undetermined
+    instead. A ``True`` is unaffected, since the discarded factor only ever helps convergence.
+    """
+    index: sp.Symbol | None = _infinite_series_index(series)
+    if index is None:
+        raise MathInputError("Convergence applies to a series with one index running to infinity.")
+
+    try:
+        converges: bool | None = _tribool(series.is_convergent())
+    except NotImplementedError:
+        return _verdict_result("Undetermined", "SymPy could not decide this series.")
+
+    if converges is None:
+        return _verdict_result("Undetermined", "SymPy could not decide this series.")
+
+    if converges is False:
+        if _oscillates_with_index(series.function, index):
+            return _verdict_result(
+                "Undetermined",
+                "SymPy reports divergence for every oscillating summand of this shape, including "
+                "ones that converge, so the answer is withheld rather than guessed.",
+            )
+        return _verdict_result("Diverges")
+
+    # Only asked once convergence is established, because it is the expensive half.
+    absolutely: bool | None
+    if _oscillates_with_index(series.function, index):
+        # `is_absolutely_convergent` spends ~5 s on these before raising — measured on Σcos(n)/n²,
+        # which is in the bundled corpus — so bound |sin| and |cos| by 1 and test what is left
+        # instead. Convergence of the bound implies absolute convergence by comparison; failure to
+        # decide the bound implies nothing, so it only ever adds the qualifier, never removes it.
+        absolutely = _absolutely_convergent_by_comparison(series, index)
+    else:
+        try:
+            absolutely = _tribool(series.is_absolutely_convergent())
+        except (NotImplementedError, RecursionError, ValueError, TypeError):
+            absolutely = None
+
+    if absolutely is True:
+        return _verdict_result("Converges absolutely")
+    if absolutely is False:
+        return _verdict_result("Converges conditionally")
+    return _verdict_result("Converges", "Absolute convergence could not be determined.")
 
 
 def _graph_expression(expression: ParsedInput) -> tuple[sp.Symbol, sp.Expr, str] | None:
