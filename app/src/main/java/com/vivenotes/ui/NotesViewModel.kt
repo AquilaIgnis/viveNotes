@@ -56,6 +56,7 @@ import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkPoint
+import com.vivenotes.ink.PageBounds
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.eraseObjects
 import com.vivenotes.ink.moveSelected
@@ -823,7 +824,7 @@ class NotesViewModel(
         // Read before the change runs, because a caller is entitled to rewrite `blocksById`
         // inside it — which is how a delete takes the text with the box.
         val blocksBefore = touched.associateWith { blocksById[it] }
-        val after = change(before)
+        val after = change(before).onPage()
         if (after == before && touched.all { blocksById[it] == blocksBefore[it] }) return
 
         _uiState.value = state.copy(outlines = after, pageRevision = state.pageRevision + 1)
@@ -1371,7 +1372,8 @@ class NotesViewModel(
         if (readOnlyPageId == pageId) return
         val state = _uiState.value
         val before = state.shapes
-        val after = change(before)
+        // Held to the page's origin corner here, at the one door — see [onPage].
+        val after = change(before).onPage()
         if (after == before) return
 
         _uiState.value = state.copy(shapes = after)
@@ -1488,7 +1490,7 @@ class NotesViewModel(
         if (readOnlyPageId == pageId) return
         val state = _uiState.value
         val before = state.equations
-        val after = change(before)
+        val after = change(before).onPage()
         if (after == before) return
 
         _uiState.value = state.copy(equations = after)
@@ -1697,7 +1699,7 @@ class NotesViewModel(
         // Read before the change runs, because a caller is entitled to rewrite `blocksById` inside
         // it — which is how a deleted row takes its text with it.
         val blocksBefore = touched.associateWith { blocksById[it] }
-        val after = change(before)
+        val after = change(before).onPage()
         if (after == before && touched.all { blocksById[it] == blocksBefore[it] }) return
 
         _uiState.value = state.copy(
@@ -1866,16 +1868,17 @@ class NotesViewModel(
         // put half of what was pasted above the tap, so a paste near the top of the page landed with
         // its head off the sheet and the tap looked like it had chosen the middle of the content
         // rather than its start.
-        val dx = at.x - union.center.x
-        val dy = at.y - union.top
+        // Clamped as **one** delta, against the union, rather than each kind coercing its own corner
+        // afterwards. Both keep the paste on the page — [PageBounds] — but only this one keeps it in
+        // the arrangement it was copied in: coercing per object slides whatever stuck out furthest
+        // back to the wall and leaves the rest where it was, so a diagram pasted near the corner
+        // arrives with its pieces on top of each other.
+        val wanted = InkPoint(at.x - union.center.x, at.y - union.top)
+        val (dx, dy) = PageBounds.clampTranslation(union, wanted.x, wanted.y)
 
         if (sourceTexts.isNotEmpty()) {
             val pasted = sourceTexts.map { source ->
-                source.copy(
-                    id = newId(),
-                    x = (source.x + dx).coerceAtLeast(0f),
-                    y = (source.y + dy).coerceAtLeast(0f),
-                )
+                source.copy(id = newId(), x = source.x + dx, y = source.y + dy)
             }
             editTexts(pasted.map { it.id }.toSet()) { outlines ->
                 pasted.forEach { blocksById[it.id] = it.blocks }
@@ -1895,10 +1898,7 @@ class NotesViewModel(
             // Fresh ids all the way down — table, rows and cells. Two tables sharing a cell id would
             // share the block map entry behind it, so typing in one would appear in the other.
             val pastedTables = sourceTables.map { source ->
-                source.withNewIds().copy(
-                    x = (source.x + dx).coerceAtLeast(0f),
-                    y = (source.y + dy).coerceAtLeast(0f),
-                )
+                source.withNewIds().copy(x = source.x + dx, y = source.y + dy)
             }
             editTables(pastedTables.flatMap { it.contentCellIds() }.toSet()) { tables ->
                 pastedTables.forEach { table ->
@@ -1925,9 +1925,7 @@ class NotesViewModel(
 
         if (sourceEquations.isNotEmpty()) {
             val pastedEquations = sourceEquations.map { source ->
-                source.translated(dx, dy).copy(id = newId()).let {
-                    it.copy(x = it.x.coerceAtLeast(0f), y = it.y.coerceAtLeast(0f))
-                }
+                source.translated(dx, dy).copy(id = newId())
             }
             editEquations { it + pastedEquations }
         }
@@ -2390,6 +2388,50 @@ class NotesViewModel(
             outlines.add(index.coerceAtMost(outlines.size), outline)
         }
         return outlines
+    }
+
+    // --- the page's origin corner ---------------------------------------------------------------
+    //
+    // Applied inside each kind's edit funnel, which is what turns [PageBounds] from a habit into an
+    // invariant: **no object is ever stored above or to the left of the page's origin**, whatever
+    // asked for it. The gestures clamp too, and have to — a preview that disagreed with this would
+    // follow the finger past the wall and spring back on the lift — but they are five places and
+    // growing, and a rule enforced only at five places is a rule with a sixth coming.
+    //
+    // A translation rather than a coerced coordinate, because a shape's (x, y) is *derived* from its
+    // segments: writing the corner alone would move the box and leave the drawing behind. It also
+    // means the repair is the gentlest one available — the object keeps its size and its shape, and
+    // only its position changes, by exactly the distance it was out.
+
+    // The four read as one overloaded name at the call sites and have to be spelled apart for the
+    // JVM, whose erasure sees four `List` parameters and one signature.
+
+    @JvmName("shapesOnPage")
+    private fun List<Outline.Shape>.onPage(): List<Outline.Shape> = map { shape ->
+        val correction = PageBounds.correctionFor(shape.x, shape.y)
+        if (correction.x == 0f && correction.y == 0f) shape
+        else shape.translated(correction.x, correction.y)
+    }
+
+    @JvmName("equationsOnPage")
+    private fun List<Outline.Equation>.onPage(): List<Outline.Equation> = map { equation ->
+        val correction = PageBounds.correctionFor(equation.x, equation.y)
+        if (correction.x == 0f && correction.y == 0f) equation
+        else equation.translated(correction.x, correction.y)
+    }
+
+    @JvmName("tablesOnPage")
+    private fun List<Outline.Table>.onPage(): List<Outline.Table> = map { table ->
+        val correction = PageBounds.correctionFor(table.x, table.y)
+        if (correction.x == 0f && correction.y == 0f) table
+        else table.translated(correction.x, correction.y)
+    }
+
+    @JvmName("textsOnPage")
+    private fun List<OutlineBox>.onPage(): List<OutlineBox> = map { box ->
+        val correction = PageBounds.correctionFor(box.x, box.y)
+        if (correction.x == 0f && correction.y == 0f) box
+        else box.copy(x = box.x + correction.x, y = box.y + correction.y)
     }
 
     companion object {

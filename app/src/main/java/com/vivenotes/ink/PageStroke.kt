@@ -314,7 +314,20 @@ private fun PageStroke.scaledAround(anchor: InkPoint, x: Float, y: Float): PageS
     offsetY = anchor.y + (offsetY - anchor.y) * y,
 )
 
-/** Replays a persisted move against the projections that existed inside its original lasso. */
+/**
+ * Replays a persisted move against the projections that existed inside its original lasso.
+ *
+ * **This is where the page's origin corner is enforced for ink** — [PageBounds]. A shape, a table or
+ * an equation is a position in the document and can be held to the rule where it is written down;
+ * ink is a stroke plus every operation ever replayed over it, so the only place its final position
+ * is known is here, at the end of the fold that produces it.
+ *
+ * For a move recorded by a build that has the rule, this changes nothing: the gesture had already
+ * clamped the delta against a selection the ink was part of, so the same limit computed again is the
+ * same limit. It fires only for the pages that were dragged off the corner before the rule existed,
+ * and it brings the whole moved set back **together**, by the one delta it shares, rather than
+ * shuffling each stroke to the wall on its own.
+ */
 internal fun List<PageStroke>.replayMove(
     path: List<InkPoint>,
     targetIds: Collection<String>,
@@ -323,11 +336,15 @@ internal fun List<PageStroke>.replayMove(
 ): List<PageStroke> {
     val targets = targetIds.toSet()
     if (path.size < 3 || targets.isEmpty()) return this
-    return map { stroke ->
-        val selected = stroke.id in targets &&
-            stroke.isInsideLasso(path, DEFAULT_LASSO_EDGE_TOLERANCE)
-        if (selected) {
-            stroke.copy(offsetX = stroke.offsetX + dx, offsetY = stroke.offsetY + dy)
+    // Decided once and remembered: the lasso test walks every outline vertex of every stroke, and
+    // the clamp below needs to know the answer before it can measure what is moving.
+    val selected = map { it.id in targets && it.isInsideLasso(path, DEFAULT_LASSO_EDGE_TOLERANCE) }
+    val delta = movingBounds(selected)
+        ?.let { PageBounds.clampTranslation(it, dx, dy) }
+        ?: InkPoint(dx, dy)
+    return mapIndexed { index, stroke ->
+        if (selected[index]) {
+            stroke.copy(offsetX = stroke.offsetX + delta.x, offsetY = stroke.offsetY + delta.y)
         } else {
             stroke
         }
@@ -344,12 +361,22 @@ internal fun List<PageStroke>.replayResize(
 ): List<PageStroke> {
     val targets = targetIds.toSet()
     if (path.size < 3 || targets.isEmpty()) return this
-    return map { stroke ->
-        val selected = stroke.id in targets &&
-            stroke.isInsideLasso(path, DEFAULT_LASSO_EDGE_TOLERANCE)
-        if (selected) stroke.scaledAround(anchor, scaleX, scaleY) else stroke
+    val selected = map { it.id in targets && it.isInsideLasso(path, DEFAULT_LASSO_EDGE_TOLERANCE) }
+    // Held to the origin corner for the reason [replayMove] gives, and by the same one measurement:
+    // a resize about a far corner drags the near edges towards it.
+    val scale = movingBounds(selected)
+        ?.let { PageBounds.clampScale(it, anchor, scaleX, scaleY) }
+        ?: InkPoint(scaleX, scaleY)
+    return mapIndexed { index, stroke ->
+        if (selected[index]) stroke.scaledAround(anchor, scale.x, scale.y) else stroke
     }
 }
+
+/** The rectangle around everything a replayed operation is about to move, in page units. */
+private fun List<PageStroke>.movingBounds(selected: List<Boolean>): InkBounds? =
+    filterIndexed { index, _ -> selected[index] }
+        .mapNotNull(PageStroke::pageBounds)
+        .unionBounds()
 
 private fun pointInPolygon(point: InkPoint, polygon: List<InkPoint>): Boolean {
     var inside = false

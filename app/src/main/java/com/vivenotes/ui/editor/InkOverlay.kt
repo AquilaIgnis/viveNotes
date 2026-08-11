@@ -53,6 +53,7 @@ import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkLassoSelection
 import com.vivenotes.ink.InkPoint
+import com.vivenotes.ink.PageBounds
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.Ruler
 import com.vivenotes.ink.TableBounds
@@ -655,9 +656,14 @@ private fun handleInk(
             ruler.engages(event.pagePoint(index, toWorld), Ruler.SNAP_TOLERANCE_DP))
     val drawn = if (ruled && ruler != null) event.snappedTo(ruler, toWorld, transform) else null
 
+    // After the ruler, because the ruler is what decides where a ruled stroke goes and this is what
+    // decides where it may not — a straightedge laid across the top of the page must not be able to
+    // put ink above it.
+    val bounded = (drawn ?: event).clampedToPage(toWorld, transform)
+
     try {
         return handleInkStroke(
-            event = drawn ?: event,
+            event = bounded ?: drawn ?: event,
             view = view,
             brush = brush,
             toWorld = toWorld,
@@ -669,6 +675,7 @@ private fun handleInk(
         )
     } finally {
         drawn?.recycle()
+        bounded?.recycle()
     }
 }
 
@@ -761,6 +768,63 @@ private fun MotionEvent.snappedTo(ruler: Ruler, toPage: Matrix, toView: Matrix):
 
     // One pointer, so the action carries no pointer index and `actionMasked` is the whole of it.
     // Safe because a stroke is single-pointer by construction: a second contact cancels it above.
+    return MotionEvent.obtain(
+        downTime,
+        eventTime,
+        actionMasked,
+        1,
+        arrayOf(properties),
+        arrayOf(coords),
+        metaState,
+        buttonState,
+        xPrecision,
+        yPrecision,
+        deviceId,
+        edgeFlags,
+        source,
+        flags,
+    )
+}
+
+/**
+ * A copy of this event with its point pulled back onto the page, or **null when it is already on it**
+ * — [PageBounds].
+ *
+ * The pen is the one thing on this canvas that can put marks outside it, and it does not need to
+ * leave the glass to do it: a stroke begun inside the window keeps receiving moves after the pointer
+ * has left it, and those arrive with coordinates behind the origin. That is how a page ends up
+ * carrying strokes at a negative y — invisible, unselectable, and unreachable, because neither
+ * scroll state goes below zero.
+ *
+ * There is no fixing it afterwards. A stroke's points are what the pen produced, and translating one
+ * back onto the page would move the half that was never off it. So it is stopped here, on the way
+ * in: past the wall, the ink piles up against it, which is what a hard edge looks like.
+ *
+ * **Null for the common case**, and that is the whole reason for the return type: an in-bounds event
+ * is passed through untouched and keeps its historical samples, which are most of a fast stroke's
+ * fidelity. Only an event that has actually crossed the wall is rebuilt, and only that one loses its
+ * history — the same trade [snappedTo] makes, and for the same reason: the samples given up are the
+ * ones being pushed into a wall.
+ *
+ * Single-pointer events only. A second contact cancels the stroke a line later, so there is nothing
+ * here worth rebuilding, and the caller's `index` is only valid against a one-pointer copy.
+ *
+ * The caller recycles.
+ */
+private fun MotionEvent.clampedToPage(toPage: Matrix, toView: Matrix): MotionEvent? {
+    if (pointerCount != 1) return null
+    val index = actionIndex
+    val point = pagePoint(index, toPage)
+    if (point.x >= PageBounds.MIN_X && point.y >= PageBounds.MIN_Y) return null
+
+    val viewPoint = floatArrayOf(PageBounds.clampX(point.x), PageBounds.clampY(point.y))
+    toView.mapPoints(viewPoint)
+
+    val properties = MotionEvent.PointerProperties().also { getPointerProperties(index, it) }
+    val coords = MotionEvent.PointerCoords().also { getPointerCoords(index, it) }
+    coords.x = viewPoint[0]
+    coords.y = viewPoint[1]
+
     return MotionEvent.obtain(
         downTime,
         eventTime,
@@ -1018,7 +1082,10 @@ internal class ShapeGesture {
         return when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 pointerId = event.getPointerId(event.actionIndex)
-                val point = event.pagePoint(event.actionIndex, toPage)
+                // Clamped as it is captured, so the preview drawn from these two points and the
+                // shape inserted from them are held to the origin corner by one line rather than
+                // two that could disagree — [PageBounds].
+                val point = PageBounds.clamp(event.pagePoint(event.actionIndex, toPage))
                 start = point
                 current = point
                 invalidateDraw()
@@ -1032,22 +1099,30 @@ internal class ShapeGesture {
             MotionEvent.ACTION_MOVE -> {
                 val index = event.findPointerIndex(pointerId)
                 if (index < 0 || start == null) return false
-                current = event.pagePoint(index, toPage)
+                current = PageBounds.clamp(event.pagePoint(index, toPage))
                 invalidateDraw()
                 true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 val began = start ?: return false
                 if (event.getPointerId(event.actionIndex) != pointerId) return false
-                val ended = event.pagePoint(event.actionIndex, toPage)
+                val ended = PageBounds.clamp(event.pagePoint(event.actionIndex, toPage))
                 clear()
                 // A tap is not a mis-drag. Dropping a default-sized shape where it landed is what
                 // keeps the tool from feeling dead when someone taps instead of dragging, and the
                 // corner handles are there to resize it.
                 if (hypot(ended.x - began.x, ended.y - began.y) <= toPageLength(toPage, touchSlop)) {
+                    // Nudged onto the page rather than clipped against it: a drag says how big the
+                    // shape is and stops at the wall, but a tap only says *where*, so a tap near
+                    // the corner should still get a whole shape.
+                    val corner = PageBounds.correctionFor(
+                        began.x - DEFAULT_SHAPE_WIDTH / 2f,
+                        began.y - DEFAULT_SHAPE_HEIGHT / 2f,
+                    )
+                    val centre = InkPoint(began.x + corner.x, began.y + corner.y)
                     onInsert(
-                        InkPoint(began.x - DEFAULT_SHAPE_WIDTH / 2f, began.y - DEFAULT_SHAPE_HEIGHT / 2f),
-                        InkPoint(began.x + DEFAULT_SHAPE_WIDTH / 2f, began.y + DEFAULT_SHAPE_HEIGHT / 2f),
+                        InkPoint(centre.x - DEFAULT_SHAPE_WIDTH / 2f, centre.y - DEFAULT_SHAPE_HEIGHT / 2f),
+                        InkPoint(centre.x + DEFAULT_SHAPE_WIDTH / 2f, centre.y + DEFAULT_SHAPE_HEIGHT / 2f),
                     )
                 } else {
                     onInsert(began, ended)
@@ -1109,6 +1184,16 @@ internal class LassoGesture {
     private var resizeAnchor = InkPoint(0f, 0f)
     private var resizeStart = InkPoint(0f, 0f)
     private var resizeScale by mutableStateOf(InkPoint(1f, 1f))
+
+    /**
+     * What the selection occupied when the gesture began, held so the origin corner can be enforced
+     * against it — [PageBounds].
+     *
+     * Captured on the down rather than read from the live selection, because a resize measures a
+     * scale against the geometry it *started* from: reading the selection as it is being previewed
+     * would compound the limit frame by frame and stall the drag short of the wall.
+     */
+    private var startBounds: InkBounds? = null
     var renderRevision by mutableIntStateOf(0)
         private set
 
@@ -1158,6 +1243,7 @@ internal class LassoGesture {
         path.clear()
         preview = InkPoint(0f, 0f)
         resizeScale = InkPoint(1f, 1f)
+        startBounds = null
         invalidateDraw()
     }
 
@@ -1189,6 +1275,7 @@ internal class LassoGesture {
                 pointerId = event.getPointerId(event.actionIndex)
                 val point = event.pagePoint(event.actionIndex, toPage)
                 val corner = selection?.bounds?.cornerNear(point, handleHitRadius(toPage))
+                startBounds = selection?.bounds
                 if (selection != null && corner != null) {
                     mode = Mode.Resizing
                     resizeStart = corner.point(selection.bounds)
@@ -1219,8 +1306,7 @@ internal class LassoGesture {
                 when (mode) {
                     Mode.Drawing -> appendSamples(event, index, toPage)
                     Mode.Moving -> {
-                        val point = event.pagePoint(index, toPage)
-                        preview = InkPoint(point.x - start.x, point.y - start.y)
+                        preview = travelTo(event.pagePoint(index, toPage))
                         invalidateDraw()
                     }
                     Mode.Resizing -> updateResize(event.pagePoint(index, toPage))
@@ -1246,8 +1332,9 @@ internal class LassoGesture {
                         path.clear()
                     }
                     Mode.Moving -> {
-                        val point = event.pagePoint(event.actionIndex, toPage)
-                        val delta = InkPoint(point.x - start.x, point.y - start.y)
+                        // The same clamp the preview was drawn with, so what is written down is
+                        // what the finger was shown — see [travelTo].
+                        val delta = travelTo(event.pagePoint(event.actionIndex, toPage))
                         if (selection != null && (delta.x != 0f || delta.y != 0f)) {
                             // One gesture, one payload per kind: ink persists a move for replay,
                             // a shape translates its own segments. AD7's second consequence —
@@ -1313,6 +1400,7 @@ internal class LassoGesture {
                 pointerId = -1
                 preview = InkPoint(0f, 0f)
                 resizeScale = InkPoint(1f, 1f)
+                startBounds = null
                 invalidateDraw()
                 true
             }
@@ -1339,14 +1427,33 @@ internal class LassoGesture {
         }
     }
 
+    /**
+     * How far the selection may follow the finger, which is not always how far the finger has gone.
+     *
+     * The page has no left or top edge to scroll to, so a selection dragged past the origin corner
+     * would be put somewhere it could never be reached again — [PageBounds]. Clamping here rather
+     * than on the lift is what keeps the preview honest: the ink under the finger stops at the wall
+     * instead of following it out and snapping back when it is let go.
+     */
+    private fun travelTo(point: InkPoint): InkPoint {
+        val raw = InkPoint(point.x - start.x, point.y - start.y)
+        val bounds = startBounds ?: return raw
+        return PageBounds.clampTranslation(bounds, raw.x, raw.y)
+    }
+
     private fun updateResize(point: InkPoint) {
         val width = resizeStart.x - resizeAnchor.x
         val height = resizeStart.y - resizeAnchor.y
         if (width == 0f || height == 0f) return
-        resizeScale = InkPoint(
+        val wanted = InkPoint(
             ((point.x - resizeAnchor.x) / width).coerceAtLeast(MIN_RESIZE_SCALE),
             ((point.y - resizeAnchor.y) / height).coerceAtLeast(MIN_RESIZE_SCALE),
         )
+        // A corner dragged outward takes the opposite edges towards the origin, so the same wall
+        // applies here as to a move — see [travelTo].
+        resizeScale = startBounds
+            ?.let { PageBounds.clampScale(it, resizeAnchor, wanted.x, wanted.y) }
+            ?: wanted
         invalidateDraw()
     }
 
@@ -1356,6 +1463,7 @@ internal class LassoGesture {
         pointerId = -1
         preview = InkPoint(0f, 0f)
         resizeScale = InkPoint(1f, 1f)
+        startBounds = null
         invalidateDraw()
     }
 

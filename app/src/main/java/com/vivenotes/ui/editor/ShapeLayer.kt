@@ -31,6 +31,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ink.CanvasSelection
+import com.vivenotes.ink.InkPoint
+import com.vivenotes.ink.PageBounds
+import com.vivenotes.ink.pageBounds
 import com.vivenotes.model.Outline
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.ShapeArm
@@ -266,8 +269,19 @@ internal fun ShapeLayer(
                                     change.position.y / density,
                                 )?.let { (scaleX, scaleY) ->
                                     val (anchorX, anchorY) = target.anchorFor(handle.corner)
+                                    // A corner dragged outward takes the opposite edges towards the
+                                    // origin, and the page has no left or top to scroll to — so the
+                                    // scale stops where they reach it. Clamped on the preview rather
+                                    // than on the lift, or the shape would grow past the wall under
+                                    // the finger and shrink back when it is let go. [PageBounds]
+                                    val held = PageBounds.clampScale(
+                                        target.pageBounds(),
+                                        InkPoint(anchorX, anchorY),
+                                        scaleX,
+                                        scaleY,
+                                    )
                                     resize.value = ShapeResize(
-                                        target.id, anchorX, anchorY, scaleX, scaleY,
+                                        target.id, anchorX, anchorY, held.x, held.y,
                                     )
                                 }
 
@@ -280,8 +294,14 @@ internal fun ShapeLayer(
                                     } else {
                                         change.position.y / density
                                     }
+                                    // The tip is the only point this drag moves, and `along` is
+                                    // where it lands on its own axis — so holding that one number
+                                    // to the origin is the whole of the rule here. The rest of the
+                                    // shape was already on the page. [PageBounds]
                                     armResize.value = ShapeArmResize(
-                                        target.id, handle.arm, along + armGrab,
+                                        target.id,
+                                        handle.arm,
+                                        (along + armGrab).coerceAtLeast(0f),
                                     )
                                 }
 
@@ -290,9 +310,14 @@ internal fun ShapeLayer(
                                 // touch slop is not folded into it.
                                 null -> {
                                     val travel = change.position - last
-                                    move.value = ShapeMove(
-                                        target.id, travel.x / density, travel.y / density,
+                                    // Only as far as keeps the shape on the page: the origin corner
+                                    // is a wall, not somewhere to be dropped — [PageBounds].
+                                    val held = PageBounds.clampTranslation(
+                                        target.pageBounds(),
+                                        travel.x / density,
+                                        travel.y / density,
                                     )
+                                    move.value = ShapeMove(target.id, held.x, held.y)
                                 }
                             }
                         }

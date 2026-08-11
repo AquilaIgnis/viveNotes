@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.vivenotes.data.EditorDefaults
+import com.vivenotes.ink.PageBounds
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.Outline
@@ -208,7 +209,20 @@ internal fun TableContainer(
                                     .clip(RoundedCornerShape(topStart = 4.dp))
                                     .background(accent)
                                     .pointerInputMove(
-                                        onDrag = { dx, dy -> travel += Offset(dx, dy) },
+                                        onDrag = { dx, dy ->
+                                            // Accumulated *through* the wall rather than against
+                                            // it: the origin corner is a hard edge — [PageBounds] —
+                                            // and clamping each frame's total, rather than each
+                                            // frame's delta, is what lets a drag that overshot the
+                                            // corner come back out of it instead of having thrown
+                                            // the overshoot away.
+                                            travel = PageBounds.clampTranslation(
+                                                current.x,
+                                                current.y,
+                                                travel.x + dx,
+                                                travel.y + dy,
+                                            ).let { Offset(it.x, it.y) }
+                                        },
                                         onEnd = {
                                             if (travel != Offset.Zero) onMove(travel.x, travel.y)
                                             travel = Offset.Zero

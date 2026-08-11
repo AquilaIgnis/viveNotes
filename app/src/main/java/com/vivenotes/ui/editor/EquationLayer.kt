@@ -29,6 +29,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ink.CanvasSelection
+import com.vivenotes.ink.InkPoint
+import com.vivenotes.ink.PageBounds
+import com.vivenotes.ink.pageBounds
 import com.vivenotes.model.Outline
 import com.vivenotes.richtext.createEquationRenderer
 import io.ratex.RaTeXRenderer
@@ -202,15 +205,29 @@ internal fun EquationLayer(
                                     change.position.y / density,
                                 )?.let { (scaleX, scaleY) ->
                                     val (anchorX, anchorY) = target.anchorFor(handle.corner)
+                                    // Stopped where the far edges reach the page's origin corner,
+                                    // and stopped on the preview so the formula does not grow past
+                                    // it and spring back on the lift — [PageBounds], and the same
+                                    // clamp `ShapeLayer` puts on its own corners.
+                                    val held = PageBounds.clampScale(
+                                        target.pageBounds(),
+                                        InkPoint(anchorX, anchorY),
+                                        scaleX,
+                                        scaleY,
+                                    )
                                     resize.value =
-                                        EquationResize(target.id, anchorX, anchorY, scaleX, scaleY)
+                                        EquationResize(target.id, anchorX, anchorY, held.x, held.y)
                                 }
                             } else {
                                 // Measured from where the drag began rather than from the previous
                                 // sample, so the travel is one number and the slop is not in it.
                                 val travel = change.position - last
-                                move.value =
-                                    EquationMove(target.id, travel.x / density, travel.y / density)
+                                val held = PageBounds.clampTranslation(
+                                    target.pageBounds(),
+                                    travel.x / density,
+                                    travel.y / density,
+                                )
+                                move.value = EquationMove(target.id, held.x, held.y)
                             }
                         }
                     }
