@@ -29,7 +29,29 @@ data class PageStroke(
     val brushVersion: Int = InkCodec.BRUSH_VERSION,
     val stabilization: Int = 0,
     val groupId: String? = null,
-)
+) {
+    /**
+     * This projection's page-space rectangle, or null once a cut has left it with no geometry.
+     *
+     * Computed once per instance rather than per call. `computeBoundingBox` is a JNI hop into the
+     * mesh, and the two callers that matter ask for it on *every* stroke: the draw pass, which culls
+     * against the window on every frame, and lasso replay, which measures what an operation is about
+     * to move. At page scale that was tens of thousands of crossings per frame.
+     *
+     * Outside the constructor on purpose — it is derived, so it stays out of `equals`, `hashCode` and
+     * `copy`, and a `copy` that changes the offset, the scale or the stroke gets a fresh one.
+     */
+    internal val pageBounds: InkBounds? by lazy {
+        stroke.shape.computeBoundingBox()?.let {
+            InkBounds(
+                left = it.xMin * scaleX + offsetX,
+                top = it.yMin * scaleY + offsetY,
+                right = it.xMax * scaleX + offsetX,
+                bottom = it.yMax * scaleY + offsetY,
+            )
+        }
+    }
+}
 
 /** One point in the page coordinate system, where persisted ink and lasso paths live. */
 data class InkPoint(val x: Float, val y: Float)
@@ -84,15 +106,6 @@ data class InkLassoSelection(
 
 internal val PageStroke.projectionKey: InkProjectionKey
     get() = InkProjectionKey(id, System.identityHashCode(stroke))
-
-internal fun PageStroke.pageBounds(): InkBounds? = stroke.shape.computeBoundingBox()?.let {
-    InkBounds(
-        left = it.xMin * scaleX + offsetX,
-        top = it.yMin * scaleY + offsetY,
-        right = it.xMax * scaleX + offsetX,
-        bottom = it.yMax * scaleY + offsetY,
-    )
-}
 
 internal fun PageStroke.strokeToPageTransform(): AffineTransform =
     ImmutableAffineTransform(scaleX, 0f, offsetX, 0f, scaleY, offsetY)
@@ -229,9 +242,8 @@ internal fun List<PageStroke>.selectWithLasso(
     edgeTolerance: Float = DEFAULT_LASSO_EDGE_TOLERANCE,
 ): InkLassoSelection? {
     if (path.size < 3) return null
-    val hits = filter { stroke ->
-        stroke.isInsideLasso(path, edgeTolerance)
-    }
+    val lasso = LassoShape(path, edgeTolerance)
+    val hits = filter { stroke -> lasso.contains(stroke) }
     val hitIds = hits.map(PageStroke::id).toSet()
     val hitGroups = hits.mapNotNull(PageStroke::groupId).toSet()
     // A stored stroke remains one logical object after a partial erase, and touching any member of
@@ -338,7 +350,8 @@ internal fun List<PageStroke>.replayMove(
     if (path.size < 3 || targets.isEmpty()) return this
     // Decided once and remembered: the lasso test walks every outline vertex of every stroke, and
     // the clamp below needs to know the answer before it can measure what is moving.
-    val selected = map { it.id in targets && it.isInsideLasso(path, DEFAULT_LASSO_EDGE_TOLERANCE) }
+    val lasso = LassoShape(path)
+    val selected = map { it.id in targets && lasso.contains(it) }
     val delta = movingBounds(selected)
         ?.let { PageBounds.clampTranslation(it, dx, dy) }
         ?: InkPoint(dx, dy)
@@ -361,7 +374,14 @@ internal fun List<PageStroke>.replayResize(
 ): List<PageStroke> {
     val targets = targetIds.toSet()
     if (path.size < 3 || targets.isEmpty()) return this
-    val selected = map { it.id in targets && it.isInsideLasso(path, DEFAULT_LASSO_EDGE_TOLERANCE) }
+    // A plain move stores no scale, and every stored move is replayed through here — so on most
+    // pages this is the whole of the work and none of it changes anything. Provably nothing:
+    // `clampScale` only ever *lowers* a scale towards 1 and never below it, so an identity scale
+    // survives the clamp, and `scaledAround` by 1 returns the stroke it was given. On the page this
+    // was found on it was 228 ms of a 3.8 s open, spent to arrive back where it started.
+    if (scaleX == 1f && scaleY == 1f) return this
+    val lasso = LassoShape(path)
+    val selected = map { it.id in targets && lasso.contains(it) }
     // Held to the origin corner for the reason [replayMove] gives, and by the same one measurement:
     // a resize about a far corner drags the near edges towards it.
     val scale = movingBounds(selected)
@@ -394,11 +414,87 @@ private fun pointInPolygon(point: InkPoint, polygon: List<InkPoint>): Boolean {
 }
 
 /**
+ * A lasso polygon, prepared once so that testing a whole page against it does not walk every mesh.
+ *
+ * The exact test in [containsExactly] reads every outline vertex of every stroke through JNI, which
+ * is the right answer and far too much of it: replaying the page-sized lasso that repairs a drawing's
+ * position cost 253 ms of a page open, and an interactive lasso pays the same per gesture. Both
+ * shortcuts below are *decisions*, never approximations — each one reaches a conclusion the exact
+ * walk would have reached, using the bounding box the stroke already cached.
+ */
+internal class LassoShape(
+    val path: List<InkPoint>,
+    private val edgeTolerance: Float = DEFAULT_LASSO_EDGE_TOLERANCE,
+) {
+    val usable: Boolean = path.size >= 3
+
+    // The polygon's own extent, grown by the tolerance, so "outside this box" means "outside the
+    // tolerant test" and not merely "outside the polygon".
+    private val minX = path.minOf { it.x } - edgeTolerance
+    private val minY = path.minOf { it.y } - edgeTolerance
+    private val maxX = path.maxOf { it.x } + edgeTolerance
+    private val maxY = path.maxOf { it.y } + edgeTolerance
+
+    /**
+     * Whether every turn goes the same way, and so whether a box may be accepted whole.
+     *
+     * A convex polygon contains the convex hull of any points it contains, so four corners inside it
+     * put the entire rectangle inside it — and every outline vertex lies within that rectangle. A
+     * lasso drawn by hand usually is not convex, and then only [couldContain] applies.
+     */
+    val acceptsWholeBox: Boolean = isConvex(path)
+
+    /**
+     * Whether any part of a stroke this size could be inside the lasso at all.
+     *
+     * False is a decision, not a guess: the bounding box is tight, so each of its edges is touched by
+     * some outline vertex, and a box reaching past the grown extent therefore has a vertex the exact
+     * walk would have failed on.
+     */
+    fun couldContain(bounds: InkBounds): Boolean =
+        bounds.left >= minX && bounds.top >= minY && bounds.right <= maxX && bounds.bottom <= maxY
+
+    fun contains(stroke: PageStroke): Boolean {
+        if (!usable) return false
+        val bounds = stroke.pageBounds ?: return false
+        if (!couldContain(bounds)) return false
+        // Tested without the tolerance, so this only ever concludes what the tolerant walk would
+        // also have concluded.
+        if (acceptsWholeBox && corners(bounds).all { pointInPolygon(it, path) }) return true
+        return stroke.containsExactly(path, edgeTolerance)
+    }
+
+    private fun corners(bounds: InkBounds): List<InkPoint> = listOf(
+        InkPoint(bounds.left, bounds.top),
+        InkPoint(bounds.right, bounds.top),
+        InkPoint(bounds.right, bounds.bottom),
+        InkPoint(bounds.left, bounds.bottom),
+    )
+}
+
+private fun isConvex(polygon: List<InkPoint>): Boolean {
+    if (polygon.size < 3) return false
+    var sign = 0
+    polygon.indices.forEach { index ->
+        val a = polygon[index]
+        val b = polygon[(index + 1) % polygon.size]
+        val c = polygon[(index + 2) % polygon.size]
+        val cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)
+        // Collinear vertices turn neither way and constrain nothing.
+        if (cross != 0f) {
+            val turn = if (cross > 0f) 1 else -1
+            if (sign == 0) sign = turn else if (sign != turn) return false
+        }
+    }
+    return sign != 0
+}
+
+/**
  * Tests the actual rendered outline instead of the object's bounding-box corners. Curved lassos
  * can closely enclose triangular or circular ink while naturally excluding the unused corners of
  * that rectangle. The small tolerance absorbs finger/stylus jitter right along a visible edge.
  */
-private fun PageStroke.isInsideLasso(polygon: List<InkPoint>, edgeTolerance: Float): Boolean {
+private fun PageStroke.containsExactly(polygon: List<InkPoint>, edgeTolerance: Float): Boolean {
     val position = MutableVec()
     var outlineVertexCount = 0
     val shape = stroke.shape

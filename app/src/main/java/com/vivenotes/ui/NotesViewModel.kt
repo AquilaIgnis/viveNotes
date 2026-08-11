@@ -7,6 +7,11 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -48,6 +53,7 @@ import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
 import com.vivenotes.data.db.InkEraseWithTargets
 import com.vivenotes.data.db.InkMoveWithTargets
+import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.unionBounds
 import com.vivenotes.ink.CanvasClipboard
@@ -513,6 +519,25 @@ class NotesViewModel(
     /** Wall time made strictly increasing so erase/move replay never has an ambiguous tie. */
     private var lastInkOperationAt = 0L
 
+    /**
+     * The page currently being opened, so that opening another one stops it.
+     *
+     * Ink now loads *after* its page is on screen, which means a load can still be running when the
+     * next page is opened. Left alone it would finish and publish itself over whatever the user had
+     * moved on to — and go on spending eight cores rebuilding a page nobody is looking at.
+     */
+    private var pageLoad: Job? = null
+
+    /**
+     * The page [openPage] was last asked for, set the moment it is asked rather than when its state
+     * lands.
+     *
+     * `uiState.selectedPageId` cannot answer this: it does not become the incoming page until that
+     * page's document has been read, and the outgoing page's ink load — cancelled, but cancellation
+     * is cooperative — can reach a publication inside that gap and still find its own id there.
+     */
+    private var openingPageId: String? = null
+
     /** Commands travel to the focused editor, the only thing that can act on them. */
     private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
     val commands: SharedFlow<FormatCommand> = _commands
@@ -606,6 +631,10 @@ class NotesViewModel(
     fun selectSection(sectionId: String) {
         if (selectedSection.value == sectionId) return
         viewModelScope.launch { persist() }
+        // Whatever page was loading belongs to the section being left. The pages flow will open one
+        // from the new section in a moment; until then there is nothing this should still be doing.
+        pageLoad?.cancel()
+        openingPageId = null
         selectedSection.value = sectionId
         _uiState.value = _uiState.value.copy(selectedSectionId = sectionId, selectedPageId = null)
         _strokes.value = emptyList()
@@ -613,9 +642,29 @@ class NotesViewModel(
         _compactPane.value = CompactPane.Pages
     }
 
+    /**
+     * Opens a page, and does not wait for its ink to open it.
+     *
+     * The page, its text and its objects are published first and the ink arrives afterwards, because
+     * the two are not the same size of job: reading the document is a couple of milliseconds, while
+     * rebuilding a densely drawn page's strokes is seconds — 3.0 s of decoding for the 9,553 strokes
+     * on the page this was measured against, all of it in front of the state that puts the page on
+     * screen. So a page that was ready to show sat behind a page that was not.
+     *
+     * Held as one cancellable job rather than left to run: opening a second page while the first is
+     * still loading must not let the first finish and publish itself over the second.
+     */
     fun openPage(pageId: String) {
-        viewModelScope.launch {
-            persist()
+        pageLoad?.cancel()
+        openingPageId = pageId
+        // The outgoing page's ink goes now rather than when the incoming page's arrives. It is the
+        // one piece of the old page that would otherwise stay on screen, drawn over a page it does
+        // not belong to, for exactly as long as the load that this change stopped waiting for.
+        _strokes.value = emptyList()
+        pageLoad = viewModelScope.launch {
+            // The outgoing page's text is written before anything can replace it, and a page switch
+            // arriving mid-write cannot tear that write in half.
+            withContext(NonCancellable) { persist() }
             val page = _uiState.value.pages.firstOrNull { it.id == pageId }
 
             val doc = when (val load = repository.loadDoc(pageId)) {
@@ -659,10 +708,6 @@ class NotesViewModel(
                 it.value is Outline.Text || it.value is Outline.Shape || it.value is Outline.Table ||
                     it.value is Outline.Equation
             }
-            // Loading joins the same serialization lane as edits. Otherwise a fast page switch can
-            // read an operation between its immediate canvas update and its database tombstone.
-            _strokes.value = inkMutations.withLock { loadInk(pageId) }
-
             _uiState.value = _uiState.value.copy(
                 selectedPageId = pageId,
                 title = page?.title.orEmpty(),
@@ -682,7 +727,27 @@ class NotesViewModel(
             publishCanvasUndoState(pageId)
             _selection.value = SelectionState()
             _compactPane.value = CompactPane.Editor
+
+            // The page is on screen from here; what follows fills it in.
+            //
+            // Loading joins the same serialization lane as edits. Otherwise a fast page switch can
+            // read an operation between its immediate canvas update and its database tombstone.
+            val ink = inkMutations.withLock {
+                loadInk(pageId) { partial -> publishInk(pageId, partial) }
+            }
+            publishInk(pageId, ink)
         }
+    }
+
+    /**
+     * Shows ink, unless the page it belongs to has since been closed.
+     *
+     * Cancellation alone does not cover this. It is cooperative, so a load told to stop can still
+     * reach its next publication before it notices, and this is the check that keeps one page's
+     * strokes off another's canvas even then.
+     */
+    private fun publishInk(pageId: String, strokes: List<PageStroke>) {
+        if (openingPageId == pageId) _strokes.value = strokes
     }
 
     fun showCompactPane(pane: CompactPane) {
@@ -1014,62 +1079,131 @@ class NotesViewModel(
 
     // --- draw ----------------------------------------------------------------------------------
 
-    /** Rebuilds one page from its live stroke rows and active replay operations. */
-    private suspend fun loadInk(pageId: String): List<PageStroke> {
-        // A stroke or operation that cannot be decoded costs only that item, not the page.
-        val baseStrokes = repository.inkFor(pageId).mapNotNull { row ->
-            InkCodec.decode(row)?.let {
-                PageStroke(
-                    id = row.id,
-                    stroke = it,
-                    brushFamily = row.brushFamily,
-                    brushVersion = row.brushVersion,
-                    stabilization = row.stabilization,
-                    groupId = row.groupId,
-                )
-            }
-        }
-        val storedOperations = buildList {
+    /**
+     * Rebuilds one page from its live stroke rows and active replay operations, off the main thread
+     * and across every core, reporting each part as it becomes showable.
+     *
+     * Decoding is the expensive half and is perfectly parallel — a stroke is rebuilt from its own row
+     * and nothing else — so it is split into fixed-size chunks and awaited **in row order**, which
+     * keeps what is published a prefix of the page in draw order. Later strokes sit on top of
+     * earlier ones, so an out-of-order prefix would show ink stacked wrongly and then rearrange
+     * itself.
+     *
+     * [onPartial] is called only when the page's stored operations allow a prefix to be shown at all;
+     * see [streamable]. It is always safe to ignore it — the return value is the whole page.
+     */
+    private suspend fun loadInk(
+        pageId: String,
+        onPartial: (List<PageStroke>) -> Unit = {},
+    ): List<PageStroke> = withContext(inkDispatcher) {
+        val rows = repository.inkFor(pageId)
+        val operations = buildList {
             repository.partialErasesFor(pageId).forEach { add(StoredInkOperation.Erase(it)) }
             repository.inkMovesFor(pageId).forEach { add(StoredInkOperation.Move(it)) }
         }.sortedWith(compareBy(StoredInkOperation::createdAt, StoredInkOperation::id))
         lastInkOperationAt = maxOf(
             lastInkOperationAt,
-            storedOperations.maxOfOrNull { it.createdAt } ?: 0L,
+            operations.maxOfOrNull { it.createdAt } ?: 0L,
         )
-        if (storedOperations.isEmpty()) return baseStrokes
-        return withContext(inkDispatcher) {
-            storedOperations.fold(baseStrokes) { current, operation ->
-                when (operation) {
-                    is StoredInkOperation.Erase -> {
-                        val stored = operation.stored
-                        val mask = InkCodec.decodeErase(stored.erase) ?: return@fold current
-                        val targets = stored.targets.map { it.strokeId }
-                        when (stored.erase.mode) {
-                            EraserMode.Normal -> current.subtract(mask, targets)
-                            EraserMode.Object -> current.eraseObjects(mask, targets)
-                        }
-                    }
-                    is StoredInkOperation.Move -> {
-                        val stored = operation.stored
-                        val path = InkCodec.decodeMove(stored.move) ?: return@fold current
-                        val moved = current.replayMove(
-                            path = path,
-                            targetIds = stored.targets.map { it.strokeId },
-                            dx = stored.move.dxDp,
-                            dy = stored.move.dyDp,
-                        )
-                        moved.replayResize(
-                            path = path,
-                            targetIds = stored.targets.map { it.strokeId },
-                            anchor = InkPoint(stored.move.anchorX, stored.move.anchorY),
-                            scaleX = stored.move.scaleX,
-                            scaleY = stored.move.scaleY,
+        val streaming = operations.streamable
+        val shown = ArrayList<PageStroke>(rows.size)
+
+        val decoded = decodeConcurrently(rows) { chunk ->
+            if (streaming) {
+                // Applied to the chunk rather than to everything decoded so far: an erase decides
+                // stroke by stroke, so the answer is the same and the work is not repeated.
+                shown += replay(chunk, operations)
+                onPartial(ArrayList(shown))
+            }
+        }
+        if (streaming) shown else replay(decoded, operations)
+    }
+
+    /**
+     * Whether a partly decoded page can be shown with these operations already applied.
+     *
+     * An erase decides one stroke at a time against a fixed target list, so applying it to a prefix
+     * gives that prefix exactly the geometry it will have in the finished page. A move does not: it
+     * measures the rectangle around **everything** it is about to move and clamps the whole set by
+     * one shared delta so the drawing stays together (`PageBounds`, and `replayMove`). A prefix would
+     * be measured against a smaller rectangle, get a different delta, and slide into place when the
+     * rest of the page arrived — so a page carrying one waits and is shown once.
+     */
+    private val List<StoredInkOperation>.streamable: Boolean
+        get() = none { it is StoredInkOperation.Move }
+
+    /** Folds the page's stored operations over [strokes], in the order they were made. */
+    private fun replay(
+        strokes: List<PageStroke>,
+        operations: List<StoredInkOperation>,
+    ): List<PageStroke> = operations.fold(strokes) { current, operation ->
+        when (operation) {
+            is StoredInkOperation.Erase -> {
+                val stored = operation.stored
+                val mask = InkCodec.decodeErase(stored.erase) ?: return@fold current
+                val targets = stored.targets.map { it.strokeId }
+                when (stored.erase.mode) {
+                    EraserMode.Normal -> current.subtract(mask, targets)
+                    EraserMode.Object -> current.eraseObjects(mask, targets)
+                }
+            }
+            is StoredInkOperation.Move -> {
+                val stored = operation.stored
+                val path = InkCodec.decodeMove(stored.move) ?: return@fold current
+                val targets = stored.targets.map { it.strokeId }
+                current.replayMove(
+                    path = path,
+                    targetIds = targets,
+                    dx = stored.move.dxDp,
+                    dy = stored.move.dyDp,
+                ).replayResize(
+                    path = path,
+                    targetIds = targets,
+                    anchor = InkPoint(stored.move.anchorX, stored.move.anchorY),
+                    scaleX = stored.move.scaleX,
+                    scaleY = stored.move.scaleY,
+                )
+            }
+        }
+    }
+
+    /**
+     * Rebuilds every stroke row, using the whole processor rather than one core of it.
+     *
+     * [onChunk] runs on this dispatcher as each chunk lands, in row order. The chunk size trades how
+     * soon the first ink appears against how many times the canvas is asked to redraw: smaller
+     * chunks show something sooner and recompose more often.
+     */
+    private suspend fun decodeConcurrently(
+        rows: List<InkStrokeEntity>,
+        onChunk: (List<PageStroke>) -> Unit,
+    ): List<PageStroke> = coroutineScope {
+        if (rows.isEmpty()) return@coroutineScope emptyList()
+        val pending = rows.chunked(INK_DECODE_CHUNK).map { chunk ->
+            async {
+                ensureActive()
+                // A stroke that cannot be decoded costs only that stroke, not the page it is on.
+                chunk.mapNotNull { row ->
+                    InkCodec.decode(row)?.let {
+                        PageStroke(
+                            id = row.id,
+                            stroke = it,
+                            brushFamily = row.brushFamily,
+                            brushVersion = row.brushVersion,
+                            stabilization = row.stabilization,
+                            groupId = row.groupId,
                         )
                     }
                 }
             }
         }
+        val all = ArrayList<PageStroke>(rows.size)
+        pending.forEach { chunk ->
+            val part = chunk.await()
+            all += part
+            onChunk(part)
+        }
+        all
     }
 
     fun selectTool(tool: DrawTool) {
@@ -2448,6 +2582,16 @@ class NotesViewModel(
          * coming back to the same control after looking at the result is a new action to undo.
          */
         private const val SHAPE_COALESCE_MS = 1200L
+
+        /**
+         * How many stroke rows one decoding task rebuilds.
+         *
+         * Sized against the eight-core tablet this was measured on, where a page of 9,553 strokes
+         * became nineteen chunks: enough that every core has work and that the first ink appears in
+         * a fraction of the total, few enough that a streaming page is not recomposed hundreds of
+         * times on the way in.
+         */
+        private const val INK_DECODE_CHUNK = 512
         const val MIN_OUTLINE_WIDTH = 120f
         const val MAX_OUTLINE_WIDTH = 2000f
         const val MAX_OUTLINE_HEIGHT = 4000f

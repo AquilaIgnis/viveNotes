@@ -308,6 +308,12 @@ internal fun InkOverlay(
             val gestureRevision = lassoGesture.renderRevision
             val shapeRevision = shapeGesture.renderRevision
             val matrix = currentTransform()
+            // The window in page units, so a stroke that cannot be seen is not drawn. On a densely
+            // handwritten page this is the difference between drawing a screenful and drawing ten
+            // thousand strokes, every frame, for a scroll that shows a few dozen of them. Computed
+            // from the transform *here* in the draw scope, for the same reason the transform is read
+            // here: scrolling re-runs the draw and nothing above it. See `docs/inkPlan.md` §3.2.
+            val visible = matrix.pageWindow(size.width, size.height)
             drawIntoCanvas { canvas ->
                 val native = canvas.nativeCanvas
                 // The matrix goes on the canvas, and is *also* passed to the renderer. Passing it
@@ -315,14 +321,16 @@ internal fun InkOverlay(
                 // landed at page-units-as-pixels, ignoring zoom and scroll. The argument is what
                 // the renderer measures to pick a mesh detail level for the scale it is drawn at,
                 // not what moves it.
+                val strokeMatrix = Matrix()
                 (liveErasedStrokes ?: currentStrokes).forEach { pageStroke ->
-                    val strokeMatrix = Matrix(matrix).apply {
-                        if (pageStroke.projectionKey in currentSelection?.projections.orEmpty()) {
-                            lassoGesture.applyPreview(this)
-                        }
-                        preTranslate(pageStroke.offsetX, pageStroke.offsetY)
-                        preScale(pageStroke.scaleX, pageStroke.scaleY)
-                    }
+                    val moving = pageStroke.projectionKey in currentSelection?.projections.orEmpty()
+                    // A stroke being dragged is exempt: the preview transform moves it, so where it
+                    // sits now says nothing about where this frame will put it.
+                    if (!moving && visible != null && pageStroke.isOutside(visible)) return@forEach
+                    strokeMatrix.set(matrix)
+                    if (moving) lassoGesture.applyPreview(strokeMatrix)
+                    strokeMatrix.preTranslate(pageStroke.offsetX, pageStroke.offsetY)
+                    strokeMatrix.preScale(pageStroke.scaleX, pageStroke.scaleY)
                     val checkpoint = native.save()
                     native.concat(strokeMatrix)
                     renderer.draw(native, pageStroke.stroke, strokeMatrix)
@@ -890,6 +898,37 @@ private fun panPage(
     }
     return true
 }
+
+/**
+ * The part of the page this view is showing, in page units, or null if the transform cannot be
+ * inverted — a zoom of zero, which draws nothing anyway.
+ *
+ * Two objects a frame to decide the fate of thousands, rather than the reverse.
+ */
+private fun Matrix.pageWindow(viewWidth: Float, viewHeight: Float): android.graphics.RectF? {
+    val inverse = Matrix()
+    if (!invert(inverse)) return null
+    val window = android.graphics.RectF(0f, 0f, viewWidth, viewHeight)
+    inverse.mapRect(window)
+    // The mesh's own box is tight, and the renderer feathers the edge of it. A dp of slack costs a
+    // stroke that was going to be culled anyway and removes any question of a clipped edge.
+    window.inset(-CULL_MARGIN_DP, -CULL_MARGIN_DP)
+    return window
+}
+
+/**
+ * Whether none of this stroke can be seen in [window].
+ *
+ * A stroke with no geometry left — cut away entirely by an eraser — reports no bounds, and there is
+ * nothing to draw for it either way.
+ */
+private fun PageStroke.isOutside(window: android.graphics.RectF): Boolean {
+    val bounds = pageBounds ?: return true
+    return bounds.right < window.left || bounds.left > window.right ||
+        bounds.bottom < window.top || bounds.top > window.bottom
+}
+
+private const val CULL_MARGIN_DP = 2f
 
 /** Draws the free-form loop and the bounds of the objects it currently owns. */
 private fun drawLasso(
