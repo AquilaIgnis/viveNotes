@@ -127,6 +127,33 @@ interface InkStrokeDao {
 }
 
 @Dao
+interface AttachmentDao {
+
+    @Query("SELECT * FROM attachments WHERE id = :id")
+    suspend fun byId(id: String): AttachmentEntity?
+
+    @Query("SELECT * FROM attachments WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<String>): List<AttachmentEntity>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(attachment: AttachmentEntity): Long
+
+    /** Claims a reference. Inserting the same picture twice adds a claim rather than a second copy. */
+    @Query("UPDATE attachments SET refCount = refCount + 1 WHERE id = :id")
+    suspend fun retain(id: String)
+
+    /** Never below zero: a double release must not make a live attachment look sweepable. */
+    @Query("UPDATE attachments SET refCount = MAX(refCount - 1, 0) WHERE id = :id")
+    suspend fun release(id: String)
+
+    @Query("SELECT * FROM attachments WHERE refCount <= 0")
+    suspend fun unreferenced(): List<AttachmentEntity>
+
+    @Query("DELETE FROM attachments WHERE id = :id AND refCount <= 0")
+    suspend fun deleteIfUnreferenced(id: String)
+}
+
+@Dao
 interface InkEraseDao {
 
     @Transaction

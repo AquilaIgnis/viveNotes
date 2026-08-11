@@ -256,6 +256,22 @@ sealed interface Outline {
         }
     }
 
+    /**
+     * A picture placed on the canvas — feature E6.
+     *
+     * **The document holds the frame; the pixels live outside it.** [attachmentId] is the SHA-256 of
+     * the stored bytes and names a file the `attachments` table knows about; see
+     * `data/AttachmentStore.kt` for why megabytes must not travel in `page_content.docJson`. That
+     * makes this outline what every other one is — a handful of numbers — so it costs autosave
+     * nothing, exports as a reference, and can be read by the MCP server without a device.
+     *
+     * [width] and [height] are the size *on the page*, in page dp, and are not the pixel dimensions:
+     * the same picture can be placed twice at different sizes, and the file is shared between them.
+     *
+     * Resizing scales the two axes independently, as it does for every other kind, rather than
+     * locking the aspect ratio. A lasso holding a picture and a shape applies one transform to both,
+     * and a kind that quietly refused half of it would tear that selection apart.
+     */
     @Serializable
     @SerialName("image")
     data class Image(
@@ -265,7 +281,40 @@ sealed interface Outline {
         override val width: Float = Text.DEFAULT_WIDTH,
         val attachmentId: String,
         val height: Float,
-    ) : Outline
+    ) : Outline {
+
+        fun translated(dx: Float, dy: Float): Image = copy(x = x + dx, y = y + dy)
+
+        /**
+         * Scales about the corner opposite the one being dragged — AD7's four-corner resize.
+         *
+         * **Absolute, against the frame it is called on**, exactly as [Shape.scaledAbout] is: a corner
+         * drag reports where the finger is now measured from the geometry the drag started with, so
+         * applying it per frame multiplies a drag's own scales together.
+         *
+         * A negative or zero scale would flip or collapse the frame, so both axes are floored at a
+         * size that can still be grabbed by its handles and dragged back.
+         */
+        fun scaledAbout(anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float): Image = copy(
+            x = anchorX + (x - anchorX) * scaleX,
+            y = anchorY + (y - anchorY) * scaleY,
+            width = (width * scaleX).coerceAtLeast(MIN_SIZE),
+            height = (height * scaleY).coerceAtLeast(MIN_SIZE),
+        )
+
+        companion object {
+            /** Small enough to be a deliberate choice, large enough to still show its handles. */
+            const val MIN_SIZE = 24f
+
+            /**
+             * How wide a newly inserted picture is, before the user resizes it.
+             *
+             * A page is 720 dp of writing width, so this is a little under half of it: big enough to
+             * see, small enough that it does not bury whatever is already written there.
+             */
+            const val DEFAULT_WIDTH = 320f
+        }
+    }
 
     /**
      * A shape placed on the canvas — `docs/inkPlan.md` §5.4.

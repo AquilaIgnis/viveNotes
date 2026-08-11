@@ -31,18 +31,22 @@ data class CanvasSelection(
     val tableIds: Set<String> = emptySet(),
     /** Equations placed on the canvas — the fourth kind, and the fourth id set. */
     val equationIds: Set<String> = emptySet(),
+    /** Pictures — feature E6, and the fifth kind. One line here, exactly as [othersEmpty] promised. */
+    val imageIds: Set<String> = emptySet(),
     /** Live ink projections, including pieces that share a row id after a partial erase. */
     val projections: Set<InkProjectionKey> = emptySet(),
     val bounds: InkBounds,
 ) {
     val isEmpty: Boolean
-        get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isEmpty() && equationIds.isEmpty()
+        get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isEmpty() &&
+            equationIds.isEmpty() && imageIds.isEmpty()
 
     /** True when only one kind is held, which is what decides the per-kind half of the toolkit. */
     val isInkOnly: Boolean get() = inkIds.isNotEmpty() && othersEmpty(inkIds)
     val isShapeOnly: Boolean get() = shapeIds.isNotEmpty() && othersEmpty(shapeIds)
     val isTableOnly: Boolean get() = tableIds.isNotEmpty() && othersEmpty(tableIds)
     val isEquationOnly: Boolean get() = equationIds.isNotEmpty() && othersEmpty(equationIds)
+    val isImageOnly: Boolean get() = imageIds.isNotEmpty() && othersEmpty(imageIds)
 
     /**
      * Every id set except the one asked about is empty.
@@ -53,11 +57,13 @@ data class CanvasSelection(
      * pure. The next kind adds one line here and one flag, and cannot break the others.
      */
     private fun othersEmpty(own: Set<String>): Boolean =
-        listOf(inkIds, shapeIds, tableIds, equationIds).all { it === own || it.isEmpty() }
+        listOf(inkIds, shapeIds, tableIds, equationIds, imageIds).all { it === own || it.isEmpty() }
 
     fun holdsShape(shapeId: String): Boolean = shapeId in shapeIds
 
     fun holdsEquation(equationId: String): Boolean = equationId in equationIds
+
+    fun holdsImage(imageId: String): Boolean = imageId in imageIds
 
     /** The ink half, in the shape the ink move/resize/replay path already takes. */
     fun inkHalf(): InkLassoSelection? = if (inkIds.isEmpty()) {
@@ -97,13 +103,15 @@ data class CanvasSelection(
         shapes: List<Outline.Shape>,
         tables: List<TableBounds> = emptyList(),
         equations: List<Outline.Equation> = emptyList(),
+        images: List<Outline.Image> = emptyList(),
     ): CanvasSelection? {
         val liveShapes = shapes.filter { it.id in shapeIds }
         val liveTables = tables.filter { it.id in tableIds }
         val liveEquations = equations.filter { it.id in equationIds }
+        val liveImages = images.filter { it.id in imageIds }
         val directInk = strokes.filter { it.id in inkIds }
         if (liveShapes.isEmpty() && directInk.isEmpty() && liveTables.isEmpty() &&
-            liveEquations.isEmpty()
+            liveEquations.isEmpty() && liveImages.isEmpty()
         ) {
             return null
         }
@@ -113,7 +121,8 @@ data class CanvasSelection(
         val measured = expandedInk.mapNotNull(PageStroke::pageBounds) +
             liveShapes.map(Outline.Shape::pageBounds) +
             liveTables.map(TableBounds::bounds) +
-            liveEquations.map(Outline.Equation::pageBounds)
+            liveEquations.map(Outline.Equation::pageBounds) +
+            liveImages.map(Outline.Image::pageBounds)
         val union = measured.unionBounds() ?: return null
 
         return copy(
@@ -121,6 +130,7 @@ data class CanvasSelection(
             shapeIds = liveShapes.map(Outline.Shape::id).toSet(),
             tableIds = liveTables.map(TableBounds::id).toSet(),
             equationIds = liveEquations.map(Outline.Equation::id).toSet(),
+            imageIds = liveImages.map(Outline.Image::id).toSet(),
             projections = expandedInk.map(PageStroke::projectionKey).toSet(),
             bounds = union,
         )
@@ -143,6 +153,12 @@ data class CanvasSelection(
         fun ofEquation(equation: Outline.Equation): CanvasSelection = CanvasSelection(
             equationIds = setOf(equation.id),
             bounds = equation.pageBounds(),
+        )
+
+        /** One tapped picture, measured from its frame rather than from its pixels. */
+        fun ofImage(image: Outline.Image): CanvasSelection = CanvasSelection(
+            imageIds = setOf(image.id),
+            bounds = image.pageBounds(),
         )
     }
 }
@@ -208,6 +224,7 @@ internal fun selectWithLasso(
     shapes: List<Outline.Shape>,
     tables: List<TableBounds> = emptyList(),
     equations: List<Outline.Equation> = emptyList(),
+    images: List<Outline.Image> = emptyList(),
     path: List<InkPoint>,
     edgeTolerance: Float = DEFAULT_LASSO_EDGE_TOLERANCE,
 ): CanvasSelection? {
@@ -217,8 +234,11 @@ internal fun selectWithLasso(
     val caughtTables = tables.filter { it.bounds.isInsideLasso(path, edgeTolerance) }
     // A rectangle, so the same four-corner rule a table is held to — see [isInsideLasso].
     val caughtEquations = equations.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
+    // A picture is a rectangle too, and is caught by its frame rather than by what is in it: a
+    // photograph of a circle is still a photograph, and half-circling one leaves it alone.
+    val caughtImages = images.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
     if (ink == null && caughtShapes.isEmpty() && caughtTables.isEmpty() &&
-        caughtEquations.isEmpty()
+        caughtEquations.isEmpty() && caughtImages.isEmpty()
     ) {
         return null
     }
@@ -226,7 +246,8 @@ internal fun selectWithLasso(
     val measured = (ink?.let { listOf(it.bounds) } ?: emptyList()) +
         caughtShapes.map(Outline.Shape::pageBounds) +
         caughtTables.map(TableBounds::bounds) +
-        caughtEquations.map(Outline.Equation::pageBounds)
+        caughtEquations.map(Outline.Equation::pageBounds) +
+        caughtImages.map(Outline.Image::pageBounds)
     val union = measured.unionBounds() ?: return null
     return CanvasSelection(
         path = path,
@@ -234,6 +255,7 @@ internal fun selectWithLasso(
         shapeIds = caughtShapes.map(Outline.Shape::id).toSet(),
         tableIds = caughtTables.map(TableBounds::id).toSet(),
         equationIds = caughtEquations.map(Outline.Equation::id).toSet(),
+        imageIds = caughtImages.map(Outline.Image::id).toSet(),
         projections = ink?.projections.orEmpty(),
         bounds = union,
     )
@@ -278,6 +300,10 @@ internal fun Outline.Shape.pageBounds(): InkBounds =
  * there is nothing here for the canvas to know better (see `Outline.Equation`).
  */
 internal fun Outline.Equation.pageBounds(): InkBounds =
+    InkBounds(left = x, top = y, right = x + width, bottom = y + height)
+
+/** A picture's frame on the page. Its pixel size is a different fact and lives in `attachments`. */
+internal fun Outline.Image.pageBounds(): InkBounds =
     InkBounds(left = x, top = y, right = x + width, bottom = y + height)
 
 internal fun List<InkBounds>.unionBounds(): InkBounds? {

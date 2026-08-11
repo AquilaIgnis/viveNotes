@@ -108,6 +108,7 @@ private const val CONFIRM_FLASH_MS = 650L
 /** Test tag for the Text button, whose active state is the whole point of it. */
 internal object HomeTags {
     const val TEXT = "home-text-mode"
+    const val PICTURE = "home-picture"
 }
 
 internal object FontTags {
@@ -129,6 +130,8 @@ fun Ribbon(
     defaults: EditorDefaults,
     /** Makes a font or size the default. A deliberate gesture, never a side effect of picking one. */
     onSetDefault: (Mark) -> Unit,
+    /** Opens the photo picker. Home tab, feature E6 — see `HomeTab`'s Picture button. */
+    onInsertPicture: () -> Unit = {},
     /** The open page's appearance, which the View tab both shows and changes. */
     pageStyle: PageStyle,
     viewSettings: ViewSettings,
@@ -193,6 +196,7 @@ fun Ribbon(
                 onTextMode = {
                     draw.selectTool(if (tool == DrawTool.Text) DrawTool.None else DrawTool.Text)
                 },
+                onInsertPicture = onInsertPicture,
                 pageOpen = pageOpen,
             )
             RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
@@ -333,6 +337,7 @@ private fun HomeTab(
     onSetDefault: (Mark) -> Unit,
     textMode: Boolean,
     onTextMode: () -> Unit,
+    onInsertPicture: () -> Unit,
     pageOpen: Boolean,
 ) {
     ScrollingRow(
@@ -345,6 +350,19 @@ private fun HomeTab(
         // because "where does it go" is a question only a tap can answer.
         Box(Modifier.testTag(HomeTags.TEXT)) {
             TwoToneRibbonButton({ it.insertText }, "Text", textMode, onTextMode)
+        }
+
+        // Beside Text because it answers the same question — *put something here*. Not a mode, unlike
+        // Text: the picker decides which picture, and the page has an obvious place to put it, so
+        // there is nothing left for a second tap to say. Disabled with no page open, since there
+        // would be nowhere for the result to land by the time the picker came back.
+        Box(Modifier.testTag(HomeTags.PICTURE)) {
+            RibbonButton(
+                MaterialSymbols.Image,
+                "Picture",
+                enabled = pageOpen,
+                onClick = onInsertPicture,
+            )
         }
 
         // Beside Text because it answers the same question — *put something here* — and because an

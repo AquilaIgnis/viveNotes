@@ -330,3 +330,38 @@ data class InkMoveWithTargets(
     @Relation(parentColumn = "id", entityColumn = "moveId")
     val targets: List<InkMoveTargetEntity>,
 )
+
+/**
+ * What is known *about* an imported picture. The pixels are not here.
+ *
+ * **The bytes are a file, not a column** — `filesDir/attachments/<sha256>`, with this row pointing at
+ * it. Ink argues for a blob column because a stroke is a few hundred bytes; a photograph is a few
+ * million, and the two do not want the same home:
+ *
+ *  - Every query that touches a table pays for the width of the rows it walks. A page's picture list
+ *    is a handful of numbers; putting megabytes in the same rows makes reading those numbers cost
+ *    what reading the pictures costs.
+ *  - `notes.db` is one file that gets copied, backed up and — eventually — synced whole. Content that
+ *    is already immutable and already addressed by its hash has no business inflating it.
+ *
+ * **Keyed by the hash of the bytes, so the same picture inserted twice is one file.** That is not
+ * only thrift: it is what lets a page be duplicated, or a picture copied and pasted, without deciding
+ * who owns the pixels. [refCount] is what makes deleting safe — the file goes when the last outline
+ * referencing it does, and never while another still points at it.
+ *
+ * Not tied to a page by a foreign key, deliberately. One picture can appear on several pages, which a
+ * `pageId` column would have to lie about.
+ */
+@Entity(tableName = "attachments")
+data class AttachmentEntity(
+    /** SHA-256 of the stored bytes, lowercase hex. Also the file's name on disk. */
+    @PrimaryKey val id: String,
+    val mimeType: String,
+    /** Pixel dimensions of what was stored, after any downscale at import. */
+    val pixelWidth: Int,
+    val pixelHeight: Int,
+    val byteCount: Long,
+    /** How many outlines currently point at this. Zero means the file may be swept. */
+    val refCount: Int = 0,
+    val createdAt: Long,
+)

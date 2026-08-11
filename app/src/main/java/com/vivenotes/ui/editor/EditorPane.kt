@@ -90,6 +90,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.conflate
+import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.RulerKind
@@ -264,6 +266,20 @@ fun EditorPane(
      * `tableArmed` is Insert Table in hand (TA7): the next tap on bare canvas puts one there, and
      * [onInsertTable] returns its id so the page can select what it just made.
      */
+    /**
+     * The pictures on the page — feature E6.
+     *
+     * [attachments] is what turns an id into pixels, and is null in the tests and previews that
+     * exercise the canvas without a database. `ImageLayer` is simply not composed then, which is the
+     * honest answer: a picture whose bytes cannot be reached is not a picture.
+     */
+    images: List<Outline.Image> = emptyList(),
+    attachments: AttachmentStore? = null,
+    onMoveImages: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeImages: (Set<String>, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    onDeleteImages: (Set<String>) -> Unit = {},
+    /** The page's top-left corner in page units, reported as it scrolls. See the `snapshotFlow`. */
+    onViewport: (Float, Float) -> Unit = { _, _ -> },
     tables: List<Outline.Table> = emptyList(),
     tableArmed: Boolean = false,
     onInsertTable: (Float, Float) -> String? = { _, _ -> null },
@@ -446,8 +462,8 @@ fun EditorPane(
 
     // Re-read against the page whenever any kind changes, so a deleted or undone object takes its
     // handles with it instead of leaving a rectangle over nothing.
-    LaunchedEffect(strokes, shapes, tableBounds, equations) {
-        selection = selection?.reconcile(strokes, shapes, tableBounds, equations)
+    LaunchedEffect(strokes, shapes, tableBounds, equations, images) {
+        selection = selection?.reconcile(strokes, shapes, tableBounds, equations, images)
     }
 
     // A hold outlives neither its table's selection nor the row it named. Selecting something else
@@ -789,6 +805,20 @@ fun EditorPane(
                 Rect(left, top, left + window.width.toPx(), top + window.height.toPx())
             }
         }
+        // Where the page is being looked at, for inserts that arrive from the ribbon and so have no
+        // tap to take a position from. A `snapshotFlow` rather than a read during composition: this
+        // observes the scroll inside a coroutine, so keeping it current recomposes nothing — the same
+        // property `visibleWindow` gets by being a lambda called in the draw.
+        LaunchedEffect(horizontal, vertical, zoom, density) {
+            snapshotFlow { horizontal.value to vertical.value }
+                .conflate()
+                .collect { (scrollX, scrollY) ->
+                    onViewport(
+                        scrollX / (zoom * density.density),
+                        scrollY / (zoom * density.density),
+                    )
+                }
+        }
         val canPlaceAt: (InkPoint) -> Boolean = { point ->
             val offSheet = fits && (point.x > pageSize.width.value || point.y > pageSize.height.value)
             val onTitle = !style.hideTitle && point.y < PageStyle.TITLE_BAND_DP
@@ -912,6 +942,7 @@ fun EditorPane(
                             // lasso is the overlay owns every gesture on the page — in neither case
                             // may this layer also try to edit what is under the pointer.
                             interactive = shaping == null && !lassoing,
+                            visibleWindow = visibleWindow,
                             // This layer's tap is what clears the page's selection (TA11), and with
                             // a table selected it is the *only* thing that hears a tap on bare
                             // canvas — it consumes the down, so the detector above never runs. The
@@ -944,6 +975,7 @@ fun EditorPane(
                                 lassoGesture = lassoGesture.takeIf { lassoing },
                                 interactive = shaping == null && !lassoing && !equationArmed &&
                                     !tableArmed,
+                                visibleWindow = visibleWindow,
                                 onSelect = {
                                     dismissTextInput()
                                     selection = it
@@ -952,7 +984,30 @@ fun EditorPane(
                                 onResize = { id, anchorX, anchorY, scaleX, scaleY ->
                                     onResizeEquations(setOf(id), anchorX, anchorY, scaleX, scaleY)
                                 },
-                            )
+                            ) {
+                                // The fifth kind, inside the fourth for the reason the fourth is
+                                // inside the third — `docs/plan.md` entry 24, and `ShapeLayer.above`.
+                                attachments?.let { store ->
+                                    ImageLayer(
+                                        images = images,
+                                        selection = selection,
+                                        attachments = store,
+                                        lassoGesture = lassoGesture.takeIf { lassoing },
+                                        interactive = shaping == null && !lassoing &&
+                                            !equationArmed && !tableArmed,
+                                        visibleWindow = visibleWindow,
+                                        onSelect = {
+                                            dismissTextInput()
+                                            selection = it
+                                        },
+                                        onMove = { id, dx, dy -> onMoveImages(setOf(id), dx, dy) },
+                                        onResize = { id, anchorX, anchorY, scaleX, scaleY ->
+                                            onResizeImages(setOf(id), anchorX, anchorY, scaleX, scaleY)
+                                        },
+                                        density = density.density,
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -1081,6 +1136,7 @@ fun EditorPane(
             InkOverlay(
                 strokes = strokes,
                 shapes = shapes,
+                images = images,
                 tables = tableBounds,
                 equations = equations,
                 selection = selection,
@@ -1130,6 +1186,10 @@ fun EditorPane(
                 onResizeEquations = { ids, anchor, scaleX, scaleY ->
                     onResizeEquations(ids, anchor.x, anchor.y, scaleX, scaleY)
                 },
+                onMoveImages = onMoveImages,
+                onResizeImages = { ids, anchor, scaleX, scaleY ->
+                    onResizeImages(ids, anchor.x, anchor.y, scaleX, scaleY)
+                },
                 onDeleteSelection = onDeleteInkSelection,
                 onRecolorSelection = onRecolorInkSelection,
                 onGroupSelection = onGroupInkSelection,
@@ -1177,6 +1237,7 @@ fun EditorPane(
                         if (held.shapeIds.isNotEmpty()) onDeleteShapes(held.shapeIds)
                         if (held.tableIds.isNotEmpty()) onDeleteTables(held.tableIds)
                         if (held.equationIds.isNotEmpty()) onDeleteEquations(held.equationIds)
+                        if (held.imageIds.isNotEmpty()) onDeleteImages(held.imageIds)
                         selection = null
                         lassoGesture.clear()
                     },
@@ -1401,7 +1462,13 @@ private fun CanvasSelection.swatch(
     strokes: List<PageStroke>,
     shapes: List<Outline.Shape>,
     tables: List<Outline.Table>,
-): Color {
+): Color? {
+    // A photograph has no colour of its own to change — the same case a text box makes in TD4, and
+    // the reason the swatch is nullable at all. Absent rather than disabled, and absent rather than
+    // present-and-inert: a button that opens a palette which then changes nothing is worse than no
+    // button. Only when the selection is *nothing but* pictures; mixed with ink or a shape there is
+    // still something for a colour to mean.
+    if (isImageOnly) return null
     val inkColors = strokes.filter { it.id in inkIds }.map { it.stroke.brush.colorIntArgb }
     val shapeColors = shapes.filter { it.id in shapeIds }.map(Outline.Shape::borderArgb)
     val tableColors = tables.filter { it.id in tableIds }.map(Outline.Table::borderArgb)

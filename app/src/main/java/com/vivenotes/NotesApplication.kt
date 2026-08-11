@@ -3,6 +3,7 @@ package com.vivenotes
 import android.app.Application
 import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.OnnxInkRecognitionEngine
+import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PenSettingsStore
@@ -27,6 +28,7 @@ class NotesApplication : Application() {
             starterInkPage = StarterInkPageFixture.load(this),
         )
     }
+    val attachments: AttachmentStore by lazy { AttachmentStore(this, database) }
     val editorDefaults: EditorDefaultsStore by lazy { EditorDefaultsStore(this) }
     val viewSettings: ViewSettingsStore by lazy { ViewSettingsStore(this) }
     val penSettings: PenSettingsStore by lazy { PenSettingsStore(this) }

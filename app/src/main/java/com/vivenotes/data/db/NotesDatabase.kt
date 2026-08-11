@@ -19,8 +19,9 @@ import androidx.sqlite.execSQL
         InkEraseTargetEntity::class,
         InkMoveEntity::class,
         InkMoveTargetEntity::class,
+        AttachmentEntity::class,
     ],
-    version = 9,
+    version = 10,
     // Turn this on together with the androidx.room Gradle plugin and room.schemaLocation before
     // the first release, since the exported schemas are what migration tests assert against.
     exportSchema = false,
@@ -34,6 +35,7 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun inkStrokeDao(): InkStrokeDao
     abstract fun inkEraseDao(): InkEraseDao
     abstract fun inkMoveDao(): InkMoveDao
+    abstract fun attachmentDao(): AttachmentDao
 
     companion object {
 
@@ -194,6 +196,31 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds what is known about imported pictures. A pure create: `Outline.Image` has existed in
+         * the model since the first schema, but nothing could produce one, so no row needs
+         * backfilling and no document needs rewriting.
+         *
+         * The pixels are not in here — see [AttachmentEntity] for where they are and why.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS attachments (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        mimeType TEXT NOT NULL,
+                        pixelWidth INTEGER NOT NULL,
+                        pixelHeight INTEGER NOT NULL,
+                        byteCount INTEGER NOT NULL,
+                        refCount INTEGER NOT NULL DEFAULT 0,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 .addMigrations(
@@ -205,6 +232,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_6_7,
                     MIGRATION_7_8,
                     MIGRATION_8_9,
+                    MIGRATION_9_10,
                 )
                 .build()
     }

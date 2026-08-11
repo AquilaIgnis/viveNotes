@@ -29,6 +29,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import android.net.Uri
+import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
@@ -201,6 +203,17 @@ private sealed interface CanvasHistoryEntry {
     ) : CanvasHistoryEntry
 
     /**
+     * The page's pictures before and after — the same whole-list snapshot [Shapes] takes, and safe
+     * for the same reason: an `Outline.Image` is immutable and is a frame, not a photograph. Undoing
+     * back past an insert therefore costs nothing and, in particular, does not touch the stored file
+     * — which is why an attachment's reference is not released until the delete leaves the history.
+     */
+    data class Images(
+        val before: List<Outline.Image>,
+        val after: List<Outline.Image>,
+    ) : CanvasHistoryEntry
+
+    /**
      * A structural edit to the text containers — `docs/textBoxPlan.md` TD5: delete and paste, the two
      * things the TextBox toolkit can do.
      *
@@ -290,6 +303,8 @@ data class NotesUiState(
     val shapes: List<Outline.Shape> = emptyList(),
     /** Equations placed on the canvas — the Draw tab's ƒ. Objects, like shapes, not marks. */
     val equations: List<Outline.Equation> = emptyList(),
+    /** Pictures on the canvas — E6. Frames only; the pixels are in `attachments`. */
+    val images: List<Outline.Image> = emptyList(),
     /**
      * The tables on the canvas — `docs/tablePlan.md`. **The grid, not the writing in it.**
      *
@@ -317,6 +332,7 @@ enum class CompactPane { Notebooks, Pages, Editor }
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class NotesViewModel(
     private val repository: NotesRepository,
+    private val attachments: AttachmentStore,
     private val editorDefaultsStore: EditorDefaultsStore,
     private val viewSettingsStore: ViewSettingsStore,
     private val penSettingsStore: PenSettingsStore,
@@ -538,6 +554,15 @@ class NotesViewModel(
      */
     private var openingPageId: String? = null
 
+    /**
+     * The top-left of what the canvas is currently showing, in page units.
+     *
+     * Held as a plain field rather than as state: nothing recomposes on it, and the only reader is an
+     * insert that happens to need somewhere to put a new object. Reported by `EditorPane` from a
+     * `snapshotFlow` over the scroll, so keeping it up to date costs no recomposition either.
+     */
+    private var viewportOrigin = InkPoint(0f, 0f)
+
     /** Commands travel to the focused editor, the only thing that can act on them. */
     private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
     val commands: SharedFlow<FormatCommand> = _commands
@@ -706,7 +731,7 @@ class NotesViewModel(
             // PageDoc.empty(), so this clears — the outgoing page's outlines must not follow it.
             unmanagedOutlines = doc.outlines.withIndex().filterNot {
                 it.value is Outline.Text || it.value is Outline.Shape || it.value is Outline.Table ||
-                    it.value is Outline.Equation
+                    it.value is Outline.Equation || it.value is Outline.Image
             }
             _uiState.value = _uiState.value.copy(
                 selectedPageId = pageId,
@@ -716,6 +741,7 @@ class NotesViewModel(
                 shapes = doc.outlines.filterIsInstance<Outline.Shape>(),
                 tables = tables,
                 equations = doc.outlines.filterIsInstance<Outline.Equation>(),
+                images = doc.outlines.filterIsInstance<Outline.Image>(),
                 pageStyle = doc.style,
                 pageRevision = _uiState.value.pageRevision + 1,
                 contentError = if (readOnlyPageId == pageId) {
@@ -1523,6 +1549,117 @@ class NotesViewModel(
         edits.tryEmit(Unit)
     }
 
+    // --- images ---------------------------------------------------------------------------------
+
+    /**
+     * Imports a picked picture and puts it on the page — feature E6.
+     *
+     * The import is the slow half (read, downscale, re-encode, hash, write) and is entirely inside
+     * [AttachmentStore], off the main thread. What lands here is a few numbers, so the page edit
+     * itself is the same cheap document change every other object makes.
+     *
+     * **Placed where the user is looking**, not at the page's origin: the ribbon button has no tap to
+     * take a position from, and a picture inserted onto a corner of a page scrolled somewhere else is
+     * a picture the user has to go and find. [viewportOrigin] is what the canvas last reported.
+     *
+     * Sized to [Outline.Image.DEFAULT_WIDTH] with the aspect ratio the file actually has, so a
+     * portrait photograph arrives portrait.
+     */
+    fun insertImage(uri: Uri) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        viewModelScope.launch {
+            val imported = attachments.import(uri) ?: return@launch
+            // Re-read: importing suspends, and the page may have been closed or changed underneath.
+            if (_uiState.value.selectedPageId != pageId || readOnlyPageId == pageId) {
+                attachments.release(imported.id)
+                return@launch
+            }
+            val aspect = if (imported.pixelWidth > 0) {
+                imported.pixelHeight.toFloat() / imported.pixelWidth
+            } else {
+                1f
+            }
+            val width = Outline.Image.DEFAULT_WIDTH
+            // Clear of the title band when the page is scrolled to its top, exactly as a seeded or
+            // newly opened text container is: outline coordinates start at the page's own corner, so
+            // something placed at the viewport origin lands *on* the header rather than below it.
+            // Scrolled anywhere else the viewport wins, which is what the max is for.
+            val titleFloor = if (_uiState.value.pageStyle.hideTitle) 0f else PageStyle.TITLE_BAND_DP
+            val created = Outline.Image(
+                id = newId(),
+                x = PageBounds.clampX(viewportOrigin.x + INSERT_MARGIN),
+                y = PageBounds.clampY(maxOf(viewportOrigin.y + INSERT_MARGIN, titleFloor)),
+                width = width,
+                height = (width * aspect).coerceAtLeast(Outline.Image.MIN_SIZE),
+                attachmentId = imported.id,
+            )
+            editImages { it + created }
+            // Nothing armed, so the next tap reaches the picture and selects it rather than being
+            // taken by a tool. Not auto-selected: the insert happens off a ribbon button, not a
+            // canvas gesture, so there is no layer in the call path holding the selection to set.
+            _tool.value = DrawTool.None
+        }
+    }
+
+    /** Where the canvas is currently looking, in page units. Reported by `EditorPane` as it scrolls. */
+    fun reportViewport(x: Float, y: Float) {
+        viewportOrigin = InkPoint(x, y)
+    }
+
+    fun moveImages(imageIds: Set<String>, dx: Float, dy: Float) {
+        if (imageIds.isEmpty() || (dx == 0f && dy == 0f)) return
+        editImages { images ->
+            images.map { if (it.id in imageIds) it.translated(dx, dy) else it }
+        }
+    }
+
+    /** The corner handles, and the lasso's half of a resize — once per gesture, per [resizeShapes]. */
+    fun resizeImages(
+        imageIds: Set<String>,
+        anchorX: Float,
+        anchorY: Float,
+        scaleX: Float,
+        scaleY: Float,
+    ) {
+        if (imageIds.isEmpty()) return
+        editImages { images ->
+            images.map {
+                if (it.id in imageIds) it.scaledAbout(anchorX, anchorY, scaleX, scaleY) else it
+            }
+        }
+    }
+
+    /**
+     * Removes pictures from the page — the toolkit's Delete.
+     *
+     * **The file stays, and for now it stays for good.** Undo restores this list, and a restored
+     * frame pointing at bytes that had been swept would be a hole in the page no further undo could
+     * fill — so nothing is released here. Deciding the moment a delete becomes permanent is a real
+     * question (the history ring? closing the page? a sweep at launch?) and getting it wrong destroys
+     * a picture that is still referenced, so **v1 leaks disk rather than risk that**:
+     * `AttachmentStore.release` exists and is correct, and nothing calls it yet. `refCount` is
+     * maintained so the sweep can be written without a migration.
+     */
+    fun deleteImages(imageIds: Set<String>) {
+        if (imageIds.isEmpty()) return
+        editImages { images -> images.filterNot { it.id in imageIds } }
+    }
+
+    private inline fun editImages(change: (List<Outline.Image>) -> List<Outline.Image>) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val state = _uiState.value
+        val before = state.images
+        // Held to the page's origin corner at the one door, exactly as every other kind is.
+        val after = change(before).onPage()
+        if (after == before) return
+
+        _uiState.value = state.copy(images = after)
+        pushHistory(pageId, CanvasHistoryEntry.Images(before = before, after = after))
+        edits.tryEmit(Unit)
+    }
+
     // --- equations ------------------------------------------------------------------------------
 
     /**
@@ -2227,6 +2364,14 @@ class NotesViewModel(
                 )
                 edits.tryEmit(Unit)
             }
+            // One half too, and deliberately so: the picture's bytes are not in the history and are
+            // not touched by it. An undone delete restores a frame whose file was never removed.
+            is CanvasHistoryEntry.Images -> {
+                _uiState.value = _uiState.value.copy(
+                    images = if (applied) entry.after else entry.before,
+                )
+                edits.tryEmit(Unit)
+            }
             // A container is two halves in two places, so both move together or a restored box comes
             // back blank — see [CanvasHistoryEntry.Texts].
             is CanvasHistoryEntry.Texts -> {
@@ -2500,7 +2645,7 @@ class NotesViewModel(
         repository.saveDoc(
             pageId,
             PageDoc(
-                outlines = merged(state.shapes + state.equations + tables + outlines),
+                outlines = merged(state.shapes + state.equations + state.images + tables + outlines),
                 style = state.pageStyle,
             ),
         )
@@ -2547,6 +2692,13 @@ class NotesViewModel(
         else shape.translated(correction.x, correction.y)
     }
 
+    @JvmName("imagesOnPage")
+    private fun List<Outline.Image>.onPage(): List<Outline.Image> = map { image ->
+        val correction = PageBounds.correctionFor(image.x, image.y)
+        if (correction.x == 0f && correction.y == 0f) image
+        else image.translated(correction.x, correction.y)
+    }
+
     @JvmName("equationsOnPage")
     private fun List<Outline.Equation>.onPage(): List<Outline.Equation> = map { equation ->
         val correction = PageBounds.correctionFor(equation.x, equation.y)
@@ -2573,6 +2725,14 @@ class NotesViewModel(
 
         /** Far enough that a duplicate is not mistaken for the original not having copied. */
         private const val DUPLICATE_OFFSET = 16f
+
+        /**
+         * How far inside the visible corner a ribbon-inserted object lands.
+         *
+         * Not flush against it: an object placed exactly on the corner has two of its resize handles
+         * half off the screen, and the first thing anyone does with a new picture is resize it.
+         */
+        private const val INSERT_MARGIN = 24f
         private const val CANVAS_HISTORY_LIMIT = 100
 
         /**
@@ -2598,6 +2758,7 @@ class NotesViewModel(
 
         fun factory(
             repository: NotesRepository,
+            attachments: AttachmentStore,
             editorDefaultsStore: EditorDefaultsStore,
             viewSettingsStore: ViewSettingsStore,
             penSettingsStore: PenSettingsStore,
@@ -2606,6 +2767,7 @@ class NotesViewModel(
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
                 NotesViewModel(
                     repository,
+                    attachments,
                     editorDefaultsStore,
                     viewSettingsStore,
                     penSettingsStore,

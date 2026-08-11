@@ -1,6 +1,9 @@
 package com.vivenotes.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,6 +37,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
@@ -109,6 +113,7 @@ private val AUTOMATIC_MATH_ACTIONS = listOf("solve", "evaluate", "simplify")
 @Composable
 fun NotesApp(
     viewModel: NotesViewModel,
+    attachments: AttachmentStore,
     aiModelStore: AiModelStore,
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
@@ -134,6 +139,14 @@ fun NotesApp(
     val stylusButtons by viewModel.stylusButtons.collectAsStateWithLifecycle()
     val canvasUndoState by viewModel.canvasUndoState.collectAsStateWithLifecycle()
     val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
+
+    // The system photo picker — feature E6. Chosen over `GetContent` and over `READ_MEDIA_IMAGES`
+    // deliberately: it needs **no runtime permission at all**, because the user picking a file *is*
+    // the grant, and it shows the same picker whether the photo is local or in the cloud. Asking for
+    // storage permission to insert one picture is the thing this API exists to stop.
+    val pickPicture = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> uri?.let(viewModel::insertImage) }
     val strokes by viewModel.strokes.collectAsStateWithLifecycle()
     val aiModels by aiModelStore.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -331,6 +344,11 @@ fun NotesApp(
                         onCommand = viewModel::send,
                         defaults = defaults,
                         onSetDefault = viewModel::setDefaultFont,
+                        onInsertPicture = {
+                            pickPicture.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        },
                         pageStyle = state.pageStyle,
                         viewSettings = viewSettings,
                         view = viewActions,
@@ -414,6 +432,7 @@ fun NotesApp(
                                 allowFinger = drawWithFinger,
                                 hasClipboard = hasClipboard,
                                 strokes = strokes,
+                                attachments = attachments,
                                 aiModels = aiModels,
                                 recognitionRunning = recognitionRunning,
                                 onRecognizeFormula = { recognize(it, RecognitionOutputKind.Formula) },
@@ -526,6 +545,7 @@ fun NotesApp(
                                 allowFinger = drawWithFinger,
                                 hasClipboard = hasClipboard,
                                 strokes = strokes,
+                                attachments = attachments,
                                 aiModels = aiModels,
                                 recognitionRunning = recognitionRunning,
                                 onRecognizeFormula = { recognize(it, RecognitionOutputKind.Formula) },
@@ -639,6 +659,8 @@ private fun EditorSurface(
     allowFinger: Boolean,
     hasClipboard: Boolean,
     strokes: List<PageStroke>,
+    /** Turns a picture's id into its pixels — feature E6. */
+    attachments: AttachmentStore,
     aiModels: AiModelsState,
     recognitionRunning: Boolean,
     onRecognizeFormula: (com.vivenotes.ink.CanvasSelection) -> Unit,
@@ -715,6 +737,12 @@ private fun EditorSurface(
         onMoveEquations = viewModel::moveEquations,
         onResizeEquations = viewModel::resizeEquations,
         onDeleteEquations = viewModel::deleteEquations,
+        images = state.images,
+        attachments = attachments,
+        onMoveImages = viewModel::moveImages,
+        onResizeImages = viewModel::resizeImages,
+        onDeleteImages = viewModel::deleteImages,
+        onViewport = viewModel::reportViewport,
         onRecolorEquations = viewModel::recolorEquations,
         onEditEquation = viewModel::setEquationLatex,
         onMoveTables = viewModel::moveTables,

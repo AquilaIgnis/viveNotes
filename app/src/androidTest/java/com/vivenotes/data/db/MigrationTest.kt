@@ -257,4 +257,60 @@ class MigrationTest {
             }
         }
     }
+
+    @Test
+    fun migration9To10AddsAttachmentsAndLeavesExistingContentAlone() {
+        val driver = AndroidSQLiteDriver()
+
+        driver.open(file.absolutePath).use { connection ->
+            connection.execSQL(
+                """
+                CREATE TABLE page_content (
+                    pageId TEXT NOT NULL PRIMARY KEY,
+                    docJson TEXT NOT NULL,
+                    updatedAt INTEGER NOT NULL,
+                    format TEXT NOT NULL DEFAULT 'json/1'
+                )
+                """.trimIndent(),
+            )
+            connection.execSQL(
+                "INSERT INTO page_content VALUES ('page', '{\"outlines\":[]}', 42, 'json/1')",
+            )
+
+            NotesDatabase.MIGRATION_9_10.migrate(connection)
+
+            // A pure create: nothing existed that could reference an attachment, so no document is
+            // rewritten and no row is backfilled.
+            connection.prepare("SELECT COUNT(*) FROM attachments").use {
+                assertEquals(true, it.step())
+                assertEquals(0, it.getLong(0).toInt())
+            }
+            connection.prepare("SELECT docJson FROM page_content WHERE pageId = 'page'").use {
+                assertEquals(true, it.step())
+                assertEquals("{\"outlines\":[]}", it.getText(0))
+            }
+        }
+    }
+
+    @Test
+    fun anAttachmentStartsUnreferencedAndCannotBeReleasedBelowZero() {
+        val driver = AndroidSQLiteDriver()
+
+        driver.open(file.absolutePath).use { connection ->
+            NotesDatabase.MIGRATION_9_10.migrate(connection)
+            connection.execSQL(
+                "INSERT INTO attachments VALUES ('abc', 'image/jpeg', 100, 80, 2048, 0, 42)",
+            )
+
+            // The guard that matters: a double release must not drive the count negative, because a
+            // negative count reads as "sweepable" and would delete a file something still points at.
+            connection.execSQL("UPDATE attachments SET refCount = MAX(refCount - 1, 0) WHERE id = 'abc'")
+            connection.execSQL("UPDATE attachments SET refCount = MAX(refCount - 1, 0) WHERE id = 'abc'")
+
+            connection.prepare("SELECT refCount FROM attachments WHERE id = 'abc'").use {
+                assertEquals(true, it.step())
+                assertEquals(0, it.getLong(0).toInt())
+            }
+        }
+    }
 }

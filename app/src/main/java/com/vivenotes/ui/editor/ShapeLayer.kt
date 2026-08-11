@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -89,6 +90,13 @@ internal fun ShapeLayer(
      * which case the overlay owns every gesture on the page and this layer must not also claim taps.
      */
     interactive: Boolean,
+    /**
+     * What the page can currently show, in page units multiplied by density.
+     *
+     * Called *inside* the draw scope, never during composition — `PageRuling`'s idiom, and the reason
+     * scrolling re-runs the draw and nothing above it.
+     */
+    visibleWindow: () -> Rect,
     onSelect: (CanvasSelection?) -> Unit,
     onMoveShape: (shapeId: String, dx: Float, dy: Float) -> Unit,
     onResizeShape: (shapeId: String, anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float) -> Unit =
@@ -361,8 +369,20 @@ internal fun ShapeLayer(
             // Page units are dp, the same units an outline's (x, y) is in, so the geometry is scaled
             // by density. The selection box is not: it is chrome, and chrome keeps its weight.
             val pageScale = density
+            // Read here rather than captured, so scrolling re-runs the draw and not the composition.
+            val window = visibleWindow()
             withTransform({ scale(pageScale, pageScale, Offset.Zero) }) {
-                shapes.forEach { shape -> drawShape(previewOf(shape)) }
+                shapes.forEach { shape ->
+                    val drawn = previewOf(shape)
+                    // A shape off the edge of the window is a path per segment that nobody can see.
+                    if (!pageBoxIsVisible(
+                            drawn.x, drawn.y, drawn.width, drawn.height, window, pageScale,
+                        )
+                    ) {
+                        return@forEach
+                    }
+                    drawShape(drawn)
+                }
             }
             // Handles only for a lone shape. A selection holding more than one object draws its
             // rectangle over in the overlay, around everything it holds, ink included.
@@ -719,6 +739,33 @@ private val HANDLE_REACH: Dp = SelectionChrome.HANDLE_REACH
  * `TableContainer` keeps its own radius on purpose: its handle is a composed target with its own hit
  * area, not a disc painted into a canvas, so it is a different thing that happens to look similar.
  */
+/**
+ * Whether a page-space box is worth drawing — the object half of `docs/inkPlan.md` §3.2.
+ *
+ * Ink got this first, and for the obvious reason: a page can hold ten thousand strokes. The document
+ * kinds got it late and are *worse* per element, not better — a shape is a path per segment, a formula
+ * is a display list, a picture is a decoded bitmap and a texture upload — so a page of them off the
+ * edge of the window costs more each than a stroke does.
+ *
+ * [x], [y], [width] and [height] are page units; [window] is what `EditorPane` computes for
+ * `PageRuling`, which is page units multiplied by density. Both are converted here rather than at
+ * three call sites, because a culling test that disagrees with itself between layers shows up as one
+ * kind of object vanishing and nothing else.
+ */
+internal fun pageBoxIsVisible(
+    x: Float,
+    y: Float,
+    width: Float,
+    height: Float,
+    window: Rect,
+    density: Float,
+): Boolean {
+    val left = x * density
+    val top = y * density
+    return left + width * density >= window.left && left <= window.right &&
+        top + height * density >= window.top && top <= window.bottom
+}
+
 internal object SelectionChrome {
     val PADDING: Dp = 6.dp
     val STROKE: Dp = 1.5.dp

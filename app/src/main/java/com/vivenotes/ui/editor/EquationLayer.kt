@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -16,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -79,6 +81,8 @@ internal fun EquationLayer(
     lassoGesture: LassoGesture? = null,
     /** False while a tool is armed or the lasso owns the page — see [ShapeLayer.interactive]. */
     interactive: Boolean,
+    /** What the page can currently show — see [ShapeLayer]'s own, and read in the draw for the same reason. */
+    visibleWindow: () -> Rect,
     onSelect: (CanvasSelection?) -> Unit,
     onMove: (equationId: String, dx: Float, dy: Float) -> Unit,
     onResize: (
@@ -89,6 +93,14 @@ internal fun EquationLayer(
         scaleY: Float,
     ) -> Unit = { _, _, _, _, _ -> },
     modifier: Modifier = Modifier,
+    /**
+     * The next layer up, composed as a **child** rather than a sibling.
+     *
+     * The same slot, for the same reason, that `ShapeLayer.above` exists and that this layer occupies:
+     * two full-page layers side by side means Compose gives every touch to whichever is on top and the
+     * other goes silently dead — `docs/plan.md` entry 24. `ImageLayer` is what goes in here.
+     */
+    above: @Composable BoxScope.() -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val handleFill = MaterialTheme.colorScheme.surface
@@ -257,8 +269,14 @@ internal fun EquationLayer(
                 else -> equation
             }
 
+            // Read here rather than captured, so scrolling re-runs the draw and not the composition.
+            val window = visibleWindow()
             equations.forEach { equation ->
                 val drawn = previewOf(equation)
+                // A formula off the edge of the window is a display list nobody can see.
+                if (!pageBoxIsVisible(drawn.x, drawn.y, drawn.width, drawn.height, window, density)) {
+                    return@forEach
+                }
                 val key = EquationRenderKey(equation.latex, equation.resolvedColor(canvasTextColor))
                 drawEquation(drawn, renderers[key], key.colorArgb, density)
             }
@@ -266,6 +284,8 @@ internal fun EquationLayer(
             equations.singleOrNull { selection?.isEquationOnly == true && it.id in heldIds }
                 ?.let { drawEquationSelection(previewOf(it), accent, handleFill, density) }
         }
+        // Last, so it draws over the formulas and is hit-tested before them — see [above].
+        above()
     }
 }
 
