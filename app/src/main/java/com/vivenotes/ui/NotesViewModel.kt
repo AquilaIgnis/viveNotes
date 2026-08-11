@@ -1861,8 +1861,13 @@ class NotesViewModel(
             // something else, and cheaper to accept than to plumb a measurement into the ViewModel.
             sourceTexts.map { InkBounds(it.x, it.y, it.x + it.width, it.y + it.minHeight) }
         val union = bounds.unionBounds() ?: return
+        // Horizontally centred on the tap, vertically hung *from* it: the paste grows downward from
+        // the point, the way everything else placed on this canvas does. Centring the box vertically
+        // put half of what was pasted above the tap, so a paste near the top of the page landed with
+        // its head off the sheet and the tap looked like it had chosen the middle of the content
+        // rather than its start.
         val dx = at.x - union.center.x
-        val dy = at.y - union.center.y
+        val dy = at.y - union.top
 
         if (sourceTexts.isNotEmpty()) {
             val pasted = sourceTexts.map { source ->

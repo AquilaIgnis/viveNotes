@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -254,6 +255,35 @@ class PageViewTest {
         assertEquals(220f, pasted?.x ?: Float.NaN, 1f)
         assertEquals(310f, pasted?.y ?: Float.NaN, 1f)
         compose.onNodeWithTag(PageTags.PASTE_MENU).assertDoesNotExist()
+    }
+
+    /**
+     * The menu is placed in view coordinates while the tap that summoned it is in page ones, so at
+     * any zoom but 1 the two disagree unless the page transform is applied. It was not, which put
+     * the menu at the page coordinate read as a screen one — at 2x, half as far from the corner as
+     * the ink it was offering to paste beside, and further still once the page had been scrolled.
+     */
+    @Test
+    fun thePasteMenuIsPlacedAtTheTapRatherThanAtItsUntransformedPageCoordinate() {
+        setPage(style = PageStyle(hideTitle = true), hasClipboard = true, zoom = 2f)
+        val tap = with(density) { Offset(300.dp.toPx(), 220.dp.toPx()) }
+        // Read before the tap: once the menu is up there are two roots and `onRoot` is ambiguous.
+        val rootOnScreen = compose.onRoot().fetchSemanticsNode().positionOnScreen
+
+        compose.onRoot().performTouchInput { doubleClick(tap) }
+        compose.onNodeWithTag(PageTags.PASTE).assertIsDisplayed()
+
+        // The menu lives in its own Popup window, so root-relative bounds are always (0, 0) for it.
+        // Screen coordinates are the only space the two can be compared in.
+        val menuOnScreen = compose.onNodeWithTag(PageTags.PASTE_MENU).fetchSemanticsNode().positionOnScreen
+        val menuInRoot = Offset(menuOnScreen.x - rootOnScreen.x, menuOnScreen.y - rootOnScreen.y)
+        // A dropdown adds its own padding and may shift to stay on screen, so this asserts the menu
+        // is *near* the tap rather than exactly on it. The bug it guards missed by 150dp in x.
+        val tolerance = with(density) { 96.dp.toPx() }
+        assertTrue(
+            "paste menu at $menuInRoot is nowhere near the tap at $tap",
+            abs(menuInRoot.x - tap.x) < tolerance && abs(menuInRoot.y - tap.y) < tolerance,
+        )
     }
 
     @Test

@@ -746,6 +746,37 @@ class NotesViewModelTest {
             pasted.segments.map { it.id }.none { id -> id in vm.uiState.value.shapes.first { s -> s.id == shapeId }.segments.map { it.id } })
     }
 
+    /**
+     * The paste point is the *top* of what arrives, not its middle.
+     *
+     * Centring it vertically put half the pasted content above the tap, so a paste aimed just below
+     * some existing ink overlapped it, and one near the top of the page landed with its head off the
+     * sheet. Horizontally it stays centred, which is what makes the tap feel aimed rather than
+     * hung from a corner.
+     */
+    @Test
+    fun pasteHangsTheContentFromTheTapRatherThanCentringItOnIt() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val shapeId = vm.insertShape(ShapeSettings(), 40f, 100f, 140f, 300f)!!
+        advanceUntilIdle()
+        val source = vm.uiState.value.shapes.single { it.id == shapeId }
+
+        vm.copySelection(selectionOf(shapeIds = setOf(shapeId)))
+        vm.pasteObjects(InkPoint(400f, 500f))
+        advanceUntilIdle()
+
+        val pasted = vm.uiState.value.shapes.single { it.id != shapeId }
+        assertEquals("the paste did not start at the tap", 500f, pasted.y, 0.5f)
+        assertEquals(
+            "the paste was not centred horizontally on the tap",
+            400f,
+            pasted.x + pasted.width / 2f,
+            0.5f,
+        )
+        assertEquals("the paste changed size", source.width, pasted.width, 0.5f)
+        assertEquals("the paste changed size", source.height, pasted.height, 0.5f)
+    }
+
     @Test
     fun copyingAShapeLeavesThePageAloneUntilItIsPasted() = runTest(dispatcher) {
         // It used to drop a duplicate 16dp down and right the moment Copy was pressed.
@@ -775,8 +806,10 @@ class NotesViewModelTest {
         vm.pasteObjects(InkPoint(100f, 120f))
         assertEquals(2, vm.strokes.value.size)
         val pastedBounds = vm.strokes.value.first { it.id != originalId }.stroke.shape.computeBoundingBox()!!
+        // Centred across the tap, hung from it vertically — see
+        // [pasteHangsTheContentFromTheTapRatherThanCentringItOnIt] for why the two axes differ.
         assertEquals(100f, (pastedBounds.xMin + pastedBounds.xMax) / 2f, 1f)
-        assertEquals(120f, (pastedBounds.yMin + pastedBounds.yMax) / 2f, 1f)
+        assertEquals(120f, pastedBounds.yMin, 1f)
         vm.undoCanvas()
         assertEquals(1, vm.strokes.value.size)
         vm.redoCanvas()

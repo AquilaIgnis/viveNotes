@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.ink.brush.Brush
@@ -1375,6 +1376,9 @@ fun EditorPane(
             pastePopupAt?.takeIf { hasClipboard }?.let { point ->
                 ObjectPastePopup(
                     point = point,
+                    zoom = zoom,
+                    scrollX = horizontal.value.toFloat(),
+                    scrollY = vertical.value.toFloat(),
                     onDismiss = { pastePopupAt = null },
                     onPaste = {
                         onPaste(point)
@@ -1604,15 +1608,38 @@ private suspend fun PointerInputScope.detectCanvasTapGestures(
     }
 }
 
+/**
+ * The Paste menu, anchored to the point that was double-tapped.
+ *
+ * **[point] is in page units and this composable is not inside the zoomed viewport**, so it has to be
+ * transformed the same way [ObjectTooltip]'s bounds are — through [inkPageToView], which applies the
+ * zoom, the density and both scroll offsets. Offsetting by the raw page value treats page dp as view
+ * dp: correct only at 100% zoom with the page scrolled to its origin, and wrong by the scroll
+ * distance everywhere else, which is what put the menu somewhere unrelated to the tap.
+ */
 @Composable
 private fun BoxScope.ObjectPastePopup(
     point: InkPoint,
+    zoom: Float,
+    scrollX: Float,
+    scrollY: Float,
     onDismiss: () -> Unit,
     onPaste: () -> Unit,
 ) {
+    val density = LocalDensity.current
+    val anchor = remember(point, zoom, scrollX, scrollY, density.density) {
+        val mapped = floatArrayOf(point.x, point.y)
+        inkPageToView(
+            zoom = zoom,
+            density = density.density,
+            scrollX = scrollX,
+            scrollY = scrollY,
+        ).mapPoints(mapped)
+        IntOffset(mapped[0].roundToInt(), mapped[1].roundToInt())
+    }
     Box(
         Modifier
-            .offset(x = point.x.dp, y = point.y.dp)
+            .offset { anchor }
             .size(1.dp),
     ) {
         DropdownMenu(
