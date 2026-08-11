@@ -281,7 +281,11 @@ internal fun EquationLayer(
                 drawEquation(drawn, renderers[key], key.colorArgb, density)
             }
 
-            equations.singleOrNull { selection?.isEquationOnly == true && it.id in heldIds }
+            // Not while the lasso is armed: the overlay draws the selection then, and owns the
+            // gestures on it — a second box and four more discs here are chrome nothing services.
+            // See `ShapeLayer`, where the same line carries the same condition.
+            equations.takeIf { lassoGesture == null }
+                ?.singleOrNull { selection?.isEquationOnly == true && it.id in heldIds }
                 ?.let { drawEquationSelection(previewOf(it), accent, handleFill, density) }
         }
         // Last, so it draws over the formulas and is hit-tested before them — see [above].

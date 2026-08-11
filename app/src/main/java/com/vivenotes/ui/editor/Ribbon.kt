@@ -352,23 +352,7 @@ private fun HomeTab(
             TwoToneRibbonButton({ it.insertText }, "Text", textMode, onTextMode)
         }
 
-        // Beside Text because it answers the same question — *put something here*. Not a mode, unlike
-        // Text: the picker decides which picture, and the page has an obvious place to put it, so
-        // there is nothing left for a second tap to say. Disabled with no page open, since there
-        // would be nowhere for the result to land by the time the picker came back.
-        Box(Modifier.testTag(HomeTags.PICTURE)) {
-            RibbonButton(
-                MaterialSymbols.Image,
-                "Picture",
-                enabled = pageOpen,
-                onClick = onInsertPicture,
-            )
-        }
 
-        // Beside Text because it answers the same question — *put something here* — and because an
-        // equation written this way is a character in a sentence rather than an object on the page.
-        // It came off the Insert tab when that tab was retired; the Draw tab carries its twin, which
-        // puts the same formula on the canvas instead. See [EquationButton].
 
         Divider()
 
@@ -500,6 +484,17 @@ private fun HomeTab(
             onReleaseTarget = { onCommand(FormatCommand.ReleaseEquationTarget) },
             onSubmit = { latex, _ -> onCommand(FormatCommand.InsertEquation(latex)) },
         )
+
+        Box(Modifier.testTag(HomeTags.PICTURE)) {
+            RibbonButton(
+                MaterialSymbols.Image,
+                "Picture",
+                enabled = pageOpen,
+                onClick = onInsertPicture,
+            )
+        }
+
+
     }
 }
 

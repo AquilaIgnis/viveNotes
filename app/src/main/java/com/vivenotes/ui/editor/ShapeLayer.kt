@@ -384,9 +384,15 @@ internal fun ShapeLayer(
                     drawShape(drawn)
                 }
             }
-            // Handles only for a lone shape. A selection holding more than one object draws its
-            // rectangle over in the overlay, around everything it holds, ink included.
-            shapes.singleOrNull { selection?.isShapeOnly == true && it.id in held }
+            // Handles only for a lone shape, and only while this layer is the one that would
+            // service them. A selection holding more than one object draws its rectangle over in
+            // the overlay, around everything it holds, ink included — and so does a selection of
+            // *any* size once the lasso is armed, because the lasso owns every gesture on the page
+            // then ([interactive]). Drawing a second set here in that state put two rectangles a
+            // few dp apart around one shape, each with its own four corner discs, of which only the
+            // overlay's answered a finger.
+            shapes.takeIf { lassoGesture == null }
+                ?.singleOrNull { selection?.isShapeOnly == true && it.id in held }
                 ?.let { drawSelection(previewOf(it), accent, handleFill, pageScale) }
         }
 
@@ -523,8 +529,9 @@ private fun DrawScope.drawSelection(
         ),
     )
 
-    // Four corners, drawn the way the lasso draws its own — white disc, accent ring — so the two
-    // selections are the same affordance rather than two that merely do the same thing (AD7).
+    // Four corners, drawn the way the lasso draws its own — surface disc, accent ring, and the
+    // radius off [SelectionChrome] — so the two selections are the same affordance rather than two
+    // that merely do the same thing (AD7).
     val radius = HANDLE_RADIUS.toPx()
     listOf(left to top, right to top, right to bottom, left to bottom).forEach { (x, y) ->
         drawCircle(handleFill, radius, Offset(x, y))
@@ -772,7 +779,14 @@ internal object SelectionChrome {
     val DASH: Dp = 4.dp
     val HANDLE_RADIUS: Dp = 5.5.dp
 
-    /** Matches LassoGesture's own handle reach, so every selection grabs the same way. */
+    /**
+     * Matches `LassoGesture`'s own handle reach, so every selection grabs the same way.
+     *
+     * It did not, until the lasso was made to read this: it carried 10 device pixels of its own,
+     * which is a quarter of this on a dense screen. That is the failure this object exists to
+     * prevent, and it survived here as a comment claiming otherwise — so the number is now shared
+     * rather than described.
+     */
     val HANDLE_REACH: Dp = 14.dp
 }
 

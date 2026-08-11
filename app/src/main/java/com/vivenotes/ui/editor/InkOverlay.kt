@@ -293,6 +293,11 @@ internal fun InkOverlay(
     // took the ACTION_DOWN, which is right (a stroke must not break because the pen left the page),
     // so the fix belongs in what is drawn, not in what is delivered.
     val lassoColor = MaterialTheme.colorScheme.primary.toArgb()
+    // The disc inside each corner handle, and the app's surface rather than white for the reason the
+    // radius beside it is a shared dp: `ShapeLayer`, `EquationLayer` and `ImageLayer` all fill theirs
+    // with `colorScheme.surface`, so a hardcoded white here was one selection affordance in two
+    // colours — the same one, on the same page, depending only on which tool had made it (AD7).
+    val lassoHandleFill = MaterialTheme.colorScheme.surface.toArgb()
     // Frosted plastic in the *canvas's* own ink, not the app's accent: a ruler is an object lying on
     // the paper, and one painted in the selection colour reads as a selection. See `RulerPaint`.
     val canvasInk = LocalCanvasColors.current.text
@@ -344,7 +349,9 @@ internal fun InkOverlay(
                     native.restoreToCount(checkpoint)
                 }
                 if (currentLassoing && gestureRevision >= 0) {
-                    drawLasso(native, matrix, lassoGesture, currentSelection, lassoColor)
+                    drawLasso(
+                        native, matrix, lassoGesture, currentSelection, lassoColor, lassoHandleFill,
+                    )
                 }
                 currentShaping?.takeIf { shapeRevision >= 0 }?.let { settings ->
                     drawShapePreview(native, matrix, shapeGesture, settings)
@@ -953,6 +960,8 @@ private fun drawLasso(
     gesture: LassoGesture,
     selection: CanvasSelection?,
     color: Int,
+    /** The fill inside a corner handle — `colorScheme.surface`, as every object layer uses. */
+    handleColor: Int,
 ) {
     val values = FloatArray(9)
     pageToView.getValues(values)
@@ -974,20 +983,29 @@ private fun drawLasso(
         canvas.drawPath(path, tracePaint)
     }
     gesture.previewBounds(selection)?.let { bounds ->
-        val padding = 4f / scale
+        // **Page units are dp**, so the chrome is drawn from [SelectionChrome] as it stands, with no
+        // division by [scale] — those are the same numbers `ShapeLayer`, `EquationLayer` and
+        // `ImageLayer` hand to `Dp.toPx()`, and reading them here is what makes a lassoed object's
+        // selection *the same* affordance as a tapped one rather than one that resembles it (AD7).
+        //
+        // Dividing by the scale was the bug: it pinned the chrome to a fixed number of **device
+        // pixels**, which is the same number divided by the density — so a lassoed object's handles
+        // came out at a third of the radius a tapped one's have on a 3× screen, and shrank further
+        // against the page with every step of zoom, where a tapped object's grow with it.
+        val padding = SelectionChrome.PADDING.value
         val selectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
             style = Paint.Style.STROKE
-            strokeWidth = 2f / scale
+            strokeWidth = SelectionChrome.STROKE.value
         }
         val left = bounds.left - padding
         val top = bounds.top - padding
         val right = bounds.right + padding
         val bottom = bounds.bottom + padding
         canvas.drawRect(left, top, right, bottom, selectionPaint)
-        val handleRadius = 5.5f / scale
+        val handleRadius = SelectionChrome.HANDLE_RADIUS.value
         val handleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.color = android.graphics.Color.WHITE
+            this.color = handleColor
             style = Paint.Style.FILL
         }
         listOf(
@@ -1332,7 +1350,7 @@ internal class LassoGesture {
             MotionEvent.ACTION_DOWN -> {
                 pointerId = event.getPointerId(event.actionIndex)
                 val point = event.pagePoint(event.actionIndex, toPage)
-                val corner = selection?.bounds?.cornerNear(point, handleHitRadius(toPage))
+                val corner = selection?.bounds?.cornerNear(point)
                 startBounds = selection?.bounds
                 if (selection != null && corner != null) {
                     mode = Mode.Resizing
@@ -1541,32 +1559,45 @@ internal class LassoGesture {
         anchor.y + (this.y - anchor.y) * y,
     )
 
-    private fun handleHitRadius(toPage: Matrix): Float {
-        val values = FloatArray(9)
-        toPage.getValues(values)
-        return HANDLE_HIT_PX * hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y])
-    }
-
     private fun lassoEdgeTolerance(toPage: Matrix): Float {
         val values = FloatArray(9)
         toPage.getValues(values)
         return LASSO_EDGE_TOLERANCE_PX * hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y])
     }
 
-    private fun InkBounds.cornerNear(point: InkPoint, radius: Float): Corner? =
-        Corner.entries.minByOrNull { corner ->
-            val handle = corner.point(this)
+    /**
+     * The corner handle under the point, or null.
+     *
+     * Measured from where the handle is **drawn** — a corner of the padded rectangle, not of the
+     * bounds themselves — because that is the disc a finger aims at. The two are only
+     * [SelectionChrome.PADDING] apart, but a reach measured from the wrong one of them is
+     * off-centre by that much in both axes at once, and every dp of that comes off the far side of
+     * the target. The resize itself still measures against the raw bounds: see [handle], where
+     * [Corner.point] is called without an outset for the anchor.
+     *
+     * [SelectionChrome.HANDLE_REACH] is a dp value read as page units, which is what page units
+     * are — the same reading `ShapeLayer.handleNear` makes of it, and the reason a handle grabs the
+     * same way whichever layer drew it (AD7). It was 10 *device pixels* before, so a selection was
+     * markedly harder to grab on a dense screen than on a coarse one, and harder again the further
+     * the page was zoomed out.
+     */
+    private fun InkBounds.cornerNear(point: InkPoint): Corner? {
+        val outset = SelectionChrome.PADDING.value
+        return Corner.entries.minByOrNull { corner ->
+            val handle = corner.point(this, outset)
             hypot(point.x - handle.x, point.y - handle.y)
         }?.takeIf { corner ->
-            val handle = corner.point(this)
-            hypot(point.x - handle.x, point.y - handle.y) <= radius
+            val handle = corner.point(this, outset)
+            hypot(point.x - handle.x, point.y - handle.y) <= SelectionChrome.HANDLE_REACH.value
         }
+    }
 
-    private fun Corner.point(bounds: InkBounds): InkPoint = when (this) {
-        Corner.TopLeft -> InkPoint(bounds.left, bounds.top)
-        Corner.TopRight -> InkPoint(bounds.right, bounds.top)
-        Corner.BottomRight -> InkPoint(bounds.right, bounds.bottom)
-        Corner.BottomLeft -> InkPoint(bounds.left, bounds.bottom)
+    /** A corner of the bounds, or of the chrome around them when [outset] is the chrome's padding. */
+    private fun Corner.point(bounds: InkBounds, outset: Float = 0f): InkPoint = when (this) {
+        Corner.TopLeft -> InkPoint(bounds.left - outset, bounds.top - outset)
+        Corner.TopRight -> InkPoint(bounds.right + outset, bounds.top - outset)
+        Corner.BottomRight -> InkPoint(bounds.right + outset, bounds.bottom + outset)
+        Corner.BottomLeft -> InkPoint(bounds.left - outset, bounds.bottom + outset)
     }
 
     private fun Corner.opposite(): Corner = when (this) {
@@ -1577,7 +1608,6 @@ internal class LassoGesture {
     }
 
     private companion object {
-        const val HANDLE_HIT_PX = 10f
         const val LASSO_EDGE_TOLERANCE_PX = 5f
         const val MIN_RESIZE_SCALE = 0.12f
     }

@@ -242,7 +242,10 @@ internal fun ImageLayer(
                 drawImage(drawn, bitmaps[image.attachmentId], placeholder, density)
             }
 
-            images.singleOrNull { selection?.isImageOnly == true && it.id in heldIds }
+            // Skipped while the lasso is armed, for the reason `ShapeLayer` gives on the same line:
+            // the overlay is drawing the selection and owns every gesture on it.
+            images.takeIf { lassoGesture == null }
+                ?.singleOrNull { selection?.isImageOnly == true && it.id in heldIds }
                 ?.let { drawImageSelection(previewOf(it), accent, handleFill, density) }
         }
         // Last, so it draws over the pictures and is hit-tested before them — see `ShapeLayer.above`.

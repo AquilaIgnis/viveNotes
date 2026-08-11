@@ -1030,7 +1030,14 @@ fun EditorPane(
                         key(pageRevision, table.id) {
                             TableContainer(
                                 table = table,
-                                selected = selection?.holdsTable(table.id) == true,
+                                // Not while the lasso is armed, the condition the object layers
+                                // above take as `interactive`: the overlay covers the page then and
+                                // takes every touch, so a table's gutter handles, move grip and
+                                // scale handle are all out of reach — and drawn under the overlay's
+                                // own box and corner discs they were a second, dead set of handles
+                                // around the same table. The ribbon still reads `selection`, so its
+                                // Row and Column verbs are unaffected.
+                                selected = selection?.holdsTable(table.id) == true && !lassoing,
                                 editorStyle = editorStyle,
                                 defaults = defaults,
                                 initialBlocksFor = initialBlocksFor,
