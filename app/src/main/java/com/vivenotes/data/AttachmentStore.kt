@@ -27,8 +27,8 @@ import java.security.MessageDigest
  * 4000 × 3000; a page shows it about 700 dp wide. Storing the original would keep ten times the bytes
  * to draw the same picture, and — the part that actually hurts — every decode of it would allocate
  * the full bitmap: 4000 × 3000 at 4 bytes a pixel is **48 MB of native memory for one photograph**,
- * against roughly 3 MB as a JPEG on disk. A page with a handful of those does not run out of disk, it
- * runs out of process.
+ * against a couple of hundred kilobytes re-encoded. A page with a handful of those does not run out
+ * of disk, it runs out of process.
  *
  * So [MAX_DIMENSION] is a memory budget written as a length, and the re-encode is where an image
  * feature is made affordable. It is applied once, at the door, rather than at every draw.
@@ -151,7 +151,7 @@ class AttachmentStore(
     }.getOrNull()
 
     private fun Bitmap.compress(): ByteArray = ByteArrayOutputStream().use { out ->
-        compress(Bitmap.CompressFormat.JPEG, QUALITY, out)
+        compress(Bitmap.CompressFormat.WEBP_LOSSY, QUALITY, out)
         out.toByteArray()
     }
 
@@ -167,8 +167,26 @@ class AttachmentStore(
          */
         const val MAX_DIMENSION = 2048
 
-        /** Re-encoded rather than stored as received, so [MAX_DIMENSION] is what reaches the disk. */
-        private const val MIME_TYPE = "image/jpeg"
+        /**
+         * Re-encoded rather than stored as received, so [MAX_DIMENSION] is what reaches the disk.
+         *
+         * **WebP rather than JPEG, and the alpha channel is the reason.** JPEG has none, so every
+         * imported PNG came back with its transparent regions filled — a logo or a cropped sticker
+         * arrived on the page sitting in a black box. Lossy WebP carries alpha (stored losslessly
+         * beside the lossy colour) and is smaller than JPEG at the same quality besides, so the fix
+         * for the transparency bug also shrinks what a sync will one day have to carry.
+         *
+         * Lossy for both cases rather than branching on [Bitmap.hasAlpha]: that flag reports the
+         * bitmap's *config*, not whether any pixel is actually transparent, so a photograph that
+         * happened to arrive as RGBA would be stored lossless at many times the size.
+         *
+         * **Only new imports are affected.** Nothing decodes by extension — files are named by hash
+         * with no suffix and `ImageDecoder` sniffs the container — so the JPEGs already on disk stay
+         * readable, and [AttachmentEntity.mimeType] records per row which is which.
+         */
+        private const val MIME_TYPE = "image/webp"
+
+        /** Quality for [MIME_TYPE]. WebP's scale is its own; 88 is not JPEG's 88. */
         private const val QUALITY = 88
 
         /** The power-of-two divisor `BitmapFactory` and `ImageDecoder` both understand. */
