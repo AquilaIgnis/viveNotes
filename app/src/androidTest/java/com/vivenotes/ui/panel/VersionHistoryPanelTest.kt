@@ -2,7 +2,6 @@ package com.vivenotes.ui.panel
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -50,7 +49,6 @@ class VersionHistoryPanelTest {
                 revisions = listOf(first),
                 selectedRevision = first,
                 preview = preview,
-                previewIncludesInk = true,
             ),
             onRestore = { restored = true },
         )
@@ -66,30 +64,10 @@ class VersionHistoryPanelTest {
     }
 
     @Test
-    fun emptyHistoryExplainsWhenARevisionAppears() {
+    fun emptyHistoryIsReported() {
         setPanel(VersionHistoryState(pageId = "page-1"))
 
-        compose.onNodeWithText(
-            "No earlier versions yet. A checkpoint appears after this page is edited and saved.",
-        ).assertIsDisplayed()
-    }
-
-    @Test
-    fun aLegacyDocumentOnlyVersionCannotClaimToRestoreTheWholePage() {
-        setPanel(
-            VersionHistoryState(
-                pageId = "page-1",
-                revisions = listOf(first),
-                selectedRevision = first,
-                preview = preview,
-                previewIncludesInk = false,
-            ),
-        )
-
-        compose.onNodeWithText(
-            "This version predates ink-aware history, so it cannot restore the complete page.",
-        ).assertIsDisplayed()
-        compose.onNodeWithTag(VersionHistoryPanelTags.RESTORE).assertIsNotEnabled()
+        compose.onNodeWithText("No earlier versions yet").assertIsDisplayed()
     }
 
     private fun setPanel(

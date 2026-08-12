@@ -62,7 +62,7 @@ internal fun VersionHistoryPanelContent(
     )
     Spacer(Modifier.height(6.dp))
     Text(
-        text = "A restore returns the whole page—including ink—to that saved point.",
+        text = "A restore returns the whole page state",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -71,7 +71,7 @@ internal fun VersionHistoryPanelContent(
     when {
         state.loading -> Status("Loading versions…", progress = true)
         state.revisions.isEmpty() && state.error == null -> Status(
-            "No earlier versions yet. A checkpoint appears after this page is edited and saved.",
+            "No earlier versions yet",
         )
         else -> state.revisions.forEach { revision ->
             RevisionRow(
@@ -115,23 +115,12 @@ internal fun VersionHistoryPanelContent(
         Spacer(Modifier.height(6.dp))
         when {
             state.previewLoading -> Status("Loading preview…", progress = true)
-            state.preview != null -> {
-                VersionPreview(state.preview)
-                if (!state.previewIncludesInk) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "This version predates ink-aware history, so it cannot restore the complete page.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
+            state.preview != null -> VersionPreview(state.preview)
         }
         Spacer(Modifier.height(12.dp))
         Button(
             onClick = { confirmingRestore = true },
-            enabled = state.preview != null && state.previewIncludesInk &&
-                !state.previewLoading && !state.restoring,
+            enabled = state.preview != null && !state.previewLoading && !state.restoring,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(VersionHistoryPanelTags.RESTORE),
@@ -146,9 +135,8 @@ internal fun VersionHistoryPanelContent(
             title = { Text("Restore this version?") },
             text = {
                 Text(
-                    "The selected version will replace the page's saved text, layout, placed " +
-                        "objects, and ink. Your current version will be kept in history so you can " +
-                        "return to it.",
+                    "The selected version will replace the page's saved state " +
+                        "Your current version will be kept in history"
                 )
             },
             confirmButton = {

@@ -420,7 +420,7 @@ class MigrationTest {
     }
 
     @Test
-    fun migration12To13MarksExistingRevisionsAsDocumentOnly() {
+    fun migration12To13DropsPrereleaseDocumentOnlyRevisions() {
         helper.createDatabase(ROOM_MIGRATION_DB, 12).apply {
             execSQL(
                 "INSERT INTO notebooks VALUES " +
@@ -447,16 +447,9 @@ class MigrationTest {
             true,
             NotesDatabase.MIGRATION_12_13,
         ).use { migrated ->
-            migrated.query(
-                "SELECT inkFormat, inkEncoding, inkByteCount, inkSha256, length(inkPayload) " +
-                    "FROM page_revisions WHERE id = 'revision'",
-            ).use {
+            migrated.query("SELECT COUNT(*) FROM page_revisions").use {
                 assertEquals(true, it.moveToFirst())
-                assertEquals("none/1", it.getString(0))
-                assertEquals("none", it.getString(1))
-                assertEquals(0, it.getInt(2))
-                assertEquals("", it.getString(3))
-                assertEquals(0, it.getInt(4))
+                assertEquals(0L, it.getLong(0))
             }
         }
     }

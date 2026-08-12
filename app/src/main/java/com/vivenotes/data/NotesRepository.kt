@@ -227,19 +227,12 @@ class NotesRepository(
     suspend fun loadRevision(pageId: String, revisionId: String): PageRevisionLoad {
         val row = revisions.byId(pageId, revisionId) ?: return PageRevisionLoad.NotFound
         val summary = DocumentRevisionPayload.summary(row)
-        return runCatching { DocumentRevisionPayload.unpack(row) }.fold(
-            onSuccess = { doc ->
-                runCatching { InkRevisionPayload.unpack(row) }.fold(
-                    onSuccess = { inkSnapshot ->
-                        PageRevisionLoad.Loaded(
-                            revision = summary,
-                            doc = doc,
-                            includesInk = inkSnapshot != null,
-                        )
-                    },
-                    onFailure = { PageRevisionLoad.Unreadable(summary, it) },
-                )
-            },
+        return runCatching {
+            val doc = DocumentRevisionPayload.unpack(row)
+            InkRevisionPayload.unpack(row)
+            PageRevisionLoad.Loaded(summary, doc)
+        }.fold(
+            onSuccess = { it },
             onFailure = { PageRevisionLoad.Unreadable(summary, it) },
         )
     }
@@ -256,7 +249,7 @@ class NotesRepository(
         }
         val restoredInk = runCatching { InkRevisionPayload.unpack(row) }.getOrElse {
             return PageRevisionLoad.Unreadable(summary, it)
-        } ?: return PageRevisionLoad.InkUnavailable(summary)
+        }
 
         val now = clock()
         val encoded = codec.encodeToString(doc)
@@ -273,7 +266,7 @@ class NotesRepository(
                 pages.updatePreview(pageId, preview, now)
             }
         }
-        return PageRevisionLoad.Loaded(summary, doc, includesInk = true)
+        return PageRevisionLoad.Loaded(summary, doc)
     }
 
     private suspend fun writeDoc(pageId: String, doc: PageDoc) {
@@ -294,7 +287,6 @@ class NotesRepository(
     }
 
     private suspend fun shouldCheckpoint(pageId: String, now: Long): Boolean {
-        if (revisions.newestInkFormat(pageId) != InkRevisionPayload.FORMAT) return true
         val newest = revisions.newestTimestamp(pageId) ?: return true
         return now - newest >= REVISION_CHECKPOINT_INTERVAL_MS
     }
@@ -330,7 +322,7 @@ class NotesRepository(
         ).filter { candidate ->
             runCatching {
                 DocumentRevisionPayload.unpack(candidate)
-                require(InkRevisionPayload.unpack(candidate) != null)
+                InkRevisionPayload.unpack(candidate)
             }.isSuccess
         }
         if (healthyMatches.isEmpty()) {

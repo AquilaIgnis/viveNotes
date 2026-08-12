@@ -263,7 +263,7 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
-        /** Adds the exact active ink state to new page revisions; old rows stay document-only. */
+        /** Adds exact active ink state; prerelease document-only history is not retained. */
         val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(connection: SQLiteConnection) {
                 connection.execSQL(
@@ -283,6 +283,7 @@ abstract class NotesDatabase : RoomDatabase() {
                 connection.execSQL(
                     "ALTER TABLE page_revisions ADD COLUMN inkPayload BLOB NOT NULL DEFAULT X''",
                 )
+                connection.execSQL("DELETE FROM page_revisions")
             }
         }
 

@@ -129,7 +129,7 @@ interface PageRevisionDao {
     suspend fun byId(pageId: String, id: String): PageRevisionEntity?
 
     @Query(
-        "SELECT id, pageId, createdAt, byteCount + inkByteCount AS byteCount, inkFormat " +
+        "SELECT id, pageId, createdAt, byteCount + inkByteCount AS byteCount " +
             "FROM page_revisions " +
             "WHERE pageId = :pageId ORDER BY createdAt DESC, id DESC",
     )
@@ -137,12 +137,6 @@ interface PageRevisionDao {
 
     @Query("SELECT MAX(createdAt) FROM page_revisions WHERE pageId = :pageId")
     suspend fun newestTimestamp(pageId: String): Long?
-
-    @Query(
-        "SELECT inkFormat FROM page_revisions WHERE pageId = :pageId " +
-            "ORDER BY createdAt DESC, id DESC LIMIT 1",
-    )
-    suspend fun newestInkFormat(pageId: String): String?
 
     /** Exact-content candidates used to keep restore toggles from cloning the same checkpoints. */
     @Query(

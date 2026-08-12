@@ -58,7 +58,6 @@ internal data class PackedInkSnapshot(
 /** Compact state-vector encoding; the large immutable point rows remain in their normal tables. */
 internal object InkRevisionPayload {
     const val FORMAT = "ink-refs/1"
-    const val LEGACY_NONE = "none/1"
     private const val ENCODING = "gzip/1"
     private const val MAGIC = 0x56494E4B // VINK
     private const val MAX_ROWS = 1_000_000
@@ -92,9 +91,7 @@ internal object InkRevisionPayload {
         )
     }
 
-    /** Null means the row predates ink-aware history; it never means an intentionally blank page. */
-    fun unpack(row: PageRevisionEntity): InkSnapshot? {
-        if (row.inkFormat == LEGACY_NONE) return null
+    fun unpack(row: PageRevisionEntity): InkSnapshot {
         require(row.inkFormat == FORMAT) { "unknown ink revision format '${row.inkFormat}'" }
         require(row.inkEncoding == ENCODING) {
             "unknown ink revision encoding '${row.inkEncoding}'"

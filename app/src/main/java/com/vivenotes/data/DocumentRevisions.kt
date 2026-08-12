@@ -18,11 +18,9 @@ sealed interface PageRevisionLoad {
     data class Loaded(
         val revision: PageRevisionSummary,
         val doc: PageDoc,
-        val includesInk: Boolean = true,
     ) : PageRevisionLoad
     data object NotFound : PageRevisionLoad
     data class Unreadable(val revision: PageRevisionSummary, val cause: Throwable) : PageRevisionLoad
-    data class InkUnavailable(val revision: PageRevisionSummary) : PageRevisionLoad
 }
 
 /** Compression and integrity boundary for revision payloads. */
@@ -76,7 +74,6 @@ internal object DocumentRevisionPayload {
             row.pageId,
             row.createdAt,
             row.byteCount + row.inkByteCount,
-            row.inkFormat,
         )
 }
 

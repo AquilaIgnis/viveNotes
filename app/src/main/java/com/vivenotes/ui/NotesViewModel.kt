@@ -340,7 +340,6 @@ data class VersionHistoryState(
     val revisions: List<PageRevisionSummary> = emptyList(),
     val selectedRevision: PageRevisionSummary? = null,
     val preview: PageDoc? = null,
-    val previewIncludesInk: Boolean = false,
     val previewLoading: Boolean = false,
     val restoring: Boolean = false,
     val error: String? = null,
@@ -797,7 +796,6 @@ class NotesViewModel(
         _versionHistory.value = state.copy(
             selectedRevision = revision,
             preview = null,
-            previewIncludesInk = false,
             previewLoading = true,
             error = null,
             message = null,
@@ -810,10 +808,7 @@ class NotesViewModel(
         val history = _versionHistory.value
         val pageId = history.pageId ?: return
         val revision = history.selectedRevision ?: return
-        if (
-            history.preview == null || !history.previewIncludesInk || history.restoring ||
-            _uiState.value.selectedPageId != pageId
-        ) return
+        if (history.preview == null || history.restoring || _uiState.value.selectedPageId != pageId) return
 
         versionHistoryLoad?.cancel()
         _versionHistory.value = history.copy(restoring = true, error = null, message = null)
@@ -850,7 +845,6 @@ class NotesViewModel(
                             revisions = revisions,
                             selectedRevision = selected,
                             preview = restored.doc,
-                            previewIncludesInk = true,
                             message = "Version restored. The version it replaced is still in history.",
                         )
                     }
@@ -864,12 +858,6 @@ class NotesViewModel(
                         _versionHistory.value = history.copy(
                             restoring = false,
                             error = "That version is damaged and cannot be restored.",
-                        )
-                    }
-                    is PageRevisionLoad.InkUnavailable -> {
-                        _versionHistory.value = history.copy(
-                            restoring = false,
-                            error = "This older version has no ink snapshot and cannot restore the complete page.",
                         )
                     }
                 }
@@ -904,7 +892,6 @@ class NotesViewModel(
         _versionHistory.value = when (loaded) {
             is PageRevisionLoad.Loaded -> current.copy(
                 preview = loaded.doc,
-                previewIncludesInk = loaded.includesInk,
                 previewLoading = false,
                 error = null,
             )
@@ -915,10 +902,6 @@ class NotesViewModel(
             is PageRevisionLoad.Unreadable -> current.copy(
                 previewLoading = false,
                 error = "That version is damaged and cannot be previewed.",
-            )
-            is PageRevisionLoad.InkUnavailable -> current.copy(
-                previewLoading = false,
-                error = "This older version has no ink snapshot.",
             )
             null -> current.copy(
                 previewLoading = false,

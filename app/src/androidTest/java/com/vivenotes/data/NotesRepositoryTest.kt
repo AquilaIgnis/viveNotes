@@ -232,7 +232,6 @@ class NotesRepositoryTest {
         now += NotesRepository.REVISION_CHECKPOINT_INTERVAL_MS
         repository.addStroke(stroke("ink-b", 0xFF445566.toInt()))
         val revisionWithA = repository.revisionHistory(pageId).first()
-        assertTrue((repository.loadRevision(pageId, revisionWithA.id) as PageRevisionLoad.Loaded).includesInk)
         repository.setInkColors(
             mapOf("ink-a" to com.vivenotes.data.db.StrokeColor(0xFF778899.toInt(), false)),
         )

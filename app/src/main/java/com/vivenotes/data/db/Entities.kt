@@ -135,7 +135,7 @@ data class PageRevisionEntity(
     val byteCount: Int,
     val sha256: String,
     val payload: ByteArray,
-    /** `none/1` only for revisions created before schema 13, whose historical ink is unknowable. */
+    /** Defaults exist only because SQLite requires them while schema 13 adds these columns. */
     @ColumnInfo(defaultValue = "'none/1'") val inkFormat: String = "none/1",
     @ColumnInfo(defaultValue = "'none'") val inkEncoding: String = "none",
     @ColumnInfo(defaultValue = "0") val inkByteCount: Int = 0,
@@ -169,7 +169,6 @@ data class PageRevisionSummary(
     val pageId: String,
     val createdAt: Long,
     val byteCount: Int,
-    val inkFormat: String = "none/1",
 )
 
 /** A notebook with its sections, for the navigation rail's expandable tree. */
