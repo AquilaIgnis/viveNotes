@@ -153,6 +153,17 @@ data class InkStrokeEntity(
     val brushVersion: Int,
     val sizeDp: Float,
     val colorArgb: Int,
+    /**
+     * Whether [colorArgb] was the automatic colour rather than one the user picked.
+     *
+     * Recorded so Switch Background can re-resolve it — see [com.vivenotes.data.automaticColorOr],
+     * which owns the rule and explains the tri-state. Stored *beside* the resolved colour rather
+     * than instead of it, so a build that does not know this column still finds a colour that was
+     * correct when it was written.
+     *
+     * Null on every row older than schema 11, meaning the intent was never recorded.
+     */
+    val colorFollowsTheme: Boolean? = null,
     val epsilon: Float,
     /**
      * The pen's stabilization level when the stroke was drawn, 0–5.
@@ -352,6 +363,15 @@ data class InkMoveWithTargets(
  * Not tied to a page by a foreign key, deliberately. One picture can appear on several pages, which a
  * `pageId` column would have to lie about.
  */
+/**
+ * A stroke's colour together with whether it was automatic.
+ *
+ * The pair travels as one because the two are only meaningful together: undoing a recolour has to
+ * put back the colour *and* whether it was a choice, or the stroke comes back looking right and
+ * stops following the canvas. See [com.vivenotes.data.automaticColorOr].
+ */
+data class StrokeColor(val argb: Int, val followsTheme: Boolean?)
+
 @Entity(tableName = "attachments")
 data class AttachmentEntity(
     /** SHA-256 of the stored bytes, lowercase hex. Also the file's name on disk. */

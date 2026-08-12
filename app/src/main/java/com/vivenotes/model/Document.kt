@@ -347,6 +347,16 @@ sealed interface Outline {
         val kind: ShapeKind = ShapeKind.DEFAULT,
         val segments: List<ShapeSegment> = emptyList(),
         val borderArgb: Int = 0xFF000000.toInt(),
+        /**
+         * Whether [borderArgb] was the automatic colour rather than one the user picked.
+         *
+         * Null on every shape drawn before this was recorded, which is read as "infer from the
+         * colour" — `com.vivenotes.data.automaticColorOr` owns that rule and explains it. Kept
+         * beside the resolved colour instead of replacing it with null, the way [Equation] does,
+         * so an older build reading a newer document still finds a usable border colour rather
+         * than failing to decode one.
+         */
+        val borderFollowsTheme: Boolean? = null,
         val borderWidth: Float = 2f,
         val lineType: LineType = LineType.Solid,
         val fillArgb: Int? = null,
@@ -516,6 +526,8 @@ sealed interface Outline {
         val headerRow: Boolean = false,
         val headerColumn: Boolean = false,
         val borderArgb: Int = 0xFF000000.toInt(),
+        /** Whether [borderArgb] was automatic — see [Shape.borderFollowsTheme], same rule. */
+        val borderFollowsTheme: Boolean? = null,
         val borderWidth: Float = 1f,
         val fillArgb: Int? = null,
         /**

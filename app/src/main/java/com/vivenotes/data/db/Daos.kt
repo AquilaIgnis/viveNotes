@@ -116,8 +116,18 @@ interface InkStrokeDao {
     @Query("UPDATE ink_strokes SET deletedAt = NULL WHERE id IN (:ids)")
     suspend fun restore(ids: List<String>)
 
-    @Query("UPDATE ink_strokes SET colorArgb = :colorArgb WHERE id = :id")
-    suspend fun setColor(id: String, colorArgb: Int)
+    /**
+     * Sets a stroke's colour and whether it is automatic.
+     *
+     * Both, because undo has to restore the pair — a recolour writes `followsTheme = false`, and
+     * undoing it must put back what the stroke was before rather than leaving it deliberate. See
+     * `PageStroke.recolor`, which makes the same change to the in-memory copy.
+     */
+    @Query(
+        "UPDATE ink_strokes SET colorArgb = :colorArgb, colorFollowsTheme = :followsTheme " +
+            "WHERE id = :id",
+    )
+    suspend fun setColor(id: String, colorArgb: Int, followsTheme: Boolean?)
 
     @Query("UPDATE ink_strokes SET groupId = :groupId WHERE id = :id")
     suspend fun setGroup(id: String, groupId: String?)

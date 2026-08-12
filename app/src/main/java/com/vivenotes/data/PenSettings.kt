@@ -299,6 +299,42 @@ fun PenPreset.forCanvasTheme(isDark: Boolean): PenPreset =
         this
     }
 
+/**
+ * The colour to actually paint with, for anything that recorded whether its colour was automatic.
+ *
+ * **The settings' `forCanvasTheme` family resolves a colour for the tool; this resolves it for the
+ * mark already on the page**, and the two exist for opposite halves of the same rule. Resolving only
+ * at the tool bakes the answer into the stroke, so Switch Background left every automatic mark at
+ * whatever the canvas happened to be when it was drawn — white ink staying white on white paper,
+ * while the text beside it flipped. Text never had the bug because it stores no colour at all and
+ * reads [com.vivenotes.ui.theme.CanvasColors.text] at paint time; this is how ink and objects get to
+ * say the same thing.
+ *
+ * [followsTheme] is deliberately tri-state:
+ *  - `true` — automatic, drawn with the pen or shape that follows the canvas. Always resolves.
+ *  - `false` — a colour the user picked. Never resolves; the codebase's standing rule is that a
+ *    deliberate choice survives the theme changing under it.
+ *  - `null` — **written before any of this was recorded.** Its intent is genuinely unknown, so it is
+ *    inferred: pure white and pure black are what the automatic pen resolved to and nothing else, so
+ *    they are read as automatic and every other colour is read as chosen. The inference is confined
+ *    to null, so it applies to old marks only and never to anything drawn from now on.
+ *
+ * The inference can be wrong in exactly one way — a stroke where white or black was picked from the
+ * palette by hand — and it fails safe: that mark flips instead of disappearing.
+ */
+fun automaticColorOr(stored: Int, followsTheme: Boolean?, canvasInk: Int): Int = when {
+    followsTheme == true -> canvasInk
+    followsTheme == false -> stored
+    stored == AUTOMATIC_LIGHT || stored == AUTOMATIC_DARK -> canvasInk
+    else -> stored
+}
+
+/** What the automatic pen resolves to on a dark canvas — see [PenPreset.forCanvasTheme]. */
+const val AUTOMATIC_LIGHT: Int = 0xFFFFFFFF.toInt()
+
+/** And on a light one. */
+const val AUTOMATIC_DARK: Int = 0xFF000000.toInt()
+
 val PEN_COLORS: List<Int> = listOf(
     0xFFFFFFFF, 0xFF000000, 0xFFE53935, 0xFF00BCD4, 0xFF00C853,
     0xFFFFD600, 0xFFFF9100, 0xFF9C27B0, 0xFF2962FF,

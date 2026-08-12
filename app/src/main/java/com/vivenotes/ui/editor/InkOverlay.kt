@@ -55,6 +55,7 @@ import com.vivenotes.ink.InkLassoSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
 import com.vivenotes.ink.PageStroke
+import com.vivenotes.ink.CanvasInkPainter
 import com.vivenotes.ink.Ruler
 import com.vivenotes.ink.TableBounds
 import com.vivenotes.ink.pageBounds
@@ -188,6 +189,17 @@ internal fun InkOverlay(
 ) {
     val renderer = remember { CanvasStrokeRenderer.create() }
     var wetView by remember { mutableStateOf<InProgressStrokesView?>(null) }
+
+    // What automatic ink resolves to on this canvas. Strokes drawn with the automatic pen follow the
+    // page they are on, exactly as the text beside them does — Switch Background used to leave them
+    // at whatever the canvas was when they were drawn, which on a flip meant white ink on white
+    // paper.
+    //
+    // **The painter is consulted at the draw and nowhere else.** Everything below still holds the
+    // stored strokes, because a stroke's identity is what selection, erase and recognition are keyed
+    // on — see [CanvasInkPainter], which exists because theming the list instead broke all three.
+    val canvasInkArgb = LocalCanvasColors.current.text.toArgb()
+    val inkPainter = remember(strokes, canvasInkArgb) { CanvasInkPainter(canvasInkArgb) }
 
     // Read inside callbacks that outlive the composition that created them.
     val currentBrush by rememberUpdatedState(brush)
@@ -345,7 +357,9 @@ internal fun InkOverlay(
                     strokeMatrix.preScale(pageStroke.scaleX, pageStroke.scaleY)
                     val checkpoint = native.save()
                     native.concat(strokeMatrix)
-                    renderer.draw(native, pageStroke.stroke, strokeMatrix)
+                    // The only place the canvas colour reaches the ink. The stroke itself is
+                    // untouched, so its projection key still matches what the selection holds.
+                    renderer.draw(native, inkPainter.paint(pageStroke), strokeMatrix)
                     native.restoreToCount(checkpoint)
                 }
                 if (currentLassoing && gestureRevision >= 0) {

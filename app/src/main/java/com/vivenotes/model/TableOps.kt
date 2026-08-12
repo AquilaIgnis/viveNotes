@@ -53,6 +53,7 @@ fun newTable(
     headerRow: Boolean = false,
     headerColumn: Boolean = false,
     borderArgb: Int = 0xFF000000.toInt(),
+    borderFollowsTheme: Boolean? = null,
     borderWidth: Float = 1f,
     fillArgb: Int? = null,
     /** A ruling for the stylus rather than a grid of text fields — TA15. */
@@ -78,6 +79,7 @@ fun newTable(
         headerRow = headerRow,
         headerColumn = headerColumn,
         borderArgb = borderArgb,
+        borderFollowsTheme = borderFollowsTheme,
         borderWidth = borderWidth,
         fillArgb = fillArgb,
         inkOnly = inkOnly,

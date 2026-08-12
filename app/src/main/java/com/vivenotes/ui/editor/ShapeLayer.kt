@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -31,6 +32,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.vivenotes.data.automaticColorOr
+import com.vivenotes.ui.theme.LocalCanvasColors
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
@@ -128,6 +131,9 @@ internal fun ShapeLayer(
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val handleFill = MaterialTheme.colorScheme.surface
+    // What a border drawn with the automatic colour paints as on this page — the canvas's ink, the
+    // same source the text and the ink use. See `automaticColorOr`.
+    val canvasInkArgb = LocalCanvasColors.current.text.toArgb()
 
     // Read by the gesture rather than captured by it. The handler below runs for the lifetime of the
     // layer and is never rebuilt, so everything it needs has to be reachable through a holder whose
@@ -381,7 +387,7 @@ internal fun ShapeLayer(
                     ) {
                         return@forEach
                     }
-                    drawShape(drawn)
+                    drawShape(drawn, canvasInkArgb)
                 }
             }
             // Handles only for a lone shape, and only while this layer is the one that would
@@ -464,8 +470,15 @@ private fun Outline.Shape.withLassoPreview(gesture: LassoGesture): Outline.Shape
     }
 }
 
-/** Fill first, then the border, so a stroke is never half-covered by the paint it surrounds. */
-private fun DrawScope.drawShape(shape: Outline.Shape) {
+/**
+ * Fill first, then the border, so a stroke is never half-covered by the paint it surrounds.
+ *
+ * [canvasInkArgb] is what a border drawn with the automatic colour resolves to on this page — the
+ * same treatment the ink beside it gets, so Switch Background does not leave a white outline on
+ * white paper. Only the border follows: a fill is a colour that was chosen off a palette, never an
+ * automatic one, so flipping it would be overriding a decision rather than completing one.
+ */
+private fun DrawScope.drawShape(shape: Outline.Shape, canvasInkArgb: Int) {
     // What a shape covers, which is not the path it is stroked along — see `fillRegion`. Walking the
     // visible segments as one path is what this did, and it was only ever right for a shape with a
     // single closed contour: it filled a cube's twelve edges as one self-crossing loop, and would
@@ -476,7 +489,9 @@ private fun DrawScope.drawShape(shape: Outline.Shape) {
         }
     }
 
-    val border = Color(shape.borderArgb)
+    val border = Color(
+        automaticColorOr(shape.borderArgb, shape.borderFollowsTheme, canvasInkArgb),
+    )
     // By contour rather than by segment: a dash pattern restarts on every path it is given, so
     // stroking a rim's arcs one at a time doubles the dots at each joint. See [ShapeContour].
     shape.segments.contours().forEach { contour ->

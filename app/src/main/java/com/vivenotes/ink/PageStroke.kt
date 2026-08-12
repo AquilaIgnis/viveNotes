@@ -7,6 +7,9 @@ import androidx.ink.geometry.MutableVec
 import androidx.ink.strokes.ExperimentalInkEraserApi
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
+import com.vivenotes.data.automaticColorOr
+import java.util.IdentityHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * A finished stroke together with the row it came from.
@@ -28,7 +31,34 @@ data class PageStroke(
     val brushFamily: String = "pressure-pen",
     val brushVersion: Int = InkCodec.BRUSH_VERSION,
     val stabilization: Int = 0,
+    /**
+     * Whether this stroke's colour was the automatic one — carried alongside the mesh so the draw
+     * pass can re-resolve it, and so a duplicate keeps the intent rather than the answer.
+     *
+     * The [stroke]'s own brush still holds a concrete colour, because a `Brush` has nowhere to put
+     * "it depends"; this is what says whether that colour is a decision or a derivation. See
+     * [com.vivenotes.data.automaticColorOr].
+     */
+    val colorFollowsTheme: Boolean? = null,
     val groupId: String? = null,
+    /**
+     * What makes this projection *this* projection, for as long as it is on the page.
+     *
+     * **This used to be `System.identityHashCode(stroke)`, and that was a trap.** Selection, the
+     * lasso's move preview and recognition are all keyed on [projectionKey], so deriving it from the
+     * allocation meant any code that rebuilt a `Stroke` silently renumbered every selection pointing
+     * at it. Nothing failed loudly: the selection simply stopped matching, and
+     * `InkSelectionRenderer.renderInkSelection` — which filters its input by exactly this key —
+     * rendered an empty square and handed it to the formula model, which read the blank page it was
+     * given. Recolouring a held selection did it, and so did the first version of Switch Background's
+     * ink fix.
+     *
+     * Carrying the number instead means a projection keeps its identity through anything `copy` can
+     * do to it — a rebound brush, a new colour, a move, a regroup — because those all produce the
+     * same projection wearing different paint. Only a genuinely *new* projection mints a new number,
+     * which is the constructor's default and, explicitly, the pieces an erase splits a stroke into.
+     */
+    val projection: Int = newProjection(),
 ) {
     /**
      * This projection's page-space rectangle, or null once a cut has left it with no geometry.
@@ -56,8 +86,13 @@ data class PageStroke(
 /** One point in the page coordinate system, where persisted ink and lasso paths live. */
 data class InkPoint(val x: Float, val y: Float)
 
-/** Identifies one live projection, including a disconnected piece that shares its stored row id. */
-data class InkProjectionKey(val strokeId: String, val strokeIdentity: Int)
+/**
+ * Identifies one live projection, including a disconnected piece that shares its stored row id.
+ *
+ * [projection] was `System.identityHashCode(stroke)` and is now a number the projection carries —
+ * see [PageStroke.projection] for what that bought.
+ */
+data class InkProjectionKey(val strokeId: String, val projection: Int)
 
 /** A completed lasso drag, ready to apply immediately and persist for replay. */
 data class InkLassoMove(
@@ -104,8 +139,13 @@ data class InkLassoSelection(
     val bounds: InkBounds,
 )
 
+/** Mints a projection number. Process-local and never stored — a projection lives on a page, not in a file. */
+internal fun newProjection(): Int = projectionCounter.incrementAndGet()
+
+private val projectionCounter = AtomicInteger()
+
 internal val PageStroke.projectionKey: InkProjectionKey
-    get() = InkProjectionKey(id, System.identityHashCode(stroke))
+    get() = InkProjectionKey(id, projection)
 
 internal fun PageStroke.strokeToPageTransform(): AffineTransform =
     ImmutableAffineTransform(scaleX, 0f, offsetX, 0f, scaleY, offsetY)
@@ -187,10 +227,20 @@ internal fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<Strin
                 // Erased down to nothing is erased. The other branch gets this for free — an empty
                 // mesh splits into no components — but this one would keep a stroke with no
                 // geometry, invisible on the page and fatal to the next comparison it meets.
-                if (cut.hasGeometry) listOf(pageStroke.copy(stroke = cut)) else emptyList()
+                // A fresh projection, not the one that went in: what comes out has different
+                // geometry, and anything still holding the old key is holding a shape that no
+                // longer exists. See [PageStroke.projection].
+                if (cut.hasGeometry) {
+                    listOf(pageStroke.copy(stroke = cut, projection = newProjection()))
+                } else {
+                    emptyList()
+                }
             } else {
+                // And one each, so the pieces are told apart — the case the key exists for.
                 cut.split(strokeToWorldTransform = pageStroke.strokeToPageTransform(), tolerance = 0f)
-                    .map { component -> pageStroke.copy(stroke = component) }
+                    .map { component ->
+                        pageStroke.copy(stroke = component, projection = newProjection())
+                    }
             }
         }
     }
@@ -231,7 +281,8 @@ internal fun List<PageStroke>.eraseObjects(
                         otherShapeToThis = pageStroke.pageToStrokeTransform(),
                     )
                 }
-                .map { component -> pageStroke.copy(stroke = component) }
+                // One projection per surviving region, as in [subtract].
+                .map { component -> pageStroke.copy(stroke = component, projection = newProjection()) }
         }
     }
 }
@@ -260,7 +311,14 @@ internal fun List<PageStroke>.selectWithLasso(
     )
 }
 
-/** Rebinds selected immutable meshes to a brush carrying the requested colour. */
+/**
+ * Rebinds selected immutable meshes to a brush carrying the requested colour.
+ *
+ * **Clears the automatic flag**, because picking a colour off the palette is exactly the act that
+ * makes one deliberate — leaving it set would have the stroke go back to the canvas's ink the next
+ * time the background was switched, silently discarding the choice just made. Explicitly `false`
+ * rather than null: this stroke's intent is now known, and null means only "never recorded".
+ */
 internal fun List<PageStroke>.recolor(ids: Collection<String>, colorArgb: Int): List<PageStroke> {
     val targets = ids.toSet()
     return map { pageStroke ->
@@ -269,9 +327,48 @@ internal fun List<PageStroke>.recolor(ids: Collection<String>, colorArgb: Int): 
                 stroke = pageStroke.stroke.copy(
                     pageStroke.stroke.brush.copyWithColorIntArgb(colorArgb),
                 ),
+                colorFollowsTheme = false,
             )
         } else {
             pageStroke
+        }
+    }
+}
+
+/**
+ * What to paint an automatic stroke with on this canvas, leaving the stroke itself alone.
+ *
+ * **A view, not an edit, and deliberately not a new list of [PageStroke]s.** The obvious shape for
+ * this — map the list, rebinding automatic strokes to a themed brush — is wrong in a way that does
+ * not show up on screen: [projectionKey] is `System.identityHashCode(stroke)`, so handing the page a
+ * themed copy silently renumbers every projection. A lasso selection captured against those copies
+ * then matches nothing in the list the view model holds, which is what
+ * `InkSelectionRenderer.renderInkSelection` filters by — so recognition renders a blank square and
+ * reads an empty page, and the lasso's own move preview stops finding the strokes it is moving.
+ *
+ * So identity stays with the stored stroke and only the paint is derived. The themed [Stroke] is
+ * built once per stroke and cached by identity; `Stroke.copy(brush)` rebinds the existing immutable
+ * mesh rather than rebuilding it, so this costs an object, not a re-tessellation.
+ *
+ * Scoped to one canvas colour — build a new painter when the canvas flips, which is what the call
+ * site's `remember` key does.
+ */
+internal class CanvasInkPainter(private val canvasInkArgb: Int) {
+
+    private val painted = IdentityHashMap<Stroke, Stroke>()
+
+    fun paint(pageStroke: PageStroke): Stroke {
+        val stroke = pageStroke.stroke
+        val resolved = automaticColorOr(
+            stored = stroke.brush.colorIntArgb,
+            followsTheme = pageStroke.colorFollowsTheme,
+            canvasInk = canvasInkArgb,
+        )
+        // Already the right colour — the common case on a page of deliberately coloured ink, and
+        // worth not filling the cache for.
+        if (resolved == stroke.brush.colorIntArgb) return stroke
+        return painted.getOrPut(stroke) {
+            stroke.copy(stroke.brush.copyWithColorIntArgb(resolved))
         }
     }
 }

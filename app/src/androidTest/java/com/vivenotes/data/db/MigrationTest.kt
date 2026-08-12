@@ -313,4 +313,62 @@ class MigrationTest {
             }
         }
     }
+
+    /**
+     * Ink drawn before the automatic flag existed must come through as NULL, not as false.
+     *
+     * The distinction is the whole fix: false means "the user picked this colour, leave it alone",
+     * and defaulting old rows to it would permanently freeze every stroke already on a page at the
+     * colour the canvas happened to be when it was drawn — which is the bug. NULL means "never
+     * recorded", which is what lets `automaticColorOr` infer it and let the ink follow the page.
+     */
+    @Test
+    fun migration10To11LeavesExistingStrokesUnrecordedRatherThanDeliberate() {
+        val driver = AndroidSQLiteDriver()
+
+        driver.open(file.absolutePath).use { connection ->
+            connection.execSQL(
+                """
+                CREATE TABLE ink_strokes (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    pageId TEXT NOT NULL,
+                    seq INTEGER NOT NULL,
+                    brushFamily TEXT NOT NULL,
+                    brushVersion INTEGER NOT NULL,
+                    sizeDp REAL NOT NULL,
+                    colorArgb INTEGER NOT NULL,
+                    epsilon REAL NOT NULL,
+                    stabilization INTEGER NOT NULL,
+                    minX REAL NOT NULL,
+                    minY REAL NOT NULL,
+                    maxX REAL NOT NULL,
+                    maxY REAL NOT NULL,
+                    points BLOB NOT NULL,
+                    enc TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    deletedAt INTEGER,
+                    groupId TEXT
+                )
+                """.trimIndent(),
+            )
+            // -1 is 0xFFFFFFFF: what the automatic pen resolved to on a dark canvas, and what every
+            // stroke drawn that way was stored as.
+            connection.execSQL(
+                "INSERT INTO ink_strokes VALUES ('s1', 'p1', 0, 'pressure-pen', 1, 2.0, -1, " +
+                    "0.1, 0, 0.0, 0.0, 1.0, 1.0, X'00', 'v1', 42, NULL, NULL)",
+            )
+
+            NotesDatabase.MIGRATION_10_11.migrate(connection)
+
+            connection.prepare(
+                "SELECT colorArgb, colorFollowsTheme FROM ink_strokes WHERE id = 's1'",
+            ).use {
+                assertEquals(true, it.step())
+                // The stored colour is untouched — the migration adds a column, it does not repaint
+                // ink the user has already drawn.
+                assertEquals(-1, it.getLong(0).toInt())
+                assertEquals(true, it.isNull(1))
+            }
+        }
+    }
 }

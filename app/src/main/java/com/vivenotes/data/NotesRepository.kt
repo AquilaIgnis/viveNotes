@@ -2,6 +2,7 @@ package com.vivenotes.data
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
 import com.vivenotes.data.db.InkEraseWithTargets
@@ -231,9 +232,11 @@ class NotesRepository(
         ink.restore(ids)
     }
 
-    suspend fun setInkColors(colors: Map<String, Int>) {
+    suspend fun setInkColors(colors: Map<String, StrokeColor>) {
         if (colors.isEmpty()) return
-        db.withTransaction { colors.forEach { (id, color) -> ink.setColor(id, color) } }
+        db.withTransaction {
+            colors.forEach { (id, color) -> ink.setColor(id, color.argb, color.followsTheme) }
+        }
     }
 
     suspend fun setInkGroups(groups: Map<String, String?>) {

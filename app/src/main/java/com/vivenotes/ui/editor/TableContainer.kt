@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -52,6 +53,7 @@ import com.vivenotes.richtext.EditorStyle
 import com.vivenotes.richtext.OutlineEditText
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.data.automaticColorOr
 import com.vivenotes.ui.theme.LocalCanvasColors
 
 /**
@@ -313,7 +315,15 @@ internal fun TableContainer(
                     heldRow = (held as? TableAxis.Row)?.index,
                     heldColumn = (held as? TableAxis.Column)?.index,
                     heldTint = accent.copy(alpha = HELD_TINT_ALPHA),
-                    ruleColor = Color(live.borderArgb),
+                    // A ruling drawn with the automatic border follows the page it is on, as the
+                    // text in its cells already does — see `automaticColorOr`.
+                    ruleColor = Color(
+                        automaticColorOr(
+                            live.borderArgb,
+                            live.borderFollowsTheme,
+                            canvas.text.toArgb(),
+                        ),
+                    ),
                     ruleWidth = live.borderWidth,
                     fill = live.fillArgb?.let(::Color),
                     headerTint = canvas.text.copy(alpha = HEADER_TINT_ALPHA),

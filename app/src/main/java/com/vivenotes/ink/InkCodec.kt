@@ -328,7 +328,18 @@ object InkCodec {
         seq: Int,
         pen: PenPreset,
         now: Long = System.currentTimeMillis(),
-    ): InkStrokeEntity = encode(stroke, pageId, seq, familyId(pen), pen.stabilization, now)
+    ): InkStrokeEntity = encode(
+        stroke,
+        pageId,
+        seq,
+        familyId(pen),
+        pen.stabilization,
+        now,
+        // The pen's own flag, not a reading of the colour: this is the one moment the intent is
+        // actually known, and recording it here is what keeps Switch Background from having to
+        // guess later.
+        colorFollowsTheme = pen.colorFollowsTheme,
+    )
 
     /**
      * A highlighter stroke.
@@ -343,7 +354,18 @@ object InkCodec {
         seq: Int,
         highlighter: HighlighterSettings,
         now: Long = System.currentTimeMillis(),
-    ): InkStrokeEntity = encode(stroke, pageId, seq, FAMILY_HIGHLIGHTER, stabilization = 0, now)
+    ): InkStrokeEntity = encode(
+        stroke,
+        pageId,
+        seq,
+        FAMILY_HIGHLIGHTER,
+        stabilization = 0,
+        now,
+        // Never automatic. A highlighter is only a highlighter because its colour is translucent,
+        // so there is no such thing as a highlight that follows the canvas — flipping one to the
+        // page's ink colour would paint an opaque band over the writing it is marking.
+        colorFollowsTheme = false,
+    )
 
     private fun encode(
         stroke: Stroke,
@@ -352,6 +374,7 @@ object InkCodec {
         brushFamily: String,
         stabilization: Int,
         now: Long,
+        colorFollowsTheme: Boolean?,
         groupId: String? = null,
     ): InkStrokeEntity {
         val box = stroke.shape.computeBoundingBox()
@@ -364,6 +387,7 @@ object InkCodec {
             brushVersion = BRUSH_VERSION,
             sizeDp = stroke.brush.size,
             colorArgb = stroke.brush.colorIntArgb,
+            colorFollowsTheme = colorFollowsTheme,
             epsilon = stroke.brush.epsilon,
             stabilization = stabilization,
             // An empty stroke has no bounding box. It also has nothing to draw, so zeroes are the
@@ -396,6 +420,9 @@ object InkCodec {
             brushVersion = source.brushVersion,
             sizeDp = stroke.brush.size,
             colorArgb = stroke.brush.colorIntArgb,
+            // Copied from the source rather than re-derived: a duplicate of an automatic stroke is
+            // still automatic, and a duplicate of a red one is still red.
+            colorFollowsTheme = source.colorFollowsTheme,
             epsilon = stroke.brush.epsilon,
             stabilization = source.stabilization,
             minX = box?.xMin ?: 0f,

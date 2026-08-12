@@ -51,6 +51,7 @@ import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.data.ViewSettingsStore
+import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
 import com.vivenotes.data.db.InkEraseWithTargets
@@ -154,8 +155,8 @@ private sealed interface InkHistoryMutation {
     data class MoveOperation(val id: String) : InkHistoryMutation
 
     data class RecolorStrokes(
-        val before: Map<String, Int>,
-        val after: Map<String, Int>,
+        val before: Map<String, StrokeColor>,
+        val after: Map<String, StrokeColor>,
     ) : InkHistoryMutation
 
     data class RegroupStrokes(
@@ -1217,6 +1218,7 @@ class NotesViewModel(
                             brushFamily = row.brushFamily,
                             brushVersion = row.brushVersion,
                             stabilization = row.stabilization,
+                            colorFollowsTheme = row.colorFollowsTheme,
                             groupId = row.groupId,
                         )
                     }
@@ -1323,6 +1325,7 @@ class NotesViewModel(
                 brushFamily = entity.brushFamily,
                 brushVersion = entity.brushVersion,
                 stabilization = entity.stabilization,
+                colorFollowsTheme = entity.colorFollowsTheme,
             ),
             mutation = InkHistoryMutation.AddStrokes(listOf(entity.id)),
         )
@@ -1363,6 +1366,9 @@ class NotesViewModel(
             kind = shape.kind,
             segments = segments,
             borderArgb = shape.borderColorArgb,
+            // Carried from the pane onto the shape, so the border keeps following the canvas after
+            // it is drawn rather than freezing at whatever the page was at the time.
+            borderFollowsTheme = shape.colorFollowsTheme,
             borderWidth = shape.borderWidth.toFloat(),
             lineType = shape.lineType,
             fillArgb = shape.fillArgb,
@@ -1498,7 +1504,15 @@ class NotesViewModel(
     fun recolorShapes(shapeIds: Set<String>, argb: Int) {
         if (shapeIds.isEmpty()) return
         editShapes { shapes ->
-            shapes.map { if (it.id in shapeIds) it.copy(borderArgb = argb) else it }
+            // Picking a colour is what makes it deliberate, so the border stops following the
+            // canvas — the same thing `PageStroke.recolor` does to a stroke.
+            shapes.map {
+                if (it.id in shapeIds) {
+                    it.copy(borderArgb = argb, borderFollowsTheme = false)
+                } else {
+                    it
+                }
+            }
         }
     }
 
@@ -1803,6 +1817,7 @@ class NotesViewModel(
             headerRow = settings.headerRow,
             headerColumn = settings.headerColumn,
             borderArgb = settings.borderColorArgb,
+            borderFollowsTheme = settings.colorFollowsTheme,
             borderWidth = settings.borderWidth.toFloat(),
             fillArgb = settings.fillArgb,
             // A ruling for the stylus rather than a grid of text fields — `docs/tablePlan.md` TA15,
@@ -1923,7 +1938,13 @@ class NotesViewModel(
     fun recolorTables(tableIds: Set<String>, argb: Int) {
         if (tableIds.isEmpty()) return
         editTables { tables ->
-            tables.map { if (it.id in tableIds) it.copy(borderArgb = argb) else it }
+            tables.map {
+                if (it.id in tableIds) {
+                    it.copy(borderArgb = argb, borderFollowsTheme = false)
+                } else {
+                    it
+                }
+            }
         }
     }
 
@@ -2221,6 +2242,7 @@ class NotesViewModel(
                 brushFamily = entity.brushFamily,
                 brushVersion = entity.brushVersion,
                 stabilization = entity.stabilization,
+                colorFollowsTheme = entity.colorFollowsTheme,
                 groupId = entity.groupId,
             )
         }
@@ -2241,9 +2263,12 @@ class NotesViewModel(
         if (readOnlyPageId == pageId) return
         val before = _strokes.value
         val oldColors = before.filter { it.id in ids }
-            .associate { it.id to it.stroke.brush.colorIntArgb }
-        if (oldColors.isEmpty() || oldColors.values.all { it == colorArgb }) return
-        val newColors = oldColors.keys.associateWith { colorArgb }
+            .associate { it.id to StrokeColor(it.stroke.brush.colorIntArgb, it.colorFollowsTheme) }
+        // An automatic stroke whose resolved colour already matches is still a change: it is about
+        // to stop following the canvas, which the colour alone cannot tell you.
+        if (oldColors.isEmpty()) return
+        if (oldColors.values.all { it.argb == colorArgb && it.followsTheme == false }) return
+        val newColors = oldColors.keys.associateWith { StrokeColor(colorArgb, followsTheme = false) }
         commitInkEdit(
             pageId = pageId,
             before = before,

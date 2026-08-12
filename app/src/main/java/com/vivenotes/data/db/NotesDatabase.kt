@@ -21,7 +21,7 @@ import androidx.sqlite.execSQL
         InkMoveTargetEntity::class,
         AttachmentEntity::class,
     ],
-    version = 10,
+    version = 11,
     // Turn this on together with the androidx.room Gradle plugin and room.schemaLocation before
     // the first release, since the exported schemas are what migration tests assert against.
     exportSchema = false,
@@ -221,6 +221,23 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Records whether a stroke's colour was the automatic one, so Switch Background can
+         * re-resolve it instead of leaving white ink on white paper.
+         *
+         * **Deliberately left NULL rather than backfilled.** Every row written before this column
+         * existed baked its resolved colour and recorded nothing about where that colour came from,
+         * so no `UPDATE` here could do better than guess. The guess is worth making, but it belongs
+         * at the point of use where it can be explained and changed —
+         * [com.vivenotes.data.automaticColorOr] reads null as "infer from the colour" — rather than
+         * written irreversibly over ink the user has already drawn.
+         */
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE ink_strokes ADD COLUMN colorFollowsTheme INTEGER")
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 .addMigrations(
@@ -233,6 +250,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_7_8,
                     MIGRATION_8_9,
                     MIGRATION_9_10,
+                    MIGRATION_10_11,
                 )
                 .build()
     }
