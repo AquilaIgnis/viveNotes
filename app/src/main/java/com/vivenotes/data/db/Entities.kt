@@ -106,12 +106,13 @@ data class PageContentEntity(
 )
 
 /**
- * One recoverable checkpoint of a page body.
+ * One recoverable checkpoint of a complete page.
  *
  * [PageContentEntity] remains the cheap current state. This table holds older states only, so a
  * normal page load never walks history and saving can atomically preserve the value it replaces.
- * The payload is compressed by the repository; keeping its codec and checksum beside it means a
- * future document format can still restore old revisions and corruption is detected before restore.
+ * The document payload and compact ink state vector are compressed by the repository. Keeping each
+ * codec and checksum beside its bytes lets formats change independently and detects corruption
+ * before restore.
  */
 @Entity(
     tableName = "page_revisions",
@@ -134,6 +135,12 @@ data class PageRevisionEntity(
     val byteCount: Int,
     val sha256: String,
     val payload: ByteArray,
+    /** `none/1` only for revisions created before schema 13, whose historical ink is unknowable. */
+    @ColumnInfo(defaultValue = "'none/1'") val inkFormat: String = "none/1",
+    @ColumnInfo(defaultValue = "'none'") val inkEncoding: String = "none",
+    @ColumnInfo(defaultValue = "0") val inkByteCount: Int = 0,
+    @ColumnInfo(defaultValue = "''") val inkSha256: String = "",
+    @ColumnInfo(defaultValue = "X''") val inkPayload: ByteArray = byteArrayOf(),
 ) {
     override fun equals(other: Any?): Boolean =
         this === other ||
@@ -145,9 +152,15 @@ data class PageRevisionEntity(
                 encoding == other.encoding &&
                 byteCount == other.byteCount &&
                 sha256 == other.sha256 &&
-                payload.contentEquals(other.payload))
+                payload.contentEquals(other.payload) &&
+                inkFormat == other.inkFormat &&
+                inkEncoding == other.inkEncoding &&
+                inkByteCount == other.inkByteCount &&
+                inkSha256 == other.inkSha256 &&
+                inkPayload.contentEquals(other.inkPayload))
 
-    override fun hashCode(): Int = 31 * id.hashCode() + payload.contentHashCode()
+    override fun hashCode(): Int =
+        31 * (31 * id.hashCode() + payload.contentHashCode()) + inkPayload.contentHashCode()
 }
 
 /** Lightweight history row for lists; compressed document bytes stay out of ordinary queries. */
@@ -156,6 +169,7 @@ data class PageRevisionSummary(
     val pageId: String,
     val createdAt: Long,
     val byteCount: Int,
+    val inkFormat: String = "none/1",
 )
 
 /** A notebook with its sections, for the navigation rail's expandable tree. */

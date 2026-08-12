@@ -129,13 +129,40 @@ interface PageRevisionDao {
     suspend fun byId(pageId: String, id: String): PageRevisionEntity?
 
     @Query(
-        "SELECT id, pageId, createdAt, byteCount FROM page_revisions " +
+        "SELECT id, pageId, createdAt, byteCount + inkByteCount AS byteCount, inkFormat " +
+            "FROM page_revisions " +
             "WHERE pageId = :pageId ORDER BY createdAt DESC, id DESC",
     )
     suspend fun history(pageId: String): List<PageRevisionSummary>
 
     @Query("SELECT MAX(createdAt) FROM page_revisions WHERE pageId = :pageId")
     suspend fun newestTimestamp(pageId: String): Long?
+
+    @Query(
+        "SELECT inkFormat FROM page_revisions WHERE pageId = :pageId " +
+            "ORDER BY createdAt DESC, id DESC LIMIT 1",
+    )
+    suspend fun newestInkFormat(pageId: String): String?
+
+    /** Exact-content candidates used to keep restore toggles from cloning the same checkpoints. */
+    @Query(
+        "SELECT * FROM page_revisions WHERE pageId = :pageId AND format = :format " +
+            "AND byteCount = :byteCount AND sha256 = :sha256 AND inkFormat = :inkFormat " +
+            "AND inkByteCount = :inkByteCount AND inkSha256 = :inkSha256 " +
+            "ORDER BY createdAt DESC, id DESC",
+    )
+    suspend fun matchingContent(
+        pageId: String,
+        format: String,
+        byteCount: Int,
+        sha256: String,
+        inkFormat: String,
+        inkByteCount: Int,
+        inkSha256: String,
+    ): List<PageRevisionEntity>
+
+    @Query("DELETE FROM page_revisions WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
 
     @Query(
         "DELETE FROM page_revisions WHERE pageId = :pageId AND id NOT IN " +
@@ -163,6 +190,28 @@ interface InkStrokeDao {
 
     @Query("UPDATE ink_strokes SET deletedAt = NULL WHERE id IN (:ids)")
     suspend fun restore(ids: List<String>)
+
+    @Query("SELECT DISTINCT pageId FROM ink_strokes WHERE id IN (:ids)")
+    suspend fun pageIdsFor(ids: List<String>): List<String>
+
+    @Query(
+        "UPDATE ink_strokes SET deletedAt = :now " +
+            "WHERE pageId = :pageId AND deletedAt IS NULL",
+    )
+    suspend fun softDeletePage(pageId: String, now: Long)
+
+    @Query(
+        "UPDATE ink_strokes SET deletedAt = NULL, colorArgb = :colorArgb, " +
+            "colorFollowsTheme = :followsTheme, groupId = :groupId " +
+            "WHERE pageId = :pageId AND id = :id",
+    )
+    suspend fun restoreSnapshotState(
+        pageId: String,
+        id: String,
+        colorArgb: Int,
+        followsTheme: Boolean?,
+        groupId: String?,
+    )
 
     /**
      * Sets a stroke's colour and whether it is automatic.
@@ -226,6 +275,18 @@ interface InkEraseDao {
 
     @Query("UPDATE ink_erases SET deletedAt = :deletedAt WHERE id = :id")
     suspend fun setDeletedAt(id: String, deletedAt: Long?)
+
+    @Query("SELECT pageId FROM ink_erases WHERE id = :id")
+    suspend fun pageId(id: String): String?
+
+    @Query(
+        "UPDATE ink_erases SET deletedAt = :now " +
+            "WHERE pageId = :pageId AND deletedAt IS NULL",
+    )
+    suspend fun softDeletePage(pageId: String, now: Long)
+
+    @Query("UPDATE ink_erases SET deletedAt = NULL WHERE pageId = :pageId AND id IN (:ids)")
+    suspend fun restoreSnapshotIds(pageId: String, ids: List<String>)
 }
 
 @Dao
@@ -243,4 +304,16 @@ interface InkMoveDao {
 
     @Query("UPDATE ink_moves SET deletedAt = :deletedAt WHERE id = :id")
     suspend fun setDeletedAt(id: String, deletedAt: Long?)
+
+    @Query("SELECT pageId FROM ink_moves WHERE id = :id")
+    suspend fun pageId(id: String): String?
+
+    @Query(
+        "UPDATE ink_moves SET deletedAt = :now " +
+            "WHERE pageId = :pageId AND deletedAt IS NULL",
+    )
+    suspend fun softDeletePage(pageId: String, now: Long)
+
+    @Query("UPDATE ink_moves SET deletedAt = NULL WHERE pageId = :pageId AND id IN (:ids)")
+    suspend fun restoreSnapshotIds(pageId: String, ids: List<String>)
 }

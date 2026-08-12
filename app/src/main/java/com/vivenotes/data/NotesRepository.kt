@@ -15,6 +15,7 @@ import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.data.db.PageEntity
+import com.vivenotes.data.db.PageRevisionEntity
 import com.vivenotes.data.db.PageRevisionSummary
 import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.model.Block
@@ -217,7 +218,7 @@ class NotesRepository(
         )
     }
 
-    suspend fun saveDoc(pageId: String, doc: PageDoc) = writeDoc(pageId, doc, forceRevision = false)
+    suspend fun saveDoc(pageId: String, doc: PageDoc) = writeDoc(pageId, doc)
 
     /** Newest first. The compressed payloads deliberately do not travel with the list. */
     suspend fun revisionHistory(pageId: String): List<PageRevisionSummary> =
@@ -227,7 +228,18 @@ class NotesRepository(
         val row = revisions.byId(pageId, revisionId) ?: return PageRevisionLoad.NotFound
         val summary = DocumentRevisionPayload.summary(row)
         return runCatching { DocumentRevisionPayload.unpack(row) }.fold(
-            onSuccess = { PageRevisionLoad.Loaded(summary, it) },
+            onSuccess = { doc ->
+                runCatching { InkRevisionPayload.unpack(row) }.fold(
+                    onSuccess = { inkSnapshot ->
+                        PageRevisionLoad.Loaded(
+                            revision = summary,
+                            doc = doc,
+                            includesInk = inkSnapshot != null,
+                        )
+                    },
+                    onFailure = { PageRevisionLoad.Unreadable(summary, it) },
+                )
+            },
             onFailure = { PageRevisionLoad.Unreadable(summary, it) },
         )
     }
@@ -236,40 +248,129 @@ class NotesRepository(
      * Makes a checkpoint current and first checkpoints the state it replaces, even when the normal
      * coalescing window has not elapsed. A restore therefore never destroys the route back.
      */
-    suspend fun restoreRevision(pageId: String, revisionId: String): PageRevisionLoad =
-        when (val loaded = loadRevision(pageId, revisionId)) {
-            is PageRevisionLoad.Loaded -> {
-                writeDoc(pageId, loaded.doc, forceRevision = true)
-                loaded
-            }
-            else -> loaded
+    suspend fun restoreRevision(pageId: String, revisionId: String): PageRevisionLoad {
+        val row = revisions.byId(pageId, revisionId) ?: return PageRevisionLoad.NotFound
+        val summary = DocumentRevisionPayload.summary(row)
+        val doc = runCatching { DocumentRevisionPayload.unpack(row) }.getOrElse {
+            return PageRevisionLoad.Unreadable(summary, it)
         }
+        val restoredInk = runCatching { InkRevisionPayload.unpack(row) }.getOrElse {
+            return PageRevisionLoad.Unreadable(summary, it)
+        } ?: return PageRevisionLoad.InkUnavailable(summary)
 
-    private suspend fun writeDoc(pageId: String, doc: PageDoc, forceRevision: Boolean) {
         val now = clock()
         val encoded = codec.encodeToString(doc)
-        val preview = doc.plainText().lineSequence()
-            .firstOrNull { it.isNotBlank() }
-            .orEmpty()
-            .take(140)
+        val preview = previewOf(doc)
+        db.withTransaction {
+            val previous = contents.byId(pageId) ?: return@withTransaction
+            val current = checkpointOf(previous, now)
+            if (!current.sameContentAs(row)) {
+                // Forced even inside the coalescing window: the complete page being replaced must
+                // remain reachable. Content identity keeps repeated A <-> B restores idempotent.
+                storeCheckpoint(current)
+                contents.upsert(PageContentEntity(pageId, encoded, now, codec.id))
+                restoreInkLocked(pageId, restoredInk, now)
+                pages.updatePreview(pageId, preview, now)
+            }
+        }
+        return PageRevisionLoad.Loaded(summary, doc, includesInk = true)
+    }
+
+    private suspend fun writeDoc(pageId: String, doc: PageDoc) {
+        val now = clock()
+        val encoded = codec.encodeToString(doc)
+        val preview = previewOf(doc)
 
         db.withTransaction {
             val previous = contents.byId(pageId)
             if (previous?.docJson == encoded && previous.format == codec.id) return@withTransaction
 
-            if (previous != null && shouldCheckpoint(pageId, now, forceRevision)) {
-                revisions.insert(DocumentRevisionPayload.pack(previous, now))
-                revisions.trimToNewest(pageId, MAX_REVISIONS_PER_PAGE)
+            if (previous != null && shouldCheckpoint(pageId, now)) {
+                storeCheckpoint(checkpointOf(previous, now))
             }
             contents.upsert(PageContentEntity(pageId, encoded, now, codec.id))
             pages.updatePreview(pageId, preview, now)
         }
     }
 
-    private suspend fun shouldCheckpoint(pageId: String, now: Long, force: Boolean): Boolean {
-        if (force) return true
+    private suspend fun shouldCheckpoint(pageId: String, now: Long): Boolean {
+        if (revisions.newestInkFormat(pageId) != InkRevisionPayload.FORMAT) return true
         val newest = revisions.newestTimestamp(pageId) ?: return true
         return now - newest >= REVISION_CHECKPOINT_INTERVAL_MS
+    }
+
+    private fun previewOf(doc: PageDoc): String = doc.plainText().lineSequence()
+        .firstOrNull { it.isNotBlank() }
+        .orEmpty()
+        .take(140)
+
+    /** Must run inside the caller's transaction so document and ink describe one instant. */
+    private suspend fun checkpointOf(content: PageContentEntity, now: Long) =
+        DocumentRevisionPayload.pack(
+            row = content,
+            createdAt = now,
+            ink = InkRevisionPayload.pack(
+                InkSnapshot.from(
+                    strokes = ink.byPage(content.pageId),
+                    erases = inkErases.byPage(content.pageId),
+                    moves = inkMoves.byPage(content.pageId),
+                ),
+            ),
+        )
+
+    private suspend fun storeCheckpoint(checkpoint: PageRevisionEntity) {
+        val healthyMatches = revisions.matchingContent(
+            pageId = checkpoint.pageId,
+            format = checkpoint.format,
+            byteCount = checkpoint.byteCount,
+            sha256 = checkpoint.sha256,
+            inkFormat = checkpoint.inkFormat,
+            inkByteCount = checkpoint.inkByteCount,
+            inkSha256 = checkpoint.inkSha256,
+        ).filter { candidate ->
+            runCatching {
+                DocumentRevisionPayload.unpack(candidate)
+                require(InkRevisionPayload.unpack(candidate) != null)
+            }.isSuccess
+        }
+        if (healthyMatches.isEmpty()) {
+            revisions.insert(checkpoint)
+            revisions.trimToNewest(checkpoint.pageId, MAX_REVISIONS_PER_PAGE)
+        } else if (healthyMatches.size > 1) {
+            revisions.deleteByIds(healthyMatches.drop(1).map { it.id })
+        }
+    }
+
+    private fun PageRevisionEntity.sameContentAs(other: PageRevisionEntity): Boolean =
+        format == other.format && byteCount == other.byteCount && sha256 == other.sha256 &&
+            inkFormat == other.inkFormat && inkByteCount == other.inkByteCount &&
+            inkSha256 == other.inkSha256
+
+    private suspend fun checkpointBeforeInkMutation(pageId: String, now: Long) {
+        if (!shouldCheckpoint(pageId, now)) return
+        contents.byId(pageId)?.let { storeCheckpoint(checkpointOf(it, now)) }
+    }
+
+    /** Replaces the active ink view while retaining later rows as tombstoned history. */
+    private suspend fun restoreInkLocked(pageId: String, snapshot: InkSnapshot, now: Long) {
+        ink.softDeletePage(pageId, now)
+        inkErases.softDeletePage(pageId, now)
+        inkMoves.softDeletePage(pageId, now)
+        snapshot.strokes.forEach { stroke ->
+            ink.restoreSnapshotState(
+                pageId = pageId,
+                id = stroke.id,
+                colorArgb = stroke.colorArgb,
+                followsTheme = stroke.colorFollowsTheme,
+                groupId = stroke.groupId,
+            )
+        }
+        if (snapshot.eraseIds.isNotEmpty()) {
+            inkErases.restoreSnapshotIds(pageId, snapshot.eraseIds)
+        }
+        if (snapshot.moveIds.isNotEmpty()) {
+            inkMoves.restoreSnapshotIds(pageId, snapshot.moveIds)
+        }
     }
 
     // --- ink -------------------------------------------------------------------------------
@@ -284,17 +385,19 @@ class NotesRepository(
     suspend fun inkFor(pageId: String): List<InkStrokeEntity> = ink.byPage(pageId)
 
     /** Appends one stroke. Strokes are immutable, so this is the only way ink is ever written. */
-    suspend fun addStroke(stroke: InkStrokeEntity): InkStrokeEntity {
-        val placed = stroke.copy(seq = ink.nextSeq(stroke.pageId))
-        ink.insert(placed)
-        return placed
+    suspend fun addStroke(stroke: InkStrokeEntity): InkStrokeEntity = db.withTransaction {
+        checkpointBeforeInkMutation(stroke.pageId, clock())
+        stroke.copy(seq = ink.nextSeq(stroke.pageId)).also { ink.insert(it) }
     }
 
     /** Appends a copied selection as one contiguous draw-order block. */
     suspend fun addStrokes(strokes: List<InkStrokeEntity>): List<InkStrokeEntity> {
         if (strokes.isEmpty()) return emptyList()
         return db.withTransaction {
-            var sequence = ink.nextSeq(strokes.first().pageId)
+            val pageId = strokes.first().pageId
+            require(strokes.all { it.pageId == pageId }) { "copied strokes span multiple pages" }
+            checkpointBeforeInkMutation(pageId, clock())
+            var sequence = ink.nextSeq(pageId)
             strokes.map { stroke -> stroke.copy(seq = sequence++).also { ink.insert(it) } }
         }
     }
@@ -307,25 +410,39 @@ class NotesRepository(
      */
     suspend fun eraseStrokes(ids: List<String>) {
         if (ids.isEmpty()) return
-        ink.softDelete(ids, clock())
+        val now = clock()
+        db.withTransaction {
+            ink.pageIdsFor(ids).forEach { checkpointBeforeInkMutation(it, now) }
+            ink.softDelete(ids, now)
+        }
     }
 
     /** Restores stroke rows tombstoned by Draw-toolbar undo. */
     suspend fun restoreStrokes(ids: List<String>) {
         if (ids.isEmpty()) return
-        ink.restore(ids)
+        val now = clock()
+        db.withTransaction {
+            ink.pageIdsFor(ids).forEach { checkpointBeforeInkMutation(it, now) }
+            ink.restore(ids)
+        }
     }
 
     suspend fun setInkColors(colors: Map<String, StrokeColor>) {
         if (colors.isEmpty()) return
+        val now = clock()
         db.withTransaction {
+            ink.pageIdsFor(colors.keys.toList()).forEach { checkpointBeforeInkMutation(it, now) }
             colors.forEach { (id, color) -> ink.setColor(id, color.argb, color.followsTheme) }
         }
     }
 
     suspend fun setInkGroups(groups: Map<String, String?>) {
         if (groups.isEmpty()) return
-        db.withTransaction { groups.forEach { (id, group) -> ink.setGroup(id, group) } }
+        val now = clock()
+        db.withTransaction {
+            ink.pageIdsFor(groups.keys.toList()).forEach { checkpointBeforeInkMutation(it, now) }
+            groups.forEach { (id, group) -> ink.setGroup(id, group) }
+        }
     }
 
     suspend fun partialErasesFor(pageId: String): List<InkEraseWithTargets> =
@@ -341,27 +458,39 @@ class NotesRepository(
     suspend fun addPartialErase(erase: InkEraseEntity, strokeIds: List<String>) {
         if (strokeIds.isEmpty()) return
         db.withTransaction {
+            checkpointBeforeInkMutation(erase.pageId, clock())
             inkErases.insert(erase)
             inkErases.insertTargets(strokeIds.distinct().map { InkEraseTargetEntity(erase.id, it) })
         }
     }
 
     /** Includes or excludes an existing erase operation from page-open replay. */
-    suspend fun setPartialEraseActive(id: String, active: Boolean) =
-        inkErases.setDeletedAt(id, if (active) null else clock())
+    suspend fun setPartialEraseActive(id: String, active: Boolean) {
+        val now = clock()
+        db.withTransaction {
+            inkErases.pageId(id)?.let { checkpointBeforeInkMutation(it, now) }
+            inkErases.setDeletedAt(id, if (active) null else now)
+        }
+    }
 
     /** Stores a lasso move or resize with the source rows it was allowed to transform. */
     suspend fun addInkMove(move: InkMoveEntity, strokeIds: Collection<String>) {
         if (strokeIds.isEmpty()) return
         db.withTransaction {
+            checkpointBeforeInkMutation(move.pageId, clock())
             inkMoves.insert(move)
             inkMoves.insertTargets(strokeIds.distinct().map { InkMoveTargetEntity(move.id, it) })
         }
     }
 
     /** Includes or excludes an existing lasso transform from page-open replay. */
-    suspend fun setInkMoveActive(id: String, active: Boolean) =
-        inkMoves.setDeletedAt(id, if (active) null else clock())
+    suspend fun setInkMoveActive(id: String, active: Boolean) {
+        val now = clock()
+        db.withTransaction {
+            inkMoves.pageId(id)?.let { checkpointBeforeInkMutation(it, now) }
+            inkMoves.setDeletedAt(id, if (active) null else now)
+        }
+    }
 
     // --- first run -------------------------------------------------------------------------
 

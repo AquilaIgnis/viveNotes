@@ -22,7 +22,7 @@ import androidx.sqlite.execSQL
         InkMoveTargetEntity::class,
         AttachmentEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -263,6 +263,29 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds the exact active ink state to new page revisions; old rows stay document-only. */
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "ALTER TABLE page_revisions ADD COLUMN " +
+                        "inkFormat TEXT NOT NULL DEFAULT 'none/1'",
+                )
+                connection.execSQL(
+                    "ALTER TABLE page_revisions ADD COLUMN " +
+                        "inkEncoding TEXT NOT NULL DEFAULT 'none'",
+                )
+                connection.execSQL(
+                    "ALTER TABLE page_revisions ADD COLUMN inkByteCount INTEGER NOT NULL DEFAULT 0",
+                )
+                connection.execSQL(
+                    "ALTER TABLE page_revisions ADD COLUMN inkSha256 TEXT NOT NULL DEFAULT ''",
+                )
+                connection.execSQL(
+                    "ALTER TABLE page_revisions ADD COLUMN inkPayload BLOB NOT NULL DEFAULT X''",
+                )
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 .addMigrations(
@@ -277,6 +300,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_9_10,
                     MIGRATION_10_11,
                     MIGRATION_11_12,
+                    MIGRATION_12_13,
                 )
                 .build()
     }

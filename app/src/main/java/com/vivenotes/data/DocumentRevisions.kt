@@ -15,16 +15,25 @@ import java.util.zip.GZIPOutputStream
 
 /** Result of reading or restoring one historical page checkpoint. */
 sealed interface PageRevisionLoad {
-    data class Loaded(val revision: PageRevisionSummary, val doc: PageDoc) : PageRevisionLoad
+    data class Loaded(
+        val revision: PageRevisionSummary,
+        val doc: PageDoc,
+        val includesInk: Boolean = true,
+    ) : PageRevisionLoad
     data object NotFound : PageRevisionLoad
     data class Unreadable(val revision: PageRevisionSummary, val cause: Throwable) : PageRevisionLoad
+    data class InkUnavailable(val revision: PageRevisionSummary) : PageRevisionLoad
 }
 
 /** Compression and integrity boundary for revision payloads. */
 internal object DocumentRevisionPayload {
     const val ENCODING = "gzip/1"
 
-    fun pack(row: PageContentEntity, createdAt: Long): PageRevisionEntity {
+    fun pack(
+        row: PageContentEntity,
+        createdAt: Long,
+        ink: PackedInkSnapshot,
+    ): PageRevisionEntity {
         val raw = row.docJson.encodeToByteArray()
         val compressed = ByteArrayOutputStream().use { bytes ->
             GZIPOutputStream(bytes).use { it.write(raw) }
@@ -39,6 +48,11 @@ internal object DocumentRevisionPayload {
             byteCount = raw.size,
             sha256 = raw.sha256(),
             payload = compressed,
+            inkFormat = ink.format,
+            inkEncoding = ink.encoding,
+            inkByteCount = ink.byteCount,
+            inkSha256 = ink.sha256,
+            inkPayload = ink.payload,
         )
     }
 
@@ -57,7 +71,13 @@ internal object DocumentRevisionPayload {
     }
 
     fun summary(row: PageRevisionEntity): PageRevisionSummary =
-        PageRevisionSummary(row.id, row.pageId, row.createdAt, row.byteCount)
+        PageRevisionSummary(
+            row.id,
+            row.pageId,
+            row.createdAt,
+            row.byteCount + row.inkByteCount,
+            row.inkFormat,
+        )
 }
 
 private fun ByteArray.sha256(): String =

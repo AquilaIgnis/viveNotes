@@ -419,6 +419,48 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migration12To13MarksExistingRevisionsAsDocumentOnly() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 12).apply {
+            execSQL(
+                "INSERT INTO notebooks VALUES " +
+                    "('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)",
+            )
+            execSQL(
+                "INSERT INTO sections VALUES " +
+                    "('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)",
+            )
+            execSQL(
+                "INSERT INTO pages VALUES " +
+                    "('page', 'section', 'Page', 0, 'kept', 10, 10, NULL)",
+            )
+            execSQL(
+                "INSERT INTO page_revisions VALUES " +
+                    "('revision', 'page', 10, 'json/1', 'gzip/1', 2, 'abc', X'01')",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            13,
+            true,
+            NotesDatabase.MIGRATION_12_13,
+        ).use { migrated ->
+            migrated.query(
+                "SELECT inkFormat, inkEncoding, inkByteCount, inkSha256, length(inkPayload) " +
+                    "FROM page_revisions WHERE id = 'revision'",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("none/1", it.getString(0))
+                assertEquals("none", it.getString(1))
+                assertEquals(0, it.getInt(2))
+                assertEquals("", it.getString(3))
+                assertEquals(0, it.getInt(4))
+            }
+        }
+    }
+
     companion object {
         private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
     }

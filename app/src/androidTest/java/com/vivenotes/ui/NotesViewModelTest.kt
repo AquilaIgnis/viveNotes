@@ -37,6 +37,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
+import com.vivenotes.data.PageRevisionLoad
 import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.TableSettings
@@ -244,6 +245,65 @@ class NotesViewModelTest {
             "the last edit was lost when switching pages",
             storedText(firstPage).contains("must not be lost"),
         )
+    }
+
+    @Test
+    fun restoringARevisionKeepsUnsavedEditorStateAsTheSafetyVersion() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+
+        // First-run seeding replaces the page's initial empty body, which gives this test an older
+        // checkpoint to restore without manufacturing repository state behind the ViewModel.
+        vm.loadVersionHistory()
+        advanceUntilIdle()
+        assertNotNull(vm.versionHistory.value.preview)
+
+        val outlineId = vm.uiState.value.outlines.first().id
+        vm.onBlocksChanged(outlineId, listOf(Block.of("still inside the autosave window")))
+        // Do not advance time: restore itself must flush this live editor state before checkpointing.
+        vm.restoreSelectedVersion()
+        advanceUntilIdle()
+
+        assertTrue(vm.initialBlocksFor(vm.uiState.value.outlines.first().id).all { it.text.isBlank() })
+        assertTrue(vm.versionHistory.value.message?.contains("still in history") == true)
+
+        val safetyCopyExists = repository.revisionHistory(pageId).any { revision ->
+            val load = repository.loadRevision(pageId, revision.id)
+            load is PageRevisionLoad.Loaded &&
+                load.doc.plainText().contains("still inside the autosave window")
+        }
+        assertTrue("the live editor state was not checkpointed before restore", safetyCopyExists)
+    }
+
+    @Test
+    fun restoringBackAndForwardRefreshesTheVisibleInkCanvas() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.onStrokeFinished(inkStroke(10f to 20f, 90f to 20f))
+        advanceUntilIdle()
+        assertEquals(1, vm.strokes.value.size)
+
+        // The seeded page's first checkpoint is its blank, ink-free state. Restoring it must first
+        // protect the currently visible Welcome page and its stroke as the forward version.
+        vm.loadVersionHistory()
+        advanceUntilIdle()
+        vm.restoreSelectedVersion()
+        advanceUntilIdle()
+        assertTrue(vm.strokes.value.isEmpty())
+
+        vm.loadVersionHistory()
+        advanceUntilIdle()
+        val forward = vm.versionHistory.value.revisions.first { revision ->
+            val loaded = repository.loadRevision(pageId, revision.id)
+            loaded is PageRevisionLoad.Loaded && loaded.doc.plainText().contains("This is a page")
+        }
+        vm.selectVersionRevision(forward.id)
+        advanceUntilIdle()
+        vm.restoreSelectedVersion()
+        advanceUntilIdle()
+
+        assertEquals(1, vm.strokes.value.size)
+        assertTrue(storedText(pageId).contains("This is a page"))
     }
 
     @Test

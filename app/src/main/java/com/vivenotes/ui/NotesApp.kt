@@ -71,6 +71,7 @@ import com.vivenotes.math.MathEngine
 import com.vivenotes.ui.editor.DrawActions
 import com.vivenotes.ui.editor.AiActions
 import com.vivenotes.ui.editor.EditorPane
+import com.vivenotes.ui.editor.FileActions
 import com.vivenotes.ui.editor.Ribbon
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
@@ -86,6 +87,7 @@ import com.vivenotes.ui.panel.RecognitionPanelState
 import com.vivenotes.ui.panel.TOOL_PANEL_WIDTH
 import com.vivenotes.ui.panel.ToolPane
 import com.vivenotes.ui.panel.ToolPanel
+import com.vivenotes.ui.panel.VersionHistoryPanelContent
 import com.vivenotes.ui.shell.NotebookRail
 import com.vivenotes.ui.shell.PageListPane
 import com.vivenotes.ui.shell.SectionTabsBar
@@ -152,6 +154,7 @@ fun NotesApp(
     val canvasUndoState by viewModel.canvasUndoState.collectAsStateWithLifecycle()
     val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
     val contentSearch by viewModel.contentSearch.collectAsStateWithLifecycle()
+    val versionHistory by viewModel.versionHistory.collectAsStateWithLifecycle()
     val reveal by viewModel.reveal.collectAsStateWithLifecycle()
 
     // The system photo picker — feature E6. Chosen over `GetContent` and over `READ_MEDIA_IMAGES`
@@ -323,6 +326,19 @@ fun NotesApp(
     val aiActions = remember {
         AiActions(openIntegrated = { openPane = ToolPane.AiModels })
     }
+    val fileActions = remember(viewModel) {
+        FileActions(
+            openVersionHistory = {
+                openPane = ToolPane.VersionHistory
+                viewModel.loadVersionHistory()
+            },
+        )
+    }
+
+    // Keep a docked history pane in step when the user chooses another page behind it.
+    LaunchedEffect(state.selectedPageId) {
+        if (openPane == ToolPane.VersionHistory) viewModel.loadVersionHistory()
+    }
 
     val horizontalTabs = viewSettings.tabsLayout == TabsLayout.Horizontal
     // Switch Background pins the canvas light or dark; until it is used it follows the theme.
@@ -366,6 +382,7 @@ fun NotesApp(
                         pageStyle = state.pageStyle,
                         viewSettings = viewSettings,
                         view = viewActions,
+                        file = fileActions,
                         ai = aiActions,
                         pens = themedPens,
                         palette = palette,
@@ -486,6 +503,7 @@ fun NotesApp(
                                         copyRecognizedText(context, "SymPy result", value)
                                     },
                                     contentSearch = contentSearch,
+                                    versionHistory = versionHistory,
                                     onSearchQueryChange = viewModel::setSearchQuery,
                                     onOpenHit = viewModel::openSearchHit,
                                     viewModel = viewModel,
@@ -548,6 +566,7 @@ fun NotesApp(
                                         copyRecognizedText(context, "SymPy result", value)
                                     },
                                     contentSearch = contentSearch,
+                                    versionHistory = versionHistory,
                                     onSearchQueryChange = viewModel::setSearchQuery,
                                     // Compact windows show the pane *instead of* the page, so going
                                     // to a result has to put the page back or it reveals it behind
@@ -638,6 +657,7 @@ private fun ToolPaneHost(
     onCopyMathResult: (String) -> Unit,
     /** Content pane — the query, and what it found across the notebook (`docs/searchPlan.md`). */
     contentSearch: ContentSearchState,
+    versionHistory: VersionHistoryState,
     onSearchQueryChange: (String) -> Unit,
     onOpenHit: (ContentHit) -> Unit,
     viewModel: NotesViewModel,
@@ -652,6 +672,11 @@ private fun ToolPaneHost(
     }
     ToolPanel(pane = pane, onClose = onClose, modifier = modifier, header = header) {
         when (pane) {
+            ToolPane.VersionHistory -> VersionHistoryPanelContent(
+                state = versionHistory,
+                onSelect = viewModel::selectVersionRevision,
+                onRestore = viewModel::restoreSelectedVersion,
+            )
             ToolPane.PaperSize -> PaperSizePanelContent(
                 style = style,
                 onPickSize = viewModel::setPaperSize,

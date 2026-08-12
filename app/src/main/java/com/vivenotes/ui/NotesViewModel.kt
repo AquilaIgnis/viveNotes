@@ -3,6 +3,7 @@ package com.vivenotes.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -45,6 +46,7 @@ import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
+import com.vivenotes.data.PageRevisionLoad
 import androidx.ink.strokes.Stroke
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenPreset
@@ -60,6 +62,7 @@ import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
+import com.vivenotes.data.db.PageRevisionSummary
 import com.vivenotes.data.db.InkEraseWithTargets
 import com.vivenotes.data.db.InkMoveWithTargets
 import com.vivenotes.data.db.InkStrokeEntity
@@ -330,6 +333,20 @@ private data class PageCanvasHistory(
     val redo: MutableList<CanvasHistoryEntry> = mutableListOf(),
 )
 
+/** The File tab's page-version browser. Payloads are decoded only for the selected row. */
+data class VersionHistoryState(
+    val pageId: String? = null,
+    val loading: Boolean = false,
+    val revisions: List<PageRevisionSummary> = emptyList(),
+    val selectedRevision: PageRevisionSummary? = null,
+    val preview: PageDoc? = null,
+    val previewIncludesInk: Boolean = false,
+    val previewLoading: Boolean = false,
+    val restoring: Boolean = false,
+    val error: String? = null,
+    val message: String? = null,
+)
+
 data class NotesUiState(
     val tree: List<NotebookWithSections> = emptyList(),
     val selectedSectionId: String? = null,
@@ -381,6 +398,9 @@ class NotesViewModel(
 
     private val _uiState = MutableStateFlow(NotesUiState())
     val uiState: StateFlow<NotesUiState> = _uiState.asStateFlow()
+
+    private val _versionHistory = MutableStateFlow(VersionHistoryState())
+    val versionHistory: StateFlow<VersionHistoryState> = _versionHistory.asStateFlow()
 
     private val _selection = MutableStateFlow(SelectionState())
     val selection: StateFlow<SelectionState> = _selection.asStateFlow()
@@ -584,6 +604,9 @@ class NotesViewModel(
      */
     private var pageLoad: Job? = null
 
+    /** Cancels an obsolete history read when the user changes pages or picks another version. */
+    private var versionHistoryLoad: Job? = null
+
     /**
      * The page [openPage] was last asked for, set the moment it is asked rather than when its state
      * lands.
@@ -705,7 +728,15 @@ class NotesViewModel(
                     val current = _uiState.value.selectedPageId
                     if (current == null || pages.none { it.id == current }) {
                         pages.firstOrNull()?.let { openPage(it.id) }
-                            ?: run { _uiState.value = _uiState.value.copy(selectedPageId = null, title = "", outlines = emptyList()) }
+                            ?: run {
+                                versionHistoryLoad?.cancel()
+                                _versionHistory.value = VersionHistoryState()
+                                _uiState.value = _uiState.value.copy(
+                                    selectedPageId = null,
+                                    title = "",
+                                    outlines = emptyList(),
+                                )
+                            }
                     }
                 }
                 .launchIn(this)
@@ -718,6 +749,184 @@ class NotesViewModel(
         }
     }
 
+    // --- version history ----------------------------------------------------------------------
+
+    /** Opens the current page's lightweight revision list, then previews the newest checkpoint. */
+    fun loadVersionHistory() {
+        val pageId = _uiState.value.selectedPageId
+        versionHistoryLoad?.cancel()
+        if (pageId == null) {
+            _versionHistory.value = VersionHistoryState()
+            return
+        }
+
+        _versionHistory.value = VersionHistoryState(pageId = pageId, loading = true)
+        versionHistoryLoad = viewModelScope.launch {
+            try {
+                val revisions = repository.revisionHistory(pageId)
+                if (_uiState.value.selectedPageId != pageId) return@launch
+                val selected = revisions.firstOrNull()
+                _versionHistory.value = VersionHistoryState(
+                    pageId = pageId,
+                    revisions = revisions,
+                    selectedRevision = selected,
+                    previewLoading = selected != null,
+                )
+                if (selected != null) loadVersionPreview(pageId, selected)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (_uiState.value.selectedPageId == pageId) {
+                    _versionHistory.value = VersionHistoryState(
+                        pageId = pageId,
+                        error = "Version history could not be loaded.",
+                    )
+                }
+            }
+        }
+    }
+
+    /** Selects one row without bringing its compressed document through the list query. */
+    fun selectVersionRevision(revisionId: String) {
+        val state = _versionHistory.value
+        val pageId = state.pageId ?: return
+        val revision = state.revisions.firstOrNull { it.id == revisionId } ?: return
+        if (_uiState.value.selectedPageId != pageId || state.restoring) return
+
+        versionHistoryLoad?.cancel()
+        _versionHistory.value = state.copy(
+            selectedRevision = revision,
+            preview = null,
+            previewIncludesInk = false,
+            previewLoading = true,
+            error = null,
+            message = null,
+        )
+        versionHistoryLoad = viewModelScope.launch { loadVersionPreview(pageId, revision) }
+    }
+
+    /** Restores the complete page and keeps the page it replaces as a reversible checkpoint. */
+    fun restoreSelectedVersion() {
+        val history = _versionHistory.value
+        val pageId = history.pageId ?: return
+        val revision = history.selectedRevision ?: return
+        if (
+            history.preview == null || !history.previewIncludesInk || history.restoring ||
+            _uiState.value.selectedPageId != pageId
+        ) return
+
+        versionHistoryLoad?.cancel()
+        _versionHistory.value = history.copy(restoring = true, error = null, message = null)
+        versionHistoryLoad = viewModelScope.launch {
+            try {
+                // The revision API checkpoints what is in SQLite. Land the live editors there first
+                // so even changes inside the autosave debounce window are part of that safety copy.
+                persist()
+                if (_uiState.value.selectedPageId != pageId) return@launch
+
+                val (restored, restoredStrokes) = inkMutations.withLock {
+                    val result = repository.restoreRevision(pageId, revision.id)
+                    result to if (result is PageRevisionLoad.Loaded) loadInk(pageId) else emptyList()
+                }
+                when (restored) {
+                    is PageRevisionLoad.Loaded -> {
+                        if (_uiState.value.selectedPageId != pageId) return@launch
+                        pageLoad?.cancel()
+                        openingPageId = pageId
+                        readOnlyPageId = null
+                        canvasHistoryByPage.remove(pageId)
+                        _strokes.value = emptyList()
+                        showDocument(
+                            pageId = pageId,
+                            page = _uiState.value.pages.firstOrNull { it.id == pageId },
+                            doc = restored.doc,
+                        )
+                        publishInk(pageId, restoredStrokes)
+
+                        val revisions = repository.revisionHistory(pageId)
+                        val selected = revisions.firstOrNull { it.id == revision.id }
+                        _versionHistory.value = VersionHistoryState(
+                            pageId = pageId,
+                            revisions = revisions,
+                            selectedRevision = selected,
+                            preview = restored.doc,
+                            previewIncludesInk = true,
+                            message = "Version restored. The version it replaced is still in history.",
+                        )
+                    }
+                    PageRevisionLoad.NotFound -> {
+                        _versionHistory.value = history.copy(
+                            restoring = false,
+                            error = "That version no longer exists.",
+                        )
+                    }
+                    is PageRevisionLoad.Unreadable -> {
+                        _versionHistory.value = history.copy(
+                            restoring = false,
+                            error = "That version is damaged and cannot be restored.",
+                        )
+                    }
+                    is PageRevisionLoad.InkUnavailable -> {
+                        _versionHistory.value = history.copy(
+                            restoring = false,
+                            error = "This older version has no ink snapshot and cannot restore the complete page.",
+                        )
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (_uiState.value.selectedPageId == pageId) {
+                    _versionHistory.value = _versionHistory.value.copy(
+                        restoring = false,
+                        error = "The version could not be restored.",
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun loadVersionPreview(pageId: String, revision: PageRevisionSummary) {
+        val loaded = try {
+            repository.loadRevision(pageId, revision.id)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            null
+        }
+        val current = _versionHistory.value
+        if (
+            _uiState.value.selectedPageId != pageId ||
+            current.pageId != pageId ||
+            current.selectedRevision?.id != revision.id
+        ) return
+
+        _versionHistory.value = when (loaded) {
+            is PageRevisionLoad.Loaded -> current.copy(
+                preview = loaded.doc,
+                previewIncludesInk = loaded.includesInk,
+                previewLoading = false,
+                error = null,
+            )
+            PageRevisionLoad.NotFound -> current.copy(
+                previewLoading = false,
+                error = "That version no longer exists.",
+            )
+            is PageRevisionLoad.Unreadable -> current.copy(
+                previewLoading = false,
+                error = "That version is damaged and cannot be previewed.",
+            )
+            is PageRevisionLoad.InkUnavailable -> current.copy(
+                previewLoading = false,
+                error = "This older version has no ink snapshot.",
+            )
+            null -> current.copy(
+                previewLoading = false,
+                error = "That version could not be loaded.",
+            )
+        }
+    }
+
     // --- navigation ----------------------------------------------------------------------------
 
     fun selectSection(sectionId: String) {
@@ -726,6 +935,8 @@ class NotesViewModel(
         // Whatever page was loading belongs to the section being left. The pages flow will open one
         // from the new section in a moment; until then there is nothing this should still be doing.
         pageLoad?.cancel()
+        versionHistoryLoad?.cancel()
+        _versionHistory.value = VersionHistoryState()
         openingPageId = null
         selectedSection.value = sectionId
         _uiState.value = _uiState.value.copy(selectedSectionId = sectionId, selectedPageId = null)
@@ -747,6 +958,13 @@ class NotesViewModel(
      * still loading must not let the first finish and publish itself over the second.
      */
     fun openPage(pageId: String) {
+        if (_uiState.value.selectedPageId != pageId) {
+            // Disable actions for the outgoing page during the short load window before the new id
+            // is published. Otherwise a fast Restore tap could cancel the page switch and act on
+            // the page the list is visibly leaving.
+            versionHistoryLoad?.cancel()
+            _versionHistory.value = VersionHistoryState(pageId = pageId, loading = true)
+        }
         pageLoad?.cancel()
         openingPageId = pageId
         // The outgoing page's ink goes now rather than when the incoming page's arrives. It is the
@@ -772,54 +990,16 @@ class NotesViewModel(
                 }
             }
 
-            val loaded = doc.outlines.filterIsInstance<Outline.Text>()
-                // A page with nothing on it still needs somewhere to put the caret, placed clear of
-                // the title rather than under it — outline coordinates start at the page's corner.
-                .ifEmpty { listOf(Outline.Text.empty(y = if (doc.style.hideTitle) 0f else PageStyle.TITLE_BAND_DP)) }
-
-            val tables = doc.outlines.filterIsInstance<Outline.Table>()
-
-            blocksById.clear()
-            loaded.forEach { blocksById[it.id] = it.blocks }
-            // Cells join the same map, per TA2 — one content path for containers and cells alike,
-            // which is what lets `initialBlocksFor` and `onBlocksChanged` serve both unchanged. An
-            // ink table's cells are not in it at all (TA15): nothing types in them, so an entry
-            // would be a promise of content that never arrives.
-            tables.forEach { table ->
-                val cells = table.contentCellIds().toSet()
-                table.rows.forEach { row ->
-                    row.cells.forEach { cell ->
-                        if (cell.id in cells) blocksById[cell.id] = cell.blocks
-                    }
-                }
-            }
-            // Taken from the document rather than from [loaded], which is the text containers alone
-            // and may have been substituted for an empty one. An unreadable page decodes to
-            // PageDoc.empty(), so this clears — the outgoing page's outlines must not follow it.
-            unmanagedOutlines = doc.outlines.withIndex().filterNot {
-                it.value is Outline.Text || it.value is Outline.Shape || it.value is Outline.Table ||
-                    it.value is Outline.Equation || it.value is Outline.Image
-            }
-            _uiState.value = _uiState.value.copy(
-                selectedPageId = pageId,
-                title = page?.title.orEmpty(),
-                createdAt = page?.createdAt ?: System.currentTimeMillis(),
-                outlines = loaded.map { OutlineBox(it.id, it.x, it.y, it.width, it.minHeight) },
-                shapes = doc.outlines.filterIsInstance<Outline.Shape>(),
-                tables = tables,
-                equations = doc.outlines.filterIsInstance<Outline.Equation>(),
-                images = doc.outlines.filterIsInstance<Outline.Image>(),
-                pageStyle = doc.style,
-                pageRevision = _uiState.value.pageRevision + 1,
+            showDocument(
+                pageId = pageId,
+                page = page,
+                doc = doc,
                 contentError = if (readOnlyPageId == pageId) {
                     "This page could not be read, so editing is disabled to protect its contents."
                 } else {
                     null
                 },
             )
-            publishCanvasUndoState(pageId)
-            _selection.value = SelectionState()
-            _compactPane.value = CompactPane.Editor
 
             // The page is on screen from here; what follows fills it in.
             //
@@ -830,6 +1010,60 @@ class NotesViewModel(
             }
             publishInk(pageId, ink)
         }
+    }
+
+    /** Publishes one decoded document without persisting the document currently on screen. */
+    private fun showDocument(
+        pageId: String,
+        page: PageEntity?,
+        doc: PageDoc,
+        contentError: String? = null,
+    ) {
+        val loaded = doc.outlines.filterIsInstance<Outline.Text>()
+            // A page with nothing on it still needs somewhere to put the caret, placed clear of the
+            // title rather than under it — outline coordinates start at the page's corner.
+            .ifEmpty {
+                listOf(
+                    Outline.Text.empty(
+                        y = if (doc.style.hideTitle) 0f else PageStyle.TITLE_BAND_DP,
+                    ),
+                )
+            }
+        val tables = doc.outlines.filterIsInstance<Outline.Table>()
+
+        blocksById.clear()
+        loaded.forEach { blocksById[it.id] = it.blocks }
+        // Cells join the same map, per TA2 — one content path for containers and cells alike.
+        tables.forEach { table ->
+            val cells = table.contentCellIds().toSet()
+            table.rows.forEach { row ->
+                row.cells.forEach { cell ->
+                    if (cell.id in cells) blocksById[cell.id] = cell.blocks
+                }
+            }
+        }
+        // Taken from the document rather than from [loaded], which may contain a substitute empty
+        // text box. Carrying unknown outline kinds through preserves load -> save -> load identity.
+        unmanagedOutlines = doc.outlines.withIndex().filterNot {
+            it.value is Outline.Text || it.value is Outline.Shape || it.value is Outline.Table ||
+                it.value is Outline.Equation || it.value is Outline.Image
+        }
+        _uiState.value = _uiState.value.copy(
+            selectedPageId = pageId,
+            title = page?.title.orEmpty(),
+            createdAt = page?.createdAt ?: System.currentTimeMillis(),
+            outlines = loaded.map { OutlineBox(it.id, it.x, it.y, it.width, it.minHeight) },
+            shapes = doc.outlines.filterIsInstance<Outline.Shape>(),
+            tables = tables,
+            equations = doc.outlines.filterIsInstance<Outline.Equation>(),
+            images = doc.outlines.filterIsInstance<Outline.Image>(),
+            pageStyle = doc.style,
+            pageRevision = _uiState.value.pageRevision + 1,
+            contentError = contentError,
+        )
+        publishCanvasUndoState(pageId)
+        _selection.value = SelectionState()
+        _compactPane.value = CompactPane.Editor
     }
 
     /**

@@ -13,6 +13,8 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.data.db.InkStrokeEntity
+import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.model.Block
 import com.vivenotes.model.Outline
@@ -165,6 +167,143 @@ class NotesRepositoryTest {
     }
 
     @Test
+    fun alternatingBetweenTwoRevisionsDoesNotDuplicateEitherOne() = runBlocking {
+        val pageId = newPage()
+        fun doc(text: String) = PageDoc(
+            outlines = listOf(Outline.Text(id = "text", blocks = listOf(Block.of(text)))),
+        )
+
+        repository.saveDoc(pageId, doc("one"))
+        now += NotesRepository.REVISION_CHECKPOINT_INTERVAL_MS
+        repository.saveDoc(pageId, doc("two"))
+        val revisionOfOne = repository.revisionHistory(pageId).first { revision ->
+            (repository.loadRevision(pageId, revision.id) as PageRevisionLoad.Loaded)
+                .doc
+                .plainText() == "one"
+        }
+        // Simulate the duplicate rows produced by an older build. The original is newer so cleanup
+        // keeps the id this test uses for the subsequent back-and-forth restores.
+        val storedOne = db.pageRevisionDao().byId(pageId, revisionOfOne.id)!!
+        db.pageRevisionDao().insert(
+            storedOne.copy(id = newId(), createdAt = storedOne.createdAt - 1),
+        )
+
+        // The first restore legitimately creates the only safety copy of "two".
+        repository.restoreRevision(pageId, revisionOfOne.id)
+        val revisionOfTwo = repository.revisionHistory(pageId).first { revision ->
+            (repository.loadRevision(pageId, revision.id) as PageRevisionLoad.Loaded)
+                .doc
+                .plainText() == "two"
+        }
+
+        repeat(4) {
+            repository.restoreRevision(pageId, revisionOfTwo.id)
+            repository.restoreRevision(pageId, revisionOfOne.id)
+        }
+
+        assertEquals("legacy duplicate rows were not healed", 3, repository.revisionHistory(pageId).size)
+        assertEquals("one", (repository.loadDoc(pageId) as PageLoad.Loaded).doc.plainText())
+    }
+
+    @Test
+    fun restoringBackAndForwardRestoresTheExactInkRows() = runBlocking {
+        val pageId = newPage()
+        fun stroke(id: String, color: Int) = InkStrokeEntity(
+            id = id,
+            pageId = pageId,
+            seq = 0,
+            brushFamily = "pressure-pen",
+            brushVersion = 1,
+            sizeDp = 3f,
+            colorArgb = color,
+            colorFollowsTheme = false,
+            epsilon = 0.1f,
+            stabilization = 1,
+            minX = 1f,
+            minY = 2f,
+            maxX = 3f,
+            maxY = 4f,
+            points = byteArrayOf(1, 2, 3),
+            enc = "test/1",
+            createdAt = now,
+        )
+
+        repository.addStroke(stroke("ink-a", 0xFF112233.toInt()))
+        now += NotesRepository.REVISION_CHECKPOINT_INTERVAL_MS
+        repository.addStroke(stroke("ink-b", 0xFF445566.toInt()))
+        val revisionWithA = repository.revisionHistory(pageId).first()
+        assertTrue((repository.loadRevision(pageId, revisionWithA.id) as PageRevisionLoad.Loaded).includesInk)
+        repository.setInkColors(
+            mapOf("ink-a" to com.vivenotes.data.db.StrokeColor(0xFF778899.toInt(), false)),
+        )
+
+        repository.restoreRevision(pageId, revisionWithA.id)
+
+        assertEquals(listOf("ink-a"), repository.inkFor(pageId).map { it.id })
+        assertEquals(0xFF112233.toInt(), repository.inkFor(pageId).single().colorArgb)
+        val revisionWithBoth = repository.revisionHistory(pageId).first { revision ->
+            revision.id != revisionWithA.id && revision.createdAt >= now
+        }
+
+        repository.restoreRevision(pageId, revisionWithBoth.id)
+
+        assertEquals(listOf("ink-a", "ink-b"), repository.inkFor(pageId).map { it.id })
+        assertEquals(0xFF778899.toInt(), repository.inkFor(pageId).first().colorArgb)
+    }
+
+    @Test
+    fun restoringInkAlsoRestoresItsActiveReplayOperations() = runBlocking {
+        val pageId = newPage()
+        val stroke = InkStrokeEntity(
+            id = "ink-a",
+            pageId = pageId,
+            seq = 0,
+            brushFamily = "pressure-pen",
+            brushVersion = 1,
+            sizeDp = 3f,
+            colorArgb = 0xFF112233.toInt(),
+            colorFollowsTheme = false,
+            epsilon = 0.1f,
+            stabilization = 1,
+            minX = 1f,
+            minY = 2f,
+            maxX = 3f,
+            maxY = 4f,
+            points = byteArrayOf(1),
+            enc = "test/1",
+            createdAt = now,
+        )
+        repository.addStroke(stroke)
+        repository.addPartialErase(
+            InkEraseEntity(
+                id = "erase-a",
+                pageId = pageId,
+                mode = EraserMode.Normal,
+                sizeDp = 12f,
+                points = byteArrayOf(2),
+                enc = "test/1",
+                createdAt = now + 1,
+            ),
+            listOf(stroke.id),
+        )
+        now += NotesRepository.REVISION_CHECKPOINT_INTERVAL_MS
+        repository.addStroke(stroke.copy(id = "ink-b", createdAt = now))
+        val revisionWithErase = repository.revisionHistory(pageId).first()
+
+        now += 1
+        repository.setPartialEraseActive("erase-a", active = false)
+        repository.restoreRevision(pageId, revisionWithErase.id)
+
+        assertEquals(listOf("erase-a"), repository.partialErasesFor(pageId).map { it.erase.id })
+        val forward = repository.revisionHistory(pageId).first { it.createdAt == now }
+
+        repository.restoreRevision(pageId, forward.id)
+
+        assertTrue(repository.partialErasesFor(pageId).isEmpty())
+        assertEquals(listOf("ink-a", "ink-b"), repository.inkFor(pageId).map { it.id })
+    }
+
+    @Test
     fun aCorruptRevisionIsReportedAndNeverRestored() = runBlocking {
         val pageId = newPage()
         repository.saveDoc(
@@ -181,6 +320,44 @@ class NotesRepositoryTest {
 
         assertTrue(load is PageRevisionLoad.Unreadable)
         assertEquals("kept", ((repository.loadDoc(pageId) as PageLoad.Loaded).doc.plainText()))
+    }
+
+    @Test
+    fun corruptRevisionInkIsReportedWithoutChangingCurrentInk() = runBlocking {
+        val pageId = newPage()
+        repository.addStroke(
+            InkStrokeEntity(
+                id = "kept-ink",
+                pageId = pageId,
+                seq = 0,
+                brushFamily = "pressure-pen",
+                brushVersion = 1,
+                sizeDp = 3f,
+                colorArgb = 0xFF112233.toInt(),
+                colorFollowsTheme = false,
+                epsilon = 0.1f,
+                stabilization = 1,
+                minX = 1f,
+                minY = 2f,
+                maxX = 3f,
+                maxY = 4f,
+                points = byteArrayOf(1),
+                enc = "test/1",
+                createdAt = now,
+            ),
+        )
+        val revision = repository.revisionHistory(pageId).single()
+        db.openHelper.writableDatabase.execSQL(
+            "UPDATE page_revisions SET inkPayload = X'00' WHERE id = ?",
+            arrayOf(revision.id),
+        )
+
+        val load = repository.loadRevision(pageId, revision.id)
+        val restore = repository.restoreRevision(pageId, revision.id)
+
+        assertTrue(load is PageRevisionLoad.Unreadable)
+        assertTrue(restore is PageRevisionLoad.Unreadable)
+        assertEquals(listOf("kept-ink"), repository.inkFor(pageId).map { it.id })
     }
 
     @Test

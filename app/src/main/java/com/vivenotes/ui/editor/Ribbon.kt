@@ -67,9 +67,9 @@ import com.vivenotes.ui.icons.fontColorGlyph
 import com.vivenotes.ui.icons.highlightGlyph
 
 /**
- * Ribbon tabs from the reference UI. Home, View and Draw are implemented; the rest are shown
- * because the shell is part of the design, and each states plainly that it is not built rather
- * than pretending to work.
+ * Ribbon tabs from the reference UI. Each tab owns commands with the same scope as its name: File
+ * for the page's saved versions, Home and Draw for its content, View for its appearance, and
+ * Settings for this device.
  *
  * **Insert is gone.** It ended up holding two buttons that both had a better home: Shape, which had
  * always been the Draw tab's as well, and Equation, which belongs beside the other things you put
@@ -136,6 +136,7 @@ fun Ribbon(
     pageStyle: PageStyle,
     viewSettings: ViewSettings,
     view: ViewActions,
+    file: FileActions = FileActions(openVersionHistory = {}),
     ai: AiActions = AiActions(openIntegrated = {}),
     /** The Draw tab's pens, the swatch row they share, and which tool is currently in hand. */
     pens: List<PenPreset>,
@@ -184,6 +185,7 @@ fun Ribbon(
                 .background(MaterialTheme.colorScheme.outlineVariant),
         )
         when (activeTab) {
+            RibbonTab.File -> FileTab(actions = file, pageOpen = pageOpen)
             RibbonTab.Home -> HomeTab(
                 selection = selection,
                 defaults = defaults,
@@ -216,7 +218,6 @@ fun Ribbon(
                 canRedo = canRedoCanvas,
             )
             RibbonTab.RibonSettings -> SettingsTab(ai = ai, openPane = view.openPane)
-            else -> PlaceholderTab(activeTab)
         }
     }
 }
@@ -308,23 +309,6 @@ private fun RibbonNavigationButton(
             contentDescription = contentDescription,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp),
-        )
-    }
-}
-
-@Composable
-private fun PlaceholderTab(tab: RibbonTab) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(52.dp)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "The ${tab.label} tab is not built yet.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
