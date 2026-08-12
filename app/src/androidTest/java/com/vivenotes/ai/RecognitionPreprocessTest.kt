@@ -44,7 +44,21 @@ class RecognitionPreprocessTest {
 
         assertEquals(384 * 384, tensor.size)
         assertTrue(tensor.all(Float::isFinite))
-        assertTrue(tensor[192 * 384 + 192] > tensor.first())
+
+        // The square is padded with paper, not with black. This used to assert that the middle was
+        // *brighter* than the corner, which only held because the corner was the darkest value in
+        // the tensor — the whole defect. The corner is now the same paper the crop sits on, so what
+        // is worth asserting is that the padding is paper and that the ink survived the resize.
+        val paper = (1f - 0.7931f) / 0.1738f
+        assertEquals(paper, tensor.first(), 1e-4f)
+        assertEquals(paper, tensor.last(), 1e-4f)
+        assertTrue("no ink survived the crop and resize", tensor.min() < paper - 1f)
+
+        // A 60x20 rectangle is 3:1, so it fits to 384x128 and is centred: the middle row crosses
+        // both of its uprights, and the rows a third of the way down the frame are still padding.
+        val middleRow = tensor.asList().subList(192 * 384, 193 * 384)
+        assertTrue("the crop did not land in the middle of the frame", middleRow.min()!! < paper - 1f)
+        assertEquals(paper, tensor[20 * 384 + 192], 1e-4f)
     }
 
     @Test

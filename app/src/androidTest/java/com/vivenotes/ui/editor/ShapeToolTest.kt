@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHasNoClickAction
@@ -482,6 +483,9 @@ class ShapeToolTest {
                                     shapes = shapes,
                                     selection = selection,
                                     interactive = true,
+                                    // Everything is visible: this harness is about gestures, and a
+                                    // culled shape is one no touch can reach.
+                                    visibleWindow = { EVERYTHING },
                                     onSelect = { selection = it },
                                     onMoveShape = { id, dx, dy ->
                                         moveCalls++
@@ -874,3 +878,11 @@ class ShapeToolTest {
 /** Big enough to scroll in both directions, small enough to be all on screen. */
 private val VIEWPORT = 300.dp
 private val PAGE = 1200.dp
+
+/** No culling. `ShapeLayer` skips shapes outside its window, and a culled shape takes no touches. */
+private val EVERYTHING = Rect(
+    Float.NEGATIVE_INFINITY,
+    Float.NEGATIVE_INFINITY,
+    Float.POSITIVE_INFINITY,
+    Float.POSITIVE_INFINITY,
+)

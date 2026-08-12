@@ -186,8 +186,13 @@ internal fun preprocessFormula(image: Bitmap): FloatArray {
     val scaledPixels = IntArray(scaledWidth * scaledHeight)
     scaled.getPixels(scaledPixels, 0, scaledWidth, 0, 0, scaledWidth, scaledHeight)
 
+    // **Padded white, the colour of the page it surrounds.** This filled the square with black and
+    // then pasted a white crop into the middle of it, so every formula arrived framed in a hard
+    // border the model had never seen in training — the normalization mean of 0.79 is itself the
+    // statement that these images are mostly white. Measured over page 3, padding white is worth
+    // about +0.08 mean token accuracy on its own: `simulations/formula-render`.
     val values = FloatArray(FORMULA_SIZE_FOR_PREPROCESS * FORMULA_SIZE_FOR_PREPROCESS) {
-        (0f - 0.7931f) / 0.1738f
+        (FORMULA_PAD_LEVEL - 0.7931f) / 0.1738f
     }
     val xOffset = (FORMULA_SIZE_FOR_PREPROCESS - scaledWidth) / 2
     val yOffset = (FORMULA_SIZE_FOR_PREPROCESS - scaledHeight) / 2
@@ -236,3 +241,6 @@ private fun luminance(color: Int): Int =
 private const val TEXT_BASE_WIDTH_FOR_PREPROCESS = 320
 private const val TEXT_MAX_WIDTH_FOR_PREPROCESS = 3200
 private const val FORMULA_SIZE_FOR_PREPROCESS = 384
+
+/** Paper, on the 0..1 scale the crop is normalized on. See [preprocessFormula]. */
+private const val FORMULA_PAD_LEVEL = 1f

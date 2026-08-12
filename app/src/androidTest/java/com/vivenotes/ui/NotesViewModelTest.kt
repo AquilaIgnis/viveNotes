@@ -31,6 +31,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
@@ -75,6 +76,7 @@ class NotesViewModelTest {
 
     private lateinit var db: NotesDatabase
     private lateinit var repository: NotesRepository
+    private lateinit var attachments: AttachmentStore
     private lateinit var editorDefaults: EditorDefaultsStore
     private lateinit var viewSettings: ViewSettingsStore
     private lateinit var penSettings: PenSettingsStore
@@ -95,6 +97,9 @@ class NotesViewModelTest {
             .setTransactionExecutor { it.run() }
             .build()
         repository = NotesRepository(db)
+        // Rows live in the in-memory database above; the bytes would land in the installed app's
+        // files directory, and no test here inserts a picture.
+        attachments = AttachmentStore(context, db)
         // Backed by a real file, unlike the in-memory database — the preferences delegate memoises
         // per Context, so every test in this class shares one store rather than clashing over it.
         editorDefaults = EditorDefaultsStore(context)
@@ -124,6 +129,7 @@ class NotesViewModelTest {
     private suspend fun seededViewModel(): NotesViewModel {
         val vm = NotesViewModel(
             repository,
+            attachments,
             editorDefaults,
             viewSettings,
             penSettings,
@@ -1151,7 +1157,7 @@ class NotesViewModelTest {
     @Test
     fun holdingASizeStoresItAsTheDefault() = runBlocking<Unit> {
         Dispatchers.setMain(Dispatchers.Unconfined)
-        val vm = NotesViewModel(repository, editorDefaults, viewSettings, penSettings)
+        val vm = NotesViewModel(repository, attachments, editorDefaults, viewSettings, penSettings)
 
         vm.setDefaultFont(Mark.FontSize(36))
 
@@ -1162,7 +1168,7 @@ class NotesViewModelTest {
     @Test
     fun holdingAFontStoresItAsTheDefault() = runBlocking<Unit> {
         Dispatchers.setMain(Dispatchers.Unconfined)
-        val vm = NotesViewModel(repository, editorDefaults, viewSettings, penSettings)
+        val vm = NotesViewModel(repository, attachments, editorDefaults, viewSettings, penSettings)
 
         vm.setDefaultFont(Mark.FontFamily("lora"))
 
@@ -1230,7 +1236,7 @@ class NotesViewModelTest {
     @Test
     fun liftingTheFingersWritesTheZoomDown() = runBlocking<Unit> {
         Dispatchers.setMain(Dispatchers.Unconfined)
-        val vm = NotesViewModel(repository, editorDefaults, viewSettings, penSettings)
+        val vm = NotesViewModel(repository, attachments, editorDefaults, viewSettings, penSettings)
 
         vm.pinchZoom(1.75f)
         vm.commitZoom()
