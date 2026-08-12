@@ -79,6 +79,9 @@ enum class ToolPane(val title: String) {
     AiModels("Integrated AI"),
     Recognition("Recognition"),
     Hardware("Hardware"),
+
+    /** Fuzzy search over the notebook's text boxes and fields — `docs/searchPlan.md` CS1. */
+    Content("Content"),
 }
 
 /** A pane's fields are addressable by the label beside them. */
@@ -104,6 +107,12 @@ fun ToolPanel(
     pane: ToolPane,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Fixed content between the title bar and the scrolling area, for a control that must stay
+     * reachable while what it produces scrolls under it — the Content pane's query field, and so far
+     * nothing else. Panes that pass nothing are laid out exactly as they were.
+     */
+    header: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
@@ -136,6 +145,15 @@ fun ToolPanel(
                     modifier = Modifier.size(18.dp),
                 )
             }
+        }
+
+        if (header != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                content = header,
+            )
         }
 
         Column(

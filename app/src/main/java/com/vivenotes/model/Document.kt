@@ -724,8 +724,23 @@ data class Block(
     /** Only meaningful for [BlockType.Todo]. */
     val checked: Boolean? = null,
 ) {
-    /** The block's text with formatting discarded — used for search indexing and previews. */
+    /** The block's text with formatting discarded — used for previews. */
     val text: String get() = runs.joinToString("") { it.plainText }
+
+    /**
+     * The block exactly as the editor holds it — `docs/searchPlan.md` CS5.
+     *
+     * **Not the same string as [text]**, and the difference is the whole reason this exists: [text]
+     * substitutes an equation run's LaTeX source, while the editor writes one
+     * [OBJECT_REPLACEMENT_CHARACTER] for it. Search over this projection and a match offset *is* an
+     * offset the editor can select; search over [text] and it is a number that means nothing to
+     * `setSelection` without a run-level mapping table.
+     *
+     * Paired with `SpannableCodec.render`, which is the code that actually builds the editor's text.
+     * The two must agree character for character; `SpannableCodecTest` is where that is asserted,
+     * being the one place that can run both.
+     */
+    val editorText: String get() = runs.joinToString("") { it.editorText }
 
     companion object {
         fun empty(): Block = Block(id = newId())
@@ -750,6 +765,10 @@ data class Run(
     /** Equations project their source, not the editor's otherwise meaningless object character. */
     val plainText: String
         get() = marks.filterIsInstance<Mark.Equation>().firstOrNull()?.latex ?: text
+
+    /** The run as the editor holds it: one object character where [plainText] gives the source. */
+    val editorText: String
+        get() = if (marks.any { it is Mark.Equation }) OBJECT_REPLACEMENT_CHARACTER.toString() else text
 }
 
 /** The single editor character occupied by an inline object such as an equation. */

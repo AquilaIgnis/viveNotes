@@ -77,6 +77,37 @@ class NotesRepository(
 
     fun searchPages(query: String): Flow<List<PageEntity>> = pages.search(query)
 
+    // --- content search --------------------------------------------------------------------
+    //
+    // The Content panel's corpus, in the two halves `docs/searchPlan.md` CS7 splits it into: the page
+    // rows, which are cheap and tell the index what has changed, and the bodies of only those pages
+    // whose stamp has moved.
+
+    /** Every live page of a notebook, in reading order. Metadata only — no document bodies. */
+    suspend fun pagesInNotebook(notebookId: String): List<PageEntity> = pages.inNotebook(notebookId)
+
+    /** A notebook's live sections, so a result can say which one it came from. */
+    suspend fun sectionsInNotebook(notebookId: String): List<SectionEntity> =
+        sections.inNotebook(notebookId)
+
+    /**
+     * Decodes the named pages' documents, skipping any that cannot be read.
+     *
+     * A page whose body is corrupt is left out of the search rather than reported: the editor already
+     * refuses to write to it and says so when it is opened, and a search box is not the place to
+     * learn about it. Decoding uses the codec each row records, exactly as [loadDoc] does, so a
+     * format change does not blind the index to everything written before it.
+     */
+    suspend fun docsFor(pageIds: List<String>): Map<String, PageDoc> {
+        if (pageIds.isEmpty()) return emptyMap()
+        return contents.byIds(pageIds).mapNotNull { row ->
+            val rowCodec = DocumentCodecs.byId(row.format) ?: return@mapNotNull null
+            runCatching { rowCodec.decode(row.docJson.encodeToByteArray()).migrated() }
+                .getOrNull()
+                ?.let { row.pageId to it }
+        }.toMap()
+    }
+
     // --- notebooks -------------------------------------------------------------------------
 
     suspend fun createNotebook(name: String): String {

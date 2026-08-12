@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,12 +26,15 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import android.net.Uri
 import com.vivenotes.data.AttachmentStore
+import com.vivenotes.data.ContentSearchIndex
+import com.vivenotes.data.ContentSearchResults
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
@@ -96,6 +100,11 @@ import com.vivenotes.model.PrintMargins
 import com.vivenotes.model.RuleLines
 import com.vivenotes.model.newId
 import com.vivenotes.model.newTable
+import com.vivenotes.model.search.ContentHit
+import com.vivenotes.model.search.ContentKind
+import com.vivenotes.model.search.ContentUnit
+import com.vivenotes.model.search.blockUnits
+import com.vivenotes.model.search.titleUnit
 import com.vivenotes.model.withCellBlocks
 import com.vivenotes.model.withColumnInserted
 import com.vivenotes.model.withColumnRemoved
@@ -137,6 +146,33 @@ private sealed interface StoredInkOperation {
         override val id: String get() = stored.move.id
     }
 }
+
+/**
+ * A hit the user asked to see — `docs/searchPlan.md` CS9.
+ *
+ * Carries where to go rather than what was found: the page it is on, the box that holds it, and the
+ * range to select once that box has an editor. [tableId] is set for a cell, because a cell has no
+ * geometry of its own and the canvas scrolls to the table it sits in (TA2).
+ *
+ * [start] and [end] are offsets into the box's editor text, which is what `Block.editorText` exists
+ * to make true (CS5).
+ */
+data class ContentReveal(
+    val pageId: String,
+    val kind: ContentKind,
+    val boxId: String,
+    val tableId: String?,
+    val start: Int,
+    val end: Int,
+)
+
+/** What the Content panel is showing: a query, whether it is still running, and what it found. */
+data class ContentSearchState(
+    val query: String = "",
+    val running: Boolean = false,
+    /** Null until a query has finished. Non-null with no pages is "nothing matched". */
+    val results: ContentSearchResults? = null,
+)
 
 /** Whether the open page has a Draw-toolbar action in either direction. */
 data class CanvasUndoState(
@@ -610,6 +646,15 @@ class NotesViewModel(
     /** Page whose stored body failed to decode. Never written to. */
     private var readOnlyPageId: String? = null
 
+    /**
+     * A page to open as soon as the section holding it has listed its pages — CS9.
+     *
+     * Without it, going to a search result in another section is a race: `selectSection` clears the
+     * selection, and the pages flow opens that section's *first* page the moment it arrives, which is
+     * not the one that was asked for.
+     */
+    private var pendingPageId: String? = null
+
     /** Last measured (viewport, canvas) width in dp, for [zoomToPageWidth]. */
     private var canvasWidths: Pair<Float, Float> = 0f to 0f
 
@@ -636,6 +681,16 @@ class NotesViewModel(
                 .flatMapLatest { repository.observePages(it) }
                 .onEach { pages ->
                     _uiState.value = _uiState.value.copy(pages = pages)
+                    // A page asked for by name — a search result in another section (CS9). Honoured
+                    // once, on the first list that contains it, and dropped otherwise: a request
+                    // that survived a list which did not have the page would fire later, on a
+                    // section the user has since chosen for their own reasons.
+                    val requested = pendingPageId
+                    pendingPageId = null
+                    if (requested != null && pages.any { it.id == requested }) {
+                        openPage(requested)
+                        return@onEach
+                    }
                     val current = _uiState.value.selectedPageId
                     if (current == null || pages.none { it.id == current }) {
                         pages.firstOrNull()?.let { openPage(it.id) }
@@ -803,6 +858,150 @@ class NotesViewModel(
 
     fun toggleNotebookExpanded(notebookId: String, expanded: Boolean) {
         viewModelScope.launch { repository.setNotebookExpanded(notebookId, expanded) }
+    }
+
+    // --- content search ---------------------------------------------------------------------------
+    //
+    // `docs/searchPlan.md`. The panel owns the query, this owns everything the query needs: the
+    // notebook to search (CS2), the open page's live text (CS8), and where a result leads (CS9).
+
+    private val searchIndex = ContentSearchIndex(repository)
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    /**
+     * The current query's results — CS11.
+     *
+     * `transformLatest` rather than a `debounce` operator, because the wait and the work belong to
+     * the same cancellable block: a keystroke arriving mid-search abandons that search where an
+     * operator chain would let it finish and race the next one to the state. The previous results
+     * stay on screen while a new query is being typed, which is what makes the list feel like it is
+     * narrowing rather than blinking.
+     */
+    val contentSearch: StateFlow<ContentSearchState> = _searchQuery
+        .transformLatest { query ->
+            if (query.isBlank()) {
+                lastResults = null
+                emit(ContentSearchState())
+                return@transformLatest
+            }
+            // **Before the wait, not after it.** The panel's field renders from this state, so a
+            // keystroke that only reached the UI 180ms later would be a text field that fights the
+            // keyboard. The previous query's results ride along until the new ones land, which is
+            // what keeps the list from blinking empty between letters.
+            emit(ContentSearchState(query = query, running = true, results = lastResults))
+            delay(SEARCH_DEBOUNCE_MS)
+            // Read on the main thread, where the block map is written, and matched off it.
+            val live = liveContentUnits()
+            val notebookId = notebookIdOfSelectedSection()
+            val results = if (notebookId == null) {
+                ContentSearchResults(query)
+            } else {
+                withContext(Dispatchers.Default) {
+                    searchIndex.search(
+                        notebookId = notebookId,
+                        query = query,
+                        livePageId = _uiState.value.selectedPageId,
+                        liveUnits = live,
+                    )
+                }
+            }
+            lastResults = results
+            emit(ContentSearchState(query = query, results = results))
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ContentSearchState())
+
+    /**
+     * The last completed search, shown while the next one is being typed.
+     *
+     * Held outside the flow because `transformLatest` throws its own previous emissions away with the
+     * collector it cancelled, and "what was on screen a moment ago" has to survive that.
+     */
+    private var lastResults: ContentSearchResults? = null
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    /**
+     * The open page's searchable text, taken from the editors rather than from storage — CS8.
+     *
+     * Autosave is 400ms behind the keyboard, so the stored copy of this page is the one thing in the
+     * notebook that can be out of date. Everything else comes from [ContentSearchIndex].
+     */
+    private fun liveContentUnits(): List<ContentUnit> {
+        val state = _uiState.value
+        val pageId = state.selectedPageId ?: return emptyList()
+        val sectionId = state.selectedSectionId ?: return emptyList()
+        val units = mutableListOf<ContentUnit>()
+        titleUnit(pageId, sectionId, state.title)?.let(units::add)
+        state.outlines.forEach { box ->
+            // A missing entry is "content not known" here exactly as it is in [persist]: a container
+            // whose editor has not reported yet contributes nothing rather than an empty box.
+            blocksById[box.id]?.let { blocks ->
+                units += blockUnits(pageId, sectionId, ContentKind.Text, box.id, blocks = blocks)
+            }
+        }
+        state.tables.forEach { table ->
+            table.contentCellIds().forEach { cellId ->
+                blocksById[cellId]?.let { blocks ->
+                    units += blockUnits(pageId, sectionId, ContentKind.Cell, cellId, table.id, blocks)
+                }
+            }
+        }
+        return units
+    }
+
+    /** Which notebook the open section belongs to — the scope of a search (CS2). */
+    private fun notebookIdOfSelectedSection(): String? {
+        val sectionId = _uiState.value.selectedSectionId ?: return null
+        return _uiState.value.tree
+            .firstOrNull { notebook -> notebook.liveSections.any { it.id == sectionId } }
+            ?.notebook
+            ?.id
+    }
+
+    private val _reveal = MutableStateFlow<ContentReveal?>(null)
+
+    /** The hit the canvas has been asked to show, until it has shown it. */
+    val reveal: StateFlow<ContentReveal?> = _reveal.asStateFlow()
+
+    /**
+     * Goes to a hit: its section, its page, and then the box that holds it — CS9.
+     *
+     * The reveal is set *first* and outlives the page load on purpose. It is a standing request that
+     * `EditorPane` picks up once the page it names is the open one and the container it names has
+     * been laid out, which is several frames after this returns.
+     */
+    fun openSearchHit(hit: ContentHit) {
+        val unit = hit.unit
+        _reveal.value = ContentReveal(
+            pageId = unit.pageId,
+            kind = unit.kind,
+            boxId = unit.boxId,
+            tableId = unit.tableId,
+            start = hit.editorStart,
+            end = hit.editorEnd,
+        )
+        val state = _uiState.value
+        when {
+            state.selectedPageId == unit.pageId -> _compactPane.value = CompactPane.Editor
+            state.selectedSectionId == unit.sectionId -> openPage(unit.pageId)
+            else -> {
+                selectSection(unit.sectionId)
+                // Set after the switch, not before: `selectSection` hands the choice of page to the
+                // pages flow, which cannot have emitted yet — nothing else runs on this thread
+                // between here and a database round trip. Clearing it in `selectSection` instead
+                // would delete the request this very line is making.
+                pendingPageId = unit.pageId
+            }
+        }
+    }
+
+    /** Called by the canvas once it has scrolled to a hit and put the caret on it. */
+    fun onRevealHandled() {
+        _reveal.value = null
     }
 
     // --- outlines ------------------------------------------------------------------------------
@@ -2747,6 +2946,15 @@ class NotesViewModel(
 
     companion object {
         private const val AUTOSAVE_DELAY_MS = 400L
+
+        /**
+         * How long the search box waits before running a query — CS11.
+         *
+         * Shorter than autosave, because this is answering a question rather than protecting work:
+         * long enough that typing a word is one search rather than five, short enough that the list
+         * has caught up by the time the fingers stop.
+         */
+        private const val SEARCH_DEBOUNCE_MS = 180L
 
         /** Far enough that a duplicate is not mistaken for the original not having copied. */
         private const val DUPLICATE_OFFSET = 16f

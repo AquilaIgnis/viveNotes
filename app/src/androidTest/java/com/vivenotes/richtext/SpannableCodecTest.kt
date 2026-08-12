@@ -62,6 +62,38 @@ class SpannableCodecTest {
         assertEquals("before $latex after", SpannableCodec.parse(rendered).single().text)
     }
 
+    /**
+     * The invariant the Content panel's offsets stand on — `docs/searchPlan.md` CS5.
+     *
+     * `Block.editorText` is the model's claim about what [SpannableCodec.render] writes, and a search
+     * hit's position is handed straight to `setSelection` on the strength of it. This is the only
+     * place that can hold the two strings up against each other, since one of them needs Android.
+     *
+     * An equation is the case that matters: `Block.text` substitutes the LaTeX source, which is a
+     * different length, so a search that used it would select the wrong characters — by the length of
+     * every formula before the match.
+     */
+    @Test
+    fun editorTextIsWhatTheEditorActuallyHolds() {
+        val latex = "\\frac{1}{2}"
+        val blocks = listOf(
+            Block(
+                id = "first",
+                runs = listOf(
+                    Run("before "),
+                    Run(OBJECT_REPLACEMENT_CHARACTER.toString(), setOf(Mark.Equation(latex))),
+                    Run(" after"),
+                ),
+            ),
+            Block(id = "second", runs = listOf(Run("plain line"))),
+        )
+
+        val rendered = SpannableCodec.render(blocks, style)
+        assertEquals(rendered.toString(), blocks.joinToString("\n") { it.editorText })
+        // And the two projections really do differ, so the assertion above is not vacuous.
+        assertTrue(blocks.first().text.length > blocks.first().editorText.length)
+    }
+
     @Test
     fun findsAnEquationOnItsSelectionAndEitherCaretBoundary() {
         val latex = "x^2"

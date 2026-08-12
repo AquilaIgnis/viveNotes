@@ -117,10 +117,13 @@ import com.vivenotes.model.Mark
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PrintMargins
 import com.vivenotes.model.RuleLines
+import androidx.compose.ui.text.TextRange
+import com.vivenotes.model.search.ContentKind
 import com.vivenotes.richtext.EditorStyle
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.OutlineEditText
 import com.vivenotes.richtext.SelectionState
+import com.vivenotes.ui.ContentReveal
 import com.vivenotes.ui.OutlineBox
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.theme.CanvasColors
@@ -140,6 +143,13 @@ private val CANVAS_TRAILING_SPACE = 320.dp
 /** Blank canvas kept to the right of the widest container, so there is room to start another. */
 private val CANVAS_TRAILING_WIDTH = 200.dp
 private val CANVAS_MIN_WIDTH = 720.dp
+/**
+ * How far inside the window a revealed search result is placed — `docs/searchPlan.md` CS9.
+ *
+ * Not flush against the corner: a container scrolled hard against the edge has its move grip and its
+ * left rule off screen, and a result that lands there reads as having overshot.
+ */
+private val REVEAL_MARGIN = 48.dp
 private val GRIP_HEIGHT = 18.dp
 private val RESIZE_HANDLE_WIDTH = 18.dp
 
@@ -242,6 +252,15 @@ fun EditorPane(
     onCanvasMeasured: (Float, Float) -> Unit,
     /** Drawn while the Paper Size pane is open, so the margins being edited are visible. */
     showPrintMargins: Boolean,
+    /**
+     * A search result to show — `docs/searchPlan.md` CS9.
+     *
+     * A standing request rather than an event, because it usually arrives while the page it names is
+     * still loading: it is honoured on the first composition where that page is open *and* the box it
+     * names has been laid out, and [onRevealHandled] is what says it has been taken.
+     */
+    reveal: ContentReveal? = null,
+    onRevealHandled: () -> Unit = {},
     /**
      * The page's ink, and what the armed tool does with it.
      *
@@ -398,6 +417,18 @@ fun EditorPane(
     var retainedEquationOutlineId by remember { mutableStateOf<String?>(null) }
     /** Container to grab focus once composed — the one the user just created by tapping. */
     var pendingFocusId by remember { mutableStateOf<String?>(null) }
+
+    /**
+     * What that container should select once it has focus, or null to leave the caret where the
+     * editor puts it — CS9.
+     *
+     * Set only by a revealed search result. A container created by tapping has no text to select, so
+     * this stays null on that path and nothing about it changes.
+     */
+    var pendingSelection by remember { mutableStateOf<TextRange?>(null) }
+
+    /** The same request aimed at one table cell, which is focused through the grid's own map (TA17). */
+    var pendingCellFocus by remember { mutableStateOf<CellFocus?>(null) }
     var pastePopupAt by remember { mutableStateOf<InkPoint?>(null) }
     val heights = remember { mutableStateMapOf<String, Int>() }
 
@@ -616,6 +647,59 @@ fun EditorPane(
     // The platform's own fling curve, so letting go of the page decelerates the way letting go
     // of anything else on the device does.
     val flingSpec = rememberSplineBasedDecay<Float>()
+
+    /**
+     * Scrolls a revealed search result into view and hands the caret to it — `docs/searchPlan.md` CS9.
+     *
+     * Keyed on the page's geometry as well as on the request, because the request almost always
+     * arrives before the page it names: opening a result switches page, and the containers land a few
+     * frames later. Returning early leaves the request standing, and the next list of outlines runs
+     * this again.
+     *
+     * The scroll targets the box's own corner rather than the match inside it. A block's position on
+     * screen is known only to the editor that laid it out, and a container is small enough that its
+     * top-left corner puts the caret on screen — which the focus below then makes visible for real.
+     */
+    LaunchedEffect(reveal, pageId, outlines, tables, zoom) {
+        val target = reveal ?: return@LaunchedEffect
+        if (target.pageId != pageId) return@LaunchedEffect
+        val corner = when (target.kind) {
+            // The title is the page's own header, which is at the origin whatever else has moved.
+            ContentKind.Title -> InkPoint(0f, 0f)
+            ContentKind.Text -> outlines.firstOrNull { it.id == target.boxId }
+                ?.let { InkPoint(it.x, it.y) }
+            // A cell has no geometry of its own (TA2), so the canvas scrolls to its table.
+            ContentKind.Cell -> tables.firstOrNull { it.id == target.tableId }
+                ?.let { InkPoint(it.x, it.y) }
+        } ?: run {
+            // The page is open — `pageId` matching means these outlines are its own, since a page
+            // publishes its id and its boxes in one write — and the box is not on it. The index was
+            // stale: something deleted it between being searched and being asked for. Dropping the
+            // request is the honest end, and leaving it standing would fire it at whatever came next.
+            onRevealHandled()
+            return@LaunchedEffect
+        }
+
+        val scale = zoom * density.density
+        val margin = with(density) { REVEAL_MARGIN.toPx() }
+        horizontal.animateScrollTo((corner.x * scale - margin).roundToInt().coerceAtLeast(0))
+        vertical.animateScrollTo((corner.y * scale - margin).roundToInt().coerceAtLeast(0))
+
+        when (target.kind) {
+            // A title has no editor to put a caret in — it is a Compose field with no focus
+            // requester — so showing the page is the whole of what opening it can honestly do.
+            ContentKind.Title -> Unit
+            ContentKind.Text -> {
+                pendingSelection = TextRange(target.start, target.end)
+                pendingFocusId = target.boxId
+            }
+            ContentKind.Cell -> pendingCellFocus = CellFocus(
+                cellId = target.boxId,
+                selection = TextRange(target.start, target.end),
+            )
+        }
+        onRevealHandled()
+    }
 
     // Read through holders, never captured: the pinch handler is keyed on nothing and outlives every
     // recomposition, so a captured zoom would be frozen at whatever it was when the page opened.
@@ -1092,6 +1176,10 @@ fun EditorPane(
                                     tableBounds.firstOrNull { it.id == table.id }
                                         ?.let { selection = CanvasSelection.ofTable(it) }
                                 },
+                                // Every table is offered the request; the one that owns the cell
+                                // takes it. A grid that does not have it cannot answer for it.
+                                focusCell = pendingCellFocus,
+                                onCellFocusHandled = { pendingCellFocus = null },
                                 onMeasured = { heightPx -> heights[table.id] = heightPx },
                             )
                         }
@@ -1106,7 +1194,14 @@ fun EditorPane(
                                 defaults = defaults,
                                 focused = focusedOutlineId == box.id,
                                 requestFocus = pendingFocusId == box.id,
-                                onFocusHandled = { pendingFocusId = null },
+                                // Only ever set alongside this container's own focus request, and
+                                // cleared with it, so a stale range cannot be applied to the next
+                                // container that happens to ask for focus.
+                                selectRange = pendingSelection.takeIf { pendingFocusId == box.id },
+                                onFocusHandled = {
+                                    pendingFocusId = null
+                                    pendingSelection = null
+                                },
                                 onFocused = { view ->
                                     focusedEditor = view
                                     focusedOutlineId = box.id
@@ -1741,6 +1836,20 @@ internal object OutlineTags {
     const val EDITOR = "outline-editor"
 }
 
+/**
+ * Selects [range] in this editor, clamped to the text it is actually holding.
+ *
+ * The offsets come from the document (`docs/searchPlan.md` CS5) and are applied to a View that may
+ * still be a frame behind it — a table cell mid-rebuild, a container whose blocks have not been set.
+ * Clamping keeps that a caret in the wrong place for one frame rather than an exception.
+ */
+internal fun OutlineEditText.select(range: TextRange) {
+    val length = text?.length ?: 0
+    val start = range.start.coerceIn(0, length)
+    val end = range.end.coerceIn(start, length)
+    setSelection(start, end)
+}
+
 @Composable
 internal fun OutlineContainer(
     box: OutlineBox,
@@ -1750,6 +1859,14 @@ internal fun OutlineContainer(
     defaults: EditorDefaults = EditorDefaults(),
     focused: Boolean,
     requestFocus: Boolean,
+    /**
+     * What to select once focus arrives, in editor offsets — `docs/searchPlan.md` CS9.
+     *
+     * Null for every other way a container gets focus, which leaves the caret where the editor puts
+     * it. Clamped to the text actually present: the offsets were computed from the document, and a
+     * container whose editor has not yet been given that document would otherwise throw.
+     */
+    selectRange: TextRange? = null,
     onFocusHandled: () -> Unit,
     onFocused: (OutlineEditText) -> Unit,
     onBlurred: () -> Unit,
@@ -1780,6 +1897,7 @@ internal fun OutlineContainer(
     LaunchedEffect(requestFocus, view) {
         if (requestFocus && view != null) {
             view?.requestFocus()
+            selectRange?.let { range -> view?.select(range) }
             onFocusHandled()
         }
     }

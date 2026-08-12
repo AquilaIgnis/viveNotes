@@ -5,18 +5,24 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -31,9 +37,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,6 +65,7 @@ import com.vivenotes.ai.renderInkSelection
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.model.PageStyle
+import com.vivenotes.model.search.ContentHit
 import com.vivenotes.math.FormulaToolsState
 import com.vivenotes.math.MathEngine
 import com.vivenotes.ui.editor.DrawActions
@@ -65,7 +74,10 @@ import com.vivenotes.ui.editor.EditorPane
 import com.vivenotes.ui.editor.Ribbon
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.AiModelsPanelContent
+import com.vivenotes.ui.panel.ContentPanelContent
+import com.vivenotes.ui.panel.ContentPanelHeader
 import com.vivenotes.ui.panel.HardwarePanelContent
 import com.vivenotes.ui.panel.PaperSizePanelContent
 import com.vivenotes.ui.panel.RecognitionOutputKind
@@ -139,6 +151,8 @@ fun NotesApp(
     val stylusButtons by viewModel.stylusButtons.collectAsStateWithLifecycle()
     val canvasUndoState by viewModel.canvasUndoState.collectAsStateWithLifecycle()
     val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
+    val contentSearch by viewModel.contentSearch.collectAsStateWithLifecycle()
+    val reveal by viewModel.reveal.collectAsStateWithLifecycle()
 
     // The system photo picker — feature E6. Chosen over `GetContent` and over `READ_MEDIA_IMAGES`
     // deliberately: it needs **no runtime permission at all**, because the user picking a file *is*
@@ -421,6 +435,12 @@ fun NotesApp(
                                 defaults,
                                 viewSettings.zoom,
                                 showPrintMargins = openPane == ToolPane.PaperSize,
+                                searchOpen = openPane == ToolPane.Content,
+                                onToggleSearch = {
+                                    openPane = if (openPane == ToolPane.Content) null else ToolPane.Content
+                                },
+                                reveal = reveal,
+                                onRevealHandled = viewModel::onRevealHandled,
                                 tool = tool,
                                 pens = themedPens,
                                 eraser = eraser,
@@ -465,6 +485,9 @@ fun NotesApp(
                                     onCopyMathResult = { value ->
                                         copyRecognizedText(context, "SymPy result", value)
                                     },
+                                    contentSearch = contentSearch,
+                                    onSearchQueryChange = viewModel::setSearchQuery,
+                                    onOpenHit = viewModel::openSearchHit,
                                     viewModel = viewModel,
                                     onClose = { openPane = null },
                                     modifier = Modifier.width(TOOL_PANEL_WIDTH),
@@ -524,6 +547,15 @@ fun NotesApp(
                                     onCopyMathResult = { value ->
                                         copyRecognizedText(context, "SymPy result", value)
                                     },
+                                    contentSearch = contentSearch,
+                                    onSearchQueryChange = viewModel::setSearchQuery,
+                                    // Compact windows show the pane *instead of* the page, so going
+                                    // to a result has to put the page back or it reveals it behind
+                                    // the panel that asked for it.
+                                    onOpenHit = { hit ->
+                                        viewModel.openSearchHit(hit)
+                                        openPane = null
+                                    },
                                     viewModel = viewModel,
                                     onClose = { openPane = null },
                                     modifier = Modifier.fillMaxSize(),
@@ -534,6 +566,10 @@ fun NotesApp(
                                 defaults,
                                 viewSettings.zoom,
                                 showPrintMargins = false,
+                                searchOpen = false,
+                                onToggleSearch = { openPane = ToolPane.Content },
+                                reveal = reveal,
+                                onRevealHandled = viewModel::onRevealHandled,
                                 tool = tool,
                                 pens = themedPens,
                                 eraser = eraser,
@@ -600,11 +636,21 @@ private fun ToolPaneHost(
     onCopyRecognition: (String) -> Unit,
     onMathAction: (String) -> Unit,
     onCopyMathResult: (String) -> Unit,
+    /** Content pane — the query, and what it found across the notebook (`docs/searchPlan.md`). */
+    contentSearch: ContentSearchState,
+    onSearchQueryChange: (String) -> Unit,
+    onOpenHit: (ContentHit) -> Unit,
     viewModel: NotesViewModel,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ToolPanel(pane = pane, onClose = onClose, modifier = modifier) {
+    // The query field is the one control that must survive its own results scrolling past it.
+    val header: (@Composable ColumnScope.() -> Unit)? = if (pane == ToolPane.Content) {
+        { ContentPanelHeader(state = contentSearch, onQueryChange = onSearchQueryChange) }
+    } else {
+        null
+    }
+    ToolPanel(pane = pane, onClose = onClose, modifier = modifier, header = header) {
         when (pane) {
             ToolPane.PaperSize -> PaperSizePanelContent(
                 style = style,
@@ -636,6 +682,10 @@ private fun ToolPaneHost(
                 text = "Select ink and choose Recognize to see a result here.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            ToolPane.Content -> ContentPanelContent(
+                state = contentSearch,
+                onOpenHit = onOpenHit,
+            )
         }
     }
 }
@@ -647,6 +697,12 @@ private fun EditorSurface(
     defaults: EditorDefaults,
     zoom: Float,
     showPrintMargins: Boolean,
+    /** Whether the Content pane is docked, which the magnifier shows as its own pressed state. */
+    searchOpen: Boolean,
+    onToggleSearch: () -> Unit,
+    /** A search result the canvas has been asked to scroll to and put the caret on — CS9. */
+    reveal: ContentReveal?,
+    onRevealHandled: () -> Unit,
     tool: DrawTool,
     pens: List<PenPreset>,
     eraser: EraserSettings,
@@ -668,17 +724,122 @@ private fun EditorSurface(
     pendingEquation: PendingEquation?,
     modifier: Modifier = Modifier,
 ) {
-    if (state.selectedPageId == null) {
-        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = if (state.loading) "" else "No page selected",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+    // The magnifier is a sibling of the page rather than part of it, and composed after it, so it
+    // sits above the ink overlay and takes the tap the overlay would otherwise swallow. It stays on
+    // a canvas with no page open, because a notebook-wide search does not need one (CS10).
+    Box(modifier.fillMaxSize()) {
+        if (state.selectedPageId == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = if (state.loading) "" else "No page selected",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            PageEditor(
+                state = state,
+                viewModel = viewModel,
+                defaults = defaults,
+                zoom = zoom,
+                showPrintMargins = showPrintMargins,
+                reveal = reveal,
+                onRevealHandled = onRevealHandled,
+                tool = tool,
+                pens = pens,
+                eraser = eraser,
+                highlighter = highlighter,
+                shape = shape,
+                themedTable = themedTable,
+                ruler = ruler,
+                rulerOut = rulerOut,
+                allowFinger = allowFinger,
+                hasClipboard = hasClipboard,
+                strokes = strokes,
+                attachments = attachments,
+                aiModels = aiModels,
+                recognitionRunning = recognitionRunning,
+                onRecognizeFormula = onRecognizeFormula,
+                pendingEquation = pendingEquation,
             )
         }
-        return
-    }
 
+        SearchAffordance(
+            open = searchOpen,
+            onClick = onToggleSearch,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(12.dp),
+        )
+    }
+}
+
+/** Test tag for the magnifier that opens the Content pane. */
+internal const val SEARCH_AFFORDANCE_TAG = "canvas-search"
+
+/**
+ * The magnifier floating at the canvas's top-right — feature C7, `docs/searchPlan.md` CS10.
+ *
+ * Over the page rather than in the ribbon so it is reachable from every tab, Draw included, and so
+ * that finding something does not cost a tab switch in the middle of a thought.
+ */
+@Composable
+private fun SearchAffordance(open: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val background = if (open) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .clip(RoundedCornerShape(50))
+            .background(background)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .testTag(SEARCH_AFFORDANCE_TAG),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = MaterialSymbols.Search,
+            contentDescription = if (open) "Close search" else "Search this notebook",
+            tint = if (open) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/** The page itself, split out so [EditorSurface] can float the magnifier over it. */
+@Composable
+private fun PageEditor(
+    state: NotesUiState,
+    viewModel: NotesViewModel,
+    defaults: EditorDefaults,
+    zoom: Float,
+    showPrintMargins: Boolean,
+    reveal: ContentReveal?,
+    onRevealHandled: () -> Unit,
+    tool: DrawTool,
+    pens: List<PenPreset>,
+    eraser: EraserSettings,
+    highlighter: HighlighterSettings,
+    shape: ShapeSettings,
+    themedTable: TableSettings,
+    ruler: RulerSettings,
+    rulerOut: Boolean,
+    allowFinger: Boolean,
+    hasClipboard: Boolean,
+    strokes: List<PageStroke>,
+    attachments: AttachmentStore,
+    aiModels: AiModelsState,
+    recognitionRunning: Boolean,
+    onRecognizeFormula: (com.vivenotes.ink.CanvasSelection) -> Unit,
+    pendingEquation: PendingEquation?,
+) {
     EditorPane(
         title = state.title,
         createdAt = state.createdAt,
@@ -787,7 +948,9 @@ private fun EditorSurface(
         recognitionRunning = recognitionRunning,
         onRecognizeFormula = onRecognizeFormula,
         showPrintMargins = showPrintMargins,
-        modifier = modifier,
+        reveal = reveal,
+        onRevealHandled = onRevealHandled,
+        modifier = Modifier.fillMaxSize(),
     )
 }
 

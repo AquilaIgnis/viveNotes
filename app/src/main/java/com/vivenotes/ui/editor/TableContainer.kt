@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
@@ -28,6 +29,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -157,6 +160,14 @@ internal fun TableContainer(
      * toolkit short of drawing a lasso round it.
      */
     onSelect: () -> Unit = {},
+    /**
+     * A cell to put the caret in, when it belongs to this table — `docs/searchPlan.md` CS9.
+     *
+     * A revealed search result, and so far the only thing that focuses a cell from outside the grid.
+     * The caller clears it through [onCellFocusHandled] once it has been taken.
+     */
+    focusCell: CellFocus? = null,
+    onCellFocusHandled: () -> Unit = {},
     onMeasured: (Int) -> Unit,
 ) {
     val density = LocalDensity.current
@@ -305,6 +316,8 @@ internal fun TableContainer(
                     defaults = defaults,
                     initialBlocksFor = initialBlocksFor,
                     onCellFocused = onCellFocused,
+                    focusCell = focusCell,
+                    onCellFocusHandled = onCellFocusHandled,
                     onCellBlurred = onCellBlurred,
                     onCellBlocksChanged = onCellBlocksChanged,
                     onSelectionChanged = onSelectionChanged,
@@ -388,6 +401,8 @@ private fun TableGrid(
     defaults: EditorDefaults,
     initialBlocksFor: (String) -> List<Block>,
     onCellFocused: (String, OutlineEditText) -> Unit,
+    focusCell: CellFocus?,
+    onCellFocusHandled: () -> Unit,
     onCellBlurred: (String) -> Unit,
     onCellBlocksChanged: (String, List<Block>) -> Unit,
     onSelectionChanged: (SelectionState) -> Unit,
@@ -422,6 +437,31 @@ private fun TableGrid(
     // Read through a holder: the callback below is assigned to a View that outlives the composition
     // that built it, and a captured grid would still be the one the cell was created in.
     val currentTable = rememberUpdatedState(table)
+
+    /**
+     * Hands the caret to a revealed cell — `docs/searchPlan.md` CS9.
+     *
+     * Keyed on the editor map as well as on the request, because a result opened on another page
+     * arrives before the cells that will render it: the map fills in a frame or two later, and this
+     * runs again when it does. Requests for cells in other tables are ignored, which is what lets
+     * every table on the page be handed the same one.
+     */
+    LaunchedEffect(focusCell, cellEditors.size) {
+        val request = focusCell ?: return@LaunchedEffect
+        if (table.rows.none { row -> row.cells.any { it.id == request.cellId } }) return@LaunchedEffect
+        val editor = cellEditors[request.cellId] ?: return@LaunchedEffect
+        // A View that has only just been added cannot take focus until it is attached, and that is
+        // not this frame. A few tries across frames covers the gap; failing quietly after them
+        // leaves the page scrolled to the right table, which is most of what was asked for.
+        repeat(FOCUS_ATTEMPTS) {
+            if (editor.requestFocus()) {
+                request.selection?.let(editor::select)
+                onCellFocusHandled()
+                return@LaunchedEffect
+            }
+            withFrameNanos { }
+        }
+    }
 
     Column(
         Modifier
@@ -540,6 +580,17 @@ private fun TableGrid(
         }
     }
 }
+
+/**
+ * A cell asked to take the caret, and what it should select when it does — `docs/searchPlan.md` CS9.
+ *
+ * [selection] is in the cell's own editor offsets, exactly as a container's is, since a cell holds
+ * blocks the same way (TA2). Null selects nothing and leaves the caret where focus puts it.
+ */
+internal data class CellFocus(val cellId: String, val selection: TextRange? = null)
+
+/** How many frames a revealed cell is given to become focusable before the attempt is dropped. */
+private const val FOCUS_ATTEMPTS = 5
 
 /**
  * Tab's whole behaviour inside a grid — `docs/tablePlan.md` TA17.

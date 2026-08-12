@@ -57,6 +57,9 @@ interface SectionDao {
 
     @Query("SELECT * FROM sections WHERE id = :id")
     suspend fun byId(id: String): SectionEntity?
+
+    @Query("SELECT * FROM sections WHERE notebookId = :notebookId AND deletedAt IS NULL ORDER BY sortIndex")
+    suspend fun inNotebook(notebookId: String): List<SectionEntity>
 }
 
 @Dao
@@ -85,6 +88,21 @@ interface PageDao {
 
     @Query("SELECT * FROM pages WHERE deletedAt IS NULL AND (title LIKE '%' || :query || '%' OR preview LIKE '%' || :query || '%') ORDER BY updatedAt DESC LIMIT 50")
     fun search(query: String): Flow<List<PageEntity>>
+
+    /**
+     * Every live page of a notebook, in reading order — the corpus the Content panel searches
+     * (`docs/searchPlan.md` CS2).
+     *
+     * Metadata only: `page_content` is a separate table precisely so that listing pages does not drag
+     * every document body along, and the search index relies on that to decide which bodies it
+     * actually needs (CS7).
+     */
+    @Query(
+        "SELECT p.* FROM pages p JOIN sections s ON s.id = p.sectionId " +
+            "WHERE s.notebookId = :notebookId AND p.deletedAt IS NULL AND s.deletedAt IS NULL " +
+            "ORDER BY s.sortIndex, p.sortIndex",
+    )
+    suspend fun inNotebook(notebookId: String): List<PageEntity>
 }
 
 @Dao
@@ -92,6 +110,10 @@ interface PageContentDao {
 
     @Query("SELECT * FROM page_content WHERE pageId = :pageId")
     suspend fun byId(pageId: String): PageContentEntity?
+
+    /** The bodies of named pages, for the search index's incremental rebuild — CS7. */
+    @Query("SELECT * FROM page_content WHERE pageId IN (:pageIds)")
+    suspend fun byIds(pageIds: List<String>): List<PageContentEntity>
 
     @Upsert
     suspend fun upsert(content: PageContentEntity)
