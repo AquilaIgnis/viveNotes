@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
                 app.editorDefaults,
                 app.viewSettings,
                 app.penSettings,
+                app.databaseBackups,
             ),
         )[NotesViewModel::class.java]
 

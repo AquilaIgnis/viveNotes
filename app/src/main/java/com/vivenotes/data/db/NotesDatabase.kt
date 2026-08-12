@@ -14,6 +14,7 @@ import androidx.sqlite.execSQL
         SectionEntity::class,
         PageEntity::class,
         PageContentEntity::class,
+        PageRevisionEntity::class,
         InkStrokeEntity::class,
         InkEraseEntity::class,
         InkEraseTargetEntity::class,
@@ -21,10 +22,8 @@ import androidx.sqlite.execSQL
         InkMoveTargetEntity::class,
         AttachmentEntity::class,
     ],
-    version = 11,
-    // Turn this on together with the androidx.room Gradle plugin and room.schemaLocation before
-    // the first release, since the exported schemas are what migration tests assert against.
-    exportSchema = false,
+    version = 12,
+    exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
 
@@ -32,6 +31,7 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun sectionDao(): SectionDao
     abstract fun pageDao(): PageDao
     abstract fun pageContentDao(): PageContentDao
+    abstract fun pageRevisionDao(): PageRevisionDao
     abstract fun inkStrokeDao(): InkStrokeDao
     abstract fun inkEraseDao(): InkEraseDao
     abstract fun inkMoveDao(): InkMoveDao
@@ -238,6 +238,31 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds bounded, compressed page checkpoints without rewriting any current document. */
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS page_revisions (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        pageId TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        format TEXT NOT NULL,
+                        encoding TEXT NOT NULL,
+                        byteCount INTEGER NOT NULL,
+                        sha256 TEXT NOT NULL,
+                        payload BLOB NOT NULL,
+                        FOREIGN KEY(pageId) REFERENCES pages(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_page_revisions_pageId_createdAt " +
+                        "ON page_revisions(pageId, createdAt)",
+                )
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 .addMigrations(
@@ -251,6 +276,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_8_9,
                     MIGRATION_9_10,
                     MIGRATION_10_11,
+                    MIGRATION_11_12,
                 )
                 .build()
     }

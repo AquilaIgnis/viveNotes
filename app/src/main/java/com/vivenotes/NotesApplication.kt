@@ -4,6 +4,7 @@ import android.app.Application
 import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.OnnxInkRecognitionEngine
 import com.vivenotes.data.AttachmentStore
+import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PenSettingsStore
@@ -22,6 +23,7 @@ import com.vivenotes.math.SympyMathEngine
 class NotesApplication : Application() {
 
     val database: NotesDatabase by lazy { NotesDatabase.create(this) }
+    val databaseBackups: DatabaseBackupManager by lazy { DatabaseBackupManager(this, database) }
     val repository: NotesRepository by lazy {
         NotesRepository(
             database,

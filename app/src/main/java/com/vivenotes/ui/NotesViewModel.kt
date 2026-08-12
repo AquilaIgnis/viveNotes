@@ -32,9 +32,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import android.net.Uri
+import android.util.Log
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.ContentSearchIndex
 import com.vivenotes.data.ContentSearchResults
+import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
@@ -374,6 +376,7 @@ class NotesViewModel(
     private val viewSettingsStore: ViewSettingsStore,
     private val penSettingsStore: PenSettingsStore,
     private val inkDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val databaseBackups: DatabaseBackupManager? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotesUiState())
@@ -665,6 +668,14 @@ class NotesViewModel(
             // empty document the row was created with — and the next save writes that emptiness
             // over the seeded content. On any later launch this returns immediately.
             repository.seedIfEmpty()
+            // Independent of first paint: SQLite may have a large database to copy, and history is
+            // useful precisely because opening a notebook must not wait for backup maintenance.
+            databaseBackups?.let { backups ->
+                launch {
+                    runCatching { backups.createIfDue() }
+                        .onFailure { Log.w("DatabaseBackup", "Could not create daily backup", it) }
+                }
+            }
 
             repository.observeTree()
                 .onEach { tree ->
@@ -2995,6 +3006,7 @@ class NotesViewModel(
             editorDefaultsStore: EditorDefaultsStore,
             viewSettingsStore: ViewSettingsStore,
             penSettingsStore: PenSettingsStore,
+            databaseBackups: DatabaseBackupManager? = null,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -3004,6 +3016,7 @@ class NotesViewModel(
                     editorDefaultsStore,
                     viewSettingsStore,
                     penSettingsStore,
+                    databaseBackups = databaseBackups,
                 ) as T
         }
     }

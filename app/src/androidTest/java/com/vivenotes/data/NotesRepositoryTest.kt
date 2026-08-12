@@ -25,6 +25,7 @@ class NotesRepositoryTest {
 
     private lateinit var db: NotesDatabase
     private lateinit var repository: NotesRepository
+    private var now = 1_000_000L
 
     @Before
     fun setUp() {
@@ -32,7 +33,8 @@ class NotesRepositoryTest {
         db = Room.inMemoryDatabaseBuilder(context, NotesDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        repository = NotesRepository(db)
+        now = 1_000_000L
+        repository = NotesRepository(db, clock = { now })
     }
 
     @After
@@ -107,6 +109,104 @@ class NotesRepositoryTest {
 
         assertTrue("expected a clean load, got $load", load is PageLoad.Loaded)
         assertTrue((load as PageLoad.Loaded).doc.plainText().isBlank())
+    }
+
+    @Test
+    fun autosavesBecomeCompressedCheckpointsRatherThanOneRevisionPerWrite() = runBlocking {
+        val pageId = newPage()
+        fun doc(text: String) = PageDoc(
+            outlines = listOf(Outline.Text(id = "text", blocks = listOf(Block.of(text)))),
+        )
+
+        repository.saveDoc(pageId, doc("one"))
+        now += 1_000
+        repository.saveDoc(pageId, doc("two"))
+
+        var history = repository.revisionHistory(pageId)
+        assertEquals("the 400 ms autosaves were not coalesced", 1, history.size)
+        assertTrue(history.single().byteCount > 0)
+        val first = repository.loadRevision(pageId, history.single().id)
+        assertTrue(first is PageRevisionLoad.Loaded)
+        assertTrue((first as PageRevisionLoad.Loaded).doc.plainText().isBlank())
+
+        now += NotesRepository.REVISION_CHECKPOINT_INTERVAL_MS
+        repository.saveDoc(pageId, doc("three"))
+
+        history = repository.revisionHistory(pageId)
+        assertEquals(2, history.size)
+        val newest = repository.loadRevision(pageId, history.first().id)
+        assertEquals("two", (newest as PageRevisionLoad.Loaded).doc.plainText())
+    }
+
+    @Test
+    fun restoringARevisionCheckpointsTheStateItReplaces() = runBlocking {
+        val pageId = newPage()
+        fun doc(text: String) = PageDoc(
+            outlines = listOf(Outline.Text(id = "text", blocks = listOf(Block.of(text)))),
+        )
+
+        repository.saveDoc(pageId, doc("one"))
+        now += NotesRepository.REVISION_CHECKPOINT_INTERVAL_MS
+        repository.saveDoc(pageId, doc("two"))
+        val revisionOfOne = repository.revisionHistory(pageId).first()
+
+        now += 1
+        val restored = repository.restoreRevision(pageId, revisionOfOne.id)
+
+        assertTrue(restored is PageRevisionLoad.Loaded)
+        assertEquals("one", ((repository.loadDoc(pageId) as PageLoad.Loaded).doc.plainText()))
+        val safetyRevision = repository.revisionHistory(pageId).first()
+        assertEquals(
+            "two",
+            (repository.loadRevision(pageId, safetyRevision.id) as PageRevisionLoad.Loaded)
+                .doc
+                .plainText(),
+        )
+    }
+
+    @Test
+    fun aCorruptRevisionIsReportedAndNeverRestored() = runBlocking {
+        val pageId = newPage()
+        repository.saveDoc(
+            pageId,
+            PageDoc(outlines = listOf(Outline.Text(id = "text", blocks = listOf(Block.of("kept"))))),
+        )
+        val revision = repository.revisionHistory(pageId).single()
+        db.openHelper.writableDatabase.execSQL(
+            "UPDATE page_revisions SET payload = X'00' WHERE id = ?",
+            arrayOf(revision.id),
+        )
+
+        val load = repository.loadRevision(pageId, revision.id)
+
+        assertTrue(load is PageRevisionLoad.Unreadable)
+        assertEquals("kept", ((repository.loadDoc(pageId) as PageLoad.Loaded).doc.plainText()))
+    }
+
+    @Test
+    fun revisionHistoryIsBoundedPerPage() = runBlocking {
+        val pageId = newPage()
+        repeat(NotesRepository.MAX_REVISIONS_PER_PAGE + 5) { index ->
+            repository.saveDoc(
+                pageId,
+                PageDoc(
+                    outlines = listOf(
+                        Outline.Text(id = "text", blocks = listOf(Block.of(index.toString()))),
+                    ),
+                ),
+            )
+            now += NotesRepository.REVISION_CHECKPOINT_INTERVAL_MS
+        }
+
+        val history = repository.revisionHistory(pageId)
+
+        assertEquals(NotesRepository.MAX_REVISIONS_PER_PAGE, history.size)
+        assertEquals(
+            (NotesRepository.MAX_REVISIONS_PER_PAGE + 3).toString(),
+            (repository.loadRevision(pageId, history.first().id) as PageRevisionLoad.Loaded)
+                .doc
+                .plainText(),
+        )
     }
 
     @Test

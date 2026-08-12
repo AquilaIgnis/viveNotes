@@ -105,6 +105,59 @@ data class PageContentEntity(
     val format: String = "json/1",
 )
 
+/**
+ * One recoverable checkpoint of a page body.
+ *
+ * [PageContentEntity] remains the cheap current state. This table holds older states only, so a
+ * normal page load never walks history and saving can atomically preserve the value it replaces.
+ * The payload is compressed by the repository; keeping its codec and checksum beside it means a
+ * future document format can still restore old revisions and corruption is detected before restore.
+ */
+@Entity(
+    tableName = "page_revisions",
+    foreignKeys = [
+        ForeignKey(
+            entity = PageEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["pageId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index(value = ["pageId", "createdAt"])],
+)
+data class PageRevisionEntity(
+    @PrimaryKey val id: String,
+    val pageId: String,
+    val createdAt: Long,
+    val format: String,
+    val encoding: String,
+    val byteCount: Int,
+    val sha256: String,
+    val payload: ByteArray,
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (other is PageRevisionEntity &&
+                id == other.id &&
+                pageId == other.pageId &&
+                createdAt == other.createdAt &&
+                format == other.format &&
+                encoding == other.encoding &&
+                byteCount == other.byteCount &&
+                sha256 == other.sha256 &&
+                payload.contentEquals(other.payload))
+
+    override fun hashCode(): Int = 31 * id.hashCode() + payload.contentHashCode()
+}
+
+/** Lightweight history row for lists; compressed document bytes stay out of ordinary queries. */
+data class PageRevisionSummary(
+    val id: String,
+    val pageId: String,
+    val createdAt: Long,
+    val byteCount: Int,
+)
+
 /** A notebook with its sections, for the navigation rail's expandable tree. */
 data class NotebookWithSections(
     @androidx.room.Embedded val notebook: NotebookEntity,

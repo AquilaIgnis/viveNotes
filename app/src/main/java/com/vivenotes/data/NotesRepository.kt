@@ -15,6 +15,7 @@ import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.data.db.PageEntity
+import com.vivenotes.data.db.PageRevisionSummary
 import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
@@ -59,12 +60,15 @@ class NotesRepository(
     private val codec: TextDocumentCodec = DocumentCodecs.default,
     /** Optional real-ink page bundled by the application for clean-install recognition tests. */
     private val starterInkPage: StarterInkPageFixture? = null,
+    /** Injectable so checkpoint-window behavior has deterministic instrumentation tests. */
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
     private val notebooks = db.notebookDao()
     private val sections = db.sectionDao()
     private val pages = db.pageDao()
     private val contents = db.pageContentDao()
+    private val revisions = db.pageRevisionDao()
     private val ink = db.inkStrokeDao()
     private val inkErases = db.inkEraseDao()
     private val inkMoves = db.inkMoveDao()
@@ -111,7 +115,7 @@ class NotesRepository(
     // --- notebooks -------------------------------------------------------------------------
 
     suspend fun createNotebook(name: String): String {
-        val now = System.currentTimeMillis()
+        val now = clock()
         val index = notebooks.nextSortIndex()
         val id = newId()
         notebooks.insert(
@@ -128,18 +132,18 @@ class NotesRepository(
     }
 
     suspend fun renameNotebook(id: String, name: String) =
-        notebooks.rename(id, name, System.currentTimeMillis())
+        notebooks.rename(id, name, clock())
 
     suspend fun setNotebookExpanded(id: String, expanded: Boolean) =
         notebooks.setExpanded(id, expanded)
 
     suspend fun deleteNotebook(id: String) =
-        notebooks.softDelete(id, System.currentTimeMillis())
+        notebooks.softDelete(id, clock())
 
     // --- sections --------------------------------------------------------------------------
 
     suspend fun createSection(notebookId: String, name: String): String {
-        val now = System.currentTimeMillis()
+        val now = clock()
         val index = sections.nextSortIndex(notebookId)
         val id = newId()
         sections.insert(
@@ -157,15 +161,15 @@ class NotesRepository(
     }
 
     suspend fun renameSection(id: String, name: String) =
-        sections.rename(id, name, System.currentTimeMillis())
+        sections.rename(id, name, clock())
 
     suspend fun deleteSection(id: String) =
-        sections.softDelete(id, System.currentTimeMillis())
+        sections.softDelete(id, clock())
 
     // --- pages -----------------------------------------------------------------------------
 
     suspend fun createPage(sectionId: String, title: String = ""): String {
-        val now = System.currentTimeMillis()
+        val now = clock()
         val index = pages.nextSortIndex(sectionId)
         val id = newId()
         pages.insert(
@@ -185,10 +189,10 @@ class NotesRepository(
     }
 
     suspend fun renamePage(id: String, title: String) =
-        pages.rename(id, title, System.currentTimeMillis())
+        pages.rename(id, title, clock())
 
     suspend fun deletePage(id: String) =
-        pages.softDelete(id, System.currentTimeMillis())
+        pages.softDelete(id, clock())
 
     /**
      * Loads a page body.
@@ -213,10 +217,59 @@ class NotesRepository(
         )
     }
 
-    suspend fun saveDoc(pageId: String, doc: PageDoc) {
-        val now = System.currentTimeMillis()
-        contents.upsert(PageContentEntity(pageId, codec.encodeToString(doc), now, codec.id))
-        pages.updatePreview(pageId, doc.plainText().lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(140), now)
+    suspend fun saveDoc(pageId: String, doc: PageDoc) = writeDoc(pageId, doc, forceRevision = false)
+
+    /** Newest first. The compressed payloads deliberately do not travel with the list. */
+    suspend fun revisionHistory(pageId: String): List<PageRevisionSummary> =
+        revisions.history(pageId)
+
+    suspend fun loadRevision(pageId: String, revisionId: String): PageRevisionLoad {
+        val row = revisions.byId(pageId, revisionId) ?: return PageRevisionLoad.NotFound
+        val summary = DocumentRevisionPayload.summary(row)
+        return runCatching { DocumentRevisionPayload.unpack(row) }.fold(
+            onSuccess = { PageRevisionLoad.Loaded(summary, it) },
+            onFailure = { PageRevisionLoad.Unreadable(summary, it) },
+        )
+    }
+
+    /**
+     * Makes a checkpoint current and first checkpoints the state it replaces, even when the normal
+     * coalescing window has not elapsed. A restore therefore never destroys the route back.
+     */
+    suspend fun restoreRevision(pageId: String, revisionId: String): PageRevisionLoad =
+        when (val loaded = loadRevision(pageId, revisionId)) {
+            is PageRevisionLoad.Loaded -> {
+                writeDoc(pageId, loaded.doc, forceRevision = true)
+                loaded
+            }
+            else -> loaded
+        }
+
+    private suspend fun writeDoc(pageId: String, doc: PageDoc, forceRevision: Boolean) {
+        val now = clock()
+        val encoded = codec.encodeToString(doc)
+        val preview = doc.plainText().lineSequence()
+            .firstOrNull { it.isNotBlank() }
+            .orEmpty()
+            .take(140)
+
+        db.withTransaction {
+            val previous = contents.byId(pageId)
+            if (previous?.docJson == encoded && previous.format == codec.id) return@withTransaction
+
+            if (previous != null && shouldCheckpoint(pageId, now, forceRevision)) {
+                revisions.insert(DocumentRevisionPayload.pack(previous, now))
+                revisions.trimToNewest(pageId, MAX_REVISIONS_PER_PAGE)
+            }
+            contents.upsert(PageContentEntity(pageId, encoded, now, codec.id))
+            pages.updatePreview(pageId, preview, now)
+        }
+    }
+
+    private suspend fun shouldCheckpoint(pageId: String, now: Long, force: Boolean): Boolean {
+        if (force) return true
+        val newest = revisions.newestTimestamp(pageId) ?: return true
+        return now - newest >= REVISION_CHECKPOINT_INTERVAL_MS
     }
 
     // --- ink -------------------------------------------------------------------------------
@@ -254,7 +307,7 @@ class NotesRepository(
      */
     suspend fun eraseStrokes(ids: List<String>) {
         if (ids.isEmpty()) return
-        ink.softDelete(ids, System.currentTimeMillis())
+        ink.softDelete(ids, clock())
     }
 
     /** Restores stroke rows tombstoned by Draw-toolbar undo. */
@@ -295,7 +348,7 @@ class NotesRepository(
 
     /** Includes or excludes an existing erase operation from page-open replay. */
     suspend fun setPartialEraseActive(id: String, active: Boolean) =
-        inkErases.setDeletedAt(id, if (active) null else System.currentTimeMillis())
+        inkErases.setDeletedAt(id, if (active) null else clock())
 
     /** Stores a lasso move or resize with the source rows it was allowed to transform. */
     suspend fun addInkMove(move: InkMoveEntity, strokeIds: Collection<String>) {
@@ -308,7 +361,7 @@ class NotesRepository(
 
     /** Includes or excludes an existing lasso transform from page-open replay. */
     suspend fun setInkMoveActive(id: String, active: Boolean) =
-        inkMoves.setDeletedAt(id, if (active) null else System.currentTimeMillis())
+        inkMoves.setDeletedAt(id, if (active) null else clock())
 
     // --- first run -------------------------------------------------------------------------
 
@@ -362,5 +415,11 @@ class NotesRepository(
                 inkMoves.insertTargets(rows.moveTargets)
             }
         }
+    }
+
+    companion object {
+        /** Coalesces the editor's 400 ms autosaves into useful checkpoints instead of near-duplicates. */
+        const val REVISION_CHECKPOINT_INTERVAL_MS = 30_000L
+        const val MAX_REVISIONS_PER_PAGE = 100
     }
 }

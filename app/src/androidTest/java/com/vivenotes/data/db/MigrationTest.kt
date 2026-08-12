@@ -4,11 +4,13 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import androidx.sqlite.execSQL
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.room.testing.MigrationTestHelper
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.Rule
 import java.io.File
 
 /**
@@ -20,6 +22,12 @@ import java.io.File
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {
+
+    @get:Rule
+    val helper = MigrationTestHelper(
+        InstrumentationRegistry.getInstrumentation(),
+        NotesDatabase::class.java,
+    )
 
     private lateinit var file: File
 
@@ -370,5 +378,48 @@ class MigrationTest {
                 assertEquals(true, it.isNull(1))
             }
         }
+    }
+
+    @Test
+    fun migration11To12PreservesDocumentsAndMatchesTheExportedSchema() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 11).apply {
+            execSQL(
+                "INSERT INTO notebooks VALUES " +
+                    "('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)",
+            )
+            execSQL(
+                "INSERT INTO sections VALUES " +
+                    "('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)",
+            )
+            execSQL(
+                "INSERT INTO pages VALUES " +
+                    "('page', 'section', 'Page', 0, 'kept', 10, 10, NULL)",
+            )
+            execSQL(
+                "INSERT INTO page_content VALUES " +
+                    "('page', '{\"outlines\":[]}', 10, 'json/1')",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            12,
+            true,
+            NotesDatabase.MIGRATION_11_12,
+        ).use { migrated ->
+            migrated.query("SELECT docJson FROM page_content WHERE pageId = 'page'").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("{\"outlines\":[]}", it.getString(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM page_revisions").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+        }
+    }
+
+    companion object {
+        private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
     }
 }

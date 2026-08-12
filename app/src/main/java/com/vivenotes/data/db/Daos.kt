@@ -120,6 +120,32 @@ interface PageContentDao {
 }
 
 @Dao
+interface PageRevisionDao {
+
+    @Insert
+    suspend fun insert(revision: PageRevisionEntity)
+
+    @Query("SELECT * FROM page_revisions WHERE id = :id AND pageId = :pageId")
+    suspend fun byId(pageId: String, id: String): PageRevisionEntity?
+
+    @Query(
+        "SELECT id, pageId, createdAt, byteCount FROM page_revisions " +
+            "WHERE pageId = :pageId ORDER BY createdAt DESC, id DESC",
+    )
+    suspend fun history(pageId: String): List<PageRevisionSummary>
+
+    @Query("SELECT MAX(createdAt) FROM page_revisions WHERE pageId = :pageId")
+    suspend fun newestTimestamp(pageId: String): Long?
+
+    @Query(
+        "DELETE FROM page_revisions WHERE pageId = :pageId AND id NOT IN " +
+            "(SELECT id FROM page_revisions WHERE pageId = :pageId " +
+            "ORDER BY createdAt DESC, id DESC LIMIT :keep)",
+    )
+    suspend fun trimToNewest(pageId: String, keep: Int)
+}
+
+@Dao
 interface InkStrokeDao {
 
     /** A page's live ink, in draw order. Tombstones are excluded, never removed. */
