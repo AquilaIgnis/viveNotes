@@ -92,17 +92,24 @@ class BinaryCodecTest {
         println("CODEC_SIZE json=$json cbor=$cbor ratio=${"%.2f".format(cbor.toDouble() / json)}")
     }
 
+    /**
+     * Why every stored row records its format: the wrong codec must fail, not misread.
+     *
+     * Both directions, because they fail for different reasons — CBOR's tag bytes are not valid
+     * JSON, and JSON's ASCII is not a valid CBOR item — and only one of them being loud would still
+     * leave a way to silently corrupt a document.
+     */
     @Test
     fun `a document is only readable by the codec that wrote it`() {
-        // Why every stored row records its format: the wrong codec must fail, not misread.
-        val cborBytes = CborDocumentCodec.encode(everyFeature())
+        val doc = everyFeature()
 
-        assertTrue(runCatching { JsonDocumentCodec.decode(cborBytes) }.isFailure)
-    }
-
-    @Test
-    fun `both codecs are reachable by id`() {
-        assertEquals(JsonDocumentCodec, DocumentCodecs.byId("json/1"))
-        assertEquals(CborDocumentCodec, DocumentCodecs.byId("cbor/1"))
+        assertTrue(
+            "cbor bytes were accepted as json",
+            runCatching { JsonDocumentCodec.decode(CborDocumentCodec.encode(doc)) }.isFailure,
+        )
+        assertTrue(
+            "json bytes were accepted as cbor",
+            runCatching { CborDocumentCodec.decode(JsonDocumentCodec.encode(doc)) }.isFailure,
+        )
     }
 }

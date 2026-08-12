@@ -3,12 +3,16 @@ package com.vivenotes.model
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * Guards the seam that lets storage and transport use different formats — the thing that makes
  * adding MessagePack for the sync protocol a new codec rather than a change to the model.
+ *
+ * The *binary* half of that seam is [BinaryCodecTest]'s, which exercises it through CBOR. This file
+ * once carried a `ReversedBytesCodec` standing in for "a genuinely binary format, someday"; CBOR is
+ * that format, so the stand-in and the two tests built on it were removed rather than kept beside a
+ * real codec proving the same thing twice.
  */
 class DocumentCodecTest {
 
@@ -47,45 +51,19 @@ class DocumentCodecTest {
         )
     }
 
+    /**
+     * The registry, for every codec there is.
+     *
+     * The id is written into every stored row, so changing one silently orphans documents — which is
+     * why the literals are spelled out here rather than read back off the objects.
+     */
     @Test
     fun `codecs are addressable by a stable id`() {
-        // The id is written into every stored row, so changing it silently orphans documents.
         assertEquals("json/1", JsonDocumentCodec.id)
+        assertEquals("cbor/1", CborDocumentCodec.id)
         assertEquals(JsonDocumentCodec, DocumentCodecs.byId("json/1"))
+        assertEquals(CborDocumentCodec, DocumentCodecs.byId("cbor/1"))
+        // An id from a build this one does not have degrades to null rather than to a wrong guess.
         assertNull(DocumentCodecs.byId("msgpack/1"))
-    }
-
-    /**
-     * Stands in for MessagePack: a format that is genuinely binary rather than text. Proves the
-     * abstraction does not quietly assume a string representation, which is the mistake that would
-     * only surface once a real binary codec was wired in.
-     */
-    private object ReversedBytesCodec : DocumentCodec {
-        override val id = "test-binary/1"
-        override fun encode(doc: PageDoc): ByteArray =
-            JsonDocumentCodec.encode(doc).reversedArray()
-
-        override fun decode(bytes: ByteArray): PageDoc =
-            JsonDocumentCodec.decode(bytes.reversedArray())
-    }
-
-    @Test
-    fun `a binary codec round trips without going through a string`() {
-        val doc = sample()
-
-        val bytes = ReversedBytesCodec.encode(doc)
-
-        assertTrue("expected an encoding unlike the JSON one", !bytes.contentEquals(JsonDocumentCodec.encode(doc)))
-        assertEquals(doc, ReversedBytesCodec.decode(bytes))
-    }
-
-    @Test
-    fun `documents encoded by one codec are unreadable by another`() {
-        // Why every stored row records the codec that wrote it: guessing would corrupt silently.
-        val bytes = ReversedBytesCodec.encode(sample())
-
-        val decodedByWrongCodec = runCatching { JsonDocumentCodec.decode(bytes) }
-
-        assertTrue("a mismatched codec should fail loudly", decodedByWrongCodec.isFailure)
     }
 }
