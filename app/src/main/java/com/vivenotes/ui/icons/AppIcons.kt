@@ -29,6 +29,7 @@ class AppIcons(neutral: Color, accent: Color, warn: Color) {
     val hidePageTitle = hidePageTitleGlyph(neutral, warn)
     val pageWidth = pageWidthGlyph(neutral, accent)
     val eraser = eraserGlyph(neutral, warn)
+    val importNotebook = importNotebookGlyph(neutral, accent)
 }
 
 /**

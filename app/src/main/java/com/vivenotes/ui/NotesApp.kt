@@ -43,7 +43,12 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
+import com.vivenotes.data.db.SectionEntity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivenotes.data.AttachmentStore
@@ -184,6 +189,12 @@ fun NotesApp(
     // Hoisted into the view model, because a stylus button can change it — see `ui/StylusButtons.kt`.
     val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
+    var pendingSectionDelete by remember { mutableStateOf<SectionEntity?>(null) }
+    /** Null until the count has been read, which is what the dialog's vaguer wording covers. */
+    var pendingSectionPages by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(pendingSectionDelete) {
+        pendingSectionPages = pendingSectionDelete?.let { viewModel.pageCount(it.id) }
+    }
     /** The docked pane, if any. Deliberately not persisted: it is where you are, not what you have. */
     var openPane by remember { mutableStateOf<ToolPane?>(null) }
     var recognition by remember { mutableStateOf<RecognitionPanelState?>(null) }
@@ -449,6 +460,14 @@ fun NotesApp(
                                         onToggleNotebook = viewModel::toggleNotebookExpanded,
                                         onAddSection = { pendingDialog = NameDialog.Section(it) },
                                         onAddNotebook = { pendingDialog = NameDialog.Notebook },
+                                        onRenameNotebook = {
+                                            pendingDialog = NameDialog.RenameNotebook(it.id, it.name)
+                                        },
+                                        onRenameSection = {
+                                            pendingDialog = NameDialog.RenameSection(it.id, it.name)
+                                        },
+                                        onDeleteSection = { pendingSectionDelete = it },
+                                        onReorderSections = viewModel::reorderSections,
                                         onSwipeLeft = viewModel::hideNotebookRail,
                                         modifier = Modifier.width(RAIL_WIDTH),
                                     )
@@ -460,6 +479,7 @@ fun NotesApp(
                                     onSelectPage = viewModel::openPage,
                                     onAddPage = viewModel::addPage,
                                     onDeletePage = viewModel::deletePage,
+                                    onReorderPages = viewModel::reorderPages,
                                     onSwipeLeft = viewModel::hideNavigation,
                                     modifier = Modifier.width(PAGE_LIST_WIDTH),
                                 )
@@ -545,6 +565,14 @@ fun NotesApp(
                                 onToggleNotebook = viewModel::toggleNotebookExpanded,
                                 onAddSection = { pendingDialog = NameDialog.Section(it) },
                                 onAddNotebook = { pendingDialog = NameDialog.Notebook },
+                                onRenameNotebook = {
+                                    pendingDialog = NameDialog.RenameNotebook(it.id, it.name)
+                                },
+                                onRenameSection = {
+                                    pendingDialog = NameDialog.RenameSection(it.id, it.name)
+                                },
+                                onDeleteSection = { pendingSectionDelete = it },
+                                onReorderSections = viewModel::reorderSections,
                                 onSwipeLeft = { viewModel.showCompactPane(CompactPane.Pages) },
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -554,6 +582,7 @@ fun NotesApp(
                                 onSelectPage = viewModel::openPage,
                                 onAddPage = viewModel::addPage,
                                 onDeletePage = viewModel::deletePage,
+                                onReorderPages = viewModel::reorderPages,
                                 onSwipeLeft = { viewModel.showCompactPane(CompactPane.Editor) },
                                 modifier = Modifier.fillMaxSize(),
                             )
@@ -638,14 +667,42 @@ fun NotesApp(
             title = when (dialog) {
                 is NameDialog.Notebook -> "New notebook"
                 is NameDialog.Section -> "New section"
+                is NameDialog.RenameNotebook -> "Rename notebook"
+                is NameDialog.RenameSection -> "Rename section"
+            },
+            confirmLabel = when (dialog) {
+                is NameDialog.Notebook, is NameDialog.Section -> "Create"
+                is NameDialog.RenameNotebook, is NameDialog.RenameSection -> "Rename"
+            },
+            initial = when (dialog) {
+                is NameDialog.RenameNotebook -> dialog.current
+                is NameDialog.RenameSection -> dialog.current
+                else -> ""
             },
             onDismiss = { pendingDialog = null },
             onConfirm = { name ->
                 when (dialog) {
                     is NameDialog.Notebook -> viewModel.createNotebook(name)
                     is NameDialog.Section -> viewModel.createSection(dialog.notebookId, name)
+                    // A blank rename is a cancel, not an erasure: creating falls back to a default
+                    // name, but there is no sensible default for something that already has one.
+                    is NameDialog.RenameNotebook -> name.trim().takeIf { it.isNotEmpty() }
+                        ?.let { viewModel.renameNotebook(dialog.id, it) }
+                    is NameDialog.RenameSection -> name.trim().takeIf { it.isNotEmpty() }
+                        ?.let { viewModel.renameSection(dialog.id, it) }
                 }
                 pendingDialog = null
+            },
+        )
+    }
+    pendingSectionDelete?.let { section ->
+        DeleteSectionDialog(
+            section = section,
+            pageCount = pendingSectionPages,
+            onDismiss = { pendingSectionDelete = null },
+            onConfirm = {
+                viewModel.deleteSection(section.id)
+                pendingSectionDelete = null
             },
         )
     }
@@ -1068,15 +1125,29 @@ private fun VerticalHairline() {
 private sealed interface NameDialog {
     data object Notebook : NameDialog
     data class Section(val notebookId: String) : NameDialog
+    data class RenameNotebook(val id: String, val current: String) : NameDialog
+    data class RenameSection(val id: String, val current: String) : NameDialog
 }
 
+/**
+ * Naming something, whether or not it already has a name.
+ *
+ * [initial] is what makes it serve renaming too: the field opens on the current name with it
+ * selected, so replacing is one keystroke and correcting a typo does not mean retyping the rest.
+ */
 @Composable
 private fun NameEntryDialog(
     title: String,
+    confirmLabel: String,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
+    initial: String = "",
 ) {
-    var value by remember { mutableStateOf("") }
+    var value by remember {
+        mutableStateOf(TextFieldValue(initial, selection = TextRange(0, initial.length)))
+    }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -1090,7 +1161,7 @@ private fun NameEntryDialog(
                 decorationBox = { inner ->
                     Column {
                         Box(Modifier.padding(vertical = 6.dp)) {
-                            if (value.isEmpty()) {
+                            if (value.text.isEmpty()) {
                                 Text(
                                     "Name",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -1107,11 +1178,48 @@ private fun NameEntryDialog(
                         )
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focus),
             )
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(value) }) { Text("Create") }
+            TextButton(onClick = { onConfirm(value.text) }) { Text(confirmLabel) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+/**
+ * Confirms a section deletion, which the page list's own delete does not do for a single page.
+ *
+ * The asymmetry is the point: a section takes every page in it out of reach in one tap, and the
+ * count is the part worth reading before agreeing to it. The rows are only tombstoned, so nothing
+ * is unrecoverable — but nothing in the app can bring them back yet either.
+ */
+@Composable
+private fun DeleteSectionDialog(
+    section: SectionEntity,
+    pageCount: Int?,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete ${section.name}?") },
+        text = {
+            Text(
+                when (pageCount) {
+                    null, 0 -> "This section will be removed."
+                    1 -> "Its 1 page will go with it."
+                    else -> "Its $pageCount pages will go with it."
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Delete") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

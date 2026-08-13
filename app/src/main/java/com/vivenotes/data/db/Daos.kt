@@ -81,6 +81,10 @@ interface SectionDao {
     @Query("SELECT COALESCE(MAX(sortIndex), -1) + 1 FROM sections WHERE notebookId = :notebookId")
     suspend fun nextSortIndex(notebookId: String): Int
 
+    /** See [PageDao.setSortIndex] for why this one column moves without touching `updatedAt`. */
+    @Query("UPDATE sections SET sortIndex = :sortIndex WHERE id = :id")
+    suspend fun setSortIndex(id: String, sortIndex: Int)
+
     @Query("SELECT * FROM sections WHERE id = :id")
     suspend fun byId(id: String): SectionEntity?
 
@@ -96,6 +100,13 @@ interface PageDao {
 
     @Query("SELECT * FROM pages WHERE sectionId = :sectionId AND deletedAt IS NULL ORDER BY sortIndex")
     fun observeIn(sectionId: String): Flow<List<PageEntity>>
+
+    /** [observeIn] read once, for a reorder that needs the authoritative membership up front. */
+    @Query("SELECT * FROM pages WHERE sectionId = :sectionId AND deletedAt IS NULL ORDER BY sortIndex")
+    suspend fun inSection(sectionId: String): List<PageEntity>
+
+    @Query("SELECT COUNT(*) FROM pages WHERE sectionId = :sectionId AND deletedAt IS NULL")
+    suspend fun countIn(sectionId: String): Int
 
     @Query("SELECT * FROM pages WHERE id = :id AND deletedAt IS NULL")
     fun observeById(id: String): Flow<PageEntity?>
@@ -123,6 +134,18 @@ interface PageDao {
 
     @Query("SELECT COALESCE(MAX(sortIndex), -1) + 1 FROM pages WHERE sectionId = :sectionId")
     suspend fun nextSortIndex(sectionId: String): Int
+
+    /**
+     * Moves a row within its section.
+     *
+     * **`updatedAt` is deliberately left alone**, unlike every other write in this DAO. It is the
+     * one the list renders under each title as "date modified" and the one `PageSort.Recent` orders
+     * by, so bumping it would make a single drag stamp every page in the section "Just now" and
+     * flatten the very ordering the user might be about to switch to. Where a page sits is not when
+     * it was last written.
+     */
+    @Query("UPDATE pages SET sortIndex = :sortIndex WHERE id = :id")
+    suspend fun setSortIndex(id: String, sortIndex: Int)
 
     @Query("SELECT * FROM pages WHERE deletedAt IS NULL AND (title LIKE '%' || :query || '%' OR preview LIKE '%' || :query || '%') ORDER BY updatedAt DESC LIMIT 50")
     fun search(query: String): Flow<List<PageEntity>>

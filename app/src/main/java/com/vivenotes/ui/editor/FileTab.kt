@@ -2,8 +2,6 @@ package com.vivenotes.ui.editor
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
@@ -40,40 +38,26 @@ internal fun FileTab(
                 label = "Version History",
                 onClick = actions.openVersionHistory,
                 enabled = pageOpen,
-                icon = {
-                    Icon(
-                        imageVector = MaterialSymbols.History,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
+                icon = { MonoIcon(MaterialSymbols.History) },
             )
         }
+
+        Divider()
         Box(Modifier.testTag(FileTags.EXPORT_NOTEBOOK)) {
             RibbonCommand(
                 label = "Export Notebook",
                 onClick = actions.exportNotebook,
                 enabled = notebookOpen,
-                icon = {
-                    Icon(
-                        imageVector = MaterialSymbols.Book,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
+                icon = { MonoIcon(MaterialSymbols.Book) },
             )
         }
         Box(Modifier.testTag(FileTags.IMPORT_NOTEBOOK)) {
             RibbonCommand(
-                label = "Import Notebook",
+                label = "Import",
                 onClick = actions.importNotebook,
-                icon = {
-                    Icon(
-                        imageVector = MaterialSymbols.Article,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
+                // The plain book beside it is Export; the arrow is the only thing telling the two
+                // apart, so this one is two-tone — see `icons/RibbonGlyphs.kt`.
+                icon = { active -> TwoToneIcon({ it.importNotebook }, active) },
             )
         }
     }

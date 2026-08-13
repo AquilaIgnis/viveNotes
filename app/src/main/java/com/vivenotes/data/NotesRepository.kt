@@ -179,6 +179,23 @@ class NotesRepository(
         sections.softDelete(id, clock())
     }
 
+    /** How much a section takes with it when deleted — what the confirmation is worth reading for. */
+    suspend fun pageCount(sectionId: String): Int = pages.countIn(sectionId)
+
+    /** Rewrites a notebook's section order. See [reorderPages], which this mirrors exactly. */
+    suspend fun reorderSections(notebookId: String, orderedIds: List<String>) {
+        clearReplaceableStarter()
+        db.withTransaction {
+            resequence(
+                live = sections.inNotebook(notebookId),
+                orderedIds = orderedIds,
+                id = SectionEntity::id,
+                sortIndex = SectionEntity::sortIndex,
+                write = sections::setSortIndex,
+            )
+        }
+    }
+
     // --- pages -----------------------------------------------------------------------------
 
     suspend fun createPage(sectionId: String, title: String = ""): String {
@@ -210,6 +227,52 @@ class NotesRepository(
     suspend fun deletePage(id: String) {
         clearReplaceableStarter()
         pages.softDelete(id, clock())
+    }
+
+    /**
+     * Rewrites a section's page order.
+     *
+     * [orderedIds] is the list as it looked to the user, which is not necessarily what the table
+     * holds — a page can be created, deleted or imported while a finger is still down. So the live
+     * rows stay the authority on *membership* and [orderedIds] is consulted only for *sequence*:
+     * anything the caller never saw keeps its own relative place at the end rather than colliding
+     * on an index with something else.
+     *
+     * One transaction, so a list is never half-renumbered; and indices are rewritten from zero
+     * rather than shuffled, which is what keeps them dense however many drags have happened.
+     */
+    suspend fun reorderPages(sectionId: String, orderedIds: List<String>) {
+        clearReplaceableStarter()
+        db.withTransaction {
+            resequence(
+                live = pages.inSection(sectionId),
+                orderedIds = orderedIds,
+                id = PageEntity::id,
+                sortIndex = PageEntity::sortIndex,
+                write = pages::setSortIndex,
+            )
+        }
+    }
+
+    /**
+     * Applies [orderedIds] to [live] and writes the resulting positions, skipping the rows already
+     * sitting where they belong — a drag moves one row past a handful of others, so renumbering the
+     * whole list would be mostly no-op writes that still wake every observer of the table.
+     */
+    private suspend fun <T> resequence(
+        live: List<T>,
+        orderedIds: List<String>,
+        id: (T) -> String,
+        sortIndex: (T) -> Int,
+        write: suspend (String, Int) -> Unit,
+    ) {
+        val byId = live.associateBy(id)
+        val requested = orderedIds.mapNotNull(byId::get)
+        val requestedIds = requested.mapTo(mutableSetOf(), id)
+        val resolved = requested + live.filterNot { id(it) in requestedIds }
+        resolved.forEachIndexed { index, row ->
+            if (sortIndex(row) != index) write(id(row), index)
+        }
     }
 
     /**

@@ -3111,6 +3111,9 @@ class NotesViewModel(
         viewModelScope.launch { repository.renameNotebook(notebookId, name) }
     }
 
+    /** For the delete confirmation, which says how many pages go with the section. */
+    suspend fun pageCount(sectionId: String): Int = repository.pageCount(sectionId)
+
     fun deleteSection(sectionId: String) {
         viewModelScope.launch {
             repository.deleteSection(sectionId)
@@ -3131,6 +3134,21 @@ class NotesViewModel(
 
     fun deletePage(pageId: String) {
         viewModelScope.launch { repository.deletePage(pageId) }
+    }
+
+    /**
+     * Commits a drag in the page list. [orderedIds] is the whole section in its new order, because
+     * that is what a drop produces and it is the one form that cannot be misapplied to a list that
+     * moved underneath it — see `NotesRepository.reorderPages`.
+     */
+    fun reorderPages(orderedIds: List<String>) {
+        val sectionId = selectedSection.value ?: return
+        viewModelScope.launch { repository.reorderPages(sectionId, orderedIds) }
+    }
+
+    /** The same, for a notebook's sections. Order is per-notebook, so the notebook is named. */
+    fun reorderSections(notebookId: String, orderedIds: List<String>) {
+        viewModelScope.launch { repository.reorderSections(notebookId, orderedIds) }
     }
 
     fun setTitle(title: String) {

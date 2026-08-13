@@ -477,7 +477,108 @@ class NotesRepositoryTest {
             assertTrue("deletedAt was not stamped", !it.isNull(0))
         }
     }
+
+    @Test
+    fun reorderingPagesRenumbersThemDenselyFromZero() = runBlocking {
+        val sectionId = newSection()
+        val ids = List(4) { repository.createPage(sectionId, "page $it") }
+
+        repository.reorderPages(sectionId, listOf(ids[3], ids[0], ids[2], ids[1]))
+
+        assertEquals(listOf(ids[3], ids[0], ids[2], ids[1]), db.pageIdsIn(sectionId))
+        assertEquals(listOf(0, 1, 2, 3), db.sortIndicesIn("pages", "sectionId", sectionId))
+    }
+
+    /**
+     * The list a finger let go of is not necessarily the list the table holds. A page created while
+     * the drag was still running must not be renumbered on top of one that was.
+     */
+    @Test
+    fun reorderingKeepsPagesTheCallerNeverSaw() = runBlocking {
+        val sectionId = newSection()
+        val known = List(3) { repository.createPage(sectionId, "page $it") }
+        val arrivedMidDrag = repository.createPage(sectionId, "late")
+
+        repository.reorderPages(sectionId, listOf(known[2], known[0], known[1]))
+
+        assertEquals(
+            "the unseen page should keep its place at the end, not collide",
+            listOf(known[2], known[0], known[1], arrivedMidDrag),
+            db.pageIdsIn(sectionId),
+        )
+        assertEquals(listOf(0, 1, 2, 3), db.sortIndicesIn("pages", "sectionId", sectionId))
+    }
+
+    /** A deleted page is gone from the order even if the caller was still showing it. */
+    @Test
+    fun reorderingIgnoresIdsThatAreNoLongerLive() = runBlocking {
+        val sectionId = newSection()
+        val ids = List(3) { repository.createPage(sectionId, "page $it") }
+        repository.deletePage(ids[1])
+
+        repository.reorderPages(sectionId, listOf(ids[1], ids[2], ids[0]))
+
+        assertEquals(listOf(ids[2], ids[0]), db.pageIdsIn(sectionId))
+    }
+
+    /**
+     * `updatedAt` is what the page list shows as "date modified" and what `PageSort.Recent` orders
+     * by, so moving a row must not touch it. See `PageDao.setSortIndex`.
+     */
+    @Test
+    fun reorderingPagesLeavesTheirModifiedTimeAlone() = runBlocking {
+        val sectionId = newSection()
+        val ids = List(2) { repository.createPage(sectionId, "page $it") }
+        val before = db.updatedAtOf(ids[0])
+
+        now += 60_000
+        repository.reorderPages(sectionId, listOf(ids[1], ids[0]))
+
+        assertEquals(before, db.updatedAtOf(ids[0]))
+    }
+
+    @Test
+    fun reorderingSectionsRenumbersWithinOneNotebook() = runBlocking {
+        val notebookId = repository.createNotebook("nb")
+        val other = repository.createNotebook("untouched")
+        val otherSection = repository.createSection(other, "elsewhere")
+        val ids = List(3) { repository.createSection(notebookId, "sec $it") }
+
+        repository.reorderSections(notebookId, listOf(ids[2], ids[1], ids[0]))
+
+        assertEquals(listOf(ids[2], ids[1], ids[0]), db.sectionIdsIn(notebookId))
+        assertEquals(listOf(0, 1, 2), db.sortIndicesIn("sections", "notebookId", notebookId))
+        assertEquals(listOf(otherSection), db.sectionIdsIn(other))
+    }
+
+    private suspend fun newSection(): String =
+        repository.createSection(repository.createNotebook("nb"), "sec")
 }
+
+private fun NotesDatabase.pageIdsIn(sectionId: String): List<String> =
+    idsFrom("SELECT id FROM pages WHERE sectionId = ? AND deletedAt IS NULL ORDER BY sortIndex", sectionId)
+
+private fun NotesDatabase.sectionIdsIn(notebookId: String): List<String> =
+    idsFrom("SELECT id FROM sections WHERE notebookId = ? AND deletedAt IS NULL ORDER BY sortIndex", notebookId)
+
+private fun NotesDatabase.idsFrom(sql: String, argument: String): List<String> =
+    query(sql, arrayOf(argument)).use { cursor ->
+        buildList { while (cursor.moveToNext()) add(cursor.getString(0)) }
+    }
+
+private fun NotesDatabase.sortIndicesIn(table: String, parent: String, id: String): List<Int> =
+    query(
+        "SELECT sortIndex FROM $table WHERE $parent = ? AND deletedAt IS NULL ORDER BY sortIndex",
+        arrayOf(id),
+    ).use { cursor ->
+        buildList { while (cursor.moveToNext()) add(cursor.getInt(0)) }
+    }
+
+private fun NotesDatabase.updatedAtOf(pageId: String): Long =
+    query("SELECT updatedAt FROM pages WHERE id = ?", arrayOf(pageId)).use { cursor ->
+        cursor.moveToFirst()
+        cursor.getLong(0)
+    }
 
 private fun String.hexBytesForTest(): ByteArray = ByteArray(length / 2) { index ->
     val offset = index * 2

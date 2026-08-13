@@ -5,6 +5,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
+import androidx.compose.ui.graphics.vector.group
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
@@ -37,6 +39,28 @@ private inline fun glyph(name: String, block: ImageVector.Builder.() -> Unit): I
         viewportWidth = 24f,
         viewportHeight = 24f,
     ).apply(block).build()
+
+/**
+ * [glyph], for artwork traced from a Material Symbol rather than drawn from scratch here.
+ *
+ * Google's exports are authored in a 960×960 box whose origin sits at the *bottom* left
+ * (`viewBox="0 -960 960 960"`), so every y is negative. Keeping that space rather than rescaling to
+ * the 24 the hand-drawn glyphs use means an export's path data can be pasted in verbatim: nothing
+ * is re-derived by hand, so nothing can be re-derived wrongly, and a redrawn `.svg` drops straight
+ * in. The translating group is exactly the correction `res/drawable/ms_rounded_*.xml` already
+ * applies for the same reason.
+ */
+private inline fun materialGlyph(
+    name: String,
+    block: ImageVector.Builder.() -> Unit,
+): ImageVector =
+    ImageVector.Builder(
+        name = name,
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 960f,
+        viewportHeight = 960f,
+    ).group(translationY = 960f, block = block).build()
 
 /** The three "text" rules that both list glyphs share. */
 private fun ImageVector.Builder.listRules(neutral: Color) {
@@ -485,6 +509,47 @@ fun eraserGlyph(neutral: Color, warn: Color): ImageVector = glyph("Eraser") {
         close()
     }
 }
+
+/**
+ * Path data lifted verbatim from `book_24dp_000000_FILL0_wght400_GRAD0_opsz24.svg` — the Material
+ * `book` symbol with its bookmark removed to clear room for the arrow.
+ *
+ * Parsed once per process rather than once per [AppIcons]. That distinction matters here and
+ * nowhere else in this file: every other glyph is already plain node allocation, while these two
+ * would otherwise re-run an SVG parser each time the theme rebuilds its two icon sets.
+ */
+private val ImportNotebookCover = addPathNodes(
+    "m 240,-80 c -22,0 -40.83333,-7.833333 -56.5,-23.5 C 167.83333,-119.16667 160,-138 160,-160 " +
+        "v -640 c 0,-22 7.83333,-40.83333 23.5,-56.5 15.66667,-15.66667 34.5,-23.5 56.5,-23.5 " +
+        "h 480 c 22,0 40.83333,7.83333 56.5,23.5 15.66667,15.66667 23.5,34.5 23.5,56.5 v 640 " +
+        "c 0,22 -7.83333,40.83333 -23.5,56.5 C 760.83333,-87.833333 742,-80 720,-80 Z " +
+        "m 0,-80 H 720 V -800 H 640 440 240 Z m 0,0 v -640 z",
+)
+
+private val ImportNotebookArrow = addPathNodes(
+    "m 589.65093,-799.95709 v 240.2522 l 76.71592,-76.64487 41.30858,42.74425 " +
+        "-147.53063,147.39399 -147.53062,-147.39399 41.30857,-42.74425 76.71593,76.64487 " +
+        "v -240.2522 z",
+)
+
+/**
+ * Import Notebook — a book with an arrow coming down into it through the cover.
+ *
+ * Two-tone for the reason this whole file exists: the book is scaffolding shared with Export, and
+ * the arrow is the only part that says which direction the notebook is travelling, so the arrow is
+ * what takes the accent. Flattened to one tint the two commands would be near-indistinguishable in
+ * a row that puts them side by side.
+ *
+ * The source artwork already draws that arrow in `#007FFF`, which is the azure the whole theme is
+ * built from (`ui/theme/Theme.kt`), so passing [accent] here reproduces the drawing rather than
+ * reinterpreting it — and gets the light scheme's darker shade for free, where a baked-in hex would
+ * have sat at 2.3:1 on white.
+ */
+fun importNotebookGlyph(neutral: Color, accent: Color): ImageVector =
+    materialGlyph("ImportNotebook") {
+        addPath(ImportNotebookCover, fill = SolidColor(neutral))
+        addPath(ImportNotebookArrow, fill = SolidColor(accent))
+    }
 
 fun highlightGlyph(neutral: Color, swatch: Color): ImageVector = glyph("Highlight") {
     path(fill = SolidColor(neutral)) {         // pen body
