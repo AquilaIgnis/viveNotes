@@ -96,7 +96,12 @@ internal object InkRevisionPayload {
         require(row.inkEncoding == ENCODING) {
             "unknown ink revision encoding '${row.inkEncoding}'"
         }
-        val raw = GZIPInputStream(ByteArrayInputStream(row.inkPayload)).use { it.readBytes() }
+        require(row.inkByteCount in 0..MAX_INK_BYTES) {
+            "ink revision ${row.id} has an invalid size ${row.inkByteCount}"
+        }
+        val raw = GZIPInputStream(ByteArrayInputStream(row.inkPayload)).use {
+            it.readBounded(row.inkByteCount)
+        }
         require(raw.size == row.inkByteCount) {
             "ink revision ${row.id} is ${raw.size} bytes, expected ${row.inkByteCount}"
         }
@@ -153,6 +158,8 @@ internal object InkRevisionPayload {
         1 -> true
         else -> error("invalid nullable boolean $value")
     }
+
+    internal const val MAX_INK_BYTES = 64 * 1024 * 1024
 }
 
 private fun ByteArray.digest(): String =

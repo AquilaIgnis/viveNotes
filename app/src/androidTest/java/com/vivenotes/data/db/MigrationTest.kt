@@ -454,6 +454,33 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migration13To14AddsLocalMetadataWithoutChangingNotebooks() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 13).apply {
+            execSQL(
+                "INSERT INTO notebooks VALUES " +
+                    "('notebook-uuid', 'Notebook', 1, 0, 1, 10, 10, NULL)",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            14,
+            true,
+            NotesDatabase.MIGRATION_13_14,
+        ).use { migrated ->
+            migrated.query("SELECT id FROM notebooks").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("notebook-uuid", it.getString(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM local_metadata").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+        }
+    }
+
     companion object {
         private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
     }

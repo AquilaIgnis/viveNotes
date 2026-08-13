@@ -45,6 +45,7 @@ import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.NotesRepository
+import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.PageLoad
 import com.vivenotes.data.PageRevisionLoad
 import androidx.ink.strokes.Stroke
@@ -346,6 +347,13 @@ data class VersionHistoryState(
     val message: String? = null,
 )
 
+/** Progress and the one-shot result message for File-tab notebook transfers. */
+data class NotebookTransferState(
+    val running: Boolean = false,
+    val message: String? = null,
+    val error: String? = null,
+)
+
 data class NotesUiState(
     val tree: List<NotebookWithSections> = emptyList(),
     val selectedSectionId: String? = null,
@@ -393,6 +401,7 @@ class NotesViewModel(
     private val penSettingsStore: PenSettingsStore,
     private val inkDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val databaseBackups: DatabaseBackupManager? = null,
+    private val notebookTransfers: NotebookTransferManager? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotesUiState())
@@ -400,6 +409,9 @@ class NotesViewModel(
 
     private val _versionHistory = MutableStateFlow(VersionHistoryState())
     val versionHistory: StateFlow<VersionHistoryState> = _versionHistory.asStateFlow()
+
+    private val _notebookTransfer = MutableStateFlow(NotebookTransferState())
+    val notebookTransfer: StateFlow<NotebookTransferState> = _notebookTransfer.asStateFlow()
 
     private val _selection = MutableStateFlow(SelectionState())
     val selection: StateFlow<SelectionState> = _selection.asStateFlow()
@@ -748,6 +760,79 @@ class NotesViewModel(
         }
     }
 
+    // --- notebook transfer ---------------------------------------------------------------------
+
+    /** The notebook containing the selected section; used for both its export id and picker name. */
+    fun selectedNotebookName(): String? = selectedNotebook()?.notebook?.name
+
+    fun exportCurrentNotebook(destination: Uri) {
+        val manager = notebookTransfers
+        val notebook = selectedNotebook()?.notebook
+        if (manager == null || notebook == null || _notebookTransfer.value.running) return
+        viewModelScope.launch {
+            _notebookTransfer.value = NotebookTransferState(running = true)
+            try {
+                persist()
+                val result = manager.exportNotebook(notebook.id, destination)
+                _notebookTransfer.value = NotebookTransferState(
+                    message = "${result.notebookName} was exported as a .vive notebook.",
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                _notebookTransfer.value = NotebookTransferState(
+                    error = failure.message ?: "The notebook could not be exported.",
+                )
+            }
+        }
+    }
+
+    fun importNotebook(source: Uri) {
+        val manager = notebookTransfers
+        if (manager == null || _notebookTransfer.value.running) return
+        viewModelScope.launch {
+            _notebookTransfer.value = NotebookTransferState(running = true)
+            try {
+                val selectedNotebookId = selectedNotebook()?.notebook?.id
+                val selectedPageId = _uiState.value.selectedPageId
+                persist()
+                val result = manager.importNotebook(source)
+                if (result.created) {
+                    pendingPageId = result.firstPageId
+                    result.firstSectionId?.let(::selectSection)
+                } else if (selectedNotebookId == result.notebookId && selectedPageId != null) {
+                    // persist() already landed the editor before sync. Reload without persisting
+                    // again, or the stale pre-sync UI would immediately overwrite the merged row.
+                    openPage(selectedPageId, persistCurrent = false)
+                }
+                _notebookTransfer.value = NotebookTransferState(
+                    message = if (result.created) {
+                        "${result.notebookName} was imported."
+                    } else {
+                        "${result.notebookName} was synced with the .vive notebook."
+                    },
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                _notebookTransfer.value = NotebookTransferState(
+                    error = failure.message ?: "The notebook could not be imported.",
+                )
+            }
+        }
+    }
+
+    fun clearNotebookTransferStatus() {
+        if (!_notebookTransfer.value.running) _notebookTransfer.value = NotebookTransferState()
+    }
+
+    private fun selectedNotebook(): NotebookWithSections? {
+        val sectionId = _uiState.value.selectedSectionId ?: return null
+        return _uiState.value.tree.firstOrNull { notebook ->
+            notebook.liveSections.any { it.id == sectionId }
+        }
+    }
+
     // --- version history ----------------------------------------------------------------------
 
     /** Opens the current page's lightweight revision list, then previews the newest checkpoint. */
@@ -940,7 +1025,9 @@ class NotesViewModel(
      * Held as one cancellable job rather than left to run: opening a second page while the first is
      * still loading must not let the first finish and publish itself over the second.
      */
-    fun openPage(pageId: String) {
+    fun openPage(pageId: String) = openPage(pageId, persistCurrent = true)
+
+    private fun openPage(pageId: String, persistCurrent: Boolean) {
         if (_uiState.value.selectedPageId != pageId) {
             // Disable actions for the outgoing page during the short load window before the new id
             // is published. Otherwise a fast Restore tap could cancel the page switch and act on
@@ -957,7 +1044,7 @@ class NotesViewModel(
         pageLoad = viewModelScope.launch {
             // The outgoing page's text is written before anything can replace it, and a page switch
             // arriving mid-write cannot tear that write in half.
-            withContext(NonCancellable) { persist() }
+            if (persistCurrent) withContext(NonCancellable) { persist() }
             val page = _uiState.value.pages.firstOrNull { it.id == pageId }
 
             val doc = when (val load = repository.loadDoc(pageId)) {
@@ -3224,6 +3311,7 @@ class NotesViewModel(
             viewSettingsStore: ViewSettingsStore,
             penSettingsStore: PenSettingsStore,
             databaseBackups: DatabaseBackupManager? = null,
+            notebookTransfers: NotebookTransferManager? = null,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -3234,6 +3322,7 @@ class NotesViewModel(
                     viewSettingsStore,
                     penSettingsStore,
                     databaseBackups = databaseBackups,
+                    notebookTransfers = notebookTransfers,
                 ) as T
         }
     }

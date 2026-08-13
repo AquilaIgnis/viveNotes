@@ -18,7 +18,7 @@ class FileTabTest {
     @Test
     fun versionHistoryOpensForAnOpenPage() {
         var opened = false
-        setTab(pageOpen = true) { opened = true }
+        setTab(pageOpen = true, history = { opened = true })
 
         compose.onNodeWithTag(FileTags.VERSION_HISTORY).performClick()
 
@@ -28,19 +28,56 @@ class FileTabTest {
     @Test
     fun versionHistoryIsInertWithoutAnOpenPage() {
         var opened = false
-        setTab(pageOpen = false) { opened = true }
+        setTab(pageOpen = false, history = { opened = true })
 
         compose.onNodeWithTag(FileTags.VERSION_HISTORY).performTouchInput { click() }
 
         assertFalse(opened)
     }
 
-    private fun setTab(pageOpen: Boolean, onOpen: () -> Unit) {
+    @Test
+    fun exportOpensForASelectedNotebook() {
+        var opened = false
+        setTab(pageOpen = false, notebookOpen = true, export = { opened = true })
+
+        compose.onNodeWithTag(FileTags.EXPORT_NOTEBOOK).performClick()
+
+        assertTrue(opened)
+    }
+
+    @Test
+    fun exportIsInertWithoutASelectedNotebook() {
+        var opened = false
+        setTab(pageOpen = false, notebookOpen = false, export = { opened = true })
+
+        compose.onNodeWithTag(FileTags.EXPORT_NOTEBOOK).performTouchInput { click() }
+
+        assertFalse(opened)
+    }
+
+    @Test
+    fun importIsAlwaysAvailable() {
+        var opened = false
+        setTab(pageOpen = false, notebookOpen = false, import = { opened = true })
+
+        compose.onNodeWithTag(FileTags.IMPORT_NOTEBOOK).performClick()
+
+        assertTrue(opened)
+    }
+
+    private fun setTab(
+        pageOpen: Boolean,
+        notebookOpen: Boolean = pageOpen,
+        history: () -> Unit = {},
+        export: () -> Unit = {},
+        import: () -> Unit = {},
+    ) {
         compose.setContent {
             ViveNotesTheme {
                 FileTab(
-                    actions = FileActions(openVersionHistory = onOpen),
+                    actions = FileActions(history, export, import),
                     pageOpen = pageOpen,
+                    notebookOpen = notebookOpen,
                 )
             }
         }

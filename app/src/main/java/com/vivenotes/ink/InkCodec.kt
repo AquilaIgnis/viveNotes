@@ -462,6 +462,10 @@ object InkCodec {
         }.getOrNull()
     }
 
+    /** Structural validation for an imported point blob without building its brush mesh. */
+    fun hasValidInputData(points: ByteArray): Boolean =
+        runCatching { decodeInputs(points) }.isSuccess
+
     fun encodeErase(
         mask: Stroke,
         pageId: String,

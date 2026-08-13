@@ -9,6 +9,19 @@ import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+interface LocalMetadataDao {
+
+    @Query("SELECT value FROM local_metadata WHERE `key` = :key")
+    suspend fun value(key: String): String?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(metadata: LocalMetadataEntity)
+
+    @Query("DELETE FROM local_metadata WHERE `key` = :key")
+    suspend fun delete(key: String)
+}
+
+@Dao
 interface NotebookDao {
 
     @Transaction
@@ -20,6 +33,16 @@ interface NotebookDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(notebook: NotebookEntity)
+
+    @Upsert
+    suspend fun upsert(notebook: NotebookEntity)
+
+    @Query("SELECT * FROM notebooks WHERE id = :id")
+    suspend fun byId(id: String): NotebookEntity?
+
+    /** Only for removing an installation-generated placeholder; user deletion stays tombstoned. */
+    @Query("DELETE FROM notebooks WHERE id = :id")
+    suspend fun hardDeletePlaceholder(id: String)
 
     @Query("UPDATE notebooks SET name = :name, updatedAt = :now WHERE id = :id")
     suspend fun rename(id: String, name: String, now: Long)
@@ -46,6 +69,9 @@ interface SectionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(section: SectionEntity)
 
+    @Upsert
+    suspend fun upsert(section: SectionEntity)
+
     @Query("UPDATE sections SET name = :name, updatedAt = :now WHERE id = :id")
     suspend fun rename(id: String, name: String, now: Long)
 
@@ -57,6 +83,9 @@ interface SectionDao {
 
     @Query("SELECT * FROM sections WHERE id = :id")
     suspend fun byId(id: String): SectionEntity?
+
+    @Query("SELECT * FROM sections WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<String>): List<SectionEntity>
 
     @Query("SELECT * FROM sections WHERE notebookId = :notebookId AND deletedAt IS NULL ORDER BY sortIndex")
     suspend fun inNotebook(notebookId: String): List<SectionEntity>
@@ -73,6 +102,15 @@ interface PageDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(page: PageEntity)
+
+    @Upsert
+    suspend fun upsert(page: PageEntity)
+
+    @Query("SELECT * FROM pages WHERE id = :id")
+    suspend fun byId(id: String): PageEntity?
+
+    @Query("SELECT * FROM pages WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<String>): List<PageEntity>
 
     @Query("UPDATE pages SET title = :title, updatedAt = :now WHERE id = :id")
     suspend fun rename(id: String, title: String, now: Long)
@@ -124,6 +162,12 @@ interface PageRevisionDao {
 
     @Insert
     suspend fun insert(revision: PageRevisionEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfAbsent(revision: PageRevisionEntity): Long
+
+    @Query("SELECT * FROM page_revisions WHERE id IN (:ids)")
+    suspend fun byGlobalIds(ids: List<String>): List<PageRevisionEntity>
 
     @Query("SELECT * FROM page_revisions WHERE id = :id AND pageId = :pageId")
     suspend fun byId(pageId: String, id: String): PageRevisionEntity?
@@ -178,6 +222,12 @@ interface InkStrokeDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(strokes: List<InkStrokeEntity>)
+
+    @Upsert
+    suspend fun upsert(strokes: List<InkStrokeEntity>)
+
+    @Query("SELECT * FROM ink_strokes WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<String>): List<InkStrokeEntity>
 
     @Query("UPDATE ink_strokes SET deletedAt = :now WHERE id IN (:ids)")
     suspend fun softDelete(ids: List<String>, now: Long)
@@ -264,8 +314,20 @@ interface InkEraseDao {
     @Insert
     suspend fun insert(erase: InkEraseEntity)
 
+    @Upsert
+    suspend fun upsert(erase: InkEraseEntity)
+
     @Insert
     suspend fun insertTargets(targets: List<InkEraseTargetEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTargetsIfAbsent(targets: List<InkEraseTargetEntity>)
+
+    @Query("SELECT * FROM ink_erase_targets WHERE eraseId IN (:eraseIds)")
+    suspend fun targetsForErases(eraseIds: List<String>): List<InkEraseTargetEntity>
+
+    @Query("SELECT * FROM ink_erases WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<String>): List<InkEraseEntity>
 
     @Query("UPDATE ink_erases SET deletedAt = :deletedAt WHERE id = :id")
     suspend fun setDeletedAt(id: String, deletedAt: Long?)
@@ -293,8 +355,20 @@ interface InkMoveDao {
     @Insert
     suspend fun insert(move: InkMoveEntity)
 
+    @Upsert
+    suspend fun upsert(move: InkMoveEntity)
+
     @Insert
     suspend fun insertTargets(targets: List<InkMoveTargetEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTargetsIfAbsent(targets: List<InkMoveTargetEntity>)
+
+    @Query("SELECT * FROM ink_move_targets WHERE moveId IN (:moveIds)")
+    suspend fun targetsForMoves(moveIds: List<String>): List<InkMoveTargetEntity>
+
+    @Query("SELECT * FROM ink_moves WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<String>): List<InkMoveEntity>
 
     @Query("UPDATE ink_moves SET deletedAt = :deletedAt WHERE id = :id")
     suspend fun setDeletedAt(id: String, deletedAt: Long?)

@@ -56,7 +56,12 @@ internal object DocumentRevisionPayload {
 
     fun unpack(row: PageRevisionEntity): PageDoc {
         require(row.encoding == ENCODING) { "unknown revision encoding '${row.encoding}'" }
-        val raw = GZIPInputStream(ByteArrayInputStream(row.payload)).use { it.readBytes() }
+        require(row.byteCount in 0..MAX_DOCUMENT_BYTES) {
+            "revision ${row.id} has an invalid size ${row.byteCount}"
+        }
+        val raw = GZIPInputStream(ByteArrayInputStream(row.payload)).use {
+            it.readBounded(row.byteCount)
+        }
         require(raw.size == row.byteCount) {
             "revision ${row.id} is ${raw.size} bytes, expected ${row.byteCount}"
         }
@@ -75,6 +80,24 @@ internal object DocumentRevisionPayload {
             row.createdAt,
             row.byteCount + row.inkByteCount,
         )
+
+    internal const val MAX_DOCUMENT_BYTES = 16 * 1024 * 1024
+}
+
+/** Reads one integrity-framed payload without letting a false size become a decompression bomb. */
+internal fun java.io.InputStream.readBounded(expectedBytes: Int): ByteArray {
+    require(expectedBytes >= 0)
+    val output = ByteArrayOutputStream(minOf(expectedBytes, 64 * 1024))
+    val buffer = ByteArray(16 * 1024)
+    var total = 0
+    while (true) {
+        val read = read(buffer)
+        if (read < 0) break
+        total += read
+        require(total <= expectedBytes) { "payload exceeds its declared size" }
+        output.write(buffer, 0, read)
+    }
+    return output.toByteArray()
 }
 
 private fun ByteArray.sha256(): String =

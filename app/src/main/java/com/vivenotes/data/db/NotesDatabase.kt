@@ -21,8 +21,9 @@ import androidx.sqlite.execSQL
         InkMoveEntity::class,
         InkMoveTargetEntity::class,
         AttachmentEntity::class,
+        LocalMetadataEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -36,6 +37,7 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun inkEraseDao(): InkEraseDao
     abstract fun inkMoveDao(): InkMoveDao
     abstract fun attachmentDao(): AttachmentDao
+    abstract fun localMetadataDao(): LocalMetadataDao
 
     companion object {
 
@@ -287,6 +289,16 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /** Tracks installation-only UUIDs without putting device state into portable notebooks. */
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS local_metadata (" +
+                        "`key` TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL)",
+                )
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 .addMigrations(
@@ -302,6 +314,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_10_11,
                     MIGRATION_11_12,
                     MIGRATION_12_13,
+                    MIGRATION_13_14,
                 )
                 .build()
     }

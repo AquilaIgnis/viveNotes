@@ -7,6 +7,7 @@ import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
+import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.StarterInkPageFixture
 import com.vivenotes.data.ViewSettingsStore
@@ -31,6 +32,9 @@ class NotesApplication : Application() {
         )
     }
     val attachments: AttachmentStore by lazy { AttachmentStore(this, database) }
+    val notebookTransfers: NotebookTransferManager by lazy {
+        NotebookTransferManager(this, database, attachments)
+    }
     val editorDefaults: EditorDefaultsStore by lazy { EditorDefaultsStore(this) }
     val viewSettings: ViewSettingsStore by lazy { ViewSettingsStore(this) }
     val penSettings: PenSettingsStore by lazy { PenSettingsStore(this) }

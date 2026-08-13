@@ -9,6 +9,13 @@ import androidx.room.PrimaryKey
 import androidx.room.Relation
 import com.vivenotes.data.EraserMode
 
+/** Installation-local state. This table is deliberately removed from portable notebook bundles. */
+@Entity(tableName = "local_metadata")
+data class LocalMetadataEntity(
+    @PrimaryKey val key: String,
+    val value: String,
+)
+
 /**
  * These entities are plain data and double as the domain model — there is no separate mapping
  * layer while the app is single-module.

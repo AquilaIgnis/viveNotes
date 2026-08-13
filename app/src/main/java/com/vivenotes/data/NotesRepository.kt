@@ -9,6 +9,7 @@ import com.vivenotes.data.db.InkEraseWithTargets
 import com.vivenotes.data.db.InkMoveEntity
 import com.vivenotes.data.db.InkMoveTargetEntity
 import com.vivenotes.data.db.InkMoveWithTargets
+import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.NotesDatabase
@@ -73,6 +74,7 @@ class NotesRepository(
     private val ink = db.inkStrokeDao()
     private val inkErases = db.inkEraseDao()
     private val inkMoves = db.inkMoveDao()
+    private val localMetadata = db.localMetadataDao()
 
     fun observeTree(): Flow<List<NotebookWithSections>> = notebooks.observeTree()
 
@@ -116,6 +118,7 @@ class NotesRepository(
     // --- notebooks -------------------------------------------------------------------------
 
     suspend fun createNotebook(name: String): String {
+        clearReplaceableStarter()
         val now = clock()
         val index = notebooks.nextSortIndex()
         val id = newId()
@@ -132,18 +135,23 @@ class NotesRepository(
         return id
     }
 
-    suspend fun renameNotebook(id: String, name: String) =
+    suspend fun renameNotebook(id: String, name: String) {
+        clearReplaceableStarter()
         notebooks.rename(id, name, clock())
+    }
 
     suspend fun setNotebookExpanded(id: String, expanded: Boolean) =
         notebooks.setExpanded(id, expanded)
 
-    suspend fun deleteNotebook(id: String) =
+    suspend fun deleteNotebook(id: String) {
+        clearReplaceableStarter()
         notebooks.softDelete(id, clock())
+    }
 
     // --- sections --------------------------------------------------------------------------
 
     suspend fun createSection(notebookId: String, name: String): String {
+        clearReplaceableStarter()
         val now = clock()
         val index = sections.nextSortIndex(notebookId)
         val id = newId()
@@ -161,15 +169,20 @@ class NotesRepository(
         return id
     }
 
-    suspend fun renameSection(id: String, name: String) =
+    suspend fun renameSection(id: String, name: String) {
+        clearReplaceableStarter()
         sections.rename(id, name, clock())
+    }
 
-    suspend fun deleteSection(id: String) =
+    suspend fun deleteSection(id: String) {
+        clearReplaceableStarter()
         sections.softDelete(id, clock())
+    }
 
     // --- pages -----------------------------------------------------------------------------
 
     suspend fun createPage(sectionId: String, title: String = ""): String {
+        clearReplaceableStarter()
         val now = clock()
         val index = pages.nextSortIndex(sectionId)
         val id = newId()
@@ -189,11 +202,15 @@ class NotesRepository(
         return id
     }
 
-    suspend fun renamePage(id: String, title: String) =
+    suspend fun renamePage(id: String, title: String) {
+        clearReplaceableStarter()
         pages.rename(id, title, clock())
+    }
 
-    suspend fun deletePage(id: String) =
+    suspend fun deletePage(id: String) {
+        clearReplaceableStarter()
         pages.softDelete(id, clock())
+    }
 
     /**
      * Loads a page body.
@@ -258,6 +275,7 @@ class NotesRepository(
             val previous = contents.byId(pageId) ?: return@withTransaction
             val current = checkpointOf(previous, now)
             if (!current.sameContentAs(row)) {
+                clearReplaceableStarter()
                 // Forced even inside the coalescing window: the complete page being replaced must
                 // remain reachable. Content identity keeps repeated A <-> B restores idempotent.
                 storeCheckpoint(current)
@@ -277,6 +295,7 @@ class NotesRepository(
         db.withTransaction {
             val previous = contents.byId(pageId)
             if (previous?.docJson == encoded && previous.format == codec.id) return@withTransaction
+            clearReplaceableStarter()
 
             if (previous != null && shouldCheckpoint(pageId, now)) {
                 storeCheckpoint(checkpointOf(previous, now))
@@ -378,6 +397,7 @@ class NotesRepository(
 
     /** Appends one stroke. Strokes are immutable, so this is the only way ink is ever written. */
     suspend fun addStroke(stroke: InkStrokeEntity): InkStrokeEntity = db.withTransaction {
+        clearReplaceableStarter()
         checkpointBeforeInkMutation(stroke.pageId, clock())
         stroke.copy(seq = ink.nextSeq(stroke.pageId)).also { ink.insert(it) }
     }
@@ -386,6 +406,7 @@ class NotesRepository(
     suspend fun addStrokes(strokes: List<InkStrokeEntity>): List<InkStrokeEntity> {
         if (strokes.isEmpty()) return emptyList()
         return db.withTransaction {
+            clearReplaceableStarter()
             val pageId = strokes.first().pageId
             require(strokes.all { it.pageId == pageId }) { "copied strokes span multiple pages" }
             checkpointBeforeInkMutation(pageId, clock())
@@ -404,6 +425,7 @@ class NotesRepository(
         if (ids.isEmpty()) return
         val now = clock()
         db.withTransaction {
+            clearReplaceableStarter()
             ink.pageIdsFor(ids).forEach { checkpointBeforeInkMutation(it, now) }
             ink.softDelete(ids, now)
         }
@@ -414,6 +436,7 @@ class NotesRepository(
         if (ids.isEmpty()) return
         val now = clock()
         db.withTransaction {
+            clearReplaceableStarter()
             ink.pageIdsFor(ids).forEach { checkpointBeforeInkMutation(it, now) }
             ink.restore(ids)
         }
@@ -423,6 +446,7 @@ class NotesRepository(
         if (colors.isEmpty()) return
         val now = clock()
         db.withTransaction {
+            clearReplaceableStarter()
             ink.pageIdsFor(colors.keys.toList()).forEach { checkpointBeforeInkMutation(it, now) }
             colors.forEach { (id, color) -> ink.setColor(id, color.argb, color.followsTheme) }
         }
@@ -432,6 +456,7 @@ class NotesRepository(
         if (groups.isEmpty()) return
         val now = clock()
         db.withTransaction {
+            clearReplaceableStarter()
             ink.pageIdsFor(groups.keys.toList()).forEach { checkpointBeforeInkMutation(it, now) }
             groups.forEach { (id, group) -> ink.setGroup(id, group) }
         }
@@ -450,6 +475,7 @@ class NotesRepository(
     suspend fun addPartialErase(erase: InkEraseEntity, strokeIds: List<String>) {
         if (strokeIds.isEmpty()) return
         db.withTransaction {
+            clearReplaceableStarter()
             checkpointBeforeInkMutation(erase.pageId, clock())
             inkErases.insert(erase)
             inkErases.insertTargets(strokeIds.distinct().map { InkEraseTargetEntity(erase.id, it) })
@@ -460,6 +486,7 @@ class NotesRepository(
     suspend fun setPartialEraseActive(id: String, active: Boolean) {
         val now = clock()
         db.withTransaction {
+            clearReplaceableStarter()
             inkErases.pageId(id)?.let { checkpointBeforeInkMutation(it, now) }
             inkErases.setDeletedAt(id, if (active) null else now)
         }
@@ -469,6 +496,7 @@ class NotesRepository(
     suspend fun addInkMove(move: InkMoveEntity, strokeIds: Collection<String>) {
         if (strokeIds.isEmpty()) return
         db.withTransaction {
+            clearReplaceableStarter()
             checkpointBeforeInkMutation(move.pageId, clock())
             inkMoves.insert(move)
             inkMoves.insertTargets(strokeIds.distinct().map { InkMoveTargetEntity(move.id, it) })
@@ -479,6 +507,7 @@ class NotesRepository(
     suspend fun setInkMoveActive(id: String, active: Boolean) {
         val now = clock()
         db.withTransaction {
+            clearReplaceableStarter()
             inkMoves.pageId(id)?.let { checkpointBeforeInkMutation(it, now) }
             inkMoves.setDeletedAt(id, if (active) null else now)
         }
@@ -536,9 +565,17 @@ class NotesRepository(
                 inkMoves.insertTargets(rows.moveTargets)
             }
         }
+        // Written last: all calls above are seed construction, while any later content mutation
+        // clears this marker. The UUID lets import remove only this installation's placeholder.
+        localMetadata.put(LocalMetadataEntity(REPLACEABLE_STARTER_KEY, notebookId))
+    }
+
+    private suspend fun clearReplaceableStarter() {
+        localMetadata.delete(REPLACEABLE_STARTER_KEY)
     }
 
     companion object {
+        const val REPLACEABLE_STARTER_KEY = "replaceableStarterNotebookId"
         /** Coalesces the editor's 400 ms autosaves into useful checkpoints instead of near-duplicates. */
         const val REVISION_CHECKPOINT_INTERVAL_MS = 30_000L
         const val MAX_REVISIONS_PER_PAGE = 100

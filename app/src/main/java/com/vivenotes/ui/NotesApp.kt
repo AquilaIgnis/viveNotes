@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -50,6 +51,7 @@ import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
+import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
@@ -155,6 +157,7 @@ fun NotesApp(
     val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
     val contentSearch by viewModel.contentSearch.collectAsStateWithLifecycle()
     val versionHistory by viewModel.versionHistory.collectAsStateWithLifecycle()
+    val notebookTransfer by viewModel.notebookTransfer.collectAsStateWithLifecycle()
     val reveal by viewModel.reveal.collectAsStateWithLifecycle()
 
     // The system photo picker — feature E6. Chosen over `GetContent` and over `READ_MEDIA_IMAGES`
@@ -164,6 +167,14 @@ fun NotesApp(
     val pickPicture = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri -> uri?.let(viewModel::insertImage) }
+    // Storage Access Framework pickers grant access to exactly the document the user chose. No
+    // broad storage permission is requested, and providers may be local, removable, or cloud-backed.
+    val exportNotebook = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(NotebookTransferManager.MIME_TYPE),
+    ) { uri -> uri?.let(viewModel::exportCurrentNotebook) }
+    val importNotebook = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let(viewModel::importNotebook) }
     val strokes by viewModel.strokes.collectAsStateWithLifecycle()
     val aiModels by aiModelStore.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -326,11 +337,18 @@ fun NotesApp(
     val aiActions = remember {
         AiActions(openIntegrated = { openPane = ToolPane.AiModels })
     }
-    val fileActions = remember(viewModel) {
+    val exportFileName = viewModel.selectedNotebookName()?.viveFileName()
+    val fileActions = remember(viewModel, exportFileName) {
         FileActions(
             openVersionHistory = {
                 openPane = ToolPane.VersionHistory
                 viewModel.loadVersionHistory()
+            },
+            exportNotebook = {
+                exportFileName?.let(exportNotebook::launch)
+            },
+            importNotebook = {
+                importNotebook.launch(NotebookTransferManager.importMimeTypes())
             },
         )
     }
@@ -396,6 +414,7 @@ fun NotesApp(
                         allowFinger = drawWithFinger,
                         draw = drawActions,
                         pageOpen = state.selectedPageId != null,
+                        notebookOpen = state.selectedSectionId != null,
                         canUndoCanvas = canvasUndoState.canUndo,
                         canRedoCanvas = canvasUndoState.canRedo,
                         showBack = !medium && pane != rootPane,
@@ -630,6 +649,53 @@ fun NotesApp(
             },
         )
     }
+    if (notebookTransfer.running || notebookTransfer.message != null || notebookTransfer.error != null) {
+        NotebookTransferDialog(
+            state = notebookTransfer,
+            onDismiss = viewModel::clearNotebookTransferStatus,
+        )
+    }
+}
+
+private fun String.viveFileName(): String {
+    val safe = replace(Regex("[\\\\/:*?\"<>|\\u0000-\\u001F]"), "_")
+        .trim()
+        .trim('.')
+        .take(100)
+        .ifBlank { "Notebook" }
+    return "$safe${NotebookTransferManager.EXTENSION}"
+}
+
+@Composable
+private fun NotebookTransferDialog(
+    state: NotebookTransferState,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { if (!state.running) onDismiss() },
+        title = {
+            Text(
+                when {
+                    state.running -> "Working with notebook"
+                    state.error != null -> "Notebook transfer failed"
+                    else -> "Notebook transfer complete"
+                },
+            )
+        },
+        text = {
+            if (state.running) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                    Text("Checking and preparing the notebook…", Modifier.padding(start = 12.dp))
+                }
+            } else {
+                Text(state.error ?: state.message.orEmpty())
+            }
+        },
+        confirmButton = {
+            if (!state.running) TextButton(onClick = onDismiss) { Text("OK") }
+        },
+    )
 }
 
 /** The pane one step back from [pane] in the compact flow. */

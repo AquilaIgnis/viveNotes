@@ -153,6 +153,7 @@ fun Ribbon(
     allowFinger: Boolean,
     draw: DrawActions,
     pageOpen: Boolean,
+    notebookOpen: Boolean = pageOpen,
     canUndoCanvas: Boolean = false,
     canRedoCanvas: Boolean = false,
     showBack: Boolean = false,
@@ -185,7 +186,11 @@ fun Ribbon(
                 .background(MaterialTheme.colorScheme.outlineVariant),
         )
         when (activeTab) {
-            RibbonTab.File -> FileTab(actions = file, pageOpen = pageOpen)
+            RibbonTab.File -> FileTab(
+                actions = file,
+                pageOpen = pageOpen,
+                notebookOpen = notebookOpen,
+            )
             RibbonTab.Home -> HomeTab(
                 selection = selection,
                 defaults = defaults,

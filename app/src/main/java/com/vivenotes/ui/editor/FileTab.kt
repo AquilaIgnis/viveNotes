@@ -15,15 +15,23 @@ import com.vivenotes.ui.icons.MaterialSymbols
 @Immutable
 data class FileActions(
     val openVersionHistory: () -> Unit,
+    val exportNotebook: () -> Unit = {},
+    val importNotebook: () -> Unit = {},
 )
 
 internal object FileTags {
     const val VERSION_HISTORY = "file-version-history"
+    const val EXPORT_NOTEBOOK = "file-export-notebook"
+    const val IMPORT_NOTEBOOK = "file-import-notebook"
 }
 
 /** Commands about the open file rather than its content or the device running the app. */
 @Composable
-internal fun FileTab(actions: FileActions, pageOpen: Boolean) {
+internal fun FileTab(
+    actions: FileActions,
+    pageOpen: Boolean,
+    notebookOpen: Boolean = pageOpen,
+) {
     ScrollingRow(
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
@@ -35,6 +43,33 @@ internal fun FileTab(actions: FileActions, pageOpen: Boolean) {
                 icon = {
                     Icon(
                         imageVector = MaterialSymbols.History,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+            )
+        }
+        Box(Modifier.testTag(FileTags.EXPORT_NOTEBOOK)) {
+            RibbonCommand(
+                label = "Export Notebook",
+                onClick = actions.exportNotebook,
+                enabled = notebookOpen,
+                icon = {
+                    Icon(
+                        imageVector = MaterialSymbols.Book,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+            )
+        }
+        Box(Modifier.testTag(FileTags.IMPORT_NOTEBOOK)) {
+            RibbonCommand(
+                label = "Import Notebook",
+                onClick = actions.importNotebook,
+                icon = {
+                    Icon(
+                        imageVector = MaterialSymbols.Article,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
