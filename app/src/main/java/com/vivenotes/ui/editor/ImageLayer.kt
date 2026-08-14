@@ -25,8 +25,18 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
@@ -52,7 +62,7 @@ internal const val IMAGE_LAYER_TAG = "image-layer"
  *
  * **The decoded bitmaps are the expensive part, and they are not in the document.** Loading is keyed
  * on the attachment id, runs off the main thread, and is cached here for as long as some picture on
- * the page refers to it — see [rememberPageBitmaps].
+ * the page refers to it — see [rememberPageAssets], which also names the two ways that can fail.
  */
 @Composable
 internal fun ImageLayer(
@@ -92,6 +102,16 @@ internal fun ImageLayer(
     val handleFill = MaterialTheme.colorScheme.surface
     val placeholder = MaterialTheme.colorScheme.surfaceVariant
 
+    // What a broken picture says, in the theme's error colour. The plate underneath stays the
+    // loading grey: a whole frame filled with `errorContainer` was tried first and is too loud on
+    // a page — a photograph-sized red block shouts far past what a missing file is worth. The words
+    // are the signal, and they are red.
+    val brokenLabel = MaterialTheme.typography.labelMedium.copy(
+        color = MaterialTheme.colorScheme.error,
+        textAlign = TextAlign.Center,
+    )
+    val measurer = rememberTextMeasurer()
+
     // Read by the gesture rather than captured by it: the handler below runs for the lifetime of the
     // layer and is never rebuilt, so everything it needs has to sit behind a stable holder.
     val currentImages = rememberUpdatedState(images)
@@ -105,12 +125,20 @@ internal fun ImageLayer(
     val resize = remember { mutableStateOf<ImageResize?>(null) }
     val move = remember { mutableStateOf<ImageMove?>(null) }
 
-    val bitmaps = rememberPageBitmaps(images, attachments, density)
+    val assets = rememberPageAssets(images, attachments, density)
+
+    // What the plate says, put where a screen reader — and an instrumented test — can reach it.
+    // Everything this layer shows is painted into one canvas and has no semantics node of its own, so
+    // a message that lives only in those pixels does not exist for either of them.
+    val failures = images.mapNotNull { (assets[it.attachmentId] as? ImageAsset.Broken)?.reason }
 
     Box(
         modifier
             .fillMaxSize()
             .testTag(IMAGE_LAYER_TAG)
+            .semantics {
+                if (failures.isNotEmpty()) contentDescription = failures.joinToString(". ")
+            }
             // Keyed on nothing, for the reason ShapeLayer spells out at length: `pointerInput(keys)`
             // cancels its coroutine when a key changes, and a restarted handler waits for a DOWN that
             // a finger already on the glass will never send.
@@ -239,7 +267,9 @@ internal fun ImageLayer(
                 // photograph is megabytes of native memory and a texture upload; a page of them that
                 // are all nowhere near the window should cost neither.
                 if (!drawn.intersects(window, density)) return@forEach
-                drawImage(drawn, bitmaps[image.attachmentId], placeholder, density)
+                drawImage(
+                    drawn, assets[image.attachmentId], placeholder, brokenLabel, measurer, density,
+                )
             }
 
             // Skipped while the lasso is armed, for the reason `ShapeLayer` gives on the same line:
@@ -254,21 +284,40 @@ internal fun ImageLayer(
 }
 
 /**
- * The decoded bitmap for every picture on the page, loaded off the main thread and kept while used.
+ * What the page knows about one picture's bytes.
+ *
+ * Absent from the map is the third state, and the ordinary one: the load has not finished yet. Only
+ * what the page has to *say* something about is named here; "not answered yet" says itself.
+ */
+private sealed interface ImageAsset {
+
+    data class Ready(val bitmap: ImageBitmap) : ImageAsset
+
+    /** No pixels, and the sentence the plate shows instead of them — see [drawBrokenImage]. */
+    data class Broken(val reason: String) : ImageAsset
+}
+
+/**
+ * Everything the page knows about its pictures' bytes, loaded off the main thread and kept while used.
  *
  * Keyed by attachment id rather than by outline id, so the same picture placed twice is decoded once
  * — which is the same property the content-addressed store gives the file itself.
  *
  * Entries are dropped as soon as no picture refers to them. A cache that only grows is a leak with a
  * photograph in it, and this one would be filled by scrolling through a notebook.
+ *
+ * **A failure is cached exactly like a success**, and deliberately: a picture whose file is gone is
+ * not re-checked on every recomposition of the page. A file that arrives afterwards — an import that
+ * restores it, say — is picked up the next time the page is opened, which is also when the import
+ * would have rewritten the page under it.
  */
 @Composable
-private fun rememberPageBitmaps(
+private fun rememberPageAssets(
     images: List<Outline.Image>,
     attachments: AttachmentStore,
     density: Float,
-): Map<String, ImageBitmap> {
-    val bitmaps = remember { mutableStateMapOf<String, ImageBitmap>() }
+): Map<String, ImageAsset> {
+    val assets = remember { mutableStateMapOf<String, ImageAsset>() }
     // The ids alone, so moving or resizing a picture does not re-run the load.
     val ids = images.map { it.attachmentId }.distinct()
     // The size actually needed, quantised so that dragging a corner does not re-decode every frame.
@@ -276,16 +325,40 @@ private fun rememberPageBitmaps(
 
     LaunchedEffect(ids, target) {
         ids.forEach { id ->
-            if (bitmaps.containsKey(id)) return@forEach
+            if (assets.containsKey(id)) return@forEach
             // Decoded at the size the page needs rather than the size the file is; the store picks
             // the sample from the header, so a large photograph shown small is never fully decoded.
-            attachments.loadBitmap(id, target)?.let { bitmaps[id] = it.asImageBitmap() }
+            val bitmap = attachments.loadBitmap(id, target)
+            assets[id] = when {
+                bitmap != null -> ImageAsset.Ready(bitmap.asImageBitmap())
+                // Two different failures arrive as the same null, and they send the user to two
+                // different places — hence the extra stat, only ever on the path that already failed.
+                !attachments.hasFile(id) -> ImageAsset.Broken("Error: ${id.asFileName()} not found")
+                else -> ImageAsset.Broken("Error: ${id.asFileName()} could not be read")
+            }
         }
         val live = ids.toSet()
-        bitmaps.keys.filterNot { it in live }.forEach(bitmaps::remove)
+        assets.keys.filterNot { it in live }.forEach(assets::remove)
     }
-    return bitmaps
+    return assets
 }
+
+/**
+ * The name of the file an outline points at, shortened to fit on a picture-sized plate.
+ *
+ * Attachments are content-addressed, so the id *is* the filename: `filesDir/attachments/<sha256>`,
+ * 64 hex characters and no extension. The first twelve are enough to find the file by hand and short
+ * enough to sit on one line of a small frame; the rest is a wall of hex that identifies nothing the
+ * prefix has not already identified.
+ */
+private fun String.asFileName(): String =
+    if (length <= FILE_NAME_CHARS) this else take(FILE_NAME_CHARS) + "…"
+
+private const val FILE_NAME_CHARS = 12
+
+/** Chrome, so plain dp: the message stays the same size whatever size the picture was going to be. */
+private val BROKEN_PADDING = 8.dp
+private const val BROKEN_MAX_LINES = 3
 
 /**
  * How many pixels across a picture is worth decoding.
@@ -313,26 +386,84 @@ private fun Outline.Image.intersects(window: Rect, density: Float): Boolean {
  * Draws one picture into its frame.
  *
  * A frame whose bitmap has not arrived yet is filled rather than left blank — the page reflows the
- * moment the picture lands, and a hole that then fills in reads as a bug where a plate does not.
+ * moment the picture lands, and a hole that then fills in reads as a bug where a plate does not. A
+ * frame whose bitmap is never going to arrive gets [drawBrokenImage] instead.
  */
 private fun DrawScope.drawImage(
     image: Outline.Image,
-    bitmap: ImageBitmap?,
+    asset: ImageAsset?,
     placeholder: Color,
+    brokenLabel: TextStyle,
+    measurer: TextMeasurer,
     density: Float,
 ) {
     val topLeft = Offset(image.x * density, image.y * density)
     val size = Size(image.width * density, image.height * density)
-    if (bitmap == null) {
-        drawRect(color = placeholder, topLeft = topLeft, size = size)
-        return
+    when (asset) {
+        null -> drawRect(color = placeholder, topLeft = topLeft, size = size)
+        is ImageAsset.Broken ->
+            drawBrokenImage(asset, topLeft, size, placeholder, brokenLabel, measurer)
+        is ImageAsset.Ready -> drawImage(
+            image = asset.bitmap,
+            srcOffset = IntOffset.Zero,
+            srcSize = IntSize(asset.bitmap.width, asset.bitmap.height),
+            dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
+            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+        )
     }
-    drawImage(
-        image = bitmap,
-        srcOffset = IntOffset.Zero,
-        srcSize = IntSize(bitmap.width, bitmap.height),
-        dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
-        dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+}
+
+/**
+ * The plate for a picture that cannot be drawn, with the reason written on it.
+ *
+ * **A blank plate is the bug this replaces.** A picture whose file is missing kept the loading fill —
+ * `#333333` on the dark theme — so the page showed a black rectangle where the photograph was, with
+ * nothing to say whether it was still decoding, empty, or gone for good. The frame is still drawn at
+ * the document's size, because the picture has not been deleted and the page must not reflow around a
+ * file that may come back.
+ *
+ * **The plate keeps that same fill, and only the message is red.** Painting the whole frame in
+ * `errorContainer` was the first attempt and it was rejected on sight: a photograph-sized block of
+ * saturated red is the loudest thing on the page, for a condition that needs to be noticed once and
+ * then read. A missing picture is now told apart from a loading one by the words on it, not by colour.
+ *
+ * **Painted rather than composed**, for the reason everything else on this layer is: it has to follow
+ * the drag and lasso previews and the window culling, all of which live in this draw scope. A `Text`
+ * child would have to read that state during composition and would recompose the layer on every frame
+ * of a drag. What a canvas cannot give — words a screen reader or a test can find — the layer's
+ * `contentDescription` carries instead.
+ */
+private fun DrawScope.drawBrokenImage(
+    asset: ImageAsset.Broken,
+    topLeft: Offset,
+    size: Size,
+    plate: Color,
+    label: TextStyle,
+    measurer: TextMeasurer,
+) {
+    drawRect(color = plate, topLeft = topLeft, size = size)
+
+    val padding = BROKEN_PADDING.toPx()
+    val room = Size(size.width - padding * 2, size.height - padding * 2)
+    if (room.width <= 0f || room.height <= 0f) return
+    val layout = measurer.measure(
+        text = asset.reason,
+        style = label,
+        overflow = TextOverflow.Ellipsis,
+        maxLines = BROKEN_MAX_LINES,
+        constraints = Constraints(maxWidth = room.width.toInt()),
+    )
+    // A picture can be resized down to `Outline.Image.MIN_SIZE`, where the sentence would spill out
+    // of its own frame and over whatever is beside it. A thumbnail-sized frame therefore says nothing
+    // on the page and is left to the `contentDescription` — spilling someone else's picture over is
+    // worse than a plate that has to be tapped to be understood.
+    if (layout.size.height > room.height) return
+    drawText(
+        textLayoutResult = layout,
+        topLeft = Offset(
+            topLeft.x + (size.width - layout.size.width) / 2f,
+            topLeft.y + (size.height - layout.size.height) / 2f,
+        ),
     )
 }
 

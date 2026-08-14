@@ -111,6 +111,17 @@ class AttachmentStore(
     suspend fun metadata(id: String): AttachmentEntity? = withContext(io) { attachments.byId(id) }
 
     /**
+     * Whether the bytes for [id] are still on disk.
+     *
+     * Exists so a picture that will not draw can say *which* failure it is. [loadBitmap] answers null
+     * for both a file that is gone — a notebook whose attachments never arrived, a file swept while
+     * something still pointed at it — and a file that is sitting right there and cannot be decoded,
+     * and telling a user a picture is missing when it is in `filesDir/attachments` sends them looking
+     * for the wrong thing. See `ImageLayer`'s broken-picture plate.
+     */
+    suspend fun hasFile(id: String): Boolean = withContext(io) { fileFor(id).exists() }
+
+    /**
      * Reads a picture back at no more than [maxDimension] on its longer side.
      *
      * The sample size is chosen from the file's header before any pixels are read, so a picture shown
