@@ -3,6 +3,7 @@ package com.vivenotes.data
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.vivenotes.data.db.AttachmentTextEntity
 import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
@@ -75,6 +76,7 @@ class NotesRepository(
     private val ink = db.inkStrokeDao()
     private val inkErases = db.inkEraseDao()
     private val inkMoves = db.inkMoveDao()
+    private val imageText = db.imageTextDao()
     private val localMetadata = db.localMetadataDao()
     private val deletionRecovery = db.deletionRecoveryDao()
 
@@ -157,6 +159,39 @@ class NotesRepository(
                 ?.let { row.pageId to it }
         }.toMap()
     }
+
+    // --- recognized picture text ------------------------------------------------------------
+    //
+    // `memory/imageOcrPlan.md`. Keyed by attachment, so the same picture in ten places is one row;
+    // deleted with its attachment by the foreign key, so it can never outlive what it describes.
+
+    /**
+     * What is known about the named pictures, whether or not any text came out of them.
+     *
+     * Chunked because a notebook can hold more pictures than SQLite will bind parameters for, and
+     * the failure mode of not chunking is an exception on somebody's largest notebook only.
+     */
+    suspend fun imageTextFor(attachmentIds: Collection<String>): Map<String, AttachmentTextEntity> {
+        if (attachmentIds.isEmpty()) return emptyMap()
+        return attachmentIds.distinct().chunked(SQLITE_BIND_CHUNK)
+            .flatMap { imageText.byIds(it) }
+            .associateBy { it.attachmentId }
+    }
+
+    suspend fun saveImageText(row: AttachmentTextEntity) = imageText.upsert(row)
+
+    suspend fun imageTextCount(engine: String): Int = imageText.countForEngine(engine)
+
+    suspend fun clearImageText() = imageText.clear()
+
+    /** See `ImageTextDao.deleteOrphans`: this must always return zero. */
+    suspend fun deleteOrphanImageText(): Int = imageText.deleteOrphans()
+
+    /** One installation-local setting. Never travels in a notebook bundle — see `local_metadata`. */
+    suspend fun localValue(key: String): String? = localMetadata.value(key)
+
+    suspend fun putLocalValue(key: String, value: String) =
+        localMetadata.put(LocalMetadataEntity(key, value))
 
     // --- notebooks -------------------------------------------------------------------------
 
@@ -685,5 +720,13 @@ class NotesRepository(
         /** Coalesces the editor's 400 ms autosaves into useful checkpoints instead of near-duplicates. */
         const val REVISION_CHECKPOINT_INTERVAL_MS = 30_000L
         const val MAX_REVISIONS_PER_PAGE = 100
+
+        /**
+         * How many ids go into one `IN (…)`.
+         *
+         * SQLite's default parameter limit is 999. Well under it, because a query is built from
+         * these *plus* whatever else it binds.
+         */
+        private const val SQLITE_BIND_CHUNK = 400
     }
 }

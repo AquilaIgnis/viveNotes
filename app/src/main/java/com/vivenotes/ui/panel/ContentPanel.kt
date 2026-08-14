@@ -38,6 +38,7 @@ import com.vivenotes.model.search.ContentHit
 import com.vivenotes.model.search.ContentKind
 import com.vivenotes.model.search.MatchSpan
 import com.vivenotes.model.search.snippetOf
+import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.PageResults
 import com.vivenotes.ui.ContentSearchState
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -46,6 +47,9 @@ internal object ContentPanelTags {
     const val QUERY = "content-query"
     const val CLEAR = "content-clear"
     const val STATUS = "content-status"
+
+    /** The "reading N pictures" line, shown only while an indexing pass is in flight. */
+    const val PICTURES = "content-pictures"
 
     /** A page heading in the result list, which is also the way a title match is opened. */
     fun page(pageId: String) = "content-page-$pageId"
@@ -64,6 +68,7 @@ internal object ContentPanelTags {
 internal fun ColumnScope.ContentPanelHeader(
     state: ContentSearchState,
     onQueryChange: (String) -> Unit,
+    imageProgress: ImageTextProgress = ImageTextProgress(enabled = false),
 ) {
     Row(
         modifier = Modifier
@@ -129,6 +134,26 @@ internal fun ColumnScope.ContentPanelHeader(
             .padding(top = 6.dp, bottom = 2.dp)
             .testTag(ContentPanelTags.STATUS),
     )
+
+    // Said only while it is happening, and only when there is a query to be incomplete about: a
+    // result list that is still growing should say so, and one that is finished should not carry a
+    // line about machinery.
+    if (imageProgress.running && state.query.isNotBlank()) {
+        Text(
+            text = imageProgress.readingLine(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(bottom = 2.dp)
+                .testTag(ContentPanelTags.PICTURES),
+        )
+    }
+}
+
+private fun ImageTextProgress.readingLine(): String {
+    val remaining = pending.coerceAtLeast(0)
+    val pictures = if (remaining == 1) "1 picture" else "$remaining pictures"
+    return "Reading $pictures…"
 }
 
 /**
@@ -210,10 +235,11 @@ private fun HitRow(hit: ContentHit, onOpenHit: (ContentHit) -> Unit) {
             .testTag(ContentPanelTags.hit(hit.unit.boxId, hit.unit.blockIndex)),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Only the cell says what it is. A text box is what a note is made of, so labelling every
-        // ordinary line "text" would be noise down the whole list.
-        if (hit.unit.kind == ContentKind.Cell) {
-            Icon(
+        // Only the kinds that are not plain text say what they are. A text box is what a note is
+        // made of, so labelling every ordinary line "text" would be noise down the whole list — but
+        // a line nobody typed had better say so before someone goes looking for it in the editor.
+        when (hit.unit.kind) {
+            ContentKind.Cell -> Icon(
                 imageVector = MaterialSymbols.Table,
                 contentDescription = "In a table",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -221,6 +247,15 @@ private fun HitRow(hit: ContentHit, onOpenHit: (ContentHit) -> Unit) {
                     .padding(top = 2.dp)
                     .size(14.dp),
             )
+            ContentKind.Image -> Icon(
+                imageVector = MaterialSymbols.Image,
+                contentDescription = "Read from a picture",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .size(14.dp),
+            )
+            ContentKind.Title, ContentKind.Text -> Unit
         }
         Text(
             text = highlighted(snippet.text, snippet.spans),
@@ -257,7 +292,7 @@ private fun highlighted(text: String, spans: List<MatchSpan>): AnnotatedString {
 }
 
 private fun ContentSearchState.statusLine(): String = when {
-    query.isBlank() -> "Text boxes, tables and page titles across this notebook."
+    query.isBlank() -> "Text boxes, tables, pictures and page titles across this notebook."
     // While a query is in flight the list below is still the previous one's, so the line says what
     // is happening rather than counting an answer to a question that has changed.
     running -> "Searching…"

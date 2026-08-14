@@ -172,4 +172,68 @@ class ContentSearchTest {
         val snippet = snippetOf("x = ${OBJECT_REPLACEMENT_CHARACTER} here", emptyList())
         assertEquals("x =   here", snippet.text)
     }
+
+    // --- pictures — `memory/imageOcrPlan.md` IO5 ------------------------------------------------
+
+    private fun picture(id: String, attachmentId: String) =
+        Outline.Image(id = id, attachmentId = attachmentId, height = 100f)
+
+    @Test
+    fun `a page placing the same picture twice contributes it once`() {
+        val placements = doc(
+            picture("frame-a", "sha-one"),
+            picture("frame-b", "sha-one"),
+            picture("frame-c", "sha-two"),
+        ).imagePlacements(page, section)
+
+        // Two placements of one screenshot are one answer to "where is this written", with two
+        // frames around it. The *first* in document order is the one a result opens.
+        assertEquals(listOf("sha-one", "sha-two"), placements.map { it.attachmentId })
+        assertEquals(listOf("frame-a", "frame-c"), placements.map { it.outlineId })
+    }
+
+    @Test
+    fun `two pages placing the same picture each contribute it`() {
+        val one = doc(picture("frame-a", "sha-one")).imagePlacements("page-1", section)
+        val two = doc(picture("frame-b", "sha-one")).imagePlacements("page-2", section)
+
+        val units = (one + two).flatMap { imageUnits(it, listOf("shared caption")) }
+        // Different pages are genuinely different places to go, so both are findable — and both
+        // read the same single row of stored text.
+        assertEquals(listOf("page-1", "page-2"), units.map { it.pageId })
+        assertEquals(setOf("sha-one"), units.mapTo(mutableSetOf()) { it.attachmentId })
+    }
+
+    @Test
+    fun `a picture with no stored text contributes nothing`() {
+        val placement = doc(picture("frame", "sha-one")).imagePlacements(page, section).single()
+
+        assertTrue(imageUnits(placement, emptyList()).isEmpty())
+        assertTrue(imageUnits(placement, listOf("", "   ")).isEmpty())
+    }
+
+    @Test
+    fun `each recognized line is its own result, pointing at the picture`() {
+        val placement = doc(picture("frame", "sha-one")).imagePlacements(page, section).single()
+        val units = imageUnits(placement, listOf("first line", "second line"))
+
+        assertEquals(listOf(ContentKind.Image, ContentKind.Image), units.map { it.kind })
+        assertEquals(listOf("frame", "frame"), units.map { it.boxId })
+        assertEquals(listOf(0, 1), units.map { it.blockIndex })
+        // Offsets into the joined text, the way blocks are offsets into an editor's text.
+        assertEquals(listOf(0, "first line".length + 1), units.map { it.blockStart })
+    }
+
+    @Test
+    fun `a typed line outranks a picture's line for the same word`() {
+        val typed = doc(textBox("box", "quarterly revenue")).contentUnits(page, section, "")
+        val placement = doc(picture("frame", "sha-one")).imagePlacements(page, section).single()
+        val read = imageUnits(placement, listOf("quarterly revenue"))
+
+        val hits = searchContent(typed + read, "quarterly")
+        assertEquals(2, hits.size)
+        // Typed text is what someone wrote; a reading is what a model thinks it can see.
+        assertEquals(ContentKind.Text, hits.first().unit.kind)
+        assertEquals(ContentKind.Image, hits.last().unit.kind)
+    }
 }

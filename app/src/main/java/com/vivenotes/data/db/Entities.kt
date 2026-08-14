@@ -458,3 +458,69 @@ data class AttachmentEntity(
     val refCount: Int = 0,
     val createdAt: Long,
 )
+
+/** What happened the last time a picture was read. */
+enum class ImageTextStatus {
+    /** Text was found and is in the row. */
+    Read,
+
+    /** The picture was read successfully and holds no searchable text. */
+    Empty,
+
+    /**
+     * Reading failed — the file was missing, undecodable, or inference threw.
+     *
+     * Stored rather than left absent so a picture that cannot be read is not retried on every query
+     * for the rest of the notebook's life. A new engine id retries it; nothing else does.
+     */
+    Failed,
+}
+
+/**
+ * The text PP-OCRv5 read out of one picture — `memory/imageOcrPlan.md` IO2, IO3, IO11.
+ *
+ * **Keyed by the attachment, which is keyed by the hash of the pixels.** So the same screenshot
+ * pasted on nine pages is one row, one inference and one copy of the text, by construction rather
+ * than by a de-duplication pass somebody has to remember to run. There is deliberately no `pageId`
+ * and no outline id here: this is what the *picture* says, and where it is placed is the document's
+ * business.
+ *
+ * **It is a child of `attachments` with `ON DELETE CASCADE`.** `AttachmentStore.release` deletes the
+ * attachment row and its file together once the last outline pointing at it is gone for good, and
+ * this row goes with them. A derived cache outliving its subject is the bug this table is most
+ * likely to grow, so the invariant is checked as well as declared — see `ImageTextDao.deleteOrphans`.
+ *
+ * Derived, and therefore regenerable: [engine] records which model and preprocessing wrote [text],
+ * so changing the pipeline is a rolling re-read rather than a migration, and the whole table can be
+ * deleted without losing anything a user typed or drew. That is also why the export in
+ * `NotebookTransferManager` drops it.
+ *
+ * The line boxes are **not** stored. Highlighting the matched line on the picture would need them;
+ * opening a hit selects the picture instead (IO10), and a row that stays narrow is a row that stays
+ * cheap to read for every page of a notebook on every keystroke.
+ */
+@Entity(
+    tableName = "attachment_text",
+    foreignKeys = [
+        ForeignKey(
+            entity = AttachmentEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["attachmentId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class AttachmentTextEntity(
+    @PrimaryKey val attachmentId: String,
+    /** The recognized lines, joined by newlines, in reading order. Empty unless [status] is Read. */
+    val text: String,
+    val lineCount: Int,
+    /** Mean per-character confidence over the lines that were kept. */
+    val confidence: Float,
+    /** Model plus preprocessing version, e.g. `ppocrv5-en/1`. A row from another id is stale. */
+    val engine: String,
+    val status: ImageTextStatus,
+    /** How long the read took, kept because it is the only latency measurement from real devices. */
+    val durationMs: Long,
+    val updatedAt: Long,
+)

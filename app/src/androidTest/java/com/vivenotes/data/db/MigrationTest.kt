@@ -481,6 +481,75 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migration14To15AddsPictureTextKeyedByAttachment() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 14).apply {
+            execSQL(
+                "INSERT INTO attachments VALUES " +
+                    "('sha-one', 'image/webp', 800, 600, 1024, 1, 10)",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            15,
+            true,
+            NotesDatabase.MIGRATION_14_15,
+        ).use { migrated ->
+            // Nothing is backfilled: every row is derived from pixels by a named engine, so the
+            // first indexing pass is what fills this in.
+            migrated.query("SELECT COUNT(*) FROM attachment_text").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+            migrated.execSQL(
+                "INSERT INTO attachment_text VALUES " +
+                    "('sha-one', 'hello', 1, 0.9, 'ppocrv5-en/1', 'Read', 42, 10)",
+            )
+            migrated.query("SELECT COUNT(*) FROM attachment_text").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(1L, it.getLong(0))
+            }
+        }
+    }
+
+    /**
+     * IO3, in the place it can actually be proved: recognized text must not outlive its picture.
+     *
+     * Run against the migrated database rather than a Room-built one so it covers the migration's
+     * own `CREATE TABLE` — a cascade written into the entity but omitted from the migration SQL
+     * would leave exactly this bug on every upgraded install and none of the fresh ones.
+     */
+    @Test
+    fun deletingAnAttachmentDeletesItsRecognizedText() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 14).apply {
+            execSQL(
+                "INSERT INTO attachments VALUES " +
+                    "('sha-one', 'image/webp', 800, 600, 1024, 0, 10)",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            15,
+            true,
+            NotesDatabase.MIGRATION_14_15,
+        ).use { migrated ->
+            migrated.execSQL("PRAGMA foreign_keys = ON")
+            migrated.execSQL(
+                "INSERT INTO attachment_text VALUES " +
+                    "('sha-one', 'hello', 1, 0.9, 'ppocrv5-en/1', 'Read', 42, 10)",
+            )
+            migrated.execSQL("DELETE FROM attachments WHERE id = 'sha-one'")
+            migrated.query("SELECT COUNT(*) FROM attachment_text").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+        }
+    }
+
     companion object {
         private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
     }

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -39,7 +40,10 @@ import android.net.Uri
 import android.util.Log
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.ContentSearchIndex
+import com.vivenotes.data.ContentSearchOutcome
 import com.vivenotes.data.ContentSearchResults
+import com.vivenotes.data.ImageTextIndexer
+import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.DeletedItem
 import com.vivenotes.data.DeletedItemKey
@@ -115,6 +119,7 @@ import com.vivenotes.model.newTable
 import com.vivenotes.model.search.ContentHit
 import com.vivenotes.model.search.ContentKind
 import com.vivenotes.model.search.ContentUnit
+import com.vivenotes.model.search.ImagePlacement
 import com.vivenotes.model.search.blockUnits
 import com.vivenotes.model.search.titleUnit
 import com.vivenotes.model.withCellBlocks
@@ -442,6 +447,14 @@ class NotesViewModel(
     private val inkDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val databaseBackups: DatabaseBackupManager? = null,
     private val notebookTransfers: NotebookTransferManager? = null,
+    /**
+     * Reads pictures in the background so the Content panel can find what is written in them.
+     *
+     * Optional for the same reason [databaseBackups] is: the Compose suites build a ViewModel over a
+     * seeded database with no ONNX Runtime behind it, and a search that finds typed text is still a
+     * search. Null simply means no picture ever gets read.
+     */
+    private val imageText: ImageTextIndexer? = null,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotesUiState())
@@ -602,7 +615,7 @@ class NotesViewModel(
      * business: a stylus button changes the tool, and the tab that shows tools has to come forward
      * with it — see `ui/StylusButtons.kt`. Transient like [_tool], and for the same reason.
      */
-    private val _activeTab = MutableStateFlow(RibbonTab.Home)
+    private val _activeTab = MutableStateFlow(RibbonTab.Document)
     val activeTab: StateFlow<RibbonTab> = _activeTab.asStateFlow()
 
     fun selectRibbonTab(tab: RibbonTab) {
@@ -1285,25 +1298,65 @@ class NotesViewModel(
             // what keeps the list from blinking empty between letters.
             emit(ContentSearchState(query = query, running = true, results = lastResults))
             delay(SEARCH_DEBOUNCE_MS)
-            // Read on the main thread, where the block map is written, and matched off it.
-            val live = liveContentUnits()
-            val notebookId = notebookIdOfSelectedSection()
-            val results = if (notebookId == null) {
-                ContentSearchResults(query)
-            } else {
-                withContext(Dispatchers.Default) {
-                    searchIndex.search(
-                        notebookId = notebookId,
-                        query = query,
-                        livePageId = _uiState.value.selectedPageId,
-                        liveUnits = live,
-                    )
+
+            // **The picture version is collected here rather than combined with the query upstream.**
+            // A picture finishing is a reason to run the query again (`memory/imageOcrPlan.md` IO6),
+            // and `combine(_searchQuery, version)` is the obvious way to say so — but `combine`
+            // conflates, so three keystrokes in a row became one emission and the field stopped
+            // reporting what was typed. Collecting inside the block leaves the keystroke path
+            // exactly as it was and adds the re-run underneath it; `transformLatest` cancels this
+            // collector on the next keystroke, so a superseded query stops re-running too.
+            val versions = imageText?.version ?: MutableStateFlow(0L)
+            versions.collect {
+                // Read on the main thread, where the block map is written, and matched off it.
+                val live = liveContentUnits()
+                val livePictures = liveImagePlacements()
+                val notebookId = notebookIdOfSelectedSection()
+                val outcome = if (notebookId == null) {
+                    ContentSearchOutcome(ContentSearchResults(query), emptySet())
+                } else {
+                    withContext(Dispatchers.Default) {
+                        searchIndex.search(
+                            notebookId = notebookId,
+                            query = query,
+                            livePageId = _uiState.value.selectedPageId,
+                            liveUnits = live,
+                            liveImages = livePictures,
+                        )
+                    }
                 }
+                lastResults = outcome.results
+                emit(ContentSearchState(query = query, results = outcome.results))
+                // After the results, never before them: reading pictures is slow and a search must
+                // not wait on it. The index has just decoded every page, so this list is free.
+                imageText?.request(outcome.pictures)
             }
-            lastResults = results
-            emit(ContentSearchState(query = query, results = results))
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ContentSearchState())
+
+    /** How far reading this notebook's pictures has got, for the Content and Integrated AI panes. */
+    val imageTextProgress: StateFlow<ImageTextProgress> =
+        imageText?.progress ?: MutableStateFlow(ImageTextProgress(enabled = false))
+
+    /**
+     * How many pictures on this device currently hold a reading.
+     *
+     * Counted from the indexer's version rather than kept in step by hand, and only while something
+     * is collecting — which is while the Integrated AI pane is open. `mapLatest` collapses the burst
+     * of bumps a pass produces into one `COUNT`.
+     */
+    val picturesRead: StateFlow<Int> = (imageText?.version ?: MutableStateFlow(0L))
+        .mapLatest { imageText?.readCount() ?: 0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    fun setImageTextEnabled(enabled: Boolean) {
+        viewModelScope.launch { imageText?.setEnabled(enabled) }
+    }
+
+    /** Throws away every reading; the next query reads them again. Pictures are untouched. */
+    fun rebuildImageText() {
+        viewModelScope.launch { imageText?.clear() }
+    }
 
     /**
      * The last completed search, shown while the next one is being typed.
@@ -1344,6 +1397,22 @@ class NotesViewModel(
             }
         }
         return units
+    }
+
+    /**
+     * The open page's pictures, for the same reason [liveContentUnits] exists.
+     *
+     * A picture pasted a moment ago is not in the stored document yet, and the text it holds may
+     * well have been read already — the same screenshot on an earlier page reads once for both
+     * (IO2). Deduplicated here as it is there: one placement per picture.
+     */
+    private fun liveImagePlacements(): List<ImagePlacement> {
+        val state = _uiState.value
+        val pageId = state.selectedPageId ?: return emptyList()
+        val sectionId = state.selectedSectionId ?: return emptyList()
+        return state.images.distinctBy { it.attachmentId }.map { image ->
+            ImagePlacement(pageId, sectionId, image.id, image.attachmentId)
+        }
     }
 
     /** Which notebook the open section belongs to — the scope of a search (CS2). */
@@ -3524,6 +3593,7 @@ class NotesViewModel(
             penSettingsStore: PenSettingsStore,
             databaseBackups: DatabaseBackupManager? = null,
             notebookTransfers: NotebookTransferManager? = null,
+            imageText: ImageTextIndexer? = null,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -3535,6 +3605,7 @@ class NotesViewModel(
                     penSettingsStore,
                     databaseBackups = databaseBackups,
                     notebookTransfers = notebookTransfers,
+                    imageText = imageText,
                 ) as T
         }
     }

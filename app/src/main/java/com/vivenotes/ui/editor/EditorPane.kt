@@ -660,7 +660,7 @@ fun EditorPane(
      * screen is known only to the editor that laid it out, and a container is small enough that its
      * top-left corner puts the caret on screen — which the focus below then makes visible for real.
      */
-    LaunchedEffect(reveal, pageId, outlines, tables, zoom) {
+    LaunchedEffect(reveal, pageId, outlines, tables, images, zoom) {
         val target = reveal ?: return@LaunchedEffect
         if (target.pageId != pageId) return@LaunchedEffect
         val corner = when (target.kind) {
@@ -670,6 +670,8 @@ fun EditorPane(
                 ?.let { InkPoint(it.x, it.y) }
             // A cell has no geometry of its own (TA2), so the canvas scrolls to its table.
             ContentKind.Cell -> tables.firstOrNull { it.id == target.tableId }
+                ?.let { InkPoint(it.x, it.y) }
+            ContentKind.Image -> images.firstOrNull { it.id == target.boxId }
                 ?.let { InkPoint(it.x, it.y) }
         } ?: run {
             // The page is open — `pageId` matching means these outlines are its own, since a page
@@ -697,6 +699,11 @@ fun EditorPane(
                 cellId = target.boxId,
                 selection = TextRange(target.start, target.end),
             )
+            // A picture has no caret to put the match in — the line that matched is in the panel,
+            // which is where it can be read. Selecting the picture is the honest equivalent of
+            // putting the caret on a word: it says *this* is the thing you were sent to.
+            ContentKind.Image -> images.firstOrNull { it.id == target.boxId }
+                ?.let { selection = CanvasSelection.ofImage(it) }
         }
         onRevealHandled()
     }

@@ -21,9 +21,10 @@ import androidx.sqlite.execSQL
         InkMoveEntity::class,
         InkMoveTargetEntity::class,
         AttachmentEntity::class,
+        AttachmentTextEntity::class,
         LocalMetadataEntity::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -37,6 +38,7 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun inkEraseDao(): InkEraseDao
     abstract fun inkMoveDao(): InkMoveDao
     abstract fun attachmentDao(): AttachmentDao
+    abstract fun imageTextDao(): ImageTextDao
     abstract fun localMetadataDao(): LocalMetadataDao
     abstract fun deletionRecoveryDao(): DeletionRecoveryDao
 
@@ -300,6 +302,39 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the recognized-text cache for pictures.
+         *
+         * A pure create with **nothing backfilled**, and the reason is the point of the table: every
+         * row is derived from an attachment's pixels by a named engine, so there is no prior value
+         * to carry forward — the first indexing pass reads every picture that has one. A row can
+         * therefore be absent (never tried), present with an old `engine` (stale, re-read) or
+         * present and current, and those three states are the whole schedule.
+         *
+         * The foreign key is what keeps the cache from outliving its subject: `attachments` rows are
+         * deleted by `AttachmentStore.release` once the last outline pointing at a picture is gone
+         * for good, and this cascades with them.
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS attachment_text (
+                        attachmentId TEXT NOT NULL PRIMARY KEY,
+                        text TEXT NOT NULL,
+                        lineCount INTEGER NOT NULL,
+                        confidence REAL NOT NULL,
+                        engine TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        durationMs INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(attachmentId) REFERENCES attachments(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 .addMigrations(
@@ -316,6 +351,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_11_12,
                     MIGRATION_12_13,
                     MIGRATION_13_14,
+                    MIGRATION_14_15,
                 )
                 .build()
     }

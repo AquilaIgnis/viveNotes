@@ -140,9 +140,26 @@ class AiModelStore internal constructor(
     /** Opens the bundled English PP-OCRv5 CTC dictionary after its asset has been verified. */
     fun openTextDictionary() = appContext.assets.open(TEXT_DICTIONARY_ASSET)
 
+    /**
+     * Opens the bundled PP-OCRv5 text detector after its asset has been verified.
+     *
+     * Bundled rather than downloaded — `memory/imageOcrPlan.md` IO1. 4.7 MB beside a 7.9 MB
+     * recognizer is not the size that made FormulaNet optional, and OCR that needs a network round
+     * trip before it works is OCR that mostly does not work.
+     */
+    fun openDetectionModel() = appContext.assets.open(DETECTION_MODEL_ASSET)
+
+    /**
+     * All three bundled OCR assets, verified together.
+     *
+     * Together because they are one capability: the detector finds the lines and the recognizer
+     * reads them, and either one alone reads a picture as nothing. A half-verified pipeline reported
+     * as Installed would be a promise the panel cannot keep.
+     */
     private fun verifyBundledTextModel(): AiModelInstallState = try {
         verifyAsset(TEXT_MODEL_ASSET, TEXT_MODEL_BYTES, TEXT_MODEL_SHA256)
         verifyAsset(TEXT_DICTIONARY_ASSET, TEXT_DICTIONARY_BYTES, TEXT_DICTIONARY_SHA256)
+        verifyAsset(DETECTION_MODEL_ASSET, DETECTION_MODEL_BYTES, DETECTION_MODEL_SHA256)
         AiModelInstallState.Installed
     } catch (failure: Exception) {
         AiModelInstallState.Failed("Bundled OCR model is unavailable")
@@ -294,8 +311,20 @@ class AiModelStore internal constructor(
 
         internal const val TEXT_MODEL_ASSET = "ai/en_pp-ocrv5_mobile_rec.onnx"
         internal const val TEXT_DICTIONARY_ASSET = "ai/ppocrv5_en_dict.txt"
+
+        /**
+         * PP-OCRv5_mobile_det, from the same pinned oar-ocr v0.3.0 release as everything else here.
+         *
+         * It is not a second recognizer and cannot replace one: its only output is a per-pixel
+         * probability map, `[1, 1, H, W]`, with no box, class or score tensor anywhere in the graph.
+         * Turning that map into text quads is `model/ocr/TextDetection.kt`.
+         */
+        internal const val DETECTION_MODEL_ASSET = "ai/pp-ocrv5_mobile_det.onnx"
         private const val TEXT_MODEL_BYTES = 7_876_014L
         private const val TEXT_DICTIONARY_BYTES = 1_416L
+        private const val DETECTION_MODEL_BYTES = 4_826_518L
+        private const val DETECTION_MODEL_SHA256 =
+            "1eb7b4f7ab657ebd1c66d5f79bca7497f29768a2e3c15e52daecbba1a8e4a039"
         private const val TEXT_MODEL_SHA256 =
             "8307465d3c9ef2ba4055c3bd0be55aafe11f518630212b7598b70ccb376028ac"
         private const val TEXT_DICTIONARY_SHA256 =

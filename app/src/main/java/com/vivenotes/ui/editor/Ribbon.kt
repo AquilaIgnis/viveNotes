@@ -79,7 +79,7 @@ import com.vivenotes.ui.icons.highlightGlyph
 enum class RibbonTab(val label: String) {
     File("File"),
     Draw("Draw"),
-    Home("Home"),
+    Document("Document"),
     View("View"),
     RibonSettings("Settings"),
 }
@@ -191,7 +191,7 @@ fun Ribbon(
                 pageOpen = pageOpen,
                 notebookOpen = notebookOpen,
             )
-            RibbonTab.Home -> HomeTab(
+            RibbonTab.Document -> HomeTab(
                 selection = selection,
                 defaults = defaults,
                 onCommand = onCommand,

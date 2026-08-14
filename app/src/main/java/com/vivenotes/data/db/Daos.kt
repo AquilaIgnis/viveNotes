@@ -451,6 +451,41 @@ interface AttachmentDao {
     suspend fun deleteIfUnreferenced(id: String)
 }
 
+/** The recognized-text cache of [AttachmentTextEntity] — `memory/imageOcrPlan.md` IO2, IO3, IO6. */
+@Dao
+interface ImageTextDao {
+
+    /**
+     * Rows for the pictures a notebook contains.
+     *
+     * Only `Read` rows carry text, but every status is returned: the caller needs to know that a
+     * picture has already been tried, or it will queue it again on the next keystroke.
+     */
+    @Query("SELECT * FROM attachment_text WHERE attachmentId IN (:attachmentIds)")
+    suspend fun byIds(attachmentIds: List<String>): List<AttachmentTextEntity>
+
+    @Upsert
+    suspend fun upsert(row: AttachmentTextEntity)
+
+    @Query("SELECT COUNT(*) FROM attachment_text WHERE engine = :engine")
+    suspend fun countForEngine(engine: String): Int
+
+    /** Clears the cache. Nothing a user made is in here, so this needs no confirmation beyond the UI's. */
+    @Query("DELETE FROM attachment_text")
+    suspend fun clear()
+
+    /**
+     * Deletes rows whose attachment is gone, and returns how many that was.
+     *
+     * **This must always return zero.** The foreign key cascades, so an orphan can only exist if
+     * something wrote this table outside Room or deleted an attachment with foreign keys off. It is
+     * one cheap statement per indexing pass, and it is the difference between believing the cascade
+     * fires and knowing it — see `AttachmentTextEntity`.
+     */
+    @Query("DELETE FROM attachment_text WHERE attachmentId NOT IN (SELECT id FROM attachments)")
+    suspend fun deleteOrphans(): Int
+}
+
 @Dao
 interface InkEraseDao {
 

@@ -43,7 +43,7 @@ class EquationButtonTest {
             ViveNotesTheme {
                 Ribbon(
                     selection = selection,
-                    activeTab = RibbonTab.Home,
+                    activeTab = RibbonTab.Document,
                     onTabChange = {},
                     onCommand = { commands += it },
                     defaults = EditorDefaults(),

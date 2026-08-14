@@ -12,6 +12,15 @@ viveNotes includes or downloads the following machine-learning artifacts for off
 - Bundled dictionary SHA-256:
   `e025a66d31f327ba0c232e03f407ae8d105e1e709e7ccb3f408aa778c24e70d6`
 
+## PP-OCRv5_mobile_det
+
+- Upstream model: <https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det>
+- Android ONNX conversion: <https://github.com/GreatV/oar-ocr>
+- ONNX download: <https://github.com/GreatV/oar-ocr/releases/tag/v0.3.0>
+- License: Apache License 2.0
+- Bundled graph SHA-256:
+  `1eb7b4f7ab657ebd1c66d5f79bca7497f29768a2e3c15e52daecbba1a8e4a039`
+
 ## PP-FormulaNet-S
 
 - Upstream model: <https://huggingface.co/PaddlePaddle/PP-FormulaNet-S>

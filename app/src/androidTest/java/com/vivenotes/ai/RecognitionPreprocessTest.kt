@@ -26,6 +26,37 @@ class RecognitionPreprocessTest {
         assertTrue(tensor.values.first() <= -0.99f)
     }
 
+    /**
+     * A padded line keeps its rows aligned — the defect described on `preprocessText`.
+     *
+     * A vertical black bar down the left of the crop must stay vertical in the tensor. Walking the
+     * pixels with one running index shifts each row by `width - resizedWidth`, so by row 48 the bar
+     * has walked thousands of pixels to the right and the line is unreadable. The model gives no
+     * sign of this beyond returning worse text, which is why it survived from the day recognition
+     * shipped until a picture with three lines on it read only the widest one.
+     */
+    @Test
+    fun aPaddedLineIsNotShearedRowByRow() {
+        // 96 x 48 is 2:1, well under the 320-wide tensor, so every row is padded.
+        val bitmap = Bitmap.createBitmap(96, 48, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.WHITE)
+            for (y in 0 until 48) for (x in 0 until 8) setPixel(x, y, Color.BLACK)
+        }
+
+        val tensor = preprocessText(bitmap)
+
+        assertEquals(320, tensor.width)
+        for (y in 0 until 48) {
+            val row = y * tensor.width
+            assertTrue("row $y lost the bar at its left edge", tensor.values[row] <= -0.99f)
+            // The bar is eight pixels wide and nothing else is dark, so column 40 is paper on every
+            // row. Under the shear it was ink on most of them.
+            assertTrue("row $y has ink where the page should be", tensor.values[row + 40] >= 0.99f)
+            // Everything past the picture is padding, and padding is zero.
+            assertEquals(0f, tensor.values[row + 200], 1e-6f)
+        }
+    }
+
     @Test
     fun formulaInputIsCroppedAndPaddedTo384Square() {
         val bitmap = Bitmap.createBitmap(120, 60, Bitmap.Config.ARGB_8888).apply {

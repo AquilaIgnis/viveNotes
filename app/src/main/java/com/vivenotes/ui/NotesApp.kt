@@ -61,6 +61,7 @@ import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
+import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
@@ -168,6 +169,7 @@ fun NotesApp(
     val canvasUndoState by viewModel.canvasUndoState.collectAsStateWithLifecycle()
     val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
     val contentSearch by viewModel.contentSearch.collectAsStateWithLifecycle()
+    val imageTextProgress by viewModel.imageTextProgress.collectAsStateWithLifecycle()
     val versionHistory by viewModel.versionHistory.collectAsStateWithLifecycle()
     val deletedItems by viewModel.deletedItems.collectAsStateWithLifecycle()
     val notebookTransfer by viewModel.notebookTransfer.collectAsStateWithLifecycle()
@@ -588,6 +590,7 @@ fun NotesApp(
                                         copyRecognizedText(context, "SymPy result", value)
                                     },
                                     contentSearch = contentSearch,
+                                    imageTextProgress = imageTextProgress,
                                     versionHistory = versionHistory,
                                     deletedItems = deletedItems,
                                     onSearchQueryChange = viewModel::setSearchQuery,
@@ -662,6 +665,7 @@ fun NotesApp(
                                         copyRecognizedText(context, "SymPy result", value)
                                     },
                                     contentSearch = contentSearch,
+                                    imageTextProgress = imageTextProgress,
                                     versionHistory = versionHistory,
                                     deletedItems = deletedItems,
                                     onSearchQueryChange = viewModel::setSearchQuery,
@@ -840,6 +844,8 @@ private fun ToolPaneHost(
     onCopyMathResult: (String) -> Unit,
     /** Content pane — the query, and what it found across the notebook (`docs/searchPlan.md`). */
     contentSearch: ContentSearchState,
+    /** How far reading this notebook's pictures has got — `memory/imageOcrPlan.md` IO6. */
+    imageTextProgress: ImageTextProgress,
     versionHistory: VersionHistoryState,
     deletedItems: DeletedItemsState,
     onSearchQueryChange: (String) -> Unit,
@@ -850,7 +856,13 @@ private fun ToolPaneHost(
 ) {
     // The query field is the one control that must survive its own results scrolling past it.
     val header: (@Composable ColumnScope.() -> Unit)? = if (pane == ToolPane.Content) {
-        { ContentPanelHeader(state = contentSearch, onQueryChange = onSearchQueryChange) }
+        {
+            ContentPanelHeader(
+                state = contentSearch,
+                onQueryChange = onSearchQueryChange,
+                imageProgress = imageTextProgress,
+            )
+        }
     } else {
         null
     }
@@ -873,10 +885,17 @@ private fun ToolPaneHost(
                 onSetCustomPaper = viewModel::setCustomPaper,
                 onSetMargins = viewModel::setMargins,
             )
-            ToolPane.AiModels -> AiModelsPanelContent(
-                state = aiModels,
-                onDownloadFormula = onDownloadFormula,
-            )
+            ToolPane.AiModels -> {
+                val picturesRead by viewModel.picturesRead.collectAsStateWithLifecycle()
+                AiModelsPanelContent(
+                    state = aiModels,
+                    onDownloadFormula = onDownloadFormula,
+                    pictureText = imageTextProgress,
+                    picturesRead = picturesRead,
+                    onSetPictureText = viewModel::setImageTextEnabled,
+                    onRebuildPictureText = viewModel::rebuildImageText,
+                )
+            }
             ToolPane.Hardware -> HardwarePanelContent(
                 allowFinger = allowFinger,
                 onSetDrawWithFinger = viewModel::setDrawWithFinger,

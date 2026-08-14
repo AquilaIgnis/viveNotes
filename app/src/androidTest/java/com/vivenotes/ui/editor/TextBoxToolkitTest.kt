@@ -52,7 +52,7 @@ class TextBoxToolkitTest {
             ViveNotesTheme {
                 Ribbon(
                     selection = SelectionState(),
-                    activeTab = RibbonTab.Home,
+                    activeTab = RibbonTab.Document,
                     onTabChange = {},
                     onCommand = {},
                     defaults = EditorDefaults(),

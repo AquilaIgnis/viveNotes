@@ -6,6 +6,7 @@ import com.vivenotes.ai.OnnxInkRecognitionEngine
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.EditorDefaultsStore
+import com.vivenotes.data.ImageTextIndexer
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.PenSettingsStore
@@ -40,6 +41,16 @@ class NotesApplication : Application() {
     val penSettings: PenSettingsStore by lazy { PenSettingsStore(this) }
     val aiModels: AiModelStore by lazy { AiModelStore(this) }
     val recognitionEngine: OnnxInkRecognitionEngine by lazy { OnnxInkRecognitionEngine(aiModels) }
+
+    /**
+     * Reads pictures for the Content panel — `memory/imageOcrPlan.md`.
+     *
+     * Lazy like everything else here, which matters more for this one: touching it opens ONNX
+     * Runtime, and an install whose owner never searches should never pay for that.
+     */
+    val imageText: ImageTextIndexer by lazy {
+        ImageTextIndexer(repository, attachments, recognitionEngine)
+    }
     val mathEngine: SympyMathEngine by lazy { SympyMathEngine(this) }
 
     override fun onCreate() {

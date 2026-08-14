@@ -1,0 +1,274 @@
+{
+  "unclip-1.2": [
+    {
+      "sample": "screenshot_light",
+      "lines_found": 5,
+      "lines_expected": 5,
+      "cer": 0.0,
+      "exact_lines": 5,
+      "detect_ms": 25.0,
+      "recognize_ms": 99.7,
+      "post_ms": 76.0,
+      "text": "Release notes for version 3.2\nFixed a crash when importing large notebooks.\nSearch now covers table cells and page titles.\nStylus pressure is smoothed on Lenovo pens.\nKnown issue: export drops empty sections."
+    },
+    {
+      "sample": "screenshot_dark",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 16.8,
+      "recognize_ms": 55.5,
+      "post_ms": 37.6,
+      "text": "Terminal output\ngradle assembleDebug\nBUILD SUCCESSFUL in 42s\n142 actionable tasks: 30 executed"
+    },
+    {
+      "sample": "slide",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 31.6,
+      "recognize_ms": 49.4,
+      "post_ms": 65.8,
+      "text": "Gradient Descent\nFollow the negative gradient\nStep size controls stability\nMomentum smooths the path"
+    },
+    {
+      "sample": "photographed_page",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 29.0,
+      "recognize_ms": 22.9,
+      "post_ms": 61.7,
+      "text": "Meeting notes\nShip the search panel this week\nAsk about the tablet budget\nRenew the signing certificate"
+    },
+    {
+      "sample": "small_thumbnail",
+      "lines_found": 1,
+      "lines_expected": 1,
+      "cer": 0.0,
+      "exact_lines": 1,
+      "detect_ms": 1.2,
+      "recognize_ms": 6.9,
+      "post_ms": 0.8,
+      "text": "tiny"
+    },
+    {
+      "sample": "photograph_no_text",
+      "lines_found": 0,
+      "lines_expected": 0,
+      "cer": 0.0,
+      "exact_lines": 0,
+      "detect_ms": 33.7,
+      "recognize_ms": 4.5,
+      "post_ms": 23.9,
+      "text": ""
+    }
+  ],
+  "unclip-1.5": [
+    {
+      "sample": "screenshot_light",
+      "lines_found": 5,
+      "lines_expected": 5,
+      "cer": 0.0,
+      "exact_lines": 5,
+      "detect_ms": 23.4,
+      "recognize_ms": 74.3,
+      "post_ms": 73.0,
+      "text": "Release notes for version 3.2\nFixed a crash when importing large notebooks.\nSearch now covers table cells and page titles.\nStylus pressure is smoothed on Lenovo pens.\nKnown issue: export drops empty sections."
+    },
+    {
+      "sample": "screenshot_dark",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 12.8,
+      "recognize_ms": 49.7,
+      "post_ms": 37.3,
+      "text": "Terminal output\ngradle assembleDebug\nBUILD SUCCESSFUL in 42s\n142 actionable tasks: 30 executed"
+    },
+    {
+      "sample": "slide",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 38.0,
+      "recognize_ms": 43.7,
+      "post_ms": 65.7,
+      "text": "Gradient Descent\nFollow the negative gradient\nStep size controls stability\nMomentum smooths the path"
+    },
+    {
+      "sample": "photographed_page",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 26.6,
+      "recognize_ms": 21.3,
+      "post_ms": 62.1,
+      "text": "Meeting notes\nShip the search panel this week\nAsk about the tablet budget\nRenew the signing certificate"
+    },
+    {
+      "sample": "small_thumbnail",
+      "lines_found": 1,
+      "lines_expected": 1,
+      "cer": 0.0,
+      "exact_lines": 1,
+      "detect_ms": 1.4,
+      "recognize_ms": 6.9,
+      "post_ms": 0.8,
+      "text": "tiny"
+    },
+    {
+      "sample": "photograph_no_text",
+      "lines_found": 0,
+      "lines_expected": 0,
+      "cer": 0.0,
+      "exact_lines": 0,
+      "detect_ms": 25.5,
+      "recognize_ms": 7.4,
+      "post_ms": 23.9,
+      "text": ""
+    }
+  ],
+  "unclip-1.8": [
+    {
+      "sample": "screenshot_light",
+      "lines_found": 5,
+      "lines_expected": 5,
+      "cer": 0.0,
+      "exact_lines": 5,
+      "detect_ms": 19.5,
+      "recognize_ms": 67.1,
+      "post_ms": 74.1,
+      "text": "Release notes for version 3.2\nFixed a crash when importing large notebooks.\nSearch now covers table cells and page titles.\nStylus pressure is smoothed on Lenovo pens.\nKnown issue: export drops empty sections."
+    },
+    {
+      "sample": "screenshot_dark",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 11.1,
+      "recognize_ms": 41.2,
+      "post_ms": 37.4,
+      "text": "Terminal output\ngradle assembleDebug\nBUILD SUCCESSFUL in 42s\n142 actionable tasks: 30 executed"
+    },
+    {
+      "sample": "slide",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 28.5,
+      "recognize_ms": 44.8,
+      "post_ms": 66.2,
+      "text": "Gradient Descent\nFollow the negative gradient\nStep size controls stability\nMomentum smooths the path"
+    },
+    {
+      "sample": "photographed_page",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 26.6,
+      "recognize_ms": 17.4,
+      "post_ms": 62.4,
+      "text": "Meeting notes\nShip the search panel this week\nAsk about the tablet budget\nRenew the signing certificate"
+    },
+    {
+      "sample": "small_thumbnail",
+      "lines_found": 1,
+      "lines_expected": 1,
+      "cer": 0.0,
+      "exact_lines": 1,
+      "detect_ms": 1.5,
+      "recognize_ms": 4.5,
+      "post_ms": 0.8,
+      "text": "tiny"
+    },
+    {
+      "sample": "photograph_no_text",
+      "lines_found": 0,
+      "lines_expected": 0,
+      "cer": 0.0,
+      "exact_lines": 0,
+      "detect_ms": 34.8,
+      "recognize_ms": 6.6,
+      "post_ms": 23.9,
+      "text": ""
+    }
+  ],
+  "unclip-2.2": [
+    {
+      "sample": "screenshot_light",
+      "lines_found": 5,
+      "lines_expected": 5,
+      "cer": 0.0,
+      "exact_lines": 5,
+      "detect_ms": 23.2,
+      "recognize_ms": 51.4,
+      "post_ms": 72.6,
+      "text": "Release notes for version 3.2\nFixed a crash when importing large notebooks.\nSearch now covers table cells and page titles.\nStylus pressure is smoothed on Lenovo pens.\nKnown issue: export drops empty sections."
+    },
+    {
+      "sample": "screenshot_dark",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 11.5,
+      "recognize_ms": 33.2,
+      "post_ms": 38.2,
+      "text": "Terminal output\ngradle assembleDebug\nBUILD SUCCESSFUL in 42s\n142 actionable tasks: 30 executed"
+    },
+    {
+      "sample": "slide",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 29.0,
+      "recognize_ms": 35.4,
+      "post_ms": 66.3,
+      "text": "Gradient Descent\nFollow the negative gradient\nStep size controls stability\nMomentum smooths the path"
+    },
+    {
+      "sample": "photographed_page",
+      "lines_found": 4,
+      "lines_expected": 4,
+      "cer": 0.0,
+      "exact_lines": 4,
+      "detect_ms": 33.6,
+      "recognize_ms": 15.7,
+      "post_ms": 61.7,
+      "text": "Meeting notes\nShip the search panel this week\nAsk about the tablet budget\nRenew the signing certificate"
+    },
+    {
+      "sample": "small_thumbnail",
+      "lines_found": 1,
+      "lines_expected": 1,
+      "cer": 0.0,
+      "exact_lines": 1,
+      "detect_ms": 1.4,
+      "recognize_ms": 4.6,
+      "post_ms": 0.8,
+      "text": "tiny"
+    },
+    {
+      "sample": "photograph_no_text",
+      "lines_found": 0,
+      "lines_expected": 0,
+      "cer": 0.0,
+      "exact_lines": 0,
+      "detect_ms": 24.9,
+      "recognize_ms": 5.3,
+      "post_ms": 23.7,
+      "text": ""
+    }
+  ]
+}

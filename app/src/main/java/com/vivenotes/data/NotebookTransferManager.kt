@@ -222,6 +222,13 @@ class NotebookTransferManager(
                 // Installation identity is not notebook content and must never travel to another
                 // device. The notebook UUID itself remains in both `notebooks.id` and vive_bundle.
                 source.execSQL("DROP TABLE IF EXISTS local_metadata")
+                // Recognized picture text is a derived cache, not content — the importing device
+                // rebuilds it from the pictures the bundle already carries, with whatever engine
+                // that build ships. Dropped rather than carried for the reason `page_revisions` is
+                // carried: a revision is something a person made, and this is something a model
+                // guessed. It also keeps `EXPECTED_COLUMNS` and the bundle format unchanged, so
+                // every `.vive` written before schema 15 still imports.
+                source.execSQL("DROP TABLE IF EXISTS attachment_text")
                 source.setTransactionSuccessful()
             } finally {
                 source.endTransaction()

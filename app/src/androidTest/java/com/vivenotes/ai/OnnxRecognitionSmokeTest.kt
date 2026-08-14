@@ -48,6 +48,52 @@ class OnnxRecognitionSmokeTest {
         }
     }
 
+    /**
+     * The whole picture pipeline on a device: detector, DB post-processing, crop, recognizer.
+     *
+     * Three lines rather than one, because the thing that can silently fail here is *detection* —
+     * a recognizer alone reads a multi-line picture as a single blank strip (it returned `" "` on
+     * the desktop study), so a one-line fixture would pass with the detector doing nothing at all.
+     */
+    @Test
+    fun bundledDetectorReadsEveryLineOfAPicture() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val models = AiModelStore(context)
+        withTimeout(10_000) {
+            models.state.first { it.handwritingText !is AiModelInstallState.Verifying }
+        }
+        assertEquals(AiModelInstallState.Installed, models.state.value.handwritingText)
+
+        val lines = listOf("Release notes", "Search covers pictures", "Known issue")
+        val bitmap = Bitmap.createBitmap(760, 340, Bitmap.Config.ARGB_8888)
+        Canvas(bitmap).apply {
+            drawColor(Color.WHITE)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.BLACK
+                textSize = 48f
+            }
+            lines.forEachIndexed { index, line -> drawText(line, 32f, 80f + index * 96f, paint) }
+        }
+
+        val engine = OnnxInkRecognitionEngine(models)
+        try {
+            val result = withTimeout(60_000) { engine.recognizeImageText(bitmap) }
+            assertEquals(
+                "expected one reading per drawn line, got ${result.lines.map { it.text }}",
+                lines.size,
+                result.lines.size,
+            )
+            // Reading order, not detection order: the lines come back top to bottom.
+            assertTrue(
+                "readings do not resemble what was drawn: ${result.text}",
+                result.lines.first().text.contains("Release", ignoreCase = true),
+            )
+        } finally {
+            engine.close()
+            bitmap.recycle()
+        }
+    }
+
     /** A clean debug install must hydrate and run its bundled FormulaNet package without a download. */
     @Test
     fun debugBundledFormulaGraphRunsInsideAndroid() = runBlocking {

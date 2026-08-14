@@ -49,7 +49,7 @@ class FontPickerTest {
             ViveNotesTheme {
                 Ribbon(
                     selection = selection,
-                    activeTab = RibbonTab.Home,
+                    activeTab = RibbonTab.Document,
                     onTabChange = {},
                     onCommand = { picked = (it as? FormatCommand.SetMark)?.mark },
                     defaults = defaults,

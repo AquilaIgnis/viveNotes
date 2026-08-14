@@ -21,6 +21,14 @@ enum class ContentKind {
 
     /** A block of one table cell — the "grid of text fields" of `docs/tablePlan.md` TA15. */
     Cell,
+
+    /**
+     * One line PP-OCRv5 read inside a picture — `memory/imageOcrPlan.md` IO5.
+     *
+     * The only kind whose text nobody typed. That is why it is weighted below the others and why
+     * opening one selects the picture rather than pretending to put a caret in it.
+     */
+    Image,
 }
 
 /**
@@ -44,6 +52,8 @@ data class ContentUnit(
     val blockIndex: Int = 0,
     val blockStart: Int = 0,
     val text: String,
+    /** Set only for [ContentKind.Image]: which picture's recognized text this line came from. */
+    val attachmentId: String? = null,
 )
 
 /** A [ContentUnit] the query matched, with where in it the match landed. */
@@ -150,6 +160,61 @@ fun blockUnits(
 }
 
 /**
+ * Where one picture sits on one page — `memory/imageOcrPlan.md` IO5.
+ *
+ * Held instead of units because the *text* of a picture arrives later than the page does: indexing
+ * runs in the background, so the placements are cached with the decoded document and the words are
+ * joined on at query time, when whatever has been read by then is available.
+ */
+data class ImagePlacement(
+    val pageId: String,
+    val sectionId: String,
+    /** The `Outline.Image` to select when a hit is opened. */
+    val outlineId: String,
+    val attachmentId: String,
+)
+
+/**
+ * Every distinct picture on a page, at its first placement in document order.
+ *
+ * **Distinct by attachment, which is the whole of "do not duplicate the text".** A page that shows
+ * the same screenshot twice offers one answer to "where is this written", with two frames around it;
+ * listing it twice would be two identical rows in the panel leading to the same page. Two *pages*
+ * showing it do each contribute, because those are genuinely different places to go.
+ */
+fun PageDoc.imagePlacements(pageId: String, sectionId: String): List<ImagePlacement> =
+    outlines.filterIsInstance<Outline.Image>()
+        .distinctBy { it.attachmentId }
+        .map { ImagePlacement(pageId, sectionId, it.id, it.attachmentId) }
+
+/**
+ * One unit per recognized line of the picture at [placement].
+ *
+ * [lines] is what `attachment_text` stored, already in reading order. A picture that has not been
+ * read yet, or that holds no text, contributes nothing — which is what makes the panel fill in as
+ * indexing proceeds rather than showing empty rows for pictures nobody has looked at.
+ */
+fun imageUnits(placement: ImagePlacement, lines: List<String>): List<ContentUnit> {
+    var offset = 0
+    return lines.mapIndexedNotNull { index, line ->
+        val start = offset
+        offset += line.length + 1
+        line.takeIf { it.isNotBlank() }?.let {
+            ContentUnit(
+                pageId = placement.pageId,
+                sectionId = placement.sectionId,
+                kind = ContentKind.Image,
+                boxId = placement.outlineId,
+                blockIndex = index,
+                blockStart = start,
+                text = it,
+                attachmentId = placement.attachmentId,
+            )
+        }
+    }
+}
+
+/**
  * Ranks [units] against [query] — CS6.
  *
  * The matcher decides whether a block matches and how well; this adds the one piece of context it
@@ -207,11 +272,19 @@ fun snippetOf(text: String, spans: List<MatchSpan>, maxChars: Int = SNIPPET_CHAR
     )
 }
 
-/** A title is a page's subject; a body line only mentions things. */
+/**
+ * A title is a page's subject; a body line only mentions things.
+ *
+ * A picture's line is docked instead of promoted, and not because it matters less: it is the one
+ * kind nobody typed. Typed text is what someone wrote and a reading is what a model thinks it can
+ * see, so on an equally good match the certain one goes first. Docked rather than excluded, because
+ * a picture that *does* contain the word is still the answer when nothing else does.
+ */
 private val ContentKind.weight: Int
     get() = when (this) {
         ContentKind.Title -> 40
         ContentKind.Text, ContentKind.Cell -> 0
+        ContentKind.Image -> -8
     }
 
 /**

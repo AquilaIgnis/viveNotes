@@ -54,7 +54,7 @@ class RibbonTabStripTest {
     /** The whole point of the move: it is not the Draw tab's, so it does not leave with the tab. */
     @Test
     fun theFingerButtonIsThereWithTheHomeTabOpen() {
-        setRibbon(activeTab = RibbonTab.Home)
+        setRibbon(activeTab = RibbonTab.Document)
 
         compose.onNodeWithTag(RibbonTags.FINGER).assertIsDisplayed()
     }
@@ -67,7 +67,7 @@ class RibbonTabStripTest {
     }
 
     private fun setRibbon(
-        activeTab: RibbonTab = RibbonTab.Home,
+        activeTab: RibbonTab = RibbonTab.Document,
         allowFinger: Boolean = false,
     ) {
         compose.setContent {

@@ -1,9 +1,13 @@
 package com.vivenotes.data
 
+import com.vivenotes.data.db.ImageTextStatus
 import com.vivenotes.model.search.ContentHit
 import com.vivenotes.model.search.ContentUnit
+import com.vivenotes.model.search.ImagePlacement
 import com.vivenotes.model.search.MAX_HITS
 import com.vivenotes.model.search.contentUnits
+import com.vivenotes.model.search.imagePlacements
+import com.vivenotes.model.search.imageUnits
 import com.vivenotes.model.search.searchContent
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -27,6 +31,19 @@ data class ContentSearchResults(
 )
 
 /**
+ * A query's results, plus the pictures the notebook turned out to contain.
+ *
+ * The two travel together because the search is the only thing that decodes every page — asking it
+ * what pictures it saw costs nothing, and asking anything else would mean decoding them twice
+ * (`memory/imageOcrPlan.md` IO6).
+ */
+data class ContentSearchOutcome(
+    val results: ContentSearchResults,
+    /** Every attachment id placed in the notebook, for the indexer to read the unread ones. */
+    val pictures: Set<String>,
+)
+
+/**
  * The Content panel's corpus, held in memory and rebuilt a page at a time — `docs/searchPlan.md` CS7.
  *
  * **No FTS table and no schema change.** `page_fts` is designed (A7, `docs/plan.md` §7) and not built;
@@ -41,17 +58,26 @@ data class ContentSearchResults(
  *
  * **The open page is never read from here.** Its last keystrokes are up to 400ms from being written,
  * so the caller passes its live units in and this indexes every *other* page (CS8).
+ *
+ * **Pictures are the one thing not cached with the page.** Their text is produced in the background
+ * long after the document was decoded, so what is cached is where each picture *sits*
+ * ([Entry.images]) and the words are joined on at query time. That is what lets results grow into an
+ * open panel as reading finishes, with no invalidation protocol between the indexer and this cache.
  */
 class ContentSearchIndex(private val repository: NotesRepository) {
 
-    private data class Entry(val stamp: Long, val units: List<ContentUnit>)
+    private data class Entry(
+        val stamp: Long,
+        val units: List<ContentUnit>,
+        val images: List<ImagePlacement>,
+    )
 
     private val lock = Mutex()
     private var indexed: String? = null
     private val byPage = mutableMapOf<String, Entry>()
 
     /**
-     * Ranks [query] over [notebookId], with [liveUnits] standing in for the open page.
+     * Ranks [query] over [notebookId], with [liveUnits] and [liveImages] standing in for the open page.
      *
      * [livePageId] is excluded from the stored index entirely rather than merely overridden, so a
      * page that is open can never be searched twice or searched stale.
@@ -61,13 +87,13 @@ class ContentSearchIndex(private val repository: NotesRepository) {
         query: String,
         livePageId: String?,
         liveUnits: List<ContentUnit>,
-    ): ContentSearchResults {
-        if (query.isBlank()) return ContentSearchResults(query)
-
+        liveImages: List<ImagePlacement> = emptyList(),
+    ): ContentSearchOutcome {
+        if (query.isBlank()) return ContentSearchOutcome(ContentSearchResults(query), emptySet())
         val pages = repository.pagesInNotebook(notebookId)
         val sections = repository.sectionsInNotebook(notebookId).associate { it.id to it.name }
 
-        val units = lock.withLock {
+        val (units, placements) = lock.withLock {
             if (indexed != notebookId) {
                 byPage.clear()
                 indexed = notebookId
@@ -86,19 +112,44 @@ class ContentSearchIndex(private val repository: NotesRepository) {
                     byPage[page.id] = Entry(
                         stamp = page.updatedAt,
                         units = doc?.contentUnits(page.id, page.sectionId, page.title).orEmpty(),
+                        images = doc?.imagePlacements(page.id, page.sectionId).orEmpty(),
                     )
                 }
             }
 
-            buildList {
+            val storedUnits = buildList {
                 addAll(liveUnits)
                 pages.forEach { page ->
                     if (page.id != livePageId) byPage[page.id]?.units?.let(::addAll)
                 }
             }
+            val storedImages = buildList {
+                addAll(liveImages)
+                pages.forEach { page ->
+                    if (page.id != livePageId) byPage[page.id]?.images?.let(::addAll)
+                }
+            }
+            storedUnits to storedImages
         }
 
-        val hits = searchContent(units, query)
+        val pictures = placements.mapTo(mutableSetOf()) { it.attachmentId }
+        if (query.isBlank()) {
+            return ContentSearchOutcome(ContentSearchResults(query), pictures)
+        }
+
+        // Read every query rather than cached beside the documents: this is how text finished a
+        // second ago reaches an open panel, and the rows are a handful of short columns.
+        val stored = repository.imageTextFor(pictures)
+        val withPictures = units + placements.flatMap { placement ->
+            val row = stored[placement.attachmentId]
+            if (row == null || row.status != ImageTextStatus.Read) {
+                emptyList()
+            } else {
+                imageUnits(placement, row.text.lines())
+            }
+        }
+
+        val hits = searchContent(withPictures, query)
         val titles = pages.associate { it.id to it.title }
         // Pages in the order their best hit ranked, and hits within a page in the order they ranked:
         // `groupBy` preserves both, since the hits arrive sorted.
@@ -113,11 +164,14 @@ class ContentSearchIndex(private val repository: NotesRepository) {
             )
         }
 
-        return ContentSearchResults(
-            query = query,
-            pages = grouped,
-            hitCount = hits.size,
-            truncated = hits.size >= MAX_HITS,
+        return ContentSearchOutcome(
+            results = ContentSearchResults(
+                query = query,
+                pages = grouped,
+                hitCount = hits.size,
+                truncated = hits.size >= MAX_HITS,
+            ),
+            pictures = pictures,
         )
     }
 }

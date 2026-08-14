@@ -47,13 +47,6 @@ internal fun DeletedItemsPanelContent(
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Spacer(Modifier.height(6.dp))
-    Text(
-        text = "Restoring a parent brings back everything that was live inside it. " +
-            "Items deleted earlier stay deleted and appear here afterward.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
     Spacer(Modifier.height(12.dp))
 
     val status = state.error ?: state.message
