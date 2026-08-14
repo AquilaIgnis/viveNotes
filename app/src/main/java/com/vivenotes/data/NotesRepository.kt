@@ -2,6 +2,7 @@ package com.vivenotes.data
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
@@ -75,6 +76,7 @@ class NotesRepository(
     private val inkErases = db.inkEraseDao()
     private val inkMoves = db.inkMoveDao()
     private val localMetadata = db.localMetadataDao()
+    private val deletionRecovery = db.deletionRecoveryDao()
 
     fun observeTree(): Flow<List<NotebookWithSections>> = notebooks.observeTree()
 
@@ -83,6 +85,47 @@ class NotesRepository(
     fun observePage(pageId: String): Flow<PageEntity?> = pages.observeById(pageId)
 
     fun searchPages(query: String): Flow<List<PageEntity>> = pages.search(query)
+
+    /**
+     * Every currently actionable deletion, newest first.
+     *
+     * Room invalidates this flow when any hierarchy table changes, so the recovery pane survives
+     * process death and stays current without a UI-owned refresh protocol.
+     */
+    fun observeDeletedItems(): Flow<List<DeletedItem>> = deletionRecovery.observeRoots().map { rows ->
+        rows.map { row ->
+            DeletedItem(
+                key = DeletedItemKey(row.id, DeletedItemKind.valueOf(row.kind)),
+                name = row.name,
+                notebookName = row.notebookName,
+                sectionName = row.sectionName,
+                deletedAt = row.deletedAt,
+                sectionCount = row.sectionCount,
+                pageCount = row.pageCount,
+            )
+        }
+    }
+
+    /**
+     * Clears exactly one recovery-root tombstone.
+     *
+     * Descendant rows are intentionally untouched. They were never tombstoned by a parent delete,
+     * and any child that *does* have a tombstone represents an older independent deletion that must
+     * remain deleted. Clearing the first-run marker and restoring the row are one transaction so a
+     * crash cannot leave a real restored notebook looking like a replaceable placeholder.
+     */
+    suspend fun restoreDeletedItem(key: DeletedItemKey): Boolean {
+        val now = clock()
+        return db.withTransaction {
+            val restored = when (key.kind) {
+                DeletedItemKind.Notebook -> deletionRecovery.restoreNotebook(key.id, now)
+                DeletedItemKind.Section -> deletionRecovery.restoreSection(key.id, now)
+                DeletedItemKind.Page -> deletionRecovery.restorePage(key.id, now)
+            } == 1
+            if (restored) clearReplaceableStarter()
+            restored
+        }
+    }
 
     // --- content search --------------------------------------------------------------------
     //

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,11 +22,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
@@ -38,6 +41,9 @@ import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.ContentSearchIndex
 import com.vivenotes.data.ContentSearchResults
 import com.vivenotes.data.DatabaseBackupManager
+import com.vivenotes.data.DeletedItem
+import com.vivenotes.data.DeletedItemKey
+import com.vivenotes.data.DeletedItemKind
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
@@ -347,6 +353,34 @@ data class VersionHistoryState(
     val message: String? = null,
 )
 
+/** Durable recovery rows plus the state of the one restore write currently in flight. */
+data class DeletedItemsState(
+    val loading: Boolean = true,
+    val items: List<DeletedItem> = emptyList(),
+    val restoring: DeletedItemKey? = null,
+    val message: String? = null,
+    val error: String? = null,
+)
+
+/** One completed delete offered immediately as a snackbar Undo convenience. */
+data class DeletionNotice(
+    val key: DeletedItemKey,
+    val message: String,
+)
+
+private data class DeletedItemsStatus(
+    val restoring: DeletedItemKey? = null,
+    val message: String? = null,
+    val error: String? = null,
+)
+
+private val DeletedItemKind.displayName: String
+    get() = when (this) {
+        DeletedItemKind.Notebook -> "Notebook"
+        DeletedItemKind.Section -> "Section"
+        DeletedItemKind.Page -> "Page"
+    }
+
 /** Progress and the one-shot result message for File-tab notebook transfers. */
 data class NotebookTransferState(
     val running: Boolean = false,
@@ -415,6 +449,32 @@ class NotesViewModel(
 
     private val _versionHistory = MutableStateFlow(VersionHistoryState())
     val versionHistory: StateFlow<VersionHistoryState> = _versionHistory.asStateFlow()
+
+    private val _deletedItemsStatus = MutableStateFlow(DeletedItemsStatus())
+    val deletedItems: StateFlow<DeletedItemsState> = combine(
+        repository.observeDeletedItems(),
+        _deletedItemsStatus,
+    ) { items, status ->
+        DeletedItemsState(
+            loading = false,
+            items = items,
+            restoring = status.restoring,
+            message = status.message,
+            error = status.error,
+        )
+    }
+        .catch {
+            emit(
+                DeletedItemsState(
+                    loading = false,
+                    error = "Deleted items could not be loaded.",
+                ),
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DeletedItemsState())
+
+    private val deletionNoticeChannel = Channel<DeletionNotice>(Channel.BUFFERED)
+    val deletionNotices = deletionNoticeChannel.receiveAsFlow()
 
     private val _notebookTransfer = MutableStateFlow(NotebookTransferState())
     val notebookTransfer: StateFlow<NotebookTransferState> = _notebookTransfer.asStateFlow()
@@ -3144,8 +3204,20 @@ class NotesViewModel(
     )
 
     fun deleteSection(sectionId: String) {
+        val sectionName = _uiState.value.tree
+            .flatMap { it.liveSections }
+            .firstOrNull { it.id == sectionId }
+            ?.name
+            .orEmpty()
         viewModelScope.launch {
+            if (selectedSection.value == sectionId) persist()
             repository.deleteSection(sectionId)
+            deletionNoticeChannel.send(
+                DeletionNotice(
+                    key = DeletedItemKey(sectionId, DeletedItemKind.Section),
+                    message = "${sectionName.ifBlank { "Section" }} moved to Deleted items.",
+                ),
+            )
             if (selectedSection.value == sectionId) {
                 closeOpenSection()
                 _uiState.value.tree.firstOrNull()?.liveSections?.firstOrNull()?.let { selectSection(it.id) }
@@ -3164,13 +3236,25 @@ class NotesViewModel(
      * is moved off it explicitly, using the membership read *before* the write.
      */
     fun deleteNotebook(notebookId: String) {
+        val notebookName = _uiState.value.tree
+            .firstOrNull { it.notebook.id == notebookId }
+            ?.notebook
+            ?.name
+            .orEmpty()
         viewModelScope.launch {
             val owned = _uiState.value.tree
                 .firstOrNull { it.notebook.id == notebookId }
                 ?.liveSections.orEmpty()
                 .map { it.id }
                 .toSet()
+            if (selectedSection.value in owned) persist()
             repository.deleteNotebook(notebookId)
+            deletionNoticeChannel.send(
+                DeletionNotice(
+                    key = DeletedItemKey(notebookId, DeletedItemKind.Notebook),
+                    message = "${notebookName.ifBlank { "Notebook" }} moved to Deleted items.",
+                ),
+            )
             if (selectedSection.value in owned) {
                 closeOpenSection()
                 // Explicitly not `tree.firstOrNull()`: the flow may not have re-emitted yet, so the
@@ -3197,7 +3281,53 @@ class NotesViewModel(
     }
 
     fun deletePage(pageId: String) {
-        viewModelScope.launch { repository.deletePage(pageId) }
+        val pageName = _uiState.value.pages
+            .firstOrNull { it.id == pageId }
+            ?.title
+            .orEmpty()
+            .ifBlank { "Untitled page" }
+        viewModelScope.launch {
+            if (_uiState.value.selectedPageId == pageId) persist()
+            repository.deletePage(pageId)
+            deletionNoticeChannel.send(
+                DeletionNotice(
+                    key = DeletedItemKey(pageId, DeletedItemKind.Page),
+                    message = "$pageName moved to Deleted items.",
+                ),
+            )
+        }
+    }
+
+    /** Restores one item from either the durable pane or a transient snackbar action. */
+    fun restoreDeletedItem(key: DeletedItemKey) {
+        if (_deletedItemsStatus.value.restoring != null) return
+        val item = deletedItems.value.items.firstOrNull { it.key == key }
+        val label = item?.name ?: key.kind.displayName
+        _deletedItemsStatus.value = DeletedItemsStatus(restoring = key)
+        viewModelScope.launch {
+            try {
+                val restored = repository.restoreDeletedItem(key)
+                _deletedItemsStatus.value = if (restored) {
+                    DeletedItemsStatus(message = "$label was restored.")
+                } else {
+                    DeletedItemsStatus(
+                        error = "$label is not currently available to restore. Check Deleted Items.",
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                _deletedItemsStatus.value = DeletedItemsStatus(
+                    error = "$label could not be restored.",
+                )
+            }
+        }
+    }
+
+    fun clearDeletedItemsStatus() {
+        if (_deletedItemsStatus.value.restoring == null) {
+            _deletedItemsStatus.value = DeletedItemsStatus()
+        }
     }
 
     /**

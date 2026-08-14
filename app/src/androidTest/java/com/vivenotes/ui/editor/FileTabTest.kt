@@ -36,6 +36,20 @@ class FileTabTest {
     }
 
     @Test
+    fun deletedItemsIsAvailableWithoutAnOpenNotebookOrPage() {
+        var opened = false
+        setTab(
+            pageOpen = false,
+            notebookOpen = false,
+            deletedItems = { opened = true },
+        )
+
+        compose.onNodeWithTag(FileTags.DELETED_ITEMS).performClick()
+
+        assertTrue(opened)
+    }
+
+    @Test
     fun exportOpensForASelectedNotebook() {
         var opened = false
         setTab(pageOpen = false, notebookOpen = true, export = { opened = true })
@@ -92,11 +106,18 @@ class FileTabTest {
         export: () -> Unit = {},
         import: () -> Unit = {},
         delete: () -> Unit = {},
+        deletedItems: () -> Unit = {},
     ) {
         compose.setContent {
             ViveNotesTheme {
                 FileTab(
-                    actions = FileActions(history, export, import, delete),
+                    actions = FileActions(
+                        openVersionHistory = history,
+                        exportNotebook = export,
+                        importNotebook = import,
+                        deleteNotebook = delete,
+                        openDeletedItems = deletedItems,
+                    ),
                     pageOpen = pageOpen,
                     notebookOpen = notebookOpen,
                 )

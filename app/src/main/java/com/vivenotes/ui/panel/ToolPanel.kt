@@ -76,6 +76,7 @@ private val FIELD_HEIGHT = 32.dp
 /** The panes the ribbon can open. */
 enum class ToolPane(val title: String) {
     VersionHistory("Version History"),
+    DeletedItems("Deleted Items"),
     PaperSize("Paper Size"),
     AiModels("Integrated AI"),
     Recognition("Recognition"),

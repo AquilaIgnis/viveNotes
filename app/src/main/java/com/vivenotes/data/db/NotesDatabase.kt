@@ -38,6 +38,7 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun inkMoveDao(): InkMoveDao
     abstract fun attachmentDao(): AttachmentDao
     abstract fun localMetadataDao(): LocalMetadataDao
+    abstract fun deletionRecoveryDao(): DeletionRecoveryDao
 
     companion object {
 

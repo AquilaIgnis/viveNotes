@@ -21,6 +21,116 @@ interface LocalMetadataDao {
     suspend fun delete(key: String)
 }
 
+/** Raw Room projection for the typed recovery model in `data/DeletionRecovery.kt`. */
+data class DeletedItemRow(
+    val id: String,
+    val kind: String,
+    val name: String,
+    val notebookName: String?,
+    val sectionName: String?,
+    val deletedAt: Long,
+    val sectionCount: Int,
+    val pageCount: Int,
+)
+
+/**
+ * The app-wide soft-delete view.
+ *
+ * Only the highest deleted ancestor is returned. If a notebook is gone, its section/page rows are
+ * implementation detail until it is restored; likewise a page inside a deleted section. This makes
+ * each row correspond to one user action and prevents a parent restore from overwriting older child
+ * deletion decisions.
+ */
+@Dao
+interface DeletionRecoveryDao {
+
+    @Query(
+        """
+        SELECT
+            n.id AS id,
+            'Notebook' AS kind,
+            n.name AS name,
+            NULL AS notebookName,
+            NULL AS sectionName,
+            COALESCE(n.deletedAt, 0) AS deletedAt,
+            (
+                SELECT COUNT(*) FROM sections s
+                WHERE s.notebookId = n.id AND s.deletedAt IS NULL
+            ) AS sectionCount,
+            (
+                SELECT COUNT(*) FROM pages p
+                JOIN sections s ON s.id = p.sectionId
+                WHERE s.notebookId = n.id
+                    AND s.deletedAt IS NULL
+                    AND p.deletedAt IS NULL
+            ) AS pageCount
+        FROM notebooks n
+        WHERE n.deletedAt IS NOT NULL
+
+        UNION ALL
+
+        SELECT
+            s.id AS id,
+            'Section' AS kind,
+            s.name AS name,
+            n.name AS notebookName,
+            NULL AS sectionName,
+            COALESCE(s.deletedAt, 0) AS deletedAt,
+            0 AS sectionCount,
+            (
+                SELECT COUNT(*) FROM pages p
+                WHERE p.sectionId = s.id AND p.deletedAt IS NULL
+            ) AS pageCount
+        FROM sections s
+        JOIN notebooks n ON n.id = s.notebookId
+        WHERE s.deletedAt IS NOT NULL AND n.deletedAt IS NULL
+
+        UNION ALL
+
+        SELECT
+            p.id AS id,
+            'Page' AS kind,
+            CASE WHEN p.title = '' THEN 'Untitled page' ELSE p.title END AS name,
+            n.name AS notebookName,
+            s.name AS sectionName,
+            COALESCE(p.deletedAt, 0) AS deletedAt,
+            0 AS sectionCount,
+            0 AS pageCount
+        FROM pages p
+        JOIN sections s ON s.id = p.sectionId
+        JOIN notebooks n ON n.id = s.notebookId
+        WHERE p.deletedAt IS NOT NULL
+            AND s.deletedAt IS NULL
+            AND n.deletedAt IS NULL
+
+        ORDER BY deletedAt DESC, name
+        """,
+    )
+    fun observeRoots(): Flow<List<DeletedItemRow>>
+
+    @Query(
+        "UPDATE notebooks SET deletedAt = NULL, updatedAt = :now " +
+            "WHERE id = :id AND deletedAt IS NOT NULL",
+    )
+    suspend fun restoreNotebook(id: String, now: Long): Int
+
+    @Query(
+        "UPDATE sections SET deletedAt = NULL, updatedAt = :now " +
+            "WHERE id = :id AND deletedAt IS NOT NULL " +
+            "AND EXISTS (SELECT 1 FROM notebooks n " +
+            "WHERE n.id = sections.notebookId AND n.deletedAt IS NULL)",
+    )
+    suspend fun restoreSection(id: String, now: Long): Int
+
+    @Query(
+        "UPDATE pages SET deletedAt = NULL, updatedAt = :now " +
+            "WHERE id = :id AND deletedAt IS NOT NULL " +
+            "AND EXISTS (SELECT 1 FROM sections s JOIN notebooks n ON n.id = s.notebookId " +
+            "WHERE s.id = pages.sectionId AND s.deletedAt IS NULL AND n.deletedAt IS NULL)",
+    )
+    suspend fun restorePage(id: String, now: Long): Int
+}
+
 @Dao
 interface NotebookDao {
 

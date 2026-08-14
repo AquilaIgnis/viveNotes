@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -476,6 +477,63 @@ class NotesRepositoryTest {
             assertTrue("the row was hard-deleted", it.moveToFirst())
             assertTrue("deletedAt was not stamped", !it.isNull(0))
         }
+    }
+
+    @Test
+    fun recoveryFollowsHierarchyRootsWithoutResurrectingOlderDeletes() = runBlocking {
+        val notebookId = repository.createNotebook("Recovery notebook")
+        val deletedSection = repository.createSection(notebookId, "Deleted section")
+        repository.createPage(deletedSection, "Live child")
+        val olderDeletedPage = repository.createPage(deletedSection, "Older deleted page")
+        repository.saveDoc(
+            olderDeletedPage,
+            PageDoc(
+                outlines = listOf(
+                    Outline.Text(id = "kept", blocks = listOf(Block.of("recover me"))),
+                ),
+            ),
+        )
+        val liveSection = repository.createSection(notebookId, "Live section")
+        repository.createPage(liveSection, "Live page")
+
+        repository.deletePage(olderDeletedPage)
+        repository.deleteSection(deletedSection)
+        repository.deleteNotebook(notebookId)
+
+        val notebookRoot = repository.observeDeletedItems().first().single()
+        assertEquals(DeletedItemKind.Notebook, notebookRoot.key.kind)
+        assertEquals(1, notebookRoot.sectionCount)
+        assertEquals(1, notebookRoot.pageCount)
+
+        assertTrue(repository.restoreDeletedItem(notebookRoot.key))
+        val sectionRoot = repository.observeDeletedItems().first().single()
+        assertEquals(DeletedItemKind.Section, sectionRoot.key.kind)
+        assertEquals(1, sectionRoot.pageCount)
+
+        assertTrue(repository.restoreDeletedItem(sectionRoot.key))
+        val pageRoot = repository.observeDeletedItems().first().single()
+        assertEquals(DeletedItemKind.Page, pageRoot.key.kind)
+        assertEquals(olderDeletedPage, pageRoot.key.id)
+
+        assertTrue(repository.restoreDeletedItem(pageRoot.key))
+        assertTrue(repository.observeDeletedItems().first().isEmpty())
+        val restored = repository.loadDoc(olderDeletedPage)
+        assertTrue(restored is PageLoad.Loaded)
+        assertEquals("recover me", (restored as PageLoad.Loaded).doc.plainText())
+    }
+
+    @Test
+    fun childRestoreIsGuardedWhileItsParentIsDeleted() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        val pageKey = DeletedItemKey(pageId, DeletedItemKind.Page)
+        repository.deletePage(pageId)
+        repository.deleteNotebook(notebookId)
+
+        assertTrue(!repository.restoreDeletedItem(pageKey))
+        assertTrue(db.notebookDao().byId(notebookId)!!.deletedAt != null)
+        assertTrue(db.pageDao().byId(pageId)!!.deletedAt != null)
     }
 
     @Test

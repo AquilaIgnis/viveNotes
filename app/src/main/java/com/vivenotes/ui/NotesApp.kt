@@ -26,6 +26,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -87,6 +91,7 @@ import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.AiModelsPanelContent
 import com.vivenotes.ui.panel.ContentPanelContent
 import com.vivenotes.ui.panel.ContentPanelHeader
+import com.vivenotes.ui.panel.DeletedItemsPanelContent
 import com.vivenotes.ui.panel.HardwarePanelContent
 import com.vivenotes.ui.panel.PaperSizePanelContent
 import com.vivenotes.ui.panel.RecognitionOutputKind
@@ -103,6 +108,7 @@ import com.vivenotes.ui.theme.LocalCanvasColors
 import com.vivenotes.ui.theme.canvasColorsFor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -163,6 +169,7 @@ fun NotesApp(
     val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
     val contentSearch by viewModel.contentSearch.collectAsStateWithLifecycle()
     val versionHistory by viewModel.versionHistory.collectAsStateWithLifecycle()
+    val deletedItems by viewModel.deletedItems.collectAsStateWithLifecycle()
     val notebookTransfer by viewModel.notebookTransfer.collectAsStateWithLifecycle()
     val reveal by viewModel.reveal.collectAsStateWithLifecycle()
 
@@ -186,6 +193,24 @@ fun NotesApp(
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val recognitionScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Immediate Undo is a convenience over the durable Deleted Items pane. collectLatest keeps the
+    // newest destructive action visible; older ones remain recoverable from the pane even when a
+    // burst of deletes replaces their transient message.
+    LaunchedEffect(viewModel, snackbarHostState) {
+        viewModel.deletionNotices.collectLatest { notice ->
+            val result = snackbarHostState.showSnackbar(
+                message = notice.message,
+                actionLabel = "Undo",
+                withDismissAction = true,
+                duration = SnackbarDuration.Long,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.restoreDeletedItem(notice.key)
+            }
+        }
+    }
 
     // Hoisted into the view model, because a stylus button can change it — see `ui/StylusButtons.kt`.
     val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
@@ -367,6 +392,9 @@ fun NotesApp(
                 openPane = ToolPane.VersionHistory
                 viewModel.loadVersionHistory()
             },
+            openDeletedItems = {
+                openPane = ToolPane.DeletedItems
+            },
             exportNotebook = {
                 exportFileName?.let(exportNotebook::launch)
             },
@@ -404,7 +432,9 @@ fun NotesApp(
             val expanded = maxWidth >= EXPANDED_BREAKPOINT
             val medium = maxWidth >= MEDIUM_BREAKPOINT
 
-            Scaffold { padding ->
+            Scaffold(
+                snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            ) { padding ->
                 Column(
                     Modifier
                         .fillMaxSize()
@@ -559,6 +589,7 @@ fun NotesApp(
                                     },
                                     contentSearch = contentSearch,
                                     versionHistory = versionHistory,
+                                    deletedItems = deletedItems,
                                     onSearchQueryChange = viewModel::setSearchQuery,
                                     onOpenHit = viewModel::openSearchHit,
                                     viewModel = viewModel,
@@ -632,6 +663,7 @@ fun NotesApp(
                                     },
                                     contentSearch = contentSearch,
                                     versionHistory = versionHistory,
+                                    deletedItems = deletedItems,
                                     onSearchQueryChange = viewModel::setSearchQuery,
                                     // Compact windows show the pane *instead of* the page, so going
                                     // to a result has to put the page back or it reveals it behind
@@ -809,6 +841,7 @@ private fun ToolPaneHost(
     /** Content pane — the query, and what it found across the notebook (`docs/searchPlan.md`). */
     contentSearch: ContentSearchState,
     versionHistory: VersionHistoryState,
+    deletedItems: DeletedItemsState,
     onSearchQueryChange: (String) -> Unit,
     onOpenHit: (ContentHit) -> Unit,
     viewModel: NotesViewModel,
@@ -827,6 +860,11 @@ private fun ToolPaneHost(
                 state = versionHistory,
                 onSelect = viewModel::selectVersionRevision,
                 onRestore = viewModel::restoreSelectedVersion,
+            )
+            ToolPane.DeletedItems -> DeletedItemsPanelContent(
+                state = deletedItems,
+                onRestore = { viewModel.restoreDeletedItem(it.key) },
+                onClearStatus = viewModel::clearDeletedItemsStatus,
             )
             ToolPane.PaperSize -> PaperSizePanelContent(
                 style = style,
@@ -1224,8 +1262,8 @@ private fun NameEntryDialog(
  * Confirms a section deletion, which the page list's own delete does not do for a single page.
  *
  * The asymmetry is the point: a section takes every page in it out of reach in one tap, and the
- * count is the part worth reading before agreeing to it. The rows are only tombstoned, so nothing
- * is unrecoverable — but nothing in the app can bring them back yet either.
+ * count is the part worth reading before agreeing to it. The rows are only tombstoned and remain
+ * available from the app-wide Deleted Items pane.
  */
 @Composable
 private fun DeleteSectionDialog(
@@ -1239,10 +1277,15 @@ private fun DeleteSectionDialog(
         title = { Text("Delete ${section.name}?") },
         text = {
             Text(
-                when (pageCount) {
-                    null, 0 -> "This section will be removed."
-                    1 -> "Its 1 page will go with it."
-                    else -> "Its $pageCount pages will go with it."
+                buildString {
+                    append(
+                        when (pageCount) {
+                            null, 0 -> "This section will be removed."
+                            1 -> "Its 1 page will go with it."
+                            else -> "Its $pageCount pages will go with it."
+                        },
+                    )
+                    append(" You can restore it later from Deleted Items.")
                 },
             )
         },
@@ -1261,9 +1304,8 @@ private fun DeleteSectionDialog(
  * The same asymmetry as [DeleteSectionDialog], one level up, and for stronger reasons: this is the
  * largest thing the app can remove in a single tap, and it is reached from a toolbar rather than
  * from the row of the thing being deleted, so the name in the title is doing real work — it is the
- * only place the user can check that the ribbon was pointed where they thought. Export is named in
- * the body because it is the one way back that exists today; the rows are tombstoned, but nothing
- * in the app can yet bring them back.
+ * only place the user can check that the ribbon was pointed where they thought. The body names the
+ * durable recovery route so the confirmation does not imply that this is a hard delete.
  */
 @Composable
 private fun DeleteNotebookDialog(
@@ -1287,7 +1329,7 @@ private fun DeleteNotebookDialog(
                                     "${countOf(contents.pages, "page")} will go with it."
                         },
                     )
-                    append(" Export it first if you might want it back.")
+                    append(" You can restore it later from Deleted Items.")
                 },
             )
         },

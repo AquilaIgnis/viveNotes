@@ -59,6 +59,7 @@ object MaterialSymbols {
     val NoteAdd: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_note_add)
     val Redo: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_redo)
     val Remove: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_remove)
+    val RestoreFromTrash: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_restore_from_trash)
     val Search: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_search)
     val Sort: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_sort)
     val Straighten: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_straighten)

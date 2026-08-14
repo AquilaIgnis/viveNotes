@@ -33,6 +33,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.DrawTool
+import com.vivenotes.data.DeletedItemKind
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
@@ -1161,6 +1162,28 @@ class NotesViewModelTest {
         assertEquals(openPage, vm.uiState.value.selectedPageId)
     }
 
+    @Test
+    fun deletingAndRestoringTheOpenNotebookPublishesAnAppWideRecoveryAction() =
+        runTest(dispatcher) {
+            val vm = seededViewModel()
+            val notebookId = vm.uiState.value.tree.single().notebook.id
+            val notice = async { vm.deletionNotices.first() }
+
+            vm.deleteNotebook(notebookId)
+            advanceUntilIdle()
+
+            val deletion = notice.await()
+            assertEquals(DeletedItemKind.Notebook, deletion.key.kind)
+            assertEquals(notebookId, deletion.key.id)
+            assertEquals(listOf(notebookId), vm.deletedItems.value.items.map { it.key.id })
+
+            vm.restoreDeletedItem(deletion.key)
+            advanceUntilIdle()
+
+            assertTrue(vm.deletedItems.value.items.isEmpty())
+            assertEquals(listOf(notebookId), vm.uiState.value.tree.map { it.notebook.id })
+        }
+
     /** What the confirmation reads out before the user agrees to it. */
     @Test
     fun notebookContentsCountsLiveSectionsAndPages() = runTest(dispatcher) {
@@ -1183,6 +1206,30 @@ class NotesViewModelTest {
         assertEquals(before.sections + 1, after.sections)
         assertEquals(before.pages + 1, after.pages)
     }
+
+    @Test
+    fun deletingAndRestoringTheOpenPageKeepsEditsStillInsideTheAutosaveWindow() =
+        runTest(dispatcher) {
+            val vm = seededViewModel()
+            val pageId = vm.uiState.value.selectedPageId!!
+            val outlineId = vm.uiState.value.outlines.first().id
+            val notice = async { vm.deletionNotices.first() }
+
+            vm.onBlocksChanged(outlineId, listOf(Block.of("typed immediately before delete")))
+            vm.deletePage(pageId)
+            advanceUntilIdle()
+
+            val deletion = notice.await()
+            assertEquals(pageId, deletion.key.id)
+            assertEquals(DeletedItemKind.Page, deletion.key.kind)
+            assertEquals(listOf(pageId), vm.deletedItems.value.items.map { it.key.id })
+
+            vm.restoreDeletedItem(deletion.key)
+            advanceUntilIdle()
+
+            assertTrue(vm.deletedItems.value.items.isEmpty())
+            assertEquals("typed immediately before delete", storedText(pageId))
+        }
 
     // --- page appearance -------------------------------------------------------------------------
 

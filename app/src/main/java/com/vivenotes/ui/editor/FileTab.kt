@@ -16,10 +16,12 @@ data class FileActions(
     val exportNotebook: () -> Unit = {},
     val importNotebook: () -> Unit = {},
     val deleteNotebook: () -> Unit = {},
+    val openDeletedItems: () -> Unit = {},
 )
 
 internal object FileTags {
     const val VERSION_HISTORY = "file-version-history"
+    const val DELETED_ITEMS = "file-deleted-items"
     const val EXPORT_NOTEBOOK = "file-export-notebook"
     const val IMPORT_NOTEBOOK = "file-import-notebook"
     const val DELETE_NOTEBOOK = "file-delete-notebook"
@@ -41,6 +43,13 @@ internal fun FileTab(
                 onClick = actions.openVersionHistory,
                 enabled = pageOpen,
                 icon = { MonoIcon(MaterialSymbols.History) },
+            )
+        }
+        Box(Modifier.testTag(FileTags.DELETED_ITEMS)) {
+            RibbonCommand(
+                label = "Deleted Items",
+                onClick = actions.openDeletedItems,
+                icon = { MonoIcon(MaterialSymbols.RestoreFromTrash) },
             )
         }
 
