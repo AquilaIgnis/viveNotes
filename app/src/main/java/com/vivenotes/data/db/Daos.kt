@@ -93,6 +93,10 @@ interface SectionDao {
 
     @Query("SELECT * FROM sections WHERE notebookId = :notebookId AND deletedAt IS NULL ORDER BY sortIndex")
     suspend fun inNotebook(notebookId: String): List<SectionEntity>
+
+    /** Transfer reconciliation needs tombstones too: the archive owns the whole notebook state. */
+    @Query("SELECT * FROM sections WHERE notebookId = :notebookId ORDER BY sortIndex")
+    suspend fun allInNotebook(notebookId: String): List<SectionEntity>
 }
 
 @Dao
@@ -164,6 +168,13 @@ interface PageDao {
             "ORDER BY s.sortIndex, p.sortIndex",
     )
     suspend fun inNotebook(notebookId: String): List<PageEntity>
+
+    /** Every page row belonging to the notebook, including both page and section tombstones. */
+    @Query(
+        "SELECT p.* FROM pages p JOIN sections s ON s.id = p.sectionId " +
+            "WHERE s.notebookId = :notebookId ORDER BY s.sortIndex, p.sortIndex",
+    )
+    suspend fun allInNotebook(notebookId: String): List<PageEntity>
 }
 
 @Dao
@@ -191,6 +202,9 @@ interface PageRevisionDao {
 
     @Query("SELECT * FROM page_revisions WHERE id IN (:ids)")
     suspend fun byGlobalIds(ids: List<String>): List<PageRevisionEntity>
+
+    @Query("SELECT * FROM page_revisions WHERE pageId IN (:pageIds)")
+    suspend fun byPageIds(pageIds: List<String>): List<PageRevisionEntity>
 
     @Query("SELECT * FROM page_revisions WHERE id = :id AND pageId = :pageId")
     suspend fun byId(pageId: String, id: String): PageRevisionEntity?
@@ -349,6 +363,9 @@ interface InkEraseDao {
     @Query("SELECT * FROM ink_erase_targets WHERE eraseId IN (:eraseIds)")
     suspend fun targetsForErases(eraseIds: List<String>): List<InkEraseTargetEntity>
 
+    @Query("DELETE FROM ink_erase_targets WHERE eraseId IN (:eraseIds)")
+    suspend fun deleteTargetsForErases(eraseIds: List<String>)
+
     @Query("SELECT * FROM ink_erases WHERE id IN (:ids)")
     suspend fun byIds(ids: List<String>): List<InkEraseEntity>
 
@@ -389,6 +406,9 @@ interface InkMoveDao {
 
     @Query("SELECT * FROM ink_move_targets WHERE moveId IN (:moveIds)")
     suspend fun targetsForMoves(moveIds: List<String>): List<InkMoveTargetEntity>
+
+    @Query("DELETE FROM ink_move_targets WHERE moveId IN (:moveIds)")
+    suspend fun deleteTargetsForMoves(moveIds: List<String>)
 
     @Query("SELECT * FROM ink_moves WHERE id IN (:ids)")
     suspend fun byIds(ids: List<String>): List<InkMoveEntity>

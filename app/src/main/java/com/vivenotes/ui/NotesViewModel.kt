@@ -354,6 +354,12 @@ data class NotebookTransferState(
     val error: String? = null,
 )
 
+/** How much a notebook holds, for the wording of its delete confirmation. */
+data class NotebookContents(
+    val sections: Int,
+    val pages: Int,
+)
+
 data class NotesUiState(
     val tree: List<NotebookWithSections> = emptyList(),
     val selectedSectionId: String? = null,
@@ -793,23 +799,33 @@ class NotesViewModel(
         viewModelScope.launch {
             _notebookTransfer.value = NotebookTransferState(running = true)
             try {
-                val selectedNotebookId = selectedNotebook()?.notebook?.id
-                val selectedPageId = _uiState.value.selectedPageId
+                val selectedSectionId = _uiState.value.selectedSectionId
                 persist()
                 val result = manager.importNotebook(source)
-                if (result.created) {
-                    pendingPageId = result.firstPageId
-                    result.firstSectionId?.let(::selectSection)
-                } else if (selectedNotebookId == result.notebookId && selectedPageId != null) {
-                    // persist() already landed the editor before sync. Reload without persisting
-                    // again, or the stale pre-sync UI would immediately overwrite the merged row.
-                    openPage(selectedPageId, persistCurrent = false)
+                // An explicit import always opens what it imported. Besides making the result
+                // visible, this ensures an authoritative archive document replaces a stale open
+                // editor immediately instead of waiting for the user to leave and return.
+                result.firstSectionId?.let { importedSectionId ->
+                    if (importedSectionId == selectedSectionId) {
+                        if (result.restored) {
+                            // A restored page can be absent from the list snapshot still in UI
+                            // state. Let the Room invalidation publish the authoritative list first.
+                            pendingPageId = result.firstPageId
+                        } else {
+                            result.firstPageId?.let { openPage(it, persistCurrent = false) }
+                        }
+                    } else {
+                        pendingPageId = result.firstPageId
+                        // persist() already ran before import. Persisting the outgoing editor again
+                        // here could write its stale pre-import document over the archive.
+                        selectSection(importedSectionId, persistCurrent = false)
+                    }
                 }
                 _notebookTransfer.value = NotebookTransferState(
-                    message = if (result.created) {
-                        "${result.notebookName} was imported."
-                    } else {
-                        "${result.notebookName} was synced with the .vive notebook."
+                    message = when {
+                        result.created -> "${result.notebookName} was imported."
+                        result.restored -> "${result.notebookName} was restored from the .vive notebook."
+                        else -> "${result.notebookName} was updated from the .vive notebook."
                     },
                 )
             } catch (cancelled: CancellationException) {
@@ -997,9 +1013,11 @@ class NotesViewModel(
 
     // --- navigation ----------------------------------------------------------------------------
 
-    fun selectSection(sectionId: String) {
+    fun selectSection(sectionId: String) = selectSection(sectionId, persistCurrent = true)
+
+    private fun selectSection(sectionId: String, persistCurrent: Boolean) {
         if (selectedSection.value == sectionId) return
-        viewModelScope.launch { persist() }
+        if (persistCurrent) viewModelScope.launch { persist() }
         // Whatever page was loading belongs to the section being left. The pages flow will open one
         // from the new section in a moment; until then there is nothing this should still be doing.
         pageLoad?.cancel()
@@ -3114,22 +3132,68 @@ class NotesViewModel(
     /** For the delete confirmation, which says how many pages go with the section. */
     suspend fun pageCount(sectionId: String): Int = repository.pageCount(sectionId)
 
+    /**
+     * What a notebook would take with it, for its delete confirmation.
+     *
+     * Both halves are metadata-only reads — `pages` never touches `page_content` — so counting the
+     * contents of a large notebook costs no document decoding.
+     */
+    suspend fun notebookContents(notebookId: String): NotebookContents = NotebookContents(
+        sections = repository.sectionsInNotebook(notebookId).size,
+        pages = repository.pagesInNotebook(notebookId).size,
+    )
+
     fun deleteSection(sectionId: String) {
         viewModelScope.launch {
             repository.deleteSection(sectionId)
             if (selectedSection.value == sectionId) {
-                selectedSection.value = null
-                _uiState.value = _uiState.value.copy(
-                    selectedSectionId = null,
-                    selectedPageId = null,
-                    pages = emptyList(),
-                    outlines = emptyList(),
-                )
-                _strokes.value = emptyList()
-                publishCanvasUndoState(null)
+                closeOpenSection()
                 _uiState.value.tree.firstOrNull()?.liveSections?.firstOrNull()?.let { selectSection(it.id) }
             }
         }
+    }
+
+    /**
+     * Tombstones a whole notebook.
+     *
+     * Only the notebook row is soft-deleted; its sections and pages keep their own `deletedAt` null
+     * (see `NotesRepository.deleteNotebook`), which is what makes an eventual undelete a one-row
+     * write. The consequence here is that nothing downstream notices the sections have gone out of
+     * reach: the tree flow drops the notebook, but `selectedSection` would go on pointing into it
+     * and the editor would keep a page of a notebook the user cannot navigate to. So the selection
+     * is moved off it explicitly, using the membership read *before* the write.
+     */
+    fun deleteNotebook(notebookId: String) {
+        viewModelScope.launch {
+            val owned = _uiState.value.tree
+                .firstOrNull { it.notebook.id == notebookId }
+                ?.liveSections.orEmpty()
+                .map { it.id }
+                .toSet()
+            repository.deleteNotebook(notebookId)
+            if (selectedSection.value in owned) {
+                closeOpenSection()
+                // Explicitly not `tree.firstOrNull()`: the flow may not have re-emitted yet, so the
+                // deleted notebook can still be at the front of the list this reads.
+                _uiState.value.tree
+                    .firstOrNull { it.notebook.id != notebookId }
+                    ?.liveSections?.firstOrNull()
+                    ?.let { selectSection(it.id) }
+            }
+        }
+    }
+
+    /** Empties the editor of a section that has just been deleted, before anything else is chosen. */
+    private fun closeOpenSection() {
+        selectedSection.value = null
+        _uiState.value = _uiState.value.copy(
+            selectedSectionId = null,
+            selectedPageId = null,
+            pages = emptyList(),
+            outlines = emptyList(),
+        )
+        _strokes.value = emptyList()
+        publishCanvasUndoState(null)
     }
 
     fun deletePage(pageId: String) {

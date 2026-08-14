@@ -155,6 +155,64 @@ class NotebookTransferManagerTest {
     }
 
     @Test
+    fun importingADeletedNotebookRestoresItsStableId() = runBlocking {
+        val notebookId = repository.createNotebook("Field Notes")
+        val sectionId = repository.createSection(notebookId, "Observations")
+        val pageId = repository.createPage(sectionId, "Heron")
+        val bundle = ByteArrayOutputStream().also { transfers.exportNotebook(notebookId, it) }
+            .toByteArray()
+
+        now += 1
+        repository.deleteNotebook(notebookId)
+        val deletionTime = db.notebookDao().byId(notebookId)!!.updatedAt
+        assertEquals(0, db.notebookDao().count())
+
+        val result = transfers.importNotebook(ByteArrayInputStream(bundle))
+        val restored = db.notebookDao().byId(notebookId)!!
+
+        assertFalse(result.created)
+        assertTrue(result.restored)
+        assertEquals(sectionId, result.firstSectionId)
+        assertEquals(pageId, result.firstPageId)
+        assertEquals(1, db.notebookDao().count())
+        assertEquals(null, restored.deletedAt)
+        assertTrue("restore did not supersede the deletion timestamp", restored.updatedAt > deletionTime)
+    }
+
+    @Test
+    fun importRestoresArchivedPageMetadataAndDocumentOverANewerLocalDeletion() = runBlocking {
+        val notebookId = repository.createNotebook("Field Notes")
+        val sectionId = repository.createSection(notebookId, "Observations")
+        val pageId = repository.createPage(sectionId, "Archived page")
+        repository.saveDoc(
+            pageId,
+            PageDoc(outlines = listOf(Outline.Text(id = "text", blocks = listOf(Block.of("archived"))))),
+        )
+        val bundle = ByteArrayOutputStream().also { transfers.exportNotebook(notebookId, it) }
+            .toByteArray()
+
+        now += 1
+        repository.renamePage(pageId, "Local page")
+        repository.saveDoc(
+            pageId,
+            PageDoc(outlines = listOf(Outline.Text(id = "text", blocks = listOf(Block.of("local"))))),
+        )
+        repository.deletePage(pageId)
+        val deletionTime = db.pageDao().byId(pageId)!!.updatedAt
+
+        val result = transfers.importNotebook(ByteArrayInputStream(bundle))
+        val restoredPage = db.pageDao().byId(pageId)!!
+        val restoredDoc = repository.loadDoc(pageId) as PageLoad.Loaded
+
+        assertFalse(result.created)
+        assertTrue(result.restored)
+        assertEquals("Archived page", restoredPage.title)
+        assertEquals(null, restoredPage.deletedAt)
+        assertTrue("restored page did not supersede its deletion", restoredPage.updatedAt > deletionTime)
+        assertEquals("archived", restoredDoc.doc.plainText())
+    }
+
+    @Test
     fun exportThenImportCopiesTextInkHistoryAndAttachments() = runBlocking {
         val notebookId = repository.createNotebook("Field Notes")
         val sectionId = repository.createSection(notebookId, "Observations")
@@ -223,6 +281,16 @@ class NotebookTransferManagerTest {
             assertEquals(0xFF556677.toInt(), destinationRepository.inkFor(importedPageId).single().colorArgb)
             assertEquals(sourceRevisionCount, destinationRepository.revisionHistory(importedPageId).size)
 
+            val destinationOnlyStroke = destinationRepository.addStroke(
+                InkCodec.encode(Stroke(InkCodec.brushFor(pen), inputs), importedPageId, 1, pen, now),
+            )
+            val destinationOnlySection = destinationRepository.createSection(notebookId, "Local section")
+            val pageInDestinationOnlySection = destinationRepository.createPage(
+                destinationOnlySection,
+                "Local section page",
+            )
+            assertEquals(2, destinationRepository.inkFor(importedPageId).size)
+
             val revisionRows = destinationRepository.revisionHistory(importedPageId).map { summary ->
                 destinationDb.pageRevisionDao().byId(importedPageId, summary.id)!!
             }
@@ -261,6 +329,20 @@ class NotebookTransferManagerTest {
                 "river bank updated",
                 (destinationRepository.loadDoc(pageId) as PageLoad.Loaded).doc.plainText(),
             )
+            assertTrue(
+                "the authoritative import kept destination-only ink live",
+                destinationDb.inkStrokeDao().byIds(listOf(destinationOnlyStroke.id)).single().deletedAt != null,
+            )
+            assertTrue(
+                "the authoritative import kept a destination-only section live",
+                destinationDb.sectionDao().byId(destinationOnlySection)!!.deletedAt != null,
+            )
+            assertTrue(
+                "a page under a removed local-only section should no longer be reachable",
+                destinationRepository.pagesInNotebook(notebookId)
+                    .none { it.id == pageInDestinationOnlySection },
+            )
+            assertEquals(1, destinationRepository.inkFor(importedPageId).size)
             val revisionsAfterSync = destinationRepository.revisionHistory(pageId).size
 
             destinationTransfers.importNotebook(ByteArrayInputStream(changedBundle))
@@ -285,8 +367,8 @@ class NotebookTransferManagerTest {
 
             assertTrue("newer deletion did not sync", destinationDb.pageDao().byId(pageId)!!.deletedAt != null)
             assertTrue(
-                "the merge removed a destination-only page",
-                destinationDb.pageDao().byId(destinationOnlyPage)!!.deletedAt == null,
+                "the authoritative import kept a destination-only page live",
+                destinationDb.pageDao().byId(destinationOnlyPage)!!.deletedAt != null,
             )
         } finally {
             destinationDb.close()

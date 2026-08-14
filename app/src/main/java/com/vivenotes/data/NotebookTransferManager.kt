@@ -54,6 +54,8 @@ data class NotebookImportResult(
     val firstSectionId: String?,
     val firstPageId: String?,
     val created: Boolean,
+    /** At least one live notebook, section, or page in the archive replaced a local tombstone. */
+    val restored: Boolean,
 )
 
 data class NotebookExportResult(val notebookName: String, val byteCount: Long)
@@ -528,6 +530,36 @@ class NotebookTransferManager(
         val notebookId = data.notebook.id
         val existingRows = auditLiveCollisions(data)
         val existingNotebook = existingRows.notebook
+        val localSections = db.sectionDao().allInNotebook(notebookId)
+        val localPages = db.pageDao().allInNotebook(notebookId)
+        val localRevisions = loadChunked(
+            data.pages.map { it.id },
+            db.pageRevisionDao()::byPageIds,
+        )
+        // Import is an explicit restore boundary, not an implicit background sync. Every row the
+        // chosen archive carries is authoritative for its stable id, even when the device has a
+        // newer edit or tombstone. Local-only rows absent from the archive are tombstoned so the
+        // visible notebook is the saved state, not a union with whatever happened after export.
+        val restoringNotebook = existingNotebook?.deletedAt != null
+        val restoringSectionIds = data.sections.mapNotNullTo(mutableSetOf()) { incoming ->
+            incoming.id.takeIf {
+                incoming.deletedAt == null && existingRows.sections[incoming.id]?.deletedAt != null
+            }
+        }
+        val restoringPageIds = data.pages.mapNotNullTo(mutableSetOf()) { incoming ->
+            incoming.id.takeIf {
+                incoming.deletedAt == null && existingRows.pages[incoming.id]?.deletedAt != null
+            }
+        }
+        val restored = restoringNotebook || restoringSectionIds.isNotEmpty() || restoringPageIds.isNotEmpty()
+        val importedAt = clock()
+
+        /** A restored archive state is a new mutation and must supersede the state it replaces. */
+        fun importedTimestamp(incoming: Long, existing: Long): Long = maxOf(
+            importedAt,
+            incoming,
+            if (existing == Long.MAX_VALUE) Long.MAX_VALUE else existing + 1L,
+        )
 
         val installedFiles = mutableListOf<File>()
         try {
@@ -569,64 +601,99 @@ class NotebookTransferManager(
                             expanded = true,
                         ),
                     )
-                } else if (data.notebook.updatedAt > existingNotebook.updatedAt) {
+                } else if (!existingNotebook.sameImportedStateAs(data.notebook)) {
                     // Expansion and top-level ordering are this device's navigation state.
                     notebookDao.upsert(
                         data.notebook.copy(
                             sortIndex = existingNotebook.sortIndex,
-                            expanded = existingNotebook.expanded,
+                            expanded = if (restoringNotebook) true else existingNotebook.expanded,
+                            updatedAt = importedTimestamp(
+                                data.notebook.updatedAt,
+                                existingNotebook.updatedAt,
+                            ),
                         ),
                     )
                 }
                 db.localMetadataDao().delete(NotesRepository.REPLACEABLE_STARTER_KEY)
 
                 val sectionDao = db.sectionDao()
+                val importedSectionIds = data.sections.mapTo(hashSetOf()) { it.id }
                 data.sections.forEach { row ->
                     val existing = existingRows.sections[row.id]
-                    if (existing == null || row.updatedAt > existing.updatedAt) sectionDao.upsert(row)
+                    if (existing == null) {
+                        sectionDao.upsert(row)
+                    } else if (!existing.sameImportedStateAs(row)) {
+                        sectionDao.upsert(
+                            row.copy(updatedAt = importedTimestamp(row.updatedAt, existing.updatedAt)),
+                        )
+                    }
                 }
+                localSections.filter { it.id !in importedSectionIds && it.deletedAt == null }
+                    .forEach { sectionDao.softDelete(it.id, importedAt) }
 
                 val pageDao = db.pageDao()
+                val importedPageIds = data.pages.mapTo(hashSetOf()) { it.id }
                 data.pages.forEach { row ->
                     val existing = existingRows.pages[row.id]
-                    if (existing == null || row.updatedAt > existing.updatedAt) pageDao.upsert(row)
+                    if (existing == null) {
+                        pageDao.upsert(row)
+                    } else if (!existing.sameImportedStateAs(row)) {
+                        pageDao.upsert(
+                            row.copy(updatedAt = importedTimestamp(row.updatedAt, existing.updatedAt)),
+                        )
+                    }
                 }
+                localPages.filter { it.id !in importedPageIds && it.deletedAt == null }
+                    .forEach { pageDao.softDelete(it.id, importedAt) }
 
                 val attachmentDeltas = linkedMapOf<String, Int>()
                 val contentDao = db.pageContentDao()
                 data.contents.forEach { row ->
                     val existing = existingRows.contents[row.pageId]
-                    if (existing == null || row.updatedAt > existing.updatedAt) {
+                    if (existing == null || !existing.sameImportedStateAs(row)) {
                         existing?.safeImageIds().orEmpty().forEach { id ->
                             attachmentDeltas[id] = attachmentDeltas.getOrDefault(id, 0) - 1
                         }
                         row.safeImageIds().forEach { id ->
                             attachmentDeltas[id] = attachmentDeltas.getOrDefault(id, 0) + 1
                         }
-                        contentDao.upsert(row)
+                        contentDao.upsert(
+                            if (existing == null) row else row.copy(
+                                updatedAt = importedTimestamp(row.updatedAt, existing.updatedAt),
+                            ),
+                        )
                     }
                 }
 
-                val changedStrokes = data.strokes.filter { incoming ->
-                    existingRows.strokes[incoming.id]?.sameInkStateAs(incoming) != true
+                // Reset every archived page's active ink first. Upserting every carried operation
+                // below then reconstructs exactly the archive state; local-only operations stay as
+                // tombstoned history rather than leaking onto the restored canvas.
+                data.pages.forEach { page ->
+                    db.inkStrokeDao().softDeletePage(page.id, importedAt)
+                    db.inkEraseDao().softDeletePage(page.id, importedAt)
+                    db.inkMoveDao().softDeletePage(page.id, importedAt)
                 }
-                if (changedStrokes.isNotEmpty()) db.inkStrokeDao().upsert(changedStrokes)
-                data.erases.filter { incoming ->
-                    existingRows.erases[incoming.id]?.sameInkStateAs(incoming) != true
-                }.forEach { db.inkEraseDao().upsert(it) }
-                val newEraseTargets = data.eraseTargets.filterNot(existingRows.eraseTargets::contains)
-                if (newEraseTargets.isNotEmpty()) {
-                    db.inkEraseDao().insertTargetsIfAbsent(newEraseTargets)
+                if (data.strokes.isNotEmpty()) db.inkStrokeDao().upsert(data.strokes)
+                data.erases.forEach { db.inkEraseDao().upsert(it) }
+                data.erases.map { it.id }.chunked(SQLITE_BIND_CHUNK).forEach { ids ->
+                    db.inkEraseDao().deleteTargetsForErases(ids)
                 }
-                data.moves.filter { incoming ->
-                    existingRows.moves[incoming.id]?.sameInkStateAs(incoming) != true
-                }.forEach { db.inkMoveDao().upsert(it) }
-                val newMoveTargets = data.moveTargets.filterNot(existingRows.moveTargets::contains)
-                if (newMoveTargets.isNotEmpty()) {
-                    db.inkMoveDao().insertTargetsIfAbsent(newMoveTargets)
+                if (data.eraseTargets.isNotEmpty()) {
+                    db.inkEraseDao().insertTargetsIfAbsent(data.eraseTargets)
+                }
+                data.moves.forEach { db.inkMoveDao().upsert(it) }
+                data.moves.map { it.id }.chunked(SQLITE_BIND_CHUNK).forEach { ids ->
+                    db.inkMoveDao().deleteTargetsForMoves(ids)
+                }
+                if (data.moveTargets.isNotEmpty()) {
+                    db.inkMoveDao().insertTargetsIfAbsent(data.moveTargets)
                 }
 
                 val revisionDao = db.pageRevisionDao()
+                val importedRevisionIds = data.revisions.mapTo(hashSetOf()) { it.id }
+                localRevisions.map { it.id }.filterNot(importedRevisionIds::contains)
+                    .chunked(SQLITE_BIND_CHUNK)
+                    .forEach { revisionDao.deleteByIds(it) }
                 val newRevisions = data.revisions.filter { it.id !in existingRows.revisions }
                 newRevisions.forEach { revisionDao.insertIfAbsent(it) }
                 newRevisions.map { it.pageId }.distinct().forEach { pageId ->
@@ -654,6 +721,7 @@ class NotebookTransferManager(
             firstSection,
             firstPage,
             created = existingNotebook == null,
+            restored = restored,
         )
     }
 
@@ -1187,6 +1255,19 @@ private data class ExistingBundleRows(
     val revisions: Map<String, PageRevisionEntity>,
     val attachments: Map<String, AttachmentEntity>,
 )
+
+/** Import owns archive content, while top-level order/expansion remain device navigation state. */
+private fun NotebookEntity.sameImportedStateAs(other: NotebookEntity): Boolean =
+    copy(sortIndex = other.sortIndex, expanded = other.expanded, updatedAt = other.updatedAt) == other
+
+private fun SectionEntity.sameImportedStateAs(other: SectionEntity): Boolean =
+    copy(updatedAt = other.updatedAt) == other
+
+private fun PageEntity.sameImportedStateAs(other: PageEntity): Boolean =
+    copy(updatedAt = other.updatedAt) == other
+
+private fun PageContentEntity.sameImportedStateAs(other: PageContentEntity): Boolean =
+    copy(updatedAt = other.updatedAt) == other
 
 private val JSON = Json { encodeDefaults = true }
 

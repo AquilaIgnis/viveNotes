@@ -15,12 +15,14 @@ data class FileActions(
     val openVersionHistory: () -> Unit,
     val exportNotebook: () -> Unit = {},
     val importNotebook: () -> Unit = {},
+    val deleteNotebook: () -> Unit = {},
 )
 
 internal object FileTags {
     const val VERSION_HISTORY = "file-version-history"
     const val EXPORT_NOTEBOOK = "file-export-notebook"
     const val IMPORT_NOTEBOOK = "file-import-notebook"
+    const val DELETE_NOTEBOOK = "file-delete-notebook"
 }
 
 /** Commands about the open file rather than its content or the device running the app. */
@@ -58,6 +60,20 @@ internal fun FileTab(
                 // The plain book beside it is Export; the arrow is the only thing telling the two
                 // apart, so this one is two-tone — see `icons/RibbonGlyphs.kt`.
                 icon = { active -> TwoToneIcon({ it.importNotebook }, active) },
+            )
+        }
+
+        // Behind its own divider, and last: the only command on this tab that takes something away.
+        // Export and Import sit a thumb's width from it, and a scrolling row moves under the finger,
+        // so the gap is what stops a mistimed tap on Import from landing on this instead. The tap
+        // still only opens the confirmation — see `NotesApp.DeleteNotebookDialog`.
+        Divider()
+        Box(Modifier.testTag(FileTags.DELETE_NOTEBOOK)) {
+            RibbonCommand(
+                label = "Delete Notebook",
+                onClick = actions.deleteNotebook,
+                enabled = notebookOpen,
+                icon = { MonoIcon(MaterialSymbols.Delete) },
             )
         }
     }

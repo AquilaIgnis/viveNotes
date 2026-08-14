@@ -48,6 +48,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
+import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.SectionEntity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -194,6 +195,12 @@ fun NotesApp(
     var pendingSectionPages by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(pendingSectionDelete) {
         pendingSectionPages = pendingSectionDelete?.let { viewModel.pageCount(it.id) }
+    }
+    var pendingNotebookDelete by remember { mutableStateOf<NotebookEntity?>(null) }
+    /** As above: null until the counts have been read. */
+    var pendingNotebookContents by remember { mutableStateOf<NotebookContents?>(null) }
+    LaunchedEffect(pendingNotebookDelete) {
+        pendingNotebookContents = pendingNotebookDelete?.let { viewModel.notebookContents(it.id) }
     }
     /** The docked pane, if any. Deliberately not persisted: it is where you are, not what you have. */
     var openPane by remember { mutableStateOf<ToolPane?>(null) }
@@ -349,7 +356,12 @@ fun NotesApp(
         AiActions(openIntegrated = { openPane = ToolPane.AiModels })
     }
     val exportFileName = viewModel.selectedNotebookName()?.viveFileName()
-    val fileActions = remember(viewModel, exportFileName) {
+    // The notebook the ribbon acts on is the one holding the open section — the same rule the export
+    // name follows, read from the tree here because the dialog needs the row, not just the name.
+    val currentNotebook = state.tree
+        .firstOrNull { entry -> entry.liveSections.any { it.id == state.selectedSectionId } }
+        ?.notebook
+    val fileActions = remember(viewModel, exportFileName, currentNotebook) {
         FileActions(
             openVersionHistory = {
                 openPane = ToolPane.VersionHistory
@@ -360,6 +372,9 @@ fun NotesApp(
             },
             importNotebook = {
                 importNotebook.launch(NotebookTransferManager.importMimeTypes())
+            },
+            deleteNotebook = {
+                pendingNotebookDelete = currentNotebook
             },
         )
     }
@@ -476,6 +491,7 @@ fun NotesApp(
                                 PageListPane(
                                     pages = state.pages,
                                     selectedPageId = state.selectedPageId,
+                                    sectionOpen = state.selectedSectionId != null,
                                     onSelectPage = viewModel::openPage,
                                     onAddPage = viewModel::addPage,
                                     onDeletePage = viewModel::deletePage,
@@ -579,6 +595,7 @@ fun NotesApp(
                             CompactPane.Pages -> PageListPane(
                                 pages = state.pages,
                                 selectedPageId = state.selectedPageId,
+                                sectionOpen = state.selectedSectionId != null,
                                 onSelectPage = viewModel::openPage,
                                 onAddPage = viewModel::addPage,
                                 onDeletePage = viewModel::deletePage,
@@ -703,6 +720,17 @@ fun NotesApp(
             onConfirm = {
                 viewModel.deleteSection(section.id)
                 pendingSectionDelete = null
+            },
+        )
+    }
+    pendingNotebookDelete?.let { notebook ->
+        DeleteNotebookDialog(
+            notebook = notebook,
+            contents = pendingNotebookContents,
+            onDismiss = { pendingNotebookDelete = null },
+            onConfirm = {
+                viewModel.deleteNotebook(notebook.id)
+                pendingNotebookDelete = null
             },
         )
     }
@@ -1226,3 +1254,52 @@ private fun DeleteSectionDialog(
         },
     )
 }
+
+/**
+ * Confirms deleting the whole notebook the ribbon's File tab is pointed at.
+ *
+ * The same asymmetry as [DeleteSectionDialog], one level up, and for stronger reasons: this is the
+ * largest thing the app can remove in a single tap, and it is reached from a toolbar rather than
+ * from the row of the thing being deleted, so the name in the title is doing real work — it is the
+ * only place the user can check that the ribbon was pointed where they thought. Export is named in
+ * the body because it is the one way back that exists today; the rows are tombstoned, but nothing
+ * in the app can yet bring them back.
+ */
+@Composable
+private fun DeleteNotebookDialog(
+    notebook: NotebookEntity,
+    contents: NotebookContents?,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete ${notebook.name}?") },
+        text = {
+            Text(
+                buildString {
+                    append(
+                        when {
+                            contents == null || (contents.sections == 0 && contents.pages == 0) ->
+                                "This notebook will be removed."
+                            else ->
+                                "Its ${countOf(contents.sections, "section")} and " +
+                                    "${countOf(contents.pages, "page")} will go with it."
+                        },
+                    )
+                    append(" Export it first if you might want it back.")
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Delete") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+/** "1 section" / "3 sections" — the counts in a delete confirmation are read, so they are spelled. */
+private fun countOf(value: Int, noun: String): String =
+    if (value == 1) "1 $noun" else "$value ${noun}s"

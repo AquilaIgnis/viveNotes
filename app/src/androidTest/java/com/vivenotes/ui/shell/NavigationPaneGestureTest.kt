@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
@@ -64,5 +66,26 @@ class NavigationPaneGestureTest {
         compose.onRoot().performTouchInput { swipeLeft() }
 
         assertTrue("page list did not recognize the left swipe", collapseRequested)
+    }
+
+    @Test
+    fun pageActionsAreHiddenWithoutAnOpenSection() {
+        compose.setContent {
+            ViveNotesTheme {
+                Box(Modifier.width(260.dp).height(400.dp)) {
+                    PageListPane(
+                        pages = emptyList(),
+                        selectedPageId = null,
+                        sectionOpen = false,
+                        onSelectPage = {},
+                        onAddPage = {},
+                        onDeletePage = {},
+                    )
+                }
+            }
+        }
+
+        compose.onNodeWithText("Add Page").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Sort pages").assertDoesNotExist()
     }
 }

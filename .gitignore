@@ -12,9 +12,13 @@ gradlew
 gradlew.bat
 CLAUDE.md
 memory
+
+#trash
 *.db
 *.db-shm
 *.db-wal
+*.vive
+
 #python
 .venv
 .python-version

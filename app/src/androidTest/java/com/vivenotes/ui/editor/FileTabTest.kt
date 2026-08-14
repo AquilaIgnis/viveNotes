@@ -65,17 +65,38 @@ class FileTabTest {
         assertTrue(opened)
     }
 
+    @Test
+    fun deleteAsksForASelectedNotebook() {
+        var asked = false
+        setTab(pageOpen = false, notebookOpen = true, delete = { asked = true })
+
+        compose.onNodeWithTag(FileTags.DELETE_NOTEBOOK).performClick()
+
+        assertTrue(asked)
+    }
+
+    @Test
+    fun deleteIsInertWithoutASelectedNotebook() {
+        var asked = false
+        setTab(pageOpen = false, notebookOpen = false, delete = { asked = true })
+
+        compose.onNodeWithTag(FileTags.DELETE_NOTEBOOK).performTouchInput { click() }
+
+        assertFalse(asked)
+    }
+
     private fun setTab(
         pageOpen: Boolean,
         notebookOpen: Boolean = pageOpen,
         history: () -> Unit = {},
         export: () -> Unit = {},
         import: () -> Unit = {},
+        delete: () -> Unit = {},
     ) {
         compose.setContent {
             ViveNotesTheme {
                 FileTab(
-                    actions = FileActions(history, export, import),
+                    actions = FileActions(history, export, import, delete),
                     pageOpen = pageOpen,
                     notebookOpen = notebookOpen,
                 )

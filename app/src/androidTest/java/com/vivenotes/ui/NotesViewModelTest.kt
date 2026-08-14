@@ -1109,6 +1109,81 @@ class NotesViewModelTest {
         assertEquals(before, vm.uiState.value.outlines.size)
     }
 
+    // --- notebooks -------------------------------------------------------------------------------
+
+    /**
+     * Deleting a notebook only tombstones its own row, so nothing downstream would notice that the
+     * open section has gone out of reach — the editor would keep showing a page of a notebook the
+     * navigation no longer lists. The view model has to move the selection itself.
+     */
+    @Test
+    fun deletingTheOpenNotebookOpensAnotherOne() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val seeded = vm.uiState.value.tree.single().notebook.id
+        vm.createNotebook("Second")
+        advanceUntilIdle()
+        val second = vm.uiState.value.tree.single { it.notebook.id != seeded }
+        assertTrue(
+            "the new notebook's section should be the open one",
+            second.liveSections.any { it.id == vm.uiState.value.selectedSectionId },
+        )
+
+        vm.deleteNotebook(second.notebook.id)
+        advanceUntilIdle()
+
+        assertEquals(listOf(seeded), vm.uiState.value.tree.map { it.notebook.id })
+        val open = vm.uiState.value.selectedSectionId
+        assertNotNull("the editor was left with no section open", open)
+        assertTrue(
+            "the selection stayed inside the deleted notebook",
+            vm.uiState.value.tree.single().liveSections.any { it.id == open },
+        )
+        assertNotNull("no page was opened in the surviving notebook", vm.uiState.value.selectedPageId)
+    }
+
+    @Test
+    fun deletingAnotherNotebookLeavesTheOpenPageAlone() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val seeded = vm.uiState.value.tree.single().notebook.id
+        vm.createNotebook("Second")
+        advanceUntilIdle()
+        // A new notebook's section starts empty, so give it a page for the assertion to be about
+        // something: the editor's contents must survive a delete that is not about them.
+        vm.addPage()
+        advanceUntilIdle()
+        val openSection = vm.uiState.value.selectedSectionId
+        val openPage = vm.uiState.value.selectedPageId!!
+
+        vm.deleteNotebook(seeded)
+        advanceUntilIdle()
+
+        assertEquals(openSection, vm.uiState.value.selectedSectionId)
+        assertEquals(openPage, vm.uiState.value.selectedPageId)
+    }
+
+    /** What the confirmation reads out before the user agrees to it. */
+    @Test
+    fun notebookContentsCountsLiveSectionsAndPages() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val notebookId = vm.uiState.value.tree.single().notebook.id
+        val before = vm.notebookContents(notebookId)
+        val keptSection = repository.createSection(notebookId, "Kept section")
+        repository.createPage(keptSection, "kept")
+        val gonePage = repository.createPage(keptSection, "gone")
+        repository.deletePage(gonePage)
+        val goneSection = repository.createSection(notebookId, "Deleted section")
+        // Never tombstoned itself, only stranded by its section's tombstone — the case that decides
+        // whether the count is of rows or of pages the user can still reach.
+        repository.createPage(goneSection, "unreachable")
+        repository.deleteSection(goneSection)
+        advanceUntilIdle()
+
+        val after = vm.notebookContents(notebookId)
+
+        assertEquals(before.sections + 1, after.sections)
+        assertEquals(before.pages + 1, after.pages)
+    }
+
     // --- page appearance -------------------------------------------------------------------------
 
     /**

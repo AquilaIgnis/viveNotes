@@ -72,6 +72,7 @@ internal object PageListTags {
 fun PageListPane(
     pages: List<PageEntity>,
     selectedPageId: String?,
+    sectionOpen: Boolean = true,
     onSelectPage: (String) -> Unit,
     onAddPage: () -> Unit,
     onDeletePage: (String) -> Unit,
@@ -125,52 +126,54 @@ fun PageListPane(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .swipeLeft(onSwipeLeft),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
+        if (sectionOpen) {
             Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .clickable(onClick = onAddPage)
+                    .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Icon(
-                    imageVector = MaterialSymbols.NoteAdd,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "Add Page",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-
-            Box {
-                IconButton(onClick = { sortMenuOpen = true }, modifier = Modifier.size(30.dp)) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onAddPage)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Icon(
-                        imageVector = MaterialSymbols.Sort,
-                        contentDescription = "Sort pages",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(17.dp),
+                        imageVector = MaterialSymbols.NoteAdd,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Add Page",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
-                DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
-                    PageSort.entries.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option.label) },
-                            onClick = {
-                                sort = option
-                                sortMenuOpen = false
-                            },
+
+                Box {
+                    IconButton(onClick = { sortMenuOpen = true }, modifier = Modifier.size(30.dp)) {
+                        Icon(
+                            imageVector = MaterialSymbols.Sort,
+                            contentDescription = "Sort pages",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(17.dp),
                         )
+                    }
+                    DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                        PageSort.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.label) },
+                                onClick = {
+                                    sort = option
+                                    sortMenuOpen = false
+                                },
+                            )
+                        }
                     }
                 }
             }
