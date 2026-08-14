@@ -27,8 +27,6 @@ myTrash/
 
 # Models
 app/src/debug/assets/ai/dev/*.onnx
-app/src/main/assets/ai/en_pp-ocrv5_mobile_rec.onnx
-app/src/main/assets/ai/pp-ocrv5_mobile_det.onnx
 
 #jsc
 .env
