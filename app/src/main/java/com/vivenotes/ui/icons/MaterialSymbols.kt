@@ -53,6 +53,7 @@ object MaterialSymbols {
     val KeyboardDoubleArrowLeft: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_keyboard_double_arrow_left)
     val KeyboardDoubleArrowRight: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_keyboard_double_arrow_right)
     val LassoSelect: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_lasso_select)
+    val LocalCafe: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_local_cafe)
     val Memory: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_memory)
     val Menu: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_menu)
     val MenuOpen: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_menu_open)
