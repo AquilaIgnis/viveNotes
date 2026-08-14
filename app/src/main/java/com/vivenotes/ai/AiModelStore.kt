@@ -1,6 +1,8 @@
 package com.vivenotes.ai
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +50,14 @@ class AiModelStore internal constructor(
     context: Context,
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val downloader: VerifiedArtifactDownloader = VerifiedArtifactDownloader(),
+    /**
+     * Whether a first run fetches the formula package by itself.
+     *
+     * A parameter rather than a constant so a test can build a store that will never reach for the
+     * network. Debug builds do not reach it anyway — they carry the package in `ai/dev` and resolve
+     * to Installed before the question is asked.
+     */
+    private val autoDownload: Boolean = true,
 ) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
@@ -70,7 +80,37 @@ class AiModelStore internal constructor(
                 installBundledFormulaPackageIfPresent() ?: installedFormulaState
             }
             _state.value = AiModelsState(textState, formulaState)
+            // Formula recognition is a headline feature, not an extra, so a first run fetches it
+            // rather than waiting to be asked — see [autoDownloadAllowed] for the one condition.
+            if (formulaState == AiModelInstallState.NotInstalled && autoDownloadAllowed()) {
+                downloadFormula()
+            }
         }
+    }
+
+    /**
+     * Whether the formula package may be fetched without anyone asking for it.
+     *
+     * **Unmetered connections only, and that is the whole of the condition.** 224 MB pulled onto a
+     * cellular allowance because an app opened is a real cost to somebody who never asked for it,
+     * and the fact that the feature is worth having does not make it the app's money to spend. On a
+     * metered connection the pane keeps its Download button, so the choice is still available — it
+     * is made by the person paying for it.
+     *
+     * `VALIDATED` as well as `NOT_METERED`, because a captive-portal Wi-Fi reports unmetered and
+     * would otherwise start a 224 MB transfer that cannot succeed. A download that fails leaves the
+     * package untouched and retries on the next launch, so being conservative here costs a delay
+     * and nothing else.
+     */
+    private fun autoDownloadAllowed(): Boolean {
+        if (!autoDownload) return false
+        val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
+            ?: return false
+        val capabilities = connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+            ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     /** Starts the optional FormulaNet-S package download. Repeated taps share the active job. */

@@ -22,6 +22,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -67,7 +68,10 @@ fun ColumnScope.AiModelsPanelContent(
         ModelCard(
             name = "PP-FormulaNet-S",
             purpose = "Handwritten formulas to LaTeX",
-            size = "224 MB optional download",
+            // Says *when* rather than "optional", because a first run on Wi-Fi fetches this by
+            // itself — and because on mobile data the Download button below is the whole
+            // explanation of why nothing has happened yet.
+            size = "224 MB · downloads by itself on Wi-Fi",
             state = state.formulaLatex,
             onDownload = onDownloadFormula,
             modifier = Modifier.testTag(AiPanelTags.FORMULA_MODEL),
@@ -118,6 +122,7 @@ private fun PictureTextCard(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SWITCH_GAP),
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -136,7 +141,9 @@ private fun PictureTextCard(
             Switch(
                 checked = progress.enabled,
                 onCheckedChange = onSetEnabled,
-                modifier = Modifier.testTag(AiPanelTags.PICTURE_TEXT_SWITCH),
+                modifier = Modifier
+                    .scale(SWITCH_SCALE)
+                    .testTag(AiPanelTags.PICTURE_TEXT_SWITCH),
             )
         }
 
@@ -164,6 +171,23 @@ private fun PictureTextCard(
         }
     }
 }
+
+/** Keeps the description clear of the switch instead of letting the two meet in the middle. */
+private val SWITCH_GAP = 16.dp
+
+/**
+ * How much smaller the switch is drawn than Material's own size.
+ *
+ * `scale` rather than a size modifier because it leaves measurement alone, so the row's layout and
+ * the text beside it are unaffected by the change.
+ *
+ * **It is not free, though, and the cost is the touch target.** `scale` is a `graphicsLayer`, and
+ * Compose applies the layer transform when hit-testing as well as when drawing — measured at
+ * 46.8 × 28.8 dp against Material's 52 × 32. That is still a comfortable target on the tablet this
+ * app is built for, and it is the reason not to take this any lower without deciding to:
+ * `AiModelsPanelTest.theSwitchStaysAboveTheSizeAFingerCanFind` holds the floor.
+ */
+private const val SWITCH_SCALE = 0.9f
 
 private fun ImageTextProgress.summaryLine(picturesRead: Int): String = when {
     !enabled -> "Off. Pictures are not read and nothing is stored."
