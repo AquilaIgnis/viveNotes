@@ -92,6 +92,15 @@ class RecognitionPanelTest {
         }
     }
 
+    /**
+     * The interpretation read-out is **debug-only** and the actions beside it are not.
+     *
+     * Instrumented tests run against the debug variant, so `BuildConfig.DEBUG` is true here and the
+     * "Understood as" half of this still asserts what it always did. What it can no longer prove is
+     * the release build, where that section is compiled out — which is why the actions are asserted
+     * in the same test rather than a separate one: they are derived from the same `MathAnalysis`,
+     * and the failure worth catching is an analysis that arrives and produces nothing usable.
+     */
     @Test
     fun parsedEquationShowsInterpretationAndRelevantActions() {
         var action = ""

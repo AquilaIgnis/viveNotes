@@ -42,6 +42,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vivenotes.BuildConfig
 import com.vivenotes.math.FormulaToolsState
 import com.vivenotes.math.MathGraph
 import com.vivenotes.richtext.createEquationRenderer
@@ -210,20 +211,39 @@ private fun ColumnScope.FormulaToolsContent(
     }
 
     val analysis = state.analysis ?: return
-    PanelSection("Understood as") {
-        Text(
-            text = buildString {
-                append(analysis.summary)
-                if (analysis.variables.isNotEmpty()) {
-                    append(" · Variables: ")
-                    append(analysis.variables.joinToString())
-                }
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Box(Modifier.testTag(RecognitionPanelTags.INTERPRETATION)) {
-            EquationPreview(analysis.normalizedLatex, scale = INTERPRETATION_SCALE)
+
+    // **Debug builds only.** This section is a read-out of the SymPy round-trip — the parsed
+    // summary, the free variables, and the LaTeX the engine normalised the formula to — and it was
+    // written to debug the bridge, not for someone doing arithmetic on a page. It answers a question
+    // a user never asks and shows the same formula they are already looking at, one section above,
+    // in Preview.
+    //
+    // `BuildConfig.DEBUG` is a `static final` constant, so the block below is not merely hidden in
+    // release — the Kotlin compiler folds the condition and never emits it. That matters here
+    // rather than being a detail: this project turns **R8 off** for release
+    // (`buildTypes.release.optimization.enable = false`), so nothing downstream would have stripped
+    // a runtime check. Verified rather than assumed: "Understood as" appears in the debug APK's dex
+    // and in none of the release APK's.
+    //
+    // `analysis.summary`, `variables` and `normalizedLatex` stay in the model regardless — the
+    // actions are derived from the same analysis, and a debug read-out is worth keeping the moment
+    // the bridge misbehaves again.
+    if (BuildConfig.DEBUG) {
+        PanelSection("Understood as") {
+            Text(
+                text = buildString {
+                    append(analysis.summary)
+                    if (analysis.variables.isNotEmpty()) {
+                        append(" · Variables: ")
+                        append(analysis.variables.joinToString())
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Box(Modifier.testTag(RecognitionPanelTags.INTERPRETATION)) {
+                EquationPreview(analysis.normalizedLatex, scale = INTERPRETATION_SCALE)
+            }
         }
     }
 

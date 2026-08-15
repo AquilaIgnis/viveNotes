@@ -59,6 +59,11 @@ android {
     }
     buildFeatures {
         compose = true
+        // Off by default since AGP 8, and turned back on for one thing: `BuildConfig.DEBUG` is a
+        // compile-time constant, so a block guarded by it is removed from the release APK entirely
+        // rather than shipped and skipped. `RecognitionPanel`'s SymPy diagnostics are the first
+        // caller. A runtime `FLAG_DEBUGGABLE` check would read the same and strip nothing.
+        buildConfig = true
     }
 }
 
