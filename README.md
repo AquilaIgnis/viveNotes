@@ -15,6 +15,33 @@ and all AI features run entirely on-device.
 | <a href='#acidburnmonkey'> <img src="repo/fdroid.png"  height="80" alt="fdroid" /></a> | <a href='#acidburnmonkey'> <img src="./repo/Google_Play_Store.svg" width="206" height="80" alt="play" /></a> |
 | Coming Soon!                                                                           | Coming Soon!                                                                                                 |
 
+# Features
+
+- Local storage and AI processing on device.
+- Fuzzy notebook search across text, tables, handwriting, and text found inside images.
+- On-device handwriting and formula recognition, including math solving, evaluation, and graphing tools.
+- Highly performant Ink rendering (7ms on over 10k strokes).
+- Free-form page infinite canvas.
+- Rich-text editing.
+- Inline and free-form LaTeX equations with native rendering.
+- Handwriting with configurable pens, pressure, smoothing.
+- On-device image OCR.
+- Custom paper: ruled, multiple grid sizes, dotted, hexagonal.
+- Automatic database snapshots, and revision restoration.
+- Open source export file format .vive , [docs](docs/viveFormat.md)
+- Hardware keyboard shortcuts and configurable stylus buttons mappings.
+
+# Gallery
+
+| <a href='#acidburnmonkey'> <img src="repo/g5.jpeg"  height="500" /> </a> |
+| ------------------------------------------------------------------------ |
+| <a href='#acidburnmonkey'> <img src="repo/g1.png"  height="500" /> </a>  |
+| <a href='#acidburnmonkey'> <img src="repo/g2.png"  height="500" /> </a>  |
+
+| <a href='#acidburnmonkey'> <img src="repo/g3.jpeg" height="150"/> </a> | <a href='#acidburnmonkey'> <img src="repo/g4.jpeg"  height="200"/> </a> |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| <a href='#acidburnmonkey'> <img src="repo/g7.jpeg" height="450"/> </a> | <a href='#acidburnmonkey'> <img src="repo/g8.jpeg" height="450"/>       |
+
 # Self Host server
 
 > link
@@ -26,6 +53,10 @@ and all AI features run entirely on-device.
 - [ ] Linux & windows port
 - [ ] Apple
 - [ ] Web Client
+
+# Donate To Project
+
+<a href="https://www.buymeacoffee.com/acidburn" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 # Acknowledgments
 
