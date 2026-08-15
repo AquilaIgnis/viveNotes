@@ -5,6 +5,7 @@ import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.OnnxInkRecognitionEngine
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.DatabaseBackupManager
+import com.vivenotes.data.DeletionPurgeWorker
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.ImageTextIndexer
 import com.vivenotes.data.InkTextIndexer
@@ -60,5 +61,6 @@ class NotesApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         FontRegistry.init(this)
+        DeletionPurgeWorker.schedule(this)
     }
 }

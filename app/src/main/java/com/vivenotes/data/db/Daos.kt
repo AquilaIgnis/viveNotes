@@ -131,6 +131,36 @@ interface DeletionRecoveryDao {
     suspend fun restorePage(id: String, now: Long): Int
 }
 
+/**
+ * The hard-delete half of the recovery policy.
+ *
+ * Recovery and purge deliberately have separate DAOs: the former is user initiated and clears one
+ * tombstone, while this one is scheduled maintenance and may remove many expired rows at once.
+ * Every child table already has an `ON DELETE CASCADE` foreign key, so these six parent deletes are
+ * the complete operation rather than the first half of manual orphan cleanup.
+ */
+@Dao
+interface DeletionPurgeDao {
+
+    @Query("DELETE FROM ink_erases WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    suspend fun expiredInkErases(cutoff: Long): Int
+
+    @Query("DELETE FROM ink_moves WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    suspend fun expiredInkMoves(cutoff: Long): Int
+
+    @Query("DELETE FROM ink_strokes WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    suspend fun expiredInkStrokes(cutoff: Long): Int
+
+    @Query("DELETE FROM notebooks WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    suspend fun expiredNotebooks(cutoff: Long): Int
+
+    @Query("DELETE FROM sections WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    suspend fun expiredSections(cutoff: Long): Int
+
+    @Query("DELETE FROM pages WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    suspend fun expiredPages(cutoff: Long): Int
+}
+
 @Dao
 interface NotebookDao {
 

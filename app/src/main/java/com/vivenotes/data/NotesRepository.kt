@@ -56,6 +56,20 @@ sealed interface PageLoad {
     data class Unreadable(val rawJson: String, val cause: Throwable) : PageLoad
 }
 
+/** Direct tombstone rows removed by one maintenance transaction; cascaded child counts are omitted. */
+data class DeletionPurgeResult(
+    val cutoff: Long,
+    val inkErases: Int,
+    val inkMoves: Int,
+    val inkStrokes: Int,
+    val notebooks: Int,
+    val sections: Int,
+    val pages: Int,
+) {
+    val tombstones: Int
+        get() = inkErases + inkMoves + inkStrokes + notebooks + sections + pages
+}
+
 class NotesRepository(
     private val db: NotesDatabase,
     /**
@@ -82,6 +96,7 @@ class NotesRepository(
     private val inkText = db.inkTextDao()
     private val localMetadata = db.localMetadataDao()
     private val deletionRecovery = db.deletionRecoveryDao()
+    private val deletionPurge = db.deletionPurgeDao()
 
     fun observeTree(): Flow<List<NotebookWithSections>> = notebooks.observeTree()
 
@@ -129,6 +144,32 @@ class NotesRepository(
             } == 1
             if (restored) clearReplaceableStarter()
             restored
+        }
+    }
+
+    /**
+     * Permanently removes tombstones whose recovery window has elapsed.
+     *
+     * All statements share one Room transaction, so a process death cannot leave (for example) an
+     * erase operation gone with its target links still present. Ink operations go before strokes so
+     * their direct cascade is exercised first; hierarchy parents go before children so deleting an
+     * expired notebook removes its whole hidden branch in one foreign-key cascade.
+     *
+     * SQLite retains freed pages for reuse. That is intentional: running `VACUUM` here would rewrite
+     * and exclusively lock the complete database every day merely to shorten the file immediately.
+     */
+    suspend fun purgeExpiredDeletions(now: Long = clock()): DeletionPurgeResult {
+        val cutoff = now - DELETION_RETENTION_MILLIS
+        return db.withTransaction {
+            DeletionPurgeResult(
+                cutoff = cutoff,
+                inkErases = deletionPurge.expiredInkErases(cutoff),
+                inkMoves = deletionPurge.expiredInkMoves(cutoff),
+                inkStrokes = deletionPurge.expiredInkStrokes(cutoff),
+                notebooks = deletionPurge.expiredNotebooks(cutoff),
+                sections = deletionPurge.expiredSections(cutoff),
+                pages = deletionPurge.expiredPages(cutoff),
+            )
         }
     }
 
@@ -770,6 +811,9 @@ class NotesRepository(
     }
 
     companion object {
+        const val DELETION_RETENTION_DAYS = 7L
+        const val DELETION_RETENTION_MILLIS = DELETION_RETENTION_DAYS * 24L * 60L * 60L * 1_000L
+
         const val REPLACEABLE_STARTER_KEY = "replaceableStarterNotebookId"
         /** Coalesces the editor's 400 ms autosaves into useful checkpoints instead of near-duplicates. */
         const val REVISION_CHECKPOINT_INTERVAL_MS = 30_000L

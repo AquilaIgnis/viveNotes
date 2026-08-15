@@ -43,7 +43,8 @@ internal fun DeletedItemsPanelContent(
     onClearStatus: () -> Unit,
 ) {
     Text(
-        text = "Restore deleted notebooks, sections, and pages from anywhere in the app.",
+        text = "Restore deleted notebooks, sections, and pages from anywhere in the app. " +
+            "Items are permanently deleted after 7 days.",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -194,4 +195,3 @@ private fun RecoveryStatus(
         )
     }
 }
-

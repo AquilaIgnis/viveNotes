@@ -35,6 +35,8 @@ class DeletedItemsPanelTest {
             onRestore = { restored = it },
         )
 
+        compose.onNodeWithText("Items are permanently deleted after 7 days.", substring = true)
+            .assertIsDisplayed()
         compose.onNodeWithText("In Planning · Work").assertIsDisplayed()
         compose.onNodeWithTag(DeletedItemsPanelTags.restore(page.key.id)).performClick()
 
@@ -65,4 +67,3 @@ class DeletedItemsPanelTest {
         }
     }
 }
-

@@ -44,6 +44,7 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun inkTextDao(): InkTextDao
     abstract fun localMetadataDao(): LocalMetadataDao
     abstract fun deletionRecoveryDao(): DeletionRecoveryDao
+    abstract fun deletionPurgeDao(): DeletionPurgeDao
 
     companion object {
 
