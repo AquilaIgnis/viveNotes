@@ -40,6 +40,8 @@ import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.OutlineBox
 import com.vivenotes.ui.theme.ViveNotesTheme
 import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  * What the View tab does to the page.
@@ -579,6 +581,35 @@ class PageViewTest {
         setPage(style = PageStyle(hideTitle = true, paper = PaperSize.A6, ruleLines = RuleLines.Hexagonal))
 
         assertTrue("nothing was painted on a hexagonal page", distinctColoursInsideThePage() > 1)
+    }
+
+    @Test
+    fun aHexagonalPageUsesPointyTopCellsWithVerticalSides() {
+        setPage(style = PageStyle(hideTitle = true, paper = PaperSize.A6, ruleLines = RuleLines.Hexagonal))
+
+        val image = compose.onNodeWithTag(PageTags.SURFACE).captureToImage()
+        val pixels = IntArray(image.width * image.height)
+        image.readPixels(pixels)
+        val side = RuleLines.Hexagonal.spacingDp * density.density
+        val width = sqrt(3f) * side
+        // Row 2 is not offset. Column 2 is far enough inside the page to avoid the sheet border.
+        val centerX = width / 2f + 2f * width
+        val centerY = side + 2f * side * 1.5f
+        val edgeX = (centerX + width / 2f).roundToInt()
+        val margin = 3f * density.density
+        val firstY = (centerY - side / 2f + margin).roundToInt()
+        val lastY = (centerY + side / 2f - margin).roundToInt()
+        val background = pixels[centerY.roundToInt() * image.width + centerX.roundToInt()]
+
+        val paintedRows = (firstY..lastY).count { y ->
+            ((edgeX - 2)..(edgeX + 2)).any { x -> pixels[y * image.width + x] != background }
+        }
+        val sampledRows = lastY - firstY + 1
+
+        assertTrue(
+            "hexagonal paper has no continuous vertical side: $paintedRows/$sampledRows rows painted",
+            paintedRows >= sampledRows * 3 / 4,
+        )
     }
 
     /** Colours within the sheet, kept clear of its own border. */

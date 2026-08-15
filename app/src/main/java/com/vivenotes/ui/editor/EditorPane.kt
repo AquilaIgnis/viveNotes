@@ -2160,33 +2160,41 @@ private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
 
         if (rules.hexagonal) {
             val side = stepPx
-            val hexHeight = side * HEXAGON_HEIGHT_RATIO
-            val columnStep = side * 1.5f
-            val firstColumn = floor((visible.left - side * 2f) / columnStep)
-                .toInt()
-                .coerceAtLeast(0)
-            val lastColumn = ceil((visible.right + side) / columnStep).toInt()
+            val hexWidth = side * HEXAGON_WIDTH_RATIO
+            val rowStep = side * 1.5f
+            val firstCenterY = side
+            val firstRow = floor(
+                (visible.top - firstCenterY - side) / rowStep,
+            ).toInt().coerceAtLeast(0)
+            val lastRow = ceil(
+                (visible.bottom - firstCenterY + side) / rowStep,
+            ).toInt()
             val hexagons = Path()
 
-            for (column in firstColumn..lastColumn) {
-                val centerX = side + column * columnStep
-                val columnOffset = if (column % 2 == 0) 0f else hexHeight / 2f
-                val firstCenterY = hexHeight / 2f + columnOffset
-                val firstRow = floor(
-                    (visible.top - firstCenterY - hexHeight / 2f) / hexHeight,
+            for (row in firstRow..lastRow) {
+                val centerY = firstCenterY + row * rowStep
+                // Shifting odd rows left rather than right lets their partial first cell rule the
+                // page edge instead of leaving a half-hex blank strip down the side.
+                val rowOffset = if (row % 2 == 0) 0f else -hexWidth / 2f
+                val firstCenterX = hexWidth / 2f + rowOffset
+                val firstColumn = floor(
+                    (visible.left - firstCenterX - hexWidth / 2f) / hexWidth,
                 ).toInt().coerceAtLeast(0)
-                val lastRow = ceil(
-                    (visible.bottom - firstCenterY + hexHeight / 2f) / hexHeight,
+                val lastColumn = ceil(
+                    (visible.right - firstCenterX + hexWidth / 2f) / hexWidth,
                 ).toInt()
 
-                for (row in firstRow..lastRow) {
-                    val centerY = firstCenterY + row * hexHeight
-                    hexagons.moveTo(centerX + side, centerY)
-                    hexagons.lineTo(centerX + side / 2f, centerY + hexHeight / 2f)
-                    hexagons.lineTo(centerX - side / 2f, centerY + hexHeight / 2f)
-                    hexagons.lineTo(centerX - side, centerY)
-                    hexagons.lineTo(centerX - side / 2f, centerY - hexHeight / 2f)
-                    hexagons.lineTo(centerX + side / 2f, centerY - hexHeight / 2f)
+                for (column in firstColumn..lastColumn) {
+                    val centerX = firstCenterX + column * hexWidth
+                    // Pointy-top: the 12/6-o'clock vertices and vertical side pair are the 30°
+                    // rotation the chemistry-paper reference uses. The old order began at the
+                    // right point and therefore produced flat tops.
+                    hexagons.moveTo(centerX, centerY - side)
+                    hexagons.lineTo(centerX + hexWidth / 2f, centerY - side / 2f)
+                    hexagons.lineTo(centerX + hexWidth / 2f, centerY + side / 2f)
+                    hexagons.lineTo(centerX, centerY + side)
+                    hexagons.lineTo(centerX - hexWidth / 2f, centerY + side / 2f)
+                    hexagons.lineTo(centerX - hexWidth / 2f, centerY - side / 2f)
                     hexagons.close()
                 }
             }
@@ -2229,7 +2237,7 @@ private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
 }
 
 private const val DOTTED_RULE_RADIUS_DP = 0.8f
-private const val HEXAGON_HEIGHT_RATIO = 1.7320508f
+private const val HEXAGON_WIDTH_RATIO = 1.7320508f
 private const val HEXAGON_RULE_ALPHA = 0.5f
 
 private val createdFormat = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault())
