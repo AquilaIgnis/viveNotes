@@ -8,8 +8,6 @@
 .externalNativeBuild
 .cxx
 local.properties
-gradlew
-gradlew.bat
 CLAUDE.md
 memory
 

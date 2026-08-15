@@ -2,8 +2,6 @@ package com.vivenotes.ui.editor
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -14,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ui.ScrollingRow
-import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.ToolPane
 
 @Immutable
@@ -46,17 +43,16 @@ internal fun SettingsTab(ai: AiActions, openPane: (ToolPane) -> Unit) {
     ScrollingRow(
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
+        // All three wear the same blue, and deliberately: every command on this tab answers a
+        // question about the device or the app rather than doing something to a page, so a colour
+        // that sorted them would be inventing a distinction the tab does not have. What differs is
+        // *where* the accent sits in each glyph — the chip's die, the keyboard's keys, the i inside
+        // the ring — which is the rule the whole two-tone set follows.
         Box(Modifier.testTag(SettingsTags.INTEGRATED)) {
             RibbonCommand(
                 label = "Integrated",
                 onClick = ai.openIntegrated,
-                icon = {
-                    Icon(
-                        imageVector = MaterialSymbols.Memory,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
+                icon = { active -> TwoToneIcon({ it.integrated }, active) },
             )
         }
 
@@ -64,13 +60,7 @@ internal fun SettingsTab(ai: AiActions, openPane: (ToolPane) -> Unit) {
             RibbonCommand(
                 label = "Hardware",
                 onClick = { openPane(ToolPane.Hardware) },
-                icon = {
-                    Icon(
-                        imageVector = MaterialSymbols.Keyboard,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
+                icon = { active -> TwoToneIcon({ it.hardware }, active) },
             )
         }
 
@@ -78,13 +68,7 @@ internal fun SettingsTab(ai: AiActions, openPane: (ToolPane) -> Unit) {
             RibbonCommand(
                 label = "About",
                 onClick = { aboutOpen = true },
-                icon = {
-                    Icon(
-                        imageVector = MaterialSymbols.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
+                icon = { active -> TwoToneIcon({ it.about }, active) },
             )
         }
     }

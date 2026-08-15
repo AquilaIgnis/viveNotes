@@ -253,6 +253,7 @@ fun ViveNotesTheme(
         activeNeutral = colors.onPrimaryContainer,
         accent = accents.blue,
         warn = accents.red,
+        create = accents.green,
     )
 
     CompositionLocalProvider(

@@ -52,12 +52,12 @@ class SettingsTabTest {
         compose.onNodeWithTag(SettingsTags.ABOUT).performClick()
 
         compose.onNodeWithTag(AboutTags.DIALOG).assertIsDisplayed()
-        // The installed package's own numbers, read the same way the dialog reads them, so bumping
-        // the version in the build file does not fail this.
+        // The installed package's own name, read the same way the dialog reads it, so bumping the
+        // version in the build file does not fail this.
         val app = InstrumentationRegistry.getInstrumentation().targetContext
         val info = app.packageManager.getPackageInfo(app.packageName, 0)
         compose.onNodeWithTag(AboutTags.VERSION)
-            .assertTextEquals("Version ${info.versionName} (${info.longVersionCode})")
+            .assertTextEquals("Version ${info.versionName}")
         compose.onNodeWithText("github.com/AquilaIgnis/viveNotes").assertIsDisplayed()
         compose.onNodeWithText("buymeacoffee.com/acidburn").assertIsDisplayed()
     }

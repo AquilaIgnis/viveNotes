@@ -57,9 +57,10 @@ private const val DONATE_URL = "https://buymeacoffee.com/acidburn"
  * slots rather than sitting above them — a Material icon *and* the app's own would be two logos in a
  * row, and the wordmark under the icon reads as one thing.
  *
- * **The two actions are weighted, not matched.** Source is an outlined button and Support is a filled
- * one in the app's orange — `tertiary`, the same colour the math actions wear, so the loudest thing
- * in this window is still a colour the app already uses. Each address is printed under its button:
+ * **The two actions are the same pill at different weights.** Source is tonal in the scheme's greys
+ * and the donation is filled in the app's orange — `tertiary`, the same colour the math actions wear,
+ * so the loudest thing in this window is still a colour the app already uses. Each address is printed
+ * under its button:
  * a tap that opens a browser is the happy path, but a device without one should still leave the user
  * something they can read and type out somewhere else.
  */
@@ -174,12 +175,15 @@ private fun Address(url: String) {
 }
 
 /**
- * `Version 1.0 (1)`, read off the installed package rather than out of `BuildConfig`.
+ * `Version 1.0`, read off the installed package rather than out of `BuildConfig`.
  *
  * `buildFeatures.buildConfig` is off in this module, and turning it on to print one string would
  * generate a class for the whole build for the sake of a dialog. The package manager already knows,
- * and what it reports is the build that is actually installed — which is the number worth quoting in
- * a bug report.
+ * and what it reports is the build that is actually installed.
+ *
+ * The name only: `versionCode` was shown beside it in brackets for a while and says nothing to a
+ * reader while it is still 1. If releases ever start bumping it, that is when it earns its place
+ * back — a bug report against "1.0" is ambiguous once four builds have been called that.
  *
  * Read through the *application* context: under instrumentation the activity belongs to the test
  * APK, and the version this has to show is the app's.

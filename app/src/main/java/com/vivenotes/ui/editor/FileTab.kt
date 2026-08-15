@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ui.ScrollingRow
-import com.vivenotes.ui.icons.MaterialSymbols
 
 @Immutable
 data class FileActions(
@@ -42,14 +41,14 @@ internal fun FileTab(
                 label = "Version History",
                 onClick = actions.openVersionHistory,
                 enabled = pageOpen,
-                icon = { MonoIcon(MaterialSymbols.History) },
+                icon = { active -> TwoToneIcon({ it.versionHistory }, active) },
             )
         }
         Box(Modifier.testTag(FileTags.DELETED_ITEMS)) {
             RibbonCommand(
                 label = "Deleted Items",
                 onClick = actions.openDeletedItems,
-                icon = { MonoIcon(MaterialSymbols.RestoreFromTrash) },
+                icon = { active -> TwoToneIcon({ it.deletedItems }, active) },
             )
         }
 
@@ -59,7 +58,10 @@ internal fun FileTab(
                 label = "Export Notebook",
                 onClick = actions.exportNotebook,
                 enabled = notebookOpen,
-                icon = { MonoIcon(MaterialSymbols.Book) },
+                // The bookmark takes the accent, answering the accented arrow inside Import's glyph
+                // beside it: the pair is one idea in two directions, and Import is why Export's
+                // book keeps the bookmark that Import's has removed.
+                icon = { active -> TwoToneIcon({ it.exportNotebook }, active) },
             )
         }
         Box(Modifier.testTag(FileTags.IMPORT_NOTEBOOK)) {
@@ -82,7 +84,10 @@ internal fun FileTab(
                 label = "Delete Notebook",
                 onClick = actions.deleteNotebook,
                 enabled = notebookOpen,
-                icon = { MonoIcon(MaterialSymbols.Delete) },
+                // The bin's contents in the warning red — `IconAccents.red` is "what a glyph
+                // removes", and this is the only command here that does. It says at a glance what
+                // the divider above says by position.
+                icon = { active -> TwoToneIcon({ it.deleteNotebook }, active) },
             )
         }
     }

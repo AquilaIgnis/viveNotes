@@ -15,7 +15,7 @@ import androidx.compose.ui.graphics.Color
  * therefore rebuild every glyph on every keystroke, so they are hoisted to the theme instead.
  */
 @Immutable
-class AppIcons(neutral: Color, accent: Color, warn: Color) {
+class AppIcons(neutral: Color, accent: Color, warn: Color, create: Color) {
     val insertText = insertTextGlyph(neutral, accent)
     val bulletList = bulletListGlyph(neutral, accent)
     val numberedList = numberedListGlyph(neutral, accent)
@@ -30,6 +30,16 @@ class AppIcons(neutral: Color, accent: Color, warn: Color) {
     val pageWidth = pageWidthGlyph(neutral, accent)
     val eraser = eraserGlyph(neutral, warn)
     val importNotebook = importNotebookGlyph(neutral, accent)
+
+    // The File and Settings commands. Material Symbols with their meaning-carrying subpath lifted
+    // into a second colour rather than glyphs drawn here — see the header in `RibbonGlyphs.kt`.
+    val versionHistory = versionHistoryGlyph(neutral, accent)
+    val deletedItems = deletedItemsGlyph(neutral, create)
+    val exportNotebook = exportNotebookGlyph(neutral, accent)
+    val deleteNotebook = deleteNotebookGlyph(neutral, warn)
+    val integrated = integratedGlyph(neutral, accent)
+    val hardware = hardwareGlyph(neutral, accent)
+    val about = aboutGlyph(neutral, accent)
 }
 
 /**
@@ -53,10 +63,11 @@ fun rememberRibbonIcons(
     activeNeutral: Color,
     accent: Color,
     warn: Color,
+    create: Color,
 ): RibbonIcons =
-    remember(idleNeutral, activeNeutral, accent, warn) {
+    remember(idleNeutral, activeNeutral, accent, warn, create) {
         RibbonIcons(
-            idle = AppIcons(idleNeutral, accent, warn),
-            active = AppIcons(activeNeutral, accent, warn),
+            idle = AppIcons(idleNeutral, accent, warn, create),
+            active = AppIcons(activeNeutral, accent, warn, create),
         )
     }

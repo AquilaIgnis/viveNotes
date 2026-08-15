@@ -551,6 +551,215 @@ fun importNotebookGlyph(neutral: Color, accent: Color): ImageVector =
         addPath(ImportNotebookArrow, fill = SolidColor(accent))
     }
 
+/*
+ * ---------------------------------------------------------------------------------------------
+ * The File and Settings commands, split out of their Material Symbols.
+ *
+ * Every symbol below is one exported path made of several subpaths, and in each case the subpaths
+ * already separate the meaning from the scaffolding: the hands sit apart from the clock face, the
+ * arrow apart from the bin, the keys apart from the keyboard's frame. So these are *splits* rather
+ * than redrawings — nothing here is traced by hand, and the two halves add back up to exactly the
+ * artwork Google ships.
+ *
+ * **Each subpath's moveto was made absolute when it was lifted out.** The exports chain their
+ * subpaths with relative movetos — every one is an offset from where the previous subpath started —
+ * so a subpath pulled out of the middle would land in the wrong place, and one whose neighbour was
+ * dropped would drag everything after it. The rewrite was done by script rather than by eye, and
+ * the trap it exists to avoid is that the coordinate pairs *after* a moveto are implicit linetos in
+ * the same case: turning `m` into `M` silently turns those absolute and throws the pen across the
+ * viewport, which is why an explicit `l` appears where one was needed.
+ *
+ * A body and the hole punched through it must stay in the *same* declaration: the hole is a
+ * counter-wound subpath, and it only reads as a hole while the winding rule can see both.
+ * ---------------------------------------------------------------------------------------------
+ */
+
+/** `history`, less its hands: the dial and the arrow that runs back around it. */
+private val HistoryDial = addPathNodes(
+    "M480-120q-126 0-223-76.5T131-392q-4-15 6-27.5t27-14.5q16-2 29 6t18 24q24 90 99 " +
+        "147t170 57q117 0 198.5-81.5T760-480q0-117-81.5-198.5T480-760q-69 0-129 32t-101 " +
+        "88h70q17 0 28.5 11.5T360-600q0 17-11.5 28.5T320-560H160q-17 " +
+        "0-28.5-11.5T120-600v-160q0-17 11.5-28.5T160-800q17 0 28.5 11.5T200-760v54q51-64 " +
+        "124.5-99T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480q0 75-28.5 140.5t-77" +
+        " 114q-48.5 48.5-114 77T480-120Z",
+)
+
+/** The hour and minute hands, which are the half of a clock face that says what it is for. */
+private val HistoryHands = addPathNodes(
+    "M520,-496l100 100q11 11 11 28t-11 28q-11 11-28 " +
+        "11t-28-11L452-452q-6-6-9-13.5t-3-15.5v-159q0-17 11.5-28.5T480-680q17 0 28.5 " +
+        "11.5T520-640v144Z",
+)
+
+/** `info`'s ring, outer edge and hole together. */
+private val InfoRing = addPathNodes(
+    "M480,-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 " +
+        "127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 " +
+        "156T763-197q-54 54-127 85.5T480-80ZM480,-160q134 0 " +
+        "227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Z",
+)
+
+/** The stem and the dot — the *i* inside the ring. */
+private val InfoMark = addPathNodes(
+    "M480-280q17 0 28.5-11.5T520-320v-160q0-17-11.5-28.5T480-520q-17 0-28.5 " +
+        "11.5T440-480v160q0 17 11.5 28.5T480-280ZM480,-600q17 0 " +
+        "28.5-11.5T520-640q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640q0 17 11.5 " +
+        "28.5T480-600Z",
+)
+
+/**
+ * The bin, lid and hollow, shared by Deleted Items and Delete Notebook.
+ *
+ * One declaration for both because `restore_from_trash` and `delete` are drawn from the same bin —
+ * they differ only in what is inside it, which is exactly the part each of them accents.
+ */
+private val BinBody = addPathNodes(
+    "M280-120q-33 0-56.5-23.5T200-200v-520q-17 0-28.5-11.5T160-760q0-17 " +
+        "11.5-28.5T200-800h160q0-17 11.5-28.5T400-840h160q17 0 28.5 11.5T600-800h160q17 0 " +
+        "28.5 11.5T800-760q0 17-11.5 28.5T760-720v520q0 33-23.5 " +
+        "56.5T680-120H280ZM680,-720H280v520h400v-520Z",
+)
+
+/** The arrow climbing out of the bin: the whole difference between restoring and deleting. */
+private val BinArrow = addPathNodes(
+    "M440,-486v126q0 17 11.5 28.5T480-320q17 0 28.5-11.5T520-360v-126l36 35q11 11 27.5 " +
+        "11t28.5-12q11-11 11-28t-11-28L508-612q-12-12-28-12t-28 12L348-508q-11 11-11.5 " +
+        "27.5T348-452q11 11 27.5 11.5T404-451l36-35Z",
+)
+
+/** The two bars standing in the bin. */
+private val BinBars = addPathNodes(
+    "M400-280q17 0 28.5-11.5T440-320v-280q0-17-11.5-28.5T400-640q-17 0-28.5 " +
+        "11.5T360-600v280q0 17 11.5 28.5T400-280ZM560,-280q17 0 " +
+        "28.5-11.5T600-320v-280q0-17-11.5-28.5T560-640q-17 0-28.5 11.5T520-600v280q0 17 11.5 " +
+        "28.5T560-280Z",
+)
+
+/** `memory`'s outline and legs, with the die-shaped hole through the middle. */
+private val ChipBody = addPathNodes(
+    "M360,-160v-40h-80q-33 0-56.5-23.5T200-280v-80h-40q-17 0-28.5-11.5T120-400q0-17 " +
+        "11.5-28.5T160-440h40v-80h-40q-17 0-28.5-11.5T120-560q0-17 " +
+        "11.5-28.5T160-600h40v-80q0-33 23.5-56.5T280-760h80v-40q0-17 11.5-28.5T400-840q17 0 " +
+        "28.5 11.5T440-800v40h80v-40q0-17 11.5-28.5T560-840q17 0 28.5 11.5T600-800v40h80q33 0" +
+        " 56.5 23.5T760-680v80h40q17 0 28.5 11.5T840-560q0 17-11.5 28.5T800-520h-40v80h40q17 " +
+        "0 28.5 11.5T840-400q0 17-11.5 28.5T800-360h-40v80q0 33-23.5 56.5T680-200h-80v40q0 " +
+        "17-11.5 28.5T560-120q-17 0-28.5-11.5T520-160v-40h-80v40q0 17-11.5 28.5T400-120q-17 " +
+        "0-28.5-11.5T360-160ZM680,-280v-400H280v400h400Z",
+)
+
+/** The die at the centre of the chip — the part of the symbol that is doing the computing. */
+private val ChipCore = addPathNodes(
+    "M360-400v-160q0-17 11.5-28.5T400-600h160q17 0 28.5 11.5T600-560v160q0 17-11.5 " +
+        "28.5T560-360H400q-17 0-28.5-11.5T360-400ZM440,-440h80v-80h-80v80Z",
+)
+
+/** `keyboard`'s case, with the hole its keys sit in. */
+private val KeyboardFrame = addPathNodes(
+    "M160-200q-33 0-56.5-23.5T80-280v-400q0-33 23.5-56.5T160-760h640q33 0 56.5 " +
+        "23.5T880-680v400q0 33-23.5 56.5T800-200H160ZM160,-280h640v-400H160v400Z",
+)
+
+/** The space bar and the ten keys above it. */
+private val KeyboardKeys = addPathNodes(
+    "M360,-320h240q17 0 28.5-11.5T640-360q0-17-11.5-28.5T600-400H360q-17 0-28.5 " +
+        "11.5T320-360q0 17 11.5 28.5T360-320ZM268.5,-571.5Q280-583 280-600t-11.5-28.5Q257-640" +
+        " 240-640t-28.5 11.5Q200-617 200-600t11.5 28.5Q223-560 " +
+        "240-560t28.5-11.5ZM388.5,-571.5Q400-583 400-600t-11.5-28.5Q377-640 360-640t-28.5 " +
+        "11.5Q320-617 320-600t11.5 28.5Q343-560 360-560t28.5-11.5ZM508.5,-571.5Q520-583 " +
+        "520-600t-11.5-28.5Q497-640 480-640t-28.5 11.5Q440-617 440-600t11.5 28.5Q463-560 " +
+        "480-560t28.5-11.5ZM628.5,-571.5Q640-583 640-600t-11.5-28.5Q617-640 600-640t-28.5 " +
+        "11.5Q560-617 560-600t11.5 28.5Q583-560 600-560t28.5-11.5ZM748.5,-571.5Q760-583 " +
+        "760-600t-11.5-28.5Q737-640 720-640t-28.5 11.5Q680-617 680-600t11.5 28.5Q703-560 " +
+        "720-560t28.5-11.5ZM268.5,-451.5Q280-463 280-480t-11.5-28.5Q257-520 240-520t-28.5 " +
+        "11.5Q200-497 200-480t11.5 28.5Q223-440 240-440t28.5-11.5ZM388.5,-451.5Q400-463 " +
+        "400-480t-11.5-28.5Q377-520 360-520t-28.5 11.5Q320-497 320-480t11.5 28.5Q343-440 " +
+        "360-440t28.5-11.5ZM508.5,-451.5Q520-463 520-480t-11.5-28.5Q497-520 480-520t-28.5 " +
+        "11.5Q440-497 440-480t11.5 28.5Q463-440 480-440t28.5-11.5ZM628.5,-451.5Q640-463 " +
+        "640-480t-11.5-28.5Q617-520 600-520t-28.5 11.5Q560-497 560-480t11.5 28.5Q583-440 " +
+        "600-440t28.5-11.5ZM748.5,-451.5Q760-463 760-480t-11.5-28.5Q737-520 720-520t-28.5 " +
+        "11.5Q680-497 680-480t11.5 28.5Q703-440 720-440t28.5-11.5Z",
+)
+
+/**
+ * The whole `book` symbol, bookmark included — the neutral half of Export Notebook.
+ *
+ * Not [ImportNotebookCover], which is the same book with the bookmark taken out to clear room for
+ * the arrow. Export keeps it, because the bookmark is what it accents.
+ */
+private val BookCover = addPathNodes(
+    "M240-80q-33 0-56.5-23.5T160-160v-640q0-33 23.5-56.5T240-880h480q33 0 56.5 " +
+        "23.5T800-800v640q0 33-23.5 56.5T720-80H240Zm0-80h480v-640h-80v245q0 12-10 " +
+        "17.5t-20-.5l-49-30q-10-6-20.5-6t-20.5 6l-49 30q-10 6-20.5.5T440-555v-245H240v640Z",
+)
+
+/**
+ * The bookmark, as its own closed shape.
+ *
+ * The one glyph here that is not a subpath of its export: in `book` the bookmark is *carved out of
+ * the hole* rather than drawn, so it exists only as cover colour showing through. Its outline is
+ * therefore traced from the hole's own commands — the same curves in the same order, closed across
+ * the top — which is why it lands exactly on the neutral it paints over instead of near it.
+ */
+private val BookMark = addPathNodes(
+    "M640-800v245q0 12-10 17.5t-20-.5l-49-30q-10-6-20.5-6t-20.5 6l-49 30q-10 " +
+        "6-20.5.5T440-555v-245Z",
+)
+
+/** Version History — the dial is a clock, the hands are the *time* part of it. */
+fun versionHistoryGlyph(neutral: Color, accent: Color): ImageVector =
+    materialGlyph("VersionHistory") {
+        addPath(HistoryDial, fill = SolidColor(neutral))
+        addPath(HistoryHands, fill = SolidColor(accent))
+    }
+
+/**
+ * Deleted Items — a bin with the arrow accented in green.
+ *
+ * Green is [IconAccents.green], "what a glyph adds", and this is the one File command that gives
+ * something back rather than taking it away. It is also the only thing distinguishing this bin from
+ * Delete Notebook's, two commands sharing a tab.
+ */
+fun deletedItemsGlyph(neutral: Color, create: Color): ImageVector =
+    materialGlyph("DeletedItems") {
+        addPath(BinBody, fill = SolidColor(neutral))
+        addPath(BinArrow, fill = SolidColor(create))
+    }
+
+/** Delete Notebook — the same bin, its contents in the warning colour. */
+fun deleteNotebookGlyph(neutral: Color, warn: Color): ImageVector =
+    materialGlyph("DeleteNotebook") {
+        addPath(BinBody, fill = SolidColor(neutral))
+        addPath(BinBars, fill = SolidColor(warn))
+    }
+
+/** Export Notebook — the bookmark accented, answering Import's accented arrow beside it. */
+fun exportNotebookGlyph(neutral: Color, accent: Color): ImageVector =
+    materialGlyph("ExportNotebook") {
+        addPath(BookCover, fill = SolidColor(neutral))
+        addPath(BookMark, fill = SolidColor(accent))
+    }
+
+/** Integrated — the chip's die accented, the package and its legs neutral. */
+fun integratedGlyph(neutral: Color, accent: Color): ImageVector =
+    materialGlyph("Integrated") {
+        addPath(ChipBody, fill = SolidColor(neutral))
+        addPath(ChipCore, fill = SolidColor(accent))
+    }
+
+/** Hardware — the keys accented inside a neutral case. */
+fun hardwareGlyph(neutral: Color, accent: Color): ImageVector =
+    materialGlyph("Hardware") {
+        addPath(KeyboardFrame, fill = SolidColor(neutral))
+        addPath(KeyboardKeys, fill = SolidColor(accent))
+    }
+
+/** About — the *i*, which is the whole message; the ring around it is packaging. */
+fun aboutGlyph(neutral: Color, accent: Color): ImageVector =
+    materialGlyph("About") {
+        addPath(InfoRing, fill = SolidColor(neutral))
+        addPath(InfoMark, fill = SolidColor(accent))
+    }
+
 fun highlightGlyph(neutral: Color, swatch: Color): ImageVector = glyph("Highlight") {
     path(fill = SolidColor(neutral)) {         // pen body
         moveTo(9.0f, 13.4f)

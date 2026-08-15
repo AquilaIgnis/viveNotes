@@ -178,6 +178,14 @@ internal fun MonoIcon(icon: ImageVector, active: Boolean = false) {
     )
 }
 
+/*
+ * There is deliberately no third helper that tints a whole Material Symbol with an accent. It was
+ * tried for the File and Settings commands and it is not what an accent is here: the reference
+ * colours the part of a glyph that carries its meaning and leaves the rest neutral, so a glyph that
+ * is entirely accent-coloured says "all of me is the point", which is never true. Splitting the
+ * symbol into two paths is the work — see the File and Settings block in `RibbonGlyphs.kt`.
+ */
+
 /** See [TwoToneRibbonButton] for why the pressed state is a different vector, not a different tint. */
 @Composable
 internal fun TwoToneIcon(glyph: (AppIcons) -> ImageVector, active: Boolean) {
