@@ -9,6 +9,7 @@ import com.vivenotes.model.Run
 import com.vivenotes.model.TableCell
 import com.vivenotes.model.TableRow
 import com.vivenotes.model.newId
+import com.vivenotes.ai.InkTextRegion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -235,5 +236,114 @@ class ContentSearchTest {
         // Typed text is what someone wrote; a reading is what a model thinks it can see.
         assertEquals(ContentKind.Text, hits.first().unit.kind)
         assertEquals(ContentKind.Image, hits.last().unit.kind)
+    }
+
+    @Test
+    fun `handwriting keeps its source and chooses the stronger alternate reading`() {
+        val units = inkUnits(
+            page,
+            section,
+            listOf(
+                InkTextRegion(
+                    id = "line-1",
+                    text = "trernple reason",
+                    confidence = 0.72f,
+                    alternateText = "trample reason",
+                    alternateConfidence = 0.91f,
+                    left = 10f,
+                    top = 20f,
+                    right = 210f,
+                    bottom = 55f,
+                    strokeIds = listOf("stroke-a", "stroke-b"),
+                ),
+            ),
+        )
+
+        val hit = searchContent(units, "trample").single()
+        assertEquals(ContentKind.Ink, hit.unit.kind)
+        assertEquals("trample reason", hit.unit.text)
+        assertEquals(setOf("stroke-a", "stroke-b"), hit.unit.inkStrokeIds)
+        assertEquals(10f, hit.unit.inkBounds!!.left)
+    }
+
+    @Test
+    fun `typed text outranks an equally matching handwriting reading`() {
+        val typed = doc(textBox("box", "only in death")).contentUnits(page, section, "")
+        val ink = inkUnits(
+            page,
+            section,
+            listOf(
+                InkTextRegion(
+                    id = "line-1",
+                    text = "only in death",
+                    confidence = 0.95f,
+                    left = 0f,
+                    top = 0f,
+                    right = 100f,
+                    bottom = 20f,
+                    strokeIds = listOf("stroke"),
+                ),
+            ),
+        )
+
+        val hits = searchContent(typed + ink, "death")
+        assertEquals(ContentKind.Text, hits.first().unit.kind)
+        assertEquals(ContentKind.Ink, hits.last().unit.kind)
+    }
+
+    @Test
+    fun `fuzzy search recovers content words from the real Android handwriting reading`() {
+        fun reading(
+            id: String,
+            text: String,
+            confidence: Float,
+            alternateText: String? = null,
+            alternateConfidence: Float? = null,
+        ) = InkTextRegion(
+            id = id,
+            text = text,
+            confidence = confidence,
+            alternateText = alternateText,
+            alternateConfidence = alternateConfidence,
+            left = 0f,
+            top = 0f,
+            right = 1f,
+            bottom = 1f,
+            strokeIds = emptyList(),
+        )
+        val readings = listOf(
+            reading("1", "Athor the mutant", 0.9749f),
+            reading("2", "Be not merciful", 0.9285f),
+            reading("3", "Be the Emperors reaper", 0.9289f),
+            reading("4", "Foolish ore those who fear", 0.9380f),
+            reading(
+                "5",
+                "nothing 1yet daim to know",
+                0.8438f,
+                alternateText = "nothing ,yet claim to know",
+                alternateConfidence = 0.8460f,
+            ),
+            reading("6", "everyThing", 0.7802f),
+            reading("7", "Innocentia probat nihil", 0.8615f),
+            reading("8", "only in death does duty end.", 0.9337f),
+            reading("9", "Suffer no impurity", 0.9223f),
+            reading("10", "hack of", 0.8048f),
+            reading("11", "faish is", 0.8986f),
+            reading("12", "treason", 0.9798f),
+            reading("13", "let faith", 0.8126f),
+            reading("14", "tremple", 0.9903f),
+            reading("15", "reason", 0.8852f),
+        )
+        val units = inkUnits(page, section, readings)
+        val expectedContentWords = setOf(
+            "abhor", "mutant", "merciful", "emperors", "reaper", "foolish", "those", "fear",
+            "nothing", "claim", "know", "everything", "innocentia", "probat", "nihil", "only",
+            "death", "does", "duty", "suffer", "impurity", "lack", "faith", "treason", "trample",
+            "reason",
+        )
+
+        val missed = expectedContentWords.filter { searchContent(units, it).isEmpty() }
+
+        assertTrue("Missed handwritten words: $missed", missed.isEmpty())
     }
 }

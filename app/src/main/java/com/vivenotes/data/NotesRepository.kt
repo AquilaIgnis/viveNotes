@@ -4,6 +4,8 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import com.vivenotes.data.db.AttachmentTextEntity
+import com.vivenotes.data.db.InkTextEntity
+import com.vivenotes.data.db.InkTextStamp
 import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
@@ -77,6 +79,7 @@ class NotesRepository(
     private val inkErases = db.inkEraseDao()
     private val inkMoves = db.inkMoveDao()
     private val imageText = db.imageTextDao()
+    private val inkText = db.inkTextDao()
     private val localMetadata = db.localMetadataDao()
     private val deletionRecovery = db.deletionRecoveryDao()
 
@@ -186,6 +189,33 @@ class NotesRepository(
 
     /** See `ImageTextDao.deleteOrphans`: this must always return zero. */
     suspend fun deleteOrphanImageText(): Int = imageText.deleteOrphans()
+
+    /** What is known about the named pages' handwriting, chunked below SQLite's bind limit. */
+    suspend fun inkTextFor(pageIds: Collection<String>): Map<String, InkTextEntity> {
+        if (pageIds.isEmpty()) return emptyMap()
+        return pageIds.distinct().chunked(SQLITE_BIND_CHUNK)
+            .flatMap { inkText.byPageIds(it) }
+            .associateBy { it.pageId }
+    }
+
+    suspend fun inkTextGeneration(pageId: String): Long = inkText.generation(pageId)
+
+    /** Saves only if no ink mutation committed while recognition was running. */
+    suspend fun saveInkText(row: InkTextEntity, expectedGeneration: Long): Boolean =
+        db.withTransaction {
+            if (inkText.generation(row.pageId) != expectedGeneration) {
+                false
+            } else {
+                inkText.upsert(row)
+                true
+            }
+        }
+
+    suspend fun inkTextCount(engine: String): Int = inkText.countForEngine(engine)
+
+    suspend fun clearInkText() = inkText.clear()
+
+    fun observeInkTextStamps(): Flow<List<InkTextStamp>> = inkText.observeStamps()
 
     /** One installation-local setting. Never travels in a notebook bundle — see `local_metadata`. */
     suspend fun localValue(key: String): String? = localMetadata.value(key)
@@ -505,6 +535,8 @@ class NotesRepository(
 
     /** Replaces the active ink view while retaining later rows as tombstoned history. */
     private suspend fun restoreInkLocked(pageId: String, snapshot: InkSnapshot, now: Long) {
+        inkText.deleteForPage(pageId)
+        inkText.bumpGeneration(pageId)
         ink.softDeletePage(pageId, now)
         inkErases.softDeletePage(pageId, now)
         inkMoves.softDeletePage(pageId, now)
@@ -540,6 +572,8 @@ class NotesRepository(
     suspend fun addStroke(stroke: InkStrokeEntity): InkStrokeEntity = db.withTransaction {
         clearReplaceableStarter()
         checkpointBeforeInkMutation(stroke.pageId, clock())
+        inkText.deleteForPage(stroke.pageId)
+        inkText.bumpGeneration(stroke.pageId)
         stroke.copy(seq = ink.nextSeq(stroke.pageId)).also { ink.insert(it) }
     }
 
@@ -551,6 +585,8 @@ class NotesRepository(
             val pageId = strokes.first().pageId
             require(strokes.all { it.pageId == pageId }) { "copied strokes span multiple pages" }
             checkpointBeforeInkMutation(pageId, clock())
+            inkText.deleteForPage(pageId)
+            inkText.bumpGeneration(pageId)
             var sequence = ink.nextSeq(pageId)
             strokes.map { stroke -> stroke.copy(seq = sequence++).also { ink.insert(it) } }
         }
@@ -567,7 +603,10 @@ class NotesRepository(
         val now = clock()
         db.withTransaction {
             clearReplaceableStarter()
-            ink.pageIdsFor(ids).forEach { checkpointBeforeInkMutation(it, now) }
+            val pageIds = ink.pageIdsFor(ids)
+            pageIds.forEach { checkpointBeforeInkMutation(it, now) }
+            pageIds.chunked(SQLITE_BIND_CHUNK).forEach { inkText.deleteForPages(it) }
+            pageIds.forEach { inkText.bumpGeneration(it) }
             ink.softDelete(ids, now)
         }
     }
@@ -578,7 +617,10 @@ class NotesRepository(
         val now = clock()
         db.withTransaction {
             clearReplaceableStarter()
-            ink.pageIdsFor(ids).forEach { checkpointBeforeInkMutation(it, now) }
+            val pageIds = ink.pageIdsFor(ids)
+            pageIds.forEach { checkpointBeforeInkMutation(it, now) }
+            pageIds.chunked(SQLITE_BIND_CHUNK).forEach { inkText.deleteForPages(it) }
+            pageIds.forEach { inkText.bumpGeneration(it) }
             ink.restore(ids)
         }
     }
@@ -618,6 +660,8 @@ class NotesRepository(
         db.withTransaction {
             clearReplaceableStarter()
             checkpointBeforeInkMutation(erase.pageId, clock())
+            inkText.deleteForPage(erase.pageId)
+            inkText.bumpGeneration(erase.pageId)
             inkErases.insert(erase)
             inkErases.insertTargets(strokeIds.distinct().map { InkEraseTargetEntity(erase.id, it) })
         }
@@ -628,7 +672,11 @@ class NotesRepository(
         val now = clock()
         db.withTransaction {
             clearReplaceableStarter()
-            inkErases.pageId(id)?.let { checkpointBeforeInkMutation(it, now) }
+            inkErases.pageId(id)?.let {
+                checkpointBeforeInkMutation(it, now)
+                inkText.deleteForPage(it)
+                inkText.bumpGeneration(it)
+            }
             inkErases.setDeletedAt(id, if (active) null else now)
         }
     }
@@ -639,6 +687,8 @@ class NotesRepository(
         db.withTransaction {
             clearReplaceableStarter()
             checkpointBeforeInkMutation(move.pageId, clock())
+            inkText.deleteForPage(move.pageId)
+            inkText.bumpGeneration(move.pageId)
             inkMoves.insert(move)
             inkMoves.insertTargets(strokeIds.distinct().map { InkMoveTargetEntity(move.id, it) })
         }
@@ -649,7 +699,11 @@ class NotesRepository(
         val now = clock()
         db.withTransaction {
             clearReplaceableStarter()
-            inkMoves.pageId(id)?.let { checkpointBeforeInkMutation(it, now) }
+            inkMoves.pageId(id)?.let {
+                checkpointBeforeInkMutation(it, now)
+                inkText.deleteForPage(it)
+                inkText.bumpGeneration(it)
+            }
             inkMoves.setDeletedAt(id, if (active) null else now)
         }
     }

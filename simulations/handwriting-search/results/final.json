@@ -1,0 +1,6944 @@
+{
+  "whole-s1.5-p08": [
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.0375,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9121,
+      "render_ms": 84.4,
+      "inference_ms": 78.1,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9751300029456615,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9671504219373067,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9618630598891865,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear nothing ,yet daim to know everyThing",
+          "confidence": 0.8438419846315233,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8811480947162794,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9100728694881711,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9401280383268992,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.8322073604379382,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8093895837664604,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9741433603422982,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8372401793797811,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.991968171937125,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9334095120429993,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.0542,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.906,
+      "render_ms": 96.5,
+      "inference_ms": 88.1,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Alhor the mutant",
+          "confidence": 0.9441621340811253,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9686444838841756,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "be the Emperors reaper",
+          "confidence": 0.9502396122975783,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "oolish ort those who fear noking ,yct daim to know everyThing",
+          "confidence": 0.8665406777233374,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8809448156667792,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9321986245257514,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9384724729590945,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.830073744058609,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish is",
+          "confidence": 0.7740626446902752,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9758713245391846,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8079652024639977,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9924355915614537,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9169937670230865,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.0542,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9071,
+      "render_ms": 99.8,
+      "inference_ms": 71.4,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Alhor the mutant",
+          "confidence": 0.9642973504960537,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9734495162963868,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9320189736106179,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "oolish ore those who fear nothing ,yet daim to kow everything",
+          "confidence": 0.8717090345796992,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.908673353817152,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in leath does duty end.",
+          "confidence": 0.9016893208026886,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9345764319101969,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.835100667817252,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.826565720140934,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9782858661242894,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7781488067573972,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9862720455442157,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9010437428951263,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.0583,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.8946,
+      "render_ms": 96.2,
+      "inference_ms": 63.3,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9735572636127472,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9652473370234171,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9036300087516959,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ort those who fear nothing ,yot daim to know evryThing",
+          "confidence": 0.8241709667828775,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8876260531985242,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9265531067337308,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impority",
+          "confidence": 0.9054888337850571,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.817933623279844,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7197058089077473,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9670656749180385,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8263585997952355,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9906645928110395,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.922029455502828,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 24,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9231,
+      "missing_words": [
+        "claim",
+        "lack"
+      ],
+      "mean_confidence": 0.916,
+      "render_ms": 95.2,
+      "inference_ms": 71.4,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9663775563240051,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.945846696694692,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9188976450399919,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish or those who fear nothing yet daim to know everyThing",
+          "confidence": 0.859668743414957,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9033706084541653,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9326296033603805,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9739857614040375,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "heck of",
+          "confidence": 0.86868645463671,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8233891278505325,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9519506181989398,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8559616340531243,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9897144096238273,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9179507493972778,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.05,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.897,
+      "render_ms": 96.9,
+      "inference_ms": 62.5,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9694281667470932,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9767013947168987,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9525458677248522,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ort those who fear nothing yet daim to know evryThing",
+          "confidence": 0.8211787919529149,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9058008116224537,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9083837888070515,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no imurity",
+          "confidence": 0.9114660533035502,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.7627260131495339,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish is",
+          "confidence": 0.7450452409684658,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.97487473487854,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8108587563037872,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9904638358524868,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9320702254772186,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.0625,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9074,
+      "render_ms": 94.9,
+      "inference_ms": 62.1,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9709173887968063,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9787552674611409,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "be the Emperors reaper",
+          "confidence": 0.952353379943154,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "oolish ort those who fear nohing ,yct daim to know evrything",
+          "confidence": 0.8380741139252981,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9240562449330869,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9332685555730548,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9732035828961266,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8112308553286961,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7815811559557915,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9732330441474915,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7795560194386376,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9755739484514508,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9043489893277487,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.05,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9184,
+      "render_ms": 95.1,
+      "inference_ms": 61.8,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9716615304350853,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9599853515625,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9358808614990928,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ort those who fear nothing yet dain to know evryThing",
+          "confidence": 0.8665579147026187,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8947311613870703,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9276492723396846,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9794626004166074,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.8303117028304509,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8236788064241409,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9711286170142037,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8638701372676425,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9869860325540815,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9271140396595001,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.904,
+      "render_ms": 94.8,
+      "inference_ms": 62.2,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9523154124617577,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9658178846041362,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9492640549486334,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "oolish ore those who fear nohing yet daim to know evryThing",
+          "confidence": 0.8800174225184877,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8997370989426322,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end",
+          "confidence": 0.9255472774858828,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9050368534194099,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.7960023071084704,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish is",
+          "confidence": 0.7875775545835495,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.982290940625327,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8110326164298587,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9892008560044425,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9076247016588846,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.0708,
+      "fuzzy_words_found": 23,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.8846,
+      "missing_words": [
+        "claim",
+        "everything",
+        "lack"
+      ],
+      "mean_confidence": 0.9022,
+      "render_ms": 96.0,
+      "inference_ms": 61.0,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9756637699902058,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9578639149665833,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9569796161218123,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ort those who fear nothing ,yot daim to kow evryhiny",
+          "confidence": 0.842277658979098,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8948247056940327,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.8685706800648144,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9528672728273604,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "heck of",
+          "confidence": 0.8154117805617196,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7549302987754345,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9650172676358905,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8344014022085402,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9877041322844369,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9220124781131744,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "whole-s1.5-p08",
+      "cer": 0.0542,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9136,
+      "render_ms": 95.6,
+      "inference_ms": 62.0,
+      "regions": 13,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9777965359389782,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.963351555665334,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9554406214844097,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ort those who fear nokhing ,yet daim to kow everything",
+          "confidence": 0.8484178026837688,
+          "width": 813
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9121602125789808,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.8778713632907186,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9304075621896319,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8577455026762826,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8315253928303719,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9598472799573626,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.829048236211141,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9924838883536202,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9401720762252808,
+          "width": 156
+        }
+      ]
+    }
+  ],
+  "chunk12-s1-p08": [
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.0417,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9124,
+      "render_ms": 44.9,
+      "inference_ms": 62.5,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9721819311380386,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9196651975313822,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9615761122920297,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9583041645013369,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yct caim to know evryThiny",
+          "confidence": 0.8131812291485923,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8787756614063097,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9099378479378564,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9360252155197991,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.884151816368103,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.811252623796463,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9625348278454372,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8566802077823215,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.989529916218349,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9204994440078735,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.0417,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9034,
+      "render_ms": 58.2,
+      "inference_ms": 70.9,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Alhor the mutant",
+          "confidence": 0.9584802612662315,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9790234963099161,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9608322138136084,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foodish ore those who fear",
+          "confidence": 0.8753144993231847,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yet daim to know evryThing",
+          "confidence": 0.8167442125933511,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8971182716929395,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9398878301892962,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.928957482179006,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.7991752241339002,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.7851454764604568,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9698169316564288,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8211119506094191,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9891016057559422,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9263994495073954,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.0583,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9014,
+      "render_ms": 57.5,
+      "inference_ms": 65.8,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Alhor the mutant",
+          "confidence": 0.9595873132348061,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9826891740163167,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9258728596297178,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9017498046159744,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yct daim to know evrythiny",
+          "confidence": 0.7917720564774104,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9107222259044647,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in leath does duty end.",
+          "confidence": 0.9161172583699226,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9176303992668787,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8629655327115741,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8008179366588593,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9799490315573556,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7820964985423617,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9847789066178458,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.90311927596728,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.05,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9032,
+      "render_ms": 58.2,
+      "inference_ms": 64.3,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9744190126657486,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9581596453984579,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9074101597070694,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9439087899831625,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yct caim to know evryThiny",
+          "confidence": 0.817569500207901,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.884565699359645,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9289289904492242,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impority",
+          "confidence": 0.8845467550887002,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.8806401916912624,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.7365815676748753,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9589682562010629,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8390714724858602,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9887687393597194,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9408445755640665,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.05,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9173,
+      "render_ms": 58.0,
+      "inference_ms": 64.8,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9636229202151299,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.964168659845988,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9378062215718356,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9470127843893491,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nohing ,yot daim to know evryThing",
+          "confidence": 0.8063066128422233,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9231174225392549,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9219354146293232,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.97665849659178,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8717422229903085,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8051240518689156,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9630128570965358,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8570617139339447,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9822976589202881,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9229337672392527,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "foolish"
+      ],
+      "mean_confidence": 0.9091,
+      "render_ms": 58.9,
+      "inference_ms": 68.5,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9529172964394093,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9630974610646565,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9513985839757052,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foodkish ore those who fear",
+          "confidence": 0.8992711901664734,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yct claim to know evryThing",
+          "confidence": 0.8233228565918075,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8821878692378169,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9460315150874001,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no imprity",
+          "confidence": 0.9462986939093646,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8470773015703473,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faith s",
+          "confidence": 0.8166513017245701,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9638292789459229,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7989415691958534,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9911841409546989,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9457444945971171,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.05,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9075,
+      "render_ms": 58.0,
+      "inference_ms": 66.2,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9681840091943741,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9861353754997253,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.942356445572593,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foodish ore those who fear",
+          "confidence": 0.9058372997320615,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yot daim to know evryThing",
+          "confidence": 0.8344583579472133,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9275582147681195,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9259018940585,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9397315118047926,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8364851474761963,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.7573050856590271,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9691637073244367,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7936945226457384,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9857568655695234,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9321000476678213,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.919,
+      "render_ms": 58.5,
+      "inference_ms": 64.6,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9722636304795742,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9601502339045207,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9544987434690649,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Fookish ort those who fear",
+          "confidence": 0.9178220549455056,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing yet daim to know evryThing",
+          "confidence": 0.844301535802729,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9106119275093079,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9134534192936761,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.986770725912518,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.8264388825212207,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8135431855916977,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9703923463821411,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8847841885354784,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9832531298909869,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9283231894175211,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9013,
+      "render_ms": 58.6,
+      "inference_ms": 63.8,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Alhor the mutant",
+          "confidence": 0.9485010039061308,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.952604333559672,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9390514140779321,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.8840692478876847,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yot caim to know everyThiny",
+          "confidence": 0.799324281513691,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8879971504211426,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end",
+          "confidence": 0.9332802494366964,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impority",
+          "confidence": 0.9400580459170871,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8225499902452741,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish s",
+          "confidence": 0.7936326818806785,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9752941983086723,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8240702284706963,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9875536901610238,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9301709830760956,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.0375,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9044,
+      "render_ms": 58.4,
+      "inference_ms": 64.5,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9749413654208183,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9228582203388214,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9625630351630124,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9505189748910757,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yet claim to know evryThiny",
+          "confidence": 0.8006546215878593,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.904717330051505,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9039540844304221,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.96104829510053,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8615358216421944,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paith 1s",
+          "confidence": 0.6993508115410805,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9720815164702279,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8369818263583713,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9890075751713344,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9212303956349691,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk12-s1-p08",
+      "cer": 0.0542,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9105,
+      "render_ms": 58.5,
+      "inference_ms": 66.8,
+      "regions": 14,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9760295413434505,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9286105553309123,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperirs reaper",
+          "confidence": 0.9413494847037576,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9341279749686902,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yet claim to know evtryThiny",
+          "confidence": 0.8344047818634961,
+          "width": 471
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.908068325208581,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death des dety end.",
+          "confidence": 0.8997995743045101,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9132731921143002,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8887009876114982,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8182675428688526,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9532424211502075,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8016554845703973,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9898348280361721,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9595179855823517,
+          "width": 156
+        }
+      ]
+    }
+  ],
+  "chunk10-s1-p08": [
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.0292,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9123,
+      "render_ms": 42.4,
+      "inference_ms": 74.4,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9721819311380386,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9196651975313822,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9615761122920297,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9583041645013369,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yet claim to know",
+          "confidence": 0.804502432162945,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.918776524066925,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8787756614063097,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9099378479378564,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9360252155197991,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.884151816368103,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.811252623796463,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9625348278454372,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8566802077823215,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.989529916218349,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9204994440078735,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.0333,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9097,
+      "render_ms": 56.2,
+      "inference_ms": 66.9,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Alhor the mutant",
+          "confidence": 0.9584802612662315,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9790234963099161,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9608322138136084,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foodish ore those who fear",
+          "confidence": 0.8753144993231847,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nokhing ,yet claim to know",
+          "confidence": 0.8654889246592155,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9501694917678833,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8971182716929395,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9398878301892962,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.928957482179006,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.7991752241339002,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.7851454764604568,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9698169316564288,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8211119506094191,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9891016057559422,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9263994495073954,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.0417,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9089,
+      "render_ms": 56.0,
+      "inference_ms": 66.7,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Alhor the mutant",
+          "confidence": 0.9595873132348061,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9826891740163167,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9258728596297178,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9017498046159744,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nohing ,yet claim to know",
+          "confidence": 0.8725477039813996,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9323477447032928,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9107222259044647,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in leath does duty end.",
+          "confidence": 0.9161172583699226,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9176303992668787,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8629655327115741,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8008179366588593,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9799490315573556,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7820964985423617,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9847789066178458,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.90311927596728,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.0333,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9041,
+      "render_ms": 56.3,
+      "inference_ms": 66.8,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9744190126657486,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9581596453984579,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9074101597070694,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9439087899831625,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yet claim to know",
+          "confidence": 0.8646539999888494,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.8699960529804229,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.884565699359645,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9289289904492242,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impority",
+          "confidence": 0.8845467550887002,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.8806401916912624,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.7365815676748753,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9589682562010629,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8390714724858602,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9887687393597194,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9408445755640665,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "nothing"
+      ],
+      "mean_confidence": 0.9191,
+      "render_ms": 55.9,
+      "inference_ms": 65.6,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9636229202151299,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.964168659845988,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9378062215718356,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9470127843893491,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nolkhing 1yet claim to know",
+          "confidence": 0.8308162269768892,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "evryThing",
+          "confidence": 0.9192569123374091,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9231174225392549,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9219354146293232,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.97665849659178,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8717422229903085,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8051240518689156,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9630128570965358,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8570617139339447,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9822976589202881,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9229337672392527,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "foolish"
+      ],
+      "mean_confidence": 0.9107,
+      "render_ms": 56.2,
+      "inference_ms": 70.5,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9529172964394093,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9630974610646565,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9513985839757052,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foodkish ore those who fear",
+          "confidence": 0.8992711901664734,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yct claim to know",
+          "confidence": 0.8665353128543267,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.8888046741485596,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8821878692378169,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9460315150874001,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no imprity",
+          "confidence": 0.9462986939093646,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8470773015703473,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faith s",
+          "confidence": 0.8166513017245701,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9638292789459229,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7989415691958534,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9911841409546989,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9457444945971171,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.0417,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9104,
+      "render_ms": 56.1,
+      "inference_ms": 70.0,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9681840091943741,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9861353754997253,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.942356445572593,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foodish ore those who fear",
+          "confidence": 0.9058372997320615,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yot claim to kow",
+          "confidence": 0.8367065763473511,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9494414508342743,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9275582147681195,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9259018940585,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9397315118047926,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8364851474761963,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.7573050856590271,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9691637073244367,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7936945226457384,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9857568655695234,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9321000476678213,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.0375,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9225,
+      "render_ms": 56.3,
+      "inference_ms": 75.5,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9722636304795742,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9601502339045207,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9544987434690649,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Fookish ort those who fear",
+          "confidence": 0.9178220549455056,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yet claim to know",
+          "confidence": 0.8788640407415537,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "evryThing",
+          "confidence": 0.9366271297136942,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9106119275093079,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9134534192936761,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.986770725912518,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.8264388825212207,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8135431855916977,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9703923463821411,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8847841885354784,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9832531298909869,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9283231894175211,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.05,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9032,
+      "render_ms": 56.0,
+      "inference_ms": 67.3,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Alhor the mutant",
+          "confidence": 0.9485010039061308,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.952604333559672,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9390514140779321,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.8840692478876847,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nokhing 1yct claim to kno",
+          "confidence": 0.8315235245227813,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.8979855298995971,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8879971504211426,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end",
+          "confidence": 0.9332802494366964,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impority",
+          "confidence": 0.9400580459170871,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8225499902452741,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish s",
+          "confidence": 0.7936326818806785,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9752941983086723,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8240702284706963,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9875536901610238,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9301709830760956,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.0375,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9087,
+      "render_ms": 56.1,
+      "inference_ms": 73.2,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9749413654208183,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9228582203388214,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9625630351630124,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9505189748910757,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yet claim to know",
+          "confidence": 0.843004122376442,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "evryThing",
+          "confidence": 0.9267138308948941,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.904717330051505,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9039540844304221,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.96104829510053,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8615358216421944,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paith 1s",
+          "confidence": 0.6993508115410805,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9720815164702279,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8369818263583713,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9890075751713344,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9212303956349691,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9095,
+      "render_ms": 56.1,
+      "inference_ms": 69.4,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9760295413434505,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9286105553309123,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperirs reaper",
+          "confidence": 0.9413494847037576,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9341279749686902,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yet claim to know",
+          "confidence": 0.806120454118802,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9236180782318115,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.908068325208581,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death des dety end.",
+          "confidence": 0.8997995743045101,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9132731921143002,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8887009876114982,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8182675428688526,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9532424211502075,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8016554845703973,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9898348280361721,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9595179855823517,
+          "width": 156
+        }
+      ]
+    }
+  ],
+  "chunk10-s1.5-p04": [
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.0333,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9056,
+      "render_ms": 77.1,
+      "inference_ms": 67.1,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9231924340128899,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9688331723213196,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9603871865706011,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.929511349934798,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yet claim to know",
+          "confidence": 0.893666888658817,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "e veryThing",
+          "confidence": 0.87231599742716,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.909663622793944,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.8997520016772407,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9664430452717675,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8408315564904895,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7710147686302662,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9679454054151263,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let faith",
+          "confidence": 0.7850881550047133,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9743923800332206,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9212761322657267,
+          "width": 164
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.0458,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.8908,
+      "render_ms": 87.8,
+      "inference_ms": 67.2,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9338822811841965,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9500386158625285,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9303397888487036,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ort those who fear",
+          "confidence": 0.9041089633336434,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yet claim to know",
+          "confidence": 0.8627593815326691,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.874580854177475,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihi",
+          "confidence": 0.8789658681912855,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9133352083819253,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9456100033389198,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "luck of",
+          "confidence": 0.8402588750634875,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8180622830986977,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9342160991259983,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7075166470474668,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9821578008787972,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.8858554810285568,
+          "width": 164
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.05,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "lack"
+      ],
+      "mean_confidence": 0.8992,
+      "render_ms": 86.9,
+      "inference_ms": 66.2,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9362809136509895,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9301360646883646,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "be the Emperors reaper",
+          "confidence": 0.9181920019063082,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "ookish ore those who fear",
+          "confidence": 0.9142595958709717,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nolhing ,yet claim to know",
+          "confidence": 0.8691837948102218,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.8960046350955964,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8963749227316483,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in leath does duty end",
+          "confidence": 0.8996320355821539,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.8996990819772085,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "heck of",
+          "confidence": 0.8721223601273128,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8763233125209808,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9543753010886056,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let faith",
+          "confidence": 0.7579726709259881,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9803246174539838,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.8871949513753256,
+          "width": 164
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.0375,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9081,
+      "render_ms": 87.0,
+      "inference_ms": 80.0,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9105017296969891,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.959211258093516,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9472674971277063,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9458866004760449,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yet claim to know",
+          "confidence": 0.8788686830263871,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9283211648464202,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9047626645668693,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.8954610632998603,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9581718047459921,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.8559984649930682,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7773638926446438,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9726683752877372,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7847934299045138,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9865684679576329,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9152221580346426,
+          "width": 164
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.0333,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.907,
+      "render_ms": 87.0,
+      "inference_ms": 65.0,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9308595769107342,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.982571550210317,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9421839903701436,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9217177262673011,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nokhing ,yet claim to know",
+          "confidence": 0.8681101970947706,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9254252076148987,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9113741076510885,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9321699759789875,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9362482395437028,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.8240197684083667,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.7848368063569069,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.958930926663535,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let faih",
+          "confidence": 0.8284530267119408,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9737421955381121,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.8839032103617986,
+          "width": 164
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.0417,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.8943,
+      "render_ms": 87.1,
+      "inference_ms": 65.9,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9452845081686974,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9330900390942891,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.940017892555757,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolkish ore those who fear",
+          "confidence": 0.918283862096292,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yot claim to know",
+          "confidence": 0.8418833567545965,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.8428239792585372,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9093238711357117,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9053120953696114,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.931577377849155,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8399469682148525,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paitsh 1s",
+          "confidence": 0.7356525195969476,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9763504777635846,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7872610754436917,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9800997291292463,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9279028077920278,
+          "width": 164
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.0458,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "foolish"
+      ],
+      "mean_confidence": 0.8994,
+      "render_ms": 87.0,
+      "inference_ms": 65.4,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9301144666969776,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9472264528274537,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9620591672984037,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foodkish ore those who fear",
+          "confidence": 0.9006807285326498,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yot clain to know",
+          "confidence": 0.824512338409057,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9021126449108123,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8961030348487522,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9023841491767338,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9679238763120439,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.8437340429850987,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8166912794113159,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9459367224148342,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7742762499385409,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9783555524689811,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.8984029094378153,
+          "width": 164
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.0417,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "faith"
+      ],
+      "mean_confidence": 0.9114,
+      "render_ms": 87.3,
+      "inference_ms": 66.7,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9361178446561098,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9834536631902059,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9517555155537345,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9440465890444242,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yct claim to know",
+          "confidence": 0.8880307582708505,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.932816481590271,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.921438121277353,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9230673377002988,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9357258975505829,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.8272215170519692,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7780868522822857,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9585608158792768,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let jaih",
+          "confidence": 0.8110582157969475,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9900565232549395,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.8899515767892202,
+          "width": 164
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.0458,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.881,
+      "render_ms": 87.0,
+      "inference_ms": 66.6,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9529730901122093,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9406408905982971,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9272828549146652,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "Fookish ore those who fear",
+          "confidence": 0.9130480908430539,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nokhing 1yet claim to kno",
+          "confidence": 0.8478888511657715,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.7850125342607498,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihi",
+          "confidence": 0.8811456208879297,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end",
+          "confidence": 0.9068207928427944,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9394303113222122,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.7778247807707105,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faith 1s",
+          "confidence": 0.7649699077010155,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9482533761433193,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7570261591010623,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9781502400125776,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.8952088008324305,
+          "width": 164
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.0417,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9075,
+      "render_ms": 87.3,
+      "inference_ms": 68.9,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9669378064572811,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9856443564097087,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9469541067426855,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9655335683089036,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yct claim to know",
+          "confidence": 0.8617245497611853,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9318693518638611,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8930574344552081,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death des duty end.",
+          "confidence": 0.9200772245724996,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9445072544945611,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.8173650843756539,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7728752605617046,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9694487026759556,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7506356636683146,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9839199185371399,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9014082252979279,
+          "width": 164
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p04",
+      "cer": 0.0417,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9131,
+      "render_ms": 87.1,
+      "inference_ms": 77.2,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9515243545174599,
+          "width": 370
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9437940041224162,
+          "width": 253
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9549601511521773,
+          "width": 353
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9354338370836698,
+          "width": 400
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yot claim to know",
+          "confidence": 0.8704682336403773,
+          "width": 387
+        },
+        {
+          "region": "line-4.3",
+          "text": "evryThing",
+          "confidence": 0.9132106900215149,
+          "width": 126
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9208412740541541,
+          "width": 364
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9349436249051776,
+          "width": 420
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9634998208946652,
+          "width": 245
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8344072103500366,
+          "width": 85
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.7731369845569134,
+          "width": 113
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9708427616528102,
+          "width": 120
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paih",
+          "confidence": 0.8204408288002014,
+          "width": 133
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9791889531271798,
+          "width": 111
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9293918410936991,
+          "width": 164
+        }
+      ]
+    }
+  ],
+  "chunk10-s1.5-p08": [
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0333,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9125,
+      "render_ms": 71.0,
+      "inference_ms": 65.0,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9751300029456615,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9671504219373067,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9618630598891865,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9374815477774694,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yct claim to know",
+          "confidence": 0.7996636159144915,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9365953207015991,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8811480947162794,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9100728694881711,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9401280383268992,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.8322073604379382,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8093895837664604,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9741433603422982,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8372401793797811,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.991968171937125,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9334095120429993,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0375,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.908,
+      "render_ms": 83.7,
+      "inference_ms": 64.6,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Alhor the mutant",
+          "confidence": 0.9441621340811253,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9686444838841756,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "be the Emperors reaper",
+          "confidence": 0.9502396122975783,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foodish ore those who fear",
+          "confidence": 0.9058300680839099,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yct claim to know",
+          "confidence": 0.8545012898170031,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9475338757038116,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8809448156667792,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9321986245257514,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9384724729590945,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.830073744058609,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish is",
+          "confidence": 0.7740626446902752,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9758713245391846,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8079652024639977,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9924355915614537,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9169937670230865,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0375,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9029,
+      "render_ms": 83.5,
+      "inference_ms": 64.0,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Alhor the mutant",
+          "confidence": 0.9642973504960537,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9734495162963868,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9320189736106179,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9008109053740134,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yet claim to know",
+          "confidence": 0.8431053345020001,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.8787237197160721,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.908673353817152,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in leath does duty end.",
+          "confidence": 0.9016893208026886,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9345764319101969,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.835100667817252,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.826565720140934,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9782858661242894,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7781488067573972,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9862720455442157,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9010437428951263,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.8985,
+      "render_ms": 83.9,
+      "inference_ms": 64.3,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9735572636127472,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9652473370234171,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9036300087516959,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9440233707427979,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yct claim to know",
+          "confidence": 0.8681959143051734,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.8601276218891144,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8876260531985242,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9265531067337308,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impority",
+          "confidence": 0.9054888337850571,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.817933623279844,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7197058089077473,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9670656749180385,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8263585997952355,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9906645928110395,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.922029455502828,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0417,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "lack"
+      ],
+      "mean_confidence": 0.9187,
+      "render_ms": 83.2,
+      "inference_ms": 64.2,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9663775563240051,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.945846696694692,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9188976450399919,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9458707066682669,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yet claim to know",
+          "confidence": 0.8673193890314835,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "evryThing",
+          "confidence": 0.9180070360501608,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9033706084541653,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9326296033603805,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9739857614040375,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "heck of",
+          "confidence": 0.86868645463671,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8233891278505325,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9519506181989398,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8559616340531243,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9897144096238273,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9179507493972778,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9,
+      "render_ms": 83.8,
+      "inference_ms": 64.4,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9694281667470932,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9767013947168987,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9525458677248522,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ort those who fear",
+          "confidence": 0.9122891747034513,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yct claim to know",
+          "confidence": 0.8578130946709559,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.889492666721344,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9058008116224537,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9083837888070515,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no imurity",
+          "confidence": 0.9114660533035502,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.7627260131495339,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish is",
+          "confidence": 0.7450452409684658,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.97487473487854,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8108587563037872,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9904638358524868,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9320702254772186,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9095,
+      "render_ms": 84.0,
+      "inference_ms": 66.3,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9709173887968063,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9787552674611409,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "be the Emperors reaper",
+          "confidence": 0.952353379943154,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foodish ore those who fear",
+          "confidence": 0.9134800021465008,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yot claim to kow",
+          "confidence": 0.8284327590465546,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9427505552768707,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9240562449330869,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9332685555730548,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9732035828961266,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8112308553286961,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7815811559557915,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9732330441474915,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7795560194386376,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9755739484514508,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9043489893277487,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0333,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9191,
+      "render_ms": 84.8,
+      "inference_ms": 67.1,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9716615304350853,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9599853515625,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9358808614990928,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9234268619463994,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing ,yet claim to know",
+          "confidence": 0.8482236254673737,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "evryThing",
+          "confidence": 0.9419016771846347,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8947311613870703,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.9276492723396846,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9794626004166074,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.8303117028304509,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8236788064241409,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9711286170142037,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8638701372676425,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9869860325540815,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9271140396595001,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0375,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9026,
+      "render_ms": 85.2,
+      "inference_ms": 65.8,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9523154124617577,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9658178846041362,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9492640549486334,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9096611864291705,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yct claim to kno",
+          "confidence": 0.8482014095783234,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9092375934123993,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8997370989426322,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end",
+          "confidence": 0.9255472774858828,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9050368534194099,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.7960023071084704,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish is",
+          "confidence": 0.7875775545835495,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.982290940625327,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8110326164298587,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9892008560044425,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9076247016588846,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "lack"
+      ],
+      "mean_confidence": 0.9075,
+      "render_ms": 84.6,
+      "inference_ms": 74.5,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9756637699902058,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9578639149665833,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9569796161218123,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those who fear",
+          "confidence": 0.9606856176486382,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yet claim to know",
+          "confidence": 0.8366973044780585,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "evryThing",
+          "confidence": 0.9282172520955404,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.8948247056940327,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.8685706800648144,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9528672728273604,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "heck of",
+          "confidence": 0.8154117805617196,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7549302987754345,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9650172676358905,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8344014022085402,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9877041322844369,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9220124781131744,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk10-s1.5-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9126,
+      "render_ms": 85.1,
+      "inference_ms": 68.7,
+      "regions": 15,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the mutant",
+          "confidence": 0.9777965359389782,
+          "width": 347
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.963351555665334,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9554406214844097,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ort those who fear",
+          "confidence": 0.9246296217808356,
+          "width": 376
+        },
+        {
+          "region": "line-4.2",
+          "text": "nothing 1yet clain to know",
+          "confidence": 0.8144973023579671,
+          "width": 364
+        },
+        {
+          "region": "line-4.3",
+          "text": "everyThing",
+          "confidence": 0.9222794532775879,
+          "width": 121
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat nihil",
+          "confidence": 0.9121602125789808,
+          "width": 342
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty end.",
+          "confidence": 0.8778713632907186,
+          "width": 394
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9304075621896319,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8577455026762826,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8315253928303719,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9598472799573626,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.829048236211141,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9924838883536202,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9401720762252808,
+          "width": 156
+        }
+      ]
+    }
+  ],
+  "chunk8-s1.5-p08": [
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.0375,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9137,
+      "render_ms": 67.2,
+      "inference_ms": 107.4,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.9727566904491849,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.9780033032099406,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9671504219373067,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9618630598891865,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those",
+          "confidence": 0.8847596995970782,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing ,yct",
+          "confidence": 0.8758251567681631,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "claim to know evryThing",
+          "confidence": 0.8954844086066537,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat",
+          "confidence": 0.8780725633396822,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9791869521141052,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty",
+          "confidence": 0.9023832173451133,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end .",
+          "confidence": 0.8324236392974853,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9401280383268992,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "lack of",
+          "confidence": 0.8322073604379382,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8093895837664604,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9741433603422982,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8372401793797811,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.991968171937125,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9334095120429993,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.0542,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9092,
+      "render_ms": 85.4,
+      "inference_ms": 81.9,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.9398140642378066,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.9668379426002502,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9686444838841756,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "be the Emperors reaper",
+          "confidence": 0.9502396122975783,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Fookish ore those",
+          "confidence": 0.9306377558147206,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing 1yct",
+          "confidence": 0.8870991468429565,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "daim to know evryThing",
+          "confidence": 0.9034563221714713,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probsat",
+          "confidence": 0.8332484695646498,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9644124627113342,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty",
+          "confidence": 0.9501013781713403,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end .",
+          "confidence": 0.8351325392723083,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9384724729590945,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.830073744058609,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish is",
+          "confidence": 0.7740626446902752,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9758713245391846,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8079652024639977,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9924355915614537,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9169937670230865,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.0583,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9093,
+      "render_ms": 81.4,
+      "inference_ms": 75.7,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.9405329856607649,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.9695918957392374,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9734495162963868,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9320189736106179,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Fookish ore those",
+          "confidence": 0.9241904265740338,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing 1yct",
+          "confidence": 0.8980877697467804,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "daim to know evryThing",
+          "confidence": 0.9044064445929094,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat",
+          "confidence": 0.8823531182373271,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9785462021827698,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty",
+          "confidence": 0.9068314199862273,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end .",
+          "confidence": 0.8177512645721435,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9345764319101969,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.835100667817252,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.826565720140934,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9782858661242894,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7781488067573972,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9862720455442157,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9010437428951263,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.05,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9024,
+      "render_ms": 82.7,
+      "inference_ms": 113.6,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.9791637592845492,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.9753588140010834,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9652473370234171,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9036300087516959,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those",
+          "confidence": 0.9027255002190085,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing 1yct",
+          "confidence": 0.8779186805089315,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "claim to know evryThing",
+          "confidence": 0.8805494593537372,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat",
+          "confidence": 0.8809227189596962,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9761192083358765,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty",
+          "confidence": 0.9485599865084109,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end ,",
+          "confidence": 0.8043267726898193,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impority",
+          "confidence": 0.9054888337850571,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.817933623279844,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7197058089077473,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9670656749180385,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8263585997952355,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9906645928110395,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.922029455502828,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.0583,
+      "fuzzy_words_found": 24,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9231,
+      "missing_words": [
+        "claim",
+        "lack"
+      ],
+      "mean_confidence": 0.911,
+      "render_ms": 81.0,
+      "inference_ms": 74.3,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.9815397395028008,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.9736683865388235,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.945846696694692,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9188976450399919,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those",
+          "confidence": 0.8868101765127743,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing 1yct",
+          "confidence": 0.8595477484521412,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "dain to know everyThing",
+          "confidence": 0.8994510394075642,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Inmocentia probat",
+          "confidence": 0.836269233156653,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9777992844581604,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty",
+          "confidence": 0.9322164188260618,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end ,",
+          "confidence": 0.8040206134319305,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9739857614040375,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "heck of",
+          "confidence": 0.86868645463671,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8233891278505325,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9519506181989398,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8559616340531243,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9897144096238273,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9179507493972778,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.0417,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9076,
+      "render_ms": 80.8,
+      "inference_ms": 73.8,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.9820564654138353,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.9835417071978251,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9767013947168987,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9525458677248522,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those",
+          "confidence": 0.8992827657391044,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing 1yet",
+          "confidence": 0.8835126161575317,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "claim to know evryThing",
+          "confidence": 0.8739073302434839,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat",
+          "confidence": 0.8818106300690595,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9736209034919738,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty",
+          "confidence": 0.9163732969242594,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end.",
+          "confidence": 0.8853264302015305,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no imurity",
+          "confidence": 0.9114660533035502,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.7627260131495339,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish is",
+          "confidence": 0.7450452409684658,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.97487473487854,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8108587563037872,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9904638358524868,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9320702254772186,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.0542,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9082,
+      "render_ms": 81.0,
+      "inference_ms": 88.0,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.9441411760118272,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.9773105978965759,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9787552674611409,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "be the Emperors reaper",
+          "confidence": 0.952353379943154,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those",
+          "confidence": 0.9196397171301001,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing 1yct",
+          "confidence": 0.8825271697271437,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "daim to know evryThing",
+          "confidence": 0.9233530434695157,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat",
+          "confidence": 0.8800068182103774,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9608090639114379,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty",
+          "confidence": 0.9189005675523177,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end ,",
+          "confidence": 0.8103258728981018,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9732035828961266,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8112308553286961,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7815811559557915,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9732330441474915,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.7795560194386376,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9755739484514508,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9043489893277487,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 26,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 1.0,
+      "missing_words": [],
+      "mean_confidence": 0.9152,
+      "render_ms": 80.5,
+      "inference_ms": 73.4,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.9726295007599725,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.9582849740982056,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9599853515625,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9358808614990928,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those",
+          "confidence": 0.8909784765804515,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing 1yct",
+          "confidence": 0.863160598845709,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "caim to know everyThing",
+          "confidence": 0.8959053366080575,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Inmocentia probat",
+          "confidence": 0.8308006034177893,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9788863182067871,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "Only in death does duty",
+          "confidence": 0.940394937992096,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end ,",
+          "confidence": 0.8635689377784729,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9794626004166074,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.8303117028304509,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish 1s",
+          "confidence": 0.8236788064241409,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9711286170142037,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8638701372676425,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9869860325540815,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9271140396595001,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.0458,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9073,
+      "render_ms": 80.3,
+      "inference_ms": 72.7,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.9427620768547058,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.985421230395635,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9658178846041362,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9492640549486334,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those",
+          "confidence": 0.9232280008933124,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing 1yot",
+          "confidence": 0.8846772412459055,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "daim to know evryThing",
+          "confidence": 0.9023322273384441,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat",
+          "confidence": 0.8149424037512611,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9791934132575989,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty",
+          "confidence": 0.9125604901624762,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end.",
+          "confidence": 0.8920873701572418,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9050368534194099,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "hack of",
+          "confidence": 0.7960023071084704,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "faish is",
+          "confidence": 0.7875775545835495,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.982290940625327,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8110326164298587,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9892008560044425,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9076247016588846,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.0583,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "lack"
+      ],
+      "mean_confidence": 0.9084,
+      "render_ms": 80.0,
+      "inference_ms": 80.5,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.979274246427748,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.9771055579185486,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.9578639149665833,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9569796161218123,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Foolish ore those",
+          "confidence": 0.9061575707267312,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing 1yct",
+          "confidence": 0.88779935666493,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "dlaim to know everyThing",
+          "confidence": 0.881566991408666,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probsat",
+          "confidence": 0.8526538577344682,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9789832592010498,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "onky in death does duty",
+          "confidence": 0.8719348155933878,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end.",
+          "confidence": 0.8685370683670044,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9528672728273604,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "heck of",
+          "confidence": 0.8154117805617196,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.7549302987754345,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9650172676358905,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.8344014022085402,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9877041322844369,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9220124781131744,
+          "width": 156
+        }
+      ]
+    },
+    {
+      "label": "chunk8-s1.5-p08",
+      "cer": 0.0583,
+      "fuzzy_words_found": 25,
+      "fuzzy_words_total": 26,
+      "fuzzy_recall": 0.9615,
+      "missing_words": [
+        "claim"
+      ],
+      "mean_confidence": 0.9145,
+      "render_ms": 80.5,
+      "inference_ms": 73.2,
+      "regions": 18,
+      "readings": [
+        {
+          "region": "line-1.1",
+          "text": "Athor the",
+          "confidence": 0.9839132759306166,
+          "width": 184
+        },
+        {
+          "region": "line-1.2",
+          "text": "mutant",
+          "confidence": 0.9737860262393951,
+          "width": 139
+        },
+        {
+          "region": "line-2.1",
+          "text": "Be not merciful",
+          "confidence": 0.963351555665334,
+          "width": 239
+        },
+        {
+          "region": "line-3.1",
+          "text": "Be the Emperors reaper",
+          "confidence": 0.9554406214844097,
+          "width": 332
+        },
+        {
+          "region": "line-4.1",
+          "text": "Fookish ore those",
+          "confidence": 0.8570293398464427,
+          "width": 303
+        },
+        {
+          "region": "line-4.2",
+          "text": "who fear nothing 1yct",
+          "confidence": 0.8608955584821247,
+          "width": 298
+        },
+        {
+          "region": "line-4.3",
+          "text": "dlain to know evryThing",
+          "confidence": 0.8898113706837529,
+          "width": 295
+        },
+        {
+          "region": "line-7.1",
+          "text": "Innocentia probat",
+          "confidence": 0.8982268431607414,
+          "width": 242
+        },
+        {
+          "region": "line-7.2",
+          "text": "nihil",
+          "confidence": 0.9809136986732483,
+          "width": 88
+        },
+        {
+          "region": "line-5.1",
+          "text": "only in death does duty",
+          "confidence": 0.9094964965530064,
+          "width": 321
+        },
+        {
+          "region": "line-5.2",
+          "text": "end .",
+          "confidence": 0.8461454629898071,
+          "width": 85
+        },
+        {
+          "region": "line-6.1",
+          "text": "Suffer no impurity",
+          "confidence": 0.9304075621896319,
+          "width": 231
+        },
+        {
+          "region": "cell-01a003a5-f1db-77d8-9b36-25adae123b53",
+          "text": "leck of",
+          "confidence": 0.8577455026762826,
+          "width": 83
+        },
+        {
+          "region": "cell-01a003a5-f1db-74b2-ae35-319fe42b4928",
+          "text": "paish 1s",
+          "confidence": 0.8315253928303719,
+          "width": 108
+        },
+        {
+          "region": "cell-01a003a5-f1db-743a-88da-fe978e92f612",
+          "text": "treason",
+          "confidence": 0.9598472799573626,
+          "width": 115
+        },
+        {
+          "region": "cell-01a003a6-d7c7-771c-ae24-33a466898475",
+          "text": "let paith",
+          "confidence": 0.829048236211141,
+          "width": 127
+        },
+        {
+          "region": "cell-01a003a6-d7c8-7650-a425-3947295cf28e",
+          "text": "tremple",
+          "confidence": 0.9924838883536202,
+          "width": 106
+        },
+        {
+          "region": "cell-01a003a6-d7c8-72ef-946c-1e89470d4b03",
+          "text": "reason",
+          "confidence": 0.9401720762252808,
+          "width": 156
+        }
+      ]
+    }
+  ]
+}

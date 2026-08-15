@@ -4,6 +4,8 @@ import com.vivenotes.model.Block
 import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
+import com.vivenotes.ai.InkTextRegion
+import com.vivenotes.ink.InkBounds
 
 /**
  * What a hit was found in — `docs/searchPlan.md` CS3.
@@ -29,6 +31,9 @@ enum class ContentKind {
      * opening one selects the picture rather than pretending to put a caret in it.
      */
     Image,
+
+    /** One phrase read from replayed handwriting; opening it selects the source strokes. */
+    Ink,
 }
 
 /**
@@ -52,8 +57,13 @@ data class ContentUnit(
     val blockIndex: Int = 0,
     val blockStart: Int = 0,
     val text: String,
+    /** Other readings of the same source region; fuzzy matching chooses the strongest candidate. */
+    val alternatives: List<String> = emptyList(),
     /** Set only for [ContentKind.Image]: which picture's recognized text this line came from. */
     val attachmentId: String? = null,
+    /** Set only for [ContentKind.Ink], so reveal can select the canonical strokes. */
+    val inkStrokeIds: Set<String> = emptySet(),
+    val inkBounds: InkBounds? = null,
 )
 
 /** A [ContentUnit] the query matched, with where in it the match landed. */
@@ -214,6 +224,27 @@ fun imageUnits(placement: ImagePlacement, lines: List<String>): List<ContentUnit
     }
 }
 
+/** One searchable unit per vector-derived handwriting region. */
+fun inkUnits(pageId: String, sectionId: String, regions: List<InkTextRegion>): List<ContentUnit> =
+    regions.mapIndexedNotNull { index, region ->
+        val candidates = listOfNotNull(region.text, region.alternateText)
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .distinct()
+        val primary = candidates.firstOrNull() ?: return@mapIndexedNotNull null
+        ContentUnit(
+            pageId = pageId,
+            sectionId = sectionId,
+            kind = ContentKind.Ink,
+            boxId = region.id,
+            blockIndex = index,
+            text = primary,
+            alternatives = candidates.drop(1),
+            inkStrokeIds = region.strokeIds.toSet(),
+            inkBounds = InkBounds(region.left, region.top, region.right, region.bottom),
+        )
+    }
+
 /**
  * Ranks [units] against [query] — CS6.
  *
@@ -231,9 +262,18 @@ fun searchContent(
     if (query.isBlank()) return emptyList()
     return units
         .mapNotNull { unit ->
-            FuzzyMatcher.match(query, unit.text)?.let { match ->
-                ContentHit(unit, match.score + unit.kind.weight, match.spans)
-            }
+            (listOf(unit.text) + unit.alternatives)
+                .mapNotNull { candidate ->
+                    FuzzyMatcher.match(query, candidate)?.let { match -> candidate to match }
+                }
+                .maxByOrNull { (_, match) -> match.score }
+                ?.let { (candidate, match) ->
+                    ContentHit(
+                        unit = if (candidate == unit.text) unit else unit.copy(text = candidate),
+                        score = match.score + unit.kind.weight,
+                        spans = match.spans,
+                    )
+                }
         }
         .sortedWith(
             compareByDescending<ContentHit> { it.score }
@@ -284,7 +324,7 @@ private val ContentKind.weight: Int
     get() = when (this) {
         ContentKind.Title -> 40
         ContentKind.Text, ContentKind.Cell -> 0
-        ContentKind.Image -> -8
+        ContentKind.Image, ContentKind.Ink -> -8
     }
 
 /**

@@ -62,6 +62,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.ImageTextProgress
+import com.vivenotes.data.InkTextProgress
 import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
@@ -170,6 +171,7 @@ fun NotesApp(
     val hasClipboard by viewModel.hasClipboard.collectAsStateWithLifecycle()
     val contentSearch by viewModel.contentSearch.collectAsStateWithLifecycle()
     val imageTextProgress by viewModel.imageTextProgress.collectAsStateWithLifecycle()
+    val inkTextProgress by viewModel.inkTextProgress.collectAsStateWithLifecycle()
     val versionHistory by viewModel.versionHistory.collectAsStateWithLifecycle()
     val deletedItems by viewModel.deletedItems.collectAsStateWithLifecycle()
     val notebookTransfer by viewModel.notebookTransfer.collectAsStateWithLifecycle()
@@ -191,6 +193,7 @@ fun NotesApp(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(viewModel::importNotebook) }
     val strokes by viewModel.strokes.collectAsStateWithLifecycle()
+    val inkReadyPageId by viewModel.inkReadyPageId.collectAsStateWithLifecycle()
     val aiModels by aiModelStore.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -556,6 +559,7 @@ fun NotesApp(
                                 allowFinger = drawWithFinger,
                                 hasClipboard = hasClipboard,
                                 strokes = strokes,
+                                inkReady = inkReadyPageId == state.selectedPageId,
                                 attachments = attachments,
                                 aiModels = aiModels,
                                 recognitionRunning = recognitionRunning,
@@ -591,6 +595,7 @@ fun NotesApp(
                                     },
                                     contentSearch = contentSearch,
                                     imageTextProgress = imageTextProgress,
+                                    inkTextProgress = inkTextProgress,
                                     versionHistory = versionHistory,
                                     deletedItems = deletedItems,
                                     onSearchQueryChange = viewModel::setSearchQuery,
@@ -666,6 +671,7 @@ fun NotesApp(
                                     },
                                     contentSearch = contentSearch,
                                     imageTextProgress = imageTextProgress,
+                                    inkTextProgress = inkTextProgress,
                                     versionHistory = versionHistory,
                                     deletedItems = deletedItems,
                                     onSearchQueryChange = viewModel::setSearchQuery,
@@ -701,6 +707,7 @@ fun NotesApp(
                                 allowFinger = drawWithFinger,
                                 hasClipboard = hasClipboard,
                                 strokes = strokes,
+                                inkReady = inkReadyPageId == state.selectedPageId,
                                 attachments = attachments,
                                 aiModels = aiModels,
                                 recognitionRunning = recognitionRunning,
@@ -846,6 +853,7 @@ private fun ToolPaneHost(
     contentSearch: ContentSearchState,
     /** How far reading this notebook's pictures has got — `memory/imageOcrPlan.md` IO6. */
     imageTextProgress: ImageTextProgress,
+    inkTextProgress: InkTextProgress,
     versionHistory: VersionHistoryState,
     deletedItems: DeletedItemsState,
     onSearchQueryChange: (String) -> Unit,
@@ -887,6 +895,7 @@ private fun ToolPaneHost(
             )
             ToolPane.AiModels -> {
                 val picturesRead by viewModel.picturesRead.collectAsStateWithLifecycle()
+                val inkPagesRead by viewModel.pagesWithHandwritingText.collectAsStateWithLifecycle()
                 AiModelsPanelContent(
                     state = aiModels,
                     onDownloadFormula = onDownloadFormula,
@@ -894,6 +903,10 @@ private fun ToolPaneHost(
                     picturesRead = picturesRead,
                     onSetPictureText = viewModel::setImageTextEnabled,
                     onRebuildPictureText = viewModel::rebuildImageText,
+                    inkText = inkTextProgress,
+                    inkPagesRead = inkPagesRead,
+                    onSetInkText = viewModel::setInkTextEnabled,
+                    onRebuildInkText = viewModel::rebuildInkText,
                 )
             }
             ToolPane.Hardware -> HardwarePanelContent(
@@ -948,6 +961,7 @@ private fun EditorSurface(
     allowFinger: Boolean,
     hasClipboard: Boolean,
     strokes: List<PageStroke>,
+    inkReady: Boolean,
     /** Turns a picture's id into its pixels — feature E6. */
     attachments: AttachmentStore,
     aiModels: AiModelsState,
@@ -989,6 +1003,7 @@ private fun EditorSurface(
                 allowFinger = allowFinger,
                 hasClipboard = hasClipboard,
                 strokes = strokes,
+                inkReady = inkReady,
                 attachments = attachments,
                 aiModels = aiModels,
                 recognitionRunning = recognitionRunning,
@@ -1067,6 +1082,7 @@ private fun PageEditor(
     allowFinger: Boolean,
     hasClipboard: Boolean,
     strokes: List<PageStroke>,
+    inkReady: Boolean,
     attachments: AttachmentStore,
     aiModels: AiModelsState,
     recognitionRunning: Boolean,
@@ -1101,6 +1117,7 @@ private fun PageEditor(
         onCommand = viewModel::send,
         onCanvasMeasured = viewModel::onCanvasMeasured,
         strokes = strokes,
+        inkReady = inkReady,
         // Rebuilt only when the pen actually changes, not on every recomposition: a Brush holds a
         // native handle, and the ribbon recomposes whenever the selection moves.
         brush = remember(tool, pens, highlighter) {

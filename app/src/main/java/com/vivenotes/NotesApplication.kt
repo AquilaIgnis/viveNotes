@@ -7,6 +7,7 @@ import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.ImageTextIndexer
+import com.vivenotes.data.InkTextIndexer
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.PenSettingsStore
@@ -50,6 +51,9 @@ class NotesApplication : Application() {
      */
     val imageText: ImageTextIndexer by lazy {
         ImageTextIndexer(repository, attachments, recognitionEngine)
+    }
+    val inkText: InkTextIndexer by lazy {
+        InkTextIndexer(repository, recognitionEngine)
     }
     val mathEngine: SympyMathEngine by lazy { SympyMathEngine(this) }
 

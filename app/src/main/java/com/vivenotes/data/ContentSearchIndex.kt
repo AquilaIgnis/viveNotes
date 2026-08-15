@@ -1,6 +1,10 @@
 package com.vivenotes.data
 
 import com.vivenotes.data.db.ImageTextStatus
+import com.vivenotes.data.db.InkTextStatus
+import com.vivenotes.ai.InkPageLayout
+import com.vivenotes.ai.InkTextRegionsCodec
+import com.vivenotes.ai.inkPageLayout
 import com.vivenotes.model.search.ContentHit
 import com.vivenotes.model.search.ContentUnit
 import com.vivenotes.model.search.ImagePlacement
@@ -8,6 +12,7 @@ import com.vivenotes.model.search.MAX_HITS
 import com.vivenotes.model.search.contentUnits
 import com.vivenotes.model.search.imagePlacements
 import com.vivenotes.model.search.imageUnits
+import com.vivenotes.model.search.inkUnits
 import com.vivenotes.model.search.searchContent
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -41,6 +46,8 @@ data class ContentSearchOutcome(
     val results: ContentSearchResults,
     /** Every attachment id placed in the notebook, for the indexer to read the unread ones. */
     val pictures: Set<String>,
+    /** Every page and the document geometry needed to segment its replayed ink. */
+    val inkPages: List<InkTextPageRequest> = emptyList(),
 )
 
 /**
@@ -70,6 +77,7 @@ class ContentSearchIndex(private val repository: NotesRepository) {
         val stamp: Long,
         val units: List<ContentUnit>,
         val images: List<ImagePlacement>,
+        val inkLayout: InkPageLayout,
     )
 
     private val lock = Mutex()
@@ -88,12 +96,13 @@ class ContentSearchIndex(private val repository: NotesRepository) {
         livePageId: String?,
         liveUnits: List<ContentUnit>,
         liveImages: List<ImagePlacement> = emptyList(),
+        liveInkLayout: InkPageLayout = inkPageLayout(emptyList()),
     ): ContentSearchOutcome {
         if (query.isBlank()) return ContentSearchOutcome(ContentSearchResults(query), emptySet())
         val pages = repository.pagesInNotebook(notebookId)
         val sections = repository.sectionsInNotebook(notebookId).associate { it.id to it.name }
 
-        val (units, placements) = lock.withLock {
+        val (units, placements, inkRequests) = lock.withLock {
             if (indexed != notebookId) {
                 byPage.clear()
                 indexed = notebookId
@@ -113,6 +122,7 @@ class ContentSearchIndex(private val repository: NotesRepository) {
                         stamp = page.updatedAt,
                         units = doc?.contentUnits(page.id, page.sectionId, page.title).orEmpty(),
                         images = doc?.imagePlacements(page.id, page.sectionId).orEmpty(),
+                        inkLayout = doc?.inkPageLayout() ?: inkPageLayout(emptyList()),
                     )
                 }
             }
@@ -129,7 +139,15 @@ class ContentSearchIndex(private val repository: NotesRepository) {
                     if (page.id != livePageId) byPage[page.id]?.images?.let(::addAll)
                 }
             }
-            storedUnits to storedImages
+            val inkRequests = buildList {
+                livePageId?.let { add(InkTextPageRequest(it, liveInkLayout)) }
+                pages.forEach { page ->
+                    if (page.id != livePageId) {
+                        byPage[page.id]?.inkLayout?.let { add(InkTextPageRequest(page.id, it)) }
+                    }
+                }
+            }
+            Triple(storedUnits, storedImages, inkRequests)
         }
 
         val pictures = placements.mapTo(mutableSetOf()) { it.attachmentId }
@@ -149,7 +167,24 @@ class ContentSearchIndex(private val repository: NotesRepository) {
             }
         }
 
-        val hits = searchContent(withPictures, query)
+        val pageSections = pages.associate { it.id to it.sectionId }
+        val inkRows = repository.inkTextFor(inkRequests.map(InkTextPageRequest::pageId))
+        val withHandwriting = withPictures + inkRequests.flatMap { request ->
+            val row = inkRows[request.pageId]
+            if (row == null || row.status != InkTextStatus.Read ||
+                row.engine != InkTextIndexer.ENGINE || row.layoutHash != request.layout.hash
+            ) {
+                emptyList()
+            } else {
+                inkUnits(
+                    request.pageId,
+                    pageSections[request.pageId].orEmpty(),
+                    InkTextRegionsCodec.decode(row.regionsJson),
+                )
+            }
+        }
+
+        val hits = searchContent(withHandwriting, query)
         val titles = pages.associate { it.id to it.title }
         // Pages in the order their best hit ranked, and hits within a page in the order they ranked:
         // `groupBy` preserves both, since the hits arrive sorted.
@@ -172,6 +207,7 @@ class ContentSearchIndex(private val repository: NotesRepository) {
                 truncated = hits.size >= MAX_HITS,
             ),
             pictures = pictures,
+            inkPages = inkRequests,
         )
     }
 }

@@ -11,10 +11,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -44,6 +41,9 @@ import com.vivenotes.data.ContentSearchOutcome
 import com.vivenotes.data.ContentSearchResults
 import com.vivenotes.data.ImageTextIndexer
 import com.vivenotes.data.ImageTextProgress
+import com.vivenotes.data.InkPageLoader
+import com.vivenotes.data.InkTextIndexer
+import com.vivenotes.data.InkTextProgress
 import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.DeletedItem
 import com.vivenotes.data.DeletedItemKey
@@ -74,9 +74,6 @@ import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
 import com.vivenotes.data.db.PageRevisionSummary
-import com.vivenotes.data.db.InkEraseWithTargets
-import com.vivenotes.data.db.InkMoveWithTargets
-import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.unionBounds
 import com.vivenotes.ink.CanvasClipboard
@@ -92,8 +89,6 @@ import com.vivenotes.ink.moveSelected
 import com.vivenotes.ink.pageBounds
 import com.vivenotes.ink.recolor
 import com.vivenotes.ink.regroup
-import com.vivenotes.ink.replayMove
-import com.vivenotes.ink.replayResize
 import com.vivenotes.ink.resizeSelected
 import com.vivenotes.ink.subtract
 import com.vivenotes.ink.targetsFor
@@ -122,6 +117,7 @@ import com.vivenotes.model.search.ContentUnit
 import com.vivenotes.model.search.ImagePlacement
 import com.vivenotes.model.search.blockUnits
 import com.vivenotes.model.search.titleUnit
+import com.vivenotes.ai.inkPageLayout
 import com.vivenotes.model.withCellBlocks
 import com.vivenotes.model.withColumnInserted
 import com.vivenotes.model.withColumnRemoved
@@ -149,21 +145,6 @@ data class OutlineBox(
     val minHeight: Float = 0f,
 )
 
-private sealed interface StoredInkOperation {
-    val createdAt: Long
-    val id: String
-
-    data class Erase(val stored: InkEraseWithTargets) : StoredInkOperation {
-        override val createdAt: Long get() = stored.erase.createdAt
-        override val id: String get() = stored.erase.id
-    }
-
-    data class Move(val stored: InkMoveWithTargets) : StoredInkOperation {
-        override val createdAt: Long get() = stored.move.createdAt
-        override val id: String get() = stored.move.id
-    }
-}
-
 /**
  * A hit the user asked to see — `docs/searchPlan.md` CS9.
  *
@@ -181,6 +162,8 @@ data class ContentReveal(
     val tableId: String?,
     val start: Int,
     val end: Int,
+    val inkStrokeIds: Set<String> = emptySet(),
+    val inkBounds: InkBounds? = null,
 )
 
 /** What the Content panel is showing: a query, whether it is still running, and what it found. */
@@ -455,7 +438,11 @@ class NotesViewModel(
      * search. Null simply means no picture ever gets read.
      */
     private val imageText: ImageTextIndexer? = null,
+    /** Reads replayed handwriting lazily for the same cache-only search path as picture OCR. */
+    private val inkText: InkTextIndexer? = null,
 ) : ViewModel() {
+
+    private val inkPageLoader = InkPageLoader(repository, inkDispatcher)
 
     private val _uiState = MutableStateFlow(NotesUiState())
     val uiState: StateFlow<NotesUiState> = _uiState.asStateFlow()
@@ -654,6 +641,10 @@ class NotesViewModel(
     /** The open page's ink, in draw order. Empty while no page is open. */
     private val _strokes = MutableStateFlow<List<PageStroke>>(emptyList())
     val strokes: StateFlow<List<PageStroke>> = _strokes.asStateFlow()
+
+    /** The page whose final replayed stroke list has landed; streamed prefixes are not ready. */
+    private val _inkReadyPageId = MutableStateFlow<String?>(null)
+    val inkReadyPageId: StateFlow<String?> = _inkReadyPageId.asStateFlow()
 
     /** Availability for the open page's bounded, session-local canvas history — ink and shapes. */
     private val _canvasUndoState = MutableStateFlow(CanvasUndoState())
@@ -1005,12 +996,14 @@ class NotesViewModel(
                         readOnlyPageId = null
                         canvasHistoryByPage.remove(pageId)
                         _strokes.value = emptyList()
+                        _inkReadyPageId.value = null
                         showDocument(
                             pageId = pageId,
                             page = _uiState.value.pages.firstOrNull { it.id == pageId },
                             doc = restored.doc,
                         )
                         publishInk(pageId, restoredStrokes)
+                        _inkReadyPageId.value = pageId
 
                         val revisions = repository.revisionHistory(pageId)
                         val selected = revisions.firstOrNull { it.id == revision.id }
@@ -1100,6 +1093,7 @@ class NotesViewModel(
         selectedSection.value = sectionId
         _uiState.value = _uiState.value.copy(selectedSectionId = sectionId, selectedPageId = null)
         _strokes.value = emptyList()
+        _inkReadyPageId.value = null
         publishCanvasUndoState(null)
         _compactPane.value = CompactPane.Pages
     }
@@ -1132,6 +1126,7 @@ class NotesViewModel(
         // one piece of the old page that would otherwise stay on screen, drawn over a page it does
         // not belong to, for exactly as long as the load that this change stopped waiting for.
         _strokes.value = emptyList()
+        _inkReadyPageId.value = null
         pageLoad = viewModelScope.launch {
             // The outgoing page's text is written before anything can replace it, and a page switch
             // arriving mid-write cannot tear that write in half.
@@ -1170,6 +1165,7 @@ class NotesViewModel(
                 loadInk(pageId) { partial -> publishInk(pageId, partial) }
             }
             publishInk(pageId, ink)
+            if (openingPageId == pageId) _inkReadyPageId.value = pageId
         }
     }
 
@@ -1306,7 +1302,13 @@ class NotesViewModel(
             // reporting what was typed. Collecting inside the block leaves the keystroke path
             // exactly as it was and adds the re-run underneath it; `transformLatest` cancels this
             // collector on the next keystroke, so a superseded query stops re-running too.
-            val versions = imageText?.version ?: MutableStateFlow(0L)
+            val imageVersions = imageText?.version ?: MutableStateFlow(0L)
+            val inkVersions = inkText?.version ?: MutableStateFlow(0L)
+            val versions = combine(
+                imageVersions,
+                inkVersions,
+                repository.observeInkTextStamps(),
+            ) { _, _, _ -> Unit }
             versions.collect {
                 // Read on the main thread, where the block map is written, and matched off it.
                 val live = liveContentUnits()
@@ -1322,6 +1324,7 @@ class NotesViewModel(
                             livePageId = _uiState.value.selectedPageId,
                             liveUnits = live,
                             liveImages = livePictures,
+                            liveInkLayout = inkPageLayout(_uiState.value.tables),
                         )
                     }
                 }
@@ -1330,6 +1333,7 @@ class NotesViewModel(
                 // After the results, never before them: reading pictures is slow and a search must
                 // not wait on it. The index has just decoded every page, so this list is free.
                 imageText?.request(outcome.pictures)
+                inkText?.request(outcome.inkPages)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ContentSearchState())
@@ -1356,6 +1360,23 @@ class NotesViewModel(
     /** Throws away every reading; the next query reads them again. Pictures are untouched. */
     fun rebuildImageText() {
         viewModelScope.launch { imageText?.clear() }
+    }
+
+    val inkTextProgress: StateFlow<InkTextProgress> =
+        inkText?.progress ?: MutableStateFlow(InkTextProgress(enabled = false))
+
+    val pagesWithHandwritingText: StateFlow<Int> = combine(
+        inkText?.version ?: MutableStateFlow(0L),
+        repository.observeInkTextStamps(),
+    ) { _, _ -> inkText?.readCount() ?: 0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    fun setInkTextEnabled(enabled: Boolean) {
+        viewModelScope.launch { inkText?.setEnabled(enabled) }
+    }
+
+    fun rebuildInkText() {
+        viewModelScope.launch { inkText?.clear() }
     }
 
     /**
@@ -1445,6 +1466,8 @@ class NotesViewModel(
             tableId = unit.tableId,
             start = hit.editorStart,
             end = hit.editorEnd,
+            inkStrokeIds = unit.inkStrokeIds,
+            inkBounds = unit.inkBounds,
         )
         val state = _uiState.value
         when {
@@ -1783,116 +1806,13 @@ class NotesViewModel(
     private suspend fun loadInk(
         pageId: String,
         onPartial: (List<PageStroke>) -> Unit = {},
-    ): List<PageStroke> = withContext(inkDispatcher) {
-        val rows = repository.inkFor(pageId)
-        val operations = buildList {
-            repository.partialErasesFor(pageId).forEach { add(StoredInkOperation.Erase(it)) }
-            repository.inkMovesFor(pageId).forEach { add(StoredInkOperation.Move(it)) }
-        }.sortedWith(compareBy(StoredInkOperation::createdAt, StoredInkOperation::id))
+    ): List<PageStroke> {
+        val loaded = inkPageLoader.load(pageId, onPartial)
         lastInkOperationAt = maxOf(
             lastInkOperationAt,
-            operations.maxOfOrNull { it.createdAt } ?: 0L,
+            loaded.latestOperationAt,
         )
-        val streaming = operations.streamable
-        val shown = ArrayList<PageStroke>(rows.size)
-
-        val decoded = decodeConcurrently(rows) { chunk ->
-            if (streaming) {
-                // Applied to the chunk rather than to everything decoded so far: an erase decides
-                // stroke by stroke, so the answer is the same and the work is not repeated.
-                shown += replay(chunk, operations)
-                onPartial(ArrayList(shown))
-            }
-        }
-        if (streaming) shown else replay(decoded, operations)
-    }
-
-    /**
-     * Whether a partly decoded page can be shown with these operations already applied.
-     *
-     * An erase decides one stroke at a time against a fixed target list, so applying it to a prefix
-     * gives that prefix exactly the geometry it will have in the finished page. A move does not: it
-     * measures the rectangle around **everything** it is about to move and clamps the whole set by
-     * one shared delta so the drawing stays together (`PageBounds`, and `replayMove`). A prefix would
-     * be measured against a smaller rectangle, get a different delta, and slide into place when the
-     * rest of the page arrived — so a page carrying one waits and is shown once.
-     */
-    private val List<StoredInkOperation>.streamable: Boolean
-        get() = none { it is StoredInkOperation.Move }
-
-    /** Folds the page's stored operations over [strokes], in the order they were made. */
-    private fun replay(
-        strokes: List<PageStroke>,
-        operations: List<StoredInkOperation>,
-    ): List<PageStroke> = operations.fold(strokes) { current, operation ->
-        when (operation) {
-            is StoredInkOperation.Erase -> {
-                val stored = operation.stored
-                val mask = InkCodec.decodeErase(stored.erase) ?: return@fold current
-                val targets = stored.targets.map { it.strokeId }
-                when (stored.erase.mode) {
-                    EraserMode.Normal -> current.subtract(mask, targets)
-                    EraserMode.Object -> current.eraseObjects(mask, targets)
-                }
-            }
-            is StoredInkOperation.Move -> {
-                val stored = operation.stored
-                val path = InkCodec.decodeMove(stored.move) ?: return@fold current
-                val targets = stored.targets.map { it.strokeId }
-                current.replayMove(
-                    path = path,
-                    targetIds = targets,
-                    dx = stored.move.dxDp,
-                    dy = stored.move.dyDp,
-                ).replayResize(
-                    path = path,
-                    targetIds = targets,
-                    anchor = InkPoint(stored.move.anchorX, stored.move.anchorY),
-                    scaleX = stored.move.scaleX,
-                    scaleY = stored.move.scaleY,
-                )
-            }
-        }
-    }
-
-    /**
-     * Rebuilds every stroke row, using the whole processor rather than one core of it.
-     *
-     * [onChunk] runs on this dispatcher as each chunk lands, in row order. The chunk size trades how
-     * soon the first ink appears against how many times the canvas is asked to redraw: smaller
-     * chunks show something sooner and recompose more often.
-     */
-    private suspend fun decodeConcurrently(
-        rows: List<InkStrokeEntity>,
-        onChunk: (List<PageStroke>) -> Unit,
-    ): List<PageStroke> = coroutineScope {
-        if (rows.isEmpty()) return@coroutineScope emptyList()
-        val pending = rows.chunked(INK_DECODE_CHUNK).map { chunk ->
-            async {
-                ensureActive()
-                // A stroke that cannot be decoded costs only that stroke, not the page it is on.
-                chunk.mapNotNull { row ->
-                    InkCodec.decode(row)?.let {
-                        PageStroke(
-                            id = row.id,
-                            stroke = it,
-                            brushFamily = row.brushFamily,
-                            brushVersion = row.brushVersion,
-                            stabilization = row.stabilization,
-                            colorFollowsTheme = row.colorFollowsTheme,
-                            groupId = row.groupId,
-                        )
-                    }
-                }
-            }
-        }
-        val all = ArrayList<PageStroke>(rows.size)
-        pending.forEach { chunk ->
-            val part = chunk.await()
-            all += part
-            onChunk(part)
-        }
-        all
+        return loaded.strokes
     }
 
     fun selectTool(tool: DrawTool) {
@@ -3346,6 +3266,7 @@ class NotesViewModel(
             outlines = emptyList(),
         )
         _strokes.value = emptyList()
+        _inkReadyPageId.value = null
         publishCanvasUndoState(null)
     }
 
@@ -3580,7 +3501,6 @@ class NotesViewModel(
          * a fraction of the total, few enough that a streaming page is not recomposed hundreds of
          * times on the way in.
          */
-        private const val INK_DECODE_CHUNK = 512
         const val MIN_OUTLINE_WIDTH = 120f
         const val MAX_OUTLINE_WIDTH = 2000f
         const val MAX_OUTLINE_HEIGHT = 4000f
@@ -3594,6 +3514,7 @@ class NotesViewModel(
             databaseBackups: DatabaseBackupManager? = null,
             notebookTransfers: NotebookTransferManager? = null,
             imageText: ImageTextIndexer? = null,
+            inkText: InkTextIndexer? = null,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -3606,6 +3527,7 @@ class NotesViewModel(
                     databaseBackups = databaseBackups,
                     notebookTransfers = notebookTransfers,
                     imageText = imageText,
+                    inkText = inkText,
                 ) as T
         }
     }

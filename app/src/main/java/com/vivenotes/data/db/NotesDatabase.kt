@@ -22,9 +22,11 @@ import androidx.sqlite.execSQL
         InkMoveTargetEntity::class,
         AttachmentEntity::class,
         AttachmentTextEntity::class,
+        InkTextEntity::class,
+        InkTextGenerationEntity::class,
         LocalMetadataEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -39,6 +41,7 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun inkMoveDao(): InkMoveDao
     abstract fun attachmentDao(): AttachmentDao
     abstract fun imageTextDao(): ImageTextDao
+    abstract fun inkTextDao(): InkTextDao
     abstract fun localMetadataDao(): LocalMetadataDao
     abstract fun deletionRecoveryDao(): DeletionRecoveryDao
 
@@ -335,6 +338,37 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds the regenerable, per-page handwriting recognition cache. */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS ink_text (
+                        pageId TEXT NOT NULL PRIMARY KEY,
+                        regionsJson TEXT NOT NULL,
+                        regionCount INTEGER NOT NULL,
+                        confidence REAL NOT NULL,
+                        layoutHash TEXT NOT NULL,
+                        engine TEXT NOT NULL,
+                        status TEXT NOT NULL,
+                        durationMs INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        FOREIGN KEY(pageId) REFERENCES pages(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS ink_text_generation (
+                        pageId TEXT NOT NULL PRIMARY KEY,
+                        generation INTEGER NOT NULL,
+                        FOREIGN KEY(pageId) REFERENCES pages(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 .addMigrations(
@@ -352,6 +386,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_12_13,
                     MIGRATION_13_14,
                     MIGRATION_14_15,
+                    MIGRATION_15_16,
                 )
                 .build()
     }

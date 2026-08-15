@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.vivenotes.ai.AiModelInstallState
 import com.vivenotes.ai.AiModelsState
 import com.vivenotes.data.ImageTextProgress
+import com.vivenotes.data.InkTextProgress
 import com.vivenotes.ui.icons.MaterialSymbols
 import kotlin.math.roundToInt
 
@@ -39,6 +40,9 @@ internal object AiPanelTags {
     const val PICTURE_TEXT = "ai-picture-text"
     const val PICTURE_TEXT_SWITCH = "ai-picture-text-switch"
     const val PICTURE_TEXT_REBUILD = "ai-picture-text-rebuild"
+    const val INK_TEXT = "ai-ink-text"
+    const val INK_TEXT_SWITCH = "ai-ink-text-switch"
+    const val INK_TEXT_REBUILD = "ai-ink-text-rebuild"
 }
 
 @Composable
@@ -49,6 +53,10 @@ fun ColumnScope.AiModelsPanelContent(
     picturesRead: Int = 0,
     onSetPictureText: (Boolean) -> Unit = {},
     onRebuildPictureText: () -> Unit = {},
+    inkText: InkTextProgress = InkTextProgress(enabled = false),
+    inkPagesRead: Int = 0,
+    onSetInkText: (Boolean) -> Unit = {},
+    onRebuildInkText: () -> Unit = {},
 ) {
     Text(
         text = "Recognition runs on this device. Ink and results are not uploaded.",
@@ -87,6 +95,15 @@ fun ColumnScope.AiModelsPanelContent(
         )
     }
 
+    PanelSection("Handwriting in search") {
+        HandwritingTextCard(
+            progress = inkText,
+            pagesRead = inkPagesRead,
+            onSetEnabled = onSetInkText,
+            onRebuild = onRebuildInkText,
+        )
+    }
+
     Text(
         text = "Formula recognition loads only when requested and can require substantially more " +
             "working memory than its download size.",
@@ -94,6 +111,67 @@ fun ColumnScope.AiModelsPanelContent(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 12.dp),
     )
+}
+
+@Composable
+private fun HandwritingTextCard(
+    progress: InkTextProgress,
+    pagesRead: Int,
+    onSetEnabled: (Boolean) -> Unit,
+    onRebuild: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(8.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+            .padding(12.dp)
+            .testTag(AiPanelTags.INK_TEXT),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SWITCH_GAP),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Search handwriting",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "Reads drawn words in the background and keeps recognition on this device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = progress.enabled,
+                onCheckedChange = onSetEnabled,
+                modifier = Modifier.scale(SWITCH_SCALE).testTag(AiPanelTags.INK_TEXT_SWITCH),
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = progress.summaryLine(pagesRead),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (progress.failed > 0) MaterialTheme.colorScheme.error
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (progress.running) {
+            Spacer(Modifier.height(6.dp))
+            LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+        Spacer(Modifier.height(8.dp))
+        TextButton(
+            onClick = onRebuild,
+            enabled = progress.enabled && !progress.running,
+            modifier = Modifier.testTag(AiPanelTags.INK_TEXT_REBUILD),
+        ) {
+            Text("Read every handwritten page again")
+        }
+    }
 }
 
 /**
@@ -195,6 +273,14 @@ private fun ImageTextProgress.summaryLine(picturesRead: Int): String = when {
     failed > 0 -> "$picturesRead read · $failed could not be read"
     picturesRead == 1 -> "1 picture read"
     else -> "$picturesRead pictures read"
+}
+
+private fun InkTextProgress.summaryLine(pagesRead: Int): String = when {
+    !enabled -> "Off. Handwriting is not read and nothing is stored."
+    running -> "Reading… ${pending.coerceAtLeast(0)} pages to go"
+    failed > 0 -> "$pagesRead pages read · $failed could not be read"
+    pagesRead == 1 -> "1 page read"
+    else -> "$pagesRead pages read"
 }
 
 @Composable

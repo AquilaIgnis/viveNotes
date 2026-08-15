@@ -229,6 +229,10 @@ class NotebookTransferManager(
                 // guessed. It also keeps `EXPECTED_COLUMNS` and the bundle format unchanged, so
                 // every `.vive` written before schema 15 still imports.
                 source.execSQL("DROP TABLE IF EXISTS attachment_text")
+                // Handwriting readings are likewise derived from replayed ink and local model
+                // behavior. The destination rebuilds them from the canonical stroke rows.
+                source.execSQL("DROP TABLE IF EXISTS ink_text")
+                source.execSQL("DROP TABLE IF EXISTS ink_text_generation")
                 source.setTransactionSuccessful()
             } finally {
                 source.endTransaction()
@@ -676,6 +680,8 @@ class NotebookTransferManager(
                 // below then reconstructs exactly the archive state; local-only operations stay as
                 // tombstoned history rather than leaking onto the restored canvas.
                 data.pages.forEach { page ->
+                    db.inkTextDao().deleteForPage(page.id)
+                    db.inkTextDao().bumpGeneration(page.id)
                     db.inkStrokeDao().softDeletePage(page.id, importedAt)
                     db.inkEraseDao().softDeletePage(page.id, importedAt)
                     db.inkMoveDao().softDeletePage(page.id, importedAt)

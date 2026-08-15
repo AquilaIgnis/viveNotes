@@ -87,6 +87,7 @@ import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.DecayAnimationSpec
 import androidx.compose.animation.core.animateDecay
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
@@ -150,6 +151,7 @@ private val CANVAS_MIN_WIDTH = 720.dp
  * left rule off screen, and a result that lands there reads as having overshot.
  */
 private val REVEAL_MARGIN = 48.dp
+private const val INK_SEARCH_HIGHLIGHT_MS = 1_800L
 private val GRIP_HEIGHT = 18.dp
 private val RESIZE_HANDLE_WIDTH = 18.dp
 
@@ -269,6 +271,8 @@ fun EditorPane(
      * transparent to touch, which is what the tap and zoom tests depend on.
      */
     strokes: List<PageStroke> = emptyList(),
+    /** True only after the final persisted erase/move replay for [pageId] has landed. */
+    inkReady: Boolean = true,
     brush: Brush? = null,
     /** The armed shape's settings, or null when Insert Shape is not the tool in hand. */
     shaping: ShapeSettings? = null,
@@ -467,6 +471,8 @@ fun EditorPane(
      * with the page, since ids from the last page mean nothing on this one.
      */
     var selection by remember(pageId) { mutableStateOf<CanvasSelection?>(null) }
+    /** Search feedback is emphasis, not an editable object selection. It therefore has no tooltip. */
+    var inkSearchHighlight by remember(pageId) { mutableStateOf<InkBounds?>(null) }
     val lassoGesture = remember { LassoGesture() }
 
     /**
@@ -511,6 +517,12 @@ fun EditorPane(
     }
     LaunchedEffect(lassoing) {
         if (!lassoing) lassoGesture.clear()
+    }
+    LaunchedEffect(inkSearchHighlight) {
+        if (inkSearchHighlight != null) {
+            delay(INK_SEARCH_HIGHLIGHT_MS)
+            inkSearchHighlight = null
+        }
     }
 
     LaunchedEffect(pageRevision, hasClipboard) {
@@ -660,9 +672,11 @@ fun EditorPane(
      * screen is known only to the editor that laid it out, and a container is small enough that its
      * top-left corner puts the caret on screen — which the focus below then makes visible for real.
      */
-    LaunchedEffect(reveal, pageId, outlines, tables, images, zoom) {
+    LaunchedEffect(reveal, pageId, outlines, tables, images, strokes, inkReady, zoom) {
         val target = reveal ?: return@LaunchedEffect
         if (target.pageId != pageId) return@LaunchedEffect
+        if (target.kind == ContentKind.Ink && !inkReady) return@LaunchedEffect
+        inkSearchHighlight = null
         val corner = when (target.kind) {
             // The title is the page's own header, which is at the origin whatever else has moved.
             ContentKind.Title -> InkPoint(0f, 0f)
@@ -673,6 +687,7 @@ fun EditorPane(
                 ?.let { InkPoint(it.x, it.y) }
             ContentKind.Image -> images.firstOrNull { it.id == target.boxId }
                 ?.let { InkPoint(it.x, it.y) }
+            ContentKind.Ink -> target.inkBounds?.let { InkPoint(it.left, it.top) }
         } ?: run {
             // The page is open — `pageId` matching means these outlines are its own, since a page
             // publishes its id and its boxes in one write — and the box is not on it. The index was
@@ -704,6 +719,13 @@ fun EditorPane(
             // putting the caret on a word: it says *this* is the thing you were sent to.
             ContentKind.Image -> images.firstOrNull { it.id == target.boxId }
                 ?.let { selection = CanvasSelection.ofImage(it) }
+            ContentKind.Ink -> {
+                // A search result is navigation, not an editing gesture. Reusing CanvasSelection
+                // here exposed delete/recolour/formula actions merely because someone opened a hit.
+                selection = null
+                lassoGesture.clear()
+                inkSearchHighlight = target.inkBounds
+            }
         }
         onRevealHandled()
     }
@@ -1249,6 +1271,7 @@ fun EditorPane(
                 tables = tableBounds,
                 equations = equations,
                 selection = selection,
+                searchHighlight = inkSearchHighlight,
                 onSelect = { selection = it },
                 lassoGesture = lassoGesture,
                 brush = brush,

@@ -550,6 +550,53 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migration15To16AddsPageHandwritingCacheAndRaceGeneration() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 15).apply {
+            execSQL(
+                "INSERT INTO notebooks VALUES " +
+                    "('notebook', 'Notebook', 0, 0, 1, 1, 1, NULL)",
+            )
+            execSQL(
+                "INSERT INTO sections VALUES " +
+                    "('section', 'notebook', 'Section', 0, 0, 1, 1, NULL)",
+            )
+            execSQL(
+                "INSERT INTO pages VALUES " +
+                    "('page', 'section', 'Page', 0, '', 1, 1, NULL)",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            16,
+            true,
+            NotesDatabase.MIGRATION_15_16,
+        ).use { migrated ->
+            migrated.execSQL("PRAGMA foreign_keys = ON")
+            migrated.execSQL(
+                "INSERT INTO ink_text VALUES " +
+                    "('page', '[]', 0, 0, 'layout', 'ppocrv5-en-ink/1', 'Empty', 5, 10)",
+            )
+            migrated.execSQL("INSERT INTO ink_text_generation VALUES ('page', 3)")
+            migrated.query("SELECT generation FROM ink_text_generation WHERE pageId = 'page'").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(3L, it.getLong(0))
+            }
+
+            migrated.execSQL("DELETE FROM pages WHERE id = 'page'")
+            migrated.query("SELECT COUNT(*) FROM ink_text").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM ink_text_generation").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+        }
+    }
+
     companion object {
         private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
     }

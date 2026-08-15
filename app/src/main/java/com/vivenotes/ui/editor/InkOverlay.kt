@@ -132,6 +132,8 @@ internal fun InkOverlay(
      * it, and `ShapeLayer` has to draw the same selection this does. See [CanvasSelection].
      */
     selection: CanvasSelection? = null,
+    /** Brief, non-interactive emphasis for a handwriting search result. */
+    searchHighlight: InkBounds? = null,
     onSelect: (CanvasSelection?) -> Unit = {},
     /** The lasso's live gesture, also owned by the page so both layers read one transform. */
     lassoGesture: LassoGesture,
@@ -217,6 +219,7 @@ internal fun InkOverlay(
     val currentOnObjectErase by rememberUpdatedState(onObjectErase)
     val currentShapes by rememberUpdatedState(shapes)
     val currentSelection by rememberUpdatedState(selection)
+    val currentSearchHighlight by rememberUpdatedState(searchHighlight)
     val currentOnSelect by rememberUpdatedState(onSelect)
     val currentTables by rememberUpdatedState(tables)
     val currentEquations by rememberUpdatedState(equations)
@@ -305,6 +308,8 @@ internal fun InkOverlay(
     // took the ACTION_DOWN, which is right (a stroke must not break because the pen left the page),
     // so the fix belongs in what is drawn, not in what is delivered.
     val lassoColor = MaterialTheme.colorScheme.primary.toArgb()
+    val searchHighlightFill = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f).toArgb()
+    val searchHighlightBorder = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f).toArgb()
     // The disc inside each corner handle, and the app's surface rather than white for the reason the
     // radius beside it is a shared dp: `ShapeLayer`, `EquationLayer` and `ImageLayer` all fill theirs
     // with `colorScheme.surface`, so a hardcoded white here was one selection affordance in two
@@ -340,6 +345,15 @@ internal fun InkOverlay(
             val visible = matrix.pageWindow(size.width, size.height)
             drawIntoCanvas { canvas ->
                 val native = canvas.nativeCanvas
+                currentSearchHighlight?.let { bounds ->
+                    drawSearchHighlight(
+                        native,
+                        matrix,
+                        bounds,
+                        fillColor = searchHighlightFill,
+                        borderColor = searchHighlightBorder,
+                    )
+                }
                 // The matrix goes on the canvas, and is *also* passed to the renderer. Passing it
                 // alone leaves the geometry untransformed — it draws at stroke coordinates, so ink
                 // landed at page-units-as-pixels, ignoring zoom and scroll. The argument is what
@@ -503,6 +517,49 @@ internal fun InkOverlay(
         onDispose { wetView?.cancelUnfinishedStrokes() }
     }
 }
+
+/** Material-coloured search emphasis, intentionally without handles or edit affordances. */
+private fun drawSearchHighlight(
+    canvas: android.graphics.Canvas,
+    pageToView: Matrix,
+    bounds: InkBounds,
+    fillColor: Int,
+    borderColor: Int,
+) {
+    val padding = SEARCH_HIGHLIGHT_PADDING_DP
+    val rect = android.graphics.RectF(
+        bounds.left - padding,
+        bounds.top - padding,
+        bounds.right + padding,
+        bounds.bottom + padding,
+    )
+    val checkpoint = canvas.save()
+    canvas.concat(pageToView)
+    canvas.drawRoundRect(
+        rect,
+        SEARCH_HIGHLIGHT_RADIUS_DP,
+        SEARCH_HIGHLIGHT_RADIUS_DP,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = fillColor
+            style = Paint.Style.FILL
+        },
+    )
+    canvas.drawRoundRect(
+        rect,
+        SEARCH_HIGHLIGHT_RADIUS_DP,
+        SEARCH_HIGHLIGHT_RADIUS_DP,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = borderColor
+            style = Paint.Style.STROKE
+            strokeWidth = SEARCH_HIGHLIGHT_STROKE_DP
+        },
+    )
+    canvas.restoreToCount(checkpoint)
+}
+
+private const val SEARCH_HIGHLIGHT_PADDING_DP = 5f
+private const val SEARCH_HIGHLIGHT_RADIUS_DP = 7f
+private const val SEARCH_HIGHLIGHT_STROKE_DP = 1.5f
 
 /** Recognises stationary, single-finger double taps without taking drag/pan ownership. */
 internal class FingerDoubleTapGesture(

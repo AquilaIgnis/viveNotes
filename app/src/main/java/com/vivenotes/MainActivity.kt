@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
                 app.databaseBackups,
                 app.notebookTransfers,
                 app.imageText,
+                app.inkText,
             ),
         )[NotesViewModel::class.java]
 

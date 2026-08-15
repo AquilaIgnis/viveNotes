@@ -486,6 +486,52 @@ interface ImageTextDao {
     suspend fun deleteOrphans(): Int
 }
 
+/** Narrow change projection: observing it never drags the regions JSON through every search. */
+data class InkTextStamp(
+    val pageId: String,
+    val layoutHash: String,
+    val engine: String,
+    val status: InkTextStatus,
+    val updatedAt: Long,
+)
+
+/** The per-page derived handwriting cache. */
+@Dao
+interface InkTextDao {
+
+    @Query("SELECT * FROM ink_text WHERE pageId IN (:pageIds)")
+    suspend fun byPageIds(pageIds: List<String>): List<InkTextEntity>
+
+    @Upsert
+    suspend fun upsert(row: InkTextEntity)
+
+    @Query("SELECT COALESCE((SELECT generation FROM ink_text_generation WHERE pageId = :pageId), 0)")
+    suspend fun generation(pageId: String): Long
+
+    @Query(
+        "INSERT INTO ink_text_generation(pageId, generation) VALUES(:pageId, 1) " +
+            "ON CONFLICT(pageId) DO UPDATE SET generation = generation + 1",
+    )
+    suspend fun bumpGeneration(pageId: String)
+
+    @Query("SELECT COUNT(*) FROM ink_text WHERE engine = :engine")
+    suspend fun countForEngine(engine: String): Int
+
+    @Query("DELETE FROM ink_text WHERE pageId = :pageId")
+    suspend fun deleteForPage(pageId: String)
+
+    @Query("DELETE FROM ink_text WHERE pageId IN (:pageIds)")
+    suspend fun deleteForPages(pageIds: List<String>)
+
+    @Query("DELETE FROM ink_text")
+    suspend fun clear()
+
+    @Query(
+        "SELECT pageId, layoutHash, engine, status, updatedAt FROM ink_text ORDER BY pageId",
+    )
+    fun observeStamps(): Flow<List<InkTextStamp>>
+}
+
 @Dao
 interface InkEraseDao {
 

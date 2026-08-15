@@ -524,3 +524,59 @@ data class AttachmentTextEntity(
     val durationMs: Long,
     val updatedAt: Long,
 )
+
+/** What happened the last time one page's replayed ink was read. */
+enum class InkTextStatus {
+    Read,
+    Empty,
+    Failed,
+}
+
+/**
+ * Derived handwriting text for one page — `memory/handwritingSearchPlan.md`.
+ *
+ * Unlike picture OCR this is keyed by page: the subject is the page's replayed ink together with
+ * the geometry of any ink-only table on it. Repository ink mutations delete this row in the same
+ * transaction, and [layoutHash] catches the other half changing through a document edit.
+ */
+@Entity(
+    tableName = "ink_text",
+    foreignKeys = [
+        ForeignKey(
+            entity = PageEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["pageId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class InkTextEntity(
+    @PrimaryKey val pageId: String,
+    /** JSON-encoded recognized regions, including source ids, bounds and an optional alternate. */
+    val regionsJson: String,
+    val regionCount: Int,
+    val confidence: Float,
+    /** Stable signature of ink-only table cell geometry in the current page document. */
+    val layoutHash: String,
+    val engine: String,
+    val status: InkTextStatus,
+    val durationMs: Long,
+    val updatedAt: Long,
+)
+
+/** Monotonic guard preventing an OCR pass from saving after the ink it read was edited. */
+@Entity(
+    tableName = "ink_text_generation",
+    foreignKeys = [
+        ForeignKey(
+            entity = PageEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["pageId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class InkTextGenerationEntity(
+    @PrimaryKey val pageId: String,
+    val generation: Long,
+)

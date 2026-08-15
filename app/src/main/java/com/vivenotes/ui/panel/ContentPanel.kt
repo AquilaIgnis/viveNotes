@@ -255,6 +255,14 @@ private fun HitRow(hit: ContentHit, onOpenHit: (ContentHit) -> Unit) {
                     .padding(top = 2.dp)
                     .size(14.dp),
             )
+            ContentKind.Ink -> Icon(
+                imageVector = MaterialSymbols.Stylus,
+                contentDescription = "Read from handwriting",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .size(14.dp),
+            )
             ContentKind.Title, ContentKind.Text -> Unit
         }
         Text(
@@ -292,7 +300,7 @@ private fun highlighted(text: String, spans: List<MatchSpan>): AnnotatedString {
 }
 
 private fun ContentSearchState.statusLine(): String = when {
-    query.isBlank() -> "Text boxes, tables, pictures and page titles across this notebook."
+    query.isBlank() -> "Text, handwriting, pictures and page titles across this notebook."
     // While a query is in flight the list below is still the previous one's, so the line says what
     // is happening rather than counting an answer to a question that has changed.
     running -> "Searching…"
