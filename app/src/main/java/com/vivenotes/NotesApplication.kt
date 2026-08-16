@@ -16,6 +16,7 @@ import com.vivenotes.data.StarterInkPageFixture
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.sync.SyncAccounts
+import com.vivenotes.data.sync.HierarchySyncWorker
 import com.vivenotes.richtext.FontRegistry
 import com.vivenotes.math.SympyMathEngine
 
@@ -45,7 +46,7 @@ class NotesApplication : Application() {
     val aiModels: AiModelStore by lazy { AiModelStore(this) }
 
     /** Registering this installation with a self-hosted server — `memory/accountPlan.md`. */
-    val syncAccounts: SyncAccounts by lazy { SyncAccounts(this) }
+    val syncAccounts: SyncAccounts by lazy { SyncAccounts(this, database = database) }
     val recognitionEngine: OnnxInkRecognitionEngine by lazy { OnnxInkRecognitionEngine(aiModels) }
 
     /**
@@ -66,5 +67,6 @@ class NotesApplication : Application() {
         super.onCreate()
         FontRegistry.init(this)
         DeletionPurgeWorker.schedule(this)
+        HierarchySyncWorker.schedule(this)
     }
 }

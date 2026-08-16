@@ -16,13 +16,24 @@
     <string name="account_connecting">Connecting to the server</string>
     <string name="account_connected_title">Connected</string>
     <string name="account_connected_device">Registered as %1$s</string>
+    <string name="account_sync_now">Sync now</string>
+    <string name="account_syncing">Syncing notebooks</string>
+    <string name="account_sync_up_to_date">Up to date</string>
+    <string name="account_sync_summary">Up to date · Pulled: %1$d · Pushed: %2$d</string>
+    <string name="account_sync_error_response">The server returned sync data this version cannot read.</string>
+    <string name="account_sync_error_local">The local sync queue could not be read. The notes themselves are still stored locally.</string>
+    <string name="account_sync_error_large">One local hierarchy change is larger than the server accepts.</string>
+    <string name="account_sync_error_malformed">The server rejected one local hierarchy change as malformed.</string>
+    <string name="account_sync_error_parent">A section or page could not be sent because its parent is missing.</string>
+    <string name="account_disconnect_failed">The device could not be revoked. Its token was kept so you can try again.</string>
+    <string name="account_disconnecting">Revoking this device</string>
     <string name="account_disconnect">Disconnect</string>
     <string name="account_disconnect_title">Disconnect from this server?</string>
     <!--
         Says what cannot be undone rather than "are you sure": the token is not recoverable, and the
         device row it belongs to outlives it on the server until somebody removes it.
     -->
-    <string name="account_disconnect_body">viveNotes will forget this device\'s token, which the server cannot issue again. Connecting later registers a new device, so remove this one from your server\'s dashboard.</string>
+    <string name="account_disconnect_body">The server will revoke this device, then viveNotes will forget its token. Notes already on this device stay here.</string>
     <string name="account_disconnect_cancel">Cancel</string>
     <!--
         One message per ConnectFailure. Each names what to change, because the person reading it is

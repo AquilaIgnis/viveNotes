@@ -82,6 +82,9 @@ import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.data.sync.SelfHostConnection
 import com.vivenotes.data.sync.SyncAccounts
+import com.vivenotes.data.sync.DisconnectResult
+import com.vivenotes.data.sync.SyncRunResult
+import com.vivenotes.data.sync.ConnectFailure
 import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.AiModelInstallState
 import com.vivenotes.ai.AiModelsState
@@ -193,6 +196,10 @@ fun NotesApp(
     // press into a device registered on the server that nothing here can authenticate as.
     val connectScope = rememberCoroutineScope()
     var selfHostConnection by remember { mutableStateOf<SelfHostConnection>(SelfHostConnection.Idle) }
+    var syncing by remember { mutableStateOf(false) }
+    var syncResult by remember { mutableStateOf<SyncRunResult?>(null) }
+    var disconnecting by remember { mutableStateOf(false) }
+    var disconnectFailure by remember { mutableStateOf<ConnectFailure?>(null) }
 
     // A registration already on disk is shown as the connected state, so leaving the screen and
     // coming back does not read as never having connected. This attempt wins while there is one:
@@ -267,18 +274,51 @@ fun NotesApp(
                 onBack = closeAccount,
                 connection = displayedConnection,
                 onConnect = { serverUrl, email, password ->
+                    syncResult = null
+                    disconnectFailure = null
                     selfHostConnection = SelfHostConnection.Connecting
                     connectScope.launch {
                         selfHostConnection = syncAccounts.connect(serverUrl, email, password)
                     }
                 },
+                syncing = syncing,
+                syncResult = syncResult,
+                onSync = {
+                    if (!syncing) {
+                        syncing = true
+                        syncResult = null
+                        connectScope.launch {
+                            val result = syncAccounts.synchronize()
+                            syncResult = result
+                            syncing = false
+                            if (result == SyncRunResult.Revoked) {
+                                selfHostConnection = SelfHostConnection.Failed(
+                                    ConnectFailure.Revoked,
+                                )
+                            }
+                        }
+                    }
+                },
+                disconnecting = disconnecting,
+                disconnectFailure = disconnectFailure,
                 onDisconnect = {
-                    connectScope.launch {
-                        syncAccounts.disconnect()
-                        // Back to Idle rather than to a "disconnected" result: with the stored
-                        // account gone there is nothing to report, and the empty form is the
-                        // screen saying so.
-                        selfHostConnection = SelfHostConnection.Idle
+                    if (!disconnecting) {
+                        disconnecting = true
+                        disconnectFailure = null
+                        connectScope.launch {
+                            when (val result = syncAccounts.disconnect()) {
+                                DisconnectResult.Disconnected -> {
+                                    // Back to Idle rather than to a "disconnected" result: with the
+                                    // stored account gone the empty form is the screen saying so.
+                                    selfHostConnection = SelfHostConnection.Idle
+                                    syncResult = null
+                                }
+                                is DisconnectResult.Failed -> {
+                                    disconnectFailure = result.reason
+                                }
+                            }
+                            disconnecting = false
+                        }
                     }
                 },
             )

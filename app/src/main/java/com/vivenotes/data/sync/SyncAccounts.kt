@@ -2,6 +2,8 @@ package com.vivenotes.data.sync
 
 import android.content.Context
 import android.os.Build
+import com.vivenotes.data.db.NotesDatabase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.io.IOException
@@ -25,6 +27,11 @@ sealed interface SelfHostConnection {
     data class Failed(val reason: ConnectFailure) : SelfHostConnection
 }
 
+sealed interface DisconnectResult {
+    data object Disconnected : DisconnectResult
+    data class Failed(val reason: ConnectFailure) : DisconnectResult
+}
+
 /**
  * Connecting this installation to a self-hosted viveCServer, start to finish.
  *
@@ -36,11 +43,14 @@ sealed interface SelfHostConnection {
 class SyncAccounts(
     context: Context,
     private val client: SyncServerClient = SyncServerClient(),
+    database: NotesDatabase? = null,
     private val deviceName: String = defaultDeviceName(),
     private val platform: String = defaultPlatform(),
 ) {
 
+    private val appContext = context.applicationContext
     private val store = SyncAccountStore(context)
+    private val hierarchy = database?.let { HierarchySync(it, client) }
 
     /** Null until connected. Survives launches; cleared by [disconnect]. */
     val account: Flow<SyncAccount?> = store.account
@@ -90,6 +100,16 @@ class SyncAccounts(
                     // success would leave the app claiming a connection it cannot authenticate.
                     return SelfHostConnection.Failed(ConnectFailure.NotStored)
                 }
+                // Activation is local and idempotent. If storage fails after the token is safely
+                // stored, the scheduled worker retries it; the registration itself still succeeded.
+                try {
+                    hierarchy?.activate(registration.accountId)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // The token is already durable. The scheduled worker retries local activation.
+                }
+                HierarchySyncWorker.requestNow(appContext)
                 SelfHostConnection.Connected(serverUrl, deviceName)
             }
 
@@ -122,6 +142,7 @@ class SyncAccounts(
 
             TokenCheck.Revoked -> {
                 store.clear()
+                hierarchy?.deactivate(account.accountId)
                 SelfHostConnection.Failed(ConnectFailure.Revoked)
             }
 
@@ -132,9 +153,36 @@ class SyncAccounts(
         }
     }
 
-    /** Forgets the local registration. See [SyncAccountStore.clear] for what it does not do. */
-    suspend fun disconnect() {
-        store.clear()
+    /**
+     * Revokes this installation on the server before forgetting its non-reissuable token.
+     *
+     * Network and 5xx failures leave the credential standing so the user can try again. A 401 means
+     * it was already revoked and is therefore the other successful local-disconnect path.
+     */
+    suspend fun disconnect(): DisconnectResult {
+        val account = store.account.first() ?: return DisconnectResult.Disconnected
+        return when (val result = client.revokeDevice(account.serverUrl, account.token, account.deviceId)) {
+            is ServerResult.Success,
+            ServerResult.Unauthorized,
+            -> {
+                store.clear()
+                hierarchy?.deactivate(account.accountId)
+                DisconnectResult.Disconnected
+            }
+            is ServerResult.Failed -> DisconnectResult.Failed(result.reason)
+        }
+    }
+
+    /** Runs the hierarchy protocol once, or returns null when no account is configured. */
+    suspend fun synchronize(): SyncRunResult? {
+        val account = store.account.first() ?: return null
+        val result = hierarchy?.run(account)
+            ?: return SyncRunResult.Failed(PermanentSyncFailure.LocalData)
+        if (result == SyncRunResult.Revoked) {
+            store.clear()
+            hierarchy.deactivate(account.accountId)
+        }
+        return result
     }
 }
 

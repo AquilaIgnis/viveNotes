@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.room.testing.MigrationTestHelper
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -593,6 +594,54 @@ class MigrationTest {
             migrated.query("SELECT COUNT(*) FROM ink_text_generation").use {
                 assertEquals(true, it.moveToFirst())
                 assertEquals(0L, it.getLong(0))
+            }
+        }
+    }
+
+    @Test
+    fun migration16To17AddsDormantSyncTriggersAndGenerationSafeOutbox() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 16).apply {
+            execSQL(
+                "INSERT INTO notebooks VALUES " +
+                    "('notebook', 'Before', 1, 0, 1, 10, 10, NULL)",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            17,
+            true,
+            NotesDatabase.MIGRATION_16_17,
+        ).use { migrated ->
+            // Migration does not infer whether a token held in another DataStore is still valid.
+            migrated.query("SELECT COUNT(*) FROM sync_outbox").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+
+            migrated.execSQL(
+                "INSERT INTO sync_state(singleton, accountId, cursor, applyingRemote) " +
+                    "VALUES(0, 'account', 0, 0)",
+            )
+            migrated.execSQL("UPDATE notebooks SET name = 'One' WHERE id = 'notebook'")
+            migrated.execSQL("UPDATE notebooks SET name = 'Two' WHERE id = 'notebook'")
+            migrated.query(
+                "SELECT kind, entityId, generation, changedAt FROM sync_outbox",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("notebook", it.getString(0))
+                assertEquals("notebook", it.getString(1))
+                assertEquals(2L, it.getLong(2))
+                assertTrue(it.getLong(3) > 0L)
+            }
+
+            // Remote application uses the same transaction-local switch and must not echo.
+            migrated.execSQL("UPDATE sync_state SET applyingRemote = 1 WHERE singleton = 0")
+            migrated.execSQL("UPDATE notebooks SET name = 'Remote' WHERE id = 'notebook'")
+            migrated.query("SELECT generation FROM sync_outbox").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(2L, it.getLong(0))
             }
         }
     }

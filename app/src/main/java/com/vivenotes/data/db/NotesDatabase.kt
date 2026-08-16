@@ -25,8 +25,11 @@ import androidx.sqlite.execSQL
         InkTextEntity::class,
         InkTextGenerationEntity::class,
         LocalMetadataEntity::class,
+        SyncStateEntity::class,
+        SyncEntityStateEntity::class,
+        SyncOutboxEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -43,6 +46,7 @@ abstract class NotesDatabase : RoomDatabase() {
     abstract fun imageTextDao(): ImageTextDao
     abstract fun inkTextDao(): InkTextDao
     abstract fun localMetadataDao(): LocalMetadataDao
+    abstract fun syncDao(): SyncDao
     abstract fun deletionRecoveryDao(): DeletionRecoveryDao
     abstract fun deletionPurgeDao(): DeletionPurgeDao
 
@@ -370,6 +374,59 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the hierarchy sync cursor, per-row server versions, and durable local outbox.
+         *
+         * The triggers are dormant until `sync_state` has its singleton row. Connecting an existing
+         * installation seeds the complete hierarchy explicitly, so migration itself does not guess
+         * whether an account in a separate DataStore is still usable.
+         */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sync_state (
+                        singleton INTEGER NOT NULL PRIMARY KEY,
+                        accountId TEXT NOT NULL,
+                        cursor INTEGER NOT NULL,
+                        applyingRemote INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sync_entity_states (
+                        kind TEXT NOT NULL,
+                        entityId TEXT NOT NULL,
+                        serverVersion INTEGER NOT NULL,
+                        serverJson TEXT NOT NULL,
+                        PRIMARY KEY(kind, entityId)
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sync_outbox (
+                        kind TEXT NOT NULL,
+                        entityId TEXT NOT NULL,
+                        generation INTEGER NOT NULL,
+                        changedAt INTEGER NOT NULL,
+                        PRIMARY KEY(kind, entityId)
+                    )
+                    """.trimIndent(),
+                )
+
+                installSyncTriggers(connection)
+            }
+        }
+
+        /** Fresh databases do not run migrations, so they install the same triggers after create. */
+        val SYNC_TRIGGER_CALLBACK = object : RoomDatabase.Callback() {
+            override fun onCreate(connection: SQLiteConnection) {
+                installSyncTriggers(connection)
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 .addMigrations(
@@ -388,7 +445,41 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_13_14,
                     MIGRATION_14_15,
                     MIGRATION_15_16,
+                    MIGRATION_16_17,
                 )
+                .addCallback(SYNC_TRIGGER_CALLBACK)
                 .build()
+
+        private fun installSyncTriggers(connection: SQLiteConnection) {
+            listOf(
+                "notebook" to "notebooks",
+                "section" to "sections",
+                "page" to "pages",
+            ).forEach { (kind, table) ->
+                listOf("insert" to "INSERT", "update" to "UPDATE").forEach { (suffix, event) ->
+                    connection.execSQL(
+                        """
+                        CREATE TRIGGER IF NOT EXISTS sync_${table}_$suffix
+                        AFTER $event ON $table
+                        WHEN EXISTS (
+                            SELECT 1 FROM sync_state
+                            WHERE singleton = 0 AND applyingRemote = 0
+                        )
+                        BEGIN
+                            INSERT INTO sync_outbox(kind, entityId, generation, changedAt)
+                            VALUES(
+                                '$kind',
+                                NEW.id,
+                                1,
+                                CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+                            )
+                            ON CONFLICT(kind, entityId) DO UPDATE
+                            SET generation = generation + 1, changedAt = excluded.changedAt;
+                        END
+                        """.trimIndent(),
+                    )
+                }
+            }
+        }
     }
 }

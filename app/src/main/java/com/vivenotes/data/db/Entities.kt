@@ -17,6 +17,58 @@ data class LocalMetadataEntity(
 )
 
 /**
+ * The one server account whose hierarchy this database currently mirrors.
+ *
+ * There is deliberately one row rather than one row per account: the app has one local notebook
+ * corpus, so switching accounts resets the sync metadata rather than making the same rows silently
+ * belong to two servers. [applyingRemote] is transaction-local suppression for the hierarchy
+ * triggers; it is set and cleared in the same transaction as an incoming delta.
+ */
+@Entity(tableName = "sync_state")
+data class SyncStateEntity(
+    @PrimaryKey val singleton: Int = 0,
+    val accountId: String,
+    val cursor: Long = 0,
+    val applyingRemote: Boolean = false,
+)
+
+/** Last authoritative server state known for one hierarchy row. */
+@Entity(
+    tableName = "sync_entity_states",
+    primaryKeys = ["kind", "entityId"],
+)
+data class SyncEntityStateEntity(
+    val kind: String,
+    val entityId: String,
+    val serverVersion: Long,
+    /**
+     * The complete top-level object last received from the server.
+     *
+     * OpenAPI 0.2.0 requires clients to retain fields they do not recognise. A later local push
+     * overlays this build's known fields on this JSON, so a newer client's extension is not erased.
+     */
+    val serverJson: String,
+)
+
+/**
+ * One locally dirty hierarchy row.
+ *
+ * [generation] changes on every Room insert/update. An acknowledgement deletes only the generation
+ * it sent, so an edit committed while the request was in flight stays queued.
+ */
+@Entity(
+    tableName = "sync_outbox",
+    primaryKeys = ["kind", "entityId"],
+)
+data class SyncOutboxEntity(
+    val kind: String,
+    val entityId: String,
+    val generation: Long,
+    /** Wall-clock time of the local mutation, including order/expansion writes that do not alter UI `updatedAt`. */
+    val changedAt: Long,
+)
+
+/**
  * These entities are plain data and double as the domain model — there is no separate mapping
  * layer while the app is single-module.
  *

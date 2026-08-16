@@ -1,0 +1,588 @@
+package com.vivenotes.data.sync
+
+import androidx.room.withTransaction
+import com.vivenotes.data.db.LocalMetadataEntity
+import com.vivenotes.data.db.NotebookEntity
+import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.data.db.PageEntity
+import com.vivenotes.data.db.SectionEntity
+import com.vivenotes.data.db.SyncEntityStateEntity
+import com.vivenotes.data.db.SyncOutboxEntity
+import com.vivenotes.data.db.SyncStateEntity
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import java.util.UUID
+
+/** What one complete hierarchy synchronization accomplished. */
+data class SyncSummary(
+    val pulled: Int,
+    val pushed: Int,
+    val conflictsResolved: Int,
+)
+
+enum class PermanentSyncFailure {
+    InvalidServerResponse,
+    LocalData,
+    ChangeTooLarge,
+    MalformedChange,
+    MissingParent,
+}
+
+sealed interface SyncRunResult {
+    data class Succeeded(val summary: SyncSummary) : SyncRunResult
+    data class Retryable(val reason: ConnectFailure) : SyncRunResult
+    data class Failed(val reason: PermanentSyncFailure) : SyncRunResult
+    data object Revoked : SyncRunResult
+}
+
+/**
+ * Offline-first synchronization for the entity kinds OpenAPI 0.2.0 actually exposes.
+ *
+ * Room is always the UI's source of truth. This class snapshots its durable outbox, performs the
+ * network request without a database transaction held open, then conditionally acknowledges the
+ * exact generations it sent. [run] is serialized because two workers using the same cursor and
+ * pending idempotency batch would otherwise be indistinguishable from a lost response.
+ */
+class HierarchySync(
+    private val db: NotesDatabase,
+    private val client: SyncTransport = SyncServerClient(),
+) {
+
+    private val sync = db.syncDao()
+    private val metadata = db.localMetadataDao()
+    private val notebooks = db.notebookDao()
+    private val sections = db.sectionDao()
+    private val pages = db.pageDao()
+    private val mutex = Mutex()
+
+    /** Makes [accountId] the owner of this database's one hierarchy corpus. */
+    suspend fun activate(accountId: String) = mutex.withLock {
+        activateLocked(accountId)
+    }
+
+    /** Clears account-specific versions and queued work after the credential is intentionally gone. */
+    suspend fun deactivate(accountId: String) = mutex.withLock {
+        db.withTransaction {
+            if (sync.state()?.accountId != accountId) return@withTransaction
+            // Turn the triggers off first; clearing their own tables never touches the hierarchy,
+            // but this ordering keeps future cleanup additions safe by construction.
+            sync.clearState()
+            sync.clearOutbox()
+            sync.clearEntityStates()
+            metadata.delete(PENDING_BATCH_KEY)
+        }
+    }
+
+    suspend fun run(account: SyncAccount): SyncRunResult = mutex.withLock {
+        try {
+            activateLocked(account.accountId)
+
+            var pulled = 0
+            var pushed = 0
+            var conflicts = 0
+
+            when (val firstPull = pullIfNeeded(account)) {
+                is PhaseResult.Done -> pulled += firstPull.count
+                is PhaseResult.ConflictDone -> error("pull cannot return conflict count")
+                is PhaseResult.Stop -> return@withLock firstPull.result
+            }
+
+            when (val push = pushOutbox(account)) {
+                is PhaseResult.Done -> pushed += push.count
+                is PhaseResult.ConflictDone -> {
+                    pushed += push.count
+                    conflicts += push.conflicts
+                }
+                is PhaseResult.Stop -> return@withLock push.result
+            }
+
+            // The push cursor is explicitly not a pull cursor. Pull this device's accepted writes
+            // and anything another device committed concurrently before reporting convergence.
+            when (val finalPull = pullIfNeeded(account)) {
+                is PhaseResult.Done -> pulled += finalPull.count
+                is PhaseResult.ConflictDone -> error("pull cannot return conflict count")
+                is PhaseResult.Stop -> return@withLock finalPull.result
+            }
+
+            SyncRunResult.Succeeded(SyncSummary(pulled, pushed, conflicts))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (badLocalState: Exception) {
+            SyncRunResult.Failed(PermanentSyncFailure.LocalData)
+        }
+    }
+
+    private suspend fun activateLocked(accountId: String) {
+        db.withTransaction {
+            val current = sync.state()
+            if (current?.accountId == accountId) {
+                // This should never survive a transaction rollback, but clearing it makes recovery
+                // deterministic if a database was copied while a transaction was being inspected.
+                if (current.applyingRemote) sync.setApplyingRemote(false)
+                return@withTransaction
+            }
+
+            sync.clearState()
+            sync.clearOutbox()
+            sync.clearEntityStates()
+            metadata.delete(PENDING_BATCH_KEY)
+            sync.putState(SyncStateEntity(accountId = accountId))
+            // Existing offline rows are the first outbox. Inserts performed before the state row
+            // existed could not have fired the triggers, so this is explicit rather than magical.
+            sync.enqueueAllNotebooks()
+            sync.enqueueAllSections()
+            sync.enqueueAllPages()
+        }
+    }
+
+    private suspend fun pullIfNeeded(account: SyncAccount): PhaseResult {
+        val localCursor = sync.state()?.cursor
+            ?: return PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.LocalData))
+        val serverCursor = when (val result = client.getCursor(account.serverUrl, account.token)) {
+            is ServerResult.Success -> result.value
+            ServerResult.Unauthorized -> return PhaseResult.Stop(SyncRunResult.Revoked)
+            is ServerResult.Failed -> return PhaseResult.Stop(result.asSyncResult())
+        }
+        if (serverCursor == localCursor) return PhaseResult.Done(0)
+
+        var cursor = localCursor
+        var pulled = 0
+        var hasMore: Boolean
+        do {
+            val page = when (
+                val result = client.pullChanges(account.serverUrl, account.token, cursor)
+            ) {
+                is ServerResult.Success -> result.value
+                ServerResult.Unauthorized -> return PhaseResult.Stop(SyncRunResult.Revoked)
+                is ServerResult.Failed -> return PhaseResult.Stop(result.asSyncResult())
+            }
+
+            val parsed = try {
+                page.changes.mapNotNull(::parseRemoteChange)
+            } catch (malformed: IllegalArgumentException) {
+                return PhaseResult.Stop(
+                    SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+                )
+            }
+
+            db.withTransaction {
+                sync.setApplyingRemote(true)
+                parsed.forEach { change -> applyPulledChange(change) }
+                sync.setCursor(page.cursor)
+                sync.setApplyingRemote(false)
+            }
+            pulled += parsed.size
+            cursor = page.cursor
+            hasMore = page.hasMore
+
+            if (hasMore && page.changes.isEmpty()) {
+                return PhaseResult.Stop(
+                    SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+                )
+            }
+        } while (hasMore)
+
+        return PhaseResult.Done(pulled)
+    }
+
+    private suspend fun applyPulledChange(remote: RemoteChange) {
+        val dirty = sync.outboxEntry(remote.kind.wire, remote.id)
+        sync.putEntityState(remote.asEntityState())
+
+        // A local mutation later than the remote write remains the source of truth for now. It is
+        // rebased onto the new server version and the outbox generation is intentionally untouched.
+        if (dirty != null && dirty.changedAt > remote.updatedAt) return
+
+        applyRemoteRow(remote)
+        if (dirty != null) sync.deleteOutbox(remote.kind.wire, remote.id)
+    }
+
+    private suspend fun pushOutbox(account: SyncAccount): PhaseResult {
+        var pushed = 0
+        var conflicts = 0
+        var batchCount = 0
+
+        while (batchCount++ < MAX_BATCHES_PER_RUN) {
+            val pending = loadOrCreatePendingBatch()
+                ?: return PhaseResult.ConflictDone(pushed, conflicts)
+
+            val response = when (
+                val result = client.pushChanges(
+                    serverBaseUrl = account.serverUrl,
+                    token = account.token,
+                    batchId = pending.batchId,
+                    changes = pending.changes.map(PendingChange::payload),
+                )
+            ) {
+                is ServerResult.Success -> result.value
+                ServerResult.Unauthorized -> return PhaseResult.Stop(SyncRunResult.Revoked)
+                is ServerResult.Failed -> {
+                    // A retryable transport result keeps the serialized batch and its batchId on
+                    // disk. WorkManager's next run sends byte-for-byte the same logical request.
+                    if (!result.retryable) metadata.delete(PENDING_BATCH_KEY)
+                    return PhaseResult.Stop(result.asSyncResult())
+                }
+            }
+
+            val sentByKey = pending.changes.associateBy { it.kind to it.id }
+            val answered = buildSet {
+                response.applied.forEach { add(it.kind to it.id) }
+                response.rejected.forEach { add(it.kind to it.id) }
+            }
+            if (
+                answered != sentByKey.keys ||
+                response.applied.size + response.rejected.size != pending.changes.size
+            ) {
+                metadata.delete(PENDING_BATCH_KEY)
+                return PhaseResult.Stop(
+                    SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+                )
+            }
+
+            var permanent: PermanentSyncFailure? = null
+            db.withTransaction {
+                sync.setApplyingRemote(true)
+                response.applied.forEach { applied ->
+                    val sent = sentByKey.getValue(applied.kind to applied.id)
+                    sync.putEntityState(sent.asAcceptedState(applied.version))
+                    sync.deleteOutboxGeneration(sent.kind, sent.id, sent.generation)
+                    pushed++
+                }
+                response.rejected.forEach { rejected ->
+                    val sent = sentByKey.getValue(rejected.kind to rejected.id)
+                    when (rejected.reason) {
+                        "version_conflict" -> {
+                            conflicts++
+                            resolveVersionConflict(sent, rejected.current)
+                        }
+                        "missing_parent" -> {
+                            enqueueParent(sent)
+                            if (sent.parentId == null) permanent = PermanentSyncFailure.MissingParent
+                        }
+                        "too_large" -> permanent = PermanentSyncFailure.ChangeTooLarge
+                        "malformed" -> permanent = PermanentSyncFailure.MalformedChange
+                        else -> permanent = PermanentSyncFailure.InvalidServerResponse
+                    }
+                }
+                metadata.delete(PENDING_BATCH_KEY)
+                sync.setApplyingRemote(false)
+            }
+
+            permanent?.let { return PhaseResult.Stop(SyncRunResult.Failed(it)) }
+        }
+
+        return PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.MissingParent))
+    }
+
+    private suspend fun resolveVersionConflict(sent: PendingChange, currentJson: JsonObject?) {
+        if (currentJson == null) {
+            // The server no longer has the row. Base the still-dirty local row at zero next time.
+            sync.deleteEntityState(sent.kind, sent.id)
+            return
+        }
+        val current = parseRemoteChange(currentJson)
+            ?: throw IllegalArgumentException("unsupported current kind")
+        val currentDirty = sync.outboxEntry(sent.kind, sent.id)
+        sync.putEntityState(current.asEntityState())
+
+        // A new local edit landed after this batch was snapshotted. It wins this decision without
+        // consulting the old generation's timestamp and stays queued on the current server version.
+        if (currentDirty?.generation != sent.generation) return
+        if (sent.updatedAt > current.updatedAt) return
+
+        applyRemoteRow(current)
+        sync.deleteOutboxGeneration(sent.kind, sent.id, sent.generation)
+    }
+
+    private suspend fun enqueueParent(sent: PendingChange) {
+        val parentId = sent.parentId ?: return
+        val parentKind = when (sent.kind) {
+            SyncKind.Section.wire -> SyncKind.Notebook.wire
+            SyncKind.Page.wire -> SyncKind.Section.wire
+            else -> return
+        }
+        sync.enqueueIfAbsent(parentKind, parentId)
+    }
+
+    private suspend fun loadOrCreatePendingBatch(): PendingBatch? = db.withTransaction {
+        metadata.value(PENDING_BATCH_KEY)?.let { encoded ->
+            return@withTransaction hierarchyJson.decodeFromString(PendingBatch.serializer(), encoded)
+        }
+
+        val rows = sync.outbox(MAX_PUSH_CHANGES)
+        if (rows.isEmpty()) return@withTransaction null
+        val pending = PendingBatch(
+            batchId = UUID.randomUUID().toString(),
+            changes = rows.map { row -> snapshot(row) },
+        )
+        metadata.put(
+            LocalMetadataEntity(
+                PENDING_BATCH_KEY,
+                hierarchyJson.encodeToString(PendingBatch.serializer(), pending),
+            ),
+        )
+        pending
+    }
+
+    private suspend fun snapshot(outbox: SyncOutboxEntity): PendingChange {
+        val kind = SyncKind.fromWire(outbox.kind)
+            ?: throw IllegalStateException("unknown local sync kind ${outbox.kind}")
+        val state = sync.entityState(outbox.kind, outbox.entityId)
+        val base = state?.serverJson?.let(::decodeObject).orEmpty().toMutableMap().apply {
+            remove("version")
+            remove("seq")
+            remove("baseVersion")
+        }
+        base["kind"] = JsonPrimitive(kind.wire)
+        base["id"] = JsonPrimitive(outbox.entityId)
+        base["baseVersion"] = JsonPrimitive(state?.serverVersion ?: 0)
+
+        val parentId = when (kind) {
+            SyncKind.Notebook -> {
+                val row = notebooks.byId(outbox.entityId)
+                    ?: throw IllegalStateException("dirty notebook disappeared")
+                base.putEnvelope(row.deletedAt, maxOf(row.updatedAt, outbox.changedAt), row.updatedAt)
+                base["name"] = JsonPrimitive(row.name)
+                base["colorArgb"] = JsonPrimitive(row.colorArgb)
+                base["sortIndex"] = JsonPrimitive(row.sortIndex)
+                base["expanded"] = JsonPrimitive(row.expanded)
+                base["createdAt"] = JsonPrimitive(row.createdAt)
+                null
+            }
+            SyncKind.Section -> {
+                val row = sections.byId(outbox.entityId)
+                    ?: throw IllegalStateException("dirty section disappeared")
+                base.putEnvelope(row.deletedAt, maxOf(row.updatedAt, outbox.changedAt), row.updatedAt)
+                base["notebookId"] = JsonPrimitive(row.notebookId)
+                base["name"] = JsonPrimitive(row.name)
+                base["colorArgb"] = JsonPrimitive(row.colorArgb)
+                base["sortIndex"] = JsonPrimitive(row.sortIndex)
+                base["createdAt"] = JsonPrimitive(row.createdAt)
+                row.notebookId
+            }
+            SyncKind.Page -> {
+                val row = pages.byId(outbox.entityId)
+                    ?: throw IllegalStateException("dirty page disappeared")
+                base.putEnvelope(row.deletedAt, maxOf(row.updatedAt, outbox.changedAt), row.updatedAt)
+                base["sectionId"] = JsonPrimitive(row.sectionId)
+                base["title"] = JsonPrimitive(row.title)
+                base["sortIndex"] = JsonPrimitive(row.sortIndex)
+                base["preview"] = JsonPrimitive(row.preview)
+                base["createdAt"] = JsonPrimitive(row.createdAt)
+                row.sectionId
+            }
+        }
+        val wireUpdatedAt = base.getValue("updatedAt").jsonPrimitive.longOrNull
+            ?: throw IllegalStateException("outgoing updatedAt is not an integer")
+
+        return PendingChange(
+            kind = kind.wire,
+            id = outbox.entityId,
+            generation = outbox.generation,
+            updatedAt = wireUpdatedAt,
+            parentId = parentId,
+            payload = JsonObject(base),
+        )
+    }
+
+    private fun MutableMap<String, kotlinx.serialization.json.JsonElement>.putEnvelope(
+        deletedAt: Long?,
+        updatedAt: Long,
+        displayUpdatedAt: Long,
+    ) {
+        this["deletedAt"] = deletedAt?.let(::JsonPrimitive) ?: JsonNull
+        this["updatedAt"] = JsonPrimitive(updatedAt)
+        this[DISPLAY_UPDATED_AT] = JsonPrimitive(displayUpdatedAt)
+    }
+
+    private suspend fun applyRemoteRow(change: RemoteChange) {
+        val displayUpdatedAt = change.displayUpdatedAt
+        when (change.kind) {
+            SyncKind.Notebook -> notebooks.upsert(
+                NotebookEntity(
+                    id = change.id,
+                    name = change.raw.requiredString("name"),
+                    colorArgb = change.raw.requiredInt("colorArgb"),
+                    sortIndex = change.raw.requiredInt("sortIndex"),
+                    expanded = change.raw.requiredBoolean("expanded"),
+                    createdAt = change.raw.requiredLong("createdAt"),
+                    updatedAt = displayUpdatedAt,
+                    deletedAt = change.deletedAt,
+                ),
+            )
+            SyncKind.Section -> sections.upsert(
+                SectionEntity(
+                    id = change.id,
+                    notebookId = change.raw.requiredString("notebookId"),
+                    name = change.raw.requiredString("name"),
+                    colorArgb = change.raw.requiredInt("colorArgb"),
+                    sortIndex = change.raw.requiredInt("sortIndex"),
+                    createdAt = change.raw.requiredLong("createdAt"),
+                    updatedAt = displayUpdatedAt,
+                    deletedAt = change.deletedAt,
+                ),
+            )
+            SyncKind.Page -> pages.upsert(
+                PageEntity(
+                    id = change.id,
+                    sectionId = change.raw.requiredString("sectionId"),
+                    title = change.raw.requiredString("title"),
+                    sortIndex = change.raw.requiredInt("sortIndex"),
+                    preview = change.raw.requiredString("preview"),
+                    createdAt = change.raw.requiredLong("createdAt"),
+                    updatedAt = displayUpdatedAt,
+                    deletedAt = change.deletedAt,
+                ),
+            )
+        }
+    }
+
+    private fun parseRemoteChange(raw: JsonObject): RemoteChange? {
+        val kind = SyncKind.fromWire(raw.requiredString("kind")) ?: return null
+        val version = raw.requiredLong("version")
+        require(version >= 1) { "server version must be positive" }
+        // Validate the complete known shape before a transaction begins, so malformed server data
+        // is reported as a protocol failure and cannot leave the cursor half-applied.
+        raw.requiredString("id")
+        raw.requiredLong("updatedAt")
+        raw.optionalLong("deletedAt")
+        raw.requiredInt("sortIndex")
+        raw.requiredLong("createdAt")
+        when (kind) {
+            SyncKind.Notebook -> {
+                raw.requiredString("name")
+                raw.requiredInt("colorArgb")
+                raw.requiredBoolean("expanded")
+            }
+            SyncKind.Section -> {
+                raw.requiredString("notebookId")
+                raw.requiredString("name")
+                raw.requiredInt("colorArgb")
+            }
+            SyncKind.Page -> {
+                raw.requiredString("sectionId")
+                raw.requiredString("title")
+                raw.requiredString("preview")
+            }
+        }
+        return RemoteChange(
+            kind = kind,
+            id = raw.requiredString("id"),
+            version = version,
+            deletedAt = raw.optionalLong("deletedAt"),
+            updatedAt = raw.requiredLong("updatedAt"),
+            displayUpdatedAt = raw[DISPLAY_UPDATED_AT]?.jsonPrimitive?.longOrNull
+                ?: raw.requiredLong("updatedAt"),
+            raw = raw,
+        )
+    }
+
+    private data class RemoteChange(
+        val kind: SyncKind,
+        val id: String,
+        val version: Long,
+        val deletedAt: Long?,
+        val updatedAt: Long,
+        val displayUpdatedAt: Long,
+        val raw: JsonObject,
+    ) {
+        fun asEntityState() = SyncEntityStateEntity(
+            kind = kind.wire,
+            entityId = id,
+            serverVersion = version,
+            serverJson = raw.toString(),
+        )
+    }
+
+    @Serializable
+    private data class PendingBatch(
+        val batchId: String,
+        val changes: List<PendingChange>,
+    )
+
+    @Serializable
+    private data class PendingChange(
+        val kind: String,
+        val id: String,
+        val generation: Long,
+        val updatedAt: Long,
+        val parentId: String?,
+        val payload: JsonObject,
+    ) {
+        fun asAcceptedState(version: Long): SyncEntityStateEntity {
+            val accepted = payload.toMutableMap().apply {
+                remove("baseVersion")
+                this["version"] = JsonPrimitive(version)
+            }
+            return SyncEntityStateEntity(kind, id, version, JsonObject(accepted).toString())
+        }
+    }
+
+    private enum class SyncKind(val wire: String) {
+        Notebook("notebook"),
+        Section("section"),
+        Page("page");
+
+        companion object {
+            fun fromWire(value: String): SyncKind? = entries.firstOrNull { it.wire == value }
+        }
+    }
+
+    private sealed interface PhaseResult {
+        data class Done(val count: Int) : PhaseResult
+        data class ConflictDone(val count: Int, val conflicts: Int) : PhaseResult
+        data class Stop(val result: SyncRunResult) : PhaseResult
+    }
+
+    private fun ServerResult.Failed.asSyncResult(): SyncRunResult = if (retryable) {
+        SyncRunResult.Retryable(reason)
+    } else {
+        SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse)
+    }
+
+    private fun decodeObject(encoded: String): JsonObject =
+        hierarchyJson.parseToJsonElement(encoded) as? JsonObject
+            ?: throw IllegalArgumentException("stored server state is not an object")
+
+    private fun JsonObject.requiredString(name: String): String =
+        this[name]?.jsonPrimitive?.content
+            ?: throw IllegalArgumentException("missing $name")
+
+    private fun JsonObject.requiredLong(name: String): Long =
+        this[name]?.jsonPrimitive?.longOrNull
+            ?: throw IllegalArgumentException("missing $name")
+
+    private fun JsonObject.requiredInt(name: String): Int =
+        this[name]?.jsonPrimitive?.intOrNull
+            ?: throw IllegalArgumentException("missing $name")
+
+    private fun JsonObject.requiredBoolean(name: String): Boolean =
+        this[name]?.jsonPrimitive?.booleanOrNull
+            ?: throw IllegalArgumentException("missing $name")
+
+    private fun JsonObject.optionalLong(name: String): Long? {
+        val value = this[name] ?: return null
+        if (value === JsonNull) return null
+        return value.jsonPrimitive.longOrNull
+            ?: throw IllegalArgumentException("invalid $name")
+    }
+
+    private companion object {
+        const val MAX_PUSH_CHANGES = 512
+        const val MAX_BATCHES_PER_RUN = 1_024
+        const val PENDING_BATCH_KEY = "syncPendingHierarchyBatch"
+        const val DISPLAY_UPDATED_AT = "viveDisplayUpdatedAt"
+    }
+}
+
+private val hierarchyJson = Json { ignoreUnknownKeys = true }

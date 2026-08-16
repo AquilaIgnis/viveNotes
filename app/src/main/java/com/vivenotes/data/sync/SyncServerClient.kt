@@ -5,11 +5,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URI
+import java.net.URLEncoder
 import java.net.URL
+import java.nio.charset.StandardCharsets
 
 /**
  * Why connecting to a server failed, in the terms the person who typed the address can act on.
@@ -98,6 +101,73 @@ sealed interface DeviceRegistration {
     data class Rejected(val reason: ConnectFailure) : DeviceRegistration
 }
 
+/** One authenticated API operation, without turning transport failures into exceptions for callers. */
+sealed interface ServerResult<out T> {
+
+    data class Success<T>(val value: T) : ServerResult<T>
+
+    /** The server explicitly rejected this stored bearer credential. */
+    data object Unauthorized : ServerResult<Nothing>
+
+    /**
+     * [retryable] distinguishes an outage/5xx from a request the same client would send identically
+     * forever. WorkManager retries only the first group.
+     */
+    data class Failed(
+        val reason: ConnectFailure,
+        val retryable: Boolean,
+    ) : ServerResult<Nothing>
+}
+
+/** One complete `GET /v1/changes` response page. */
+data class PullChangesPage(
+    val changes: List<JsonObject>,
+    val cursor: Long,
+    val hasMore: Boolean,
+)
+
+data class AppliedServerChange(val kind: String, val id: String, val version: Long)
+
+data class RejectedServerChange(
+    val kind: String,
+    val id: String,
+    val reason: String,
+    val message: String?,
+    val current: JsonObject?,
+)
+
+data class PushChangesReply(
+    val applied: List<AppliedServerChange>,
+    val rejected: List<RejectedServerChange>,
+    /** Informational only. The contract explicitly says this is not a pull cursor. */
+    val serverCursor: Long,
+)
+
+/** Narrow authenticated contract used by the hierarchy coordinator and its deterministic tests. */
+interface SyncTransport {
+    suspend fun getCursor(serverBaseUrl: String, token: String): ServerResult<Long>
+
+    suspend fun pullChanges(
+        serverBaseUrl: String,
+        token: String,
+        since: Long,
+        limit: Int = 512,
+    ): ServerResult<PullChangesPage>
+
+    suspend fun pushChanges(
+        serverBaseUrl: String,
+        token: String,
+        batchId: String,
+        changes: List<JsonObject>,
+    ): ServerResult<PushChangesReply>
+
+    suspend fun revokeDevice(
+        serverBaseUrl: String,
+        token: String,
+        deviceId: String,
+    ): ServerResult<Unit>
+}
+
 /**
  * Normalises what somebody typed into the Server URL field into a base URL, or null if it cannot be
  * one.
@@ -139,8 +209,8 @@ fun normaliseServerAddress(typed: String): String? {
  * written against and the thing to re-read before adding an operation.
  *
  * `HttpURLConnection` rather than a new HTTP dependency, following
- * [com.vivenotes.ai.VerifiedArtifactDownloader]: this makes two request shapes in the whole app, and
- * neither needs connection pooling, interceptors or a client lifecycle. [openConnection] is
+ * [com.vivenotes.ai.VerifiedArtifactDownloader]: this API is low-frequency WorkManager traffic and
+ * does not need an interceptor stack or an application-owned connection pool. [openConnection] is
  * injectable for the same reason it is there.
  *
  * Android-free on purpose, so `app/src/test` can drive it against a real loopback server rather than
@@ -150,7 +220,7 @@ class SyncServerClient(
     private val openConnection: (URL) -> HttpURLConnection = { url ->
         url.openConnection() as HttpURLConnection
     },
-) {
+) : SyncTransport {
 
     /**
      * Exchanges account credentials for a device token — the one endpoint that takes a password, and
@@ -198,7 +268,9 @@ class SyncServerClient(
             // tight read timeout here reads to the user as "server down" on a server that is
             // working exactly as designed.
             connection.readTimeout = READ_TIMEOUT_MS
-            connection.instanceFollowRedirects = true
+            // A redirect can cross hosts. Following one here would hand the account password to a
+            // different origin, so a proxy must route this API without redirecting it.
+            connection.instanceFollowRedirects = false
             connection.setRequestProperty("Content-Type", "application/json")
             connection.setRequestProperty("Accept", "application/json")
             connection.setFixedLengthStreamingMode(body.size)
@@ -281,6 +353,190 @@ class SyncServerClient(
             }
         }
 
+    /** The cheap idle poll described by `GET /v1/cursor`. */
+    override suspend fun getCursor(serverBaseUrl: String, token: String): ServerResult<Long> =
+        when (
+            val raw = authenticatedRequest(
+                serverBaseUrl = serverBaseUrl,
+                path = "/v1/cursor",
+                token = token,
+            )
+        ) {
+            is RawServerResult.Response -> decodeAuthenticated(raw) { payload ->
+                syncJson.decodeFromString(CursorResponse.serializer(), payload).cursor
+            }
+            RawServerResult.InvalidAddress -> invalidAddress()
+            RawServerResult.Unreachable -> unreachable()
+        }
+
+    /** Pulls one complete server page after [since]. */
+    override suspend fun pullChanges(
+        serverBaseUrl: String,
+        token: String,
+        since: Long,
+        limit: Int,
+    ): ServerResult<PullChangesPage> {
+        if (since < 0 || limit !in 1..MAX_PULL_LIMIT) {
+            return ServerResult.Failed(ConnectFailure.InvalidRequest, retryable = false)
+        }
+        return when (
+            val raw = authenticatedRequest(
+                serverBaseUrl = serverBaseUrl,
+                path = "/v1/changes?since=$since&limit=$limit",
+                token = token,
+                maxResponseBytes = MAX_API_RESPONSE_BYTES,
+            )
+        ) {
+            is RawServerResult.Response -> decodeAuthenticated(raw) { payload ->
+                val decoded = syncJson.decodeFromString(PullChangesResponse.serializer(), payload)
+                PullChangesPage(decoded.changes, decoded.cursor, decoded.hasMore)
+            }
+            RawServerResult.InvalidAddress -> invalidAddress()
+            RawServerResult.Unreachable -> unreachable()
+        }
+    }
+
+    /**
+     * Pushes one already-snapshotted hierarchy batch.
+     *
+     * The caller owns [batchId] and must reuse it if this request is retried. This method never
+     * invents one because doing so below the durable outbox would defeat the server's idempotency
+     * guarantee precisely when the response is lost.
+     */
+    override suspend fun pushChanges(
+        serverBaseUrl: String,
+        token: String,
+        batchId: String,
+        changes: List<JsonObject>,
+    ): ServerResult<PushChangesReply> {
+        if (changes.size > MAX_PUSH_CHANGES) {
+            return ServerResult.Failed(ConnectFailure.PayloadTooLarge, retryable = false)
+        }
+        val body = syncJson.encodeToString(
+            PushChangesRequest.serializer(),
+            PushChangesRequest(batchId, changes),
+        ).encodeToByteArray()
+        if (body.size > MAX_PUSH_BYTES) {
+            return ServerResult.Failed(ConnectFailure.PayloadTooLarge, retryable = false)
+        }
+
+        return when (
+            val raw = authenticatedRequest(
+                serverBaseUrl = serverBaseUrl,
+                path = "/v1/changes",
+                token = token,
+                method = "POST",
+                body = body,
+                maxResponseBytes = MAX_API_RESPONSE_BYTES,
+            )
+        ) {
+            is RawServerResult.Response -> decodeAuthenticated(raw) { payload ->
+                val decoded = syncJson.decodeFromString(PushChangesResponse.serializer(), payload)
+                PushChangesReply(
+                    applied = decoded.applied.map { AppliedServerChange(it.kind, it.id, it.version) },
+                    rejected = decoded.rejected.map {
+                        RejectedServerChange(it.kind, it.id, it.reason, it.message, it.current)
+                    },
+                    serverCursor = decoded.cursor,
+                )
+            }
+            RawServerResult.InvalidAddress -> invalidAddress()
+            RawServerResult.Unreachable -> unreachable()
+        }
+    }
+
+    /** Revokes this device. A repeated delete remains a success according to the contract. */
+    override suspend fun revokeDevice(
+        serverBaseUrl: String,
+        token: String,
+        deviceId: String,
+    ): ServerResult<Unit> {
+        val encodedId = URLEncoder.encode(deviceId, StandardCharsets.UTF_8.name())
+        return when (
+            val raw = authenticatedRequest(
+                serverBaseUrl = serverBaseUrl,
+                path = "/v1/devices/$encodedId",
+                token = token,
+                method = "DELETE",
+            )
+        ) {
+            is RawServerResult.Response -> decodeAuthenticated(raw) { Unit }
+            RawServerResult.InvalidAddress -> invalidAddress()
+            RawServerResult.Unreachable -> unreachable()
+        }
+    }
+
+    private suspend fun authenticatedRequest(
+        serverBaseUrl: String,
+        path: String,
+        token: String,
+        method: String = "GET",
+        body: ByteArray? = null,
+        maxResponseBytes: Int = MAX_RESPONSE_BYTES,
+    ): RawServerResult = withContext(Dispatchers.IO) {
+        val url = try {
+            URL("$serverBaseUrl$path")
+        } catch (malformed: java.net.MalformedURLException) {
+            return@withContext RawServerResult.InvalidAddress
+        }
+        val connection = try {
+            openConnection(url)
+        } catch (unreachable: IOException) {
+            return@withContext RawServerResult.Unreachable
+        }
+
+        try {
+            connection.requestMethod = method
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("Authorization", "Bearer $token")
+            if (body != null) {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.setFixedLengthStreamingMode(body.size)
+                connection.outputStream.use { it.write(body) }
+            }
+
+            val status = connection.responseCode
+            RawServerResult.Response(
+                status = status,
+                payload = readBounded(
+                    stream = if (status in 200..299) connection.inputStream else connection.errorStream,
+                    maxBytes = maxResponseBytes,
+                ),
+            )
+        } catch (failed: IOException) {
+            RawServerResult.Unreachable
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private inline fun <T> decodeAuthenticated(
+        raw: RawServerResult.Response,
+        decodeSuccess: (String) -> T,
+    ): ServerResult<T> = when {
+        raw.status == 401 -> ServerResult.Unauthorized
+        raw.status in 200..299 -> runCatching { decodeSuccess(raw.payload) }.fold(
+            onSuccess = { ServerResult.Success(it) },
+            onFailure = {
+                ServerResult.Failed(ConnectFailure.NotAViveServer, retryable = false)
+            },
+        )
+        else -> ServerResult.Failed(
+            reason = failureFor(raw.status, raw.payload),
+            retryable = raw.status >= 500,
+        )
+    }
+
+    private fun <T> invalidAddress(): ServerResult<T> =
+        ServerResult.Failed(ConnectFailure.InvalidAddress, retryable = false)
+
+    private fun <T> unreachable(): ServerResult<T> =
+        ServerResult.Failed(ConnectFailure.Unreachable, retryable = true)
+
     /**
      * Maps an error response to a [ConnectFailure], preferring the `error` code and falling back to
      * the status when there is no readable body.
@@ -329,10 +585,13 @@ class SyncServerClient(
      * The bodies in this contract are a few hundred bytes. Reading unboundedly from an address the
      * user typed means an arbitrary host can decide how much memory this allocates.
      */
-    private fun readBounded(stream: InputStream?): String {
+    private fun readBounded(
+        stream: InputStream?,
+        maxBytes: Int = MAX_RESPONSE_BYTES,
+    ): String {
         if (stream == null) return ""
         return stream.use { input ->
-            val buffer = ByteArray(MAX_RESPONSE_BYTES)
+            val buffer = ByteArray(maxBytes)
             var filled = 0
             while (filled < buffer.size) {
                 val count = input.read(buffer, filled, buffer.size - filled)
@@ -347,6 +606,10 @@ class SyncServerClient(
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 30_000
         const val MAX_RESPONSE_BYTES = 64 * 1024
+        const val MAX_API_RESPONSE_BYTES = 10 * 1024 * 1024
+        const val MAX_PUSH_BYTES = 4 * 1024 * 1024
+        const val MAX_PUSH_CHANGES = 512
+        const val MAX_PULL_LIMIT = 2048
 
         /** `RegisterDeviceRequest.name` is capped at 128 in the contract, `platform` at 64. */
         const val MAX_DEVICE_NAME = 128
@@ -355,6 +618,12 @@ class SyncServerClient(
         /** `name` is required and must be non-empty after trimming. */
         const val FALLBACK_DEVICE_NAME = "viveNotes"
     }
+}
+
+private sealed interface RawServerResult {
+    data class Response(val status: Int, val payload: String) : RawServerResult
+    data object InvalidAddress : RawServerResult
+    data object Unreachable : RawServerResult
 }
 
 @Serializable
@@ -370,6 +639,45 @@ private data class RegisterDeviceResponse(
     @SerialName("deviceId") val deviceId: String,
     @SerialName("accountId") val accountId: String,
     val token: String,
+)
+
+@Serializable
+private data class CursorResponse(val cursor: Long)
+
+@Serializable
+private data class PullChangesResponse(
+    val changes: List<JsonObject>,
+    val cursor: Long,
+    @SerialName("hasMore") val hasMore: Boolean,
+)
+
+@Serializable
+private data class PushChangesRequest(
+    @SerialName("batchId") val batchId: String,
+    val changes: List<JsonObject>,
+)
+
+@Serializable
+private data class PushChangesResponse(
+    val applied: List<AppliedChangeResponse>,
+    val rejected: List<RejectedChangeResponse>,
+    val cursor: Long,
+)
+
+@Serializable
+private data class AppliedChangeResponse(
+    val kind: String,
+    val id: String,
+    val version: Long,
+)
+
+@Serializable
+private data class RejectedChangeResponse(
+    val kind: String,
+    val id: String,
+    val reason: String,
+    val message: String? = null,
+    val current: JsonObject? = null,
 )
 
 @Serializable

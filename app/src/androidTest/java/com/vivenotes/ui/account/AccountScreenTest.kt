@@ -17,6 +17,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.R
 import com.vivenotes.data.sync.ConnectFailure
 import com.vivenotes.data.sync.SelfHostConnection
+import com.vivenotes.data.sync.SyncRunResult
+import com.vivenotes.data.sync.SyncSummary
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -35,6 +37,9 @@ class AccountScreenTest {
 
     private val connectCalls = mutableListOf<Triple<String, String, String>>()
     private var disconnects = 0
+    private var syncs = 0
+    private var syncing by mutableStateOf(false)
+    private var syncResult by mutableStateOf<SyncRunResult?>(null)
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
@@ -168,6 +173,7 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.CONNECT_STATUS)
             .assertTextContains(context.getString(R.string.account_connected_title))
         compose.onNodeWithTag(AccountTags.DISCONNECT).assertIsDisplayed()
+        compose.onNodeWithTag(AccountTags.SYNC).assertIsDisplayed()
 
         compose.onNodeWithTag(AccountTags.SERVER_URL).assertDoesNotExist()
         compose.onNodeWithTag(AccountTags.EMAIL).assertDoesNotExist()
@@ -214,6 +220,25 @@ class AccountScreenTest {
         assertEquals(1, disconnects)
     }
 
+    @Test
+    fun syncNowShowsProgressAndThenASummary() {
+        setScreen()
+        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+
+        compose.onNodeWithTag(AccountTags.SYNC).performScrollTo().performClick()
+        assertEquals(1, syncs)
+
+        syncing = true
+        compose.onNodeWithTag(AccountTags.SYNC_PROGRESS).assertIsDisplayed()
+        compose.onNodeWithTag(AccountTags.SYNC).assertIsNotEnabled()
+        compose.onNodeWithTag(AccountTags.DISCONNECT).assertIsNotEnabled()
+
+        syncing = false
+        syncResult = SyncRunResult.Succeeded(SyncSummary(pulled = 2, pushed = 1, conflictsResolved = 0))
+        compose.onNodeWithTag(AccountTags.SYNC_STATUS)
+            .assertTextContains(context.getString(R.string.account_sync_summary, 2, 1))
+    }
+
     /**
      * Asserted through the button rather than by reading the password field, whose semantics carry
      * the masked text: back on the empty form, Connect has an empty required field again. The point
@@ -247,6 +272,9 @@ class AccountScreenTest {
                     onConnect = { url, email, password ->
                         connectCalls += Triple(url, email, password)
                     },
+                    syncing = syncing,
+                    syncResult = syncResult,
+                    onSync = { syncs++ },
                     onDisconnect = { disconnects++ },
                 )
             }

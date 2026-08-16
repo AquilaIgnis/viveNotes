@@ -21,6 +21,85 @@ interface LocalMetadataDao {
     suspend fun delete(key: String)
 }
 
+/** Durable hierarchy-sync bookkeeping. Network DTO mapping stays in `data/sync`. */
+@Dao
+interface SyncDao {
+
+    @Query("SELECT * FROM sync_state WHERE singleton = 0")
+    suspend fun state(): SyncStateEntity?
+
+    @Upsert
+    suspend fun putState(state: SyncStateEntity)
+
+    @Query("DELETE FROM sync_state")
+    suspend fun clearState()
+
+    @Query("UPDATE sync_state SET applyingRemote = :applying WHERE singleton = 0")
+    suspend fun setApplyingRemote(applying: Boolean)
+
+    @Query("UPDATE sync_state SET cursor = :cursor WHERE singleton = 0")
+    suspend fun setCursor(cursor: Long)
+
+    @Query("DELETE FROM sync_entity_states")
+    suspend fun clearEntityStates()
+
+    @Query("SELECT * FROM sync_entity_states WHERE kind = :kind AND entityId = :entityId")
+    suspend fun entityState(kind: String, entityId: String): SyncEntityStateEntity?
+
+    @Upsert
+    suspend fun putEntityState(state: SyncEntityStateEntity)
+
+    @Query("DELETE FROM sync_entity_states WHERE kind = :kind AND entityId = :entityId")
+    suspend fun deleteEntityState(kind: String, entityId: String)
+
+    @Query("DELETE FROM sync_outbox")
+    suspend fun clearOutbox()
+
+    @Query(
+        "SELECT * FROM sync_outbox ORDER BY " +
+            "CASE kind WHEN 'notebook' THEN 0 WHEN 'section' THEN 1 ELSE 2 END, entityId " +
+            "LIMIT :limit",
+    )
+    suspend fun outbox(limit: Int): List<SyncOutboxEntity>
+
+    @Query("SELECT * FROM sync_outbox WHERE kind = :kind AND entityId = :entityId")
+    suspend fun outboxEntry(kind: String, entityId: String): SyncOutboxEntity?
+
+    @Query(
+        "DELETE FROM sync_outbox WHERE kind = :kind AND entityId = :entityId " +
+            "AND generation = :generation",
+    )
+    suspend fun deleteOutboxGeneration(kind: String, entityId: String, generation: Long): Int
+
+    @Query("DELETE FROM sync_outbox WHERE kind = :kind AND entityId = :entityId")
+    suspend fun deleteOutbox(kind: String, entityId: String)
+
+    @Query(
+        "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
+            "SELECT :kind, :entityId, 1, " +
+            "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)",
+    )
+    suspend fun enqueueIfAbsent(kind: String, entityId: String)
+
+    @Query(
+        "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
+            "SELECT 'notebook', id, 1, updatedAt FROM notebooks",
+    )
+    suspend fun enqueueAllNotebooks()
+
+    @Query(
+        "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
+            "SELECT 'section', id, 1, updatedAt FROM sections",
+    )
+    suspend fun enqueueAllSections()
+
+    @Query(
+        "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
+            "SELECT 'page', id, 1, updatedAt FROM pages",
+    )
+    suspend fun enqueueAllPages()
+}
+
 /** Raw Room projection for the typed recovery model in `data/DeletionRecovery.kt`. */
 data class DeletedItemRow(
     val id: String,
@@ -151,13 +230,25 @@ interface DeletionPurgeDao {
     @Query("DELETE FROM ink_strokes WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
     suspend fun expiredInkStrokes(cutoff: Long): Int
 
-    @Query("DELETE FROM notebooks WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    @Query(
+        "DELETE FROM notebooks WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff " +
+            "AND NOT EXISTS (SELECT 1 FROM sync_outbox o " +
+            "WHERE o.kind = 'notebook' AND o.entityId = notebooks.id)",
+    )
     suspend fun expiredNotebooks(cutoff: Long): Int
 
-    @Query("DELETE FROM sections WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    @Query(
+        "DELETE FROM sections WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff " +
+            "AND NOT EXISTS (SELECT 1 FROM sync_outbox o " +
+            "WHERE o.kind = 'section' AND o.entityId = sections.id)",
+    )
     suspend fun expiredSections(cutoff: Long): Int
 
-    @Query("DELETE FROM pages WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    @Query(
+        "DELETE FROM pages WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff " +
+            "AND NOT EXISTS (SELECT 1 FROM sync_outbox o " +
+            "WHERE o.kind = 'page' AND o.entityId = pages.id)",
+    )
     suspend fun expiredPages(cutoff: Long): Int
 }
 
@@ -180,9 +271,9 @@ interface NotebookDao {
     @Query("SELECT * FROM notebooks WHERE id = :id")
     suspend fun byId(id: String): NotebookEntity?
 
-    /** Only for removing an installation-generated placeholder; user deletion stays tombstoned. */
-    @Query("DELETE FROM notebooks WHERE id = :id")
-    suspend fun hardDeletePlaceholder(id: String)
+    /** Retires an installation-generated placeholder without hiding its removal from active sync. */
+    @Query("UPDATE notebooks SET deletedAt = :now, updatedAt = :now WHERE id = :id")
+    suspend fun retirePlaceholder(id: String, now: Long)
 
     @Query("UPDATE notebooks SET name = :name, updatedAt = :now WHERE id = :id")
     suspend fun rename(id: String, name: String, now: Long)

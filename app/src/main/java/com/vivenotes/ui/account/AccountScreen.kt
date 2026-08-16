@@ -61,7 +61,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.data.sync.ConnectFailure
+import com.vivenotes.data.sync.PermanentSyncFailure
 import com.vivenotes.data.sync.SelfHostConnection
+import com.vivenotes.data.sync.SyncRunResult
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.theme.LocalIconAccents
 
@@ -80,6 +82,9 @@ internal object AccountTags {
     const val CONNECT_PROGRESS = "account-connect-progress"
     const val CONNECT_STATUS = "account-connect-status"
     const val CONNECTED = "account-connected"
+    const val SYNC = "account-sync"
+    const val SYNC_PROGRESS = "account-sync-progress"
+    const val SYNC_STATUS = "account-sync-status"
     const val DISCONNECT = "account-disconnect"
     const val DISCONNECT_CONFIRM = "account-disconnect-confirm"
 }
@@ -109,6 +114,11 @@ fun AccountScreen(
     onSignUp: () -> Unit = {},
     connection: SelfHostConnection = SelfHostConnection.Idle,
     onConnect: (serverUrl: String, email: String, password: String) -> Unit = { _, _, _ -> },
+    syncing: Boolean = false,
+    syncResult: SyncRunResult? = null,
+    onSync: () -> Unit = {},
+    disconnecting: Boolean = false,
+    disconnectFailure: ConnectFailure? = null,
     onDisconnect: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -263,6 +273,11 @@ fun AccountScreen(
                             if (connected != null) {
                                 ConnectedPanel(
                                     connected = connected,
+                                    syncing = syncing,
+                                    syncResult = syncResult,
+                                    onSync = onSync,
+                                    disconnecting = disconnecting,
+                                    disconnectFailure = disconnectFailure,
                                     onDisconnect = { confirmDisconnect = true },
                                 )
                                 return@Column
@@ -396,11 +411,19 @@ fun AccountScreen(
  * automatic rather than two hand-picked colours that could drift apart.
  */
 @Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private fun ConnectedPanel(
     connected: SelfHostConnection.Connected,
+    syncing: Boolean,
+    syncResult: SyncRunResult?,
+    onSync: () -> Unit,
+    disconnecting: Boolean,
+    disconnectFailure: ConnectFailure?,
     onDisconnect: () -> Unit,
 ) {
     val accents = LocalIconAccents.current
+    val connectedSyncingDescription = stringResource(R.string.account_syncing)
+    val disconnectingDescription = stringResource(R.string.account_disconnecting)
 
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -450,14 +473,89 @@ private fun ConnectedPanel(
         }
     }
 
+    Button(
+        onClick = onSync,
+        enabled = !syncing && !disconnecting,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(AccountTags.SYNC),
+    ) {
+        if (syncing) {
+            LoadingIndicator(
+                Modifier
+                    .size(18.dp)
+                    .testTag(AccountTags.SYNC_PROGRESS)
+                    .semantics {
+                        contentDescription = connectedSyncingDescription
+                    },
+            )
+        } else {
+            Text(stringResource(R.string.account_sync_now))
+        }
+    }
+
+    SyncStatus(syncing = syncing, result = syncResult)
+
     OutlinedButton(
         onClick = onDisconnect,
+        enabled = !syncing && !disconnecting,
         modifier = Modifier
             .fillMaxWidth()
             .testTag(AccountTags.DISCONNECT),
     ) {
-        Text(stringResource(R.string.account_disconnect))
+        if (disconnecting) {
+            LoadingIndicator(
+                Modifier
+                    .size(18.dp)
+                    .semantics { contentDescription = disconnectingDescription },
+            )
+        } else {
+            Text(stringResource(R.string.account_disconnect))
+        }
     }
+
+    if (disconnectFailure != null) {
+        Text(
+            text = stringResource(R.string.account_disconnect_failed),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+@Composable
+private fun SyncStatus(syncing: Boolean, result: SyncRunResult?) {
+    if (syncing || result == null) return
+
+    val (message, isError) = when (result) {
+        is SyncRunResult.Succeeded -> {
+            val summary = result.summary
+            val text = if (summary.pulled == 0 && summary.pushed == 0) {
+                stringResource(R.string.account_sync_up_to_date)
+            } else {
+                stringResource(R.string.account_sync_summary, summary.pulled, summary.pushed)
+            }
+            text to false
+        }
+        is SyncRunResult.Retryable -> stringResource(failureMessage(result.reason)) to true
+        is SyncRunResult.Failed -> stringResource(syncFailureMessage(result.reason)) to true
+        SyncRunResult.Revoked -> stringResource(R.string.account_error_revoked) to true
+    }
+    Text(
+        text = message,
+        style = MaterialTheme.typography.bodySmall,
+        color = if (isError) MaterialTheme.colorScheme.error else LocalIconAccents.current.green,
+        modifier = Modifier.testTag(AccountTags.SYNC_STATUS),
+    )
+}
+
+@StringRes
+private fun syncFailureMessage(reason: PermanentSyncFailure): Int = when (reason) {
+    PermanentSyncFailure.InvalidServerResponse -> R.string.account_sync_error_response
+    PermanentSyncFailure.LocalData -> R.string.account_sync_error_local
+    PermanentSyncFailure.ChangeTooLarge -> R.string.account_sync_error_large
+    PermanentSyncFailure.MalformedChange -> R.string.account_sync_error_malformed
+    PermanentSyncFailure.MissingParent -> R.string.account_sync_error_parent
 }
 
 /** Enough tint to read as a state, not enough to compete with the card it sits on. */

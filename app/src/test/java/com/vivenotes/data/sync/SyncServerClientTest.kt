@@ -6,6 +6,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -34,7 +36,9 @@ class SyncServerClientTest {
 
     private var requestMethod: String? = null
     private var requestPath: String? = null
+    private var requestQuery: String? = null
     private var requestBody: String? = null
+    private var authorization: String? = null
 
     @Before
     fun startServer() {
@@ -44,7 +48,9 @@ class SyncServerClientTest {
         server.createContext("/") { exchange ->
             requestMethod = exchange.requestMethod
             requestPath = exchange.requestURI.path
+            requestQuery = exchange.requestURI.query
             requestBody = exchange.requestBody.readBytes().decodeToString()
+            authorization = exchange.requestHeaders.getFirst("Authorization")
             respond(exchange)
         }
         server.start()
@@ -205,9 +211,7 @@ class SyncServerClientTest {
 
     @Test
     fun aWorkingTokenChecksOutAndIsSentAsABearerCredential() = runBlocking {
-        var authorization: String? = null
         respond = {
-            authorization = it.requestHeaders.getFirst("Authorization")
             send(it, 200, """{"devices":[]}""")
         }
 
@@ -254,6 +258,113 @@ class SyncServerClientTest {
     }
 
     @Test
+    fun cursorPollUsesBearerAuthAndDecodesTheContract() = runBlocking {
+        respond = { send(it, 200, """{"cursor":41}""") }
+
+        assertEquals(ServerResult.Success(41L), SyncServerClient().getCursor(baseUrl, "vive_abc"))
+        assertEquals("GET", requestMethod)
+        assertEquals("/v1/cursor", requestPath)
+        assertEquals("Bearer vive_abc", authorization)
+    }
+
+    @Test
+    fun pullSendsItsExclusiveCursorAndKeepsUnknownChangeFields() = runBlocking {
+        respond = {
+            send(
+                it,
+                200,
+                """
+                {
+                  "changes": [{
+                    "kind":"notebook", "id":"n", "version":2, "seq":42,
+                    "updatedAt":10, "deletedAt":null, "name":"N", "colorArgb":1,
+                    "sortIndex":0, "expanded":true, "createdAt":1, "future":"kept"
+                  }],
+                  "cursor":42,
+                  "hasMore":false
+                }
+                """.trimIndent(),
+            )
+        }
+
+        val result = SyncServerClient().pullChanges(baseUrl, "vive_abc", 41, 512)
+
+        assertEquals("since=41&limit=512", requestQuery)
+        val page = (result as ServerResult.Success).value
+        assertEquals(42L, page.cursor)
+        assertEquals("kept", page.changes.single().getValue("future").jsonPrimitive.content)
+    }
+
+    @Test
+    fun pushSendsTheSuppliedIdempotencyKeyAndDecodesAppliedAndRejectedRows() = runBlocking {
+        respond = {
+            send(
+                it,
+                200,
+                """
+                {
+                  "applied":[{"kind":"notebook","id":"n","version":3}],
+                  "rejected":[{
+                    "kind":"page", "id":"p", "reason":"missing_parent",
+                    "message":"section is absent"
+                  }],
+                  "cursor":8
+                }
+                """.trimIndent(),
+            )
+        }
+        val change = buildJsonObject {
+            put("kind", "notebook")
+            put("id", "n")
+            put("baseVersion", 2)
+            put("updatedAt", 10)
+        }
+
+        val result = SyncServerClient().pushChanges(
+            baseUrl,
+            "vive_abc",
+            "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+            listOf(change),
+        )
+
+        assertEquals("POST", requestMethod)
+        assertEquals("/v1/changes", requestPath)
+        assertEquals("Bearer vive_abc", authorization)
+        val sent = Json.parseToJsonElement(requestBody.orEmpty()).jsonObject
+        assertEquals(
+            "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+            sent.getValue("batchId").jsonPrimitive.content,
+        )
+        val reply = (result as ServerResult.Success).value
+        assertEquals(AppliedServerChange("notebook", "n", 3), reply.applied.single())
+        assertEquals("missing_parent", reply.rejected.single().reason)
+        assertEquals(8L, reply.serverCursor)
+    }
+
+    @Test
+    fun authenticatedSync401IsRevocationRatherThanARetryableOutage() = runBlocking {
+        respond = {
+            it.responseHeaders.add("WWW-Authenticate", "Bearer")
+            send(it, 401, """{"error":"unauthenticated"}""")
+        }
+
+        assertEquals(ServerResult.Unauthorized, SyncServerClient().getCursor(baseUrl, "vive_dead"))
+    }
+
+    @Test
+    fun revokingThisDeviceUsesTheDocumentedPathAndNoBody() = runBlocking {
+        respond = { send(it, 204, "") }
+
+        assertEquals(
+            ServerResult.Success(Unit),
+            SyncServerClient().revokeDevice(baseUrl, "vive_abc", "device-id"),
+        )
+        assertEquals("DELETE", requestMethod)
+        assertEquals("/v1/devices/device-id", requestPath)
+        assertEquals("", requestBody)
+    }
+
+    @Test
     fun aBareHostGetsHttpsSoCleartextHasToBeAskedFor() {
         assertEquals("https://notes.example.com", normaliseServerAddress("notes.example.com"))
         assertEquals("https://notes.example.com", normaliseServerAddress("  notes.example.com/  "))
@@ -287,7 +398,12 @@ class SyncServerClientTest {
     ) {
         val bytes = body.toByteArray()
         exchange.responseHeaders.add("Content-Type", contentType)
-        exchange.sendResponseHeaders(status, bytes.size.toLong())
-        exchange.responseBody.use { it.write(bytes) }
+        if (status == 204) {
+            exchange.sendResponseHeaders(status, -1)
+            exchange.close()
+        } else {
+            exchange.sendResponseHeaders(status, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
     }
 }

@@ -605,7 +605,7 @@ class NotebookTransferManager(
                     // Recheck inside the write transaction so an edit which clears the marker can
                     // never race an import and lose a real notebook.
                     val replaceableStarter = replaceableStarterNotebook()
-                    replaceableStarter?.let { notebookDao.hardDeletePlaceholder(it.id) }
+                    replaceableStarter?.let { notebookDao.retirePlaceholder(it.id, importedAt) }
                     notebookDao.upsert(
                         data.notebook.copy(
                             sortIndex = replaceableStarter?.sortIndex ?: notebookDao.nextSortIndex(),
