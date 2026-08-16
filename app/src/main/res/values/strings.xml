@@ -12,4 +12,29 @@
     <string name="account_server_url_example">https://notes.example.com</string>
     <string name="account_email">Email</string>
     <string name="account_password">Password</string>
+    <string name="account_connect">Connect</string>
+    <string name="account_connecting">Connecting to the server</string>
+    <string name="account_connected_title">Connected</string>
+    <string name="account_connected_device">Registered as %1$s</string>
+    <string name="account_disconnect">Disconnect</string>
+    <string name="account_disconnect_title">Disconnect from this server?</string>
+    <!--
+        Says what cannot be undone rather than "are you sure": the token is not recoverable, and the
+        device row it belongs to outlives it on the server until somebody removes it.
+    -->
+    <string name="account_disconnect_body">viveNotes will forget this device\'s token, which the server cannot issue again. Connecting later registers a new device, so remove this one from your server\'s dashboard.</string>
+    <string name="account_disconnect_cancel">Cancel</string>
+    <!--
+        One message per ConnectFailure. Each names what to change, because the person reading it is
+        the same person who runs the server: "could not connect" tells them nothing they cannot see.
+    -->
+    <string name="account_error_address">That is not a server address. Try something like https://notes.example.com.</string>
+    <string name="account_error_unreachable">Nothing answered at that address. Check the address and port, and that the server is running.</string>
+    <string name="account_error_credentials">That email and password do not match an account on this server.</string>
+    <string name="account_error_request">The server would not accept those details. Check the email address, and that the password is at least 8 characters.</string>
+    <string name="account_error_too_large">Those details are longer than the server accepts.</string>
+    <string name="account_error_server">The server could not complete the request. Check its logs, then try again.</string>
+    <string name="account_error_not_vive">Something answered at that address, but it is not a viveNotes server.</string>
+    <string name="account_error_revoked">This device\'s access was revoked on the server, so it has been disconnected. Sign in again to register it.</string>
+    <string name="account_error_not_stored">This device registered with the server, but its token could not be saved, so it cannot be used. Free some storage and connect again — the unused device can be removed from the server\'s dashboard.</string>
 </resources>

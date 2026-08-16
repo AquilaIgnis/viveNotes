@@ -2,6 +2,7 @@ package com.vivenotes.ui.editor
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
@@ -75,9 +76,30 @@ class RibbonTabStripTest {
         assertEquals(true, accountOpened)
     }
 
+    /**
+     * The dot is the ribbon's whole report of sync state, so its absence has to be asserted too —
+     * a badge that is always there says nothing.
+     */
+    @Test
+    fun theAccountButtonIsUnmarkedWhileNoServerIsConnected() {
+        setRibbon()
+
+        compose.onNodeWithTag(RibbonTags.ACCOUNT_CONNECTED).assertDoesNotExist()
+    }
+
+    @Test
+    fun theAccountButtonIsDottedOnceAServerIsConnected() {
+        setRibbon(accountConnected = true)
+
+        compose.onNodeWithTag(RibbonTags.ACCOUNT_CONNECTED).assertIsDisplayed()
+        // The dot is decoration; what a screen reader gets is the button's own description.
+        compose.onNodeWithContentDescription("Account, connected to a server").assertIsDisplayed()
+    }
+
     private fun setRibbon(
         activeTab: RibbonTab = RibbonTab.Document,
         allowFinger: Boolean = false,
+        accountConnected: Boolean = false,
     ) {
         compose.setContent {
             ViveNotesTheme {
@@ -106,6 +128,7 @@ class RibbonTabStripTest {
                     ),
                     pageOpen = true,
                     onOpenAccount = { accountOpened = true },
+                    accountConnected = accountConnected,
                 )
             }
         }

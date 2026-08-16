@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -65,6 +66,7 @@ import com.vivenotes.ui.icons.LocalRibbonIcons
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.icons.fontColorGlyph
 import com.vivenotes.ui.icons.highlightGlyph
+import com.vivenotes.ui.theme.LocalIconAccents
 
 /**
  * Ribbon tabs from the reference UI. Each tab owns commands with the same scope as its name: File
@@ -119,6 +121,9 @@ internal object FontTags {
 internal object RibbonTags {
     const val FINGER = "ribbon-finger"
     const val ACCOUNT = "ribbon-account"
+
+    /** The dot on the account button. Present only while a sync server is connected. */
+    const val ACCOUNT_CONNECTED = "ribbon-account-connected"
 }
 
 @Composable
@@ -163,6 +168,8 @@ fun Ribbon(
     navigationVisible: Boolean = true,
     onToggleNavigation: () -> Unit = {},
     onOpenAccount: () -> Unit = {},
+    /** Whether this installation holds a device token — puts a dot on the account button. */
+    accountConnected: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -181,6 +188,7 @@ fun Ribbon(
             navigationVisible = navigationVisible,
             onToggleNavigation = onToggleNavigation,
             onOpenAccount = onOpenAccount,
+            accountConnected = accountConnected,
         )
         Box(
             Modifier
@@ -242,6 +250,7 @@ private fun TabStrip(
     navigationVisible: Boolean,
     onToggleNavigation: () -> Unit,
     onOpenAccount: () -> Unit,
+    accountConnected: Boolean,
 ) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         when {
@@ -303,14 +312,36 @@ private fun TabStrip(
                 .padding(end = 6.dp)
                 .testTag(RibbonTags.FINGER),
         )
-        RibbonButton(
-            icon = MaterialSymbols.AccountCircle,
-            label = "Account",
-            onClick = onOpenAccount,
-            modifier = Modifier
-                .padding(end = 6.dp)
-                .testTag(RibbonTags.ACCOUNT),
-        )
+        // A dot rather than the pressed-state chrome `active` would give: that chrome means "this
+        // control is on", and the account button is not a toggle — it opens a screen. A badge says
+        // something is true *about* what it opens, which is what being connected is.
+        Box(Modifier.padding(end = 6.dp)) {
+            RibbonButton(
+                icon = MaterialSymbols.AccountCircle,
+                // The label is the icon's content description, so the connection is announced
+                // rather than left to a coloured dot nobody can hear.
+                label = if (accountConnected) "Account, connected to a server" else "Account",
+                onClick = onOpenAccount,
+                modifier = Modifier.testTag(RibbonTags.ACCOUNT),
+            )
+            if (accountConnected) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        // Sits *on* the glyph's top-right arc rather than in the corner of the
+                        // 32dp slot: an 18dp icon leaves 7dp of empty box around it, and a dot
+                        // parked out there reads as a stray mark instead of a badge on the icon.
+                        .padding(top = 5.dp, end = 6.dp)
+                        .size(10.dp)
+                        // Ringed in the ribbon's own surface, which is what keeps the dot separate
+                        // from the icon stroke it now overlaps.
+                        .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                        .padding(2.dp)
+                        .background(LocalIconAccents.current.green, CircleShape)
+                        .testTag(RibbonTags.ACCOUNT_CONNECTED),
+                )
+            }
+        }
     }
 }
 

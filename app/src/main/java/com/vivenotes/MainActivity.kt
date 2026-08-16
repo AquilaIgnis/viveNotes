@@ -42,7 +42,14 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ViveNotesTheme {
-                NotesApp(viewModel, app.attachments, app.aiModels, app.recognitionEngine, app.mathEngine)
+                NotesApp(
+                    viewModel,
+                    app.attachments,
+                    app.aiModels,
+                    app.recognitionEngine,
+                    app.mathEngine,
+                    app.syncAccounts,
+                )
             }
         }
     }

@@ -80,6 +80,8 @@ import com.vivenotes.data.StylusButtonMap
 import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
+import com.vivenotes.data.sync.SelfHostConnection
+import com.vivenotes.data.sync.SyncAccounts
 import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.AiModelInstallState
 import com.vivenotes.ai.AiModelsState
@@ -164,6 +166,7 @@ fun NotesApp(
     aiModelStore: AiModelStore,
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
+    syncAccounts: SyncAccounts,
 ) {
     // The app owns its small back stack, following Navigation 3's state model without taking on a
     // navigation dependency for two local destinations. Keeping the workspace composed preserves
@@ -183,6 +186,37 @@ fun NotesApp(
     val accountOpen = backStack.lastOrNull() == AppDestination.Account
     val spatialMotion = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
     val effectsMotion = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+
+    // Held here, one level above the Account destination, so closing the screen mid-request neither
+    // cancels it nor loses its result. `POST /v1/devices` returns the device token exactly once and
+    // the server cannot reissue it, so a scope that dies with the screen would turn a stray Back
+    // press into a device registered on the server that nothing here can authenticate as.
+    val connectScope = rememberCoroutineScope()
+    var selfHostConnection by remember { mutableStateOf<SelfHostConnection>(SelfHostConnection.Idle) }
+
+    // A registration already on disk is shown as the connected state, so leaving the screen and
+    // coming back does not read as never having connected. This attempt wins while there is one:
+    // its result — including a failure — is news, and the stored account is only the background.
+    val storedAccount by syncAccounts.account.collectAsStateWithLifecycle(initialValue = null)
+
+    // Revocation is one-sided: the operator removes this device from the dashboard and nothing tells
+    // the app. Opening Account is when it is worth asking, because it is the only screen where the
+    // answer changes what is shown — and a revoked token is dropped there rather than kept to fail
+    // every later request identically. Only a `Failed` verdict is taken; anything else leaves the
+    // stored account to speak for itself, so being offline cannot look like being revoked.
+    LaunchedEffect(accountOpen) {
+        if (accountOpen && selfHostConnection == SelfHostConnection.Idle) {
+            val checked = syncAccounts.refresh()
+            if (checked is SelfHostConnection.Failed) selfHostConnection = checked
+        }
+    }
+    val displayedConnection = when (val attempt = selfHostConnection) {
+        SelfHostConnection.Idle -> storedAccount
+            ?.let { SelfHostConnection.Connected(it.serverUrl, it.deviceName) }
+            ?: SelfHostConnection.Idle
+
+        else -> attempt
+    }
     val closeAccount = {
         if (backStack.lastOrNull() == AppDestination.Account) {
             backStack.removeLast()
@@ -212,6 +246,9 @@ fun NotesApp(
                         backStack.add(AppDestination.Account)
                     }
                 },
+                // The stored registration, not the in-flight attempt: the ribbon reports what this
+                // installation *has*, which outlives any one visit to the account screen.
+                accountConnected = storedAccount != null,
             )
         }
 
@@ -226,7 +263,25 @@ fun NotesApp(
                 targetOffsetX = { it },
             ) + fadeOut(animationSpec = effectsMotion),
         ) {
-            AccountScreen(onBack = closeAccount)
+            AccountScreen(
+                onBack = closeAccount,
+                connection = displayedConnection,
+                onConnect = { serverUrl, email, password ->
+                    selfHostConnection = SelfHostConnection.Connecting
+                    connectScope.launch {
+                        selfHostConnection = syncAccounts.connect(serverUrl, email, password)
+                    }
+                },
+                onDisconnect = {
+                    connectScope.launch {
+                        syncAccounts.disconnect()
+                        // Back to Idle rather than to a "disconnected" result: with the stored
+                        // account gone there is nothing to report, and the empty form is the
+                        // screen saying so.
+                        selfHostConnection = SelfHostConnection.Idle
+                    }
+                },
+            )
         }
     }
 }
@@ -239,6 +294,7 @@ private fun NotesWorkspace(
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
     onOpenAccount: () -> Unit,
+    accountConnected: Boolean,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
@@ -578,6 +634,7 @@ private fun NotesWorkspace(
                         navigationVisible = navigationVisible,
                         onToggleNavigation = viewModel::toggleNavigation,
                         onOpenAccount = onOpenAccount,
+                        accountConnected = accountConnected,
                     )
 
                     HorizontalHairline()

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Cleartext HTTP is permitted, in every build type.
+
+    Android flipped this default in API 28: with `targetSdk = 36` the platform denies cleartext
+    unless an app says otherwise, so without this file every `http://` URL fails with
+
+        java.net.UnknownServiceException: CLEARTEXT communication to <host> not permitted
+
+    before a socket is opened - which reads like the server is down or the route is wrong, and is
+    neither.
+
+    Why it is permitted rather than restricted to a host list: a self-hosted sync server's address is
+    typed by the person running it, into the Server URL field on the account screen. It can be any
+    hostname or IP on their network, and this file is compiled at build time - so there is no list to
+    write. `deploy/docker-compose.yml` fronts the server with Caddy, and https is the better answer
+    where TLS is available, but a plain-http server on a LAN is a supported configuration rather than
+    a mistake to block. That is a deliberate product decision, not an oversight.
+
+    What it costs, so nobody has to rediscover it: over http, a self-hoster's account password
+    (`POST /v1/devices` is the one endpoint that takes it) and the device token returned by that call
+    are readable by anything else on the network path. The token authorises every later sync request
+    and the server can never reissue it - only its SHA-256 is stored. Anyone on an untrusted network
+    should be reaching their server over https.
+
+    `trust-anchors` is deliberately not overridden here: the platform default (system CAs, no
+    user-installed certificates) still applies, so this loosens cleartext and nothing else. A
+    self-hoster with a private CA needs a separate, deliberate decision - not a side effect of this
+    file.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
