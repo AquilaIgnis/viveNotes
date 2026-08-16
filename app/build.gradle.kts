@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
@@ -67,13 +69,30 @@ android {
     }
 }
 
+/**
+ * Which CPython builds the requirements venv.
+ *
+ * **The absolute path is this developer's machine, and must not be anyone else's.** It is here to
+ * step around a `uv` shim: `uv`'s `python3.13` lives behind a symlink whose location gives Chaquopy
+ * a broken prefix when it runs `python -m venv`, and naming the real interpreter is the fix.
+ *
+ * Hardcoding it broke CI on every single run — `ubuntu-latest` ships 3.12 as the system Python and
+ * keeps 3.13 in the tool cache, so `installDebugPythonRequirements` died with *"'/usr/bin/python3.13'
+ * does not exist"* before a single test ran, and the emulator job never started behind its `needs`.
+ * So the path is used when it is genuinely there and Chaquopy is otherwise left to resolve
+ * `python3.13` off PATH, which is where `actions/setup-python` puts it.
+ *
+ * Deliberately a file check rather than a `System.getenv("CI")` test: what matters is whether this
+ * interpreter exists, not whose machine we are on, and a laptop without it should fall back too.
+ */
+private val buildPythonCommand: String =
+    File("/usr/bin/python3.13").takeIf { it.canExecute() }?.path ?: "python3.13"
+
 chaquopy {
     defaultConfig {
         // 3.13 has current arm64/x86-64 support and Chaquopy's 16 KB-page compatibility fixes.
         version = "3.13"
-        // Avoid the developer machine's `uv` shim: its symlink location produces a broken venv
-        // prefix when Chaquopy invokes `python -m venv`.
-        buildPython("/usr/bin/python3.13")
+        buildPython(buildPythonCommand)
         pip {
             install("sympy==1.14.0")
             // SymPy 1.14's generated LaTeX parser requires this ANTLR generation line.

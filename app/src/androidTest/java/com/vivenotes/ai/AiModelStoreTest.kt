@@ -6,8 +6,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.IOException
@@ -49,6 +49,11 @@ class AiModelStoreTest {
      * This build carries the formula files in the `debug` source set, so the store hydrates them
      * and resolves to Installed — which is exactly the state the eager download must decline to act
      * on. If it ever stops declining, this test spends 224 MB finding out.
+     *
+     * **Having the package is a precondition, not the claim.** `app/src/debug/assets/ai/dev/` is
+     * gitignored — 232 MB of ONNX — so a fresh clone and every CI runner reach this with nothing to
+     * hydrate, and asserting Installed there made the workflow red for a missing file rather than a
+     * broken rule. The subject is the line below it: with the package present, nothing is fetched.
      */
     @Test
     fun anInstalledPackageIsNeverFetchedAgain() = runBlocking {
@@ -57,7 +62,10 @@ class AiModelStoreTest {
 
         val state = settle(store)
 
-        assertEquals(AiModelInstallState.Installed, state.formulaLatex)
+        assumeTrue(
+            "no bundled formula package on this machine — see app/src/debug/assets/ai/dev/",
+            state.formulaLatex == AiModelInstallState.Installed,
+        )
         assertTrue("reached for $attempted despite the package being installed", attempted.isEmpty())
     }
 

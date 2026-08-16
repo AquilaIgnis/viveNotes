@@ -761,17 +761,40 @@ class NotesViewModel(
     private val blocksById = mutableMapOf<String, List<Block>>()
 
     /**
-     * Outlines this ViewModel does not manage — images and ink — with the position each held in the
-     * document it was loaded from.
+     * Outlines this ViewModel does not manage — an `Outline.Ink` layer, and any kind added later.
      *
-     * [persist] rebuilds `PageDoc.outlines` from the text containers it tracks, so an outline it did
-     * not put there is not merely ignored: it is written out of existence by the next autosave, 400ms
-     * after the next keystroke. Nothing produces those variants yet, which is exactly why the loss
-     * would be silent when something does — the write succeeds and the page looks fine until the
-     * drawing is gone. Carrying them through untouched keeps load → save → load the identity for a
-     * document this ViewModel only half understands.
+     * [persist] rebuilds `PageDoc.outlines` from the objects it tracks, so an outline it did not put
+     * there is not merely ignored: it is written out of existence by the next autosave, 400ms after
+     * the next keystroke. Nothing produces those variants yet, which is exactly why the loss would be
+     * silent when something does — the write succeeds and the page looks fine until the drawing is
+     * gone. Carrying them through untouched keeps load → save → load the identity for a document this
+     * ViewModel only half understands.
+     *
+     * Position is not recorded here any more; [documentOrder] holds it for every kind at once.
      */
-    private var unmanagedOutlines: List<IndexedValue<Outline>> = emptyList()
+    private var unmanagedOutlines: List<Outline> = emptyList()
+
+    /**
+     * Where each outline sat in the document as loaded, by id — what [persist] sorts back into.
+     *
+     * **The rebuilt list is grouped by kind, and that is not an order the document ever had.**
+     * `persist` concatenates shapes, then equations, then pictures, then tables, then containers,
+     * because that is the order the fields happen to be declared in; so a page loaded as
+     * `[ink, text, image]` was written back as `[ink, image, text]` and every autosave after the
+     * first shuffled the file. It went unnoticed while containers were the only managed kind — the
+     * kind-grouped list was then simply *the* list — and each kind added since (shapes, tables,
+     * equations, pictures) widened it.
+     *
+     * Nothing on screen depends on this: the canvas layers by kind with a fixed z-order of its own,
+     * so a reordered document draws identically. What it costs is everything that reads the file — a
+     * `.vive` export that differs from the one before it, a sync diff over a page nobody edited, and
+     * the load → save → load identity [unmanagedOutlines] exists to protect, held for one kind while
+     * being broken for the rest.
+     *
+     * Outlines created since the load are absent here and sort last, keeping the arrival order they
+     * already had among themselves — `sortedBy` is stable.
+     */
+    private var documentOrder: Map<String, Int> = emptyMap()
 
     /** Signals an edit that autosave should pick up; the payload is irrelevant. */
     private val edits = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
@@ -1229,10 +1252,13 @@ class NotesViewModel(
         }
         // Taken from the document rather than from [loaded], which may contain a substitute empty
         // text box. Carrying unknown outline kinds through preserves load -> save -> load identity.
-        unmanagedOutlines = doc.outlines.withIndex().filterNot {
-            it.value is Outline.Text || it.value is Outline.Shape || it.value is Outline.Table ||
-                it.value is Outline.Equation || it.value is Outline.Image
+        unmanagedOutlines = doc.outlines.filterNot {
+            it is Outline.Text || it is Outline.Shape || it is Outline.Table ||
+                it is Outline.Equation || it is Outline.Image
         }
+        // Every kind, not just the unmanaged ones — see [documentOrder] for why the rebuilt list
+        // cannot be trusted to come back in the order it went out in.
+        documentOrder = doc.outlines.withIndex().associate { (index, outline) -> outline.id to index }
         _uiState.value = _uiState.value.copy(
             selectedPageId = pageId,
             title = page?.title.orEmpty(),
@@ -3587,28 +3613,30 @@ class NotesViewModel(
         repository.saveDoc(
             pageId,
             PageDoc(
-                outlines = merged(state.shapes + state.equations + state.images + tables + outlines),
+                outlines = inDocumentOrder(
+                    state.shapes + state.equations + state.images + tables + outlines +
+                        unmanagedOutlines,
+                ),
                 style = state.pageStyle,
             ),
         )
     }
 
     /**
-     * Puts the outlines [persist] does not manage back where they were.
+     * Puts every outline back where the document had it — [documentOrder].
      *
-     * Recorded indices are positions in the document as loaded — the combined list — so reinserting
-     * them into the text-only list in ascending order lands each one at its original position, which
-     * is what makes the round trip an identity. They are clamped rather than trusted: containers are
-     * created and deleted while the page is open, so a recorded position can be past the end of the
-     * list it is being restored into.
+     * **One rule for all six kinds, replacing a splice that only knew about one.** This used to
+     * reinsert the unmanaged outlines at recorded indices, clamped, into a list whose managed half
+     * had already been reordered by kind — so the ink landed at the right index of the wrong list,
+     * and was only ever accidentally in the right place.
+     *
+     * Sorting by the loaded position instead needs no clamping and no special case for outlines
+     * created or deleted while the page was open: a missing key sorts last, and a deleted one simply
+     * is not here to be placed. `sortedBy` is stable, so anything new keeps the order it arrived in.
      */
-    private fun merged(managed: List<Outline>): List<Outline> {
-        if (unmanagedOutlines.isEmpty()) return managed
-        val outlines = ArrayList<Outline>(managed)
-        unmanagedOutlines.forEach { (index, outline) ->
-            outlines.add(index.coerceAtMost(outlines.size), outline)
-        }
-        return outlines
+    private fun inDocumentOrder(outlines: List<Outline>): List<Outline> {
+        if (documentOrder.isEmpty()) return outlines
+        return outlines.sortedBy { documentOrder[it.id] ?: Int.MAX_VALUE }
     }
 
     // --- the page's origin corner ---------------------------------------------------------------

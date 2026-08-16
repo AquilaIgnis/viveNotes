@@ -40,6 +40,16 @@ jobs:
       - name: Set up the Android SDK
         uses: android-actions/setup-android@v3
 
+      # Chaquopy builds the SymPy venv with a real CPython matching `chaquopy.defaultConfig.version`,
+      # and the runner's system Python is 3.12 — 3.13 exists only in the tool cache. Without this the
+      # build died at `installDebugPythonRequirements` on every run, so the whole workflow had never
+      # once reached a test. `app/build.gradle.kts` resolves `python3.13` off PATH, which is exactly
+      # what this puts there.
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
       - name: Read the Gradle version the project pins
         id: gradle
         run: |
@@ -98,6 +108,12 @@ jobs:
 
       - name: Set up the Android SDK
         uses: android-actions/setup-android@v3
+
+      # Same reason as the unit job: this one builds the APK too, so it needs the same interpreter.
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
 
       - name: Read the Gradle version the project pins
         id: gradle
