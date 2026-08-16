@@ -10,10 +10,39 @@ and all AI features run entirely on-device.
 
 # Download
 
-| Fdroid                                                                                 | Google Play                                                                                                  |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| <a href='#acidburnmonkey'> <img src="repo/fdroid.png"  height="80" alt="fdroid" /></a> | <a href='#acidburnmonkey'> <img src="./repo/Google_Play_Store.svg" width="206" height="80" alt="play" /></a> |
-| Coming Soon!                                                                           | Coming Soon!                                                                                                 |
+<table>
+  <thead>
+    <tr>
+      <th>F-Droid</th>
+      <th>Google Play</th>
+      <th>APK</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center">
+        <a href="#">
+          <img src="repo/fdroid.png" height="80" alt="Get it on F-Droid">
+        </a>
+      </td>
+      <td align="center">
+        <a href="#">
+          <img src="repo/Google_Play_Store.svg" height="80" width="200" alt="Get it on Google Play">
+        </a>
+      </td>
+      <td align="center">
+        <a href="#">
+          <img src="repo/apk.png" height="80" alt="Download APK">
+        </a>
+      </td>
+    </tr>
+    <tr>
+      <td align="center"><b>Coming Soon!</b></td>
+      <td align="center"><b>Coming Soon!</b></td>
+      <td align="center">Available</td>
+    </tr>
+  </tbody>
+</table>
 
 # Features
 
