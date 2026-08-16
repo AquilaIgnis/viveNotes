@@ -1,3 +1,15 @@
 <resources>
     <string name="app_name">viveNotes</string>
+    <string name="account">Account</string>
+    <string name="navigate_back">Back</string>
+    <string name="account_title">Your notes, wherever you write</string>
+    <string name="account_supporting_text">Sign in to sync your notebooks across devices, or connect viveNotes to a server you control.</string>
+    <string name="account_log_in">Log in</string>
+    <string name="account_sign_up">Sign up</string>
+    <string name="account_self_host">Self host</string>
+    <string name="account_self_host_description">Connect to your own viveNotes server.</string>
+    <string name="account_server_url">Server URL</string>
+    <string name="account_server_url_example">https://notes.example.com</string>
+    <string name="account_email">Email</string>
+    <string name="account_password">Password</string>
 </resources>

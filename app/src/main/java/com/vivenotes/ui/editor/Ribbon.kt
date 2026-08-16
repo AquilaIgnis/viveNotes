@@ -118,6 +118,7 @@ internal object FontTags {
 
 internal object RibbonTags {
     const val FINGER = "ribbon-finger"
+    const val ACCOUNT = "ribbon-account"
 }
 
 @Composable
@@ -161,6 +162,7 @@ fun Ribbon(
     showNavigationToggle: Boolean = false,
     navigationVisible: Boolean = true,
     onToggleNavigation: () -> Unit = {},
+    onOpenAccount: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -178,6 +180,7 @@ fun Ribbon(
             showNavigationToggle = showNavigationToggle,
             navigationVisible = navigationVisible,
             onToggleNavigation = onToggleNavigation,
+            onOpenAccount = onOpenAccount,
         )
         Box(
             Modifier
@@ -238,6 +241,7 @@ private fun TabStrip(
     showNavigationToggle: Boolean,
     navigationVisible: Boolean,
     onToggleNavigation: () -> Unit,
+    onOpenAccount: () -> Unit,
 ) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         when {
@@ -298,6 +302,14 @@ private fun TabStrip(
             modifier = Modifier
                 .padding(end = 6.dp)
                 .testTag(RibbonTags.FINGER),
+        )
+        RibbonButton(
+            icon = MaterialSymbols.AccountCircle,
+            label = "Account",
+            onClick = onOpenAccount,
+            modifier = Modifier
+                .padding(end = 6.dp)
+                .testTag(RibbonTags.ACCOUNT),
         )
     }
 }

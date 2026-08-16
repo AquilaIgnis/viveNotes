@@ -4,6 +4,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,9 +41,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +60,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.IntOffset
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.SectionEntity
 import androidx.compose.ui.unit.dp
@@ -90,6 +99,7 @@ import com.vivenotes.ui.editor.Ribbon
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.account.AccountScreen
 import com.vivenotes.ui.panel.AiModelsPanelContent
 import com.vivenotes.ui.panel.ContentPanelContent
 import com.vivenotes.ui.panel.ContentPanelHeader
@@ -113,6 +123,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 
 private val RAIL_WIDTH = 232.dp
 private val PAGE_LIST_WIDTH = 260.dp
@@ -123,6 +135,11 @@ private val MEDIUM_BREAKPOINT = 720.dp
 /** Above this the notebook rail is permanently visible alongside the other two panes. */
 private val EXPANDED_BREAKPOINT = 1040.dp
 private const val MATH_ANALYSIS_DEBOUNCE_MS = 350L
+
+private enum class AppDestination {
+    Workspace,
+    Account,
+}
 
 /**
  * What the recognition panel runs by itself once a formula is understood, in order of preference.
@@ -147,6 +164,81 @@ fun NotesApp(
     aiModelStore: AiModelStore,
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
+) {
+    // The app owns its small back stack, following Navigation 3's state model without taking on a
+    // navigation dependency for two local destinations. Keeping the workspace composed preserves
+    // its open page, selection and transient editing tools while Account is in front.
+    val backStack = rememberSaveable(
+        saver = listSaver(
+            save = { stack -> stack.map(AppDestination::name) },
+            restore = { names ->
+                mutableStateListOf<AppDestination>().apply {
+                    addAll(names.map(AppDestination::valueOf))
+                }
+            },
+        ),
+    ) {
+        mutableStateListOf(AppDestination.Workspace)
+    }
+    val accountOpen = backStack.lastOrNull() == AppDestination.Account
+    val spatialMotion = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
+    val effectsMotion = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val closeAccount = {
+        if (backStack.lastOrNull() == AppDestination.Account) {
+            backStack.removeLast()
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (accountOpen) {
+                        Modifier.semantics { hideFromAccessibility() }
+                    } else {
+                        Modifier
+                    },
+                ),
+        ) {
+            NotesWorkspace(
+                viewModel = viewModel,
+                attachments = attachments,
+                aiModelStore = aiModelStore,
+                recognitionEngine = recognitionEngine,
+                mathEngine = mathEngine,
+                onOpenAccount = {
+                    if (backStack.lastOrNull() != AppDestination.Account) {
+                        backStack.add(AppDestination.Account)
+                    }
+                },
+            )
+        }
+
+        AnimatedVisibility(
+            visible = accountOpen,
+            enter = slideInHorizontally(
+                animationSpec = spatialMotion,
+                initialOffsetX = { it },
+            ) + fadeIn(animationSpec = effectsMotion),
+            exit = slideOutHorizontally(
+                animationSpec = spatialMotion,
+                targetOffsetX = { it },
+            ) + fadeOut(animationSpec = effectsMotion),
+        ) {
+            AccountScreen(onBack = closeAccount)
+        }
+    }
+}
+
+@Composable
+private fun NotesWorkspace(
+    viewModel: NotesViewModel,
+    attachments: AttachmentStore,
+    aiModelStore: AiModelStore,
+    recognitionEngine: InkRecognitionEngine,
+    mathEngine: MathEngine,
+    onOpenAccount: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
@@ -485,6 +577,7 @@ fun NotesApp(
                         showNavigationToggle = medium,
                         navigationVisible = navigationVisible,
                         onToggleNavigation = viewModel::toggleNavigation,
+                        onOpenAccount = onOpenAccount,
                     )
 
                     HorizontalHairline()

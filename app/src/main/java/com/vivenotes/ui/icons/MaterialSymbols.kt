@@ -13,6 +13,7 @@ import com.vivenotes.R
  * retired `Icons` API while the actual vectors remain ordinary, shrinkable Android resources.
  */
 object MaterialSymbols {
+    val AccountCircle: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_account_circle)
     val Add: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add)
     val AddColumnRight: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_column_right)
     val AddRowBelow: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_row_below)

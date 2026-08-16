@@ -22,9 +22,8 @@ import com.vivenotes.ui.theme.ViveNotesTheme
 /**
  * The tab strip's own controls, as opposed to the tabs.
  *
- * Only one so far: whether a finger may draw. It lived on the Draw tab until 2026-08-08 and was
- * moved here because it is not a drawing tool — it decides whether a finger on the canvas marks the
- * page or scrolls it, which is as true with the Home tab open as with Draw.
+ * These are app-wide actions rather than tabs: whether a finger may draw and opening the account
+ * destination. The fixed strip keeps both available while the document tabs scroll underneath.
  */
 class RibbonTabStripTest {
 
@@ -32,6 +31,7 @@ class RibbonTabStripTest {
     val compose = createComposeRule()
 
     private var fingerDrawing: Boolean? = null
+    private var accountOpened = false
 
     @Test
     fun theFingerButtonTogglesWhoMayDraw() {
@@ -66,6 +66,15 @@ class RibbonTabStripTest {
         compose.onNodeWithTag(RibbonTags.FINGER).assertIsDisplayed()
     }
 
+    @Test
+    fun theAccountButtonOpensTheAccountDestination() {
+        setRibbon()
+
+        compose.onNodeWithTag(RibbonTags.ACCOUNT).performClick()
+
+        assertEquals(true, accountOpened)
+    }
+
     private fun setRibbon(
         activeTab: RibbonTab = RibbonTab.Document,
         allowFinger: Boolean = false,
@@ -96,6 +105,7 @@ class RibbonTabStripTest {
                         setDrawWithFinger = { fingerDrawing = it },
                     ),
                     pageOpen = true,
+                    onOpenAccount = { accountOpened = true },
                 )
             }
         }
