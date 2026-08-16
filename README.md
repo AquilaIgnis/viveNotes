@@ -73,7 +73,7 @@ and all AI features run entirely on-device.
 
 # Self Host server
 
-> link
+[Sync Server](https://github.com/AquilaIgnis/viveCServer)
 
 # Road Map
 
