@@ -118,6 +118,7 @@ import com.vivenotes.model.Mark
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PrintMargins
 import com.vivenotes.model.RuleLines
+import com.vivenotes.model.SpaceCut
 import androidx.compose.ui.text.TextRange
 import com.vivenotes.model.search.ContentKind
 import com.vivenotes.richtext.EditorStyle
@@ -351,6 +352,12 @@ fun EditorPane(
     onSetShapeFill: (Set<String>, Int?) -> Unit = { _, _ -> },
     erasing: Boolean = false,
     lassoing: Boolean = false,
+    /**
+     * Insert Space in hand — feature E2. A drag draws a line across the page and everything past it
+     * moves; [onInsertSpace] receives the one completed cut. See `com.vivenotes.model.PageSpace`.
+     */
+    insertingSpace: Boolean = false,
+    onInsertSpace: (SpaceCut) -> Unit = {},
     eraser: EraserSettings = EraserSettings(),
     allowFinger: Boolean = false,
     onStrokeFinished: (InkStroke) -> Unit = {},
@@ -1052,9 +1059,10 @@ fun EditorPane(
                             selection = selection,
                             lassoGesture = lassoGesture.takeIf { lassoing },
                             // While the shape tool is armed a drag draws a new shape, and while the
-                            // lasso is the overlay owns every gesture on the page — in neither case
-                            // may this layer also try to edit what is under the pointer.
-                            interactive = shaping == null && !lassoing,
+                            // lasso or Insert Space is the overlay owns every gesture on the page —
+                            // in none of the three may this layer also try to edit what is under the
+                            // pointer.
+                            interactive = shaping == null && !lassoing && !insertingSpace,
                             visibleWindow = visibleWindow,
                             // This layer's tap is what clears the page's selection (TA11), and with
                             // a table selected it is the *only* thing that hears a tap on bare
@@ -1087,7 +1095,7 @@ fun EditorPane(
                                 canvasTextColor = canvas.text,
                                 lassoGesture = lassoGesture.takeIf { lassoing },
                                 interactive = shaping == null && !lassoing && !equationArmed &&
-                                    !tableArmed,
+                                    !tableArmed && !insertingSpace,
                                 visibleWindow = visibleWindow,
                                 onSelect = {
                                     dismissTextInput()
@@ -1107,7 +1115,7 @@ fun EditorPane(
                                         attachments = store,
                                         lassoGesture = lassoGesture.takeIf { lassoing },
                                         interactive = shaping == null && !lassoing &&
-                                            !equationArmed && !tableArmed,
+                                            !equationArmed && !tableArmed && !insertingSpace,
                                         visibleWindow = visibleWindow,
                                         onSelect = {
                                             dismissTextInput()
@@ -1150,7 +1158,11 @@ fun EditorPane(
                                 // own box and corner discs they were a second, dead set of handles
                                 // around the same table. The ribbon still reads `selection`, so its
                                 // Row and Column verbs are unaffected.
-                                selected = selection?.holdsTable(table.id) == true && !lassoing,
+                                // Insert Space is here for the same reason the lasso is: it covers
+                                // the page and takes every touch, so the grid's own handles would be
+                                // drawn live and be unreachable.
+                                selected = selection?.holdsTable(table.id) == true && !lassoing &&
+                                    !insertingSpace,
                                 editorStyle = editorStyle,
                                 defaults = defaults,
                                 initialBlocksFor = initialBlocksFor,
@@ -1278,6 +1290,7 @@ fun EditorPane(
                 erasing = erasing,
                 lassoing = lassoing,
                 shaping = shaping,
+                insertingSpace = insertingSpace,
                 ruler = laidRuler,
                 eraser = eraser,
                 allowFinger = allowFinger,
@@ -1302,6 +1315,7 @@ fun EditorPane(
                         }
                     }
                 },
+                onInsertSpace = onInsertSpace,
                 onPartialErase = onPartialErase,
                 onObjectErase = onObjectErase,
                 onMoveSelection = onMoveSelection,

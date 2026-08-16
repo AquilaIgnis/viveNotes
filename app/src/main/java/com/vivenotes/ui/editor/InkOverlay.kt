@@ -65,11 +65,14 @@ import com.vivenotes.ink.targetsFor
 import com.vivenotes.ink.subtract
 import com.vivenotes.ink.eraseObjects
 import com.vivenotes.model.Outline
+import com.vivenotes.model.PageSpace
+import com.vivenotes.model.SpaceCut
 import com.vivenotes.model.ink.trace
 import com.vivenotes.ui.theme.LocalCanvasColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 import kotlin.math.hypot
 
 /** Test tag for the drawing surface, which has no text and no children of its own. */
@@ -144,6 +147,13 @@ internal fun InkOverlay(
     /** The armed shape's settings, or null when Insert Shape is not the tool in hand. */
     shaping: ShapeSettings?,
     /**
+     * Whether Insert Space is in hand — E2.
+     *
+     * A plain flag rather than a settings object like [shaping], because the tool has nothing to
+     * configure: the drag says where the line is, which way it runs and how far it goes.
+     */
+    insertingSpace: Boolean = false,
+    /**
      * The ruler lying on the page, or null when it is away — `docs/rulerPlan.md`.
      *
      * Drawn here because this canvas is composed in every tool state, and applied here because RD5's
@@ -158,6 +168,8 @@ internal fun InkOverlay(
     pageToView: () -> Matrix,
     onStrokeFinished: (Stroke) -> Unit,
     onInsertShape: (InkPoint, InkPoint) -> Unit = { _, _ -> },
+    /** One completed Insert Space drag. Never fired for a tap — see [InsertSpaceGesture]. */
+    onInsertSpace: (SpaceCut) -> Unit = {},
     onPartialErase: (Stroke) -> Unit,
     onObjectErase: (Stroke) -> Unit,
     onMoveSelection: (InkLassoMove) -> Unit,
@@ -209,6 +221,8 @@ internal fun InkOverlay(
     val currentErasing by rememberUpdatedState(erasing)
     val currentLassoing by rememberUpdatedState(lassoing)
     val currentShaping by rememberUpdatedState(shaping)
+    val currentInsertingSpace by rememberUpdatedState(insertingSpace)
+    val currentOnInsertSpace by rememberUpdatedState(onInsertSpace)
     val currentRuler by rememberUpdatedState(ruler)
     val currentEraser by rememberUpdatedState(eraser)
     val currentAllowFinger by rememberUpdatedState(allowFinger)
@@ -256,6 +270,7 @@ internal fun InkOverlay(
     var ruledStroke by remember { mutableStateOf(false) }
     val eraseGesture = remember { EraseGesture() }
     val shapeGesture = remember { ShapeGesture() }
+    val insertSpaceGesture = remember { InsertSpaceGesture() }
     val viewConfiguration = LocalViewConfiguration.current
     val doubleTap = remember(viewConfiguration) {
         DoubleTapGesture(
@@ -273,6 +288,9 @@ internal fun InkOverlay(
     }
     LaunchedEffect(shaping == null) {
         if (shaping == null) shapeGesture.clear()
+    }
+    LaunchedEffect(insertingSpace) {
+        if (!insertingSpace) insertSpaceGesture.clear()
     }
     LaunchedEffect(strokes) {
         eraseGesture.reconcileCommittedStrokes()
@@ -318,6 +336,11 @@ internal fun InkOverlay(
     // with `colorScheme.surface`, so a hardcoded white here was one selection affordance in two
     // colours — the same one, on the same page, depending only on which tool had made it (AD7).
     val lassoHandleFill = MaterialTheme.colorScheme.surface.toArgb()
+    // The app's accent, not the canvas's ink: the Insert Space guide is a tool showing its work, the
+    // same kind of thing the lasso's trace is, and it disappears the moment the pointer lifts. The
+    // band is the same hue held well back, so the writing it lies over stays readable while it does.
+    val insertSpaceColor = MaterialTheme.colorScheme.primary.toArgb()
+    val insertSpaceBand = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f).toArgb()
     // Frosted plastic in the *canvas's* own ink, not the app's accent: a ruler is an object lying on
     // the paper, and one painted in the selection colour reads as a selection. See `RulerPaint`.
     val canvasInk = LocalCanvasColors.current.text
@@ -339,6 +362,7 @@ internal fun InkOverlay(
             // the native canvas, including the free-form trace and the live move/resize preview.
             val gestureRevision = lassoGesture.renderRevision
             val shapeRevision = shapeGesture.renderRevision
+            val spaceRevision = insertSpaceGesture.renderRevision
             val matrix = currentTransform()
             // The window in page units, so a stroke that cannot be seen is not drawn. On a densely
             // handwritten page this is the difference between drawing a screenful and drawing ten
@@ -386,6 +410,21 @@ internal fun InkOverlay(
                 }
                 currentShaping?.takeIf { shapeRevision >= 0 }?.let { settings ->
                     drawShapePreview(native, matrix, shapeGesture, settings)
+                }
+                if (currentInsertingSpace && spaceRevision >= 0) {
+                    insertSpaceGesture.preview?.let { cut ->
+                        drawInsertSpaceGuide(
+                            native,
+                            matrix,
+                            cut,
+                            // The same window the cull above measured: the guide spans what can be
+                            // seen, because a line drawn to the document's extent on an unbounded
+                            // canvas has no end to draw to.
+                            visible,
+                            color = insertSpaceColor,
+                            bandColor = insertSpaceBand,
+                        )
+                    }
                 }
                 eraseGesture.indicator?.let { indicator ->
                     drawEraserIndicator(native, matrix, indicator)
@@ -440,7 +479,7 @@ internal fun InkOverlay(
             )
         }
 
-        if (brush != null || erasing || lassoing || shaping != null) {
+        if (brush != null || erasing || lassoing || shaping != null || insertingSpace) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -504,6 +543,9 @@ internal fun InkOverlay(
                             onResizeImages = currentOnResizeImages,
                             shapeGesture = shapeGesture,
                             onInsertShape = currentOnInsertShape,
+                            insertingSpace = currentInsertingSpace,
+                            insertSpaceGesture = insertSpaceGesture,
+                            onInsertSpace = currentOnInsertSpace,
                             touchSlop = viewConfiguration.touchSlop,
                         )
                         pastePoint?.let(currentOnRequestPaste)
@@ -696,6 +738,9 @@ private fun handleInk(
     lassoGesture: LassoGesture,
     shapeGesture: ShapeGesture,
     onInsertShape: (InkPoint, InkPoint) -> Unit,
+    insertingSpace: Boolean,
+    insertSpaceGesture: InsertSpaceGesture,
+    onInsertSpace: (SpaceCut) -> Unit,
     touchSlop: Float,
 ): Boolean {
     val index = event.actionIndex
@@ -719,6 +764,18 @@ private fun handleInk(
         }
         val toPage = Matrix().also { transform.invert(it) }
         return shapeGesture.handle(event, toPage, touchSlop, onInsertShape)
+    }
+
+    // Ahead of the lasso for the reason the shape tool is ahead of both: a tool that owns the whole
+    // gesture must be asked before anything that would also like part of it. It follows the same
+    // finger rule as its neighbours — a disallowed finger pans, so the page can still be moved
+    // one-handed with the tool in hand.
+    if (insertingSpace) {
+        if (isDirectTouch && !allowFinger) {
+            return panPage(event, pan, velocity, panning, lastPan, setPanning)
+        }
+        val toPage = Matrix().also { transform.invert(it) }
+        return insertSpaceGesture.handle(event, toPage, touchSlop, onInsertSpace)
     }
 
     if (lassoing) {
@@ -1325,6 +1382,233 @@ internal class ShapeGesture {
 /** What a tap drops, in page units. A shape you can see and grab, not a speck. */
 private const val DEFAULT_SHAPE_WIDTH = 120f
 private const val DEFAULT_SHAPE_HEIGHT = 80f
+
+/**
+ * Owns one Insert Space drag — feature E2, and `com.vivenotes.model.PageSpace` for what it means.
+ *
+ * Like [ShapeGesture] this holds two page-space facts and lets the overlay draw from them, because
+ * there is nothing here for the front buffer to do: no ink is being laid down, and what the user
+ * needs to see is a line and a band, not a wet stroke.
+ *
+ * **The axis is chosen by the drag, not by where the pointer is.** OneNote decides it from proximity
+ * to the sheet's left and right edges, and shows the guide on hover before you press. Neither half
+ * of that survives here: this canvas is unbounded by default ([com.vivenotes.model.PaperSize.Auto]),
+ * so there is no edge to be near, and a finger has no hover to show a guide during. So the first
+ * unambiguous direction of travel decides, and then **locks** — a gesture that could still change its
+ * mind at 300 dp would flip the whole page sideways on a wobble. Until it locks the guide is drawn
+ * horizontal, which is both the common case and a promise the lock only ever keeps or turns.
+ */
+internal class InsertSpaceGesture {
+
+    var renderRevision by mutableIntStateOf(0)
+        private set
+
+    /** Where the line was drawn, or null while idle — which is also what says there is nothing to draw. */
+    private var origin by mutableStateOf<InkPoint?>(null)
+    private var axis by mutableStateOf(PageSpace.Axis.Vertical)
+
+    /** How far the drag has travelled along [axis]. Signed: negative is closing the gap. */
+    private var amount by mutableStateOf(0f)
+    private var pointerId: Int = -1
+    private var axisLocked = false
+
+    /**
+     * The cut as it currently stands, for the preview to draw, or null while idle.
+     *
+     * Deliberately the same value the commit will send: a preview computed one way and a commit
+     * computed another is the bug SD6 has the shape picker chips drawing themselves to avoid.
+     */
+    val preview: SpaceCut?
+        get() = origin?.let { SpaceCut(axis, axis.coordinateOf(it), amount) }
+
+    fun handle(
+        event: MotionEvent,
+        toPage: Matrix,
+        touchSlop: Float,
+        onCommit: (SpaceCut) -> Unit,
+    ): Boolean {
+        return when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                pointerId = event.getPointerId(event.actionIndex)
+                // Clamped to the page's own corner, so the line can never be drawn at a negative
+                // coordinate — which is what lets `SpaceCut.limitedTo` be the only limit a closing
+                // drag needs. See [PageBounds].
+                origin = PageBounds.clamp(event.pagePoint(event.actionIndex, toPage))
+                axis = PageSpace.Axis.Vertical
+                axisLocked = false
+                amount = 0f
+                invalidateDraw()
+                true
+            }
+            // A second contact is a palm or a pinch. Never more space.
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                clear()
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val began = origin ?: return false
+                val index = event.findPointerIndex(pointerId)
+                if (index < 0) return false
+                val point = PageBounds.clamp(event.pagePoint(index, toPage))
+                val dx = point.x - began.x
+                val dy = point.y - began.y
+                if (!axisLocked) {
+                    val slop = toPageLength(toPage, touchSlop)
+                    if (maxOf(abs(dx), abs(dy)) > slop) {
+                        axis = if (abs(dx) > abs(dy)) {
+                            PageSpace.Axis.Horizontal
+                        } else {
+                            PageSpace.Axis.Vertical
+                        }
+                        axisLocked = true
+                    }
+                }
+                amount = if (axis == PageSpace.Axis.Horizontal) dx else dy
+                invalidateDraw()
+                true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                if (event.getPointerId(event.actionIndex) != pointerId) return false
+                val cut = preview
+                clear()
+                // A tap commits nothing, and needs no special case to say so: an unmoved pointer has
+                // travelled zero, and a cut of zero is not a gesture. Unlike a shape, there is no
+                // sensible default amount to drop — how much space is the entire question.
+                cut?.takeIf { !it.isEmpty }?.let(onCommit)
+                true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                clear()
+                true
+            }
+            else -> false
+        }
+    }
+
+    fun clear() {
+        pointerId = -1
+        origin = null
+        axisLocked = false
+        amount = 0f
+        invalidateDraw()
+    }
+
+    private fun invalidateDraw() {
+        renderRevision = if (renderRevision == Int.MAX_VALUE) 0 else renderRevision + 1
+    }
+
+    /** View-pixel slop in page units, so the axis is decided at the same finger travel at any zoom. */
+    private fun toPageLength(toPage: Matrix, pixels: Float): Float {
+        val values = FloatArray(9)
+        toPage.getValues(values)
+        return pixels * hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y])
+    }
+
+    private fun PageSpace.Axis.coordinateOf(point: InkPoint): Float =
+        if (this == PageSpace.Axis.Horizontal) point.x else point.y
+}
+
+/**
+ * The Insert Space guide: the line, and the space it is making.
+ *
+ * **The band is the point.** A line and an arrow say which way the content is going; the filled band
+ * between the line and the pointer says *how much*, in the place where it will actually appear — so
+ * a drag that is about to open a two-inch gap looks like a two-inch gap before it is committed. On a
+ * closing drag the band falls on the other side of the line and shows the gap being consumed
+ * instead, which is why it is drawn from the sorted pair rather than from the sign.
+ *
+ * Everything is drawn in page space, so the guide zooms with the content it is measuring — the same
+ * decision [drawEraserIndicator] makes, and for the same reason: this is a measurement of the page,
+ * not a piece of window chrome. The line's own weight is the exception and is divided back out, as
+ * the lasso's trace is, because a hairline is a hairline at every zoom.
+ */
+private fun drawInsertSpaceGuide(
+    canvas: android.graphics.Canvas,
+    pageToView: Matrix,
+    cut: SpaceCut,
+    /** The page rectangle currently on screen, so the line spans the view rather than the document. */
+    window: android.graphics.RectF?,
+    color: Int,
+    bandColor: Int,
+) {
+    val values = FloatArray(9)
+    pageToView.getValues(values)
+    val scale = hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y]).coerceAtLeast(0.001f)
+    // Falls back to the page's own corner and a generous run when the transform will not invert,
+    // which is a zoom of zero and draws nothing anyway.
+    val across = window ?: android.graphics.RectF(0f, 0f, GUIDE_FALLBACK_SPAN, GUIDE_FALLBACK_SPAN)
+    val near = minOf(cut.at, cut.at + cut.amount)
+    val far = maxOf(cut.at, cut.at + cut.amount)
+
+    val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        style = Paint.Style.STROKE
+        strokeWidth = GUIDE_STROKE_DP / scale
+    }
+    val bandPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = bandColor
+        style = Paint.Style.FILL
+    }
+    val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        style = Paint.Style.FILL
+    }
+
+    val checkpoint = canvas.save()
+    canvas.concat(pageToView)
+    when (cut.axis) {
+        PageSpace.Axis.Vertical -> {
+            canvas.drawRect(across.left, near, across.right, far, bandPaint)
+            canvas.drawLine(across.left, cut.at, across.right, cut.at, linePaint)
+        }
+        PageSpace.Axis.Horizontal -> {
+            canvas.drawRect(near, across.top, far, across.bottom, bandPaint)
+            canvas.drawLine(cut.at, across.top, cut.at, across.bottom, linePaint)
+        }
+    }
+    // Centred in the part of the band that is on screen, so it stays visible however far the page is
+    // scrolled from where the drag began — and left off entirely once the band is too thin to hold
+    // it, because an arrowhead poking out of a 3 dp gap describes something other than that gap.
+    if (far - near >= GUIDE_ARROW_DP * 2f) {
+        val centre = when (cut.axis) {
+            PageSpace.Axis.Vertical -> InkPoint((across.left + across.right) / 2f, (near + far) / 2f)
+            PageSpace.Axis.Horizontal -> InkPoint((near + far) / 2f, (across.top + across.bottom) / 2f)
+        }
+        canvas.drawPath(arrowHead(cut, centre), arrowPaint)
+    }
+    canvas.restoreToCount(checkpoint)
+}
+
+/** A triangle pointing the way the content is travelling, in page units. */
+private fun arrowHead(cut: SpaceCut, centre: InkPoint): Path {
+    val reach = GUIDE_ARROW_DP
+    val half = GUIDE_ARROW_DP * 0.75f
+    val forward = if (cut.amount >= 0f) 1f else -1f
+    return Path().apply {
+        when (cut.axis) {
+            PageSpace.Axis.Vertical -> {
+                moveTo(centre.x, centre.y + reach * forward)
+                lineTo(centre.x - half, centre.y - reach * forward)
+                lineTo(centre.x + half, centre.y - reach * forward)
+            }
+            PageSpace.Axis.Horizontal -> {
+                moveTo(centre.x + reach * forward, centre.y)
+                lineTo(centre.x - reach * forward, centre.y - half)
+                lineTo(centre.x - reach * forward, centre.y + half)
+            }
+        }
+        close()
+    }
+}
+
+/** In view pixels: a guide line is chrome, so it keeps one weight at every zoom. */
+private const val GUIDE_STROKE_DP = 2f
+
+/** In page units, so the arrow scales with the gap it is describing rather than the window. */
+private const val GUIDE_ARROW_DP = 9f
+
+/** Only reached when the page transform will not invert, which draws nothing worth measuring. */
+private const val GUIDE_FALLBACK_SPAN = 2000f
 
 /**
  * Owns one lasso loop and the live move or corner-resize that follows it — but **not** the selection.

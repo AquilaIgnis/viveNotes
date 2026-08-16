@@ -267,6 +267,41 @@ class DrawTabTest {
     }
 
     @Test
+    fun insertSpaceIsPickedUp() {
+        setTab()
+        compose.onNodeWithTag(DrawTags.INSERT_SPACE).performClick()
+        assertEquals(DrawTool.InsertSpace, selected)
+    }
+
+    /**
+     * It belongs with the lasso rather than with the shapes: both rearrange what is already on the
+     * page, and everything past the divider puts something new on it.
+     */
+    @Test
+    fun insertSpaceSitsBesideTheLasso() {
+        setTab()
+        val lasso = compose.onNodeWithTag(DrawTags.LASSO).fetchSemanticsNode().boundsInRoot
+        val space = compose.onNodeWithTag(DrawTags.INSERT_SPACE).fetchSemanticsNode().boundsInRoot
+
+        assertTrue("$space is not right of $lasso", space.left >= lasso.right)
+    }
+
+    /**
+     * The one tool in the tray with nothing to configure — the drag is the whole setting — so tapping
+     * the armed button must not open a panel the way an armed pen or eraser does.
+     */
+    @Test
+    fun tappingArmedInsertSpaceOpensNoSettings() {
+        setTab(tool = DrawTool.InsertSpace)
+
+        compose.onNodeWithTag(DrawTags.INSERT_SPACE).performClick()
+
+        assertEquals(DrawTool.InsertSpace, selected)
+        compose.onNodeWithTag(PenPanelTags.PREVIEW).assertDoesNotExist()
+        compose.onNodeWithTag(HighlighterPanelTags.PREVIEW).assertDoesNotExist()
+    }
+
+    @Test
     fun tappingTheArmedEraserOpensItsSettings() {
         setTab(tool = DrawTool.Eraser)
         compose.onNodeWithTag(DrawTags.ERASER).performClick()

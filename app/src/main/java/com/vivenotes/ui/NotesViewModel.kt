@@ -87,6 +87,7 @@ import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.eraseObjects
 import com.vivenotes.ink.moveSelected
 import com.vivenotes.ink.pageBounds
+import com.vivenotes.ink.projectionKey
 import com.vivenotes.ink.recolor
 import com.vivenotes.ink.regroup
 import com.vivenotes.ink.resizeSelected
@@ -109,6 +110,7 @@ import com.vivenotes.model.PaperDimensions
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.PrintMargins
 import com.vivenotes.model.RuleLines
+import com.vivenotes.model.SpaceCut
 import com.vivenotes.model.newId
 import com.vivenotes.model.newTable
 import com.vivenotes.model.search.ContentHit
@@ -308,6 +310,22 @@ private sealed interface CanvasHistoryEntry {
         val coalesceKey: String? = null,
         val atMillis: Long = 0L,
     ) : CanvasHistoryEntry
+
+    /**
+     * Several kinds' entries that are one action, and must be undone as one.
+     *
+     * **The exception to what `pasteObjects` decided, not a change of mind about it.** Paste leaves
+     * one entry per kind and says so: each press of Undo visibly takes back half of a paste, so a
+     * two-press unwind is a curiosity rather than a fault. Insert Space cannot make that bargain —
+     * the whole point of it is that everything past the line moves *together*, so an entry per kind
+     * would leave the page half-shifted between presses, with ink sitting where the text used to be.
+     * A gesture whose correctness is the relationship between the kinds has to be one entry.
+     *
+     * Deliberately not the default for cross-kind work, and deliberately not built by scanning the
+     * ring afterwards: it is opted into around one call ([NotesViewModel.asOneAction]), so the entries
+     * that belong together are the ones that were produced together.
+     */
+    data class Composite(val parts: List<CanvasHistoryEntry>) : CanvasHistoryEntry
 }
 
 /**
@@ -666,6 +684,16 @@ class NotesViewModel(
      * and both are safely shared between entries.
      */
     private val canvasHistoryByPage = mutableMapOf<String, PageCanvasHistory>()
+
+    /**
+     * Where [pushHistory] puts entries while [asOneAction] is collecting them, or null the rest of
+     * the time — which is all of the time except inside one synchronous call.
+     *
+     * A plain field rather than anything thread-aware on purpose: everything that records history
+     * runs on the main thread, and this is only ever set and cleared inside a single stack frame of
+     * it — [asOneAction] is its only writer.
+     */
+    private var historyGroup: MutableList<CanvasHistoryEntry>? = null
 
     /** An erase resolves native geometry off-thread; history pauses until its action is committed. */
     private val pendingInkEditsByPage = mutableMapOf<String, Int>()
@@ -2670,6 +2698,128 @@ class NotesViewModel(
         }
     }
 
+    // --- insert space ---------------------------------------------------------------------------
+
+    /**
+     * Insert Space — feature E2, and `com.vivenotes.model.PageSpace` for what the gesture means.
+     *
+     * Everything whose near edge is past [cut]'s line moves by its amount; everything else stays. That
+     * is one translation applied to every kind on the page, which makes this the widest single action
+     * in the app: it is the only one that can touch ink, text, shapes, pictures, tables and equations
+     * at once, without anything having been selected.
+     *
+     * **The limit is computed across all six kinds before any of them moves.** A closing drag can only
+     * take back as much space as the *nearest* thing to the line has, and asking each kind to stop
+     * itself would let the ink slide up 40 dp while the text beside it stopped at 10 — which is the
+     * one thing this gesture must never do, since its whole promise is that what moves, moves
+     * together. So the smallest near edge decides for all of them, and [SpaceCut.limitedTo] applies it
+     * once.
+     *
+     * Each kind then commits through the door it already has, which is what AD7's second consequence
+     * asks for: the same operation, applied by each kind to its own representation. What is different
+     * here is that they are wrapped in [asOneAction] — see [CanvasHistoryEntry.Composite] for why this
+     * gesture, unlike a paste, cannot be left as one entry per kind.
+     */
+    fun insertSpace(cut: SpaceCut) {
+        if (cut.isEmpty) return
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val state = _uiState.value
+
+        // **A stored row — or a group — is the atom, not a projection.** An erase splits one stroke
+        // into several projections that share a row id, and a group is several strokes the user
+        // deliberately tied together; in both cases the pieces are one thing on the page, and one
+        // thing either straddles the line or does not. Deciding per projection would cut a
+        // partially-erased word in half, or push the bottom of a grouped diagram out from under its
+        // own top. This is the same reading `selectWithLasso` gives a row and a group.
+        val movingInk = _strokes.value
+            .groupBy { it.groupId ?: it.id }
+            .values
+            .filter { unit ->
+                val boxes = unit.mapNotNull(PageStroke::pageBounds)
+                boxes.isNotEmpty() && boxes.all { cut.moves(it.left, it.top) }
+            }
+            .flatten()
+
+        val movingTexts = state.outlines.filter { cut.moves(it.x, it.y) }
+        val movingShapes = state.shapes.filter { cut.moves(it.x, it.y) }
+        val movingImages = state.images.filter { cut.moves(it.x, it.y) }
+        val movingTables = state.tables.filter { cut.moves(it.x, it.y) }
+        val movingEquations = state.equations.filter { cut.moves(it.x, it.y) }
+        val movingOutlines: List<Outline> =
+            movingShapes + movingImages + movingTables + movingEquations
+
+        val nearest = (
+            movingInk.mapNotNull(PageStroke::pageBounds).map { cut.nearEdge(it.left, it.top) } +
+                movingTexts.map { cut.nearEdge(it.x, it.y) } +
+                movingOutlines.map { cut.nearEdge(it.x, it.y) }
+            ).minOrNull()
+        val limited = cut.limitedTo(nearest)
+        // A closing drag with nothing between the line and the content it would have moved. The
+        // gesture happened; it simply had no room, exactly as pushing a window into a screen corner
+        // does nothing.
+        if (limited.isEmpty) return
+        val dx = limited.dx
+        val dy = limited.dy
+
+        asOneAction(pageId) {
+            if (movingTexts.isNotEmpty()) {
+                val ids = movingTexts.mapTo(mutableSetOf(), OutlineBox::id)
+                // No touched containers: this moves boxes and never opens one, so the history entry
+                // carries geometry alone and undo cannot reach sideways into text being typed.
+                editTexts(touched = emptySet()) { boxes ->
+                    boxes.map { if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it }
+                }
+            }
+            moveShapes(movingShapes.mapTo(mutableSetOf(), Outline.Shape::id), dx, dy)
+            moveImages(movingImages.mapTo(mutableSetOf(), Outline.Image::id), dx, dy)
+            moveTables(movingTables.mapTo(mutableSetOf(), Outline.Table::id), dx, dy)
+            moveEquations(movingEquations.mapTo(mutableSetOf(), Outline.Equation::id), dx, dy)
+            moveInkPastLine(movingInk, dx, dy)
+        }
+    }
+
+    /**
+     * The ink half of [insertSpace], as an ordinary replayable lasso move.
+     *
+     * **A rectangle is a lasso, so this needs no new kind of stored operation.** `ink_moves` already
+     * holds a page-space polygon plus a delta, and `replayMove` already selects by "enclosed by the
+     * polygon *and* named in the targets" — so a box drawn around exactly the strokes that are moving
+     * replays as exactly the move that was committed. The alternative was a seventh operation kind in
+     * the ink log, a migration, and a second replay path to keep in step with the first, for a
+     * translation the existing one already expresses.
+     *
+     * The box is the union of what is moving rather than the half-plane the gesture describes,
+     * deliberately: an unbounded canvas has no far edge to draw a half-plane to, and a polygon has to
+     * be finite to be stored. Nothing is lost — the targets are named by id, so a stroke drawn below
+     * the line *after* this gesture is not swept up by it on the next load, which is correct.
+     *
+     * [SPACE_LASSO_MARGIN] keeps the enclosure test off the boundary itself: `pointInPolygon` gives no
+     * useful answer for a corner lying exactly on an edge, and a stroke whose top is exactly at the
+     * line is the common case rather than a curiosity.
+     */
+    private fun moveInkPastLine(moving: List<PageStroke>, dx: Float, dy: Float) {
+        val bounds = moving.mapNotNull(PageStroke::pageBounds).unionBounds() ?: return
+        val left = bounds.left - SPACE_LASSO_MARGIN
+        val top = bounds.top - SPACE_LASSO_MARGIN
+        val right = bounds.right + SPACE_LASSO_MARGIN
+        val bottom = bounds.bottom + SPACE_LASSO_MARGIN
+        moveInk(
+            InkLassoMove(
+                path = listOf(
+                    InkPoint(left, top),
+                    InkPoint(right, top),
+                    InkPoint(right, bottom),
+                    InkPoint(left, bottom),
+                ),
+                targetIds = moving.mapTo(mutableSetOf(), PageStroke::id),
+                projections = moving.mapTo(mutableSetOf(), PageStroke::projectionKey),
+                dx = dx,
+                dy = dy,
+            ),
+        )
+    }
+
     /**
      * Puts the selection on the shared clipboard, whatever it holds. The page does not change.
      *
@@ -3006,6 +3156,50 @@ class NotesViewModel(
                 )
                 edits.tryEmit(Unit)
             }
+            // Backwards on the way out, forwards on the way in. The parts of one composite touch
+            // different halves of the state and so commute in practice, but a history that only
+            // works because its steps happen not to interfere is a history waiting for the first
+            // pair that does.
+            is CanvasHistoryEntry.Composite -> {
+                val parts = if (applied) entry.parts else entry.parts.asReversed()
+                parts.forEach { applyHistoryEntry(it, applied) }
+            }
+        }
+    }
+
+    /**
+     * Collects everything [body] records into a single entry on the ring — see
+     * [CanvasHistoryEntry.Composite] for when that is right and when it is not.
+     *
+     * **The ring is diverted rather than the entries post-processed.** Each kind's edit funnel is the
+     * one door that kind goes through, and it is the funnel that applies the origin-corner invariant,
+     * wakes autosave and decides that an edit changing nothing is not an edit. Reaching around them to
+     * write history by hand would mean reimplementing all of that per kind and getting it wrong on the
+     * sixth; taking their entries as they are produced costs a redirect in [pushHistory] and leaves
+     * every funnel exactly as it was.
+     *
+     * Nesting is a no-op rather than an error: the outermost call owns the group, so a helper that
+     * groups internally can still be called from inside a larger action.
+     */
+    private inline fun asOneAction(pageId: String, body: () -> Unit) {
+        if (historyGroup != null) {
+            body()
+            return
+        }
+        val collected = mutableListOf<CanvasHistoryEntry>()
+        historyGroup = collected
+        try {
+            body()
+        } finally {
+            historyGroup = null
+        }
+        when (collected.size) {
+            // Nothing moved — an edit that changes nothing is not an edit, at this level too.
+            0 -> Unit
+            // One kind's action is that kind's entry. Wrapping it would only cost the coalescing
+            // in [pushHistory] the ability to see what it is.
+            1 -> pushHistory(pageId, collected.first())
+            else -> pushHistory(pageId, CanvasHistoryEntry.Composite(collected.toList()))
         }
     }
 
@@ -3028,6 +3222,13 @@ class NotesViewModel(
      * one undo rather than one per step, without a gesture protocol reaching all the way up here.
      */
     private fun pushHistory(pageId: String, entry: CanvasHistoryEntry) {
+        // Being collected into one action. Nothing else may happen yet — in particular the redo
+        // branch must not be dropped and the buttons must not be republished until the whole action
+        // has landed, or a half-built composite would already be on the ring.
+        historyGroup?.let {
+            it += entry
+            return
+        }
         val history = canvasHistoryByPage.getOrPut(pageId, ::PageCanvasHistory)
         val previous = history.undo.lastOrNull()
 
@@ -3475,6 +3676,15 @@ class NotesViewModel(
 
         /** Far enough that a duplicate is not mistaken for the original not having copied. */
         private const val DUPLICATE_OFFSET = 16f
+
+        /**
+         * How far Insert Space's replay box stands off the ink inside it, in page units.
+         *
+         * Only has to be non-zero — the targets are named by id, so a stroke that is not moving
+         * cannot be caught by a generous box. A dp of slack simply keeps the enclosure test away
+         * from its own boundary. See [moveInkPastLine].
+         */
+        private const val SPACE_LASSO_MARGIN = 4f
 
         /**
          * How far inside the visible corner a ribbon-inserted object lands.

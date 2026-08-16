@@ -58,8 +58,10 @@ import com.vivenotes.model.Mark
 import com.vivenotes.model.Orientation
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
+import com.vivenotes.model.PageSpace
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PaperSize
+import com.vivenotes.model.SpaceCut
 import com.vivenotes.model.RuleLines
 import com.vivenotes.model.plainText
 import com.vivenotes.richtext.FormatCommand
@@ -1023,6 +1025,254 @@ class NotesViewModelTest {
 
     private fun Stroke.overlaps(area: ImmutableBox): Boolean =
         shape.computeCoverageIsGreaterThan(area, 0f)
+
+    // --- Insert Space (E2) ---------------------------------------------------------------------
+
+    /**
+     * A page with something of every movable kind on both sides of a line at y = 200.
+     *
+     * Returns the ids of the things below it, which are the ones the gesture has to move. The
+     * strokes are named by row id and identified by where they are, because [inkStroke] hands the
+     * page a mask whose exact bounds are the brush's business rather than the test's.
+     */
+    private suspend fun pageStraddling(vm: NotesViewModel): Map<String, String> {
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 40f, 90f to 40f))
+        vm.onStrokeFinished(inkStroke(10f to 300f, 90f to 300f))
+        scheduler.advanceUntilIdle()
+        val keptShape = vm.insertShape(ShapeSettings(), 20f, 20f, 120f, 100f)!!
+        val movedShape = vm.insertShape(ShapeSettings(), 20f, 400f, 120f, 480f)!!
+        val movedText = vm.createOutline(40f, 500f)
+        vm.onBlocksChanged(movedText, listOf(Block.of("below the line")))
+        scheduler.advanceUntilIdle()
+        return mapOf(
+            "keptInk" to vm.strokes.value.first { it.pageBounds!!.top < 200f }.id,
+            "movedInk" to vm.strokes.value.first { it.pageBounds!!.top >= 200f }.id,
+            "keptShape" to keptShape,
+            "movedShape" to movedShape,
+            "movedText" to movedText,
+        )
+    }
+
+    private fun NotesViewModel.offsetOf(id: String): Float =
+        strokes.value.first { it.id == id }.offsetY
+
+    private fun NotesViewModel.shapeY(id: String): Float =
+        uiState.value.shapes.first { it.id == id }.y
+
+    private fun NotesViewModel.outlineY(id: String): Float =
+        uiState.value.outlines.first { it.id == id }.y
+
+    /**
+     * The whole promise of the tool, and the reason it is not five separate features: one line, and
+     * every kind past it moves by the same amount while every kind before it stays exactly where it
+     * was.
+     */
+    @Test
+    fun insertSpaceMovesEveryKindPastTheLineAndNothingBeforeIt() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val ids = pageStraddling(vm)
+
+        vm.insertSpace(SpaceCut(PageSpace.Axis.Vertical, at = 200f, amount = 120f))
+        advanceUntilIdle()
+
+        assertEquals(0f, vm.offsetOf(ids.getValue("keptInk")), 0.01f)
+        assertEquals(120f, vm.offsetOf(ids.getValue("movedInk")), 0.01f)
+        assertEquals(20f, vm.shapeY(ids.getValue("keptShape")), 0.01f)
+        assertEquals(520f, vm.shapeY(ids.getValue("movedShape")), 0.01f)
+        assertEquals(620f, vm.outlineY(ids.getValue("movedText")), 0.01f)
+    }
+
+    /** The horizontal half of the same gesture — `PageSpace.Axis.Horizontal` reads x, not y. */
+    @Test
+    fun insertSpacePushesSidewaysToo() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val kept = vm.insertShape(ShapeSettings(), 20f, 300f, 60f, 340f)!!
+        val moved = vm.insertShape(ShapeSettings(), 400f, 300f, 460f, 340f)!!
+        advanceUntilIdle()
+
+        vm.insertSpace(SpaceCut(PageSpace.Axis.Horizontal, at = 200f, amount = 80f))
+        advanceUntilIdle()
+
+        assertEquals(20f, vm.uiState.value.shapes.first { it.id == kept }.x, 0.01f)
+        assertEquals(480f, vm.uiState.value.shapes.first { it.id == moved }.x, 0.01f)
+        assertEquals("a sideways cut moved something vertically", 300f, vm.shapeY(kept), 0.01f)
+        assertEquals("a sideways cut moved something vertically", 300f, vm.shapeY(moved), 0.01f)
+    }
+
+    /**
+     * The one thing this gesture must never do is leave the page half-shifted, so its several kinds
+     * are one entry on the history ring rather than one each — `CanvasHistoryEntry.Composite`.
+     */
+    @Test
+    fun insertSpaceIsOneUndoAcrossEveryKindItMoved() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val ids = pageStraddling(vm)
+
+        vm.insertSpace(SpaceCut(PageSpace.Axis.Vertical, at = 200f, amount = 120f))
+        advanceUntilIdle()
+        vm.undoCanvas()
+
+        assertEquals(0f, vm.offsetOf(ids.getValue("movedInk")), 0.01f)
+        assertEquals(400f, vm.shapeY(ids.getValue("movedShape")), 0.01f)
+        assertEquals(500f, vm.outlineY(ids.getValue("movedText")), 0.01f)
+        // One press, not four: everything that was on the page before the gesture is still there.
+        assertEquals("the single undo reached past the gesture", 2, vm.strokes.value.size)
+        assertEquals("the single undo reached past the gesture", 2, vm.uiState.value.shapes.size)
+
+        vm.redoCanvas()
+        assertEquals(120f, vm.offsetOf(ids.getValue("movedInk")), 0.01f)
+        assertEquals(520f, vm.shapeY(ids.getValue("movedShape")), 0.01f)
+        assertEquals(620f, vm.outlineY(ids.getValue("movedText")), 0.01f)
+        advanceUntilIdle()
+    }
+
+    /**
+     * The ink half rides the existing `ink_moves` log, so the proof it was stored rather than merely
+     * applied in memory is that reopening the page replays it to the same place.
+     */
+    @Test
+    fun insertSpaceSurvivesReopeningThePage() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        val ids = pageStraddling(vm)
+
+        vm.insertSpace(SpaceCut(PageSpace.Axis.Vertical, at = 200f, amount = 120f))
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        assertEquals(120f, vm.offsetOf(ids.getValue("movedInk")), 0.01f)
+        assertEquals("replay swept up the stroke above the line", 0f, vm.offsetOf(ids.getValue("keptInk")), 0.01f)
+        assertEquals(520f, vm.shapeY(ids.getValue("movedShape")), 0.01f)
+        assertEquals(620f, vm.outlineY(ids.getValue("movedText")), 0.01f)
+    }
+
+    /**
+     * A stroke drawn *after* the gesture is not caught by it on the next load. The stored operation
+     * names its targets by row id, so the box it carries is a description of what moved rather than a
+     * standing rule about that part of the page.
+     */
+    @Test
+    fun inkDrawnAfterInsertSpaceIsNotMovedByItOnReload() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 300f, 90f to 300f))
+        advanceUntilIdle()
+        val first = vm.strokes.value.single().id
+
+        vm.insertSpace(SpaceCut(PageSpace.Axis.Vertical, at = 200f, amount = 120f))
+        advanceUntilIdle()
+        vm.onStrokeFinished(inkStroke(10f to 500f, 90f to 500f))
+        advanceUntilIdle()
+        val second = vm.strokes.value.first { it.id != first }.id
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        assertEquals(120f, vm.offsetOf(first), 0.01f)
+        assertEquals("the later stroke was swept up by the earlier gesture", 0f, vm.offsetOf(second), 0.01f)
+    }
+
+    /** Dragging back closes the gap, and stops at the line rather than pulling content through it. */
+    @Test
+    fun closingSpaceStopsAtTheLine() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 300f, 90f to 300f))
+        advanceUntilIdle()
+        val top = vm.strokes.value.single().pageBounds!!.top
+
+        vm.insertSpace(SpaceCut(PageSpace.Axis.Vertical, at = 200f, amount = -1000f))
+        advanceUntilIdle()
+
+        assertEquals(200f, vm.strokes.value.single().pageBounds!!.top, 0.01f)
+        assertEquals(200f - top, vm.strokes.value.single().offsetY, 0.01f)
+    }
+
+    /**
+     * The limit is computed across the kinds before any of them moves. Asking each to stop itself
+     * would let the ink slide the full drag while the shape beside it stopped short, which is exactly
+     * the half-shifted page the gesture exists to avoid.
+     */
+    @Test
+    fun aClosingDragIsLimitedByTheNearestObjectOfAnyKind() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 600f, 90f to 600f))
+        advanceUntilIdle()
+        // 40 dp below the line, and far above the ink — so it, not the ink, decides the limit.
+        val shapeId = vm.insertShape(ShapeSettings(), 20f, 240f, 120f, 300f)!!
+        advanceUntilIdle()
+        val inkTop = vm.strokes.value.single().pageBounds!!.top
+
+        vm.insertSpace(SpaceCut(PageSpace.Axis.Vertical, at = 200f, amount = -500f))
+        advanceUntilIdle()
+
+        assertEquals(200f, vm.shapeY(shapeId), 0.01f)
+        assertEquals("the ink outran the shape it was moving with", inkTop - 40f, vm.strokes.value.single().pageBounds!!.top, 0.01f)
+    }
+
+    /** The near edge decides, so something that begins before the line stays whole and stays put. */
+    @Test
+    fun anObjectStraddlingTheLineStaysPut() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(50f to 150f, 50f to 400f))
+        advanceUntilIdle()
+        val tall = vm.insertShape(ShapeSettings(), 200f, 150f, 300f, 400f)!!
+        advanceUntilIdle()
+
+        vm.insertSpace(SpaceCut(PageSpace.Axis.Vertical, at = 200f, amount = 120f))
+        advanceUntilIdle()
+
+        assertEquals(0f, vm.strokes.value.single().offsetY, 0.01f)
+        assertEquals(150f, vm.shapeY(tall), 0.01f)
+    }
+
+    /**
+     * A group is one thing on the page, so a group crossing the line is a thing that straddles it.
+     * Judging its members one at a time would push the bottom of a drawing out from under its top.
+     */
+    @Test
+    fun aGroupCrossingTheLineIsNotTornInHalf() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 40f, 90f to 40f))
+        vm.onStrokeFinished(inkStroke(10f to 300f, 90f to 300f))
+        advanceUntilIdle()
+        vm.groupInk(vm.strokes.value.mapTo(mutableSetOf()) { it.id })
+        advanceUntilIdle()
+
+        vm.insertSpace(SpaceCut(PageSpace.Axis.Vertical, at = 200f, amount = 120f))
+        advanceUntilIdle()
+
+        assertTrue(
+            "half the group moved: ${vm.strokes.value.map { it.offsetY }}",
+            vm.strokes.value.all { it.offsetY == 0f },
+        )
+    }
+
+    /** Nothing past the line means nothing to do, and in particular nothing on the history ring. */
+    @Test
+    fun anInsertSpaceThatMovesNothingIsNotAnAction() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val shapeId = vm.insertShape(ShapeSettings(), 20f, 20f, 120f, 100f)!!
+        advanceUntilIdle()
+        assertEquals(CanvasUndoState(canUndo = true), vm.canvasUndoState.value)
+
+        vm.insertSpace(SpaceCut(PageSpace.Axis.Vertical, at = 900f, amount = 120f))
+        advanceUntilIdle()
+
+        // One press reaches the insert, which is only true if the gesture recorded nothing.
+        vm.undoCanvas()
+        assertTrue("an empty gesture left an entry on the ring", vm.uiState.value.shapes.isEmpty())
+
+        vm.redoCanvas()
+        assertEquals(20f, vm.shapeY(shapeId), 0.01f)
+        advanceUntilIdle()
+    }
 
     // --- free-form containers ------------------------------------------------------------------
 

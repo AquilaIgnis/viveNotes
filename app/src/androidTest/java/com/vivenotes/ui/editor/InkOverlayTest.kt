@@ -49,6 +49,8 @@ import androidx.compose.runtime.setValue
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.model.Outline
+import com.vivenotes.model.PageSpace
+import com.vivenotes.model.SpaceCut
 import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.model.ink.ShapeKind
 import com.vivenotes.ui.theme.ViveNotesTheme
@@ -79,6 +81,7 @@ class InkOverlayTest {
     private var deletedIds = emptySet<String>()
     private var recolorArgb: Int? = null
     private var requestedPaste: InkPoint? = null
+    private var spaceCut: SpaceCut? = null
 
     private val recordingPan = object : CanvasPan {
         override fun by(dx: Float, dy: Float) {
@@ -94,6 +97,7 @@ class InkOverlayTest {
         allowFinger: Boolean,
         erasing: Boolean = false,
         lassoing: Boolean = false,
+        insertingSpace: Boolean = false,
         eraser: EraserSettings = EraserSettings(),
         pageStrokes: List<PageStroke> = emptyList(),
         hasClipboard: Boolean = false,
@@ -111,7 +115,7 @@ class InkOverlayTest {
                         selection = selection,
                         onSelect = { selection = it },
                         lassoGesture = lasso,
-                        brush = if (lassoing) null else Brush.createWithColorIntArgb(
+                        brush = if (lassoing || insertingSpace) null else Brush.createWithColorIntArgb(
                             family = StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1),
                             colorIntArgb = android.graphics.Color.BLACK,
                             size = 5f,
@@ -120,6 +124,7 @@ class InkOverlayTest {
                         erasing = erasing,
                         lassoing = lassoing,
                         shaping = null,
+                        insertingSpace = insertingSpace,
                         ruler = ruler,
                         eraser = eraser,
                         allowFinger = allowFinger,
@@ -130,6 +135,7 @@ class InkOverlayTest {
                         },
                         onObjectErase = { objectEraseCalls++ },
                         onPartialErase = { partialErases++ },
+                        onInsertSpace = { spaceCut = it },
                         onMoveSelection = { lassoMove = it },
                         onResizeSelection = { lassoResize = it },
                         onDeleteSelection = { deletedIds = it },
@@ -162,6 +168,166 @@ class InkOverlayTest {
         }
     }
 
+
+    // --- Insert Space (E2) -----------------------------------------------------------------------
+    //
+    // The overlay's transform is identity in these, so view pixels and page units are the same
+    // number and the assertions can be read straight off the gesture.
+
+    @Test
+    fun aDownwardDragInsertsVerticalSpaceAtWhereItBegan() {
+        setOverlay(allowFinger = true, insertingSpace = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(200f, 300f))
+            moveTo(Offset(200f, 360f))
+            moveTo(Offset(200f, 420f))
+            up()
+        }
+        compose.waitForIdle()
+
+        val cut = spaceCut ?: error("the drag committed no cut")
+        assertEquals(PageSpace.Axis.Vertical, cut.axis)
+        assertEquals("the line is where the drag began, not where it ended", 300f, cut.at, 0.5f)
+        assertEquals(120f, cut.amount, 0.5f)
+    }
+
+    /** Dragging back the other way takes space away, which is the same gesture with a sign. */
+    @Test
+    fun anUpwardDragClosesSpace() {
+        setOverlay(allowFinger = true, insertingSpace = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(200f, 400f))
+            moveTo(Offset(200f, 320f))
+            up()
+        }
+        compose.waitForIdle()
+
+        val cut = spaceCut ?: error("the drag committed no cut")
+        assertEquals(PageSpace.Axis.Vertical, cut.axis)
+        assertEquals(-80f, cut.amount, 0.5f)
+    }
+
+    /** The other axis, reached by travelling that way rather than by starting near a page edge. */
+    @Test
+    fun aSidewaysDragInsertsHorizontalSpace() {
+        setOverlay(allowFinger = true, insertingSpace = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(200f, 300f))
+            moveTo(Offset(280f, 302f))
+            moveTo(Offset(350f, 305f))
+            up()
+        }
+        compose.waitForIdle()
+
+        val cut = spaceCut ?: error("the drag committed no cut")
+        assertEquals(PageSpace.Axis.Horizontal, cut.axis)
+        assertEquals("a sideways line is placed by x", 200f, cut.at, 0.5f)
+        assertEquals(150f, cut.amount, 0.5f)
+    }
+
+    /**
+     * Once the direction is settled it stays settled. A gesture that could still change its mind
+     * halfway would turn a long downward drag into a sideways one on a wobble, and shove the whole
+     * page across instead of down.
+     */
+    @Test
+    fun theAxisLocksOnceTheDragHasChosenOne() {
+        setOverlay(allowFinger = true, insertingSpace = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(200f, 300f))
+            moveTo(Offset(200f, 500f))
+            // Further sideways than it ever went down, and far too late to matter.
+            moveTo(Offset(600f, 500f))
+            up()
+        }
+        compose.waitForIdle()
+
+        val cut = spaceCut ?: error("the drag committed no cut")
+        assertEquals(PageSpace.Axis.Vertical, cut.axis)
+        assertEquals(200f, cut.amount, 0.5f)
+    }
+
+    /**
+     * The band is the affordance: it shows the gap that is about to appear, in the place it will
+     * appear, while the pointer is still down. And it is a preview rather than a mark, so it must be
+     * gone the moment the gesture ends.
+     */
+    @Test
+    fun theGuideShowsTheGapItIsAboutToOpenAndThenGoes() {
+        setInsertSpaceOnWhite()
+        val overlay = compose.onNodeWithTag(INK_OVERLAY_TAG)
+
+        overlay.performTouchInput {
+            down(Offset(200f, 200f))
+            moveTo(Offset(200f, 300f))
+        }
+        compose.waitForIdle()
+
+        assertTrue("nothing was drawn between the line and the pointer", inkPixels(150, 220, 250, 280) > 0)
+        assertEquals("the guide reached back past the line", 0, inkPixels(150, 100, 250, 180))
+
+        overlay.performTouchInput { up() }
+        compose.waitForIdle()
+
+        assertEquals("the guide outlived the gesture", 0, inkPixels(150, 220, 250, 280))
+    }
+
+    private fun setInsertSpaceOnWhite() {
+        compose.setContent {
+            ViveNotesTheme {
+                Box(Modifier.fillMaxSize().background(Color.White)) {
+                    InkOverlay(
+                        strokes = emptyList(),
+                        lassoGesture = remember { LassoGesture() },
+                        brush = null,
+                        erasing = false,
+                        lassoing = false,
+                        shaping = null,
+                        insertingSpace = true,
+                        eraser = EraserSettings(),
+                        allowFinger = true,
+                        pageToView = { Matrix() },
+                        onStrokeFinished = {},
+                        onInsertSpace = { spaceCut = it },
+                        onPartialErase = {},
+                        onObjectErase = {},
+                        onMoveSelection = {},
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    }
+
+    /** A tap says where but not how much, and how much is the entire question. */
+    @Test
+    fun aTapInsertsNothing() {
+        setOverlay(allowFinger = true, insertingSpace = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performClick()
+        compose.waitForIdle()
+
+        assertEquals(null, spaceCut)
+    }
+
+    /**
+     * The same bargain the lasso and the shape tool strike: a finger that is not allowed to draw
+     * moves the page instead, so it can still be scrolled one-handed with the tool in hand.
+     */
+    @Test
+    fun aDisallowedFingerPansRatherThanInsertingSpace() {
+        setOverlay(allowFinger = false, insertingSpace = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+
+        assertEquals(null, spaceCut)
+        assertTrue("the page did not pan", abs(dragged) > 0f)
+    }
 
     // --- the ruler -------------------------------------------------------------------------------
 

@@ -33,6 +33,7 @@ object MaterialSymbols {
     val Delete: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_delete)
     val DragIndicator: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_drag_indicator)
     val Edit: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_edit)
+    val Expand: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_expand)
     val ExpandLess: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_expand_less)
     val ExpandMore: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_expand_more)
     val FormatAlignCenter: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_align_center)

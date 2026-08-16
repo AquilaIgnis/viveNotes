@@ -398,6 +398,17 @@ sealed interface DrawTool {
     data object Lasso : DrawTool
 
     /**
+     * Insert Space: draw a line across the page and drag, and everything past it moves — E2.
+     *
+     * A tool rather than a dialog asking for a number, because the thing being edited is a gap and a
+     * gap is something you point at. It is also the one tool here that edits *no object*: what it
+     * changes is where everything else sits, so unlike [Shape] or [Table] it carries no settings at
+     * all — how much space, and in which direction, is the drag itself. See
+     * `com.vivenotes.model.PageSpace`.
+     */
+    data object InsertSpace : DrawTool
+
+    /**
      * Text: a tap on bare canvas opens a container and puts a caret in it —
      * `docs/textBoxPlan.md` TD2.
      *

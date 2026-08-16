@@ -79,6 +79,7 @@ internal object DrawTags {
     const val LASSO = "draw-lasso"
     const val NONE = "draw-none"
     const val RULER = "draw-ruler"
+    const val INSERT_SPACE = "draw-insert-space"
     fun pen(index: Int) = "draw-pen-$index"
 }
 
@@ -97,6 +98,9 @@ internal object DrawTags {
  *
  * Undo and redo are icon-only — their glyphs are universal, so a label would only cost width in a
  * row that scrolls. Each reverses one complete ink gesture on the current page.
+ *
+ * Insert Space is the odd one out and has no settings at all: it edits the emptiness rather than any
+ * object, and how much of it is the drag itself — see `com.vivenotes.model.PageSpace`.
  *
  * The finger button decides whether a direct touch draws or scrolls. It is a device property rather
  * than a pen setting — whether you own a stylus is not an attribute of pen 2 — and defaults to off,
@@ -201,6 +205,20 @@ internal fun DrawTab(
                 label = "Lasso",
                 active = tool == DrawTool.Lasso,
                 onClick = { actions.selectTool(DrawTool.Lasso) },
+            )
+        }
+
+        // Beside the lasso rather than beside the shapes, because it belongs to the same half of the
+        // tray: these two rearrange what is already on the page, while everything past the divider
+        // puts something new on it. Nothing configures it — the drag is the whole setting — so it is
+        // a plain button with no held-open panel, unlike every other tool on either side of it.
+        Box(Modifier.testTag(DrawTags.INSERT_SPACE)) {
+            RibbonButton(
+                icon = MaterialSymbols.Expand,
+                label = "Insert space",
+                active = tool == DrawTool.InsertSpace,
+                enabled = pageOpen,
+                onClick = { actions.selectTool(DrawTool.InsertSpace) },
             )
         }
 

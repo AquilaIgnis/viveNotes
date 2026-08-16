@@ -1280,6 +1280,9 @@ private fun PageEditor(
         erasing = tool == DrawTool.Eraser,
         lassoing = tool == DrawTool.Lasso,
         shaping = if (tool == DrawTool.Shape) shape else null,
+        // No settings to pass with it: the drag is the whole of what Insert Space knows — E2.
+        insertingSpace = tool == DrawTool.InsertSpace,
+        onInsertSpace = viewModel::insertSpace,
         ruler = ruler.takeIf { rulerOut },
         tables = state.tables,
         // One tool places a table on the next tap; which *kind* rides in on the settings, so the
