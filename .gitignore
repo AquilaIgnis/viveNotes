@@ -10,6 +10,8 @@
 local.properties
 CLAUDE.md
 memory
+.claude
+.codex
 
 #trash
 *.db
