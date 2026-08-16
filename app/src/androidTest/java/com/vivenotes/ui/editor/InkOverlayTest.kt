@@ -1,6 +1,7 @@
 package com.vivenotes.ui.editor
 
 import android.graphics.Matrix
+import android.view.InputDevice
 import android.view.MotionEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -758,6 +759,109 @@ class InkOverlayTest {
 
     private fun motion(action: Int, x: Float, y: Float): MotionEvent =
         MotionEvent.obtain(0L, 16L, action, x, y, 0)
+
+    /** [motion] with a tool type and a controllable clock, which the double-tap window needs. */
+    private fun toolMotion(
+        action: Int,
+        x: Float,
+        y: Float,
+        toolType: Int,
+        eventTime: Long,
+    ): MotionEvent {
+        val properties = arrayOf(
+            MotionEvent.PointerProperties().apply {
+                id = 0
+                this.toolType = toolType
+            },
+        )
+        val coordinates = arrayOf(
+            MotionEvent.PointerCoords().apply {
+                this.x = x
+                this.y = y
+                pressure = 1f
+                size = 1f
+            },
+        )
+        return MotionEvent.obtain(
+            0L,
+            eventTime,
+            action,
+            1,
+            properties,
+            coordinates,
+            0,
+            0,
+            1f,
+            1f,
+            0,
+            0,
+            if (toolType == MotionEvent.TOOL_TYPE_STYLUS) {
+                InputDevice.SOURCE_STYLUS
+            } else {
+                InputDevice.SOURCE_TOUCHSCREEN
+            },
+            0,
+        )
+    }
+
+    /** Two stationary taps of [toolType], spaced to land inside the double-tap window. */
+    private fun doubleTapWith(gesture: DoubleTapGesture, toolType: Int, acceptStylus: Boolean): Boolean {
+        var fired = false
+        listOf(
+            MotionEvent.ACTION_DOWN to 0L,
+            MotionEvent.ACTION_UP to 10L,
+            MotionEvent.ACTION_DOWN to 100L,
+            MotionEvent.ACTION_UP to 110L,
+        ).forEach { (action, at) ->
+            val event = toolMotion(action, 120f, 140f, toolType, at)
+            if (gesture.observe(event, acceptStylus = acceptStylus)) fired = true
+            event.recycle()
+        }
+        return fired
+    }
+
+    private fun doubleTapGesture() = DoubleTapGesture(
+        minimumIntervalMillis = 40L,
+        maximumIntervalMillis = 300L,
+        touchSlop = 8f,
+    )
+
+    /** The ask: with the lasso up, the pen may raise the paste button — it deposits nothing. */
+    @Test
+    fun aStylusDoubleTapIsADoubleTapWhileTheLassoIsActive() {
+        assertTrue(
+            "the pen could not raise paste under the lasso",
+            doubleTapWith(doubleTapGesture(), MotionEvent.TOOL_TYPE_STYLUS, acceptStylus = true),
+        )
+    }
+
+    /**
+     * And the reason it is scoped to the lasso: under a brush those two taps are two marks, so
+     * offering to paste on top of them would fire while someone is drawing.
+     */
+    @Test
+    fun aStylusDoubleTapIsInkWhileADrawingToolIsActive() {
+        assertFalse(
+            "the pen raised paste while a drawing tool owned the page",
+            doubleTapWith(doubleTapGesture(), MotionEvent.TOOL_TYPE_STYLUS, acceptStylus = false),
+        )
+    }
+
+    /** The finger never depended on the tool, and must not start depending on it now. */
+    @Test
+    fun aFingerDoubleTapStillCountsWithoutTheLasso() {
+        assertTrue(
+            doubleTapWith(doubleTapGesture(), MotionEvent.TOOL_TYPE_FINGER, acceptStylus = false),
+        )
+    }
+
+    /** A flipped pen is erasing, not gesturing, even though the lasso is what is selected. */
+    @Test
+    fun aFlippedPenDoubleTapIsNotAPasteGesture() {
+        assertFalse(
+            doubleTapWith(doubleTapGesture(), MotionEvent.TOOL_TYPE_ERASER, acceptStylus = true),
+        )
+    }
 
     @Test
     fun objectModeUsesWholeStrokeHitTestingInsteadOfAPartialMask() {

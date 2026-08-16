@@ -257,8 +257,8 @@ internal fun InkOverlay(
     val eraseGesture = remember { EraseGesture() }
     val shapeGesture = remember { ShapeGesture() }
     val viewConfiguration = LocalViewConfiguration.current
-    val fingerDoubleTap = remember(viewConfiguration) {
-        FingerDoubleTapGesture(
+    val doubleTap = remember(viewConfiguration) {
+        DoubleTapGesture(
             minimumIntervalMillis = viewConfiguration.doubleTapMinTimeMillis,
             maximumIntervalMillis = viewConfiguration.doubleTapTimeoutMillis,
             touchSlop = viewConfiguration.touchSlop,
@@ -267,6 +267,9 @@ internal fun InkOverlay(
 
     LaunchedEffect(lassoing) {
         if (!lassoing) lassoGesture.clear()
+        // Switching the lasso on or off changes which pointers `doubleTap` admits, so a tap already
+        // banked under the old rule would pair with one made under the new one.
+        doubleTap.reset()
     }
     LaunchedEffect(shaping == null) {
         if (shaping == null) shapeGesture.clear()
@@ -278,7 +281,7 @@ internal fun InkOverlay(
         if (!erasing) eraseGesture.clear()
     }
     LaunchedEffect(hasClipboard) {
-        if (!hasClipboard) fingerDoubleTap.reset()
+        if (!hasClipboard) doubleTap.reset()
     }
 
     // Velocity for the fling, measured from the same events the pan is driven by.
@@ -443,7 +446,8 @@ internal fun InkOverlay(
                     .fillMaxSize()
                     .pointerInteropFilter { event ->
                         val pastePoint = if (
-                            currentHasInkClipboard && fingerDoubleTap.observe(event)
+                            currentHasInkClipboard &&
+                            doubleTap.observe(event, acceptStylus = currentLassoing)
                         ) {
                             val toPage = Matrix().also { currentTransform().invert(it) }
                             event.pagePoint(event.actionIndex, toPage)
@@ -561,8 +565,23 @@ private const val SEARCH_HIGHLIGHT_PADDING_DP = 5f
 private const val SEARCH_HIGHLIGHT_RADIUS_DP = 7f
 private const val SEARCH_HIGHLIGHT_STROKE_DP = 1.5f
 
-/** Recognises stationary, single-finger double taps without taking drag/pan ownership. */
-internal class FingerDoubleTapGesture(
+/**
+ * Recognises stationary, single-pointer double taps without taking drag/pan ownership.
+ *
+ * **The pen is admitted per-gesture, not per-tool** — [observe]'s `acceptStylus`. A finger double
+ * tap is always safe here: when a drawing tool owns touch the finger is not drawing, so the second
+ * tap can only have been meant as a gesture. A stylus double tap is not safe in general, because
+ * with a brush or the eraser active those two taps *are* two marks on the page, and raising a paste
+ * button on top of them would fire during ordinary drawing — dotting an "i" twice would offer to
+ * paste. The lasso is the one tool where a tap deposits nothing, so it is the one tool that passes
+ * `acceptStylus = true`.
+ *
+ * Deliberately unlike `StylusButtons`: there the firmware counts the clicks and a software timer
+ * would double-count them. Nothing counts screen taps for us, so the interval test below is the
+ * only way to see this one, and it is measured against [ViewConfiguration]'s own double-tap window
+ * rather than a constant of our own.
+ */
+internal class DoubleTapGesture(
     private val minimumIntervalMillis: Long,
     private val maximumIntervalMillis: Long,
     private val touchSlop: Float,
@@ -576,10 +595,14 @@ internal class FingerDoubleTapGesture(
     private var firstTapX = 0f
     private var firstTapY = 0f
 
-    fun observe(event: MotionEvent): Boolean {
+    fun observe(event: MotionEvent, acceptStylus: Boolean = false): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                if (event.getToolType(event.actionIndex) != MotionEvent.TOOL_TYPE_FINGER) {
+                // Only the tip. A flipped pen reports TOOL_TYPE_ERASER and is erasing, not gesturing.
+                val toolType = event.getToolType(event.actionIndex)
+                val admitted = toolType == MotionEvent.TOOL_TYPE_FINGER ||
+                    (acceptStylus && toolType == MotionEvent.TOOL_TYPE_STYLUS)
+                if (!admitted) {
                     tracking = false
                     return false
                 }

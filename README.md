@@ -19,7 +19,7 @@ and all AI features run entirely on-device.
 
 - Local storage and AI processing on device.
 - Fuzzy notebook search across text, tables, handwriting, and text found inside images.
-- On-device handwriting and formula recognition, including math solving, evaluation, and graphing tools.
+- On-device handwriting and formula recognition, including math solving, evaluation, and graphing tools [docs](docs/calculator.md).
 - Highly performant Ink rendering (7ms on over 10k strokes).
 - Free-form page infinite canvas.
 - Rich-text editing.
@@ -28,7 +28,7 @@ and all AI features run entirely on-device.
 - On-device image OCR.
 - Custom paper: ruled, multiple grid sizes, dotted, hexagonal.
 - Automatic database snapshots, and revision restoration.
-- Open source export file format .vive , [docs](docs/viveFormat.md)
+- Open source export file format .vive , [docs](docs/viveFormat.md).
 - Hardware keyboard shortcuts and configurable stylus buttons mappings.
 
 # Gallery
