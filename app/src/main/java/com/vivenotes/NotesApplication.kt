@@ -1,6 +1,7 @@
 package com.vivenotes
 
 import android.app.Application
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.OnnxInkRecognitionEngine
 import com.vivenotes.data.AttachmentStore
@@ -15,10 +16,15 @@ import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.StarterInkPageFixture
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.data.sync.ForegroundSyncScheduler
 import com.vivenotes.data.sync.SyncAccounts
 import com.vivenotes.data.sync.HierarchySyncWorker
 import com.vivenotes.richtext.FontRegistry
 import com.vivenotes.math.SympyMathEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.map
 
 /**
  * Manual dependency container.
@@ -63,10 +69,31 @@ class NotesApplication : Application() {
     }
     val mathEngine: SympyMathEngine by lazy { SympyMathEngine(this) }
 
+    /**
+     * For work that must outlive every Activity but die with the process.
+     *
+     * A [SupervisorJob] so one failed child cannot take the others down with it, and never
+     * cancelled: an Application has no teardown callback that is actually guaranteed to run.
+     */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** SD6's sync cadence. See [ForegroundSyncScheduler] for why WorkManager cannot be it. */
+    private val foregroundSync: ForegroundSyncScheduler by lazy {
+        ForegroundSyncScheduler(
+            scope = appScope,
+            registered = syncAccounts.account.map { it != null },
+            sync = { syncAccounts.synchronize() },
+            requestBackgroundCatchUp = { HierarchySyncWorker.requestNow(this) },
+        )
+    }
+
     override fun onCreate() {
         super.onCreate()
         FontRegistry.init(this)
         DeletionPurgeWorker.schedule(this)
         HierarchySyncWorker.schedule(this)
+        // Registered here rather than from the Activity: the clock belongs to the process, and this
+        // owner reports the first Activity's start, so nothing is missed by being early.
+        ProcessLifecycleOwner.get().lifecycle.addObserver(foregroundSync)
     }
 }

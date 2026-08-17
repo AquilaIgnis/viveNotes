@@ -82,6 +82,29 @@ class HierarchySyncTest {
     }
 
     @Test
+    fun aParentEditedAfterItsChildrenIsStillAppliedBeforeThem() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        // The children, at the sequence value that created them.
+        server.seed(
+            sectionChange("s", "n", "Remote section", changedAt),
+            pageChange("p", "s", "Remote page", changedAt),
+        )
+        // Their notebook, renamed afterwards — so it carries a *higher* change_seq than its own
+        // children and reaches this device behind them. Applying the delta in stream order puts a
+        // section into Room before the notebook its foreign key names, which SQLite refuses; the
+        // transaction rolls back, the cursor never commits, and the device re-pulls for ever.
+        server.seed(notebookChange("n", "Renamed later", changedAt + 1_000))
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(3, result.summary.pulled)
+        assertEquals("Renamed later", db.notebookDao().byId("n")!!.name)
+        assertEquals("n", db.sectionDao().byId("s")!!.notebookId)
+        assertEquals("s", db.pageDao().byId("p")!!.sectionId)
+        assertEquals(2L, db.syncDao().state()!!.cursor)
+    }
+
+    @Test
     fun anEditCommittedWhileAPushIsInFlightRemainsQueuedAndIsSentNext() = runBlocking {
         val notebookId = repository.createNotebook("Notebook")
         val sectionId = repository.createSection(notebookId, "Section")

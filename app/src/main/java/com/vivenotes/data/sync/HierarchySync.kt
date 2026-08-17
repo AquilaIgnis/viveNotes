@@ -1,5 +1,6 @@
 package com.vivenotes.data.sync
 
+import android.util.Log
 import androidx.room.withTransaction
 import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotebookEntity
@@ -108,16 +109,30 @@ class HierarchySync(
 
             // The push cursor is explicitly not a pull cursor. Pull this device's accepted writes
             // and anything another device committed concurrently before reporting convergence.
-            when (val finalPull = pullIfNeeded(account)) {
-                is PhaseResult.Done -> pulled += finalPull.count
-                is PhaseResult.ConflictDone -> error("pull cannot return conflict count")
-                is PhaseResult.Stop -> return@withLock finalPull.result
+            //
+            // Only when the push phase actually moved something, though. SD6 requires an idle run to
+            // cost one `GET /v1/cursor` and nothing else, and idle is the common case now that a
+            // clock ticks whether or not there is anything to send: with an empty outbox there are
+            // no accepted writes to consume and no window below a push response's cursor to close,
+            // and the first pull already left this device where the server is.
+            if (pushed > 0 || conflicts > 0) {
+                when (val finalPull = pullIfNeeded(account)) {
+                    is PhaseResult.Done -> pulled += finalPull.count
+                    is PhaseResult.ConflictDone -> error("pull cannot return conflict count")
+                    is PhaseResult.Stop -> return@withLock finalPull.result
+                }
             }
 
             SyncRunResult.Succeeded(SyncSummary(pulled, pushed, conflicts))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (badLocalState: Exception) {
+            // Logged, not just classified. [PermanentSyncFailure.LocalData] tells the screen that
+            // this run cannot succeed by being retried, and tells whoever has to fix it nothing at
+            // all — and this is the one failure whose cause is a stack trace rather than a status
+            // code. A run that fails here also leaves the cursor where it was, so a silent version
+            // of this is a device that re-pulls the same delta for ever with nothing to show for it.
+            Log.e(TAG, "Hierarchy sync could not apply a change locally", badLocalState)
             SyncRunResult.Failed(PermanentSyncFailure.LocalData)
         }
     }
@@ -175,9 +190,25 @@ class HierarchySync(
                 )
             }
 
+            // Parents before children, which the stream order does not give.
+            //
+            // The server orders a delta by `(change_seq, kind_rank, id)`, so a notebook precedes its
+            // sections *within one sequence value* — but a row's `change_seq` is the seq of its last
+            // write, not of its creation. Rename a notebook after its sections were created and the
+            // notebook moves to a higher seq than its own children, so a client pulling from below
+            // both receives the sections first and Room refuses them: `SQLiteConstraintException:
+            // FOREIGN KEY constraint failed`. That aborts the transaction, the cursor is not
+            // committed, and the device re-pulls the same delta for ever.
+            //
+            // A stable sort by kind is enough for a two-level hierarchy and keeps the server's
+            // ordering inside each kind. It cannot help when a parent lands in a *later* page than
+            // its child — possible only with more than one page of changes between the two writes —
+            // where the transaction still fails safely and loudly rather than losing the row.
+            val ordered = parsed.sortedBy { change -> change.kind.rank }
+
             db.withTransaction {
                 sync.setApplyingRemote(true)
-                parsed.forEach { change -> applyPulledChange(change) }
+                ordered.forEach { change -> applyPulledChange(change) }
                 sync.setCursor(page.cursor)
                 sync.setApplyingRemote(false)
             }
@@ -528,10 +559,15 @@ class HierarchySync(
         }
     }
 
-    private enum class SyncKind(val wire: String) {
-        Notebook("notebook"),
-        Section("section"),
-        Page("page");
+    /**
+     * [rank] is depth in the hierarchy, and matches the `kind_rank` the server orders a delta by
+     * (`viveCServer/internal/store/synctables.go`). Applying in this order is what keeps a child
+     * from reaching Room before the row its foreign key points at.
+     */
+    private enum class SyncKind(val wire: String, val rank: Int) {
+        Notebook("notebook", 0),
+        Section("section", 1),
+        Page("page", 2);
 
         companion object {
             fun fromWire(value: String): SyncKind? = entries.firstOrNull { it.wire == value }
@@ -578,6 +614,7 @@ class HierarchySync(
     }
 
     private companion object {
+        const val TAG = "HierarchySync"
         const val MAX_PUSH_CHANGES = 512
         const val MAX_BATCHES_PER_RUN = 1_024
         const val PENDING_BATCH_KEY = "syncPendingHierarchyBatch"

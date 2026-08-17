@@ -1,12 +1,15 @@
 package com.vivenotes.data.sync
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
+import android.provider.Settings
 import com.vivenotes.data.db.NotesDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.io.IOException
+import java.security.MessageDigest
 
 /**
  * Where this installation stands with a self-hosted server.
@@ -44,7 +47,7 @@ class SyncAccounts(
     context: Context,
     private val client: SyncServerClient = SyncServerClient(),
     database: NotesDatabase? = null,
-    private val deviceName: String = defaultDeviceName(),
+    private val deviceName: String = defaultDeviceName(context),
     private val platform: String = defaultPlatform(),
 ) {
 
@@ -190,14 +193,46 @@ class SyncAccounts(
  * What the server's device list will call this tablet.
  *
  * [Build.MODEL] rather than a name the user types: the field exists so somebody scanning their
- * device list can tell which row to revoke, and a marketing name does that on the first try. It can
- * be renamed server-side later; the empty fallbacks are for emulator images and stripped ROMs that
- * leave these properties blank, where a blank `name` would be refused by the contract.
+ * device list can tell which row to revoke, and a marketing name does that on the first try. The
+ * empty fallbacks are for emulator images and stripped ROMs that leave these properties blank, where
+ * a blank `name` would be refused by the contract.
+ *
+ * **The model alone does not identify an installation**, and not only in theory. Android Studio's
+ * "Medium Tablet" and "Pixel Tablet" profiles are the same `emu64xa` hardware and both report
+ * `Build.MODEL == "Pixel Tablet"`, so two emulators register two rows under one name and the device
+ * list cannot say which is which — which is the moment somebody revokes the wrong one. Two real
+ * tablets of the same model do the same thing.
+ *
+ * So the name carries a four-character suffix that differs per installation: the leading two bytes
+ * of the SHA-256 of `Settings.Secure.ANDROID_ID`, which Android scopes to this app's signing key on
+ * this device and user, and which therefore survives launches, updates and reinstalls while
+ * differing on a second device. It is hashed and truncated because the server needs a label and not
+ * an identifier — four characters of a digest name a row and cannot be correlated back to a tablet.
  */
-private fun defaultDeviceName(): String =
-    Build.MODEL?.takeIf { it.isNotBlank() }
+private fun defaultDeviceName(context: Context): String {
+    val model = Build.MODEL?.takeIf { it.isNotBlank() }
         ?: Build.DEVICE?.takeIf { it.isNotBlank() }
         ?: "Android device"
+    val suffix = installationSuffix(context) ?: return model
+    return "$model ($suffix)"
+}
+
+/**
+ * Null when the platform has no id to offer. Rare, but the fallback matters: a name with no suffix
+ * is better than one with a fabricated suffix, because a suffix that changes between launches would
+ * turn one tablet into a growing list of devices nobody can prune.
+ */
+@SuppressLint("HardwareIds")
+private fun installationSuffix(context: Context): String? {
+    val androidId = Settings.Secure
+        .getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+        ?.takeIf { it.isNotBlank() }
+        ?: return null
+    return MessageDigest.getInstance("SHA-256")
+        .digest(androidId.toByteArray())
+        .take(2)
+        .joinToString("") { byte -> (byte.toInt() and 0xff).toString(16).padStart(2, '0') }
+}
 
 /** Display-only on the server, so the release string is more useful than the API level. */
 private fun defaultPlatform(): String = "Android ${Build.VERSION.RELEASE.orEmpty()}".trim()

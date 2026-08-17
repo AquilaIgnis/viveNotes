@@ -106,6 +106,11 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // ProcessLifecycleOwner, for the foreground sync cadence (memory/syncPlan.md SD6). Counting
+    // started Activities would avoid the dependency and get configuration changes wrong: this owner
+    // already debounces the teardown and rebuild of the only Activity, so a rotation is not a
+    // "went to background" event and does not cost a flush.
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.datastore.preferences)
 
     implementation(platform(libs.androidx.compose.bom))
@@ -133,6 +138,9 @@ dependencies {
     implementation(libs.onnxruntime.android)
 
     testImplementation(libs.junit)
+    // Virtual time. The sync clock's whole behaviour is "how often", and a test that waited for a
+    // real 60 s interval would either be slow or be a test of something shorter than the thing.
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.test.runner)
