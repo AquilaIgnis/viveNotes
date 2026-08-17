@@ -228,7 +228,7 @@ class HierarchySyncTest {
     }
 
     @Test
-    fun aNewerRemoteRowWinsWhileAnOlderRemoteRowRebasesAndPushesLocal() = runBlocking {
+    fun aServerVersionWinsEvenWhenTheDirtyLocalWallClockIsLater() = runBlocking {
         val localNewer = System.currentTimeMillis() + 60_000
         now = localNewer
         val localWinsId = repository.createNotebook("Local wins")
@@ -240,11 +240,10 @@ class HierarchySyncTest {
 
         val result = hierarchy.run(account()) as SyncRunResult.Succeeded
 
-        assertEquals("Local wins", db.notebookDao().byId(localWinsId)!!.name)
+        assertEquals("Remote old", db.notebookDao().byId(localWinsId)!!.name)
         assertEquals("Remote new", db.notebookDao().byId(serverWinsId)!!.name)
-        val rebased = server.pushes.flatten().single { it.getValue("id").jsonPrimitive.content == localWinsId }
-        assertEquals(1L, rebased.getValue("baseVersion").jsonPrimitive.long)
-        assertEquals(1, result.summary.pushed)
+        assertTrue(server.pushes.isEmpty())
+        assertEquals(0, result.summary.pushed)
     }
 
     @Test
@@ -318,22 +317,27 @@ class HierarchySyncTest {
     }
 
     @Test
-    fun aLaterLocalDocumentRebasesThenWinsAWholeBodyVersionConflict() = runBlocking {
+    fun aStaleLaterAutosaveCannotResurrectARemotelyDeletedTextBox() = runBlocking {
         now = System.currentTimeMillis()
-        val pageId = createAndSyncPage("base")
+        val presentDocument = """{"outlines":[{"id":"box","t":"text"}]}"""
+        val deletedDocument = """{"outlines":[]}"""
+        val pageId = createAndSyncPage(presentDocument)
         val remoteTime = now + 10_000
         now += 20_000
-        db.pageContentDao().upsert(PageContentEntity(pageId, "local", now, "json/1"))
+        // This simulates the other device autosaving the still-visible box later by wall clock,
+        // while its base remains the older server version that still contained the box.
+        db.pageContentDao().upsert(PageContentEntity(pageId, presentDocument, now, "json/1"))
         server.beforeFirstPush = {
-            server.seed(pageContentChange(pageId, "remote", remoteTime))
+            // The delete reaches the server first and becomes the causally newer version.
+            server.seed(pageContentChange(pageId, deletedDocument, remoteTime))
         }
 
         val result = hierarchy.run(account()) as SyncRunResult.Succeeded
 
         assertEquals(1, result.summary.conflictsResolved)
-        assertEquals(1, result.summary.pushed)
-        assertEquals("local", db.pageContentDao().byId(pageId)!!.docJson)
-        assertEquals("local", decodeDocument(server.current("pageContent", pageId)!!))
+        assertEquals(0, result.summary.pushed)
+        assertEquals(deletedDocument, db.pageContentDao().byId(pageId)!!.docJson)
+        assertEquals(deletedDocument, decodeDocument(server.current("pageContent", pageId)!!))
     }
 
     private suspend fun createAndSyncPage(document: String): String {

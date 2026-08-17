@@ -2,6 +2,7 @@ package com.vivenotes.data
 
 import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import com.vivenotes.data.db.AttachmentTextEntity
 import com.vivenotes.data.db.InkTextEntity
@@ -103,6 +104,17 @@ class NotesRepository(
     fun observePages(sectionId: String): Flow<List<PageEntity>> = pages.observeIn(sectionId)
 
     fun observePage(pageId: String): Flow<PageEntity?> = pages.observeById(pageId)
+
+    /**
+     * The selected page's body, including replacements written directly by hierarchy sync.
+     *
+     * Distinctness belongs on the row before decoding: Room invalidates a query when *any* row in
+     * `page_content` changes. Without this guard, saving another page could re-emit the selected
+     * page's older stored body while its editor still has unsaved typing and roll that typing back.
+     */
+    fun observeDoc(pageId: String): Flow<PageLoad> = contents.observeById(pageId)
+        .distinctUntilChanged()
+        .map(::decodeDoc)
 
     fun searchPages(query: String): Flow<List<PageEntity>> = pages.search(query)
 
@@ -436,7 +448,11 @@ class NotesRepository(
      * one saved — the same rolling-change property the per-row codec id gives the format.
      */
     suspend fun loadDoc(pageId: String): PageLoad {
-        val row = contents.byId(pageId) ?: return PageLoad.Loaded(PageDoc.empty())
+        return decodeDoc(contents.byId(pageId))
+    }
+
+    private fun decodeDoc(row: PageContentEntity?): PageLoad {
+        if (row == null) return PageLoad.Loaded(PageDoc.empty())
         // Decode with the codec that wrote the row, not the current default, so a format change
         // does not orphan everything written before it.
         val rowCodec = DocumentCodecs.byId(row.format)

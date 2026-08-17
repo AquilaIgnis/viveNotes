@@ -21,9 +21,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -344,6 +347,12 @@ data class PendingEquation(
 private data class PageCanvasHistory(
     val undo: MutableList<CanvasHistoryEntry> = mutableListOf(),
     val redo: MutableList<CanvasHistoryEntry> = mutableListOf(),
+)
+
+/** An immutable document captured before navigation clears or replaces the editor state. */
+private data class PendingPageSave(
+    val pageId: String,
+    val doc: PageDoc,
 )
 
 /** The File tab's page-version browser. Payloads are decoded only for the selected row. */
@@ -888,6 +897,23 @@ class NotesViewModel(
                 }
                 .launchIn(this)
 
+            // Page metadata already flows into the list, which is why a pulled preview could say
+            // "xw" while the open canvas stayed blank. Observe the body independently and rebuild
+            // only when the decoded document differs from what the live editors currently hold.
+            // A matching local autosave therefore keeps the editor and its caret intact.
+            _uiState
+                .map { it.selectedPageId }
+                .distinctUntilChanged()
+                .flatMapLatest { pageId ->
+                    if (pageId == null) {
+                        emptyFlow()
+                    } else {
+                        repository.observeDoc(pageId).map { load -> pageId to load }
+                    }
+                }
+                .onEach { (pageId, load) -> acceptStoredDocument(pageId, load) }
+                .launchIn(this)
+
             // Debounced so a burst of keystrokes is one write, not one per character.
             edits
                 .debounce(AUTOSAVE_DELAY_MS)
@@ -1149,7 +1175,14 @@ class NotesViewModel(
 
     private fun selectSection(sectionId: String, persistCurrent: Boolean) {
         if (selectedSection.value == sectionId) return
-        if (persistCurrent) viewModelScope.launch { persist() }
+        // Capture before clearing selectedPageId below. Launching `persist()` and letting the
+        // coroutine read uiState later loses the outgoing page when this runs on a queued dispatcher
+        // (and can do the same on a busy device). The document is immutable, so the Room write can
+        // safely finish after the visible navigation has moved on.
+        val outgoing = if (persistCurrent) currentPageSave() else null
+        if (outgoing != null) {
+            viewModelScope.launch { repository.saveDoc(outgoing.pageId, outgoing.doc) }
+        }
         // Whatever page was loading belongs to the section being left. The pages flow will open one
         // from the new section in a moment; until then there is nothing this should still be doing.
         pageLoad?.cancel()
@@ -1241,6 +1274,7 @@ class NotesViewModel(
         page: PageEntity?,
         doc: PageDoc,
         contentError: String? = null,
+        revealEditor: Boolean = true,
     ) {
         val loaded = doc.outlines.filterIsInstance<Outline.Text>()
             // A page with nothing on it still needs somewhere to put the caret, placed clear of the
@@ -1289,7 +1323,45 @@ class NotesViewModel(
         )
         publishCanvasUndoState(pageId)
         _selection.value = SelectionState()
-        _compactPane.value = CompactPane.Editor
+        if (revealEditor) _compactPane.value = CompactPane.Editor
+    }
+
+    /**
+     * Makes a body replaced underneath the editor authoritative on the canvas as well as in Room.
+     *
+     * Hierarchy sync writes `page_content` directly under trigger suppression. The pages observer
+     * sees the accompanying preview update, but before this observer the editors kept their older
+     * blocks and the next blur/navigation save wrote those stale blocks back as a fresh mutation.
+     */
+    private fun acceptStoredDocument(pageId: String, load: PageLoad) {
+        val state = _uiState.value
+        if (state.selectedPageId != pageId || openingPageId != pageId) return
+
+        when (load) {
+            is PageLoad.Loaded -> {
+                val visible = currentPageSave()?.takeIf { it.pageId == pageId }?.doc
+                if (visible == load.doc && readOnlyPageId != pageId) return
+
+                readOnlyPageId = null
+                showDocument(
+                    pageId = pageId,
+                    page = state.pages.firstOrNull { it.id == pageId },
+                    doc = load.doc,
+                    // A background sync must not pull a compact phone/tablet out of its page list.
+                    revealEditor = false,
+                )
+            }
+            is PageLoad.Unreadable -> {
+                // Preserve the stored bytes and block every save, just as an unreadable initial load
+                // does. Keeping the last healthy canvas visible is safer than replacing it with a
+                // blank placeholder that looks editable.
+                readOnlyPageId = pageId
+                _uiState.value = state.copy(
+                    contentError =
+                        "This page could not be read, so editing is disabled to protect its contents.",
+                )
+            }
+        }
     }
 
     /**
@@ -3583,25 +3655,20 @@ class NotesViewModel(
         viewModelScope.launch { repository.renamePage(pageId, title) }
     }
 
-    /** Writes the current document, so switching pages cannot lose the last keystrokes. */
-    private suspend fun persist() {
+    /** Builds one immutable save from the currently loaded editor state. */
+    private fun currentPageSave(): PendingPageSave? {
         val state = _uiState.value
-        val pageId = state.selectedPageId ?: return
-        // "Nothing loaded", which is what an empty page state means before `openPage` has filled it
-        // in — a loaded page always has at least one container. Tables count, because deleting the
-        // last container on a page that has one is a thing the toolkit can do, and a page that is
-        // all table is still a page with work on it.
-        if (state.outlines.isEmpty() && state.tables.isEmpty()) return
+        val pageId = state.selectedPageId ?: return null
         // The page's stored content could not be read, so anything shown is a placeholder rather
         // than the user's work. Writing it would destroy the real content.
-        if (readOnlyPageId == pageId) return
+        if (readOnlyPageId == pageId) return null
 
         val outlines = mutableListOf<Outline.Text>()
         for (box in state.outlines) {
             // A missing entry means "content not known", never "content is empty". Writing an
             // empty outline for one would silently blank it, so an incomplete picture skips the
             // write entirely and waits for the next edit.
-            val blocks = blocksById[box.id] ?: return
+            val blocks = blocksById[box.id] ?: return null
             // Containers the user tapped into but never typed in are not written; they exist only
             // as a caret position until there is something to hold.
             if (blocks.all { it.text.isBlank() }) continue
@@ -3621,13 +3688,13 @@ class NotesViewModel(
         // cell is part of the grid's shape, and dropping it would resize the table on reload.
         val tables = mutableListOf<Outline.Table>()
         for (table in state.tables) {
-            val cells = table.contentCellIds().associateWith { blocksById[it] ?: return }
+            val cells = table.contentCellIds().associateWith { blocksById[it] ?: return null }
             tables += table.withCellBlocks(cells)
         }
 
-        repository.saveDoc(
-            pageId,
-            PageDoc(
+        return PendingPageSave(
+            pageId = pageId,
+            doc = PageDoc(
                 outlines = inDocumentOrder(
                     state.shapes + state.equations + state.images + tables + outlines +
                         unmanagedOutlines,
@@ -3635,6 +3702,12 @@ class NotesViewModel(
                 style = state.pageStyle,
             ),
         )
+    }
+
+    /** Writes the current document, so switching pages cannot lose the last keystrokes. */
+    private suspend fun persist() {
+        val save = currentPageSave() ?: return
+        repository.saveDoc(save.pageId, save.doc)
     }
 
     /**

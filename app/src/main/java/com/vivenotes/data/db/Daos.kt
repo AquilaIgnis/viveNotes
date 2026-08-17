@@ -450,6 +450,10 @@ interface PageContentDao {
     @Query("SELECT * FROM page_content WHERE pageId = :pageId")
     suspend fun byId(pageId: String): PageContentEntity?
 
+    /** Keeps an already-open editor in step when sync or import replaces its stored body. */
+    @Query("SELECT * FROM page_content WHERE pageId = :pageId")
+    fun observeById(pageId: String): Flow<PageContentEntity?>
+
     /** The bodies of named pages, for the search index's incremental rebuild — CS7. */
     @Query("SELECT * FROM page_content WHERE pageId IN (:pageIds)")
     suspend fun byIds(pageIds: List<String>): List<PageContentEntity>

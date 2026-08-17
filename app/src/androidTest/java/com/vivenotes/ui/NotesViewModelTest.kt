@@ -251,6 +251,51 @@ class NotesViewModelTest {
     }
 
     @Test
+    fun aStoredBodyReplacementRefreshesTheOpenCanvasBeforeItCanOverwriteIt() =
+        runTest(dispatcher) {
+            // Regression from the first live page-content sync: the pages flow showed the pulled
+            // preview, but the selected editor retained its older blocks. Its next save then pushed
+            // that stale canvas as a new whole-document version and erased the imported text.
+            val vm = seededViewModel()
+            val pageId = vm.uiState.value.selectedPageId!!
+            val remoteId = "remote-text"
+            repository.saveDoc(
+                pageId,
+                PageDoc(
+                    outlines = listOf(
+                        Outline.Text(id = remoteId, blocks = listOf(Block.of("from sync"))),
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals("from sync", vm.initialBlocksFor(remoteId).single().text)
+            assertEquals("from sync", vm.uiState.value.pages.single { it.id == pageId }.preview)
+
+            // Exercise the old destructive edge: any edit after the replacement persists the live
+            // remote body, not the document that happened to be open before Room changed.
+            vm.setRuleLines(RuleLines.Wide)
+            advanceUntilIdle()
+            assertEquals("from sync", storedText(pageId))
+        }
+
+    @Test
+    fun anOrdinaryAutosaveDoesNotRebuildTheOpenEditor() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val outlineId = vm.uiState.value.outlines.first().id
+        val revision = vm.uiState.value.pageRevision
+
+        vm.onBlocksChanged(outlineId, listOf(Block.of("local typing")))
+        advanceUntilIdle()
+
+        assertEquals(
+            "the page-content observer rebuilt the editor for its own matching save",
+            revision,
+            vm.uiState.value.pageRevision,
+        )
+    }
+
+    @Test
     fun restoringARevisionKeepsUnsavedEditorStateAsTheSafetyVersion() = runTest(dispatcher) {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!
@@ -787,6 +832,39 @@ class NotesViewModelTest {
         vm.deleteOutlines(ids)
 
         assertTrue(vm.uiState.value.outlines.isEmpty())
+    }
+
+    @Test
+    fun deletingTheLastTextBoxSurvivesSectionNavigation() = runTest(dispatcher) {
+        // Regression: delete removed the box from uiState, but persist treated zero containers as
+        // "nothing loaded" and skipped the Room write. Returning to the section therefore decoded
+        // the old row and brought the deleted box and its text straight back without any sync.
+        val vm = seededViewModel()
+        val originalSection = vm.uiState.value.selectedSectionId!!
+        val pageId = vm.uiState.value.selectedPageId!!
+        val deletedIds = vm.uiState.value.outlines.map { it.id }.toSet()
+        val notebookId = vm.uiState.value.tree.single().notebook.id
+        val otherSection = repository.createSection(notebookId, "Other")
+        repository.createPage(otherSection, "Other page")
+        advanceUntilIdle()
+
+        vm.deleteOutlines(deletedIds)
+        // Deliberately switch before the 400 ms autosave. Section navigation itself must snapshot
+        // the outgoing page before it clears selectedPageId.
+        vm.selectSection(otherSection)
+        advanceUntilIdle()
+        vm.selectSection(originalSection)
+        advanceUntilIdle()
+
+        val stored = repository.loadDoc(pageId) as PageLoad.Loaded
+        assertTrue(
+            "the deleted text box remained in Room",
+            stored.doc.outlines.none { it is Outline.Text },
+        )
+        assertTrue(
+            "the deleted text box reappeared after returning to the section",
+            vm.uiState.value.outlines.none { it.id in deletedIds },
+        )
     }
 
     @Test

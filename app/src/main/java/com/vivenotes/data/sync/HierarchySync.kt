@@ -359,15 +359,15 @@ class HierarchySync(
     }
 
     private suspend fun applyPulledChange(remote: RemoteChange) {
-        val dirty = sync.outboxEntry(remote.kind.wire, remote.id)
         sync.putEntityState(remote.asEntityState())
 
-        // A local mutation later than the remote write remains the source of truth for now. It is
-        // rebased onto the new server version and the outbox generation is intentionally untouched.
-        if (dirty != null && dirty.changedAt > remote.updatedAt) return
-
+        // A server row newer than this device's base wins the plain whole-entity OCC decision.
+        // Device wall clocks cannot answer causality: a stale editor can autosave an old document
+        // after another device deleted an outline, giving the old body a later updatedAt and
+        // resurrecting it. Discarding the dirty whole row loses a simultaneous offline edit, which
+        // is the deliberate interim trade-off until outline-keyed three-way merge can preserve both.
         applyRemoteRow(remote)
-        if (dirty != null) sync.deleteOutbox(remote.kind.wire, remote.id)
+        sync.deleteOutbox(remote.kind.wire, remote.id)
     }
 
     private suspend fun pushOutbox(account: SyncAccount): PhaseResult {
@@ -455,16 +455,13 @@ class HierarchySync(
         }
         val current = parseRemoteChange(currentJson)
             ?: throw IllegalArgumentException("unsupported current kind")
-        val currentDirty = sync.outboxEntry(sent.kind, sent.id)
         sync.putEntityState(current.asEntityState())
 
-        // A new local edit landed after this batch was snapshotted. It wins this decision without
-        // consulting the old generation's timestamp and stays queued on the current server version.
-        if (currentDirty?.generation != sent.generation) return
-        if (sent.updatedAt > current.updatedAt) return
-
+        // The rejected payload was based on an older server version, including a new local edit
+        // made while this request was in flight. Retrying it against `current.version` would turn a
+        // stale whole document into a fresh accepted write and can resurrect remotely deleted text.
         applyRemoteRow(current)
-        sync.deleteOutboxGeneration(sent.kind, sent.id, sent.generation)
+        sync.deleteOutbox(sent.kind, sent.id)
     }
 
     private suspend fun enqueueParent(sent: PendingChange) {
@@ -580,14 +577,10 @@ class HierarchySync(
                 row.pageId
             }
         }
-        val wireUpdatedAt = base.getValue("updatedAt").jsonPrimitive.longOrNull
-            ?: throw IllegalStateException("outgoing updatedAt is not an integer")
-
         return PendingChange(
             kind = kind.wire,
             id = outbox.entityId,
             generation = outbox.generation,
-            updatedAt = wireUpdatedAt,
             parentId = parentId,
             payload = JsonObject(base),
         )
@@ -756,7 +749,6 @@ class HierarchySync(
         val kind: String,
         val id: String,
         val generation: Long,
-        val updatedAt: Long,
         val parentId: String?,
         val payload: JsonObject,
     ) {
