@@ -416,7 +416,7 @@ class SyncServerClient(
             PushChangesRequest.serializer(),
             PushChangesRequest(batchId, changes),
         ).encodeToByteArray()
-        if (body.size > MAX_PUSH_BYTES) {
+        if (body.size > MAX_SYNC_PUSH_BYTES) {
             return ServerResult.Failed(ConnectFailure.PayloadTooLarge, retryable = false)
         }
 
@@ -607,7 +607,6 @@ class SyncServerClient(
         const val READ_TIMEOUT_MS = 30_000
         const val MAX_RESPONSE_BYTES = 64 * 1024
         const val MAX_API_RESPONSE_BYTES = 10 * 1024 * 1024
-        const val MAX_PUSH_BYTES = 4 * 1024 * 1024
         const val MAX_PUSH_CHANGES = 512
         const val MAX_PULL_LIMIT = 2048
 
@@ -619,6 +618,9 @@ class SyncServerClient(
         const val FALLBACK_DEVICE_NAME = "viveNotes"
     }
 }
+
+/** Contract cap shared with [HierarchySync], which splits its durable outbox before transport. */
+internal const val MAX_SYNC_PUSH_BYTES = 4 * 1024 * 1024
 
 private sealed interface RawServerResult {
     data class Response(val status: Int, val payload: String) : RawServerResult

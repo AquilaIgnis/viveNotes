@@ -6,6 +6,7 @@ import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.data.db.PageEntity
 import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.data.db.SyncEntityStateEntity
@@ -16,6 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -23,6 +25,10 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
+import java.security.MessageDigest
+import java.util.Base64
 import java.util.UUID
 
 /** What one complete hierarchy synchronization accomplished. */
@@ -48,7 +54,7 @@ sealed interface SyncRunResult {
 }
 
 /**
- * Offline-first synchronization for the entity kinds OpenAPI 0.2.0 actually exposes.
+ * Offline-first synchronization for the hierarchy and document kinds OpenAPI 0.3.0 exposes.
  *
  * Room is always the UI's source of truth. This class snapshots its durable outbox, performs the
  * network request without a database transaction held open, then conditionally acknowledges the
@@ -65,6 +71,7 @@ class HierarchySync(
     private val notebooks = db.notebookDao()
     private val sections = db.sectionDao()
     private val pages = db.pageDao()
+    private val contents = db.pageContentDao()
     private val mutex = Mutex()
 
     /** Makes [accountId] the owner of this database's one hierarchy corpus. */
@@ -173,6 +180,7 @@ class HierarchySync(
             sync.enqueueAllNotebooks()
             sync.enqueueAllSections()
             sync.enqueueAllPages()
+            sync.enqueueAllPageContents()
         }
     }
 
@@ -333,17 +341,20 @@ class HierarchySync(
             SyncKind.Notebook -> return true
             SyncKind.Section -> SyncKind.Notebook
             SyncKind.Page -> SyncKind.Section
+            SyncKind.PageContent -> SyncKind.Page
         }
         val parentID = when (change.kind) {
             SyncKind.Notebook -> return true
             SyncKind.Section -> change.raw.requiredString("notebookId")
             SyncKind.Page -> change.raw.requiredString("sectionId")
+            SyncKind.PageContent -> change.raw.requiredString("pageId")
         }
         if (applying.contains(parentKind.wire + ":" + parentID)) return true
         return when (parentKind) {
             SyncKind.Notebook -> notebooks.byId(parentID) != null
             SyncKind.Section -> sections.byId(parentID) != null
-            SyncKind.Page -> false
+            SyncKind.Page -> pages.byId(parentID) != null
+            SyncKind.PageContent -> false
         }
     }
 
@@ -461,6 +472,7 @@ class HierarchySync(
         val parentKind = when (sent.kind) {
             SyncKind.Section.wire -> SyncKind.Notebook.wire
             SyncKind.Page.wire -> SyncKind.Section.wire
+            SyncKind.PageContent.wire -> SyncKind.Page.wire
             else -> return
         }
         sync.enqueueIfAbsent(parentKind, parentId)
@@ -473,9 +485,23 @@ class HierarchySync(
 
         val rows = sync.outbox(MAX_PUSH_CHANGES)
         if (rows.isEmpty()) return@withTransaction null
+        val batchId = UUID.randomUUID().toString()
+        val changes = mutableListOf<PendingChange>()
+        for (row in rows) {
+            val change = snapshot(row)
+            val candidate = changes + change
+            // A row-count cap stopped bounding the request once pageContent joined the protocol.
+            // Measure the exact compact JSON shape SyncServerClient writes and end before the row
+            // that would cross 4 MiB. A first row is still admitted so the transport/server can
+            // return the permanent size verdict instead of leaving it queued behind an empty batch.
+            if (changes.isNotEmpty() && encodedPushSize(batchId, candidate) > MAX_SYNC_PUSH_BYTES) {
+                break
+            }
+            changes += change
+        }
         val pending = PendingBatch(
-            batchId = UUID.randomUUID().toString(),
-            changes = rows.map { row -> snapshot(row) },
+            batchId = batchId,
+            changes = changes,
         )
         metadata.put(
             LocalMetadataEntity(
@@ -485,6 +511,13 @@ class HierarchySync(
         )
         pending
     }
+
+    private fun encodedPushSize(batchId: String, changes: List<PendingChange>): Int = JsonObject(
+        linkedMapOf(
+            "batchId" to JsonPrimitive(batchId),
+            "changes" to JsonArray(changes.map(PendingChange::payload)),
+        ),
+    ).toString().encodeToByteArray().size
 
     private suspend fun snapshot(outbox: SyncOutboxEntity): PendingChange {
         val kind = SyncKind.fromWire(outbox.kind)
@@ -532,6 +565,19 @@ class HierarchySync(
                 base["preview"] = JsonPrimitive(row.preview)
                 base["createdAt"] = JsonPrimitive(row.createdAt)
                 row.sectionId
+            }
+            SyncKind.PageContent -> {
+                val row = contents.byId(outbox.entityId)
+                    ?: throw IllegalStateException("dirty page content disappeared")
+                val documentBytes = row.docJson.encodeToByteArray()
+                val digest = MessageDigest.getInstance("SHA-256").digest(documentBytes)
+                base.putEnvelope(null, maxOf(row.updatedAt, outbox.changedAt), row.updatedAt)
+                base["pageId"] = JsonPrimitive(row.pageId)
+                base["doc"] = JsonPrimitive(Base64.getEncoder().encodeToString(documentBytes))
+                base["docSha256"] = JsonPrimitive(Base64.getEncoder().encodeToString(digest))
+                base["format"] = JsonPrimitive(row.format)
+                base["enc"] = JsonPrimitive(PLAIN_ENCODING)
+                row.pageId
             }
         }
         val wireUpdatedAt = base.getValue("updatedAt").jsonPrimitive.longOrNull
@@ -596,6 +642,20 @@ class HierarchySync(
                     deletedAt = change.deletedAt,
                 ),
             )
+            SyncKind.PageContent -> {
+                if (change.deletedAt != null) {
+                    contents.delete(change.id)
+                } else {
+                    contents.upsert(
+                        PageContentEntity(
+                            pageId = change.id,
+                            docJson = requireNotNull(change.documentJson),
+                            updatedAt = displayUpdatedAt,
+                            format = change.raw.requiredString("format"),
+                        ),
+                    )
+                }
+            }
         }
     }
 
@@ -608,23 +668,49 @@ class HierarchySync(
         raw.requiredString("id")
         raw.requiredLong("updatedAt")
         raw.optionalLong("deletedAt")
-        raw.requiredInt("sortIndex")
-        raw.requiredLong("createdAt")
+        var documentJson: String? = null
         when (kind) {
             SyncKind.Notebook -> {
+                raw.requiredInt("sortIndex")
+                raw.requiredLong("createdAt")
                 raw.requiredString("name")
                 raw.requiredInt("colorArgb")
                 raw.requiredBoolean("expanded")
             }
             SyncKind.Section -> {
+                raw.requiredInt("sortIndex")
+                raw.requiredLong("createdAt")
                 raw.requiredString("notebookId")
                 raw.requiredString("name")
                 raw.requiredInt("colorArgb")
             }
             SyncKind.Page -> {
+                raw.requiredInt("sortIndex")
+                raw.requiredLong("createdAt")
                 raw.requiredString("sectionId")
                 raw.requiredString("title")
                 raw.requiredString("preview")
+            }
+            SyncKind.PageContent -> {
+                val id = raw.requiredString("id")
+                require(raw.requiredString("pageId") == id) { "pageContent id must equal pageId" }
+                require(raw.requiredString("format").isNotEmpty()) { "format must not be empty" }
+                val encoding = raw["enc"]?.jsonPrimitive?.content ?: PLAIN_ENCODING
+                require(encoding == PLAIN_ENCODING) { "unsupported document encoding" }
+
+                val documentBytes = raw.decodeBase64("doc")
+                require(documentBytes.size <= MAX_DOCUMENT_BYTES) { "document is too large" }
+                val claimedDigest = raw.decodeBase64("docSha256")
+                val actualDigest = MessageDigest.getInstance("SHA-256").digest(documentBytes)
+                require(
+                    claimedDigest.size == actualDigest.size &&
+                        MessageDigest.isEqual(claimedDigest, actualDigest),
+                ) { "document checksum does not match" }
+                documentJson = Charsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(documentBytes))
+                    .toString()
             }
         }
         return RemoteChange(
@@ -635,6 +721,7 @@ class HierarchySync(
             updatedAt = raw.requiredLong("updatedAt"),
             displayUpdatedAt = raw[DISPLAY_UPDATED_AT]?.jsonPrimitive?.longOrNull
                 ?: raw.requiredLong("updatedAt"),
+            documentJson = documentJson,
             raw = raw,
         )
     }
@@ -646,6 +733,8 @@ class HierarchySync(
         val deletedAt: Long?,
         val updatedAt: Long,
         val displayUpdatedAt: Long,
+        /** Decoded only for pageContent; null for hierarchy rows. */
+        val documentJson: String?,
         val raw: JsonObject,
     ) {
         fun asEntityState() = SyncEntityStateEntity(
@@ -688,7 +777,8 @@ class HierarchySync(
     private enum class SyncKind(val wire: String, val rank: Int) {
         Notebook("notebook", 0),
         Section("section", 1),
-        Page("page", 2);
+        Page("page", 2),
+        PageContent("pageContent", 3);
 
         companion object {
             fun fromWire(value: String): SyncKind? = entries.firstOrNull { it.wire == value }
@@ -734,11 +824,19 @@ class HierarchySync(
             ?: throw IllegalArgumentException("invalid $name")
     }
 
+    private fun JsonObject.decodeBase64(name: String): ByteArray = try {
+        Base64.getDecoder().decode(requiredString(name))
+    } catch (malformed: IllegalArgumentException) {
+        throw IllegalArgumentException("invalid $name", malformed)
+    }
+
     private companion object {
         const val TAG = "HierarchySync"
         const val MAX_PUSH_CHANGES = 512
         const val MAX_BATCHES_PER_RUN = 1_024
+        const val MAX_DOCUMENT_BYTES = 2 shl 20
         const val PENDING_BATCH_KEY = "syncPendingHierarchyBatch"
+        const val PLAIN_ENCODING = "none/1"
 
         /**
          * Holds the account id this installation has caught up with, not a boolean: the question is

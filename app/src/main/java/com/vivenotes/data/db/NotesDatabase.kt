@@ -29,7 +29,7 @@ import androidx.sqlite.execSQL
         SyncEntityStateEntity::class,
         SyncOutboxEntity::class,
     ],
-    version = 17,
+    version = 18,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -420,6 +420,24 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds document bodies to the durable sync outbox without changing their stored shape. */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(connection: SQLiteConnection) {
+                installSyncTriggers(connection)
+                // An account activated under schema 17 will take activateLocked's fast path after
+                // upgrade, so it would never run the new page-content backfill there. Queue the
+                // existing bodies during migration when sync is active; offline-only databases
+                // remain untouched until the owner connects, exactly as in 16 -> 17.
+                connection.execSQL(
+                    """
+                    INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt)
+                    SELECT 'pageContent', pageId, 1, updatedAt FROM page_content
+                    WHERE EXISTS (SELECT 1 FROM sync_state WHERE singleton = 0)
+                    """.trimIndent(),
+                )
+            }
+        }
+
         /** Fresh databases do not run migrations, so they install the same triggers after create. */
         val SYNC_TRIGGER_CALLBACK = object : RoomDatabase.Callback() {
             override fun onCreate(connection: SQLiteConnection) {
@@ -446,16 +464,18 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_14_15,
                     MIGRATION_15_16,
                     MIGRATION_16_17,
+                    MIGRATION_17_18,
                 )
                 .addCallback(SYNC_TRIGGER_CALLBACK)
                 .build()
 
         private fun installSyncTriggers(connection: SQLiteConnection) {
             listOf(
-                "notebook" to "notebooks",
-                "section" to "sections",
-                "page" to "pages",
-            ).forEach { (kind, table) ->
+                Triple("notebook", "notebooks", "id"),
+                Triple("section", "sections", "id"),
+                Triple("page", "pages", "id"),
+                Triple("pageContent", "page_content", "pageId"),
+            ).forEach { (kind, table, entityIdColumn) ->
                 listOf("insert" to "INSERT", "update" to "UPDATE").forEach { (suffix, event) ->
                     connection.execSQL(
                         """
@@ -469,7 +489,7 @@ abstract class NotesDatabase : RoomDatabase() {
                             INSERT INTO sync_outbox(kind, entityId, generation, changedAt)
                             VALUES(
                                 '$kind',
-                                NEW.id,
+                                NEW.$entityIdColumn,
                                 1,
                                 CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
                             )

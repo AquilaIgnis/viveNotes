@@ -6,8 +6,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.data.db.PageContentEntity
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
@@ -21,6 +23,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.security.MessageDigest
+import java.util.Base64
 
 @RunWith(AndroidJUnit4::class)
 class HierarchySyncTest {
@@ -54,9 +58,12 @@ class HierarchySyncTest {
 
         val result = hierarchy.run(account()) as SyncRunResult.Succeeded
 
-        assertEquals(3, result.summary.pushed)
-        assertEquals(3, result.summary.pulled)
-        assertEquals(listOf("notebook", "section", "page"), server.pushes.first().map(::kindOf))
+        assertEquals(4, result.summary.pushed)
+        assertEquals(4, result.summary.pulled)
+        assertEquals(
+            listOf("notebook", "section", "page", "pageContent"),
+            server.pushes.first().map(::kindOf),
+        )
         assertTrue(db.syncDao().outbox(512).isEmpty())
         assertEquals(1L, db.syncDao().state()!!.cursor)
     }
@@ -211,7 +218,7 @@ class HierarchySyncTest {
 
         val result = hierarchy.run(account()) as SyncRunResult.Succeeded
 
-        assertEquals(4, result.summary.pushed)
+        assertEquals(5, result.summary.pushed)
         val pageTitles = server.pushes.flatten()
             .filter { kindOf(it) == "page" }
             .map { it.getValue("title").jsonPrimitive.content }
@@ -240,6 +247,105 @@ class HierarchySyncTest {
         assertEquals(1, result.summary.pushed)
     }
 
+    @Test
+    fun documentBodiesRoundTripAsOpaqueBytesAfterTheirPage() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        val document = """{"schemaVersion":1,"outlines":[{"text":"opaque ✓"}]}"""
+        db.pageContentDao().upsert(PageContentEntity(pageId, document, now, "json/1"))
+
+        hierarchy.run(account())
+
+        val pushed = server.pushes.flatten().single { kindOf(it) == "pageContent" }
+        assertEquals(pageId, pushed.getValue("pageId").jsonPrimitive.content)
+        assertEquals(document, decodeDocument(pushed))
+        assertEquals("none/1", pushed.getValue("enc").jsonPrimitive.content)
+
+        val peer = Room.inMemoryDatabaseBuilder(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            NotesDatabase::class.java,
+        ).addCallback(NotesDatabase.SYNC_TRIGGER_CALLBACK).allowMainThreadQueries().build()
+        try {
+            val peerResult = HierarchySync(peer, server).run(account()) as SyncRunResult.Succeeded
+            assertEquals(4, peerResult.summary.pulled)
+            assertEquals(document, peer.pageContentDao().byId(pageId)!!.docJson)
+        } finally {
+            peer.close()
+        }
+    }
+
+    @Test
+    fun validLargeDocumentsAreSplitBelowTheRequestByteCap() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val firstPage = repository.createPage(sectionId, "First")
+        val secondPage = repository.createPage(sectionId, "Second")
+        val document = "x".repeat(1_600_000)
+        db.pageContentDao().upsert(PageContentEntity(firstPage, document, now, "json/1"))
+        db.pageContentDao().upsert(PageContentEntity(secondPage, document, now, "json/1"))
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(6, result.summary.pushed)
+        assertEquals(2, server.pushes.size)
+        server.pushes.forEach { changes ->
+            val encoded = JsonObject(
+                mapOf(
+                    "batchId" to JsonPrimitive("00000000-0000-0000-0000-000000000000"),
+                    "changes" to JsonArray(changes),
+                ),
+            ).toString().encodeToByteArray()
+            assertTrue(encoded.size <= MAX_SYNC_PUSH_BYTES)
+        }
+    }
+
+    @Test
+    fun aLaterRemoteDocumentWinsAWholeBodyVersionConflict() = runBlocking {
+        now = System.currentTimeMillis()
+        val pageId = createAndSyncPage("base")
+        now += 10_000
+        db.pageContentDao().upsert(PageContentEntity(pageId, "local", now, "json/1"))
+        server.beforeFirstPush = {
+            server.seed(pageContentChange(pageId, "remote", now + 10_000))
+        }
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(1, result.summary.conflictsResolved)
+        assertEquals(0, result.summary.pushed)
+        assertEquals("remote", db.pageContentDao().byId(pageId)!!.docJson)
+    }
+
+    @Test
+    fun aLaterLocalDocumentRebasesThenWinsAWholeBodyVersionConflict() = runBlocking {
+        now = System.currentTimeMillis()
+        val pageId = createAndSyncPage("base")
+        val remoteTime = now + 10_000
+        now += 20_000
+        db.pageContentDao().upsert(PageContentEntity(pageId, "local", now, "json/1"))
+        server.beforeFirstPush = {
+            server.seed(pageContentChange(pageId, "remote", remoteTime))
+        }
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(1, result.summary.conflictsResolved)
+        assertEquals(1, result.summary.pushed)
+        assertEquals("local", db.pageContentDao().byId(pageId)!!.docJson)
+        assertEquals("local", decodeDocument(server.current("pageContent", pageId)!!))
+    }
+
+    private suspend fun createAndSyncPage(document: String): String {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        db.pageContentDao().upsert(PageContentEntity(pageId, document, now, "json/1"))
+        hierarchy.run(account())
+        server.pushes.clear()
+        return pageId
+    }
+
     private fun account() = SyncAccount(
         serverUrl = "http://unused",
         accountId = "account",
@@ -258,11 +364,13 @@ class HierarchySyncTest {
         fun seed(vararg changes: JsonObject) {
             cursor++
             changes.forEach { raw ->
+                val key = kindOf(raw) to idOf(raw)
+                val previousVersion = rows[key]?.getValue("version")?.jsonPrimitive?.long ?: 0
                 val stored = raw.toMutableMap().apply {
-                    this["version"] = JsonPrimitive(1)
+                    this["version"] = JsonPrimitive(previousVersion + 1)
                     this["seq"] = JsonPrimitive(cursor)
                 }.let(::JsonObject)
-                rows[kindOf(stored) to idOf(stored)] = stored
+                rows[key] = stored
                 log += stored
             }
         }
@@ -404,3 +512,25 @@ private fun pageChange(
         "createdAt" to JsonPrimitive(updatedAt),
     ),
 )
+
+private fun pageContentChange(id: String, document: String, updatedAt: Long): JsonObject {
+    val bytes = document.encodeToByteArray()
+    return JsonObject(
+        linkedMapOf(
+            "kind" to JsonPrimitive("pageContent"),
+            "id" to JsonPrimitive(id),
+            "deletedAt" to JsonNull,
+            "updatedAt" to JsonPrimitive(updatedAt),
+            "pageId" to JsonPrimitive(id),
+            "doc" to JsonPrimitive(Base64.getEncoder().encodeToString(bytes)),
+            "docSha256" to JsonPrimitive(
+                Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(bytes)),
+            ),
+            "format" to JsonPrimitive("json/1"),
+            "enc" to JsonPrimitive("none/1"),
+        ),
+    )
+}
+
+private fun decodeDocument(change: JsonObject): String =
+    Base64.getDecoder().decode(change.getValue("doc").jsonPrimitive.content).decodeToString()

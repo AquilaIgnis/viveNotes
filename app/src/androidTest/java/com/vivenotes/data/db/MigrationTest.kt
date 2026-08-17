@@ -646,6 +646,55 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migration17To18QueuesPageContentByItsPageId() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 17).apply {
+            execSQL(
+                "INSERT INTO notebooks VALUES " +
+                    "('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)",
+            )
+            execSQL(
+                "INSERT INTO sections VALUES " +
+                    "('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)",
+            )
+            execSQL(
+                "INSERT INTO pages VALUES " +
+                    "('page', 'section', 'Page', 0, '', 10, 10, NULL)",
+            )
+            execSQL("INSERT INTO page_content VALUES ('page', '{}', 10, 'json/1')")
+            execSQL(
+                "INSERT INTO sync_state(singleton, accountId, cursor, applyingRemote) " +
+                    "VALUES(0, 'account', 0, 0)",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            18,
+            true,
+            NotesDatabase.MIGRATION_17_18,
+        ).use { migrated ->
+            migrated.query(
+                "SELECT generation FROM sync_outbox WHERE kind = 'pageContent'",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(1L, it.getLong(0))
+            }
+
+            migrated.execSQL("UPDATE page_content SET docJson = '{\"one\":1}' WHERE pageId = 'page'")
+            migrated.execSQL("UPDATE page_content SET docJson = '{\"two\":2}' WHERE pageId = 'page'")
+            migrated.query(
+                "SELECT kind, entityId, generation FROM sync_outbox WHERE kind = 'pageContent'",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("pageContent", it.getString(0))
+                assertEquals("page", it.getString(1))
+                assertEquals(3L, it.getLong(2))
+            }
+        }
+    }
+
     companion object {
         private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
     }

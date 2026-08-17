@@ -57,7 +57,9 @@ interface SyncDao {
 
     @Query(
         "SELECT * FROM sync_outbox ORDER BY " +
-            "CASE kind WHEN 'notebook' THEN 0 WHEN 'section' THEN 1 ELSE 2 END, entityId " +
+            "CASE kind " +
+            "WHEN 'notebook' THEN 0 WHEN 'section' THEN 1 WHEN 'page' THEN 2 " +
+            "WHEN 'pageContent' THEN 3 ELSE 4 END, entityId " +
             "LIMIT :limit",
     )
     suspend fun outbox(limit: Int): List<SyncOutboxEntity>
@@ -86,7 +88,8 @@ interface SyncDao {
         "DELETE FROM sync_outbox WHERE " +
             "(kind = 'notebook' AND entityId NOT IN (SELECT id FROM notebooks)) OR " +
             "(kind = 'section' AND entityId NOT IN (SELECT id FROM sections)) OR " +
-            "(kind = 'page' AND entityId NOT IN (SELECT id FROM pages))",
+            "(kind = 'page' AND entityId NOT IN (SELECT id FROM pages)) OR " +
+            "(kind = 'pageContent' AND entityId NOT IN (SELECT pageId FROM page_content))",
     )
     suspend fun pruneOrphanedOutbox()
 
@@ -114,6 +117,12 @@ interface SyncDao {
             "SELECT 'page', id, 1, updatedAt FROM pages",
     )
     suspend fun enqueueAllPages()
+
+    @Query(
+        "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
+            "SELECT 'pageContent', pageId, 1, updatedAt FROM page_content",
+    )
+    suspend fun enqueueAllPageContents()
 }
 
 /** Raw Room projection for the typed recovery model in `data/DeletionRecovery.kt`. */
@@ -447,6 +456,9 @@ interface PageContentDao {
 
     @Upsert
     suspend fun upsert(content: PageContentEntity)
+
+    @Query("DELETE FROM page_content WHERE pageId = :pageId")
+    suspend fun delete(pageId: String)
 }
 
 @Dao
