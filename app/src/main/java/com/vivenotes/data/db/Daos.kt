@@ -55,11 +55,20 @@ interface SyncDao {
     @Query("DELETE FROM sync_outbox")
     suspend fun clearOutbox()
 
+    /**
+     * Queued work, parents before children.
+     *
+     * The `CASE` has to name every kind and match `HierarchySync.SyncKind.rank`. Anything it does
+     * not name shares the trailing bucket and is then ordered by id, which mixes kinds together —
+     * harmless between siblings like the three ink kinds, and a batch that pushes a child before its
+     * parent the day a kind hangs off another. Two lists that must agree, so keep them together.
+     */
     @Query(
         "SELECT * FROM sync_outbox ORDER BY " +
             "CASE kind " +
             "WHEN 'notebook' THEN 0 WHEN 'section' THEN 1 WHEN 'page' THEN 2 " +
-            "WHEN 'pageContent' THEN 3 ELSE 4 END, entityId " +
+            "WHEN 'pageContent' THEN 3 WHEN 'inkStroke' THEN 4 WHEN 'inkErase' THEN 5 " +
+            "WHEN 'inkMove' THEN 6 ELSE 7 END, entityId " +
             "LIMIT :limit",
     )
     suspend fun outbox(limit: Int): List<SyncOutboxEntity>
@@ -89,7 +98,10 @@ interface SyncDao {
             "(kind = 'notebook' AND entityId NOT IN (SELECT id FROM notebooks)) OR " +
             "(kind = 'section' AND entityId NOT IN (SELECT id FROM sections)) OR " +
             "(kind = 'page' AND entityId NOT IN (SELECT id FROM pages)) OR " +
-            "(kind = 'pageContent' AND entityId NOT IN (SELECT pageId FROM page_content))",
+            "(kind = 'pageContent' AND entityId NOT IN (SELECT pageId FROM page_content)) OR " +
+            "(kind = 'inkStroke' AND entityId NOT IN (SELECT id FROM ink_strokes)) OR " +
+            "(kind = 'inkErase' AND entityId NOT IN (SELECT id FROM ink_erases)) OR " +
+            "(kind = 'inkMove' AND entityId NOT IN (SELECT id FROM ink_moves))",
     )
     suspend fun pruneOrphanedOutbox()
 
@@ -123,6 +135,28 @@ interface SyncDao {
             "SELECT 'pageContent', pageId, 1, updatedAt FROM page_content",
     )
     suspend fun enqueueAllPageContents()
+
+    // Ink carries no `updatedAt` of its own — under plain OCC it would be a display field nothing
+    // reads, maintained by five mutation paths. `COALESCE(deletedAt, createdAt)` is the closest
+    // honest answer for the outbox stamp, and the push sends the same value.
+
+    @Query(
+        "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
+            "SELECT 'inkStroke', id, 1, COALESCE(deletedAt, createdAt) FROM ink_strokes",
+    )
+    suspend fun enqueueAllInkStrokes()
+
+    @Query(
+        "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
+            "SELECT 'inkErase', id, 1, COALESCE(deletedAt, createdAt) FROM ink_erases",
+    )
+    suspend fun enqueueAllInkErases()
+
+    @Query(
+        "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
+            "SELECT 'inkMove', id, 1, COALESCE(deletedAt, createdAt) FROM ink_moves",
+    )
+    suspend fun enqueueAllInkMoves()
 }
 
 /** Raw Room projection for the typed recovery model in `data/DeletionRecovery.kt`. */

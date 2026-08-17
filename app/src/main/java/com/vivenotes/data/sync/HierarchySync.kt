@@ -2,7 +2,13 @@ package com.vivenotes.data.sync
 
 import android.util.Log
 import androidx.room.withTransaction
+import com.vivenotes.data.EraserMode
 import com.vivenotes.data.NotesRepository
+import com.vivenotes.data.db.InkEraseEntity
+import com.vivenotes.data.db.InkEraseTargetEntity
+import com.vivenotes.data.db.InkMoveEntity
+import com.vivenotes.data.db.InkMoveTargetEntity
+import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotesDatabase
@@ -22,6 +28,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -40,6 +48,12 @@ data class SyncSummary(
 
 enum class PermanentSyncFailure {
     InvalidServerResponse,
+
+    /**
+     * The server holds a change of a kind this build cannot store, so the cursor cannot advance past
+     * it without losing it. Only an upgrade clears this.
+     */
+    UnsupportedKind,
     LocalData,
     ChangeTooLarge,
     MalformedChange,
@@ -72,6 +86,9 @@ class HierarchySync(
     private val sections = db.sectionDao()
     private val pages = db.pageDao()
     private val contents = db.pageContentDao()
+    private val inkStrokes = db.inkStrokeDao()
+    private val inkErases = db.inkEraseDao()
+    private val inkMoves = db.inkMoveDao()
     private val mutex = Mutex()
 
     /** Makes [accountId] the owner of this database's one hierarchy corpus. */
@@ -181,6 +198,12 @@ class HierarchySync(
             sync.enqueueAllSections()
             sync.enqueueAllPages()
             sync.enqueueAllPageContents()
+            // On a drawn corpus this is by far the largest of the six — one row per stroke, per
+            // erase, per lasso — which is what makes connecting an already-used installation take a
+            // while once and nothing thereafter.
+            sync.enqueueAllInkStrokes()
+            sync.enqueueAllInkErases()
+            sync.enqueueAllInkMoves()
         }
     }
 
@@ -265,6 +288,28 @@ class HierarchySync(
                 )
             }
 
+            // A kind this build does not know stops the run, and stops it *before* the cursor moves.
+            //
+            // `parseRemoteChange` returns null for an unrecognised kind, and dropping those rows
+            // while committing the cursor is silent, permanent data loss: the cursor is a promise
+            // that everything below it has been applied, so the next pull starts above rows this
+            // device skipped and never asks for them again. Found on 2026-08-17 for real — a tablet
+            // still running the build before ink pulled a delta carrying 67 strokes, advanced past
+            // them, and reported itself caught up while a page it shows was missing every stroke
+            // another device had drawn on it.
+            //
+            // Refusing to advance turns that into a device that stops syncing until it is upgraded,
+            // which is the honest failure: recoverable by installing a newer build, where losing the
+            // rows is not recoverable by anything.
+            if (parsed.size != page.changes.size) {
+                Log.e(
+                    TAG,
+                    "Pull carried ${page.changes.size - parsed.size} change(s) of a kind this " +
+                        "build cannot store; the cursor stays at $cursor until this device is upgraded",
+                )
+                return PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.UnsupportedKind))
+            }
+
             // Parents before children, which the stream order does not give.
             //
             // The server orders a delta by `(change_seq, kind_rank, id)`, so a notebook precedes its
@@ -341,20 +386,32 @@ class HierarchySync(
             SyncKind.Notebook -> return true
             SyncKind.Section -> SyncKind.Notebook
             SyncKind.Page -> SyncKind.Section
-            SyncKind.PageContent -> SyncKind.Page
+            SyncKind.PageContent,
+            SyncKind.InkStroke,
+            SyncKind.InkErase,
+            SyncKind.InkMove,
+            -> SyncKind.Page
         }
         val parentID = when (change.kind) {
             SyncKind.Notebook -> return true
             SyncKind.Section -> change.raw.requiredString("notebookId")
             SyncKind.Page -> change.raw.requiredString("sectionId")
-            SyncKind.PageContent -> change.raw.requiredString("pageId")
+            SyncKind.PageContent,
+            SyncKind.InkStroke,
+            SyncKind.InkErase,
+            SyncKind.InkMove,
+            -> change.raw.requiredString("pageId")
         }
         if (applying.contains(parentKind.wire + ":" + parentID)) return true
         return when (parentKind) {
             SyncKind.Notebook -> notebooks.byId(parentID) != null
             SyncKind.Section -> sections.byId(parentID) != null
             SyncKind.Page -> pages.byId(parentID) != null
-            SyncKind.PageContent -> false
+            // A stroke is never a parent. An operation's targets are ids it replays against, and one
+            // naming nothing stored is normal: the stroke may arrive later, or have been purged
+            // after seven days on the device that made the operation. Waiting for it would stall the
+            // cursor on a row that can never come.
+            SyncKind.PageContent, SyncKind.InkStroke, SyncKind.InkErase, SyncKind.InkMove -> false
         }
     }
 
@@ -469,7 +526,11 @@ class HierarchySync(
         val parentKind = when (sent.kind) {
             SyncKind.Section.wire -> SyncKind.Notebook.wire
             SyncKind.Page.wire -> SyncKind.Section.wire
-            SyncKind.PageContent.wire -> SyncKind.Page.wire
+            SyncKind.PageContent.wire,
+            SyncKind.InkStroke.wire,
+            SyncKind.InkErase.wire,
+            SyncKind.InkMove.wire,
+            -> SyncKind.Page.wire
             else -> return
         }
         sync.enqueueIfAbsent(parentKind, parentId)
@@ -576,6 +637,69 @@ class HierarchySync(
                 base["enc"] = JsonPrimitive(PLAIN_ENCODING)
                 row.pageId
             }
+            SyncKind.InkStroke -> {
+                val row = inkStrokes.byIds(listOf(outbox.entityId)).firstOrNull()
+                    ?: throw IllegalStateException("dirty ink stroke disappeared")
+                base.putInkEnvelope(row.deletedAt, row.createdAt, outbox.changedAt)
+                base["pageId"] = JsonPrimitive(row.pageId)
+                // `drawOrder`, not `seq`: the envelope owns `seq`, and a stroke sending its draw
+                // order under that name would have it stripped and stored nowhere — ink would
+                // arrive and paint in the wrong order with nothing failing.
+                base["drawOrder"] = JsonPrimitive(row.seq)
+                base["brushFamily"] = JsonPrimitive(row.brushFamily)
+                base["brushVersion"] = JsonPrimitive(row.brushVersion)
+                base["sizeDp"] = JsonPrimitive(row.sizeDp)
+                base["colorArgb"] = JsonPrimitive(row.colorArgb)
+                base["colorFollowsTheme"] =
+                    row.colorFollowsTheme?.let(::JsonPrimitive) ?: JsonNull
+                base["epsilon"] = JsonPrimitive(row.epsilon)
+                base["stabilization"] = JsonPrimitive(row.stabilization)
+                base["minX"] = JsonPrimitive(row.minX)
+                base["minY"] = JsonPrimitive(row.minY)
+                base["maxX"] = JsonPrimitive(row.maxX)
+                base["maxY"] = JsonPrimitive(row.maxY)
+                base["points"] = JsonPrimitive(encodePoints(row.points))
+                base["enc"] = JsonPrimitive(row.enc)
+                base["createdAt"] = JsonPrimitive(row.createdAt)
+                base["groupId"] = row.groupId?.let(::JsonPrimitive) ?: JsonNull
+                row.pageId
+            }
+            SyncKind.InkErase -> {
+                val row = inkErases.byIds(listOf(outbox.entityId)).firstOrNull()
+                    ?: throw IllegalStateException("dirty ink erase disappeared")
+                base.putInkEnvelope(row.deletedAt, row.createdAt, outbox.changedAt)
+                base["pageId"] = JsonPrimitive(row.pageId)
+                base["mode"] = JsonPrimitive(row.mode.name)
+                base["sizeDp"] = JsonPrimitive(row.sizeDp)
+                base["points"] = JsonPrimitive(encodePoints(row.points))
+                base["enc"] = JsonPrimitive(row.enc)
+                base["createdAt"] = JsonPrimitive(row.createdAt)
+                // Read at push time rather than carried with the queued key, and sent whole: the
+                // mask without its targets would erase ink drawn later when it is replayed.
+                base["targetIds"] = JsonArray(
+                    inkErases.targetsForErases(listOf(row.id)).map { JsonPrimitive(it.strokeId) },
+                )
+                row.pageId
+            }
+            SyncKind.InkMove -> {
+                val row = inkMoves.byIds(listOf(outbox.entityId)).firstOrNull()
+                    ?: throw IllegalStateException("dirty ink move disappeared")
+                base.putInkEnvelope(row.deletedAt, row.createdAt, outbox.changedAt)
+                base["pageId"] = JsonPrimitive(row.pageId)
+                base["dxDp"] = JsonPrimitive(row.dxDp)
+                base["dyDp"] = JsonPrimitive(row.dyDp)
+                base["scaleX"] = JsonPrimitive(row.scaleX)
+                base["scaleY"] = JsonPrimitive(row.scaleY)
+                base["anchorX"] = JsonPrimitive(row.anchorX)
+                base["anchorY"] = JsonPrimitive(row.anchorY)
+                base["points"] = JsonPrimitive(encodePoints(row.points))
+                base["enc"] = JsonPrimitive(row.enc)
+                base["createdAt"] = JsonPrimitive(row.createdAt)
+                base["targetIds"] = JsonArray(
+                    inkMoves.targetsForMoves(listOf(row.id)).map { JsonPrimitive(it.strokeId) },
+                )
+                row.pageId
+            }
         }
         return PendingChange(
             kind = kind.wire,
@@ -595,6 +719,27 @@ class HierarchySync(
         this["updatedAt"] = JsonPrimitive(updatedAt)
         this[DISPLAY_UPDATED_AT] = JsonPrimitive(displayUpdatedAt)
     }
+
+    /**
+     * The envelope for a kind that stores no `updatedAt` of its own.
+     *
+     * The protocol requires the field and the server keeps it, but under plain OCC it is display
+     * metadata that nothing here reads back — convergence is the server's version and nothing else.
+     * A real column on the ink tables would have to be maintained by every erase, restore, recolour
+     * and regroup for a value with no reader, so it is synthesised from what the row does carry.
+     * `viveCServer/memory/syncPlan.md` §10 item 8 is answered "no, and here is why".
+     */
+    private fun MutableMap<String, kotlinx.serialization.json.JsonElement>.putInkEnvelope(
+        deletedAt: Long?,
+        createdAt: Long,
+        changedAt: Long,
+    ) {
+        val stamp = maxOf(createdAt, deletedAt ?: 0L, changedAt)
+        putEnvelope(deletedAt, stamp, stamp)
+    }
+
+    private fun encodePoints(points: ByteArray): String =
+        Base64.getEncoder().encodeToString(points)
 
     private suspend fun applyRemoteRow(change: RemoteChange) {
         val displayUpdatedAt = change.displayUpdatedAt
@@ -649,8 +794,95 @@ class HierarchySync(
                     )
                 }
             }
+            // Ink tombstones are upserted like any other field rather than deleting the row: a
+            // stroke's `deletedAt` toggles — an erase sets it and an undo clears it again — so the
+            // row has to survive to carry the next value.
+            SyncKind.InkStroke -> inkStrokes.upsert(
+                listOf(
+                    InkStrokeEntity(
+                        id = change.id,
+                        pageId = change.raw.requiredString("pageId"),
+                        seq = change.raw.requiredInt("drawOrder"),
+                        brushFamily = change.raw.requiredString("brushFamily"),
+                        brushVersion = change.raw.requiredInt("brushVersion"),
+                        sizeDp = change.raw.requiredFloat("sizeDp"),
+                        colorArgb = change.raw.requiredInt("colorArgb"),
+                        colorFollowsTheme = change.raw.optionalBoolean("colorFollowsTheme"),
+                        epsilon = change.raw.requiredFloat("epsilon"),
+                        stabilization = change.raw.requiredInt("stabilization"),
+                        minX = change.raw.requiredFloat("minX"),
+                        minY = change.raw.requiredFloat("minY"),
+                        maxX = change.raw.requiredFloat("maxX"),
+                        maxY = change.raw.requiredFloat("maxY"),
+                        points = requireNotNull(change.inkPoints),
+                        enc = change.raw.optionalString("enc") ?: INK_ENCODING,
+                        createdAt = change.raw.requiredLong("createdAt"),
+                        groupId = change.raw.optionalString("groupId"),
+                        deletedAt = change.deletedAt,
+                    ),
+                ),
+            )
+            SyncKind.InkErase -> {
+                inkErases.upsert(
+                    InkEraseEntity(
+                        id = change.id,
+                        pageId = change.raw.requiredString("pageId"),
+                        mode = eraserModeOf(change.raw.requiredString("mode")),
+                        sizeDp = change.raw.requiredFloat("sizeDp"),
+                        points = requireNotNull(change.inkPoints),
+                        enc = change.raw.optionalString("enc") ?: INK_ENCODING,
+                        createdAt = change.raw.requiredLong("createdAt"),
+                        deletedAt = change.deletedAt,
+                    ),
+                )
+                // Replaced wholesale, and never filtered against the strokes this device holds. An
+                // id naming nothing here is inert at replay, and dropping it would silently un-erase
+                // that stroke the moment it arrived — the target set is the operation's payload, not
+                // a set of references.
+                inkErases.deleteTargetsForErases(listOf(change.id))
+                inkErases.insertTargetsIfAbsent(
+                    change.targetIds.map { InkEraseTargetEntity(change.id, it) },
+                )
+            }
+            SyncKind.InkMove -> {
+                inkMoves.upsert(
+                    InkMoveEntity(
+                        id = change.id,
+                        pageId = change.raw.requiredString("pageId"),
+                        dxDp = change.raw.requiredFloat("dxDp"),
+                        dyDp = change.raw.requiredFloat("dyDp"),
+                        scaleX = change.raw.optionalFloat("scaleX") ?: 1f,
+                        scaleY = change.raw.optionalFloat("scaleY") ?: 1f,
+                        anchorX = change.raw.optionalFloat("anchorX") ?: 0f,
+                        anchorY = change.raw.optionalFloat("anchorY") ?: 0f,
+                        points = requireNotNull(change.inkPoints),
+                        enc = change.raw.optionalString("enc") ?: INK_ENCODING,
+                        createdAt = change.raw.requiredLong("createdAt"),
+                        deletedAt = change.deletedAt,
+                    ),
+                )
+                inkMoves.deleteTargetsForMoves(listOf(change.id))
+                inkMoves.insertTargetsIfAbsent(
+                    change.targetIds.map { InkMoveTargetEntity(change.id, it) },
+                )
+            }
         }
     }
+
+    /**
+     * The stored eraser mode, defaulting rather than failing.
+     *
+     * A mode this build has never heard of comes from a newer app, and the choice is between an
+     * erase replayed with the wrong shape and a device that stops syncing on a row that will never
+     * change. The same trade `DocumentJson` already makes with `coerceInputValues` for unknown enum
+     * *values*, and for the same reason. Logged, because a silently reshaped erase is exactly the
+     * kind of thing that gets reported as "the app ate my drawing" a week later.
+     */
+    private fun eraserModeOf(mode: String): EraserMode =
+        EraserMode.entries.firstOrNull { it.name == mode } ?: run {
+            Log.w(TAG, "Unknown eraser mode \"$mode\" replayed as Normal; upgrade this device")
+            EraserMode.Normal
+        }
 
     private fun parseRemoteChange(raw: JsonObject): RemoteChange? {
         val kind = SyncKind.fromWire(raw.requiredString("kind")) ?: return null
@@ -662,6 +894,8 @@ class HierarchySync(
         raw.requiredLong("updatedAt")
         raw.optionalLong("deletedAt")
         var documentJson: String? = null
+        var inkPoints: ByteArray? = null
+        var targetIds: List<String> = emptyList()
         when (kind) {
             SyncKind.Notebook -> {
                 raw.requiredInt("sortIndex")
@@ -705,6 +939,34 @@ class HierarchySync(
                     .decode(ByteBuffer.wrap(documentBytes))
                     .toString()
             }
+            SyncKind.InkStroke -> {
+                raw.requiredString("pageId")
+                raw.requiredInt("drawOrder")
+                raw.requiredString("brushFamily")
+                raw.requiredInt("brushVersion")
+                raw.requiredInt("stabilization")
+                listOf("sizeDp", "epsilon", "minX", "minY", "maxX", "maxY")
+                    .forEach { raw.requiredFloat(it) }
+                raw.requiredInt("colorArgb")
+                raw.requiredLong("createdAt")
+                inkPoints = raw.decodeInkPoints()
+            }
+            SyncKind.InkErase -> {
+                raw.requiredString("pageId")
+                raw.requiredString("mode")
+                raw.requiredFloat("sizeDp")
+                raw.requiredLong("createdAt")
+                inkPoints = raw.decodeInkPoints()
+                targetIds = raw.requiredStringArray("targetIds")
+            }
+            SyncKind.InkMove -> {
+                raw.requiredString("pageId")
+                raw.requiredFloat("dxDp")
+                raw.requiredFloat("dyDp")
+                raw.requiredLong("createdAt")
+                inkPoints = raw.decodeInkPoints()
+                targetIds = raw.requiredStringArray("targetIds")
+            }
         }
         return RemoteChange(
             kind = kind,
@@ -715,6 +977,8 @@ class HierarchySync(
             displayUpdatedAt = raw[DISPLAY_UPDATED_AT]?.jsonPrimitive?.longOrNull
                 ?: raw.requiredLong("updatedAt"),
             documentJson = documentJson,
+            inkPoints = inkPoints,
+            targetIds = targetIds,
             raw = raw,
         )
     }
@@ -728,14 +992,34 @@ class HierarchySync(
         val displayUpdatedAt: Long,
         /** Decoded only for pageContent; null for hierarchy rows. */
         val documentJson: String?,
+        /** Decoded only for the three ink kinds; null for everything else. */
+        val inkPoints: ByteArray?,
+        /** The ids an ink operation names, empty for every other kind. */
+        val targetIds: List<String>,
         val raw: JsonObject,
     ) {
         fun asEntityState() = SyncEntityStateEntity(
             kind = kind.wire,
             entityId = id,
             serverVersion = version,
-            serverJson = raw.toString(),
+            serverJson = strippedServerJson(),
         )
+
+        /**
+         * The stored copy of the server's row, without the one field that would double the size of
+         * the database.
+         *
+         * The JSON is kept so a later push can overlay only the fields this build owns rather than
+         * erasing what a newer client wrote. `points` is not one of those: it is immutable, it is
+         * already in the ink row beside it, and the push re-attaches it from there. Keeping it here
+         * as base64 would store every stroke twice at a third again the size — on a page of 9,553
+         * strokes that is 7 MB of duplicate, and a notebook may hold 500,000.
+         */
+        private fun strippedServerJson(): String = when (kind) {
+            SyncKind.InkStroke, SyncKind.InkErase, SyncKind.InkMove ->
+                JsonObject(raw.filterKeys { it != "points" }).toString()
+            else -> raw.toString()
+        }
     }
 
     @Serializable
@@ -770,7 +1054,14 @@ class HierarchySync(
         Notebook("notebook", 0),
         Section("section", 1),
         Page("page", 2),
-        PageContent("pageContent", 3);
+        PageContent("pageContent", 3),
+
+        // Ink hangs from a page and never from another stroke. An operation names the strokes it
+        // affected, but as inert ids: a target that has not arrived, or that a purge removed years
+        // ago, must not hold the operation back — see `applyRemoteRow`.
+        InkStroke("inkStroke", 4),
+        InkErase("inkErase", 5),
+        InkMove("inkMove", 6);
 
         companion object {
             fun fromWire(value: String): SyncKind? = entries.firstOrNull { it.wire == value }
@@ -822,6 +1113,53 @@ class HierarchySync(
         throw IllegalArgumentException("invalid $name", malformed)
     }
 
+    private fun JsonObject.requiredFloat(name: String): Float =
+        this[name]?.jsonPrimitive?.floatOrNull
+            ?: throw IllegalArgumentException("missing $name")
+
+    private fun JsonObject.optionalFloat(name: String): Float? {
+        val value = this[name] ?: return null
+        if (value === JsonNull) return null
+        return value.jsonPrimitive.floatOrNull
+            ?: throw IllegalArgumentException("invalid $name")
+    }
+
+    private fun JsonObject.optionalString(name: String): String? {
+        val value = this[name] ?: return null
+        if (value === JsonNull) return null
+        return value.jsonPrimitive.content
+    }
+
+    private fun JsonObject.optionalBoolean(name: String): Boolean? {
+        val value = this[name] ?: return null
+        if (value === JsonNull) return null
+        return value.jsonPrimitive.booleanOrNull
+            ?: throw IllegalArgumentException("invalid $name")
+    }
+
+    private fun JsonObject.requiredStringArray(name: String): List<String> {
+        val value = this[name] ?: return emptyList()
+        if (value === JsonNull) return emptyList()
+        val array = value as? JsonArray ?: throw IllegalArgumentException("invalid $name")
+        return array.map { element ->
+            element.jsonPrimitive.contentOrNull
+                ?: throw IllegalArgumentException("invalid $name")
+        }
+    }
+
+    /**
+     * The encoded points of a stroke, mask or lasso.
+     *
+     * Bounded before anything is written, like a document body: the transport already refuses a
+     * response bigger than one batch, but a single row claiming more than a `.vive` bundle would
+     * carry is a protocol failure worth naming rather than a row worth storing.
+     */
+    private fun JsonObject.decodeInkPoints(): ByteArray {
+        val points = decodeBase64("points")
+        require(points.size <= MAX_INK_POINT_BYTES) { "ink points are too large" }
+        return points
+    }
+
     private companion object {
         const val TAG = "HierarchySync"
         const val MAX_PUSH_CHANGES = 512
@@ -829,6 +1167,12 @@ class HierarchySync(
         const val MAX_DOCUMENT_BYTES = 2 shl 20
         const val PENDING_BATCH_KEY = "syncPendingHierarchyBatch"
         const val PLAIN_ENCODING = "none/1"
+
+        /** `InkCodec`'s encoder id, and what a row that names none is taken to mean. */
+        const val INK_ENCODING = "ink/v1"
+
+        /** NotebookTransferManager.MAX_POINT_BYTES, so a bundle that imports also syncs. */
+        const val MAX_INK_POINT_BYTES = 4 * 1024 * 1024
 
         /**
          * Holds the account id this installation has caught up with, not a boolean: the question is

@@ -29,7 +29,7 @@ import androidx.sqlite.execSQL
         SyncEntityStateEntity::class,
         SyncOutboxEntity::class,
     ],
-    version = 19,
+    version = 20,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -518,6 +518,39 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Puts ink in the sync outbox — the change that makes a drawn page cross between devices.
+         *
+         * Nothing about the ink tables changes; this adds their insert/update triggers and queues
+         * what is already on disk. The backfill is guarded on an existing `sync_state` row for the
+         * reason 17 -> 18's was: an account activated under an older schema takes `activateLocked`'s
+         * fast path after the upgrade and would never run the new seeding there, while a database
+         * that has never been connected must stay untouched until its owner connects.
+         *
+         * On a drawn corpus this is the largest thing the outbox has ever held — one row per stroke,
+         * up to the 500,000 a notebook may carry — which is why it is one `INSERT … SELECT` per
+         * table rather than a walk, and why the first sync after upgrading is the one that takes a
+         * while rather than every sync after it.
+         */
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(connection: SQLiteConnection) {
+                installSyncTriggers(connection)
+                listOf(
+                    "inkStroke" to "ink_strokes",
+                    "inkErase" to "ink_erases",
+                    "inkMove" to "ink_moves",
+                ).forEach { (kind, table) ->
+                    connection.execSQL(
+                        """
+                        INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt)
+                        SELECT '$kind', id, 1, COALESCE(deletedAt, createdAt) FROM $table
+                        WHERE EXISTS (SELECT 1 FROM sync_state WHERE singleton = 0)
+                        """.trimIndent(),
+                    )
+                }
+            }
+        }
+
         /** Fresh databases do not run migrations, so they install the same triggers after create. */
         val SYNC_TRIGGER_CALLBACK = object : RoomDatabase.Callback() {
             override fun onCreate(connection: SQLiteConnection) {
@@ -546,6 +579,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_16_17,
                     MIGRATION_17_18,
                     MIGRATION_18_19,
+                    MIGRATION_19_20,
                 )
                 .addCallback(SYNC_TRIGGER_CALLBACK)
                 .build()
@@ -556,6 +590,12 @@ abstract class NotesDatabase : RoomDatabase() {
                 Triple("section", "sections", "id"),
                 Triple("page", "pages", "id"),
                 Triple("pageContent", "page_content", "pageId"),
+                // Ink, since schema 20. The target tables get none: they are never an entity, they
+                // travel inside their operation's payload, and they are written in the same
+                // transaction as the operation whose insert already queued it.
+                Triple("inkStroke", "ink_strokes", "id"),
+                Triple("inkErase", "ink_erases", "id"),
+                Triple("inkMove", "ink_moves", "id"),
             ).forEach { (kind, table, entityIdColumn) ->
                 listOf("insert" to "INSERT", "update" to "UPDATE").forEach { (suffix, event) ->
                     connection.execSQL(

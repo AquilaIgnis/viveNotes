@@ -3,7 +3,11 @@ package com.vivenotes.data.sync
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.vivenotes.data.EraserMode
 import com.vivenotes.data.NotesRepository
+import com.vivenotes.data.db.InkEraseEntity
+import com.vivenotes.data.db.InkMoveEntity
+import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
@@ -15,6 +19,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -350,6 +355,219 @@ class HierarchySyncTest {
         return pageId
     }
 
+    @Test
+    fun aDrawnPageUploadsItsStrokesAndOperationsWithTheirTargets() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        val stroke = repository.addStroke(strokeRow("stroke-1", pageId, seq = 0))
+        repository.addPartialErase(eraseRow("erase-1", pageId), listOf(stroke.id))
+        repository.addInkMove(moveRow("move-1", pageId), listOf(stroke.id))
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        // Parents first, and the three ink kinds after the page they hang from.
+        assertEquals(
+            listOf("notebook", "section", "page", "pageContent", "inkStroke", "inkErase", "inkMove"),
+            server.pushes.first().map(::kindOf),
+        )
+        assertEquals(7, result.summary.pushed)
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+
+        val sentStroke = server.current("inkStroke", stroke.id)!!
+        assertEquals(pageId, sentStroke.getValue("pageId").jsonPrimitive.content)
+        // `drawOrder`, never `seq`: `seq` is the envelope's account sequence, and a stroke that sent
+        // its draw order under that name would have it silently dropped.
+        assertEquals(0, sentStroke.getValue("drawOrder").jsonPrimitive.content.toInt())
+        assertEquals("pressure-pen", sentStroke.getValue("brushFamily").jsonPrimitive.content)
+        assertArrayEquals(
+            byteArrayOf(7, 8, 9),
+            Base64.getDecoder().decode(sentStroke.getValue("points").jsonPrimitive.content),
+        )
+
+        // The mask without its targets would erase ink drawn later when it is replayed, so the pair
+        // has to travel as one entity.
+        val sentErase = server.current("inkErase", "erase-1")!!
+        assertEquals(
+            listOf(stroke.id),
+            (sentErase.getValue("targetIds") as JsonArray).map { it.jsonPrimitive.content },
+        )
+        val sentMove = server.current("inkMove", "move-1")!!
+        assertEquals(
+            listOf(stroke.id),
+            (sentMove.getValue("targetIds") as JsonArray).map { it.jsonPrimitive.content },
+        )
+    }
+
+    @Test
+    fun pulledInkLandsOnThePageIncludingTargetsThisDeviceHasNeverSeen() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(
+            notebookChange("n", "Remote", changedAt),
+            sectionChange("s", "n", "Remote section", changedAt),
+            pageChange("p", "s", "Remote page", changedAt),
+            inkStrokeChange("stroke-1", "p", drawOrder = 4, updatedAt = changedAt),
+            // Names a stroke this device does not have and never will — the other device purged it
+            // seven days after erasing it. Inert, not a reason to refuse the operation.
+            inkEraseChange("erase-1", "p", listOf("stroke-1", "stroke-gone"), changedAt),
+            inkMoveChange("move-1", "p", listOf("stroke-1"), changedAt),
+        )
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(6, result.summary.pulled)
+        val stored = db.inkStrokeDao().byPage("p").single()
+        assertEquals(4, stored.seq)
+        assertEquals("pressure-pen", stored.brushFamily)
+        assertArrayEquals(byteArrayOf(7, 8, 9), stored.points)
+        assertEquals(2.5f, stored.sizeDp, 0f)
+        assertNull(stored.colorFollowsTheme)
+
+        val erase = db.inkEraseDao().byPage("p").single()
+        assertEquals(
+            listOf("stroke-1", "stroke-gone"),
+            erase.targets.map { it.strokeId }.sorted(),
+        )
+        assertEquals(listOf("stroke-1"), db.inkMoveDao().byPage("p").single().targets.map { it.strokeId })
+        // The cursor moved, which is the part a foreign key on those targets would have broken.
+        assertEquals(1L, db.syncDao().state()!!.cursor)
+    }
+
+    @Test
+    fun anErasedStrokeAndItsUndoBothCross() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(
+            notebookChange("n", "Remote", changedAt),
+            sectionChange("s", "n", "Remote section", changedAt),
+            pageChange("p", "s", "Remote page", changedAt),
+            inkStrokeChange("stroke-1", "p", drawOrder = 0, updatedAt = changedAt),
+        )
+        hierarchy.run(account())
+        assertEquals(1, db.inkStrokeDao().byPage("p").size)
+
+        // Erasing is a tombstone on the row, not a delete: the row has to survive to carry the undo.
+        server.seed(
+            inkStrokeChange("stroke-1", "p", drawOrder = 0, updatedAt = changedAt + 1, deletedAt = changedAt + 1),
+        )
+        hierarchy.run(account())
+        assertTrue(db.inkStrokeDao().byPage("p").isEmpty())
+        assertNotNull(db.inkStrokeDao().byIds(listOf("stroke-1")).single().deletedAt)
+
+        server.seed(inkStrokeChange("stroke-1", "p", drawOrder = 0, updatedAt = changedAt + 2))
+        hierarchy.run(account())
+        assertEquals(1, db.inkStrokeDao().byPage("p").size)
+        assertNull(db.inkStrokeDao().byIds(listOf("stroke-1")).single().deletedAt)
+    }
+
+    @Test
+    fun theStoredServerCopyOfAStrokeDoesNotHoldItsPointsTwice() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(
+            notebookChange("n", "Remote", changedAt),
+            sectionChange("s", "n", "Remote section", changedAt),
+            pageChange("p", "s", "Remote page", changedAt),
+            inkStrokeChange("stroke-1", "p", drawOrder = 0, updatedAt = changedAt, extra = "future"),
+        )
+        hierarchy.run(account())
+
+        // Ink is the largest table in the app; keeping the server's copy of every stroke as base64
+        // beside the row itself would store the corpus twice at a third again the size.
+        val state = db.syncDao().entityState("inkStroke", "stroke-1")!!
+        assertFalse(state.serverJson.contains("points"))
+        assertTrue(state.serverJson.contains("future"))
+
+        // The push still carries points, re-attached from the row, and still preserves the field a
+        // newer client sent that this build has no column for.
+        db.inkStrokeDao().setColor("stroke-1", 0x00FF00, followsTheme = false)
+        hierarchy.run(account())
+        val sent = server.pushes.last().single()
+        assertArrayEquals(
+            byteArrayOf(7, 8, 9),
+            Base64.getDecoder().decode(sent.getValue("points").jsonPrimitive.content),
+        )
+        assertEquals("future", sent.getValue("future").jsonPrimitive.content)
+        assertEquals(0x00FF00, sent.getValue("colorArgb").jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun inkWaitsForThePageThatArrivesInALaterPullPage() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(inkStrokeChange("stroke-1", "p", drawOrder = 0, updatedAt = changedAt))
+        server.seed(notebookChange("n", "Remote", changedAt))
+        server.seed(sectionChange("s", "n", "Remote section", changedAt))
+        server.seed(pageChange("p", "s", "Remote page", changedAt))
+        server.pageLimit = 1
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(4, result.summary.pulled)
+        assertEquals(1, db.inkStrokeDao().byPage("p").size)
+        assertEquals(4L, db.syncDao().state()!!.cursor)
+    }
+
+    @Test
+    fun aKindThisBuildCannotStoreParksTheCursorRatherThanSkippingIt() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(notebookChange("n", "Remote", changedAt))
+        server.seed(
+            JsonObject(
+                linkedMapOf(
+                    "kind" to JsonPrimitive("attachment"),
+                    "id" to JsonPrimitive("attachment-1"),
+                    "deletedAt" to JsonNull,
+                    "updatedAt" to JsonPrimitive(changedAt),
+                ),
+            ),
+        )
+
+        val result = hierarchy.run(account())
+
+        // Skipping the row and committing the cursor is silent, permanent loss: the cursor promises
+        // everything below it has been applied, so the next pull starts above what was dropped. A
+        // tablet on the build before ink did exactly that with 67 strokes on 2026-08-17.
+        assertEquals(SyncRunResult.Failed(PermanentSyncFailure.UnsupportedKind), result)
+        assertEquals(0L, db.syncDao().state()!!.cursor)
+    }
+
+    private fun strokeRow(id: String, pageId: String, seq: Int) = InkStrokeEntity(
+        id = id,
+        pageId = pageId,
+        seq = seq,
+        brushFamily = "pressure-pen",
+        brushVersion = 1,
+        sizeDp = 2.5f,
+        colorArgb = 0xFF0000,
+        epsilon = 0.1f,
+        stabilization = 3,
+        minX = 1f,
+        minY = 2f,
+        maxX = 3f,
+        maxY = 4f,
+        points = byteArrayOf(7, 8, 9),
+        enc = "ink/v1",
+        createdAt = now,
+    )
+
+    private fun eraseRow(id: String, pageId: String) = InkEraseEntity(
+        id = id,
+        pageId = pageId,
+        mode = EraserMode.Object,
+        sizeDp = 8f,
+        points = byteArrayOf(1, 2),
+        enc = "ink/v1",
+        createdAt = now,
+    )
+
+    private fun moveRow(id: String, pageId: String) = InkMoveEntity(
+        id = id,
+        pageId = pageId,
+        dxDp = 5f,
+        dyDp = -6f,
+        points = byteArrayOf(3, 4),
+        enc = "ink/v1",
+        createdAt = now,
+    )
+
     private fun account() = SyncAccount(
         serverUrl = "http://unused",
         accountId = "account",
@@ -514,6 +732,83 @@ private fun pageChange(
         "sortIndex" to JsonPrimitive(0),
         "preview" to JsonPrimitive("Preview"),
         "createdAt" to JsonPrimitive(updatedAt),
+    ),
+)
+
+private fun inkStrokeChange(
+    id: String,
+    pageId: String,
+    drawOrder: Int,
+    updatedAt: Long,
+    deletedAt: Long? = null,
+    extra: String? = null,
+): JsonObject = linkedMapOf<String, kotlinx.serialization.json.JsonElement>(
+    "kind" to JsonPrimitive("inkStroke"),
+    "id" to JsonPrimitive(id),
+    "deletedAt" to (deletedAt?.let(::JsonPrimitive) ?: JsonNull),
+    "updatedAt" to JsonPrimitive(updatedAt),
+    "pageId" to JsonPrimitive(pageId),
+    "drawOrder" to JsonPrimitive(drawOrder),
+    "brushFamily" to JsonPrimitive("pressure-pen"),
+    "brushVersion" to JsonPrimitive(1),
+    "sizeDp" to JsonPrimitive(2.5f),
+    "colorArgb" to JsonPrimitive(0xFF0000),
+    "colorFollowsTheme" to JsonNull,
+    "epsilon" to JsonPrimitive(0.1f),
+    "stabilization" to JsonPrimitive(3),
+    "minX" to JsonPrimitive(1f),
+    "minY" to JsonPrimitive(2f),
+    "maxX" to JsonPrimitive(3f),
+    "maxY" to JsonPrimitive(4f),
+    "points" to JsonPrimitive(Base64.getEncoder().encodeToString(byteArrayOf(7, 8, 9))),
+    "enc" to JsonPrimitive("ink/v1"),
+    "createdAt" to JsonPrimitive(updatedAt),
+    "groupId" to JsonNull,
+).apply { if (extra != null) this["future"] = JsonPrimitive(extra) }.let(::JsonObject)
+
+private fun inkEraseChange(
+    id: String,
+    pageId: String,
+    targetIds: List<String>,
+    updatedAt: Long,
+): JsonObject = JsonObject(
+    linkedMapOf(
+        "kind" to JsonPrimitive("inkErase"),
+        "id" to JsonPrimitive(id),
+        "deletedAt" to JsonNull,
+        "updatedAt" to JsonPrimitive(updatedAt),
+        "pageId" to JsonPrimitive(pageId),
+        "mode" to JsonPrimitive("Normal"),
+        "sizeDp" to JsonPrimitive(8f),
+        "points" to JsonPrimitive(Base64.getEncoder().encodeToString(byteArrayOf(1, 2))),
+        "enc" to JsonPrimitive("ink/v1"),
+        "createdAt" to JsonPrimitive(updatedAt),
+        "targetIds" to JsonArray(targetIds.map(::JsonPrimitive)),
+    ),
+)
+
+private fun inkMoveChange(
+    id: String,
+    pageId: String,
+    targetIds: List<String>,
+    updatedAt: Long,
+): JsonObject = JsonObject(
+    linkedMapOf(
+        "kind" to JsonPrimitive("inkMove"),
+        "id" to JsonPrimitive(id),
+        "deletedAt" to JsonNull,
+        "updatedAt" to JsonPrimitive(updatedAt),
+        "pageId" to JsonPrimitive(pageId),
+        "dxDp" to JsonPrimitive(5f),
+        "dyDp" to JsonPrimitive(-6f),
+        "scaleX" to JsonPrimitive(1f),
+        "scaleY" to JsonPrimitive(1f),
+        "anchorX" to JsonPrimitive(0f),
+        "anchorY" to JsonPrimitive(0f),
+        "points" to JsonPrimitive(Base64.getEncoder().encodeToString(byteArrayOf(3, 4))),
+        "enc" to JsonPrimitive("ink/v1"),
+        "createdAt" to JsonPrimitive(updatedAt),
+        "targetIds" to JsonArray(targetIds.map(::JsonPrimitive)),
     ),
 )
 

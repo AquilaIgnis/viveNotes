@@ -34,6 +34,7 @@
     <string name="account_sync_error_local">The local sync queue could not be read. The notes themselves are still stored locally.</string>
     <string name="account_sync_error_large">One local hierarchy change is larger than the server accepts.</string>
     <string name="account_sync_error_malformed">The server rejected one local hierarchy change as malformed.</string>
+    <string name="account_sync_error_unsupported">This account holds changes a newer version of the app wrote. Update viveNotes to keep syncing.</string>
     <string name="account_sync_error_parent">A section or page could not be sent because its parent is missing.</string>
     <string name="account_disconnect_failed">The device could not be revoked. Its token was kept so you can try again.</string>
     <string name="account_disconnecting">Revoking this device</string>

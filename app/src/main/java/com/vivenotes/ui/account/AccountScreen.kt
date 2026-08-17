@@ -609,6 +609,9 @@ private fun syncFailureMessage(reason: PermanentSyncFailure): Int = when (reason
     PermanentSyncFailure.ChangeTooLarge -> R.string.account_sync_error_large
     PermanentSyncFailure.MalformedChange -> R.string.account_sync_error_malformed
     PermanentSyncFailure.MissingParent -> R.string.account_sync_error_parent
+    // Not "an error" so much as "you are behind": the cursor is deliberately parked so the changes
+    // this build cannot store stay on the server rather than being skipped past.
+    PermanentSyncFailure.UnsupportedKind -> R.string.account_sync_error_unsupported
 }
 
 /** Enough tint to read as a state, not enough to compete with the card it sits on. */

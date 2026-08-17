@@ -767,6 +767,68 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migration19To20QueuesExistingInkAndTriggersOnNewInk() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 19).apply {
+            execSQL("INSERT INTO notebooks VALUES ('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)")
+            execSQL("INSERT INTO sections VALUES ('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)")
+            execSQL("INSERT INTO pages VALUES ('page', 'section', 'Page', 0, '', 10, 10, NULL)")
+            execSQL(
+                "INSERT INTO ink_strokes(id, pageId, seq, brushFamily, brushVersion, sizeDp, " +
+                    "colorArgb, colorFollowsTheme, epsilon, stabilization, minX, minY, maxX, maxY, " +
+                    "points, enc, createdAt, groupId, deletedAt) VALUES " +
+                    "('drawn-before', 'page', 0, 'marker', 1, 4.0, -16777216, NULL, 0.1, 0, " +
+                    "0.0, 0.0, 1.0, 1.0, x'01', 'ink/v1', 10, NULL, NULL)",
+            )
+            execSQL(
+                "INSERT INTO sync_state(singleton, accountId, cursor, applyingRemote) " +
+                    "VALUES(0, 'account', 0, 0)",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            20,
+            true,
+            NotesDatabase.MIGRATION_19_20,
+        ).use { migrated ->
+            // Everything already drawn becomes the first ink outbox, or an installation that
+            // upgrades never uploads the ink it already has.
+            migrated.query(
+                "SELECT entityId, generation FROM sync_outbox WHERE kind = 'inkStroke'",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("drawn-before", it.getString(0))
+                assertEquals(1L, it.getLong(1))
+            }
+
+            migrated.execSQL(
+                "INSERT INTO ink_erases(id, pageId, mode, sizeDp, points, enc, createdAt, deletedAt) " +
+                    "VALUES ('erase', 'page', 'Normal', 8.0, x'01', 'ink/v1', 11, NULL)",
+            )
+            // Targets are not entities: they travel inside their operation's payload, and a trigger
+            // on them would queue a key no kind can push.
+            migrated.execSQL("INSERT INTO ink_erase_targets VALUES ('erase', 'drawn-before')")
+            migrated.query("SELECT kind, entityId FROM sync_outbox ORDER BY kind").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("inkErase", it.getString(0))
+                assertEquals(true, it.moveToNext())
+                assertEquals("inkStroke", it.getString(0))
+                assertEquals(false, it.moveToNext())
+            }
+
+            // Erasing is an update on the stroke, and it has to queue the row again.
+            migrated.execSQL("UPDATE ink_strokes SET deletedAt = 20 WHERE id = 'drawn-before'")
+            migrated.query(
+                "SELECT generation FROM sync_outbox WHERE kind = 'inkStroke'",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(2L, it.getLong(0))
+            }
+        }
+    }
+
     companion object {
         private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
     }
