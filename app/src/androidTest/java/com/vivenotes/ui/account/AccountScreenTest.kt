@@ -18,6 +18,7 @@ import com.vivenotes.R
 import com.vivenotes.data.sync.ConnectFailure
 import com.vivenotes.data.sync.SelfHostConnection
 import com.vivenotes.data.sync.SyncRunResult
+import com.vivenotes.data.sync.SyncStatus
 import com.vivenotes.data.sync.SyncSummary
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
@@ -39,7 +40,7 @@ class AccountScreenTest {
     private var disconnects = 0
     private var syncs = 0
     private var syncing by mutableStateOf(false)
-    private var syncResult by mutableStateOf<SyncRunResult?>(null)
+    private var syncStatus by mutableStateOf(SyncStatus())
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
@@ -193,9 +194,9 @@ class AccountScreenTest {
             .assertIsDisplayed()
     }
 
-    /** Arriving already connected must show it, not hide it behind a collapsed row. */
+    /** Arriving already connected must show it, not hide it behind anything. */
     @Test
-    fun anExistingConnectionOpensTheDisclosureByItself() {
+    fun anExistingConnectionIsShownOnArrival() {
         connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
         setScreen()
 
@@ -234,9 +235,50 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.DISCONNECT).assertIsNotEnabled()
 
         syncing = false
-        syncResult = SyncRunResult.Succeeded(SyncSummary(pulled = 2, pushed = 1, conflictsResolved = 0))
-        compose.onNodeWithTag(AccountTags.SYNC_STATUS)
-            .assertTextContains(context.getString(R.string.account_sync_summary, 2, 1))
+        syncStatus = SyncStatus(
+            lastSucceededAtMillis = System.currentTimeMillis(),
+            lastSummary = SyncSummary(pulled = 2, pushed = 1, conflictsResolved = 0),
+        )
+        compose.onNodeWithTag(AccountTags.SYNC_STATUS).assertTextContains(
+            context.getString(R.string.account_sync_just_now) +
+                context.getString(R.string.account_sync_counts, 2, 1),
+        )
+    }
+
+    /**
+     * The status line answers for the clock as well as for the button, which is the entire reason it
+     * reads from a shared status rather than from the last press. A sync that has been failing since
+     * before this screen was opened has to be visible on opening it.
+     */
+    @Test
+    fun aFailedBackgroundRunIsOnScreenWithoutAnybodyPressingSync() {
+        setScreen()
+        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+
+        syncStatus = SyncStatus(failure = SyncRunResult.Retryable(ConnectFailure.Unreachable))
+
+        compose.onNodeWithTag(AccountTags.SYNC_STATUS).performScrollTo().assertTextContains(
+            context.getString(
+                R.string.account_sync_will_retry,
+                context.getString(R.string.account_error_unreachable),
+            ),
+        )
+        assertEquals(0, syncs)
+    }
+
+    /**
+     * Connecting is an invitation, and there is nothing left to invite. Leaving Log in and Sign up on
+     * a screen that is already connected offers a second account to an app that holds one.
+     */
+    @Test
+    fun connectedHidesEveryWayToConnectAgain() {
+        setScreen()
+        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+
+        compose.onNodeWithTag(AccountTags.CONNECTED).assertIsDisplayed()
+        compose.onNodeWithTag(AccountTags.LOGIN).assertDoesNotExist()
+        compose.onNodeWithTag(AccountTags.SIGN_UP).assertDoesNotExist()
+        compose.onNodeWithTag(AccountTags.SELF_HOST).assertDoesNotExist()
     }
 
     /**
@@ -273,7 +315,7 @@ class AccountScreenTest {
                         connectCalls += Triple(url, email, password)
                     },
                     syncing = syncing,
-                    syncResult = syncResult,
+                    syncStatus = syncStatus,
                     onSync = { syncs++ },
                     onDisconnect = { disconnects++ },
                 )

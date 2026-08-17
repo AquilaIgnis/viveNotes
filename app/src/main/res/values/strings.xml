@@ -20,6 +20,16 @@
     <string name="account_syncing">Syncing notebooks</string>
     <string name="account_sync_up_to_date">Up to date</string>
     <string name="account_sync_summary">Up to date · Pulled: %1$d · Pushed: %2$d</string>
+    <!--
+        The ambient sync line. It answers "is this tablet current", so it is written as a time rather
+        than as a verdict: "Synced just now" needs no interpretation, and a stale one is visible
+        without reading the rest of the sentence.
+    -->
+    <string name="account_sync_just_now">Synced just now</string>
+    <string name="account_sync_relative">Synced %1$s</string>
+    <string name="account_sync_counts"> · Pulled %1$d · Pushed %2$d</string>
+    <string name="account_sync_never">Not synced yet</string>
+    <string name="account_sync_will_retry">%1$s Syncing will retry by itself.</string>
     <string name="account_sync_error_response">The server returned sync data this version cannot read.</string>
     <string name="account_sync_error_local">The local sync queue could not be read. The notes themselves are still stored locally.</string>
     <string name="account_sync_error_large">One local hierarchy change is larger than the server accepts.</string>

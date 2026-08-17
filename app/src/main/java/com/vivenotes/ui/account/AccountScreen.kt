@@ -1,5 +1,6 @@
 package com.vivenotes.ui.account
 
+import android.text.format.DateUtils
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
@@ -64,6 +65,8 @@ import com.vivenotes.data.sync.ConnectFailure
 import com.vivenotes.data.sync.PermanentSyncFailure
 import com.vivenotes.data.sync.SelfHostConnection
 import com.vivenotes.data.sync.SyncRunResult
+import com.vivenotes.data.sync.SyncStatus
+import com.vivenotes.data.sync.SyncSummary
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.theme.LocalIconAccents
 
@@ -114,8 +117,9 @@ fun AccountScreen(
     onSignUp: () -> Unit = {},
     connection: SelfHostConnection = SelfHostConnection.Idle,
     onConnect: (serverUrl: String, email: String, password: String) -> Unit = { _, _, _ -> },
+    /** Whether *this screen's* Sync now is in flight — the button's own spinner, not the clock's. */
     syncing: Boolean = false,
-    syncResult: SyncRunResult? = null,
+    syncStatus: SyncStatus = SyncStatus(),
     onSync: () -> Unit = {},
     disconnecting: Boolean = false,
     disconnectFailure: ConnectFailure? = null,
@@ -211,6 +215,28 @@ fun AccountScreen(
                         )
                     }
 
+                    // Connected, this screen has one job: say how sync is going and offer the two
+                    // things that act on it. The hosted buttons and the disclosure that hides the
+                    // form are an invitation to connect, and there is nothing left to invite.
+                    if (connected != null) {
+                        Spacer(Modifier.height(20.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            ConnectedPanel(
+                                connected = connected,
+                                syncStatus = syncStatus,
+                                syncing = syncing,
+                                onSync = onSync,
+                                disconnecting = disconnecting,
+                                disconnectFailure = disconnectFailure,
+                                onDisconnect = { confirmDisconnect = true },
+                            )
+                        }
+                        return@Column
+                    }
+
                     Spacer(Modifier.height(20.dp))
                     Text(
                         text = stringResource(R.string.account_title),
@@ -267,22 +293,6 @@ fun AccountScreen(
                                 .padding(top = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            // The connected panel *replaces* the form rather than sitting above it:
-                            // the fields describe a connection to make, and there is one. Written as
-                            // an early return so the form below stays at one indent level.
-                            if (connected != null) {
-                                ConnectedPanel(
-                                    connected = connected,
-                                    syncing = syncing,
-                                    syncResult = syncResult,
-                                    onSync = onSync,
-                                    disconnecting = disconnecting,
-                                    disconnectFailure = disconnectFailure,
-                                    onDisconnect = { confirmDisconnect = true },
-                                )
-                                return@Column
-                            }
-
                             Text(
                                 text = stringResource(R.string.account_self_host_description),
                                 style = MaterialTheme.typography.bodySmall,
@@ -414,8 +424,8 @@ fun AccountScreen(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private fun ConnectedPanel(
     connected: SelfHostConnection.Connected,
+    syncStatus: SyncStatus,
     syncing: Boolean,
-    syncResult: SyncRunResult?,
     onSync: () -> Unit,
     disconnecting: Boolean,
     disconnectFailure: ConnectFailure?,
@@ -494,7 +504,7 @@ private fun ConnectedPanel(
         }
     }
 
-    SyncStatus(syncing = syncing, result = syncResult)
+    SyncStatusLine(syncStatus)
 
     OutlinedButton(
         onClick = onDisconnect,
@@ -523,23 +533,25 @@ private fun ConnectedPanel(
     }
 }
 
+/**
+ * The one line that says whether sync is actually working.
+ *
+ * It reports the clock's runs, not just the button's, which is the whole point: a tablet syncs every
+ * interval whether or not anyone is watching, and the failure worth catching is the one nobody asked
+ * for. A failure wins over the timestamp because it is the news; the timestamp survives underneath it
+ * in [SyncStatus] and is what a later reading of this line falls back to once the trouble clears.
+ *
+ * Nothing announces a run in progress. At the debug interval that would be a line flickering between
+ * two states every five seconds, and the button beside it already spins when a person asks for one.
+ */
 @Composable
-private fun SyncStatus(syncing: Boolean, result: SyncRunResult?) {
-    if (syncing || result == null) return
-
-    val (message, isError) = when (result) {
-        is SyncRunResult.Succeeded -> {
-            val summary = result.summary
-            val text = if (summary.pulled == 0 && summary.pushed == 0) {
-                stringResource(R.string.account_sync_up_to_date)
-            } else {
-                stringResource(R.string.account_sync_summary, summary.pulled, summary.pushed)
-            }
-            text to false
-        }
-        is SyncRunResult.Retryable -> stringResource(failureMessage(result.reason)) to true
-        is SyncRunResult.Failed -> stringResource(syncFailureMessage(result.reason)) to true
-        SyncRunResult.Revoked -> stringResource(R.string.account_error_revoked) to true
+private fun SyncStatusLine(status: SyncStatus) {
+    val failure = status.failure
+    val (message, isError) = when {
+        failure != null -> syncFailureText(failure) to true
+        status.lastSucceededAtMillis != null ->
+            syncedAtText(status.lastSucceededAtMillis, status.lastSummary) to false
+        else -> stringResource(R.string.account_sync_never) to false
     }
     Text(
         text = message,
@@ -547,6 +559,47 @@ private fun SyncStatus(syncing: Boolean, result: SyncRunResult?) {
         color = if (isError) MaterialTheme.colorScheme.error else LocalIconAccents.current.green,
         modifier = Modifier.testTag(AccountTags.SYNC_STATUS),
     )
+}
+
+/**
+ * "Synced just now", and what that run moved when it moved anything.
+ *
+ * The counts are appended only when they are not both zero. Every interval reporting "Pulled 0 ·
+ * Pushed 0" is a line that trains its reader to stop looking at it, and "nothing to do" is already
+ * what a bare timestamp means.
+ *
+ * Relative rather than a clock time because the question is "is this tablet current", and *five
+ * minutes ago* answers it without the reader doing arithmetic. It goes stale only while sync is
+ * failing, and that case shows the failure instead.
+ */
+@Composable
+private fun syncedAtText(atMillis: Long, summary: SyncSummary?): String {
+    val now = System.currentTimeMillis()
+    val elapsed = now - atMillis
+    val whenText = if (elapsed < DateUtils.MINUTE_IN_MILLIS) {
+        stringResource(R.string.account_sync_just_now)
+    } else {
+        stringResource(
+            R.string.account_sync_relative,
+            DateUtils.getRelativeTimeSpanString(atMillis, now, DateUtils.MINUTE_IN_MILLIS),
+        )
+    }
+    if (summary == null || (summary.pulled == 0 && summary.pushed == 0)) return whenText
+    return whenText + stringResource(R.string.account_sync_counts, summary.pulled, summary.pushed)
+}
+
+@Composable
+private fun syncFailureText(failure: SyncRunResult): String = when (failure) {
+    // Transport trouble is normal on a tablet and resolves itself, so it says so rather than
+    // reading as something the person has to go and fix.
+    is SyncRunResult.Retryable -> stringResource(
+        R.string.account_sync_will_retry,
+        stringResource(failureMessage(failure.reason)),
+    )
+    is SyncRunResult.Failed -> stringResource(syncFailureMessage(failure.reason))
+    SyncRunResult.Revoked -> stringResource(R.string.account_error_revoked)
+    // Not reachable: a success is not a failure. Exhaustive so the compiler keeps it that way.
+    is SyncRunResult.Succeeded -> stringResource(R.string.account_sync_up_to_date)
 }
 
 @StringRes

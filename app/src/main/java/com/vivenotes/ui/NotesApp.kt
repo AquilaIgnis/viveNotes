@@ -196,8 +196,10 @@ fun NotesApp(
     // press into a device registered on the server that nothing here can authenticate as.
     val connectScope = rememberCoroutineScope()
     var selfHostConnection by remember { mutableStateOf<SelfHostConnection>(SelfHostConnection.Idle) }
+    // Only this screen's button, so the spinner belongs to the press that started it. The clock's
+    // own runs report through `syncStatus` instead: at the debug interval a shared flag would put a
+    // spinner on the button every five seconds without anyone having asked for one.
     var syncing by remember { mutableStateOf(false) }
-    var syncResult by remember { mutableStateOf<SyncRunResult?>(null) }
     var disconnecting by remember { mutableStateOf(false) }
     var disconnectFailure by remember { mutableStateOf<ConnectFailure?>(null) }
 
@@ -205,6 +207,16 @@ fun NotesApp(
     // coming back does not read as never having connected. This attempt wins while there is one:
     // its result — including a failure — is news, and the stored account is only the background.
     val storedAccount by syncAccounts.account.collectAsStateWithLifecycle(initialValue = null)
+    val syncStatus by syncAccounts.status.collectAsStateWithLifecycle()
+
+    // A revocation found by the clock rather than by the button still has to reach the screen. The
+    // token is already gone by the time this runs — `synchronize` drops it — so this is only about
+    // saying why the form came back.
+    LaunchedEffect(syncStatus.failure) {
+        if (syncStatus.failure == SyncRunResult.Revoked) {
+            selfHostConnection = SelfHostConnection.Failed(ConnectFailure.Revoked)
+        }
+    }
 
     // Revocation is one-sided: the operator removes this device from the dashboard and nothing tells
     // the app. Opening Account is when it is worth asking, because it is the only screen where the
@@ -274,7 +286,6 @@ fun NotesApp(
                 onBack = closeAccount,
                 connection = displayedConnection,
                 onConnect = { serverUrl, email, password ->
-                    syncResult = null
                     disconnectFailure = null
                     selfHostConnection = SelfHostConnection.Connecting
                     connectScope.launch {
@@ -282,20 +293,15 @@ fun NotesApp(
                     }
                 },
                 syncing = syncing,
-                syncResult = syncResult,
+                syncStatus = syncStatus,
                 onSync = {
                     if (!syncing) {
                         syncing = true
-                        syncResult = null
                         connectScope.launch {
-                            val result = syncAccounts.synchronize()
-                            syncResult = result
+                            // The result reaches the screen through `syncStatus`, which every run
+                            // reports to; this only has to put the button back.
+                            syncAccounts.synchronize()
                             syncing = false
-                            if (result == SyncRunResult.Revoked) {
-                                selfHostConnection = SelfHostConnection.Failed(
-                                    ConnectFailure.Revoked,
-                                )
-                            }
                         }
                     }
                 },
@@ -310,8 +316,8 @@ fun NotesApp(
                                 DisconnectResult.Disconnected -> {
                                     // Back to Idle rather than to a "disconnected" result: with the
                                     // stored account gone the empty form is the screen saying so.
+                                    // `disconnect` clears the sync status for the same reason.
                                     selfHostConnection = SelfHostConnection.Idle
-                                    syncResult = null
                                 }
                                 is DisconnectResult.Failed -> {
                                     disconnectFailure = result.reason

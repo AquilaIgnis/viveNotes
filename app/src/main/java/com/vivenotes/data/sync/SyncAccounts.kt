@@ -7,7 +7,11 @@ import android.provider.Settings
 import com.vivenotes.data.db.NotesDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import java.io.IOException
 import java.security.MessageDigest
 
@@ -36,6 +40,29 @@ sealed interface DisconnectResult {
 }
 
 /**
+ * How synchronisation is going, for any screen that wants to say so.
+ *
+ * Every run reports here — the foreground clock, the WorkManager catch-up and the Sync now button
+ * alike — because the ones a person never asked for are exactly the ones that need somewhere to be
+ * seen. Before this existed, a device whose sync had been failing for forty minutes looked identical
+ * to one with nothing to do, and the only way to find out was to open Account and press a button.
+ *
+ * Deliberately in memory and not persisted. The alternative is a row written every interval — five
+ * seconds apart in debug builds — to answer a question that the first run after launch answers
+ * anyway, and it does so within a second of the app coming to the foreground.
+ */
+data class SyncStatus(
+    /** True for the length of a run, whoever started it. */
+    val running: Boolean = false,
+    /** When a run last reconciled everything, or null if none has since this process started. */
+    val lastSucceededAtMillis: Long? = null,
+    /** What that run moved. Zero on both counts is the ordinary case and says "nothing to do". */
+    val lastSummary: SyncSummary? = null,
+    /** The last run's verdict when it was not a success. Cleared by the next success. */
+    val failure: SyncRunResult? = null,
+)
+
+/**
  * Connecting this installation to a self-hosted viveCServer, start to finish.
  *
  * Ties [SyncServerClient] to [SyncAccountStore] so that no caller can do half of it: the token is
@@ -57,6 +84,11 @@ class SyncAccounts(
 
     /** Null until connected. Survives launches; cleared by [disconnect]. */
     val account: Flow<SyncAccount?> = store.account
+
+    private val _status = MutableStateFlow(SyncStatus())
+
+    /** How synchronisation is going. See [SyncStatus] for why this is not persisted. */
+    val status: StateFlow<SyncStatus> = _status.asStateFlow()
 
     /**
      * Registers this device and stores the token it gets back.
@@ -146,6 +178,7 @@ class SyncAccounts(
             TokenCheck.Revoked -> {
                 store.clear()
                 hierarchy?.deactivate(account.accountId)
+                _status.value = SyncStatus()
                 SelfHostConnection.Failed(ConnectFailure.Revoked)
             }
 
@@ -170,6 +203,8 @@ class SyncAccounts(
             -> {
                 store.clear()
                 hierarchy?.deactivate(account.accountId)
+                // Nothing about the old server's syncing is true of the next one.
+                _status.value = SyncStatus()
                 DisconnectResult.Disconnected
             }
             is ServerResult.Failed -> DisconnectResult.Failed(result.reason)
@@ -196,14 +231,39 @@ class SyncAccounts(
         return hierarchy?.hasCaughtUp(account.accountId) ?: true
     }
 
-    /** Runs the hierarchy protocol once, or returns null when no account is configured. */
+    /**
+     * Runs the hierarchy protocol once, or returns null when no account is configured.
+     *
+     * Every path through here reports to [status], including the ones nobody watched start.
+     */
     suspend fun synchronize(): SyncRunResult? {
         val account = store.account.first() ?: return null
-        val result = hierarchy?.run(account)
-            ?: return SyncRunResult.Failed(PermanentSyncFailure.LocalData)
+
+        _status.update { it.copy(running = true) }
+        val result = try {
+            hierarchy?.run(account) ?: SyncRunResult.Failed(PermanentSyncFailure.LocalData)
+        } finally {
+            // In a `finally` because the foreground clock cancels its run when the app goes to the
+            // background, and a status left saying "running" would outlive the run that set it.
+            _status.update { it.copy(running = false) }
+        }
+
+        _status.update { current ->
+            when (result) {
+                is SyncRunResult.Succeeded -> current.copy(
+                    lastSucceededAtMillis = System.currentTimeMillis(),
+                    lastSummary = result.summary,
+                    failure = null,
+                )
+                // The last success stands: "this failed" and "it last worked ten minutes ago" are
+                // both worth knowing, and the second is what says how stale the tablet is.
+                else -> current.copy(failure = result)
+            }
+        }
+
         if (result == SyncRunResult.Revoked) {
             store.clear()
-            hierarchy.deactivate(account.accountId)
+            hierarchy?.deactivate(account.accountId)
         }
         return result
     }
