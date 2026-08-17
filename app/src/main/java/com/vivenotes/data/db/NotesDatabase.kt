@@ -29,7 +29,7 @@ import androidx.sqlite.execSQL
         SyncEntityStateEntity::class,
         SyncOutboxEntity::class,
     ],
-    version = 18,
+    version = 19,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -438,6 +438,86 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Makes ink safe to receive from another device, and cheaper to write while doing it.
+         *
+         * Two changes, both prerequisites for `memory/inkSyncPlan.md` rather than features of it:
+         *
+         * **Operation targets stop being foreign keys.** `ink_erase_targets.strokeId` and
+         * `ink_move_targets.strokeId` referenced `ink_strokes` with a cascade. Replicated, that is a
+         * wedge: a target stroke recoloured after the operation was made carries a higher
+         * `change_seq` and therefore lands in a *later* delta page than the operation naming it, and
+         * a target already removed by the seven-day purge can never arrive at all — so the insert
+         * fails, the transaction rolls back with the sync cursor uncommitted, and the device
+         * re-pulls the same delta for ever. An unknown target id is instead inert, which is what
+         * replay already does with it. The cascade also silently rewrote an operation's payload
+         * whenever a purge fired, and operations are meant to be immutable.
+         *
+         * The `strokeId` indexes go with the keys they served. Nothing queries a target by its
+         * stroke; they existed because Room asks for an index on a foreign key's child column.
+         *
+         * **`ink_strokes` swaps its `pageId` index for `(pageId, seq, id)`.** A replacement, not an
+         * addition, so a stroke insert still maintains one index and the foreign key to `pages` is
+         * still covered by the leading column. It removes the sorter from the page-load query — the
+         * old plan pushed whole rows, `points` blobs and all, through SQLite's sorter — and turns
+         * `nextSeq`, which runs on every stroke commit, from a walk of the page's rows into a single
+         * seek to the end of its range.
+         *
+         * Nothing is backfilled and no data moves: the target rows are copied verbatim, ids and all,
+         * including any whose stroke was already purged.
+         */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(connection: SQLiteConnection) {
+                // Rebuilding a table is the only way to drop a constraint in SQLite, and
+                // `PRAGMA foreign_keys` cannot be changed inside the transaction a migration runs
+                // in. Deferring the checks to its commit can be, and is what the documented
+                // twelve-step ALTER procedure asks for.
+                connection.execSQL("PRAGMA defer_foreign_keys = TRUE")
+
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS ink_erase_targets_new (
+                        eraseId TEXT NOT NULL,
+                        strokeId TEXT NOT NULL,
+                        PRIMARY KEY(eraseId, strokeId),
+                        FOREIGN KEY(eraseId) REFERENCES ink_erases(id)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "INSERT INTO ink_erase_targets_new(eraseId, strokeId) " +
+                        "SELECT eraseId, strokeId FROM ink_erase_targets",
+                )
+                connection.execSQL("DROP TABLE ink_erase_targets")
+                connection.execSQL("ALTER TABLE ink_erase_targets_new RENAME TO ink_erase_targets")
+
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS ink_move_targets_new (
+                        moveId TEXT NOT NULL,
+                        strokeId TEXT NOT NULL,
+                        PRIMARY KEY(moveId, strokeId),
+                        FOREIGN KEY(moveId) REFERENCES ink_moves(id)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                connection.execSQL(
+                    "INSERT INTO ink_move_targets_new(moveId, strokeId) " +
+                        "SELECT moveId, strokeId FROM ink_move_targets",
+                )
+                connection.execSQL("DROP TABLE ink_move_targets")
+                connection.execSQL("ALTER TABLE ink_move_targets_new RENAME TO ink_move_targets")
+
+                connection.execSQL("DROP INDEX IF EXISTS index_ink_strokes_pageId")
+                connection.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_ink_strokes_pageId_seq_id " +
+                        "ON ink_strokes (pageId, seq, id)",
+                )
+            }
+        }
+
         /** Fresh databases do not run migrations, so they install the same triggers after create. */
         val SYNC_TRIGGER_CALLBACK = object : RoomDatabase.Callback() {
             override fun onCreate(connection: SQLiteConnection) {
@@ -465,6 +545,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_15_16,
                     MIGRATION_16_17,
                     MIGRATION_17_18,
+                    MIGRATION_18_19,
                 )
                 .addCallback(SYNC_TRIGGER_CALLBACK)
                 .build()

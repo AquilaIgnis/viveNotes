@@ -695,6 +695,78 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migration18To19KeepsTargetsWhoseStrokeIsGoneAndSwapsTheDrawOrderIndex() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 18).apply {
+            execSQL("INSERT INTO notebooks VALUES ('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)")
+            execSQL("INSERT INTO sections VALUES ('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)")
+            execSQL("INSERT INTO pages VALUES ('page', 'section', 'Page', 0, '', 10, 10, NULL)")
+            execSQL(
+                "INSERT INTO ink_strokes(id, pageId, seq, brushFamily, brushVersion, sizeDp, " +
+                    "colorArgb, colorFollowsTheme, epsilon, stabilization, minX, minY, maxX, maxY, " +
+                    "points, enc, createdAt, groupId, deletedAt) VALUES " +
+                    "('stroke', 'page', 7, 'marker', 1, 4.0, -16777216, NULL, 0.1, 0, " +
+                    "0.0, 0.0, 1.0, 1.0, x'01', 'ink/v1', 10, NULL, NULL)",
+            )
+            execSQL(
+                "INSERT INTO ink_erases(id, pageId, mode, sizeDp, points, enc, createdAt, deletedAt) " +
+                    "VALUES ('erase', 'page', 'Normal', 8.0, x'01', 'ink/v1', 11, NULL)",
+            )
+            execSQL("INSERT INTO ink_erase_targets VALUES ('erase', 'stroke')")
+            execSQL(
+                "INSERT INTO ink_moves(id, pageId, dxDp, dyDp, scaleX, scaleY, anchorX, anchorY, " +
+                    "points, enc, createdAt, deletedAt) VALUES " +
+                    "('move', 'page', 3.0, 4.0, 1.0, 1.0, 0.0, 0.0, x'01', 'ink/v1', 12, NULL)",
+            )
+            execSQL("INSERT INTO ink_move_targets VALUES ('move', 'stroke')")
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            19,
+            true,
+            NotesDatabase.MIGRATION_18_19,
+        ).use { migrated ->
+            // The rebuild copies target rows verbatim rather than re-deriving them from anything.
+            migrated.query("SELECT strokeId FROM ink_erase_targets WHERE eraseId = 'erase'").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("stroke", it.getString(0))
+            }
+
+            migrated.execSQL("PRAGMA foreign_keys = ON")
+
+            // The case this migration exists for: the seven-day purge removes a stroke an operation
+            // still names. Before 19 the cascade took the target row with it, which rewrote an
+            // operation that is meant to be immutable and, once ink replicates, made an operation
+            // whose stroke had been purged impossible to insert at all.
+            migrated.execSQL("DELETE FROM ink_strokes WHERE id = 'stroke'")
+            migrated.query("SELECT COUNT(*) FROM ink_erase_targets").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(1L, it.getLong(0))
+            }
+            migrated.query("SELECT COUNT(*) FROM ink_move_targets").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(1L, it.getLong(0))
+            }
+
+            // The operation's own key still cascades, so a purged erase never strands its targets.
+            migrated.execSQL("DELETE FROM ink_erases WHERE id = 'erase'")
+            migrated.query("SELECT COUNT(*) FROM ink_erase_targets").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(0L, it.getLong(0))
+            }
+
+            val indices = buildList {
+                migrated.query("PRAGMA index_list(`ink_strokes`)").use {
+                    while (it.moveToNext()) add(it.getString(it.getColumnIndexOrThrow("name")))
+                }
+            }
+            assertTrue("index_ink_strokes_pageId_seq_id" in indices)
+            assertTrue("index_ink_strokes_pageId" !in indices)
+        }
+    }
+
     companion object {
         private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
     }

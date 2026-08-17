@@ -266,12 +266,32 @@ data class NotebookWithSections(
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [Index("pageId")],
+    // (pageId, seq, id) rather than pageId alone, which is two things at once and replaces it
+    // instead of joining it, so a stroke insert still maintains one index. It is the exact order
+    // `byPage` reads in, so the query has no sorter — the alternative pushes whole rows, `points`
+    // blobs included, through SQLite's sorter and spills a densely drawn page to a temp file. And
+    // it is the fast path for `nextSeq`: `MAX(seq)` over an equality-constrained prefix is one seek
+    // to the end of the range instead of a walk of every row on the page. `pageId` is still the
+    // leading column, so the foreign key to `pages` remains indexed.
+    indices = [Index("pageId", "seq", "id")],
 )
 data class InkStrokeEntity(
     @PrimaryKey val id: String,
     val pageId: String,
-    /** Draw order within the page. Later strokes sit on top. */
+    /**
+     * Draw order within the page: later strokes sit on top, ties broken by [id].
+     *
+     * **This is a logical clock, not a count.** `nextSeq` allocates `MAX(seq) + 1` over every row of
+     * the page including tombstones and including strokes pulled from another device, which is
+     * exactly `max(local, incoming) + 1` — so a stroke drawn here is always above everything this
+     * device has seen, without trusting anybody's wall clock. Ordering by [createdAt] instead would
+     * let a tablet running ten minutes fast paint its ink over strokes drawn after it.
+     *
+     * Two devices drawing on one page while offline both allocate the same value, which is correct:
+     * neither saw the other, so neither is meant to be on top. The tie is broken by [id], a UUIDv7
+     * whose hex form sorts chronologically under BINARY collation — deterministic on every device,
+     * and within one logical tick it is real draw order. `memory/inkSyncPlan.md` §1.
+     */
     val seq: Int,
     val brushFamily: String,
     /** Pinned at creation, never "latest": a stock brush that gains a V2 must not restyle old ink. */
@@ -369,7 +389,22 @@ data class InkEraseEntity(
     override fun hashCode(): Int = 31 * id.hashCode() + points.contentHashCode()
 }
 
-/** The immutable link between an erase gesture and a stroke that existed when it was made. */
+/**
+ * The immutable link between an erase gesture and a stroke that existed when it was made.
+ *
+ * [strokeId] is deliberately **not** a foreign key, and an id naming no stored row is inert —
+ * `InkPageLoader` replays an operation against the strokes it can find and ignores the rest.
+ * A reference would be a wedge the moment ink replicates: a target recoloured after the erase was
+ * made lands in a later delta page than the operation naming it, and a target the seven-day purge
+ * has already removed can never arrive at all, so the insert would fail, the transaction would roll
+ * back with the sync cursor uncommitted, and the device would re-pull the same delta for ever. It
+ * would also let a purge silently rewrite an operation's payload, which is meant to be immutable.
+ * `memory/inkSyncPlan.md` §2.2.
+ *
+ * There is no index on [strokeId] either: nothing queries by it, it existed only because Room asks
+ * for one on a foreign key's child column, and an erase across a dense page writes hundreds of these
+ * rows inside a latency-sensitive transaction.
+ */
 @Entity(
     tableName = "ink_erase_targets",
     primaryKeys = ["eraseId", "strokeId"],
@@ -380,14 +415,7 @@ data class InkEraseEntity(
             childColumns = ["eraseId"],
             onDelete = ForeignKey.CASCADE,
         ),
-        ForeignKey(
-            entity = InkStrokeEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["strokeId"],
-            onDelete = ForeignKey.CASCADE,
-        ),
     ],
-    indices = [Index("strokeId")],
 )
 data class InkEraseTargetEntity(
     val eraseId: String,
@@ -436,7 +464,12 @@ data class InkMoveEntity(
     override fun hashCode(): Int = 31 * id.hashCode() + points.contentHashCode()
 }
 
-/** The source rows that existed inside a lasso when its transform was committed. */
+/**
+ * The source rows that existed inside a lasso when its transform was committed.
+ *
+ * [strokeId] is an inert id rather than a foreign key, for the reasons spelled out on
+ * [InkEraseTargetEntity].
+ */
 @Entity(
     tableName = "ink_move_targets",
     primaryKeys = ["moveId", "strokeId"],
@@ -447,14 +480,7 @@ data class InkMoveEntity(
             childColumns = ["moveId"],
             onDelete = ForeignKey.CASCADE,
         ),
-        ForeignKey(
-            entity = InkStrokeEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["strokeId"],
-            onDelete = ForeignKey.CASCADE,
-        ),
     ],
-    indices = [Index("strokeId")],
 )
 data class InkMoveTargetEntity(
     val moveId: String,

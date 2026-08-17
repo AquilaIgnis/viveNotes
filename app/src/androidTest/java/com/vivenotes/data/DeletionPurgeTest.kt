@@ -96,6 +96,65 @@ class DeletionPurgeTest {
     }
 
     @Test
+    fun inkTheServerHasNotAcknowledgedOutlivesItsCutoff() = runBlocking {
+        val pageId = newPage()
+        val cutoff = 50_000L
+        val queued = stroke("queued", pageId, seq = 0, deletedAt = cutoff)
+        val acknowledged = stroke("acknowledged", pageId, seq = 1, deletedAt = cutoff)
+        db.inkStrokeDao().insert(listOf(queued, acknowledged))
+        val queuedErase = erase("queued-erase", pageId, deletedAt = cutoff)
+        val queuedMove = move("queued-move", pageId, deletedAt = cutoff)
+        db.inkEraseDao().insert(queuedErase)
+        db.inkMoveDao().insert(queuedMove)
+        db.syncDao().enqueueIfAbsent("inkStroke", queued.id)
+        db.syncDao().enqueueIfAbsent("inkErase", queuedErase.id)
+        db.syncDao().enqueueIfAbsent("inkMove", queuedMove.id)
+
+        val result = repository.purgeExpiredDeletions(
+            now = cutoff + NotesRepository.DELETION_RETENTION_MILLIS,
+        )
+
+        // Hard-deleting a tombstone the server has never seen is how a delete stops propagating:
+        // the row is gone here and still live everywhere else, so the next pull brings it back.
+        assertEquals(1, result.inkStrokes)
+        assertEquals(0, result.inkErases)
+        assertEquals(0, result.inkMoves)
+        assertEquals(
+            listOf(queued.id),
+            db.inkStrokeDao().byIds(listOf(queued.id, acknowledged.id)).map { it.id },
+        )
+        assertEquals(1, db.rowCount("ink_erases", "id", queuedErase.id))
+        assertEquals(1, db.rowCount("ink_moves", "id", queuedMove.id))
+    }
+
+    @Test
+    fun purgingAStrokeLeavesTheOperationsThatNamedItIntact() = runBlocking {
+        val pageId = newPage()
+        val cutoff = 50_000L
+        val erased = stroke("erased", pageId, seq = 0, deletedAt = cutoff)
+        db.inkStrokeDao().insert(erased)
+        val activeErase = erase("active-erase", pageId, deletedAt = null)
+        db.inkEraseDao().insert(activeErase)
+        db.inkEraseDao().insertTargets(listOf(InkEraseTargetEntity(activeErase.id, erased.id)))
+        val activeMove = move("active-move", pageId, deletedAt = null)
+        db.inkMoveDao().insert(activeMove)
+        db.inkMoveDao().insertTargets(listOf(InkMoveTargetEntity(activeMove.id, erased.id)))
+
+        val result = repository.purgeExpiredDeletions(
+            now = cutoff + NotesRepository.DELETION_RETENTION_MILLIS,
+        )
+
+        // The stroke goes; the operations keep the payload they were committed with. A cascade from
+        // the stroke side would edit an operation that is supposed to be immutable, and once ink
+        // replicates it would make an operation whose stroke was already purged impossible to
+        // insert at all — the sync cursor would stop there for good.
+        assertEquals(1, result.inkStrokes)
+        assertEquals(0, result.inkErases)
+        assertEquals(1, db.rowCount("ink_erase_targets", "eraseId", activeErase.id))
+        assertEquals(1, db.rowCount("ink_move_targets", "moveId", activeMove.id))
+    }
+
+    @Test
     fun hierarchyPurgeCascadesWholeBranchAndKeepsNewerDeletionRecoverable() = runBlocking {
         val expiredAt = now
         val notebookId = repository.createNotebook("Expired notebook")

@@ -207,6 +207,69 @@ class NotesRepositoryTest {
     }
 
     @Test
+    fun strokesSharingADrawOrderPaintTheSameWayOnEveryDevice() = runBlocking {
+        val pageId = newPage()
+        // What two devices drawing on one page while offline produce: both allocate the same seq
+        // from their own copy of the page. Whichever row this device happens to store first is the
+        // one the other device stores second, so an order settled by rowid renders two pages.
+        db.inkStrokeDao().insert(
+            listOf(
+                inkRow("f0000000-0000-7000-8000-000000000000", pageId, seq = 7),
+                inkRow("10000000-0000-7000-8000-000000000000", pageId, seq = 7),
+            ),
+        )
+        // Dropped so the query has to sort. `(pageId, seq, id)` hands back exactly the order this
+        // test asserts, so with the index in place `ORDER BY seq` alone passes too and the test
+        // proves nothing: it would be measuring the planner's choice rather than the guarantee.
+        // Draw order has to survive any plan, including the one a later index changes.
+        db.openHelper.writableDatabase.execSQL("DROP INDEX index_ink_strokes_pageId_seq_id")
+
+        assertEquals(
+            listOf(
+                "10000000-0000-7000-8000-000000000000",
+                "f0000000-0000-7000-8000-000000000000",
+            ),
+            repository.inkFor(pageId).map { it.id },
+        )
+    }
+
+    @Test
+    fun aStrokeIsNumberedAboveEveryStrokeThisDeviceHasSeen() = runBlocking {
+        val pageId = newPage()
+        // Written the way a pull writes one: another device's number, kept as it arrived.
+        db.inkStrokeDao().insert(inkRow(newId(), pageId, seq = 41))
+
+        assertEquals(42, repository.addStroke(inkRow(newId(), pageId, seq = 0)).seq)
+
+        // An erase must not free a number either, or the next stroke would land underneath ink the
+        // other device can still restore.
+        db.inkStrokeDao().insert(inkRow(newId(), pageId, seq = 99, deletedAt = now))
+
+        assertEquals(100, repository.addStroke(inkRow(newId(), pageId, seq = 0)).seq)
+    }
+
+    private fun inkRow(id: String, pageId: String, seq: Int, deletedAt: Long? = null) =
+        InkStrokeEntity(
+            id = id,
+            pageId = pageId,
+            seq = seq,
+            brushFamily = "marker",
+            brushVersion = 1,
+            sizeDp = 3f,
+            colorArgb = 0xFF000000.toInt(),
+            epsilon = 0.1f,
+            stabilization = 0,
+            minX = 0f,
+            minY = 0f,
+            maxX = 1f,
+            maxY = 1f,
+            points = byteArrayOf(1),
+            enc = "test/1",
+            createdAt = now,
+            deletedAt = deletedAt,
+        )
+
+    @Test
     fun restoringBackAndForwardRestoresTheExactInkRows() = runBlocking {
         val pageId = newPage()
         fun stroke(id: String, color: Int) = InkStrokeEntity(

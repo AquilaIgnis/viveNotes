@@ -246,13 +246,31 @@ interface DeletionRecoveryDao {
 @Dao
 interface DeletionPurgeDao {
 
-    @Query("DELETE FROM ink_erases WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    // The three ink deletes carry the same outbox guard as the hierarchy ones below, even though no
+    // ink kind is queued yet: the row that must never be hard-deleted is one the server has not
+    // acknowledged, and the day ink becomes a sync kind is the day this table starts holding those.
+    // A guard added with the kind would be a guard that had to be remembered, and the seven-day
+    // window is long enough that nobody would notice it missing until deletes stopped propagating.
+
+    @Query(
+        "DELETE FROM ink_erases WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff " +
+            "AND NOT EXISTS (SELECT 1 FROM sync_outbox o " +
+            "WHERE o.kind = 'inkErase' AND o.entityId = ink_erases.id)",
+    )
     suspend fun expiredInkErases(cutoff: Long): Int
 
-    @Query("DELETE FROM ink_moves WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    @Query(
+        "DELETE FROM ink_moves WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff " +
+            "AND NOT EXISTS (SELECT 1 FROM sync_outbox o " +
+            "WHERE o.kind = 'inkMove' AND o.entityId = ink_moves.id)",
+    )
     suspend fun expiredInkMoves(cutoff: Long): Int
 
-    @Query("DELETE FROM ink_strokes WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff")
+    @Query(
+        "DELETE FROM ink_strokes WHERE deletedAt IS NOT NULL AND deletedAt <= :cutoff " +
+            "AND NOT EXISTS (SELECT 1 FROM sync_outbox o " +
+            "WHERE o.kind = 'inkStroke' AND o.entityId = ink_strokes.id)",
+    )
     suspend fun expiredInkStrokes(cutoff: Long): Int
 
     @Query(
@@ -524,8 +542,17 @@ interface PageRevisionDao {
 @Dao
 interface InkStrokeDao {
 
-    /** A page's live ink, in draw order. Tombstones are excluded, never removed. */
-    @Query("SELECT * FROM ink_strokes WHERE pageId = :pageId AND deletedAt IS NULL ORDER BY seq")
+    /**
+     * A page's live ink, in draw order. Tombstones are excluded, never removed.
+     *
+     * `seq` alone is not a total order: two devices drawing on one page while offline allocate the
+     * same value, and SQLite would then settle the tie by rowid — which differs per device, so the
+     * same rows would paint in a different order on each one. `id` is the tiebreak the erase and
+     * move streams already use. See [InkStrokeEntity.seq].
+     */
+    @Query(
+        "SELECT * FROM ink_strokes WHERE pageId = :pageId AND deletedAt IS NULL ORDER BY seq, id",
+    )
     suspend fun byPage(pageId: String): List<InkStrokeEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -584,6 +611,15 @@ interface InkStrokeDao {
     @Query("UPDATE ink_strokes SET groupId = :groupId WHERE id = :id")
     suspend fun setGroup(id: String, groupId: String?)
 
+    /**
+     * The next draw-order value for a page — the allocator for [InkStrokeEntity.seq].
+     *
+     * Deliberately over **every** row of the page, tombstones and rows pulled from another device
+     * included: that is what makes it `max(local, incoming) + 1` rather than a count, so a stroke
+     * drawn here lands above everything this device has seen. It runs on every stroke commit, which
+     * is why `(pageId, seq, id)` exists — the maximum of an equality-constrained prefix is one seek
+     * rather than a walk of the page's rows.
+     */
     @Query("SELECT COALESCE(MAX(seq), -1) + 1 FROM ink_strokes WHERE pageId = :pageId")
     suspend fun nextSeq(pageId: String): Int
 }
