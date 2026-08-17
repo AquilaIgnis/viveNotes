@@ -29,6 +29,7 @@ import androidx.ink.strokes.Stroke
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -48,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkBounds
+import com.vivenotes.ink.TableBounds
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageSpace
 import com.vivenotes.model.SpaceCut
@@ -880,6 +882,75 @@ class InkOverlayTest {
         assertEquals(30f, lasso.shapeDy, 0.01f)
     }
 
+    // -----------------------------------------------------------------------------------------
+    // One tap, one object — the lasso doing what a tap does with no tool in hand
+    // -----------------------------------------------------------------------------------------
+
+    private fun picture(id: String, left: Float, top: Float, side: Float) = Outline.Image(
+        id = id,
+        x = left,
+        y = top,
+        width = side,
+        height = side,
+        attachmentId = "$id-file",
+    )
+
+    @Test
+    fun aTapOnAPictureSelectsItWithTheLassoInHand() {
+        val lasso = LassoHarness(
+            strokes = emptyList(),
+            images = listOf(picture("photo", 40f, 40f, 60f)),
+        )
+
+        lasso.tap(70f, 70f)
+
+        assertEquals("the tap did not take the picture", setOf("photo"), lasso.selection?.imageIds)
+    }
+
+    @Test
+    fun aTapOnAShapeSelectsItAndATapOffItLetsGo() {
+        val lasso = LassoHarness(strokes = emptyList(), shapes = listOf(square("box", 60f, 60f, 80f)))
+
+        lasso.tap(60f, 100f)
+        assertEquals(setOf("box"), lasso.selection?.shapeIds)
+
+        // Well clear of the shape *and* of the selection rectangle, or the press would be read as
+        // the start of a move rather than as a tap on bare paper.
+        lasso.tap(400f, 400f)
+        assertNull("a tap on bare canvas kept the selection", lasso.selection)
+    }
+
+    @Test
+    fun aTapInsideATableLeavesItAlone() {
+        // The one kind a tap deliberately does not take — `selectByTap`. An ink-only table is a
+        // ruling drawn to be written inside, so a tap in it has to stay available to the ink there.
+        val lasso = LassoHarness(
+            strokes = emptyList(),
+            tables = listOf(TableBounds("grid", InkBounds(40f, 40f, 300f, 200f))),
+        )
+
+        lasso.tap(150f, 120f)
+
+        assertNull("a tap took the table", lasso.selection)
+    }
+
+    @Test
+    fun aLoopThatCaughtNothingIsNotReadAsATap() {
+        // Circling bare paper beside a picture and lifting over it must not end up holding the
+        // picture: a loop is answered as a loop, and only a press that never travelled is a tap.
+        val lasso = LassoHarness(
+            strokes = emptyList(),
+            images = listOf(picture("photo", 200f, 200f, 60f)),
+        )
+
+        lasso.send(MotionEvent.ACTION_DOWN, 230f, 230f)
+        lasso.send(MotionEvent.ACTION_MOVE, 40f, 40f)
+        lasso.send(MotionEvent.ACTION_MOVE, 40f, 120f)
+        lasso.send(MotionEvent.ACTION_UP, 230f, 230f)
+
+        assertNull("a loop that caught nothing was read as a tap", lasso.selection)
+    }
+
     /**
      * Stands in for `EditorPane`: it holds the selection the gesture reads and writes.
      *
@@ -889,6 +960,9 @@ class InkOverlayTest {
     private class LassoHarness(
         private val strokes: List<PageStroke>,
         private val shapes: List<Outline.Shape> = emptyList(),
+        private val tables: List<TableBounds> = emptyList(),
+        private val equations: List<Outline.Equation> = emptyList(),
+        private val images: List<Outline.Image> = emptyList(),
     ) {
         val gesture = LassoGesture()
         var selection: CanvasSelection? = null
@@ -908,6 +982,12 @@ class InkOverlayTest {
                 toPage = Matrix(),
                 strokes = strokes,
                 shapes = shapes,
+                tables = tables,
+                equations = equations,
+                images = images,
+                // The identity transform above makes a view pixel a page unit, so this is read as
+                // both. A real one is `ViewConfiguration.touchSlop`.
+                touchSlop = TAP_SLOP,
                 selection = selection,
                 onSelect = { selection = it },
                 onMove = { inkMoves++ },
@@ -921,6 +1001,16 @@ class InkOverlayTest {
         }
 
         fun bounds(): InkBounds? = gesture.previewBounds(selection)
+
+        /** A press that lands and lifts where it landed. */
+        fun tap(x: Float, y: Float) {
+            send(MotionEvent.ACTION_DOWN, x, y)
+            send(MotionEvent.ACTION_UP, x, y)
+        }
+
+        private companion object {
+            const val TAP_SLOP = 8f
+        }
     }
 
     private fun motion(action: Int, x: Float, y: Float): MotionEvent =

@@ -262,6 +262,62 @@ internal fun selectWithLasso(
 }
 
 /**
+ * The object under a tap, or null — one tap, one object, with the lasso in hand.
+ *
+ * The lasso answered a tap with nothing: one point is not a loop, so [selectWithLasso] returned null
+ * and the tap only cleared whatever was held. Every other pointer on the canvas already selected by
+ * tap — a picture, a formula and a shape each hit-test their own layer when no tool is armed — so the
+ * lasso was the one tool in which pointing at a thing did not pick it up, and the only way to take one
+ * object was to draw a loop around it.
+ *
+ * **Each kind is judged by exactly the rule its own layer judges a tap by**, so what a tap means does
+ * not depend on which tool happens to be in hand (AD7): a picture and a formula by their frame
+ * (`ImageLayer.contains`, `EquationLayer.contains`), a shape by its outline within [TAP_REACH] rather
+ * than by the empty rectangle around it (`ShapeLayer.topmostNear`) — pointing at the middle of a large
+ * circle is pointing at the page it encloses. Last drawn wins within a kind, and the kinds are asked
+ * in the order the layers are nested: pictures, then formulas, then shapes, which is the order Compose
+ * hit-tests them in when nothing is armed.
+ *
+ * **Tables are deliberately not here**, and are missing from the signature rather than filtered out of
+ * it, so that putting them back has to be a decision rather than an oversight. A table is a large
+ * rectangle of mostly empty cells, and an ink-only one (`docs/tablePlan.md` TA15) is a ruling drawn
+ * *to be written inside*: a tap in it is how the ink there is reached, so letting the grid answer for
+ * that area would put every stroke inside a table out of reach of the tool meant to select it. A loop
+ * still takes a table exactly as it always did.
+ *
+ * Ink is absent for a different reason: a tap on a stroke selects nothing today with any tool, so
+ * there is no existing rule here to match.
+ */
+internal fun selectByTap(
+    shapes: List<Outline.Shape>,
+    equations: List<Outline.Equation>,
+    images: List<Outline.Image>,
+    point: InkPoint,
+): CanvasSelection? {
+    images.asReversed().firstOrNull { it.pageBounds().contains(point) }
+        ?.let { return CanvasSelection.ofImage(it) }
+    equations.asReversed().firstOrNull { it.pageBounds().contains(point) }
+        ?.let { return CanvasSelection.ofEquation(it) }
+    return shapes.asReversed()
+        .firstOrNull { shape -> shape.isUnderTap(point) }
+        ?.let(CanvasSelection::ofShape)
+}
+
+/** A shape is its outline and not the rectangle around it — `ShapeLayer.topmostNear`'s rule. */
+private fun Outline.Shape.isUnderTap(point: InkPoint): Boolean =
+    segments.any { it.distanceTo(point.x, point.y) <= TAP_REACH + borderWidth / 2f }
+
+/**
+ * How near a tap has to land on a thin line to have hit it, in page units.
+ *
+ * A dp value read as page units, which is what page units are — the same reading
+ * `SelectionChrome.HANDLE_REACH` gets. It lives here rather than in `ShapeLayer` because two
+ * different gestures now hit-test a tap against the same shapes, and a reach that differs between
+ * them is a shape that is measurably easier to tap with one tool than with another.
+ */
+internal const val TAP_REACH: Float = 12f
+
+/**
  * All four corners inside the loop — the rule a stroke and a shape are both held to.
  *
  * A table is a rectangle, so its corners are the whole of it: nothing between them can be outside a

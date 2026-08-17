@@ -60,6 +60,7 @@ import com.vivenotes.ink.Ruler
 import com.vivenotes.ink.TableBounds
 import com.vivenotes.ink.pageBounds
 import com.vivenotes.ink.projectionKey
+import com.vivenotes.ink.selectByTap
 import com.vivenotes.ink.selectWithLasso
 import com.vivenotes.ink.targetsFor
 import com.vivenotes.ink.subtract
@@ -791,6 +792,7 @@ private fun handleInk(
             tables = tables,
             equations = equations,
             images = images,
+            touchSlop = touchSlop,
             selection = selection,
             onSelect = onSelect,
             onMove = onMoveSelection,
@@ -1702,6 +1704,7 @@ internal class LassoGesture {
      * @param selection what is currently selected, across kinds. Read, never written.
      * @param onSelect a new selection, or null when the loop caught nothing. Called on the up.
      * @param onMove the ink half of a finished move. [onMoveShapes] is the shape half.
+     * @param touchSlop how far, in view pixels, a press may travel and still be a tap — [selectByTap].
      */
     fun handle(
         event: MotionEvent,
@@ -1711,6 +1714,7 @@ internal class LassoGesture {
         tables: List<TableBounds> = emptyList(),
         equations: List<Outline.Equation> = emptyList(),
         images: List<Outline.Image> = emptyList(),
+        touchSlop: Float = 0f,
         selection: CanvasSelection?,
         onSelect: (CanvasSelection?) -> Unit,
         onMove: (InkLassoMove) -> Unit,
@@ -1773,6 +1777,10 @@ internal class LassoGesture {
                 when (mode) {
                     Mode.Drawing -> {
                         appendSamples(event, event.actionIndex, toPage)
+                        val drawn = path.toList()
+                        // A loop first, and a tap only when there was no loop. Read the other way
+                        // round, a deliberate circle drawn around empty paper next to a picture
+                        // would end by selecting the picture the finger happened to lift over.
                         onSelect(
                             selectWithLasso(
                                 strokes = strokes,
@@ -1780,9 +1788,16 @@ internal class LassoGesture {
                                 tables = tables,
                                 equations = equations,
                                 images = images,
-                                path = path.toList(),
+                                path = drawn,
                                 edgeTolerance = lassoEdgeTolerance(toPage),
-                            ),
+                            ) ?: drawn.tapPoint(toPage.pageSpan(touchSlop))?.let { tap ->
+                                selectByTap(
+                                    shapes = shapes,
+                                    equations = equations,
+                                    images = images,
+                                    point = tap,
+                                )
+                            },
                         )
                         path.clear()
                     }
@@ -1937,10 +1952,32 @@ internal class LassoGesture {
         anchor.y + (this.y - anchor.y) * y,
     )
 
-    private fun lassoEdgeTolerance(toPage: Matrix): Float {
+    private fun lassoEdgeTolerance(toPage: Matrix): Float =
+        toPage.pageSpan(LASSO_EDGE_TOLERANCE_PX)
+
+    /**
+     * [px] view pixels as page units, at whatever zoom the page is being drawn at.
+     *
+     * Both of the distances this gesture measures against are physical — how far a finger may wander
+     * and still have tapped, how close to the edge of the loop still counts as inside it — so both are
+     * stated in pixels and converted here rather than carried as page units that mean something
+     * different at every zoom level.
+     */
+    private fun Matrix.pageSpan(px: Float): Float {
         val values = FloatArray(9)
-        toPage.getValues(values)
-        return LASSO_EDGE_TOLERANCE_PX * hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y])
+        getValues(values)
+        return px * hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y])
+    }
+
+    /**
+     * Where this gesture tapped, or null when it travelled far enough to have meant a loop.
+     *
+     * Measured from the down point rather than to the up point: a tap is aimed, and the few pixels a
+     * pen slides during the press are jitter, not a change of mind about what was being pointed at.
+     */
+    private fun List<InkPoint>.tapPoint(slop: Float): InkPoint? {
+        val start = firstOrNull() ?: return null
+        return start.takeIf { all { hypot(it.x - start.x, it.y - start.y) <= slop } }
     }
 
     /**

@@ -37,6 +37,7 @@ import com.vivenotes.ui.theme.LocalCanvasColors
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
+import com.vivenotes.ink.TAP_REACH
 import com.vivenotes.ink.pageBounds
 import com.vivenotes.model.Outline
 import com.vivenotes.model.ink.LineType
@@ -741,8 +742,14 @@ private fun Outline.Shape.contains(x: Float, y: Float): Boolean {
         y >= this.y - slack && y <= this.y + height + slack
 }
 
-/** A line is thin; the target for one is not. */
-private val TOUCH_REACH: Dp = 12.dp
+/**
+ * A line is thin; the target for one is not.
+ *
+ * Read from `ink/CanvasSelection.kt` rather than written here, because the lasso's tap hit-tests the
+ * same shapes by the same rule (`selectByTap`) and two numbers that merely happen to agree are what
+ * [SelectionChrome] exists to stop.
+ */
+private val TOUCH_REACH: Dp = TAP_REACH.dp
 
 private val SELECTION_PADDING: Dp = SelectionChrome.PADDING
 private val SELECTION_STROKE: Dp = SelectionChrome.STROKE
