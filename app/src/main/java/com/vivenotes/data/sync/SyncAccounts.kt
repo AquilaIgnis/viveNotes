@@ -176,6 +176,26 @@ class SyncAccounts(
         }
     }
 
+    /**
+     * Whether this installation may still create its first-run starter notebook.
+     *
+     * A device joining an existing account must not. It seeds before its first pull, activation
+     * enqueues the seed into the outbox, and the account permanently grows a second "My Notebook"
+     * that nobody created — which is exactly what happened here on 2026-08-16, three times over, and
+     * is `viveCServer/memory/syncPlan.md` §10 item 4.
+     *
+     * True with no registration at all, because an offline install must not open on an empty void.
+     * True again once this device is level with the server: an empty tree then really is an empty
+     * account rather than one that has not been pulled yet, and seeding it is the same first-run
+     * courtesy the first device got. The "account is empty" half of that rule needs no code here —
+     * [com.vivenotes.data.NotesRepository.seedIfEmpty] already refuses to run over an existing tree,
+     * and after a pull the local tree *is* the account.
+     */
+    suspend fun maySeedStarter(): Boolean {
+        val account = store.account.first() ?: return true
+        return hierarchy?.hasCaughtUp(account.accountId) ?: true
+    }
+
     /** Runs the hierarchy protocol once, or returns null when no account is configured. */
     suspend fun synchronize(): SyncRunResult? {
         val account = store.account.first() ?: return null

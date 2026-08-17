@@ -74,6 +74,22 @@ interface SyncDao {
     @Query("DELETE FROM sync_outbox WHERE kind = :kind AND entityId = :entityId")
     suspend fun deleteOutbox(kind: String, entityId: String)
 
+    /**
+     * Drops queued work for rows that no longer exist.
+     *
+     * The outbox holds keys, not copies, and nothing joins it to the tables it names — so a row
+     * removed outright rather than tombstoned leaves an entry the next push can only answer with
+     * "dirty notebook disappeared", failing every push from then on. Removing rows and pruning here
+     * belong in one transaction.
+     */
+    @Query(
+        "DELETE FROM sync_outbox WHERE " +
+            "(kind = 'notebook' AND entityId NOT IN (SELECT id FROM notebooks)) OR " +
+            "(kind = 'section' AND entityId NOT IN (SELECT id FROM sections)) OR " +
+            "(kind = 'page' AND entityId NOT IN (SELECT id FROM pages))",
+    )
+    suspend fun pruneOrphanedOutbox()
+
     @Query(
         "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
             "SELECT :kind, :entityId, 1, " +
@@ -289,6 +305,17 @@ interface NotebookDao {
 
     @Query("SELECT COUNT(*) FROM notebooks WHERE deletedAt IS NULL")
     suspend fun count(): Int
+
+    /**
+     * Removes a notebook outright and, by cascade, its sections, pages and their content.
+     *
+     * Deliberately not a tombstone. A tombstone is how a row that other devices have *seen* is
+     * deleted, because they have to learn that it went; this is for a notebook no server and no
+     * other device has ever held — the seeded starter that [com.vivenotes.data.sync.HierarchySync]
+     * discards when this installation turns out to be joining an account that already has a tree.
+     */
+    @Query("DELETE FROM notebooks WHERE id = :id")
+    suspend fun hardDelete(id: String)
 }
 
 @Dao

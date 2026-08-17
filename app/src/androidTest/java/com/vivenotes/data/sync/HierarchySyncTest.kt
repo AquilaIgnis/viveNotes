@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.data.NotesRepository
+import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotesDatabase
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonNull
@@ -13,6 +14,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -79,6 +83,62 @@ class HierarchySyncTest {
         val sent = server.pushes.last().single()
         assertEquals("future-field", sent.getValue("future").jsonPrimitive.content)
         assertEquals("Local rename", server.current("notebook", "n")!!.getValue("name").jsonPrimitive.content)
+    }
+
+    @Test
+    fun anUntouchedStarterIsDroppedRatherThanPushedWhenTheAccountAlreadyHasATree() = runBlocking {
+        // A clean install as the user finds it: one seeded notebook, marked replaceable because
+        // nothing in it has been touched. Marked last, since creating rows clears the marker.
+        val starterId = repository.createNotebook("My Notebook")
+        repository.createSection(starterId, "Getting Started")
+        db.localMetadataDao().put(
+            LocalMetadataEntity(NotesRepository.REPLACEABLE_STARTER_KEY, starterId),
+        )
+        server.seed(notebookChange("n", "The real one", System.currentTimeMillis()))
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        // Nothing was uploaded: the account does not grow a second "My Notebook" per device.
+        assertEquals(0, result.summary.pushed)
+        assertTrue(server.pushes.isEmpty())
+        assertNull(db.notebookDao().byId(starterId))
+        assertTrue(db.sectionDao().allInNotebook(starterId).isEmpty())
+        assertEquals("The real one", db.notebookDao().byId("n")!!.name)
+        // And the queue it was already sitting in went with it, or every later push would fail.
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    @Test
+    fun anUntouchedStarterIsStillPushedToAnEmptyAccount() = runBlocking {
+        val starterId = repository.createNotebook("My Notebook")
+        db.localMetadataDao().put(
+            LocalMetadataEntity(NotesRepository.REPLACEABLE_STARTER_KEY, starterId),
+        )
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        // The first device to connect still furnishes the account, starter and all.
+        assertEquals(1, result.summary.pushed)
+        assertNotNull(db.notebookDao().byId(starterId))
+        assertNotNull(server.current("notebook", starterId))
+    }
+
+    @Test
+    fun anInstallationIsNotCaughtUpUntilItHasPulledThatAccount() = runBlocking {
+        server.seed(notebookChange("n", "Remote", System.currentTimeMillis()))
+
+        // Before the first pull an empty local tree proves nothing, so a joining device must not
+        // read it as "this account is empty, seed a starter notebook into it".
+        assertFalse(hierarchy.hasCaughtUp("account"))
+
+        hierarchy.run(account())
+        assertTrue(hierarchy.hasCaughtUp("account"))
+
+        // The marker names an account rather than recording that syncing has happened at all.
+        assertFalse(hierarchy.hasCaughtUp("a-different-account"))
+
+        hierarchy.deactivate("account")
+        assertFalse(hierarchy.hasCaughtUp("account"))
     }
 
     @Test

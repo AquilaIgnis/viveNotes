@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
                 app.notebookTransfers,
                 app.imageText,
                 app.inkText,
+                maySeedStarter = { app.syncAccounts.maySeedStarter() },
             ),
         )[NotesViewModel::class.java]
 

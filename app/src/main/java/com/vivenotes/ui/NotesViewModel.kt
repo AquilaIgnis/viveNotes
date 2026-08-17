@@ -458,6 +458,15 @@ class NotesViewModel(
     private val imageText: ImageTextIndexer? = null,
     /** Reads replayed handwriting lazily for the same cache-only search path as picture OCR. */
     private val inkText: InkTextIndexer? = null,
+    /**
+     * Whether first-run seeding may happen at all — see
+     * [com.vivenotes.data.sync.SyncAccounts.maySeedStarter], which says no while this installation
+     * is registered with a server it has not pulled from yet.
+     *
+     * Optional for the reason [databaseBackups] is: the suites build a ViewModel over a database
+     * with no server behind it, and null there means "seed as this app always has".
+     */
+    private val maySeedStarter: (suspend () -> Boolean)? = null,
 ) : ViewModel() {
 
     private val inkPageLoader = InkPageLoader(repository, inkDispatcher)
@@ -822,7 +831,13 @@ class NotesViewModel(
             // created before its content is written, so a page opened inside that gap loads the
             // empty document the row was created with — and the next save writes that emptiness
             // over the seeded content. On any later launch this returns immediately.
-            repository.seedIfEmpty()
+            //
+            // The gate is evaluated once, here, rather than watched: a device that is registered but
+            // has not pulled yet simply does not seed on this launch, and by the next one the pull
+            // has either filled the tree or proved the account empty. Waiting for the answer instead
+            // would leave a tablet with no signal staring at a spinner.
+            val maySeed = maySeedStarter?.invoke() ?: true
+            if (maySeed) repository.seedIfEmpty()
             // Independent of first paint: SQLite may have a large database to copy, and history is
             // useful precisely because opening a notebook must not wait for backup maintenance.
             databaseBackups?.let { backups ->
@@ -3753,6 +3768,7 @@ class NotesViewModel(
             notebookTransfers: NotebookTransferManager? = null,
             imageText: ImageTextIndexer? = null,
             inkText: InkTextIndexer? = null,
+            maySeedStarter: (suspend () -> Boolean)? = null,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -3766,6 +3782,7 @@ class NotesViewModel(
                     notebookTransfers = notebookTransfers,
                     imageText = imageText,
                     inkText = inkText,
+                    maySeedStarter = maySeedStarter,
                 ) as T
         }
     }

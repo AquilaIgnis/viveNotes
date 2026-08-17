@@ -2,6 +2,7 @@ package com.vivenotes.data.sync
 
 import android.util.Log
 import androidx.room.withTransaction
+import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotesDatabase
@@ -81,8 +82,18 @@ class HierarchySync(
             sync.clearOutbox()
             sync.clearEntityStates()
             metadata.delete(PENDING_BATCH_KEY)
+            metadata.delete(CAUGHT_UP_KEY)
         }
     }
+
+    /**
+     * Whether this installation has seen [accountId]'s tree at least once.
+     *
+     * Read by [SyncAccounts.maySeedStarter]: a device that has not yet caught up cannot tell an empty
+     * account from an account it simply has not pulled, and guessing wrong is how a second starter
+     * notebook gets created and pushed.
+     */
+    suspend fun hasCaughtUp(accountId: String): Boolean = metadata.value(CAUGHT_UP_KEY) == accountId
 
     suspend fun run(account: SyncAccount): SyncRunResult = mutex.withLock {
         try {
@@ -97,6 +108,8 @@ class HierarchySync(
                 is PhaseResult.ConflictDone -> error("pull cannot return conflict count")
                 is PhaseResult.Stop -> return@withLock firstPull.result
             }
+            markCaughtUp(account.accountId)
+            dropStarterSupersededByAccount()
 
             when (val push = pushOutbox(account)) {
                 is PhaseResult.Done -> pushed += push.count
@@ -151,12 +164,64 @@ class HierarchySync(
             sync.clearOutbox()
             sync.clearEntityStates()
             metadata.delete(PENDING_BATCH_KEY)
+            // A different account is a different tree, so "I have seen this account's tree" cannot
+            // carry over — the new one has not been pulled even once.
+            metadata.delete(CAUGHT_UP_KEY)
             sync.putState(SyncStateEntity(accountId = accountId))
             // Existing offline rows are the first outbox. Inserts performed before the state row
             // existed could not have fired the triggers, so this is explicit rather than magical.
             sync.enqueueAllNotebooks()
             sync.enqueueAllSections()
             sync.enqueueAllPages()
+        }
+    }
+
+    /**
+     * Records that a pull has completed, which is what makes an empty local tree *mean* something.
+     *
+     * Written outside the pull's transaction deliberately: the cheapest and most common way to be
+     * caught up is `PhaseResult.Done(0)` — the cursor already matched — and that path has no
+     * transaction to join. A crash between the two costs one repeated marker write on the next run.
+     * The read first is so a device that syncs every 60 s does not write a row every 60 s.
+     */
+    private suspend fun markCaughtUp(accountId: String) {
+        if (metadata.value(CAUGHT_UP_KEY) == accountId) return
+        metadata.put(LocalMetadataEntity(CAUGHT_UP_KEY, accountId))
+    }
+
+    /**
+     * Throws away this installation's seeded starter notebook once the first pull shows it is
+     * joining an account that already has a tree.
+     *
+     * Gating [com.vivenotes.data.NotesRepository.seedIfEmpty] is not enough on its own, because the
+     * order that actually happens is the other way round: a clean install seeds "My Notebook" on its
+     * first launch so the app does not open on a void, and only *then* can its owner open Account
+     * and connect — the UI offers no earlier moment. Activation enqueues that starter like any other
+     * offline row, pushes it, and the account grows one more identical "My Notebook" for every
+     * device that ever joins. Three of them is how this was found.
+     *
+     * The starter is not a contribution, it is packaging, and `REPLACEABLE_STARTER_KEY` is what says
+     * so: it is written when the starter is seeded and cleared by the first content mutation of any
+     * kind, so its presence means nothing under here has ever been touched. Rows are removed outright
+     * rather than tombstoned because no server has ever seen them — there is nothing for anyone to
+     * learn — and the queued push is pruned in the same transaction.
+     *
+     * Runs after the pull and before the push, which is the only window where "the account has a
+     * tree of its own" is a fact rather than a guess. An account that really is empty keeps its
+     * starter and uploads it, exactly as the first device did.
+     */
+    private suspend fun dropStarterSupersededByAccount() {
+        val starterId = metadata.value(NotesRepository.REPLACEABLE_STARTER_KEY) ?: return
+        if (notebooks.count() <= 1) return
+
+        db.withTransaction {
+            // The triggers must not read this as the user deleting something worth telling the
+            // server about.
+            sync.setApplyingRemote(true)
+            notebooks.hardDelete(starterId)
+            sync.pruneOrphanedOutbox()
+            metadata.delete(NotesRepository.REPLACEABLE_STARTER_KEY)
+            sync.setApplyingRemote(false)
         }
     }
 
@@ -618,6 +683,13 @@ class HierarchySync(
         const val MAX_PUSH_CHANGES = 512
         const val MAX_BATCHES_PER_RUN = 1_024
         const val PENDING_BATCH_KEY = "syncPendingHierarchyBatch"
+
+        /**
+         * Holds the account id this installation has caught up with, not a boolean: the question is
+         * always "caught up with *which* tree", and storing the id makes a stale marker for a
+         * previous account unusable rather than merely wrong.
+         */
+        const val CAUGHT_UP_KEY = "syncFirstPullCompletedFor"
         const val DISPLAY_UPDATED_AT = "viveDisplayUpdatedAt"
     }
 }
