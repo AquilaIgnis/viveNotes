@@ -238,6 +238,8 @@ class HierarchySync(
         var cursor = localCursor
         var pulled = 0
         var hasMore: Boolean
+        // Changes whose parent has not arrived yet, carried into the next page rather than applied.
+        var carried: List<RemoteChange> = emptyList()
         do {
             val page = when (
                 val result = client.pullChanges(account.serverUrl, account.token, cursor)
@@ -266,18 +268,40 @@ class HierarchySync(
             // committed, and the device re-pulls the same delta for ever.
             //
             // A stable sort by kind is enough for a two-level hierarchy and keeps the server's
-            // ordering inside each kind. It cannot help when a parent lands in a *later* page than
-            // its child — possible only with more than one page of changes between the two writes —
-            // where the transaction still fails safely and loudly rather than losing the row.
-            val ordered = parsed.sortedBy { change -> change.kind.rank }
+            // ordering inside each kind.
+            val ordered = (carried + parsed).sortedBy { change -> change.kind.rank }
+
+            // Sorting cannot help when a parent lands in a *later page* than its child, which needs
+            // more than a page of changes between the two writes but is not impossible. Such a row
+            // is held back rather than applied: Room would refuse it, and refusing it inside the
+            // transaction that commits the cursor is what turns one straddling row into a device
+            // that re-pulls the same delta for ever.
+            val applicable = mutableListOf<RemoteChange>()
+            val orphans = mutableListOf<RemoteChange>()
+            // Held back transitively: a page whose section is itself waiting for its notebook has to
+            // wait with it, or the page is written against a section Room does not have either.
+            // One pass is enough because the batch is already sorted parents-first.
+            val applying = HashSet<String>()
+            for (change in ordered) {
+                if (parentIsAvailable(change, applying)) {
+                    applicable += change
+                    applying += change.kind.wire + ":" + change.id
+                } else {
+                    orphans += change
+                }
+            }
+            carried = orphans
 
             db.withTransaction {
                 sync.setApplyingRemote(true)
-                ordered.forEach { change -> applyPulledChange(change) }
-                sync.setCursor(page.cursor)
+                applicable.forEach { change -> applyPulledChange(change) }
+                // Only when nothing is being held. The cursor is a promise that everything below it
+                // has been applied, so advancing it past a row still waiting for its parent would
+                // lose that row for good — the next pull starts above it.
+                if (orphans.isEmpty()) sync.setCursor(page.cursor)
                 sync.setApplyingRemote(false)
             }
-            pulled += parsed.size
+            pulled += applicable.size
             cursor = page.cursor
             hasMore = page.hasMore
 
@@ -288,7 +312,39 @@ class HierarchySync(
             }
         } while (hasMore)
 
+        if (carried.isNotEmpty()) {
+            // The delta ended and a child's parent never arrived. The server rejects a push whose
+            // parent it does not hold, so this cannot happen to a well-behaved pair — and leaving
+            // the cursor where it is means the next run tries the same delta rather than skipping
+            // rows nothing here can place.
+            return PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse))
+        }
+
         return PhaseResult.Done(pulled)
+    }
+
+    /**
+     * Whether a change can be written now: its parent is already in Room, or is one of the rows
+     * [applying] is about to write in the same transaction. A notebook has no parent and is
+     * therefore always applicable.
+     */
+    private suspend fun parentIsAvailable(change: RemoteChange, applying: Set<String>): Boolean {
+        val parentKind = when (change.kind) {
+            SyncKind.Notebook -> return true
+            SyncKind.Section -> SyncKind.Notebook
+            SyncKind.Page -> SyncKind.Section
+        }
+        val parentID = when (change.kind) {
+            SyncKind.Notebook -> return true
+            SyncKind.Section -> change.raw.requiredString("notebookId")
+            SyncKind.Page -> change.raw.requiredString("sectionId")
+        }
+        if (applying.contains(parentKind.wire + ":" + parentID)) return true
+        return when (parentKind) {
+            SyncKind.Notebook -> notebooks.byId(parentID) != null
+            SyncKind.Section -> sections.byId(parentID) != null
+            SyncKind.Page -> false
+        }
     }
 
     private suspend fun applyPulledChange(remote: RemoteChange) {

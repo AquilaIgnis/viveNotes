@@ -124,6 +124,41 @@ class HierarchySyncTest {
     }
 
     @Test
+    fun aChildIsHeldBackUntilThePageCarryingItsParentArrives() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        // Seeded child-first and then read one row at a time, so the section and the page each land
+        // in a page of the delta before the notebook they hang from. Sorting inside a page cannot
+        // fix that; only holding them back can.
+        server.seed(sectionChange("s", "n", "Remote section", changedAt))
+        server.seed(pageChange("p", "s", "Remote page", changedAt))
+        server.seed(notebookChange("n", "Renamed last", changedAt + 1_000))
+        server.pageLimit = 1
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(3, result.summary.pulled)
+        assertEquals("Renamed last", db.notebookDao().byId("n")!!.name)
+        assertEquals("n", db.sectionDao().byId("s")!!.notebookId)
+        assertEquals("s", db.pageDao().byId("p")!!.sectionId)
+        // Committed only once nothing was still waiting, so a crash mid-delta re-reads the held rows
+        // rather than starting above them.
+        assertEquals(3L, db.syncDao().state()!!.cursor)
+    }
+
+    @Test
+    fun aChildWhoseParentNeverArrivesFailsInsteadOfSkippingIt() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(sectionChange("s", "notebook-that-never-comes", "Orphan", changedAt))
+
+        val result = hierarchy.run(account())
+
+        assertTrue(result is SyncRunResult.Failed)
+        // The cursor stays put: the next run asks for the same delta instead of advancing past a row
+        // this device could not place.
+        assertEquals(0L, db.syncDao().state()!!.cursor)
+    }
+
+    @Test
     fun anInstallationIsNotCaughtUpUntilItHasPulledThatAccount() = runBlocking {
         server.seed(notebookChange("n", "Remote", System.currentTimeMillis()))
 
@@ -237,18 +272,28 @@ class HierarchySyncTest {
         override suspend fun getCursor(serverBaseUrl: String, token: String) =
             ServerResult.Success(cursor)
 
+        /** Rows per pull, so a test can put a parent and its child in different pages. */
+        var pageLimit: Int = Int.MAX_VALUE
+
         override suspend fun pullChanges(
             serverBaseUrl: String,
             token: String,
             since: Long,
             limit: Int,
-        ): ServerResult<PullChangesPage> = ServerResult.Success(
-            PullChangesPage(
-                changes = log.filter { it.getValue("seq").jsonPrimitive.long > since },
-                cursor = cursor,
-                hasMore = false,
-            ),
-        )
+        ): ServerResult<PullChangesPage> {
+            val remaining = log.filter { it.getValue("seq").jsonPrimitive.long > since }
+            if (remaining.size <= pageLimit) {
+                return ServerResult.Success(PullChangesPage(remaining, cursor, hasMore = false))
+            }
+            val page = remaining.take(pageLimit)
+            return ServerResult.Success(
+                PullChangesPage(
+                    changes = page,
+                    cursor = page.last().getValue("seq").jsonPrimitive.long,
+                    hasMore = true,
+                ),
+            )
+        }
 
         override suspend fun pushChanges(
             serverBaseUrl: String,
