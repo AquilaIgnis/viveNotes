@@ -852,7 +852,7 @@ class NotesRepository(
         const val REPLACEABLE_STARTER_KEY = "replaceableStarterNotebookId"
         /** Coalesces the editor's 400 ms autosaves into useful checkpoints instead of near-duplicates. */
         const val REVISION_CHECKPOINT_INTERVAL_MS = 30_000L
-        const val MAX_REVISIONS_PER_PAGE = 100
+        const val MAX_REVISIONS_PER_PAGE = 40
 
         /**
          * How many ids go into one `IN (…)`.
