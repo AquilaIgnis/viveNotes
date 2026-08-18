@@ -78,6 +78,8 @@ sealed interface SyncRunResult {
 class HierarchySync(
     private val db: NotesDatabase,
     private val client: SyncTransport = SyncServerClient(),
+    /** Where remotely applied ink is announced, so an open canvas can absorb it — IS5. */
+    private val remoteInk: RemoteInkSignal = RemoteInkSignal(),
 ) {
 
     private val sync = db.syncDao()
@@ -89,7 +91,15 @@ class HierarchySync(
     private val inkStrokes = db.inkStrokeDao()
     private val inkErases = db.inkEraseDao()
     private val inkMoves = db.inkMoveDao()
+    private val inkText = db.inkTextDao()
     private val mutex = Mutex()
+
+    /**
+     * Pages this run has written remote ink into, held until the transaction carrying them commits.
+     *
+     * A plain set because [run] is serialized by [mutex] and nothing outside a run ever touches it.
+     */
+    private val remoteInkPages = mutableSetOf<String>()
 
     /** Makes [accountId] the owner of this database's one hierarchy corpus. */
     suspend fun activate(accountId: String) = mutex.withLock {
@@ -171,6 +181,11 @@ class HierarchySync(
             // of this is a device that re-pulls the same delta for ever with nothing to show for it.
             Log.e(TAG, "Hierarchy sync could not apply a change locally", badLocalState)
             SyncRunResult.Failed(PermanentSyncFailure.LocalData)
+        } finally {
+            // The phases publish as they commit; this is for the paths that leave early — a pull
+            // that applied rows and then stopped on the row after them still wrote ink somebody is
+            // looking at, and a set left full here would announce it on the next run instead.
+            publishRemoteInk()
         }
     }
 
@@ -351,9 +366,14 @@ class HierarchySync(
                 // Only when nothing is being held. The cursor is a promise that everything below it
                 // has been applied, so advancing it past a row still waiting for its parent would
                 // lose that row for good — the next pull starts above it.
+                invalidateInkText(remoteInkPages)
                 if (orphans.isEmpty()) sync.setCursor(page.cursor)
                 sync.setApplyingRemote(false)
             }
+            // Per page of the delta rather than at the end of the run: a first reconcile can carry
+            // tens of thousands of strokes, and a canvas that shows them as they land beats one that
+            // stays empty until the whole corpus has been written.
+            publishRemoteInk()
             pulled += applicable.size
             cursor = page.cursor
             hasMore = page.hasMore
@@ -494,9 +514,12 @@ class HierarchySync(
                         else -> permanent = PermanentSyncFailure.InvalidServerResponse
                     }
                 }
+                invalidateInkText(remoteInkPages)
                 metadata.delete(PENDING_BATCH_KEY)
                 sync.setApplyingRemote(false)
             }
+            // A conflict the server won writes its row over this device's, ink included.
+            publishRemoteInk()
 
             permanent?.let { return PhaseResult.Stop(SyncRunResult.Failed(it)) }
         }
@@ -545,17 +568,26 @@ class HierarchySync(
         if (rows.isEmpty()) return@withTransaction null
         val batchId = UUID.randomUUID().toString()
         val changes = mutableListOf<PendingChange>()
+        // A row-count cap stopped bounding the request once pageContent joined the protocol, so the
+        // exact compact JSON shape SyncServerClient writes is measured instead and the batch ends
+        // before the row that would cross 4 MiB.
+        //
+        // **Accumulated, because encoding the candidate batch per row is quadratic.** That is what it
+        // used to do, and on a first upload — where every batch is a full 512 rows — it encoded
+        // ~131,000 rows to admit 512, which `InkSyncCostTest` measured as 12.5 ms per stroke, most of
+        // the run. The sum is exact rather than an estimate: the envelope is
+        // `{"batchId":"…","changes":[…]}`, so its length is the empty envelope plus each element's
+        // own length plus one comma between elements, and UTF-8 concatenates without interacting.
+        var encodedSize = encodedPushSize(batchId, emptyList())
         for (row in rows) {
             val change = snapshot(row)
-            val candidate = changes + change
-            // A row-count cap stopped bounding the request once pageContent joined the protocol.
-            // Measure the exact compact JSON shape SyncServerClient writes and end before the row
-            // that would cross 4 MiB. A first row is still admitted so the transport/server can
-            // return the permanent size verdict instead of leaving it queued behind an empty batch.
-            if (changes.isNotEmpty() && encodedPushSize(batchId, candidate) > MAX_SYNC_PUSH_BYTES) {
-                break
-            }
+            val addition = change.payload.toString().encodeToByteArray().size +
+                if (changes.isEmpty()) 0 else 1
+            // A first row is still admitted so the transport/server can return the permanent size
+            // verdict instead of leaving it queued behind an empty batch.
+            if (changes.isNotEmpty() && encodedSize + addition > MAX_SYNC_PUSH_BYTES) break
             changes += change
+            encodedSize += addition
         }
         val pending = PendingBatch(
             batchId = batchId,
@@ -741,8 +773,51 @@ class HierarchySync(
     private fun encodePoints(points: ByteArray): String =
         Base64.getEncoder().encodeToString(points)
 
+    /**
+     * Hands the pages this device just had ink written into to whoever is showing one.
+     *
+     * **After the transaction, never inside it.** The canvas answers this by reading the page back,
+     * so announcing a row that is still uncommitted would have it rebuild from the state before the
+     * write. Draining as it publishes is what keeps a rolled-back transaction from announcing rows
+     * that were never written — and an announcement that turns out to be empty costs one rebuild
+     * that finds Room exactly as the canvas already has it.
+     */
+    /**
+     * Throws away what this device had read out of the pages remote ink just landed on.
+     *
+     * `ink_text` is a cache of the handwriting on a page, keyed by a generation that every *local*
+     * ink write bumps through [com.vivenotes.data.NotesRepository]. Rows written here bypass that —
+     * they go to the DAOs directly, deliberately, so the outbox triggers can be suppressed — so
+     * without this a page whose ink arrived from another device would keep answering content search
+     * with the handwriting it held before. Derived data, so dropping it costs a re-read and nothing
+     * else; the bump is what discards a recognition pass already in flight against the old ink.
+     *
+     * Inside the transaction that wrote the ink: a cache surviving a rolled-back apply would be
+     * describing rows that are still there.
+     */
+    private suspend fun invalidateInkText(pageIds: Collection<String>) {
+        if (pageIds.isEmpty()) return
+        inkText.deleteForPages(pageIds.toList())
+        pageIds.forEach { inkText.bumpGeneration(it) }
+    }
+
+    private fun publishRemoteInk() {
+        if (remoteInkPages.isEmpty()) return
+        val pages = remoteInkPages.toList()
+        remoteInkPages.clear()
+        remoteInk.record(pages)
+    }
+
     private suspend fun applyRemoteRow(change: RemoteChange) {
         val displayUpdatedAt = change.displayUpdatedAt
+        // Recorded here rather than in the pull loop because this is also the server-wins half of a
+        // push conflict: both paths write a row this device did not, and an open canvas showing the
+        // page has to hear about either. Published only once the enclosing transaction commits.
+        when (change.kind) {
+            SyncKind.InkStroke, SyncKind.InkErase, SyncKind.InkMove ->
+                remoteInkPages += change.raw.requiredString("pageId")
+            SyncKind.Notebook, SyncKind.Section, SyncKind.Page, SyncKind.PageContent -> Unit
+        }
         when (change.kind) {
             SyncKind.Notebook -> notebooks.upsert(
                 NotebookEntity(

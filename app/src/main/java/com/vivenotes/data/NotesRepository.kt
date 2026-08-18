@@ -715,6 +715,19 @@ class NotesRepository(
         inkMoves.byPage(pageId)
 
     /**
+     * What this page's operation clock has to start above — `memory/inkSyncPlan.md` §1.
+     *
+     * Read from the tables rather than derived from the operations that were replayed, because the
+     * two differ by exactly the rows that make it a clock: an undone or pulled-and-tombstoned
+     * operation is not replayed and still has to be counted. Two indexed maxima over a page's
+     * operations, which number in the hundreds where its strokes number in the thousands.
+     */
+    suspend fun latestInkOperationAt(pageId: String): Long = maxOf(
+        inkErases.latestCreatedAt(pageId) ?: 0L,
+        inkMoves.latestCreatedAt(pageId) ?: 0L,
+    )
+
+    /**
      * Stores a normal-eraser gesture and its target set atomically. The mask without its targets
      * would be unsafe: replaying it against every page stroke would also erase ink drawn later.
      */

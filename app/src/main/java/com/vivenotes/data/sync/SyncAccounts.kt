@@ -80,7 +80,17 @@ class SyncAccounts(
 
     private val appContext = context.applicationContext
     private val store = SyncAccountStore(context)
-    private val hierarchy = database?.let { HierarchySync(it, client) }
+    private val remoteInkSignal = RemoteInkSignal()
+    private val hierarchy = database?.let { HierarchySync(it, client, remoteInkSignal) }
+
+    /**
+     * Pages the server has written ink into, by generation — `memory/inkSyncPlan.md` IS5.
+     *
+     * Held here because this is the one object both clocks run through: the foreground scheduler and
+     * WorkManager's catch-up both call [synchronize] on this instance, in this process, so an open
+     * canvas hears about a pulled stroke whichever of them pulled it.
+     */
+    val remoteInk: StateFlow<Map<String, Long>> = remoteInkSignal.pages
 
     /** Null until connected. Survives launches; cleared by [disconnect]. */
     val account: Flow<SyncAccount?> = store.account

@@ -367,6 +367,33 @@ class NotesRepositoryTest {
     }
 
     @Test
+    fun theOperationClockCountsUndoneAndTombstonedOperations() = runBlocking {
+        val pageId = newPage()
+        repository.addPartialErase(
+            InkEraseEntity(
+                id = "erase-a",
+                pageId = pageId,
+                mode = EraserMode.Normal,
+                sizeDp = 12f,
+                points = byteArrayOf(2),
+                enc = "test/1",
+                createdAt = 5_000L,
+            ),
+            listOf("some-stroke"),
+        )
+        assertEquals(5_000L, repository.latestInkOperationAt(pageId))
+
+        // Undone here, or pulled already tombstoned from a device that undid it there. Either way the
+        // row is not replayed and its time still has to be cleared: the operation can come back — an
+        // undo is redoable, and the other device may push the redo — and two operations numbered the
+        // same are two devices rendering one page differently. `memory/inkSyncPlan.md` §1.
+        repository.setPartialEraseActive("erase-a", active = false)
+
+        assertTrue(repository.partialErasesFor(pageId).isEmpty())
+        assertEquals(5_000L, repository.latestInkOperationAt(pageId))
+    }
+
+    @Test
     fun aCorruptRevisionIsReportedAndNeverRestored() = runBlocking {
         val pageId = newPage()
         repository.saveDoc(

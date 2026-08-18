@@ -68,7 +68,10 @@ class InkPageLoader(
         }
         LoadedInkPage(
             strokes = if (streaming) shown else replay(decoded, operations),
-            latestOperationAt = operations.maxOfOrNull(StoredInkOperation::createdAt) ?: 0L,
+            // Not `operations.maxOf { it.createdAt }`: the operations here are the *active* ones,
+            // and the clock has to clear the tombstoned ones too. See
+            // [NotesRepository.latestInkOperationAt].
+            latestOperationAt = repository.latestInkOperationAt(pageId),
         )
     }
 

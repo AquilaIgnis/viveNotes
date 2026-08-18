@@ -12,6 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -27,6 +29,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -47,6 +50,8 @@ import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.ink.InkCodec
+import com.vivenotes.data.PenPreset
+import com.vivenotes.data.db.InkEraseTargetEntity
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkLassoMove
@@ -130,7 +135,9 @@ class NotesViewModelTest {
     }
 
     /** Builds a settled view model sitting on the seeded Welcome page. */
-    private suspend fun seededViewModel(): NotesViewModel {
+    private suspend fun seededViewModel(
+        remoteInk: StateFlow<Map<String, Long>>? = null,
+    ): NotesViewModel {
         val vm = NotesViewModel(
             repository,
             attachments,
@@ -138,6 +145,7 @@ class NotesViewModelTest {
             viewSettings,
             penSettings,
             inkDispatcher = dispatcher,
+            remoteInk = remoteInk,
         )
         scheduler.advanceUntilIdle()
         assertNotNull("expected the seeded page to be open", vm.uiState.value.selectedPageId)
@@ -1072,6 +1080,119 @@ class NotesViewModelTest {
             stored.outlines.map { it.id },
         )
         assertEquals("edited body", stored.plainText())
+    }
+
+    // --- ink pulled onto an open page — `memory/inkSyncPlan.md` IS5 -----------------------------
+
+    @Test
+    fun pulledInkAppearsOnThePageThatIsAlreadyOpen() = runTest(dispatcher) {
+        val remoteInk = MutableStateFlow<Map<String, Long>>(emptyMap())
+        val vm = seededViewModel(remoteInk)
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.onStrokeFinished(inkStroke(10f to 20f, 90f to 20f))
+        advanceUntilIdle()
+        assertEquals(1, vm.strokes.value.size)
+
+        writeRemoteStroke(pageId, seq = 7, points = arrayOf(10f to 70f, 90f to 70f))
+        remoteInk.value = mapOf(pageId to 1L)
+        advanceUntilIdle()
+
+        assertEquals(
+            "the pulled stroke did not reach the open canvas",
+            2,
+            vm.strokes.value.size,
+        )
+    }
+
+    @Test
+    fun absorbingPulledInkKeepsTheProjectionsOfStrokesNobodyTouched() = runTest(dispatcher) {
+        val remoteInk = MutableStateFlow<Map<String, Long>>(emptyMap())
+        val vm = seededViewModel(remoteInk)
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.onStrokeFinished(inkStroke(10f to 20f, 90f to 20f))
+        advanceUntilIdle()
+        val held = vm.strokes.value.single()
+
+        writeRemoteStroke(pageId, seq = 7, points = arrayOf(10f to 70f, 90f to 70f))
+        remoteInk.value = mapOf(pageId to 1L)
+        advanceUntilIdle()
+
+        // Both halves, because either alone passes for the wrong reason: without the absorption
+        // there is no rebuild to renumber anything, and without the renumbering there is no evidence
+        // the rebuild happened.
+        assertEquals("the pulled stroke did not reach the open canvas", 2, vm.strokes.value.size)
+        // A selection lives in the composition as a set of projection keys, so renumbering the ink
+        // it names would empty it silently — see `PageStroke.projection`.
+        val same = vm.strokes.value.first { it.id == held.id }
+        assertEquals(
+            "absorbing another device's stroke renumbered a projection this one was holding",
+            held.projection,
+            same.projection,
+        )
+    }
+
+    @Test
+    fun absorbingAPulledEraseLiftsTheOperationClockAboveIt() = runTest(dispatcher) {
+        val remoteInk = MutableStateFlow<Map<String, Long>>(emptyMap())
+        val vm = seededViewModel(remoteInk)
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+
+        // A device whose clock — or whose Lamport clock — is far ahead of this one's. Its target is
+        // a stroke this device does not hold, which is ordinary: the row may have been purged there.
+        val ahead = System.currentTimeMillis() + 10_000_000L
+        val remote = InkCodec.encodeErase(
+            inkStroke(10f to 10f, 20f to 10f, sizeDp = 8f),
+            pageId,
+            now = ahead,
+        )
+        db.inkEraseDao().upsert(remote)
+        db.inkEraseDao().insertTargetsIfAbsent(
+            listOf(InkEraseTargetEntity(remote.id, "a-stroke-this-device-never-had")),
+        )
+        remoteInk.value = mapOf(pageId to 1L)
+        advanceUntilIdle()
+
+        vm.eraseStrokeParts(inkStroke(50f to 35f, 50f to 65f, sizeDp = 18f))
+        advanceUntilIdle()
+
+        val mine = db.inkEraseDao().byPage(pageId).map { it.erase }.single { it.id != remote.id }
+        assertTrue(
+            "a local erase was numbered ${mine.createdAt}, at or below the pulled $ahead",
+            mine.createdAt > ahead,
+        )
+    }
+
+    @Test
+    fun inkPulledOntoAnotherPageLeavesTheOpenCanvasAlone() = runTest(dispatcher) {
+        val remoteInk = MutableStateFlow<Map<String, Long>>(emptyMap())
+        val vm = seededViewModel(remoteInk)
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.onStrokeFinished(inkStroke(10f to 20f, 90f to 20f))
+        advanceUntilIdle()
+        val before = vm.strokes.value
+
+        // Written to the open page, but announced for another one: nothing may be read back, or the
+        // signal is doing no work and every device rebuilds every page on every tick.
+        writeRemoteStroke(pageId, seq = 7, points = arrayOf(10f to 70f, 90f to 70f))
+        remoteInk.value = mapOf("some-other-page" to 1L)
+        advanceUntilIdle()
+
+        assertSame("an arrival for another page rebuilt this one", before, vm.strokes.value)
+    }
+
+    /** Writes a stroke row the way hierarchy sync does — straight to Room, past the repository. */
+    private suspend fun writeRemoteStroke(
+        pageId: String,
+        seq: Int,
+        points: Array<Pair<Float, Float>>,
+    ) {
+        db.inkStrokeDao().upsert(
+            listOf(
+                InkCodec.encode(inkStroke(*points), pageId, seq = seq, pen = PenPreset()),
+            ),
+        )
     }
 
     private fun inkStroke(

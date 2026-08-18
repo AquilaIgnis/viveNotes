@@ -88,6 +88,7 @@ import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.eraseObjects
+import com.vivenotes.ink.keepingProjectionsOf
 import com.vivenotes.ink.moveSelected
 import com.vivenotes.ink.pageBounds
 import com.vivenotes.ink.projectionKey
@@ -468,6 +469,16 @@ class NotesViewModel(
     /** Reads replayed handwriting lazily for the same cache-only search path as picture OCR. */
     private val inkText: InkTextIndexer? = null,
     /**
+     * Pages the server has written ink into, by generation — `memory/inkSyncPlan.md` IS5.
+     *
+     * Ink has no Room flow of its own on purpose; see
+     * [com.vivenotes.data.sync.RemoteInkSignal] for why the page body has one and this does not.
+     * Null for the suites that build a ViewModel with no server behind it, and it means what it says:
+     * nothing ever arrives from anywhere else, which is what a device that has never been connected
+     * actually experiences.
+     */
+    private val remoteInk: StateFlow<Map<String, Long>>? = null,
+    /**
      * Whether first-run seeding may happen at all — see
      * [com.vivenotes.data.sync.SyncAccounts.maySeedStarter], which says no while this installation
      * is registered with a server it has not pulled from yet.
@@ -723,6 +734,21 @@ class NotesViewModel(
     private var lastInkOperationAt = 0L
 
     /**
+     * The [remoteInk] generation the strokes now on screen were built from — IS5.
+     *
+     * Captured before the open page's ink is read rather than after it, so a pull that commits
+     * *during* that read leaves this behind the signal and is absorbed instead of being mistaken for
+     * something the canvas already shows.
+     */
+    private var absorbedInkGeneration = 0L
+
+    /** An absorption that arrived while an ink edit was still resolving, waiting for it to land. */
+    private var deferredInkAbsorption = false
+
+    /** The rebuild triggered by pulled ink, so a burst of sync ticks cannot start a second one. */
+    private var inkAbsorption: Job? = null
+
+    /**
      * The page currently being opened, so that opening another one stops it.
      *
      * Ink now loads *after* its page is on screen, which means a load can still be running when the
@@ -913,6 +939,16 @@ class NotesViewModel(
                 }
                 .onEach { (pageId, load) -> acceptStoredDocument(pageId, load) }
                 .launchIn(this)
+
+            // And the same for the page's ink, which has no Room flow to observe — the canvas is
+            // told when the server writes strokes, erases or lassos into a page rather than when the
+            // tables change, because every stroke the user draws changes those tables too.
+            remoteInk
+                ?.onEach { pages ->
+                    val pageId = _uiState.value.selectedPageId ?: return@onEach
+                    absorbRemoteInk(pageId, pages[pageId] ?: 0L)
+                }
+                ?.launchIn(this)
 
             // Debounced so a burst of keystrokes is one write, not one per character.
             edits
@@ -1226,6 +1262,10 @@ class NotesViewModel(
         // not belong to, for exactly as long as the load that this change stopped waiting for.
         _strokes.value = emptyList()
         _inkReadyPageId.value = null
+        // Read before the load below, not after it — see [absorbedInkGeneration].
+        inkAbsorption?.cancel()
+        deferredInkAbsorption = false
+        absorbedInkGeneration = remoteInkGeneration(pageId)
         pageLoad = viewModelScope.launch {
             // The outgoing page's text is written before anything can replace it, and a page switch
             // arriving mid-write cannot tear that write in half.
@@ -1373,6 +1413,69 @@ class NotesViewModel(
      */
     private fun publishInk(pageId: String, strokes: List<PageStroke>) {
         if (openingPageId == pageId) _strokes.value = strokes
+    }
+
+    /** The generation of remote ink [pageId] has received, or zero on a device with no server. */
+    private fun remoteInkGeneration(pageId: String): Long = remoteInk?.value?.get(pageId) ?: 0L
+
+    /**
+     * Puts ink the server wrote into the open page onto the open page — `memory/inkSyncPlan.md` IS5.
+     *
+     * The ink twin of [acceptStoredDocument], and needed for the same reason: sync writes Room
+     * directly, and until this existed a canvas that was already open kept the strokes it was opened
+     * with. Two tablets drawing on one page each showed only their own until somebody navigated away
+     * and back.
+     *
+     * **A rebuild, not a delta.** Erases and lasso moves replay in `(createdAt, id)` order and do not
+     * commute — a pulled operation can sort *below* one already applied, which offline drawing makes
+     * ordinary rather than exotic — and a move's clamp measures the whole selection, so it cannot be
+     * replayed against the new strokes alone. Reading the page back is the only answer that is right
+     * for every arrival, and it re-seeds the operation clock on the way through [loadInk].
+     *
+     * Three things make that safe to do underneath somebody's hand:
+     * - it joins [inkMutations], the lane page opening and every edit already share;
+     * - it stands down while an ink edit is still resolving its geometry off-thread, exactly as undo
+     *   does, and is retried by [changePendingInkEdits] when that edit lands;
+     * - it re-reads rather than publishes if the canvas moved while Room was being read, because a
+     *   stroke finished mid-rebuild is on the page and not yet in the rows the rebuild saw. Its write
+     *   is already queued behind the lock, so the next read includes it. After
+     *   [INK_ABSORB_ATTEMPTS] it gives up and leaves [absorbedInkGeneration] where it was, so the
+     *   next arrival tries again — a page being drawn on continuously absorbs when the pen pauses,
+     *   or when it is next opened.
+     *
+     * What it deliberately does not do is rebase the page's undo ring, whose entries are whole-list
+     * snapshots taken before the arrival. An undo immediately after absorbing therefore republishes a
+     * list without the pulled strokes: nothing is lost — Room is untouched, and the next absorption
+     * or page open shows them again — where rewriting every snapshot on the ring is a large change
+     * for a case that heals itself. [acceptStoredDocument] makes the same trade for text.
+     */
+    private fun absorbRemoteInk(pageId: String, generation: Long) {
+        if (generation == absorbedInkGeneration) return
+        if (openingPageId != pageId || _uiState.value.selectedPageId != pageId) return
+        if ((pendingInkEditsByPage[pageId] ?: 0) > 0) {
+            deferredInkAbsorption = true
+            return
+        }
+        deferredInkAbsorption = false
+        inkAbsorption?.cancel()
+        inkAbsorption = viewModelScope.launch {
+            repeat(INK_ABSORB_ATTEMPTS) {
+                // Before the read, so a pull committing during it is absorbed by the next signal
+                // rather than counted as already shown.
+                val seen = remoteInkGeneration(pageId)
+                val live = _strokes.value
+                val rebuilt = inkMutations.withLock { loadInk(pageId) }
+                if (openingPageId != pageId) return@launch
+                if ((pendingInkEditsByPage[pageId] ?: 0) > 0) {
+                    deferredInkAbsorption = true
+                    return@launch
+                }
+                if (_strokes.value !== live) return@repeat
+                _strokes.value = withContext(inkDispatcher) { rebuilt.keepingProjectionsOf(live) }
+                absorbedInkGeneration = seen
+                return@launch
+            }
+        }
     }
 
     fun showCompactPane(pane: CompactPane) {
@@ -3407,6 +3510,10 @@ class NotesViewModel(
         val count = ((pendingInkEditsByPage[pageId] ?: 0) + delta).coerceAtLeast(0)
         if (count == 0) pendingInkEditsByPage.remove(pageId) else pendingInkEditsByPage[pageId] = count
         if (_uiState.value.selectedPageId == pageId) publishCanvasUndoState(pageId)
+        // The edit that stood an arrival down has landed, so the page can be rebuilt around it now.
+        if (count == 0 && deferredInkAbsorption && _uiState.value.selectedPageId == pageId) {
+            absorbRemoteInk(pageId, remoteInkGeneration(pageId))
+        }
     }
 
     private fun persistInkHistoryEntry(entry: CanvasHistoryEntry.Ink, applied: Boolean) {
@@ -3812,6 +3919,17 @@ class NotesViewModel(
         private const val CANVAS_HISTORY_LIMIT = 100
 
         /**
+         * How many times a rebuild triggered by pulled ink will re-read a page that moved underneath
+         * it before leaving the canvas alone — see [absorbRemoteInk].
+         *
+         * Three rather than one because the first collision is ordinary (a stroke finishing during
+         * the read) and clears immediately, and rather than "until it succeeds" because a page being
+         * drawn on without pause would spin rebuilding it. Giving up costs nothing permanent: the
+         * generation is not recorded, so the next arrival tries again.
+         */
+        private const val INK_ABSORB_ATTEMPTS = 3
+
+        /**
          * How long a run of same-key shape edits keeps folding into one undo step.
          *
          * Long enough to cover the gaps between steps of a slider being dragged, short enough that
@@ -3841,6 +3959,7 @@ class NotesViewModel(
             notebookTransfers: NotebookTransferManager? = null,
             imageText: ImageTextIndexer? = null,
             inkText: InkTextIndexer? = null,
+            remoteInk: StateFlow<Map<String, Long>>? = null,
             maySeedStarter: (suspend () -> Boolean)? = null,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -3855,6 +3974,7 @@ class NotesViewModel(
                     notebookTransfers = notebookTransfers,
                     imageText = imageText,
                     inkText = inkText,
+                    remoteInk = remoteInk,
                     maySeedStarter = maySeedStarter,
                 ) as T
         }

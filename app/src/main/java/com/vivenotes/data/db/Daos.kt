@@ -791,6 +791,20 @@ interface InkEraseDao {
     @Query("DELETE FROM ink_erase_targets WHERE eraseId IN (:eraseIds)")
     suspend fun deleteTargetsForErases(eraseIds: List<String>)
 
+    /**
+     * The highest operation time on this page, **tombstones included** — the seed for the operation
+     * clock this device stamps its next erase or lasso with.
+     *
+     * Deliberately unfiltered, exactly as [InkStrokeDao.nextSeq] is over `seq`. Ordering ink by
+     * anything but a logical clock is provably wrong (`memory/inkSyncPlan.md` §1), and a clock that
+     * counted only the operations currently *active* would be reset by the very rows it has to sort
+     * above: a pulled erase that its author has undone still carries the time the author's next
+     * operation was numbered from, and redoing it there resurrects a row this device has already
+     * numbered below. [byPage] filters for replay, which is a different question from ordering.
+     */
+    @Query("SELECT MAX(createdAt) FROM ink_erases WHERE pageId = :pageId")
+    suspend fun latestCreatedAt(pageId: String): Long?
+
     @Query("SELECT * FROM ink_erases WHERE id IN (:ids)")
     suspend fun byIds(ids: List<String>): List<InkEraseEntity>
 
@@ -834,6 +848,10 @@ interface InkMoveDao {
 
     @Query("DELETE FROM ink_move_targets WHERE moveId IN (:moveIds)")
     suspend fun deleteTargetsForMoves(moveIds: List<String>)
+
+    /** The highest operation time on this page, tombstones included — see [InkEraseDao.latestCreatedAt]. */
+    @Query("SELECT MAX(createdAt) FROM ink_moves WHERE pageId = :pageId")
+    suspend fun latestCreatedAt(pageId: String): Long?
 
     @Query("SELECT * FROM ink_moves WHERE id IN (:ids)")
     suspend fun byIds(ids: List<String>): List<InkMoveEntity>

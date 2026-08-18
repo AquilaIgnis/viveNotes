@@ -406,4 +406,35 @@ class SyncServerClientTest {
             exchange.responseBody.use { it.write(bytes) }
         }
     }
+
+    /**
+     * The identity the push batch builder's size accounting rests on — see
+     * `HierarchySync.loadOrCreatePendingBatch`.
+     *
+     * It stopped encoding the whole candidate batch per row (quadratic, and 96% of a first upload's
+     * time) and now adds each change's own encoded length plus one comma. That is only exact while
+     * the encoder writes compact JSON with no spacing, so this pins the assumption rather than the
+     * arithmetic: a serialization upgrade that started pretty-printing would make the accumulator
+     * under-count and put a request over the transport's cap, which is a permanent failure.
+     */
+    @Test
+    fun aBatchIsExactlyItsEmptyEnvelopePlusItsChangesAndTheCommasBetweenThem() {
+        val changes = listOf(
+            buildJsonObject { put("kind", "inkStroke"); put("id", "a") },
+            buildJsonObject { put("kind", "inkStroke"); put("id", "b") },
+            buildJsonObject { put("kind", "page"); put("title", "an em dash — and a ü") },
+        )
+        fun envelope(of: List<kotlinx.serialization.json.JsonObject>) = kotlinx.serialization.json.JsonObject(
+            linkedMapOf(
+                "batchId" to kotlinx.serialization.json.JsonPrimitive("batch"),
+                "changes" to kotlinx.serialization.json.JsonArray(of),
+            ),
+        ).toString().encodeToByteArray().size
+
+        val accumulated = envelope(emptyList()) +
+            changes.sumOf { it.toString().encodeToByteArray().size } +
+            (changes.size - 1)
+
+        assertEquals(envelope(changes), accumulated)
+    }
 }

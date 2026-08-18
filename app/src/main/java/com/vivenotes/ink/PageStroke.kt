@@ -147,6 +147,50 @@ private val projectionCounter = AtomicInteger()
 internal val PageStroke.projectionKey: InkProjectionKey
     get() = InkProjectionKey(id, projection)
 
+/** What makes two projections, decoded on either side of a rebuild, the same projection. */
+private data class ProjectionIdentity(
+    val strokeId: String,
+    /** Which of that row's projections this is, in draw order — a partial erase leaves several. */
+    val ordinal: Int,
+    val bounds: InkBounds?,
+)
+
+/**
+ * The same page, wearing the projection numbers [previous] gave the projections it still holds.
+ *
+ * Rebuilding a page from Room mints a fresh [PageStroke.projection] for every stroke on it, which is
+ * right when the page is being opened and wrong when it is already on screen: a lasso selection
+ * lives in `EditorPane` and is a set of [InkProjectionKey]s, so a silent renumbering is a selection
+ * that stops matching anything — the exact failure [PageStroke.projection] exists to prevent, and
+ * one that shows up as recognition reading a blank square rather than as anything failing. Absorbing
+ * a stroke another device drew must not cost the user the selection they are holding.
+ *
+ * A projection is the same one when it comes from the same row, is the same one *of* that row, and
+ * occupies the same page rectangle. The last clause is what keeps this conservative: an operation
+ * pulled from another device that cut, moved or resized a stroke changes its bounds, so it mints a
+ * new number exactly as a local erase would, and only ink nobody touched keeps its identity.
+ *
+ * [PageStroke.pageBounds] is computed once per instance and the draw pass asks every stroke for it
+ * on the next frame regardless, so this reads what was going to be read anyway.
+ */
+internal fun List<PageStroke>.keepingProjectionsOf(previous: List<PageStroke>): List<PageStroke> {
+    if (isEmpty() || previous.isEmpty()) return this
+    val ordinals = HashMap<String, Int>()
+    val held = HashMap<ProjectionIdentity, Int>(previous.size)
+    previous.forEach { stroke ->
+        val ordinal = ordinals.getOrDefault(stroke.id, 0)
+        ordinals[stroke.id] = ordinal + 1
+        held[ProjectionIdentity(stroke.id, ordinal, stroke.pageBounds)] = stroke.projection
+    }
+    ordinals.clear()
+    return map { stroke ->
+        val ordinal = ordinals.getOrDefault(stroke.id, 0)
+        ordinals[stroke.id] = ordinal + 1
+        val kept = held[ProjectionIdentity(stroke.id, ordinal, stroke.pageBounds)]
+        if (kept == null || kept == stroke.projection) stroke else stroke.copy(projection = kept)
+    }
+}
+
 internal fun PageStroke.strokeToPageTransform(): AffineTransform =
     ImmutableAffineTransform(scaleX, 0f, offsetX, 0f, scaleY, offsetY)
 

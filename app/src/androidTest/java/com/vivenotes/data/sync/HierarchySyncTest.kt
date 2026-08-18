@@ -6,6 +6,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.db.InkEraseEntity
+import com.vivenotes.data.db.InkTextEntity
+import com.vivenotes.data.db.InkTextStatus
 import com.vivenotes.data.db.InkMoveEntity
 import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.data.db.LocalMetadataEntity
@@ -37,6 +39,7 @@ class HierarchySyncTest {
     private lateinit var db: NotesDatabase
     private lateinit var repository: NotesRepository
     private lateinit var server: InMemorySyncServer
+    private lateinit var remoteInk: RemoteInkSignal
     private lateinit var hierarchy: HierarchySync
     private var now = 1_000_000L
 
@@ -49,7 +52,8 @@ class HierarchySyncTest {
             .build()
         repository = NotesRepository(db, clock = { now })
         server = InMemorySyncServer()
-        hierarchy = HierarchySync(db, server)
+        remoteInk = RemoteInkSignal()
+        hierarchy = HierarchySync(db, server, remoteInk)
     }
 
     @After
@@ -397,6 +401,58 @@ class HierarchySyncTest {
             listOf(stroke.id),
             (sentMove.getValue("targetIds") as JsonArray).map { it.jsonPrimitive.content },
         )
+    }
+
+    @Test
+    fun pulledInkNamesItsPageSoAnOpenCanvasCanAbsorbIt() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(
+            notebookChange("n", "Remote", changedAt),
+            sectionChange("s", "n", "Remote section", changedAt),
+            pageChange("p", "s", "Remote page", changedAt),
+            pageChange("q", "s", "Another remote page", changedAt),
+            inkStrokeChange("stroke-1", "p", drawOrder = 4, updatedAt = changedAt),
+            inkEraseChange("erase-1", "p", listOf("stroke-1"), changedAt),
+        )
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        // Once per row rather than once per page would be a canvas rebuilt twice for one delta; the
+        // generation is what the ViewModel compares against, and the page set is what it filters by.
+        assertEquals(mapOf("p" to 1L), remoteInk.pages.value)
+    }
+
+    @Test
+    fun pulledInkDropsTheHandwritingItsPageWasAlreadyReadAs() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(
+            notebookChange("n", "Remote", changedAt),
+            sectionChange("s", "n", "Remote section", changedAt),
+            pageChange("p", "s", "Remote page", changedAt),
+        )
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+        db.inkTextDao().upsert(
+            InkTextEntity(
+                pageId = "p",
+                regionsJson = "[]",
+                regionCount = 1,
+                confidence = 1f,
+                layoutHash = "",
+                engine = "test",
+                status = InkTextStatus.Read,
+                durationMs = 1,
+                updatedAt = changedAt,
+            ),
+        )
+
+        server.seed(inkStrokeChange("stroke-1", "p", drawOrder = 0, updatedAt = changedAt + 1))
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        // The cache is keyed by a generation every *local* ink write bumps through the repository.
+        // Rows written here go to the DAOs directly, so without this the search would answer with
+        // the handwriting the page held before another device drew on it.
+        assertTrue(db.inkTextDao().byPageIds(listOf("p")).isEmpty())
+        assertTrue(db.inkTextDao().generation("p") > 0)
     }
 
     @Test
