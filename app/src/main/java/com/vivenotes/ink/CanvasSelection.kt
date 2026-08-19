@@ -1,6 +1,8 @@
 package com.vivenotes.ink
 
 import com.vivenotes.model.Outline
+import kotlin.math.floor
+import kotlin.math.hypot
 
 /**
  * What is selected on the page, across every kind of object on it — `docs/plan.md` AD7.
@@ -218,6 +220,13 @@ data class CanvasClipboard(
  * *same* rule ink uses ([isInsideLasso]): every point of the object must be in or near the loop, so a
  * shape that is only half circled is left alone exactly as a half-circled stroke is. Anything else and
  * the lasso would feel like two different tools depending on what was under it.
+ *
+ * **The gesture has to be a closed path** ([closesIntoALoop]). Every containment test here closes the
+ * path for itself — `pointInPolygon` walks back from the last vertex to the first whether the hand did
+ * or not — so an L drawn beside a drawing used to select everything inside the triangle the app had
+ * imagined, and a C left open selected what its chord cut off. Asking the *gesture* whether it ran
+ * back into itself, once and before any of that, is what makes the drawn shape and the tested shape
+ * the same shape.
  */
 internal fun selectWithLasso(
     strokes: List<PageStroke>,
@@ -228,7 +237,7 @@ internal fun selectWithLasso(
     path: List<InkPoint>,
     edgeTolerance: Float = DEFAULT_LASSO_EDGE_TOLERANCE,
 ): CanvasSelection? {
-    if (path.size < 3) return null
+    if (path.size < 3 || !path.closesIntoALoop(edgeTolerance)) return null
     val ink = strokes.selectWithLasso(path, edgeTolerance)
     val caughtShapes = shapes.filter { it.isInsideLasso(path, edgeTolerance) }
     val caughtTables = tables.filter { it.bounds.isInsideLasso(path, edgeTolerance) }
@@ -260,6 +269,126 @@ internal fun selectWithLasso(
         bounds = union,
     )
 }
+
+/**
+ * Whether the gesture is a closed path: somewhere it runs back into itself.
+ *
+ * **The test is that the stroke meets the stroke**, not that it ends near where it began. Nothing
+ * short of that is a loop: a C left a hair open is a curve, and how nearly it closed is not the
+ * question — a lasso encloses, and an unclosed path encloses nothing. The only allowance is [touch],
+ * the reach the lasso already judges its edges by, which is a few view pixels read as page units: a
+ * hand that lifts *on* its own line lands a sample short of it, and that is a missing point rather
+ * than a gap. Reading it off the same number means the allowance is a constant on **screen**, so
+ * closing a loop is neither harder nor easier for being drawn zoomed out.
+ *
+ * Asking it of the whole path rather than of the last point is what admits the loop that carries on
+ * past its own start — closing and then running on is how a loop is usually drawn, and such a gesture
+ * ends nowhere near its beginning while having crossed it long before.
+ *
+ * **Two segments only count as meeting if the pen travelled [CLOSING_TRAVEL] between them**, and
+ * without that clause this rule does nothing at all. `LassoGesture` records a point every half page
+ * unit, so a drawn path is hundreds of samples and the segment two along is half a unit away —
+ * *inside* the touch reach. Skipping only the neighbour a segment shares an endpoint with therefore
+ * declared every gesture closed at its third sample, an L included, which is exactly the behaviour
+ * this was written to stop. Distance along the path, never a count of samples: how many samples a
+ * stretch holds depends on how fast the hand was moving through it.
+ *
+ * **Cost.** Every pair of a thousand samples is not worth comparing, so segments are dropped into a
+ * coarse grid and only compared with segments already in a cell they touch — two segments that meet
+ * always share one — and the travel between them is a subtraction that settles most of those.
+ *
+ * **Deliberately not asked in [LassoShape]**, which is where a replayed move re-identifies the ink it
+ * moved. A move stored before this rule existed can name a path that does not satisfy it, and a
+ * replay that declined to apply would put that ink back where it started on the next page open —
+ * quietly, and for good. What the user drew then is not this device's to re-judge now; this rules on
+ * a gesture being made, which is the only place a hand can be asked to close it.
+ */
+private fun List<InkPoint>.closesIntoALoop(touch: Float): Boolean {
+    if (size < 4) return false
+    val reach = maxOf(touch, CLOSING_TOUCH_FLOOR)
+    val travelled = travelledTo()
+    val apart = reach * CLOSING_TRAVEL
+    val buckets = HashMap<Long, MutableList<Int>>()
+    for (index in 0 until size - 1) {
+        val from = this[index]
+        val to = this[index + 1]
+        val minColumn = cellOf(minOf(from.x, to.x) - reach, reach)
+        val maxColumn = cellOf(maxOf(from.x, to.x) + reach, reach)
+        val minRow = cellOf(minOf(from.y, to.y) - reach, reach)
+        val maxRow = cellOf(maxOf(from.y, to.y) + reach, reach)
+        for (column in minColumn..maxColumn) {
+            for (row in minRow..maxRow) {
+                val cell = (column.toLong() shl 32) or (row.toLong() and 0xFFFF_FFFFL)
+                val sharing = buckets.getOrPut(cell) { mutableListOf() }
+                val met = sharing.any { earlier ->
+                    travelled[index] - travelled[earlier + 1] > apart && meets(earlier, index, reach)
+                }
+                if (met) return true
+                sharing += index
+            }
+        }
+    }
+    return false
+}
+
+/** How far the pen had travelled by each sample, so two segments can be told how far apart they are. */
+private fun List<InkPoint>.travelledTo(): FloatArray {
+    val distances = FloatArray(size)
+    for (index in 1 until size) {
+        val from = this[index - 1]
+        val to = this[index]
+        distances[index] = distances[index - 1] + hypot(to.x - from.x, to.y - from.y)
+    }
+    return distances
+}
+
+/** Whether the segments starting at [first] and [second] cross, or run into one another. */
+private fun List<InkPoint>.meets(first: Int, second: Int, reach: Float): Boolean {
+    val a = this[first]
+    val b = this[first + 1]
+    val c = this[second]
+    val d = this[second + 1]
+    if (crosses(a, b, c, d)) return true
+    // Touching without crossing is the ordinary way a hand closes a loop: it stops on the line.
+    val touching = reach * reach
+    return a.distanceSquaredToSegment(c, d) <= touching ||
+        b.distanceSquaredToSegment(c, d) <= touching ||
+        c.distanceSquaredToSegment(a, b) <= touching ||
+        d.distanceSquaredToSegment(a, b) <= touching
+}
+
+/** Proper crossing: each segment has one end on either side of the other's line. */
+private fun crosses(a: InkPoint, b: InkPoint, c: InkPoint, d: InkPoint): Boolean {
+    val first = side(a, b, c)
+    val second = side(a, b, d)
+    val third = side(c, d, a)
+    val fourth = side(c, d, b)
+    return first * second < 0f && third * fourth < 0f
+}
+
+private fun side(from: InkPoint, to: InkPoint, point: InkPoint): Float =
+    (to.x - from.x) * (point.y - from.y) - (to.y - from.y) * (point.x - from.x)
+
+private fun cellOf(coordinate: Float, reach: Float): Int = floor(coordinate / (reach * 4f)).toInt()
+
+/**
+ * The least a gesture's closing allowance may be, in page units, however far it is zoomed in.
+ *
+ * Samples are recorded half a page unit apart, so a couple of them is the finest a lift can be judged
+ * by at all — below this, closing would be asked to be more exact than the path is recorded.
+ */
+private const val CLOSING_TOUCH_FLOOR = 2f
+
+/**
+ * How far the pen must travel between two segments before they are allowed to be the same place, as a
+ * multiple of the touch reach.
+ *
+ * Below this the two are the same stroke of the hand rather than a return to it: a wobble that comes
+ * back within its own width is a wobble, and every path revisits itself at that scale. Above it, ink
+ * that a hand has genuinely come back around to is caught — the smallest useful loop, drawn round one
+ * letter, runs many times this far.
+ */
+private const val CLOSING_TRAVEL = 8f
 
 /**
  * The object under a tap, or null — one tap, one object, with the lasso in hand.

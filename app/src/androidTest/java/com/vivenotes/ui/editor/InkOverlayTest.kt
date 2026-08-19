@@ -660,6 +660,8 @@ class InkOverlayTest {
             moveTo(Offset(200f, 60f))
             moveTo(Offset(200f, 140f))
             moveTo(Offset(60f, 140f))
+            // Back to where it started: a lasso only selects when the gesture closes.
+            moveTo(Offset(60f, 60f))
             up()
         }
         compose.waitForIdle()
@@ -675,6 +677,69 @@ class InkOverlayTest {
         compose.onNodeWithTag(OBJECT_DELETE_TAG).assertIsDisplayed().performClick()
         assertEquals(setOf("first", "second"), deletedIds)
         compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
+    }
+
+    /**
+     * The rule the lasso lives by, driven through the gesture rather than around it.
+     *
+     * A hand leaves a point every half page unit, and a closure rule that only skips the segment it
+     * shares an endpoint with calls every path closed by its third sample — which is how three sides
+     * of a rectangle went on selecting after that rule was written. So this one is drawn the way a
+     * hand draws, in single-unit steps.
+     */
+    @Test
+    fun anOpenLoopDrawnAsAHandDrawsItSelectsNothing() {
+        val ink = PageStroke(
+            "only",
+            InkCodec.eraseMask(
+                MutableStrokeInputBatch().apply {
+                    add(InputToolType.UNKNOWN, 90f, 100f, 0L)
+                    add(InputToolType.UNKNOWN, 110f, 100f, 10L)
+                }.toImmutable(),
+                6f,
+            ),
+        )
+        setOverlay(allowFinger = true, lassoing = true, pageStrokes = listOf(ink))
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(70f, 70f))
+            (1..60).forEach { moveTo(Offset(70f + it, 70f)) }
+            (1..60).forEach { moveTo(Offset(130f, 70f + it)) }
+            (1..60).forEach { moveTo(Offset(130f - it, 130f)) }
+            // and lifted there, three sides drawn and the fourth never closed
+            up()
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
+    }
+
+    /** The same hand, closing on where it started. */
+    @Test
+    fun aClosedLoopDrawnAsAHandDrawsItSelects() {
+        val ink = PageStroke(
+            "only",
+            InkCodec.eraseMask(
+                MutableStrokeInputBatch().apply {
+                    add(InputToolType.UNKNOWN, 90f, 100f, 0L)
+                    add(InputToolType.UNKNOWN, 110f, 100f, 10L)
+                }.toImmutable(),
+                6f,
+            ),
+        )
+        setOverlay(allowFinger = true, lassoing = true, pageStrokes = listOf(ink))
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(70f, 70f))
+            (1..60).forEach { moveTo(Offset(70f + it, 70f)) }
+            (1..60).forEach { moveTo(Offset(130f, 70f + it)) }
+            (1..60).forEach { moveTo(Offset(130f - it, 130f)) }
+            (1..60).forEach { moveTo(Offset(70f, 130f - it)) }
+            up()
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
     }
 
     @Test
@@ -696,6 +761,8 @@ class InkOverlayTest {
             moveTo(Offset(130f, 70f))
             moveTo(Offset(130f, 130f))
             moveTo(Offset(70f, 130f))
+            // Back to where it started: a lasso only selects when the gesture closes.
+            moveTo(Offset(70f, 70f))
             up()
         }
         compose.waitForIdle()
@@ -723,6 +790,8 @@ class InkOverlayTest {
             moveTo(Offset(130f, 70f))
             moveTo(Offset(130f, 130f))
             moveTo(Offset(70f, 130f))
+            // Back to where it started: a lasso only selects when the gesture closes.
+            moveTo(Offset(70f, 70f))
             up()
         }
         compose.waitForIdle()

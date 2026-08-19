@@ -1,15 +1,21 @@
 package com.vivenotes.ink
 
+import androidx.ink.brush.InputToolType
 import androidx.ink.brush.SelfOverlap
 import androidx.ink.geometry.AffineTransform
 import androidx.ink.geometry.ImmutableAffineTransform
+import androidx.ink.geometry.ImmutableTriangle
+import androidx.ink.geometry.ImmutableVec
 import androidx.ink.geometry.MutableVec
+import androidx.ink.geometry.PartitionedMesh
 import androidx.ink.strokes.ExperimentalInkEraserApi
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
+import androidx.ink.strokes.createClosedShape
 import com.vivenotes.data.automaticColorOr
 import java.util.IdentityHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.hypot
 
 /**
  * A finished stroke together with the row it came from.
@@ -562,6 +568,9 @@ private fun pointInPolygon(point: InkPoint, polygon: List<InkPoint>): Boolean {
  * position cost 253 ms of a page open, and an interactive lasso pays the same per gesture. Both
  * shortcuts below are *decisions*, never approximations — each one reaches a conclusion the exact
  * walk would have reached, using the bounding box the stroke already cached.
+ *
+ * A projection with no outlines — a piece of erased ink — is answered by [encloses] instead, which is
+ * the same question put to the mesh.
  */
 internal class LassoShape(
     val path: List<InkPoint>,
@@ -602,7 +611,118 @@ internal class LassoShape(
         // Tested without the tolerance, so this only ever concludes what the tolerant walk would
         // also have concluded.
         if (acceptsWholeBox && corners(bounds).all { pointInPolygon(it, path) }) return true
-        return stroke.containsExactly(path, edgeTolerance)
+        return stroke.containsExactly(path, edgeTolerance) ?: encloses(stroke)
+    }
+
+    /**
+     * The same question asked of a projection that has no outlines to walk — a piece of erased ink.
+     *
+     * **This is why erased ink could not be lassoed at all.** `Stroke.split` — which is what gives
+     * each surviving region of a partially erased stroke its own projection ([subtract]) — returns
+     * pieces whose meshes carry *no outlines*, the same fact that stops a cut highlighter from being
+     * split ([isDrawnFromOutlines]). [containsExactly] walks outlines and so walked nothing, and
+     * every piece of erased ink answered "not inside" to every loop drawn round it. It went unnoticed
+     * because the convex shortcut above answers first for a rectangle or a triangle, which is every
+     * lasso a test ever draws; a loop drawn by hand is never convex.
+     *
+     * Two tests, because neither alone is containment:
+     * - [region] answers *overlaps the loop at all*. Coverage cannot answer more than that: it is the
+     *   fraction of the mesh's triangles that **intersect** the region, so a piece lying half outside
+     *   still measures 1.0 — measured on a device rather than assumed.
+     * - [crosses] answers *reaches over the loop's edge*. A piece is by construction one connected
+     *   region, so a piece that overlaps the loop without crossing its edge lies wholly inside it.
+     *
+     * **Two shapes of this were tried and are wrong.** Subtracting the region from the piece and
+     * asking what is left outside cuts nothing at all: a region from `createClosedShape` carries no
+     * outlines either, and that is what `Stroke.subtract` cuts with. Drawing the loop's edge as one
+     * closed *stroke* and testing against that mesh looks right and is not reproducible: a stroke's
+     * mesh is built through the brush's modeler, so it lags the input and depends on the timestamps
+     * the path is fed with — the same loop came out truncated at x=39 of 45 with one clock and at
+     * y=67 of 70 with another. [crosses] uses plain triangles, which are geometry and nothing else.
+     *
+     * The edge tolerance is deliberately not applied here: a hairline edge means ink must be inside
+     * the loop rather than inside-or-within-a-few-dp of it, so grazing the edge of a piece of erased
+     * ink misses where grazing an untouched stroke would catch. Widening the quads would trade that
+     * for the opposite error — rejecting ink that is genuinely inside — and this is the half that
+     * costs a user nothing but a slightly wider loop.
+     */
+    private fun encloses(stroke: PageStroke): Boolean {
+        val region = region ?: return false
+        val bounds = stroke.pageBounds ?: return false
+        val shape = stroke.stroke.shape
+        val toStroke = stroke.pageToStrokeTransform()
+        if (!shape.computeCoverageIsGreaterThan(region, 0f, toStroke)) return false
+        return !crosses(shape, bounds, toStroke)
+    }
+
+    /**
+     * Whether any ink of [shape] lies on the loop's own edge, tested one segment at a time.
+     *
+     * Each segment is covered by a thin quad — two triangles, because a triangle is the shape the
+     * mesh can be asked about without a rotation convention in between. Segments whose own extent
+     * cannot reach [bounds] are skipped before any of that is built, which is what keeps this cheap
+     * on a hand-drawn loop: those run to hundreds of samples, and a piece of ink is near a handful.
+     */
+    private fun crosses(
+        shape: PartitionedMesh,
+        bounds: InkBounds,
+        toStroke: AffineTransform,
+    ): Boolean {
+        val reach = EDGE_WIDTH / 2f
+        closedPath.zipWithNext().forEach { (a, b) ->
+            val nearBounds = minOf(a.x, b.x) - reach <= bounds.right &&
+                maxOf(a.x, b.x) + reach >= bounds.left &&
+                minOf(a.y, b.y) - reach <= bounds.bottom &&
+                maxOf(a.y, b.y) + reach >= bounds.top
+            if (!nearBounds) return@forEach
+            val length = hypot(b.x - a.x, b.y - a.y)
+            if (length == 0f) return@forEach
+            val nx = -(b.y - a.y) / length * reach
+            val ny = (b.x - a.x) / length * reach
+            val corner1 = ImmutableVec(a.x + nx, a.y + ny)
+            val corner2 = ImmutableVec(b.x + nx, b.y + ny)
+            val corner3 = ImmutableVec(b.x - nx, b.y - ny)
+            val corner4 = ImmutableVec(a.x - nx, a.y - ny)
+            val touched = shape.computeCoverageIsGreaterThan(
+                ImmutableTriangle(corner1, corner2, corner3), 0f, toStroke,
+            ) || shape.computeCoverageIsGreaterThan(
+                ImmutableTriangle(corner1, corner3, corner4), 0f, toStroke,
+            )
+            if (touched) return true
+        }
+        return false
+    }
+
+    /**
+     * The path closed back to its first point.
+     *
+     * Closed explicitly because the polygon tests close it implicitly — a gesture is a run of samples
+     * and not a loop — and an open path would leave the region's mouth and a gap in its edge for ink
+     * to sit in.
+     */
+    private val closedPath: List<InkPoint> = if (usable) path + path.first() else path
+
+    /**
+     * The loop as a filled shape — built once, and only if a projection ever asks for it.
+     *
+     * Lazy because a page of ordinary strokes never reaches [encloses]. Null when the path cannot be
+     * made into stroke inputs at all, which leaves [encloses] answering what it answered before this
+     * existed. Consecutive repeats are dropped and the clock is the sample index: the batch rejects a
+     * duplicate input and its documentation asks the caller to sanitise rather than to catch, and the
+     * shape this builds depends on the positions alone.
+     */
+    private val region: PartitionedMesh? by lazy {
+        runCatching {
+            MutableStrokeInputBatch().apply {
+                var previous: InkPoint? = null
+                closedPath.forEachIndexed { index, point ->
+                    if (point != previous) {
+                        add(InputToolType.UNKNOWN, point.x, point.y, index.toLong())
+                        previous = point
+                    }
+                }
+            }.toImmutable().createClosedShape()
+        }.getOrNull()
     }
 
     private fun corners(bounds: InkBounds): List<InkPoint> = listOf(
@@ -611,6 +731,16 @@ internal class LassoShape(
         InkPoint(bounds.right, bounds.bottom),
         InkPoint(bounds.left, bounds.bottom),
     )
+
+    private companion object {
+        /**
+         * How wide the loop's own edge is taken to be, in page units.
+         *
+         * Thin enough to be the line and not a band around it, wide enough that ink crossing the line
+         * cannot thread between the two triangles laid along it.
+         */
+        const val EDGE_WIDTH = 1f
+    }
 }
 
 private fun isConvex(polygon: List<InkPoint>): Boolean {
@@ -634,8 +764,13 @@ private fun isConvex(polygon: List<InkPoint>): Boolean {
  * Tests the actual rendered outline instead of the object's bounding-box corners. Curved lassos
  * can closely enclose triangular or circular ink while naturally excluding the unused corners of
  * that rectangle. The small tolerance absorbs finger/stylus jitter right along a visible edge.
+ *
+ * **Null means "this projection has no outline to walk", which is not the same as "outside".** A
+ * piece of erased ink is exactly that (`Stroke.split` drops outlines), and answering false for it is
+ * the bug [LassoShape.encloses] exists to fix — so the two answers are kept apart here rather than
+ * collapsed into the `outlineVertexCount > 0` this used to end on.
  */
-private fun PageStroke.containsExactly(polygon: List<InkPoint>, edgeTolerance: Float): Boolean {
+private fun PageStroke.containsExactly(polygon: List<InkPoint>, edgeTolerance: Float): Boolean? {
     val position = MutableVec()
     var outlineVertexCount = 0
     val shape = stroke.shape
@@ -652,7 +787,7 @@ private fun PageStroke.containsExactly(polygon: List<InkPoint>, edgeTolerance: F
             }
         }
     }
-    return outlineVertexCount > 0
+    return if (outlineVertexCount > 0) true else null
 }
 
 internal fun pointInOrNearPolygon(
@@ -671,7 +806,7 @@ internal fun pointInOrNearPolygon(
     return false
 }
 
-private fun InkPoint.distanceSquaredToSegment(start: InkPoint, end: InkPoint): Float {
+internal fun InkPoint.distanceSquaredToSegment(start: InkPoint, end: InkPoint): Float {
     val dx = end.x - start.x
     val dy = end.y - start.y
     val lengthSquared = dx * dx + dy * dy
