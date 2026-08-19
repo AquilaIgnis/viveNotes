@@ -77,8 +77,9 @@ object PenPanelTags {
  * pen — one width for the whole stroke — so the control is absent rather than disabled.
  *
  * Two things in the reference are deliberately not here. The middle pen type is crossed out, so it
- * is absent entirely rather than disabled; and the overflow beside Hold to draw shape, which chooses
- * *which* shapes are recognised, waits for shape recognition to exist at all (`docs/inkPlan.md` §5).
+ * is absent entirely rather than disabled; and the overflow beside the hold toggle, which in the
+ * reference chooses *which* shapes are recognised, has nothing left to choose — that toggle is now
+ * Hold for straight line, and the line is the only candidate there is (`memory/inkPlan.md` §5).
  * Add colour is placed and inert: it holds the spot the reference gives it and plainly does not work
  * yet. **It is the last control in the app treated that way** — the View tab's Full Page View and
  * Normal View were the other two and were removed on 2026-08-09, so weigh the trade before adding a
@@ -119,12 +120,13 @@ fun ColumnScope.PenPanelContent(
     Spacer(Modifier.height(4.dp))
 
     PanelSetting(
-        label = "Hold to draw shape",
-        info = "Pause with the pen still down at the end of a stroke and a rough circle, box or " +
-            "line is replaced by a clean one.",
+        label = "Hold for straight line",
+        info = "Draw a line and pause with the pen still down for a second: the stroke is " +
+            "replaced by a straight line you can move and resize. Lift without pausing and the " +
+            "freehand stroke stays. Nearly horizontal and nearly vertical lines are levelled.",
     ) {
-        PanelToggle("Hold to draw shape", pen.holdToDrawShape) {
-            onChange(pen.copy(holdToDrawShape = it))
+        PanelToggle("Hold for straight line", pen.holdForStraightLine) {
+            onChange(pen.copy(holdForStraightLine = it))
         }
     }
    

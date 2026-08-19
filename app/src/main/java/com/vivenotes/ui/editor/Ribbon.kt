@@ -124,6 +124,12 @@ internal object RibbonTags {
 
     /** The dot on the account button. Present only while a sync server is connected. */
     const val ACCOUNT_CONNECTED = "ribbon-account-connected"
+
+    /**
+     * The Cloud Off badge, which *replaces* the dot rather than joining it — a connected server
+     * this device cannot currently reach is one state, not two.
+     */
+    const val ACCOUNT_OFFLINE = "ribbon-account-offline"
 }
 
 @Composable
@@ -170,6 +176,11 @@ fun Ribbon(
     onOpenAccount: () -> Unit = {},
     /** Whether this installation holds a device token — puts a dot on the account button. */
     accountConnected: Boolean = false,
+    /**
+     * Whether the last sync run could not reach that server — turns the dot into Cloud Off.
+     * See [com.vivenotes.data.sync.SyncStatus.serverUnreachable] for what does and does not count.
+     */
+    serverUnreachable: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -189,6 +200,7 @@ fun Ribbon(
             onToggleNavigation = onToggleNavigation,
             onOpenAccount = onOpenAccount,
             accountConnected = accountConnected,
+            serverUnreachable = serverUnreachable,
         )
         Box(
             Modifier
@@ -256,6 +268,7 @@ private fun TabStrip(
     onToggleNavigation: () -> Unit,
     onOpenAccount: () -> Unit,
     accountConnected: Boolean,
+    serverUnreachable: Boolean,
 ) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         when {
@@ -324,13 +337,43 @@ private fun TabStrip(
             RibbonButton(
                 icon = MaterialSymbols.AccountCircle,
                 // The label is the icon's content description, so the connection is announced
-                // rather than left to a coloured dot nobody can hear.
-                label = if (accountConnected) "Account, connected to a server" else "Account",
+                // rather than left to a coloured dot nobody can hear. Three states, because a
+                // reader who cannot see the badge has no other way to learn the third one.
+                label = when {
+                    serverUnreachable -> "Account, server unreachable"
+                    accountConnected -> "Account, connected to a server"
+                    else -> "Account"
+                },
                 onClick = onOpenAccount,
                 modifier = Modifier.testTag(RibbonTags.ACCOUNT),
             )
-            if (accountConnected) {
-                Box(
+            when {
+                // Cloud Off *instead of* the dot, never beside it. The dot's claim is "there is a
+                // server"; while it cannot be reached that claim is the thing being corrected, and
+                // showing both would leave the button asserting two contradictory states at once.
+                //
+                // Larger than the dot because it has a shape to read rather than a colour, and
+                // backed by the ribbon's own surface so the glyph is not competing with the account
+                // circle's strokes underneath it. Still small enough to stay a badge: the button
+                // opens Account, which is where the sentence explaining this lives.
+                serverUnreachable -> Icon(
+                    imageVector = MaterialSymbols.CloudOff,
+                    // Decoration. The button's own label above carries this to a screen reader.
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        // The 18dp glyph is centred in a 32dp slot, so 2dp in from the corner puts
+                        // this over the account circle's lower-right arc rather than out in the
+                        // slot's empty margin, where it would read as a separate control.
+                        .padding(bottom = 1.dp, end = 1.dp)
+                        .size(15.dp)
+                        .background(MaterialTheme.colorScheme.surface, CircleShape)
+                        .padding(1.dp)
+                        .testTag(RibbonTags.ACCOUNT_OFFLINE),
+                )
+
+                accountConnected -> Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         // Sits *on* the glyph's top-right arc rather than in the corner of the

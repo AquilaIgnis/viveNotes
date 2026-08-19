@@ -96,10 +96,42 @@ class RibbonTabStripTest {
         compose.onNodeWithContentDescription("Account, connected to a server").assertIsDisplayed()
     }
 
+    /**
+     * The Cloud Off state, which is the one worth having chrome for: a tablet whose sync has been
+     * failing since it left the house looks, without this, exactly like one with nothing to send.
+     */
+    @Test
+    fun theAccountButtonShowsCloudOffWhileTheServerCannotBeReached() {
+        setRibbon(accountConnected = true, serverUnreachable = true)
+
+        compose.onNodeWithTag(RibbonTags.ACCOUNT_OFFLINE).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Account, server unreachable").assertIsDisplayed()
+    }
+
+    /**
+     * One state, not two. The dot's claim is "there is a server"; while it cannot be reached that
+     * claim is the thing being corrected, so a button wearing both would assert a contradiction.
+     */
+    @Test
+    fun cloudOffReplacesTheConnectedDotRatherThanJoiningIt() {
+        setRibbon(accountConnected = true, serverUnreachable = true)
+
+        compose.onNodeWithTag(RibbonTags.ACCOUNT_CONNECTED).assertDoesNotExist()
+    }
+
+    @Test
+    fun theAccountButtonGoesBackToItsDotOnceTheServerAnswers() {
+        setRibbon(accountConnected = true, serverUnreachable = false)
+
+        compose.onNodeWithTag(RibbonTags.ACCOUNT_OFFLINE).assertDoesNotExist()
+        compose.onNodeWithTag(RibbonTags.ACCOUNT_CONNECTED).assertIsDisplayed()
+    }
+
     private fun setRibbon(
         activeTab: RibbonTab = RibbonTab.Document,
         allowFinger: Boolean = false,
         accountConnected: Boolean = false,
+        serverUnreachable: Boolean = false,
     ) {
         compose.setContent {
             ViveNotesTheme {
@@ -129,6 +161,7 @@ class RibbonTabStripTest {
                     pageOpen = true,
                     onOpenAccount = { accountOpened = true },
                     accountConnected = accountConnected,
+                    serverUnreachable = serverUnreachable,
                 )
             }
         }

@@ -88,6 +88,9 @@ internal object AccountTags {
     const val SYNC = "account-sync"
     const val SYNC_PROGRESS = "account-sync-progress"
     const val SYNC_STATUS = "account-sync-status"
+
+    /** The Cloud Off glyph beside that line, present only while the server cannot be reached. */
+    const val SYNC_OFFLINE = "account-sync-offline"
     const val DISCONNECT = "account-disconnect"
     const val DISCONNECT_CONFIRM = "account-disconnect-confirm"
 }
@@ -553,12 +556,31 @@ private fun SyncStatusLine(status: SyncStatus) {
             syncedAtText(status.lastSucceededAtMillis, status.lastSummary) to false
         else -> stringResource(R.string.account_sync_never) to false
     }
-    Text(
-        text = message,
-        style = MaterialTheme.typography.bodySmall,
-        color = if (isError) MaterialTheme.colorScheme.error else LocalIconAccents.current.green,
-        modifier = Modifier.testTag(AccountTags.SYNC_STATUS),
-    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        // The same glyph the ribbon badges the account button with, so the badge somebody saw on
+        // the way here is recognisable beside the sentence that explains it. Only for the state it
+        // actually means: every other failure has a different cause and a different fix.
+        if (status.serverUnreachable) {
+            Icon(
+                imageVector = MaterialSymbols.CloudOff,
+                // Decoration beside text that already says it.
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier
+                    .size(16.dp)
+                    .testTag(AccountTags.SYNC_OFFLINE),
+            )
+        }
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isError) MaterialTheme.colorScheme.error else LocalIconAccents.current.green,
+            modifier = Modifier.testTag(AccountTags.SYNC_STATUS),
+        )
+    }
 }
 
 /**

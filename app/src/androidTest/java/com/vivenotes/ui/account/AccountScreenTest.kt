@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.R
 import com.vivenotes.data.sync.ConnectFailure
+import com.vivenotes.data.sync.PermanentSyncFailure
 import com.vivenotes.data.sync.SelfHostConnection
 import com.vivenotes.data.sync.SyncRunResult
 import com.vivenotes.data.sync.SyncStatus
@@ -264,6 +265,37 @@ class AccountScreenTest {
             ),
         )
         assertEquals(0, syncs)
+    }
+
+    /**
+     * The same glyph the ribbon badges the account button with, beside the sentence explaining it —
+     * so somebody who followed the badge here recognises what they followed.
+     */
+    @Test
+    fun anUnreachableServerIsMarkedWithCloudOff() {
+        setScreen()
+        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+
+        syncStatus = SyncStatus(failure = SyncRunResult.Retryable(ConnectFailure.Unreachable))
+
+        compose.onNodeWithTag(AccountTags.SYNC_OFFLINE).performScrollTo().assertIsDisplayed()
+    }
+
+    /**
+     * And only for that state. A cloud with a line through it beside "the server rejected this
+     * change" sends its reader to check the wifi, which is fine and is not the problem.
+     */
+    @Test
+    fun aFailureThatIsNotTheConnectionCarriesNoCloudOff() {
+        setScreen()
+        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+
+        syncStatus = SyncStatus(
+            failure = SyncRunResult.Failed(PermanentSyncFailure.UnsupportedKind),
+        )
+
+        compose.onNodeWithTag(AccountTags.SYNC_STATUS).performScrollTo()
+        compose.onNodeWithTag(AccountTags.SYNC_OFFLINE).assertDoesNotExist()
     }
 
     /**

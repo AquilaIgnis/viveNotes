@@ -285,6 +285,10 @@ fun NotesApp(
                     // The stored registration, not the in-flight attempt: the ribbon reports what
                     // this installation *has*, which outlives any one visit to the account screen.
                     accountConnected = storedAccount != null,
+                    // Only meaningful with a registration behind it. A device that was never
+                    // connected has no server to be cut off from, and a cloud with a line through
+                    // it there would read as a feature that is broken rather than one not set up.
+                    serverUnreachable = storedAccount != null && syncStatus.serverUnreachable,
                 )
             }
         }
@@ -359,6 +363,7 @@ private fun NotesWorkspace(
     mathEngine: MathEngine,
     onOpenAccount: () -> Unit,
     accountConnected: Boolean,
+    serverUnreachable: Boolean,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val selection by viewModel.selection.collectAsStateWithLifecycle()
@@ -700,6 +705,7 @@ private fun NotesWorkspace(
                         onToggleNavigation = viewModel::toggleNavigation,
                         onOpenAccount = onOpenAccount,
                         accountConnected = accountConnected,
+                        serverUnreachable = serverUnreachable,
                     )
 
                     HorizontalHairline()
@@ -1401,6 +1407,13 @@ private fun PageEditor(
         allowFinger = allowFinger,
         hasClipboard = hasClipboard,
         onStrokeFinished = viewModel::onStrokeFinished,
+        // Read off the pen in hand, not off a shared switch: this is a per-pen setting (ID5), so a
+        // fine pen kept for handwriting and a thick one kept for ruling can answer differently.
+        straightenOnHold = (tool as? DrawTool.Pen)
+            ?.let { pens.getOrNull(it.index)?.holdForStraightLine } == true,
+        onStraightenStroke = { startX, startY, endX, endY ->
+            viewModel.straightenStrokeToLine(startX, startY, endX, endY)
+        },
         onInsertShape = viewModel::insertShape,
         onPartialErase = viewModel::eraseStrokeParts,
         onObjectErase = viewModel::eraseStrokeObjects,

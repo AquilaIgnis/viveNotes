@@ -2,20 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!--
-        Read-only, and only to answer one question: is this connection unmetered? The formula
-        package is 224 MB and is fetched without being asked for, so it must never be fetched onto
-        somebody's cellular allowance. See `AiModelStore.autoDownloadAllowed`.
-    -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!--
-        `android:networkSecurityConfig` below permits cleartext http, which API 28 denies by default,
-        so a self-hosted sync server reachable only over plain http works. Read that file: it records
-        what the choice costs. `android:usesCleartextTraffic` is deliberately absent — the platform
-        ignores it whenever a network security config is present, so declaring both would put one
-        live setting beside one dead one.
-    -->
     <application
         android:name=".NotesApplication"
         android:allowBackup="true"

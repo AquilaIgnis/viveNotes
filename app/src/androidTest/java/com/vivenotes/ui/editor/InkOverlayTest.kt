@@ -84,6 +84,7 @@ class InkOverlayTest {
     private var recolorArgb: Int? = null
     private var requestedPaste: InkPoint? = null
     private var spaceCut: SpaceCut? = null
+    private var straightened: Pair<InkPoint, InkPoint>? = null
 
     private val recordingPan = object : CanvasPan {
         override fun by(dx: Float, dy: Float) {
@@ -104,6 +105,7 @@ class InkOverlayTest {
         pageStrokes: List<PageStroke> = emptyList(),
         hasClipboard: Boolean = false,
         ruler: Ruler? = null,
+        straightenOnHold: Boolean = false,
     ) {
         compose.setContent {
             ViveNotesTheme {
@@ -135,6 +137,8 @@ class InkOverlayTest {
                             strokes++
                             lastStroke = it
                         },
+                        straightenOnHold = straightenOnHold,
+                        onStraightenStroke = { start, end -> straightened = start to end },
                         onObjectErase = { objectEraseCalls++ },
                         onPartialErase = { partialErases++ },
                         onInsertSpace = { spaceCut = it },
@@ -1200,5 +1204,130 @@ class InkOverlayTest {
 
         assertTrue(objectEraseCalls > 0)
         assertEquals(0, partialErases)
+    }
+
+    // --- hold for straight line ------------------------------------------------------------------
+    //
+    // The gesture is *one second of nothing happening*, so these are the only tests that touch the
+    // clock: `autoAdvance` is turned off and time is moved by hand, which is also what makes the
+    // negative cases possible at all — "the hold did not fire" is only meaningful once you can say
+    // for certain that long enough went by for it to have fired.
+    //
+    // The overlay's transform is identity here, so the offsets below are page units.
+
+    /** Draws [through] with the pointer left down, then lets [waitMillis] of clock go by. */
+    private fun holdAfterDrawing(through: List<Offset>, waitMillis: Long = 1_500L) {
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(through.first())
+            through.drop(1).forEach { moveTo(it) }
+        }
+        compose.mainClock.advanceTimeBy(waitMillis)
+        compose.waitForIdle()
+    }
+
+    private fun liftPointer() {
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { up() }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun pausingAtTheEndOfALineReplacesItWithAStraightOne() {
+        compose.mainClock.autoAdvance = false
+        setOverlay(allowFinger = true, straightenOnHold = true)
+
+        holdAfterDrawing(
+            listOf(
+                Offset(100f, 300f),
+                Offset(200f, 306f),
+                Offset(300f, 298f),
+                Offset(400f, 304f),
+            ),
+        )
+
+        val (start, end) = straightened ?: error("the hold produced no line")
+        assertEquals(100f, start.x, 1f)
+        assertEquals(400f, end.x, 1f)
+        // Under 5 degrees off horizontal, so it is levelled rather than left as drawn.
+        assertEquals(start.y, end.y, 0.5f)
+        // And the freehand stroke it replaced never became ink: that is what makes it one Undo.
+        assertEquals("the wet stroke should have been cancelled, not finished", 0, strokes)
+    }
+
+    /**
+     * The other half of the bargain: the gesture costs nothing when it is not wanted. Lifting at the
+     * end of the same line — which is what writing looks like — leaves the stroke alone.
+     */
+    @Test
+    fun liftingWithoutPausingKeepsTheFreehandStroke() {
+        compose.mainClock.autoAdvance = false
+        setOverlay(allowFinger = true, straightenOnHold = true)
+
+        holdAfterDrawing(
+            listOf(Offset(100f, 300f), Offset(250f, 302f), Offset(400f, 300f)),
+            waitMillis = 200L,
+        )
+        liftPointer()
+
+        assertNull("a brief pause is not a hold", straightened)
+        assertEquals(1, strokes)
+    }
+
+    /** A pause in the middle of handwriting must not turn the word into a line. */
+    @Test
+    fun pausingAfterSomethingThatIsNotALineKeepsTheStroke() {
+        compose.mainClock.autoAdvance = false
+        setOverlay(allowFinger = true, straightenOnHold = true)
+
+        holdAfterDrawing(
+            listOf(
+                Offset(100f, 300f),
+                Offset(160f, 240f),
+                Offset(220f, 360f),
+                Offset(280f, 240f),
+                Offset(340f, 360f),
+            ),
+        )
+        liftPointer()
+
+        assertNull("a zigzag is not a line", straightened)
+        assertEquals("and it is still the stroke the user drew", 1, strokes)
+    }
+
+    /** The pen's own setting, so a pen it is turned off for behaves exactly as it did before. */
+    @Test
+    fun theHoldIsInertWhileTheSettingIsOff() {
+        compose.mainClock.autoAdvance = false
+        setOverlay(allowFinger = true, straightenOnHold = false)
+
+        holdAfterDrawing(
+            listOf(Offset(100f, 300f), Offset(250f, 300f), Offset(400f, 300f)),
+        )
+
+        assertNull(straightened)
+        liftPointer()
+        assertEquals(1, strokes)
+    }
+
+    /**
+     * A ruled stroke is already straight, drawn against an object the user deliberately laid on the
+     * page. Swapping it for a shape would replace the mark they were making with a different kind of
+     * thing, so the two features stay out of each other's way.
+     */
+    @Test
+    fun aStrokeDrawnAgainstTheRulerIsNeverStraightened() {
+        compose.mainClock.autoAdvance = false
+        setOverlay(
+            allowFinger = true,
+            straightenOnHold = true,
+            ruler = Ruler(400f, 300f, 0f, RulerKind.Straight, 800f),
+        )
+
+        holdAfterDrawing(
+            listOf(Offset(100f, 300f), Offset(250f, 300f), Offset(400f, 300f)),
+        )
+
+        assertNull(straightened)
+        liftPointer()
+        assertEquals(1, strokes)
     }
 }

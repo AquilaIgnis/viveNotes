@@ -60,7 +60,42 @@ data class SyncStatus(
     val lastSummary: SyncSummary? = null,
     /** The last run's verdict when it was not a success. Cleared by the next success. */
     val failure: SyncRunResult? = null,
-)
+) {
+
+    /**
+     * Whether the last run could not reach the server at all — the Cloud Off state.
+     *
+     * Narrower than "sync is failing", deliberately. The badge this drives says *the server is not
+     * there*, and the only failures that mean that are the two transport ones: nothing answered
+     * ([ConnectFailure.Unreachable] — offline, wrong port, server down), and something answered that
+     * was not viveCServer ([ConnectFailure.NotAViveServer] — a proxy error page, a captive portal).
+     * Both leave this tablet holding writes it cannot deliver, which is the fact worth showing on
+     * every screen rather than only inside Account.
+     *
+     * Everything else is excluded because a cloud with a line through it would misdescribe it. A
+     * 5xx, a revoked token or a change this build cannot store all mean the server *is* reachable
+     * and something else is wrong; each has its own sentence on the account screen, and each needs
+     * a different thing done about it. `InvalidAddress` and `NotStored` cannot arise from a run at
+     * all — they belong to connecting — but they are named here so this stays exhaustive rather
+     * than falling through an `else`.
+     */
+    val serverUnreachable: Boolean
+        get() = when ((failure as? SyncRunResult.Retryable)?.reason) {
+            ConnectFailure.Unreachable, ConnectFailure.NotAViveServer -> true
+
+            ConnectFailure.InvalidAddress,
+            ConnectFailure.InvalidCredentials,
+            ConnectFailure.InvalidRequest,
+            ConnectFailure.PayloadTooLarge,
+            ConnectFailure.ServerError,
+            ConnectFailure.NotStored,
+            ConnectFailure.Revoked,
+            -> false
+
+            // Not a retryable failure: a success, a permanent failure, a revocation, or no run yet.
+            null -> false
+        }
+}
 
 /**
  * Connecting this installation to a self-hosted viveCServer, start to finish.

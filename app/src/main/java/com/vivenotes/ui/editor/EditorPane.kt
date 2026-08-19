@@ -363,6 +363,16 @@ fun EditorPane(
     onStrokeFinished: (InkStroke) -> Unit = {},
     /** Returns the new shape's id, so the page can select it — see the call site below. */
     onInsertShape: (ShapeSettings, Float, Float, Float, Float) -> String? = { _, _, _, _, _ -> null },
+    /**
+     * Whether the armed pen straightens a held stroke — `PenPreset.holdForStraightLine`.
+     *
+     * Passed through as a flag beside [onStraightenStroke] rather than being derived here, for the
+     * reason [brush] is built by the caller: which pen is in hand is the shell's knowledge, and a
+     * canvas that had to look it up would need the pen list to draw a page.
+     */
+    straightenOnHold: Boolean = false,
+    /** One finished hold, in page units: start x, start y, end x, end y. */
+    onStraightenStroke: (Float, Float, Float, Float) -> Unit = { _, _, _, _ -> },
     onPartialErase: (InkStroke) -> Unit = {},
     onObjectErase: (InkStroke) -> Unit = {},
     onMoveSelection: (InkLassoMove) -> Unit = {},
@@ -1305,6 +1315,13 @@ fun EditorPane(
                     )
                 },
                 onStrokeFinished = onStrokeFinished,
+                straightenOnHold = straightenOnHold,
+                // Not selected on arrival, unlike an inserted shape: the pen is still on the glass
+                // and the next thing it does is the next word, so a tooltip raised over the page
+                // here would be chrome in the way of the hand that is still writing.
+                onStraightenStroke = { start, end ->
+                    onStraightenStroke(start.x, start.y, end.x, end.y)
+                },
                 onInsertShape = { start, end ->
                     // Selected on arrival: the handles are the point of a shape being an object, and
                     // the insert is the only thing that knows which id it just created.

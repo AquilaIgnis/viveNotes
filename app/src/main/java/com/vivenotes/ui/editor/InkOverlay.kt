@@ -4,6 +4,7 @@ import android.graphics.DashPathEffect
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.ViewGroup
@@ -68,9 +69,12 @@ import com.vivenotes.ink.eraseObjects
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageSpace
 import com.vivenotes.model.SpaceCut
+import com.vivenotes.model.ink.StraightLineFit
 import com.vivenotes.model.ink.trace
 import com.vivenotes.ui.theme.LocalCanvasColors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -168,6 +172,21 @@ internal fun InkOverlay(
     /** Page units (dp) to view pixels: scale by zoom and density, then subtract the scroll. */
     pageToView: () -> Matrix,
     onStrokeFinished: (Stroke) -> Unit,
+    /**
+     * Whether the pen in hand turns a held, straight-enough stroke into a line —
+     * `com.vivenotes.data.PenPreset.holdForStraightLine`.
+     *
+     * A flag rather than the pen itself, because that is genuinely all this layer needs to know.
+     * What the line is *drawn* like — colour, width, line type — is the pen's business and is read
+     * where the object is made; handing the overlay a `PenPreset` it would only forward is how a
+     * canvas ends up knowing about settings it never uses.
+     */
+    straightenOnHold: Boolean = false,
+    /**
+     * One finished hold: the two ends of the line, in page units. The wet stroke has already been
+     * cancelled by the time this is called, so a caller that ignores it loses the mark.
+     */
+    onStraightenStroke: (InkPoint, InkPoint) -> Unit = { _, _ -> },
     onInsertShape: (InkPoint, InkPoint) -> Unit = { _, _ -> },
     /** One completed Insert Space drag. Never fired for a tap — see [InsertSpaceGesture]. */
     onInsertSpace: (SpaceCut) -> Unit = {},
@@ -230,6 +249,8 @@ internal fun InkOverlay(
     val currentTransform by rememberUpdatedState(pageToView)
     val currentOnFinished by rememberUpdatedState(onStrokeFinished)
     val currentOnInsertShape by rememberUpdatedState(onInsertShape)
+    val currentStraightenOnHold by rememberUpdatedState(straightenOnHold)
+    val currentOnStraightenStroke by rememberUpdatedState(onStraightenStroke)
     val currentOnPartialErase by rememberUpdatedState(onPartialErase)
     val currentOnObjectErase by rememberUpdatedState(onObjectErase)
     val currentShapes by rememberUpdatedState(shapes)
@@ -271,6 +292,7 @@ internal fun InkOverlay(
     var ruledStroke by remember { mutableStateOf(false) }
     val eraseGesture = remember { EraseGesture() }
     val shapeGesture = remember { ShapeGesture() }
+    val straightenHold = remember { StraightenHold() }
     val insertSpaceGesture = remember { InsertSpaceGesture() }
     val viewConfiguration = LocalViewConfiguration.current
     val doubleTap = remember(viewConfiguration) {
@@ -301,6 +323,52 @@ internal fun InkOverlay(
     }
     LaunchedEffect(hasClipboard) {
         if (!hasClipboard) doubleTap.reset()
+    }
+    LaunchedEffect(straightenOnHold) {
+        if (!straightenOnHold) straightenHold.clear()
+    }
+
+    /*
+     * The dwell clock — the half of hold-for-straight-line that no motion event can supply.
+     *
+     * A pen resting on the glass produces no `ACTION_MOVE`, so *one second of nothing happening* is
+     * not something the gesture can be told about; it has to be waited for. [StraightenHold.dwell]
+     * changes to a fresh value every time the pen moves far enough to start the wait over, and
+     * `collectLatest` cancels the pending [delay] when it does — which is the whole timer, reset
+     * rule included, in one operator.
+     *
+     * Watched through [snapshotFlow] rather than read in composition on purpose. Reading it up
+     * there would recompose this whole overlay on every significant sample of every stroke, which
+     * is the cost the file's header goes to some length to avoid; the erase preview above observes
+     * its gesture the same way and for the same reason.
+     */
+    LaunchedEffect(Unit) {
+        snapshotFlow { straightenHold.dwell }.collectLatest { dwell ->
+            if (dwell == null) return@collectLatest
+            delay(STRAIGHTEN_HOLD_MILLIS)
+            // Asked after the wait, never before it: the trace is what the pen has drawn by *now*,
+            // and a fit computed a second ago would straighten a line the hand had since left.
+            val line = straightenHold.line() ?: return@collectLatest
+            val id = liveStroke ?: return@collectLatest
+            val view = wetView ?: return@collectLatest
+
+            // The freehand stroke is taken back rather than finished, so it never reaches
+            // `onStrokeFinished` and never becomes an ink row. That is what makes Undo one step:
+            // there is only the shape to take back, because the stroke was never there.
+            view.cancelStroke(id)
+            liveStroke = null
+            livePointer = -1
+            ruledStroke = false
+            straightenHold.spend()
+            // The one piece of feedback there is. The pen is still down and the user is looking at
+            // their own hand rather than at the line under it, so a tick is how they learn the hold
+            // took — without it the gesture is a second of silence that either worked or did not.
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            currentOnStraightenStroke(
+                InkPoint(line.startX, line.startY),
+                InkPoint(line.endX, line.endY),
+            )
+        }
     }
 
     // Velocity for the fling, measured from the same events the pan is driven by.
@@ -544,6 +612,8 @@ internal fun InkOverlay(
                             onResizeImages = currentOnResizeImages,
                             shapeGesture = shapeGesture,
                             onInsertShape = currentOnInsertShape,
+                            straightenOnHold = currentStraightenOnHold,
+                            straightenHold = straightenHold,
                             insertingSpace = currentInsertingSpace,
                             insertSpaceGesture = insertSpaceGesture,
                             onInsertSpace = currentOnInsertSpace,
@@ -739,6 +809,8 @@ private fun handleInk(
     lassoGesture: LassoGesture,
     shapeGesture: ShapeGesture,
     onInsertShape: (InkPoint, InkPoint) -> Unit,
+    straightenOnHold: Boolean,
+    straightenHold: StraightenHold,
     insertingSpace: Boolean,
     insertSpaceGesture: InsertSpaceGesture,
     onInsertSpace: (SpaceCut) -> Unit,
@@ -815,6 +887,26 @@ private fun handleInk(
     // pointer node never sees the gesture.
     if (isDirectTouch && !allowFinger) return panPage(event, pan, velocity, panning, lastPan, setPanning)
 
+    // A press is always the start of a new gesture, whatever became of the last one. Android has to
+    // work quite hard to lose an up — a disposed filter, a torn-down window — but the failure if it
+    // ever does is that the *next* stroke is swallowed as the tail of the previous one, and a mark
+    // that silently does not appear is the worst thing this feature could do.
+    if (event.actionMasked == MotionEvent.ACTION_DOWN) straightenHold.clear()
+
+    // This gesture already became a line. What is left of it is a hand coming to rest and lifting,
+    // not a second mark — and it is swallowed rather than declined, because declining mid-gesture
+    // hands the remainder to the scroll container and pans the page out from under a pen that is
+    // still touching it.
+    if (straightenHold.spent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_POINTER_UP,
+            MotionEvent.ACTION_CANCEL,
+            -> straightenHold.clear()
+        }
+        return true
+    }
+
     // The eraser end of a stylus erases whatever tool is armed, because that is what the user just
     // turned the pen over to do.
     val erase = erasing || toolType == MotionEvent.TOOL_TYPE_ERASER
@@ -844,10 +936,23 @@ private fun handleInk(
     // decides where it may not — a straightedge laid across the top of the page must not be able to
     // put ink above it.
     val bounded = (drawn ?: event).clampedToPage(toWorld, transform)
+    val inkEvent = bounded ?: drawn ?: event
+
+    // Fed the same points the stroke is — after the ruler and after the wall — so that what the
+    // fit judges is the mark that would land on the page rather than the raw path of the hand.
+    //
+    // **Never for a ruled stroke.** That one is already straight, drawn against an object the user
+    // deliberately laid there, and turning it into a shape object would swap out the mark they were
+    // making for a different kind of thing entirely.
+    if (straightenOnHold && !ruled) {
+        straightenHold.observe(inkEvent, toWorld, touchSlop)
+    } else {
+        straightenHold.clear()
+    }
 
     try {
         return handleInkStroke(
-            event = bounded ?: drawn ?: event,
+            event = inkEvent,
             view = view,
             brush = brush,
             toWorld = toWorld,
@@ -1372,14 +1477,174 @@ internal class ShapeGesture {
     private fun invalidateDraw() {
         renderRevision = if (renderRevision == Int.MAX_VALUE) 0 else renderRevision + 1
     }
+}
 
-    /** View-pixel slop expressed in page units, so the tap threshold does not change with zoom. */
-    private fun toPageLength(toPage: Matrix, pixels: Float): Float {
-        val values = FloatArray(9)
-        toPage.getValues(values)
-        return pixels * hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y])
+/**
+ * A view-pixel distance expressed in page units, so a threshold measured against the hand does not
+ * change meaning with zoom.
+ *
+ * The hand's wobble happens on the glass, not on the page: at 25% zoom a 6 dp page threshold is a
+ * pixel and a half of screen and nothing can hold that still, while at 400% it is a wide enough
+ * margin to stop meaning anything. Anything asking "has this pointer moved" therefore states its
+ * threshold in view pixels and converts it here.
+ */
+private fun toPageLength(toPage: Matrix, pixels: Float): Float {
+    val values = FloatArray(9)
+    toPage.getValues(values)
+    return pixels * hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y])
+}
+
+/**
+ * Watches one freehand stroke for the pause that turns it into a straight line — `memory/inkPlan.md`
+ * §5, scoped to the line.
+ *
+ * **This class holds a trace and a stopwatch's starting gun; it does not hold a timer.** A stationary
+ * pen emits no events, so nothing here can notice a second going by. What it does instead is publish
+ * [dwell], a value that changes every time the pen moves far enough to make the wait start over; the
+ * overlay turns that into an actual wait with `collectLatest` and [delay]. Keeping the clock out here
+ * is what lets this be driven straight from `MotionEvent`s in a test, at whatever speed the test
+ * likes.
+ *
+ * The trace is accumulated rather than read back from `InProgressStrokesView`, which does not offer
+ * the points of a stroke that has not finished — and could not offer them in page units if it did.
+ */
+internal class StraightenHold {
+
+    private var trace = FloatArray(INITIAL_CAPACITY)
+    private var traceSize = 0
+    private var pointerId = -1
+
+    /** Where the current wait is being measured from. Not the stroke's start — the pause's. */
+    private var anchorX = 0f
+    private var anchorY = 0f
+
+    /**
+     * Refused outright once a stroke gets absurdly long, rather than growing without bound.
+     *
+     * [MAX_POINTS] is around half a minute of continuous drawing at a tablet's sample rate. Nothing
+     * that long is a line somebody is about to straighten, so the cap costs nothing real — and
+     * refusing is the same answer every other threshold gives when it cannot tell.
+     */
+    private var overflowed = false
+
+    /**
+     * Non-null while a pause is being waited out, and a *different* value each time the wait
+     * restarts. The value itself means nothing; only that it changed does.
+     */
+    var dwell by mutableStateOf<Int?>(null)
+        private set
+
+    /**
+     * True once this gesture has become a line, so the rest of it is not also a stroke.
+     *
+     * A plain field rather than snapshot state, unlike [dwell]: nothing reads it in composition, and
+     * a state write from the input callback that nobody observes is an apply notification for
+     * nothing on every stroke that fires.
+     */
+    var spent = false
+        private set
+
+    fun observe(event: MotionEvent, toPage: Matrix, touchSlop: Float) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                clear()
+                pointerId = event.getPointerId(event.actionIndex)
+                val point = event.pagePoint(event.actionIndex, toPage)
+                push(point.x, point.y)
+                restartDwell(point.x, point.y)
+            }
+
+            // A palm or a pinch. The stroke itself is cancelled a moment later by `handleInkStroke`,
+            // and a trace that outlived it would straighten whatever the *next* stroke drew.
+            MotionEvent.ACTION_POINTER_DOWN -> clear()
+
+            MotionEvent.ACTION_MOVE -> {
+                val index = event.findPointerIndex(pointerId)
+                if (index < 0 || traceSize == 0) return
+                // Historical samples included: they are most of a fast stroke's shape, and a fit
+                // run over frame-boundary points alone would call a wobbly line straight.
+                for (history in 0 until event.historySize) {
+                    val past = event.pagePoint(index, toPage, history)
+                    push(past.x, past.y)
+                }
+                val point = event.pagePoint(index, toPage)
+                push(point.x, point.y)
+
+                // The wait restarts only when the pen leaves the radius it was resting in. Every
+                // sample *inside* it leaves the wait running, which is what stops a hand that is
+                // holding still — but not perfectly still — from resetting the clock for ever.
+                if (hypot(point.x - anchorX, point.y - anchorY) > toPageLength(toPage, touchSlop)) {
+                    restartDwell(point.x, point.y)
+                }
+            }
+
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL ->
+                clear()
+        }
+    }
+
+    /** The line this trace is, or null to leave the freehand stroke alone. */
+    fun line() = if (overflowed || traceSize < 4) {
+        null
+    } else {
+        StraightLineFit.of(trace.copyOf(traceSize))
+    }
+
+    /**
+     * Marks the gesture as having produced its line.
+     *
+     * Deliberately not [clear]: the pen is still down, and everything left of the gesture has to be
+     * recognisable as belonging to a stroke that is over. [clear] happens on the lift.
+     */
+    fun spend() {
+        dwell = null
+        traceSize = 0
+        spent = true
+    }
+
+    fun clear() {
+        pointerId = -1
+        traceSize = 0
+        overflowed = false
+        dwell = null
+        spent = false
+    }
+
+    private fun restartDwell(x: Float, y: Float) {
+        anchorX = x
+        anchorY = y
+        val previous = dwell ?: 0
+        dwell = if (previous == Int.MAX_VALUE) 0 else previous + 1
+    }
+
+    private fun push(x: Float, y: Float) {
+        if (overflowed) return
+        if (traceSize + 2 > trace.size) {
+            if (trace.size >= MAX_POINTS * 2) {
+                overflowed = true
+                return
+            }
+            trace = trace.copyOf(trace.size * 2)
+        }
+        trace[traceSize++] = x
+        trace[traceSize++] = y
+    }
+
+    private companion object {
+        const val INITIAL_CAPACITY = 512
+        const val MAX_POINTS = 4096
     }
 }
+
+/**
+ * How long the pen has to rest before a straight-enough stroke becomes a line.
+ *
+ * One second, by request. `memory/inkPlan.md` §5.1 proposed 500 ms, which is the number a gesture
+ * with a visible preview can afford; this one has no preview and replaces a mark that is already on
+ * the page, so it is worth being sure the pause was meant. It is also long enough not to fire on the
+ * pause people make mid-word.
+ */
+private const val STRAIGHTEN_HOLD_MILLIS = 1_000L
 
 /** What a tap drops, in page units. A shape you can see and grab, not a speck. */
 private const val DEFAULT_SHAPE_WIDTH = 120f

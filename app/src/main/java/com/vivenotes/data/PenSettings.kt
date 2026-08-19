@@ -263,7 +263,20 @@ data class PenPreset(
     val thickness: Float = 1.5f,
     val pressure: Int = 3,
     val stabilization: Int = 1,
-    val holdToDrawShape: Boolean = true,
+    /**
+     * Whether pausing at the end of a straight-ish stroke replaces it with a line object.
+     *
+     * **Was `holdToDrawShape`, and the rename is the feature.** `memory/inkPlan.md` §5 planned a
+     * classifier over line, circle and rectangle; what is built is the line alone, by request, so
+     * the toggle says what it does. The old key is not read back — `penSettingsJson` has
+     * `ignoreUnknownKeys`, so a preset saved with the old name arrives with this at its default —
+     * which costs anyone who turned the old toggle off nothing, because the old toggle was wired to
+     * a panel and to nothing else.
+     *
+     * On the pen rather than in one shared place, per ID5: a fine pen for handwriting and a thick
+     * one kept for ruling lines want opposite answers, and this is a question about how you draw.
+     */
+    val holdForStraightLine: Boolean = true,
 ) {
     companion object {
         /** Three pens, per the Draw tab. They differ only by colour, which is their whole purpose. */

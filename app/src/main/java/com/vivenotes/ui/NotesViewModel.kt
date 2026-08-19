@@ -109,6 +109,7 @@ import com.vivenotes.model.ink.arms
 import com.vivenotes.model.ink.canFill
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.seedSegments
+import com.vivenotes.model.ink.ShapeKind
 import com.vivenotes.model.ink.withArm
 import com.vivenotes.model.PaperDimensions
 import com.vivenotes.model.PaperSize
@@ -2220,6 +2221,59 @@ class NotesViewModel(
         // so placing one hands it straight to you, ready to adjust. Nothing armed genuinely means
         // nothing since TD2, so the next stray tap no longer opens a text container either.
         _tool.value = DrawTool.None
+        return created.id
+    }
+
+    /**
+     * Replaces a freehand stroke the user held still at the end of with a straight line object.
+     *
+     * The other half of `memory/inkPlan.md` §5, and deliberately **not** a second entry point into
+     * [insertShape]. Two things differ, and both would be bugs if they were shared:
+     *
+     *  - **The pen stays in hand.** [insertShape] puts the Shape tool down, because a shape you just
+     *    dragged out is one you are about to grab a handle on. This one interrupts writing: the pen
+     *    is still on the glass and the next thing it does is the next word, so disarming it here
+     *    would mean every ruled underline cost a trip back to the Draw tab.
+     *  - **Nothing is selected.** For the same reason. A tooltip raised over the page while the pen
+     *    is still down is chrome in the way of the hand holding it.
+     *
+     * The line is drawn with the *pen's* colour, width and line type rather than the Shape tool's,
+     * because it is the mark that pen was making — a black 1.5 dp pen that produced a 2 dp line in
+     * whatever the shape pane was last set to would read as the app substituting its own stroke.
+     * `colorFollowsTheme` rides across for the same reason it rides onto an ink row: this is the one
+     * moment the intent is known, and Switch Background has to be able to flip it later.
+     *
+     * Returns null when there is no page, no pen in hand, or the page is read-only — the caller
+     * cancelled the wet stroke to get here, so a null means the mark is gone; see the overlay's
+     * `StraightenHold` for why it does not reach this without a pen.
+     */
+    fun straightenStrokeToLine(
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+    ): String? {
+        val pageId = _uiState.value.selectedPageId ?: return null
+        if (readOnlyPageId == pageId) return null
+        val pen = activePen() ?: return null
+
+        val segments = seedSegments(ShapeKind.Line, startX, startY, endX, endY, ::newId)
+        if (segments.isEmpty()) return null
+
+        val created = Outline.Shape(
+            id = newId(),
+            kind = ShapeKind.Line,
+            segments = segments,
+            borderArgb = pen.colorArgb,
+            borderFollowsTheme = pen.colorFollowsTheme,
+            borderWidth = pen.thickness,
+            lineType = pen.lineType,
+            // A line has no inside. Explicit rather than defaulted, because the field exists and a
+            // reader should not have to check whether this forgot it.
+            fillArgb = null,
+        ).withRecomputedBounds()
+
+        editShapes { it + created }
         return created.id
     }
 

@@ -492,11 +492,21 @@ class DrawTabTest {
     @Test
     fun eachRemainingToggleWritesItsOwnField() {
         setPanel()
-        compose.onNodeWithTag(PanelTags.field("Hold to draw shape")).performClick()
-        assertEquals(false, changed?.holdToDrawShape)
+        compose.onNodeWithTag(PanelTags.field("Hold for straight line")).performClick()
+        assertEquals(false, changed?.holdForStraightLine)
+    }
 
+    /**
+     * The rename is the feature: what the toggle promised was a shape classifier, and what is built
+     * is the line alone. A pane still offering "shape" would be describing something that does not
+     * happen.
+     */
+    @Test
+    fun theHoldToggleNamesTheLineRatherThanAShape() {
+        setPanel()
 
-        assertEquals(false, changed?.holdToDrawShape)
+        compose.onNodeWithText("Hold for straight line").assertIsDisplayed()
+        compose.onNodeWithTag(PanelTags.field("Hold to draw shape")).assertDoesNotExist()
     }
 
     @Test
