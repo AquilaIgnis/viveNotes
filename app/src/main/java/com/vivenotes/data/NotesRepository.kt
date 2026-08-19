@@ -98,6 +98,7 @@ class NotesRepository(
     private val localMetadata = db.localMetadataDao()
     private val deletionRecovery = db.deletionRecoveryDao()
     private val deletionPurge = db.deletionPurgeDao()
+    private val sync = db.syncDao()
 
     fun observeTree(): Flow<List<NotebookWithSections>> = notebooks.observeTree()
 
@@ -743,7 +744,57 @@ class NotesRepository(
         }
     }
 
-    /** Includes or excludes an existing erase operation from page-open replay. */
+    /**
+     * Tombstones strokes the eraser has taken the last piece of, so the seven-day purge collects
+     * them.
+     *
+     * Ink is an append-only log, so rubbing a stroke out has always *added* rows — the erase and its
+     * targets — while the stroke kept every point it was drawn with, for good. On a page drawn and
+     * redrawn on, that is most of what the database holds: two thirds of the stroke rows on the test
+     * corpus had no geometry left at all. This is the collector for exactly those: a row whose live
+     * projection set is empty draws nothing, is reachable by nothing, and is not ink any more.
+     *
+     * **[deletedAt] rather than a delete of its own**, so it lands in the machinery that already
+     * exists: `DeletionPurgeWorker` hard-deletes it after the seven-day recovery window, cascading
+     * its target rows; [restoreRevision] un-tombstones exactly the strokes a revision names, so a
+     * page restored inside that window still comes back whole; and `InkStrokeDao.byPage` stops
+     * loading it immediately, which costs nothing because it had nothing to draw.
+     *
+     * **Never told to the server.** Deadness is not an edit, it is a conclusion, and every device
+     * reaches it from the same replicated erases — so pushing it would be one deletion per device per
+     * stroke, all saying what the erase already said. Worse, a deletion is the one message a device
+     * cannot disagree with: a peer that has not yet pulled the erase would lose ink it can still see.
+     * The triggers are therefore held off exactly as `HierarchySync` holds them off when it drops a
+     * joining device's starter notebook. (A stroke whose *insert* is still queued pushes the
+     * tombstone with it; that peer holds the erase too, so it draws the same page either way.)
+     *
+     * No checkpoint, no recognition invalidation, no starter clearing: nothing a reader could
+     * observe has changed, and a revision spent on a garbage collection would evict a real one.
+     */
+    suspend fun collectErasedAwayStrokes(ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        val now = clock()
+        val collected = ids.distinct()
+        db.withTransaction {
+            // Set and cleared inside one transaction, as the pull does, so a sync running beside
+            // this can neither see the flag nor have its own cleared: SQLite serialises writers.
+            sync.setApplyingRemote(true)
+            ink.softDelete(collected, now)
+            sync.setApplyingRemote(false)
+        }
+    }
+
+    /**
+     * Includes or excludes an existing erase operation from page-open replay.
+     *
+     * Undoing one restores every stroke it named, because [collectErasedAwayStrokes] may have
+     * collected the ones it finished off and replay is about to give them their geometry back. The
+     * targets it did not kill are already live, so this is a no-op for them.
+     *
+     * That cannot resurrect ink the *user* deleted: the canvas history is one linear ring, so a
+     * delete made after this erase has to be undone before this erase can be, and a revision restore
+     * drops the ring outright (`NotesViewModel.restoreRevision`).
+     */
     suspend fun setPartialEraseActive(id: String, active: Boolean) {
         val now = clock()
         db.withTransaction {
@@ -754,6 +805,9 @@ class NotesRepository(
                 inkText.bumpGeneration(it)
             }
             inkErases.setDeletedAt(id, if (active) null else now)
+            if (!active) {
+                ink.restore(inkErases.targetsForErases(listOf(id)).map { it.strokeId })
+            }
         }
     }
 

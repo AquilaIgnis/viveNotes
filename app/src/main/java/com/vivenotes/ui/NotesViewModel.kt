@@ -2056,6 +2056,11 @@ class NotesViewModel(
             lastInkOperationAt,
             loaded.latestOperationAt,
         )
+        // Opening a page is where the replay that proves a stroke has nothing left already ran, so it
+        // is where rubbed-out ink is collected — including everything erased before this existed, and
+        // everything an erase pulled from another device finished off. See
+        // [NotesRepository.collectErasedAwayStrokes]; it is a tombstone, so a page only pays once.
+        repository.collectErasedAwayStrokes(loaded.erasedAway)
         return loaded.strokes
     }
 
@@ -3271,6 +3276,11 @@ class NotesViewModel(
                     }
                     val erase = InkCodec.encodeErase(mask, pageId, mode, now = nextInkOperationTime())
                     repository.addPartialErase(erase, targetIds)
+                    // A separate transaction from the erase on purpose: that one is the user's and
+                    // travels to the server, this one is bookkeeping and must not. Dying between the
+                    // two costs nothing — the next open of this page collects them.
+                    val surviving = updated.mapTo(HashSet(updated.size)) { it.id }
+                    repository.collectErasedAwayStrokes(targetIds.filterNot { it in surviving })
                     commitInkEdit(
                         pageId = pageId,
                         before = before,

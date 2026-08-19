@@ -35,6 +35,20 @@ private sealed interface StoredInkOperation {
 data class LoadedInkPage(
     val strokes: List<PageStroke>,
     val latestOperationAt: Long,
+    /**
+     * Rows the eraser has taken the last piece of: they decoded, replay left them with no geometry,
+     * and nothing on the page draws them any more.
+     *
+     * Reported rather than acted on, because a loader is not the place to write. The caller
+     * ([com.vivenotes.ui.NotesViewModel.loadInk]) tombstones them so the seven-day purge collects
+     * them — see `NotesRepository.collectErasedAwayStrokes` for why that is safe and why it is not
+     * told to the server.
+     *
+     * **Only rows that decoded.** A row this build cannot read produces no projection either, and
+     * counting that as erased-away would have the garbage collector delete ink over a codec it does
+     * not happen to know.
+     */
+    val erasedAway: List<String> = emptyList(),
 )
 
 /**
@@ -66,12 +80,17 @@ class InkPageLoader(
                 onPartial(ArrayList(shown))
             }
         }
+        val live = if (streaming) shown else replay(decoded, operations)
+        val drawn = live.mapTo(HashSet(live.size)) { it.id }
         LoadedInkPage(
-            strokes = if (streaming) shown else replay(decoded, operations),
+            strokes = live,
             // Not `operations.maxOf { it.createdAt }`: the operations here are the *active* ones,
             // and the clock has to clear the tombstoned ones too. See
             // [NotesRepository.latestInkOperationAt].
             latestOperationAt = repository.latestInkOperationAt(pageId),
+            // Measured against what decoded rather than against the rows, so an unreadable row is
+            // never mistaken for one the eraser finished off — see [LoadedInkPage.erasedAway].
+            erasedAway = decoded.mapNotNull { it.id.takeIf { id -> id !in drawn } }.distinct(),
         )
     }
 
