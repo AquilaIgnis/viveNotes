@@ -4,8 +4,10 @@ import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -47,13 +49,48 @@ class LassoAfterEraseTest {
 
     @Test
     fun aHandDrawnLassoSelectsAPieceOfAnErasedStroke() {
-        val selection = cutInHalf().selectWithLasso(handDrawnLoop(right = 45f))
+        val pieces = cutInHalf()
+        val left = pieces.minByOrNull { it.pageBounds!!.left }!!
+
+        val selection = pieces.selectWithLasso(handDrawnLoop(right = 45f))
 
         assertNotNull("a loop around the left piece selected nothing", selection)
+        // One piece, not the row both pieces share. The row id is still what the stored operation
+        // names — that is what `ink_erases` and `ink_moves` can refer to — but what is *held* is the
+        // projection the hand circled. `memory/lassoProjectionPlan.md` §4.
         assertEquals(setOf("stroke"), selection?.targetIds)
-        // Both pieces: touching one projection of a row selects the row, which is what keeps a
-        // partially erased stroke one object to delete, colour and move — see [selectWithLasso].
-        assertEquals(2, selection?.projections?.size)
+        assertEquals(setOf(left.projectionKey), selection?.projections)
+    }
+
+    /**
+     * The reported bug, put to the geometry: a loop round one half of a cut line must not reach the
+     * other half, and the rectangle it hands the tooltip must not span the gap between them.
+     */
+    @Test
+    fun aHandDrawnLassoLeavesThePieceItDidNotCircle() {
+        val pieces = cutInHalf()
+        val right = pieces.maxByOrNull { it.pageBounds!!.left }!!
+
+        val selection = pieces.selectWithLasso(handDrawnLoop(right = 45f))
+
+        assertFalse(
+            "the piece outside the loop was selected too",
+            right.projectionKey in selection!!.projections,
+        )
+        assertTrue(
+            "the selection rectangle reached across the erased gap to the other piece",
+            selection.bounds.right < right.pageBounds!!.left,
+        )
+    }
+
+    /** And the loop that does circle both still takes both — narrowing is not a cap of one. */
+    @Test
+    fun aLassoRoundTheWholeCutLineTakesBothPieces() {
+        val pieces = cutInHalf()
+
+        val selection = pieces.selectWithLasso(handDrawnLoop(right = 99f))
+
+        assertEquals(pieces.map { it.projectionKey }.toSet(), selection?.projections)
     }
 
     /** The half that must not regress: a loop over part of a piece still leaves it alone. */
@@ -92,7 +129,7 @@ class LassoAfterEraseTest {
         )
 
         assertEquals(setOf("stroke"), selection?.targetIds)
-        assertEquals(2, selection?.projections?.size)
+        assertEquals(1, selection?.projections?.size)
     }
 
     /** The control: the same hand-drawn loop over ink the eraser never touched. */
@@ -108,6 +145,10 @@ class LassoAfterEraseTest {
     /**
      * A stored move replays through the same test, so a page whose ink was erased and then moved
      * came back on the next open with the pieces left where they had been.
+     *
+     * This is also the half that used to *contradict* the selection above: replay re-identifies its
+     * targets geometrically and so moved one piece, while the widened gesture had moved both on
+     * screen. The live page and the reloaded page now agree because both ask the same question.
      */
     @Test
     fun aReplayedMoveReachesAPieceOfAnErasedStroke() {

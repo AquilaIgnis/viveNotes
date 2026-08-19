@@ -144,7 +144,7 @@ class InkOverlayTest {
                         onInsertSpace = { spaceCut = it },
                         onMoveSelection = { lassoMove = it },
                         onResizeSelection = { lassoResize = it },
-                        onDeleteSelection = { deletedIds = it },
+                        onDeleteSelection = { deletedIds = it.targetIds },
                         onRecolorSelection = { _, color -> recolorArgb = color },
                         hasClipboard = hasClipboard,
                         onRequestPaste = { requestedPaste = it },

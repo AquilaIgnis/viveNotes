@@ -202,7 +202,7 @@ internal fun InkOverlay(
     onResizeEquations: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onMoveImages: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeImages: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
-    onDeleteSelection: (Set<String>) -> Unit = {},
+    onDeleteSelection: (InkLassoSelection) -> Unit = {},
     hasClipboard: Boolean = false,
     onRequestPaste: (InkPoint) -> Unit = {},
     onRecolorSelection: (Set<String>, Int) -> Unit = { _, _ -> },

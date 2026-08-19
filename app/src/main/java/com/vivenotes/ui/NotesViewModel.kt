@@ -84,6 +84,7 @@ import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
+import com.vivenotes.ink.InkLassoSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
 import com.vivenotes.ink.PageStroke
@@ -91,6 +92,7 @@ import com.vivenotes.ink.eraseObjects
 import com.vivenotes.ink.keepingProjectionsOf
 import com.vivenotes.ink.moveSelected
 import com.vivenotes.ink.pageBounds
+import com.vivenotes.ink.planProjectionDelete
 import com.vivenotes.ink.projectionKey
 import com.vivenotes.ink.recolor
 import com.vivenotes.ink.regroup
@@ -2928,6 +2930,93 @@ class NotesViewModel(
     }
 
     /**
+     * Deletes exactly the projections a lasso is holding — not the rows they happen to share.
+     *
+     * The lasso stopped widening a hit out to its stored row (`selectWithLasso`), which is what makes
+     * a loop round one half of a cut line select that half alone. Delete had to follow it or the
+     * narrowing would be a lie in the one place it costs the user something irreversible: a stroke
+     * erased in two, one piece circled, and the other going with it.
+     *
+     * Two mechanisms, because a row and a piece are not the same kind of thing to storage:
+     * - **A row nothing of which survives** is tombstoned, which is the ordinary delete this method
+     *   used to be, and the only one the seven-day purge can ever collect.
+     * - **A row that keeps a piece** cannot be tombstoned and has no per-piece row to tombstone
+     *   instead, so what is stored is a proved Object-mode erase per doomed piece — see
+     *   [com.vivenotes.ink.planProjectionDelete] for why that is the only durable way to say it.
+     *
+     * The two are one press of Undo through [asOneAction], and the whole of it is guarded by
+     * [changePendingInkEdits] for the reason [erase] is: the geometry resolves off the input thread,
+     * and until it lands the page's last action is not yet known.
+     */
+    fun deleteInkSelection(selection: InkLassoSelection) {
+        if (selection.projections.isEmpty()) return
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val held = selection.projections
+        val candidates = _strokes.value
+        // Nothing partially held: this is an ordinary whole-object delete and stays on the cheap
+        // path, which is every delete on a page the eraser has not cut.
+        if (candidates.groupBy(PageStroke::id).values.none { pieces ->
+                pieces.any { it.projectionKey in held } && pieces.any { it.projectionKey !in held }
+            }
+        ) {
+            eraseStrokes(candidates.filter { it.projectionKey in held }.map(PageStroke::id).distinct())
+            return
+        }
+        changePendingInkEdits(pageId, 1)
+        viewModelScope.launch {
+            try {
+                inkMutations.withLock {
+                    // A stroke finished while the plan was being built is in both snapshots and must
+                    // not vanish from the canvas — the same read [erase] takes, for the same reason.
+                    val before =
+                        if (_uiState.value.selectedPageId == pageId) _strokes.value else candidates
+                    val plan = withContext(inkDispatcher) { before.planProjectionDelete(held) }
+                    if (plan.erases.isEmpty() && plan.wholeRows.isEmpty()) return@withLock
+                    val stored = plan.erases.map { step ->
+                        val entity = InkCodec.encodeErase(
+                            mask = step.mask,
+                            pageId = pageId,
+                            mode = EraserMode.Object,
+                            now = nextInkOperationTime(),
+                        )
+                        repository.addPartialErase(entity, listOf(step.rowId))
+                        entity to step
+                    }
+                    if (plan.wholeRows.isNotEmpty()) repository.eraseStrokes(plan.wholeRows)
+                    // Bookkeeping, in its own transaction and not the user's — as in [erase].
+                    val surviving = plan.after.mapTo(HashSet(plan.after.size)) { it.id }
+                    repository.collectErasedAwayStrokes(
+                        plan.erases.map { it.rowId }.distinct().filterNot { it in surviving },
+                    )
+                    var running = before
+                    asOneAction(pageId) {
+                        stored.forEach { (entity, step) ->
+                            commitInkEdit(
+                                pageId = pageId,
+                                before = running,
+                                after = step.after,
+                                mutation = InkHistoryMutation.EraseOperation(entity.id),
+                            )
+                            running = step.after
+                        }
+                        if (plan.wholeRows.isNotEmpty()) {
+                            commitInkEdit(
+                                pageId = pageId,
+                                before = running,
+                                after = plan.after,
+                                mutation = InkHistoryMutation.EraseStrokes(plan.wholeRows),
+                            )
+                        }
+                    }
+                }
+            } finally {
+                changePendingInkEdits(pageId, -1)
+            }
+        }
+    }
+
+    /**
      * Applies a normal eraser mask to only the strokes that existed when the gesture ended.
      * Geometry work stays off the input thread; the immutable mask and target set are then stored
      * so reopening the page reconstructs the same cut mesh.
@@ -3016,7 +3105,12 @@ class NotesViewModel(
         // deliberately tied together; in both cases the pieces are one thing on the page, and one
         // thing either straddles the line or does not. Deciding per projection would cut a
         // partially-erased word in half, or push the bottom of a grouped diagram out from under its
-        // own top. This is the same reading `selectWithLasso` gives a row and a group.
+        // own top.
+        //
+        // **Deliberately not the reading `selectWithLasso` gives**, which takes projections: a lasso
+        // is a hand pointing at what it can see, and this gesture points at nothing at all. Nobody
+        // circled these strokes — a line was drawn across the page and everything past it moves — so
+        // there is no act of pointing to honour, and the unit falls back to the object.
         val movingInk = _strokes.value
             .groupBy { it.groupId ?: it.id }
             .values

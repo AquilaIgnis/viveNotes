@@ -56,7 +56,10 @@ import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
+import com.vivenotes.ink.InkLassoSelection
 import com.vivenotes.ink.InkPoint
+import com.vivenotes.ink.PageStroke
+import com.vivenotes.ink.pageBounds
 import com.vivenotes.ink.projectionKey
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
@@ -417,6 +420,95 @@ class NotesViewModelTest {
         assertTrue(vm.strokes.value.first { it.id == oldId }.stroke.overlaps(rightBox()))
         assertTrue(vm.strokes.value.first { it.id == newId }.stroke.overlaps(centerBox()))
     }
+
+    /**
+     * The half of the projection-narrowed lasso that touches storage: a piece has no row of its own
+     * to tombstone, so deleting one is stored as a proved Object erase and has to survive a reload.
+     * `memory/lassoProjectionPlan.md` §5.
+     */
+    @Test
+    fun deletingOneLassoedPieceLeavesTheOtherOnTheNextOpen() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+        vm.eraseStrokeParts(inkStroke(50f to 35f, 50f to 65f, sizeDp = 18f))
+        advanceUntilIdle()
+        assertEquals("the cut left two pieces to choose between", 2, vm.strokes.value.size)
+
+        vm.deleteInkSelection(vm.strokes.value.minByOrNull { it.pageBounds!!.left }!!.asSelection())
+        advanceUntilIdle()
+
+        assertEquals(1, vm.strokes.value.size)
+        assertTrue(vm.strokes.value.single().stroke.overlaps(rightBox()))
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        assertEquals("the deleted piece came back on the next open", 1, vm.strokes.value.size)
+        assertTrue(vm.strokes.value.single().stroke.overlaps(rightBox()))
+        assertFalse(vm.strokes.value.single().stroke.overlaps(leftBox()))
+    }
+
+    /** One press, because a piece delete is one action however many operations it took to say. */
+    @Test
+    fun undoingAPieceDeleteBringsThePieceBack() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+        vm.eraseStrokeParts(inkStroke(50f to 35f, 50f to 65f, sizeDp = 18f))
+        advanceUntilIdle()
+
+        vm.deleteInkSelection(vm.strokes.value.minByOrNull { it.pageBounds!!.left }!!.asSelection())
+        advanceUntilIdle()
+        vm.undoCanvas()
+        advanceUntilIdle()
+
+        assertEquals(2, vm.strokes.value.size)
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        assertEquals("the undone delete stayed undone across a reload", 2, vm.strokes.value.size)
+        assertTrue(vm.strokes.value.any { it.stroke.overlaps(leftBox()) })
+        assertTrue(vm.strokes.value.any { it.stroke.overlaps(rightBox()) })
+    }
+
+    /** A stroke the eraser never cut is one projection, so its delete is still the tombstone. */
+    @Test
+    fun deletingAWholeStrokeStillTombstonesIt() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+        advanceUntilIdle()
+
+        vm.deleteInkSelection(vm.strokes.value.single().asSelection())
+        advanceUntilIdle()
+
+        assertTrue(vm.strokes.value.isEmpty())
+
+        vm.openPage(pageId)
+        advanceUntilIdle()
+
+        assertTrue(vm.strokes.value.isEmpty())
+    }
+
+    /** The selection a lasso would have handed over, for one projection. */
+    private fun PageStroke.asSelection(): InkLassoSelection = InkLassoSelection(
+        path = listOf(
+            InkPoint(pageBounds!!.left - 5f, pageBounds!!.top - 5f),
+            InkPoint(pageBounds!!.right + 5f, pageBounds!!.top - 5f),
+            InkPoint(pageBounds!!.right + 5f, pageBounds!!.bottom + 5f),
+            InkPoint(pageBounds!!.left - 5f, pageBounds!!.bottom + 5f),
+        ),
+        targetIds = setOf(id),
+        projections = setOf(projectionKey),
+        bounds = pageBounds!!,
+    )
 
     @Test
     fun reopeningReplaysLassoMoveBeforeAnEraseAtItsNewPosition() = runTest(dispatcher) {

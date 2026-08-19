@@ -109,6 +109,7 @@ import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
+import com.vivenotes.ink.InkLassoSelection
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.Ruler
 import com.vivenotes.ink.RulerPlacement
@@ -377,7 +378,8 @@ fun EditorPane(
     onObjectErase: (InkStroke) -> Unit = {},
     onMoveSelection: (InkLassoMove) -> Unit = {},
     onResizeSelection: (InkLassoResize) -> Unit = {},
-    onDeleteInkSelection: (Set<String>) -> Unit = {},
+    /** The ink half of the held selection: the projections it names, not merely their rows. */
+    onDeleteInkSelection: (InkLassoSelection) -> Unit = {},
     /** Puts the whole selection on the shared clipboard — every kind it holds, in one call. */
     onCopySelection: (CanvasSelection) -> Unit = {},
     hasClipboard: Boolean = false,
@@ -1396,7 +1398,7 @@ fun EditorPane(
                         IntSize(window.width.roundToPx(), window.height.roundToPx())
                     },
                     onDelete = {
-                        if (held.inkIds.isNotEmpty()) onDeleteInkSelection(held.inkIds)
+                        held.inkHalf()?.let(onDeleteInkSelection)
                         if (held.shapeIds.isNotEmpty()) onDeleteShapes(held.shapeIds)
                         if (held.tableIds.isNotEmpty()) onDeleteTables(held.tableIds)
                         if (held.equationIds.isNotEmpty()) onDeleteEquations(held.equationIds)

@@ -489,6 +489,19 @@ object InkCodec {
         }.getOrNull()
     }
 
+    /**
+     * A mask as page-open replay will rebuild it: through the point codec and back.
+     *
+     * For [com.vivenotes.ink.planProjectionDelete], which has to *prove* that a mask it is about to
+     * store takes the piece it means and no other. The mask it builds in memory is not the one that
+     * decides that on the next open — `StrokeInputBatch.encode` is the library's own packing, and a
+     * dot that clears the piece beside it by a hair in memory is a delete that could land differently
+     * after a round trip. So the object being tested is the object that will be applied.
+     */
+    fun reloadedEraseMask(inputs: StrokeInputBatch, sizeDp: Float): Stroke? = runCatching {
+        eraseMask(decodeInputs(encodeInputs(inputs)), sizeDp)
+    }.getOrNull()
+
     fun encodeMove(
         path: List<InkPoint>,
         pageId: String,

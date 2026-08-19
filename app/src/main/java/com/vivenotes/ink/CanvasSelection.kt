@@ -99,6 +99,19 @@ data class CanvasSelection(
      * selection rather than leave a rectangle floating over nothing. Ink expands through `groupId`,
      * because touching any member of a group selects all of it (`selectWithLasso`); a shape is already
      * one object and has nothing to expand into.
+     *
+     * **Ink survives by [projections], never by [inkIds]**, or this would quietly undo what the loop
+     * decided. `selectWithLasso` takes the projections the hand circled — one half of a cut line, not
+     * the row both halves share — and this runs on *every* change to the page, so re-reading by row id
+     * would put the other half back on the next recomposition and the narrowing would last exactly one
+     * frame. `memory/lassoProjectionPlan.md` §5.
+     *
+     * The cost of keying on a projection number is that a rebuild which renumbers drops the selection
+     * instead of re-measuring it. That is not a new exposure: the move preview
+     * (`InkOverlay`) and `InkSelectionRenderer` both already match on `projectionKey`, so a renumber
+     * already leaves a selection that draws and does nothing — which is what
+     * `keepingProjectionsOf` exists to prevent, and losing the rectangle is the better of the two
+     * failures anyway.
      */
     fun reconcile(
         strokes: List<PageStroke>,
@@ -111,7 +124,7 @@ data class CanvasSelection(
         val liveTables = tables.filter { it.id in tableIds }
         val liveEquations = equations.filter { it.id in equationIds }
         val liveImages = images.filter { it.id in imageIds }
-        val directInk = strokes.filter { it.id in inkIds }
+        val directInk = strokes.filter { it.projectionKey in projections }
         if (liveShapes.isEmpty() && directInk.isEmpty() && liveTables.isEmpty() &&
             liveEquations.isEmpty() && liveImages.isEmpty()
         ) {
@@ -119,7 +132,11 @@ data class CanvasSelection(
         }
 
         val groups = directInk.mapNotNull(PageStroke::groupId).toSet()
-        val expandedInk = strokes.filter { it.id in inkIds || it.groupId != null && it.groupId in groups }
+        val expandedInk = if (groups.isEmpty()) {
+            directInk
+        } else {
+            strokes.filter { it.projectionKey in projections || it.groupId != null && it.groupId in groups }
+        }
         val measured = expandedInk.mapNotNull(PageStroke::pageBounds) +
             liveShapes.map(Outline.Shape::pageBounds) +
             liveTables.map(TableBounds::bounds) +

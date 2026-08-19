@@ -1419,7 +1419,7 @@ private fun PageEditor(
         onObjectErase = viewModel::eraseStrokeObjects,
         onMoveSelection = viewModel::moveInk,
         onResizeSelection = viewModel::resizeInk,
-        onDeleteInkSelection = { viewModel.eraseStrokes(it.toList()) },
+        onDeleteInkSelection = viewModel::deleteInkSelection,
         onCopySelection = viewModel::copySelection,
         onPaste = viewModel::pasteObjects,
         onRecolorInkSelection = viewModel::recolorInk,

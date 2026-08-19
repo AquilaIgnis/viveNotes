@@ -11,6 +11,7 @@ import androidx.ink.geometry.PartitionedMesh
 import androidx.ink.strokes.ExperimentalInkEraserApi
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
+import androidx.ink.strokes.StrokeInput
 import androidx.ink.strokes.createClosedShape
 import com.vivenotes.data.automaticColorOr
 import java.util.IdentityHashMap
@@ -214,7 +215,7 @@ private fun PageStroke.pageToStrokeTransform(): AffineTransform =
  * `computeBoundingBox` is the safe test — it returns null for an empty mesh, which is what
  * [pageBounds] already relies on.
  */
-private val Stroke.hasGeometry: Boolean
+internal val Stroke.hasGeometry: Boolean
     get() = shape.computeBoundingBox() != null
 
 /**
@@ -337,7 +338,198 @@ internal fun List<PageStroke>.eraseObjects(
     }
 }
 
-/** Selects objects whose visible ink outline is enclosed by the free-form lasso. */
+/** One stored Object-mode erase standing for "remove this piece", and the page it leaves behind. */
+internal data class InkPieceErase(
+    val mask: Stroke,
+    val rowId: String,
+    val after: List<PageStroke>,
+)
+
+/** What deleting a set of projections costs: some erase operations, and the page they produce. */
+internal data class InkProjectionDelete(
+    val erases: List<InkPieceErase>,
+    /** Rows nothing of which survives the deletion — tombstoned by the caller, not erased. */
+    val wholeRows: List<String>,
+    val after: List<PageStroke>,
+)
+
+/**
+ * How to delete exactly [held], given what is live on the page.
+ *
+ * **A piece of ink has no storable form of its own, so removing one can only be another erase.**
+ * `ink_strokes` holds a brush and an input batch and the mesh is rebuilt from them; a projection is
+ * "row X, minus its replayed erases, the component containing this region" and there is nothing about
+ * it to write down. A row every piece of which is going can therefore be tombstoned — that is an
+ * ordinary delete and stays one — while a row that keeps a piece has to be told what to lose in the
+ * only language the log has. `memory/lassoProjectionPlan.md` §5.
+ *
+ * The language it has is [eraseObjects], which removes every disconnected component its mask
+ * *touches*. Touching is the whole requirement — no coverage is measured — so the mask is a **dot on
+ * the piece**, placed on a vertex of the piece's own mesh ([pointOnInk]). Deleting a piece is then
+ * recorded as the eraser having been tapped on it, which the log, page-open replay, the undo ring and
+ * the sync client all already understand, and which needed no new operation kind and no migration.
+ *
+ * **Every dot is proved before it is offered**, by [eraserDotAvoiding]: it must take the piece and
+ * leave that row's other pieces alone. A stored operation proved against the state it was made in
+ * replays identically, because replay reproduces that state — and this is the one place the two can
+ * be compared, so it is the place to compare them.
+ *
+ * One erase per piece rather than one for the gesture: a mask is a stroke, a stroke is one continuous
+ * path, and a path visiting two pieces runs through the gap the eraser cut between them. The caller
+ * folds them into a single undo.
+ */
+internal fun List<PageStroke>.planProjectionDelete(held: Set<InkProjectionKey>): InkProjectionDelete {
+    val byRow = groupBy(PageStroke::id)
+    val wholeRows = byRow.filterValues { pieces -> pieces.all { it.projectionKey in held } }.keys.toList()
+    var current = this
+    val erases = mutableListOf<InkPieceErase>()
+    byRow.forEach { (rowId, pieces) ->
+        val doomed = pieces.filter { it.projectionKey in held }
+        // Nothing of this row is held, or all of it is: the tombstone above says it more cheaply.
+        if (doomed.isEmpty() || doomed.size == pieces.size) return@forEach
+        val survivors = pieces.filterNot { it.projectionKey in held }
+        doomed.forEach { piece ->
+            // Built against the *original* pieces, applied to the running page: `eraseObjects` mints
+            // fresh projection numbers for the components it keeps, so a key looked up in `current`
+            // after the first cut would name nothing. The mask is geometry and does not care.
+            val mask = piece.eraserDotAvoiding(survivors) ?: return@forEach
+            current = current.eraseObjects(mask, listOf(rowId))
+            erases += InkPieceErase(mask, rowId, current)
+        }
+    }
+    val after = if (wholeRows.isEmpty()) current else current.filterNot { it.id in wholeRows.toSet() }
+    return InkProjectionDelete(erases, wholeRows, after)
+}
+
+/**
+ * A round mask that takes this projection and none of [others], or null if no such mask was proved.
+ *
+ * Grown rather than guessed: the smallest dot is tried first, and a size is only accepted once the
+ * mesh has confirmed both halves of the claim. Growing stops at the first size that overreaches,
+ * because every larger one overreaches further — the eraser that cut these pieces apart was at least
+ * `EraserSettings`' 4 dp across, so a dot this size sitting on one piece cannot reach the next.
+ *
+ * Returning null leaves the piece on the page. That is the safe direction: a delete that quietly did
+ * nothing is a delete the user can repeat, where a mask that could not be proved is ink disappearing
+ * that nobody circled.
+ */
+private fun PageStroke.eraserDotAvoiding(others: List<PageStroke>): Stroke? {
+    val point = pointOnInk() ?: return null
+    val inputs = MutableStrokeInputBatch()
+        .apply { add(InputToolType.UNKNOWN, point.x, point.y, 0L) }
+        .toImmutable()
+    var size = DOT_MASK_MIN_DP
+    while (size <= DOT_MASK_MAX_DP) {
+        // Through the codec, because what replay applies is the mask as it comes back off disk and
+        // not the one built here — `StrokeInputBatch.encode` is the library's own packing and a
+        // point that survives it by a hair is a delete that lands on one device and not the next.
+        val mask = InkCodec.reloadedEraseMask(inputs, size)
+        if (mask != null && mask.hasGeometry && touches(mask)) {
+            return if (others.none { it.touches(mask) }) mask else null
+        }
+        size *= 2f
+    }
+    return null
+}
+
+/**
+ * A page-space point certainly on this projection's ink, or null once it has no mesh left.
+ *
+ * **Found by asking the mesh, not by reading it.** The direct answer — a vertex out of
+ * `PartitionedMesh.renderGroupMeshes` — is `@RestrictTo(LIBRARY_GROUP)` and lint refuses it, rightly:
+ * a restricted accessor can change or vanish between alphas, and this decides what an *erase* is
+ * allowed to remove. `computeCoverageIsGreaterThan` against a probe triangle is public, is the same
+ * question, and is already how [LassoShape.crosses] talks to a mesh with no outlines.
+ *
+ * The candidates are the stroke's **own input samples**, which is what makes one round of probes
+ * enough rather than a search: `Stroke.split` gives each piece a new shape but *"retains the original
+ * inputs"*, so every sample of the whole stroke is offered to every piece of it and each piece
+ * answers for the stretch that is its. Samples run down the centre of the ink at drawing resolution,
+ * so a piece with any length to it is hit almost at once.
+ *
+ * The box sweep behind it is for the piece too short to hold a sample — a sliver the eraser left
+ * between two of them. It walks the piece's own rectangle, which is tight around a sliver, so the
+ * expensive path is the one that has almost nothing to search.
+ */
+internal fun PageStroke.pointOnInk(): InkPoint? {
+    val bounds = pageBounds ?: return null
+    val inputs = stroke.inputs
+    val sample = StrokeInput()
+    repeat(inputs.size) { index ->
+        inputs.populate(index, sample)
+        val point = InkPoint(sample.x * scaleX + offsetX, sample.y * scaleY + offsetY)
+        if (covers(point)) return point
+    }
+    val step = maxOf(PROBE_REACH, minOf(bounds.right - bounds.left, bounds.bottom - bounds.top) / 2f)
+    var y = bounds.top
+    while (y <= bounds.bottom) {
+        var x = bounds.left
+        while (x <= bounds.right) {
+            val point = InkPoint(x, y)
+            if (covers(point)) return point
+            x += step
+        }
+        y += step
+    }
+    return null
+}
+
+/** Whether this projection's mesh has ink at a page-space point, asked as a probe with area. */
+private fun PageStroke.covers(point: InkPoint): Boolean = stroke.shape.computeCoverageIsGreaterThan(
+    triangle = ImmutableTriangle(
+        ImmutableVec(point.x - PROBE_REACH, point.y - PROBE_REACH),
+        ImmutableVec(point.x + PROBE_REACH, point.y - PROBE_REACH),
+        ImmutableVec(point.x, point.y + PROBE_REACH),
+    ),
+    coverageThreshold = 0f,
+    triangleToThis = pageToStrokeTransform(),
+)
+
+/**
+ * How far a probe reaches around the point it is asking about, in page units.
+ *
+ * A triangle needs area to intersect anything, and this is the mesh's own tolerance
+ * (`InkCodec.EPSILON`) — smaller asks a question finer than the geometry was built to answer, and
+ * larger starts reaching over the gap the eraser cut.
+ */
+private const val PROBE_REACH = 0.25f
+
+/**
+ * The smallest dot a piece is deleted with, in page units.
+ *
+ * Small on purpose: it has only to intersect the component it sits on, and every page unit of it is
+ * page units nearer the piece next door.
+ */
+private const val DOT_MASK_MIN_DP = 1f
+
+/** Where growing stops. Past this a dot is no longer smaller than the cut that made the pieces. */
+private const val DOT_MASK_MAX_DP = 4f
+
+/**
+ * Selects objects whose visible ink outline is enclosed by the free-form lasso.
+ *
+ * **A loop takes projections; only a group takes rows.** A partial erase leaves one row wearing
+ * several disconnected projections, and this used to widen every hit back out to its row — so a loop
+ * drawn round one half of a cut line selected both halves, and the rectangle spanned the gap between
+ * them. That widening was written when a piece of erased ink could not be *reached* by the lasso at
+ * all (`Stroke.split` returns pieces with no outlines and the exact test walked outlines), so for two
+ * weeks it had nothing to widen; the moment [LassoShape.encloses] made pieces selectable it became
+ * the behaviour the user sees. `memory/lassoProjectionPlan.md` §1.
+ *
+ * It was there for a reason that was real and is answered elsewhere: delete, colour and grouping are
+ * properties of the stored row, so a selection narrower than a row could name geometry they would
+ * overrun. Colour and `groupId` *are* the row and say so; delete is projection-scoped in
+ * `NotesViewModel.deleteInkSelection`. Pre-widening the selection to protect three operations left
+ * the other three — move, resize and recognition, all keyed on [projectionKey] — acting on ink the
+ * hand never circled.
+ *
+ * It was also already inconsistent with replay: [replayMove] re-derives its targets geometrically,
+ * so the widened set moved on screen and only the circled piece moved on the next page open. The
+ * gesture and the replay now ask the same question.
+ *
+ * A group still expands, because a group is the user saying these rows are one object — the one
+ * expansion that comes from an intent rather than from an implementation detail of the eraser.
+ */
 internal fun List<PageStroke>.selectWithLasso(
     path: List<InkPoint>,
     edgeTolerance: Float = DEFAULT_LASSO_EDGE_TOLERANCE,
@@ -345,13 +537,14 @@ internal fun List<PageStroke>.selectWithLasso(
     if (path.size < 3) return null
     val lasso = LassoShape(path, edgeTolerance)
     val hits = filter { stroke -> lasso.contains(stroke) }
-    val hitIds = hits.map(PageStroke::id).toSet()
+    if (hits.isEmpty()) return null
     val hitGroups = hits.mapNotNull(PageStroke::groupId).toSet()
-    // A stored stroke remains one logical object after a partial erase, and touching any member of
-    // a group selects the complete group. This keeps delete, colour and movement from affecting
-    // geometry that was not represented by the selection rectangle.
-    val selected = filter { it.id in hitIds || it.groupId != null && it.groupId in hitGroups }
-    if (selected.isEmpty()) return null
+    val selected = if (hitGroups.isEmpty()) {
+        hits
+    } else {
+        val hitKeys = hits.mapTo(HashSet(hits.size), PageStroke::projectionKey)
+        filter { it.projectionKey in hitKeys || it.groupId != null && it.groupId in hitGroups }
+    }
     val bounds = selected.mapNotNull(PageStroke::pageBounds).unionBounds() ?: return null
     return InkLassoSelection(
         path = path,
