@@ -23,6 +23,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.UUID
 import java.util.zip.GZIPOutputStream
 
@@ -45,6 +46,7 @@ class InkSyncCostTest {
     private lateinit var db: NotesDatabase
     private lateinit var repository: NotesRepository
     private lateinit var server: AcceptingTransport
+    private lateinit var attachmentDirectory: File
     private lateinit var hierarchy: HierarchySync
 
     @Before
@@ -55,11 +57,20 @@ class InkSyncCostTest {
             .build()
         repository = NotesRepository(db)
         server = AcceptingTransport()
-        hierarchy = HierarchySync(db, server)
+        attachmentDirectory = File(context.cacheDir, "ink-cost-attachments-${UUID.randomUUID()}")
+        hierarchy = HierarchySync(
+            db,
+            server,
+            RemoteInkSignal(),
+            AttachmentBlobSync(db, server, TemporaryAttachmentBytes(attachmentDirectory)),
+        )
     }
 
     @After
-    fun tearDown() = db.close()
+    fun tearDown() {
+        db.close()
+        attachmentDirectory.deleteRecursively()
+    }
 
     @Test
     fun firstUploadOfADrawnNotebook() = runBlocking<Unit> {
@@ -228,6 +239,29 @@ class InkSyncCostTest {
             token: String,
             deviceId: String,
         ): ServerResult<Unit> = ServerResult.Success(Unit)
+
+        // A drawn notebook has no pictures in it, and a measurement that quietly grew a byte route
+        // would be measuring something else. These fail rather than answering.
+
+        override suspend fun hasBlob(
+            serverBaseUrl: String,
+            token: String,
+            digest: String,
+        ): ServerResult<Boolean> = error("the ink cost measurement has no attachments")
+
+        override suspend fun uploadBlob(
+            serverBaseUrl: String,
+            token: String,
+            digest: String,
+            file: File,
+        ): ServerResult<Boolean> = error("the ink cost measurement has no attachments")
+
+        override suspend fun downloadBlob(
+            serverBaseUrl: String,
+            token: String,
+            digest: String,
+            target: File,
+        ): ServerResult<Boolean> = error("the ink cost measurement has no attachments")
     }
 
     private companion object {

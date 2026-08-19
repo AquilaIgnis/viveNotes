@@ -9,8 +9,12 @@ import android.util.Size
 import androidx.room.withTransaction
 import com.vivenotes.data.db.AttachmentEntity
 import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.data.sync.AttachmentBytes
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -37,14 +41,64 @@ class AttachmentStore(
     private val context: Context,
     private val db: NotesDatabase,
     private val io: CoroutineDispatcher = Dispatchers.IO,
-) {
+) : AttachmentBytes {
 
     private val attachments = db.attachmentDao()
+
+    private val _arrivals = MutableStateFlow(0L)
+
+    /**
+     * Bumped whenever bytes appear that were not here before — today, a picture another device drew
+     * on a page this one is already showing.
+     *
+     * **A page open when its picture arrives has to be told.** `ImageLayer` caches a failed decode
+     * exactly like a successful one, deliberately, so that a broken picture is not re-read on every
+     * recomposition; before sync that was safe, because the only way a file appeared afterwards was
+     * an import that rewrote the page under it. A pulled document changes that: the frame lands
+     * seconds before the bytes it points at, and without this the reader sees a broken plate until
+     * they navigate away and back. The ink twin of this is `data/sync/RemoteInkSignal.kt`, and it is
+     * a counter rather than a set of ids for the same reason `StateFlow` was chosen there — a
+     * collector that misses an intermediate value still sees that *something* landed, and the only
+     * thing anyone does with it is retry the reads that failed.
+     */
+    override val arrivals: StateFlow<Long> = _arrivals.asStateFlow()
 
     private val directory: File
         get() = File(context.filesDir, DIRECTORY).apply { mkdirs() }
 
-    fun fileFor(id: String): File = File(directory, id)
+    override fun fileFor(id: String): File = File(directory, id)
+
+    /**
+     * Where a download is written before its digest is proved — beside the file it will become, so
+     * that publishing it is a rename within one filesystem rather than a copy.
+     *
+     * A distinct suffix from [import]'s `.part`: an import and a download of the same picture can
+     * legitimately be in flight at once, and two writers sharing a staging name would tear each
+     * other's bytes.
+     */
+    override fun stagingFor(id: String): File = File(directory, "$id.sync")
+
+    /**
+     * Moves proved bytes into place under [id] and announces them.
+     *
+     * The caller has already checked that the bytes hash to [id] — that is what makes this a rename
+     * rather than a write. A file already sitting there is *already these bytes* by the same
+     * argument, so the staging copy is simply dropped: rewriting it could only produce the same
+     * content, and would tear the file for anything decoding it at that moment.
+     */
+    override fun publish(staged: File, id: String): Boolean {
+        val target = fileFor(id)
+        if (target.exists()) {
+            staged.delete()
+            return true
+        }
+        if (!staged.renameTo(target)) {
+            staged.delete()
+            return false
+        }
+        _arrivals.value += 1
+        return true
+    }
 
     /**
      * Imports what a picker returned, and reports what to put on the page.

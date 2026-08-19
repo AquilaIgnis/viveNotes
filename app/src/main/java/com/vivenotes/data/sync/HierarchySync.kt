@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.room.withTransaction
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.NotesRepository
+import com.vivenotes.data.db.AttachmentEntity
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
 import com.vivenotes.data.db.InkMoveEntity
@@ -18,6 +19,9 @@ import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.data.db.SyncEntityStateEntity
 import com.vivenotes.data.db.SyncOutboxEntity
 import com.vivenotes.data.db.SyncStateEntity
+import com.vivenotes.model.DocumentCodecs
+import com.vivenotes.model.Outline
+import com.vivenotes.model.migrated
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -44,6 +48,16 @@ data class SyncSummary(
     val pulled: Int,
     val pushed: Int,
     val conflictsResolved: Int,
+    /**
+     * Attachment *bytes* moved, in either direction — S5's other half.
+     *
+     * One number rather than two because a picture is the unit a reader cares about and the
+     * direction is not: what the count answers is "why did that run take a minute", and both
+     * answers are "it was carrying photographs". The change counts above never include them; a
+     * picture's metadata row is one `pulled`/`pushed` like any other entity, and its megabytes go
+     * up and down a route of their own.
+     */
+    val pictures: Int = 0,
 )
 
 enum class PermanentSyncFailure {
@@ -80,6 +94,14 @@ class HierarchySync(
     private val client: SyncTransport = SyncServerClient(),
     /** Where remotely applied ink is announced, so an open canvas can absorb it — IS5. */
     private val remoteInk: RemoteInkSignal = RemoteInkSignal(),
+    /**
+     * Attachment bytes, which never travel through the change protocol — S5.
+     *
+     * Required rather than optional: a build that synced documents without their pictures would
+     * push pages the server refuses (`missing_blob`) and pull pages it cannot draw, and both look
+     * like a working sync from the outside.
+     */
+    private val blobs: AttachmentBlobSync,
 ) {
 
     private val sync = db.syncDao()
@@ -92,6 +114,7 @@ class HierarchySync(
     private val inkErases = db.inkEraseDao()
     private val inkMoves = db.inkMoveDao()
     private val inkText = db.inkTextDao()
+    private val attachments = db.attachmentDao()
     private val mutex = Mutex()
 
     /**
@@ -100,6 +123,36 @@ class HierarchySync(
      * A plain set because [run] is serialized by [mutex] and nothing outside a run ever touches it.
      */
     private val remoteInkPages = mutableSetOf<String>()
+
+    /**
+     * Digests this run has given up on delivering, and everything that names one must stop naming
+     * it — see [undeliverable].
+     *
+     * Cleared at the start of every run because "this device cannot produce those bytes" is a fact
+     * about a moment: an import, a `.vive` restore or a download from another device puts the file
+     * back, and the next run should try again rather than carry a verdict from an hour ago.
+     */
+    private val undeliverableBlobs = mutableSetOf<String>()
+
+    /** Digests already re-uploaded for a `missing_blob` this run, so one cannot be chased forever. */
+    private val repairedBlobs = mutableSetOf<String>()
+
+    /**
+     * Bodies written by this transaction whose pictures have still to be counted. A plain list for
+     * the reason [remoteInkPages] is a plain set: a run is serialized and nothing outside one ever
+     * touches it.
+     */
+    private val pictureRecounts = mutableListOf<PictureRecount>()
+
+    /**
+     * Whether a download pass left something behind — a partition mid-transfer, a token that had
+     * just been revoked.
+     *
+     * True to begin with, so the first run of a process looks once: a picture whose download was
+     * interrupted by the app being closed has no other way to be noticed, since the row that
+     * schedules it arrived in a pull that will never be replayed.
+     */
+    private var downloadsOutstanding = true
 
     /** Makes [accountId] the owner of this database's one hierarchy corpus. */
     suspend fun activate(accountId: String) = mutex.withLock {
@@ -132,10 +185,13 @@ class HierarchySync(
     suspend fun run(account: SyncAccount): SyncRunResult = mutex.withLock {
         try {
             activateLocked(account.accountId)
+            undeliverableBlobs.clear()
+            repairedBlobs.clear()
 
             var pulled = 0
             var pushed = 0
             var conflicts = 0
+            var pictures = 0
 
             when (val firstPull = pullIfNeeded(account)) {
                 is PhaseResult.Done -> pulled += firstPull.count
@@ -150,6 +206,7 @@ class HierarchySync(
                 is PhaseResult.ConflictDone -> {
                     pushed += push.count
                     conflicts += push.conflicts
+                    pictures += push.pictures
                 }
                 is PhaseResult.Stop -> return@withLock push.result
             }
@@ -170,7 +227,22 @@ class HierarchySync(
                 }
             }
 
-            SyncRunResult.Succeeded(SyncSummary(pulled, pushed, conflicts))
+            // **Last, after this device's own writes have gone out.** A first sync of a
+            // photographed notebook is tens of megabytes of pictures, and putting them ahead of the
+            // push would hold a page somebody just typed behind the pictures on a page nobody has
+            // opened. Nothing else in a run waits on bytes, and a picture that does not arrive this
+            // minute arrives the next.
+            //
+            // Skipped entirely on an idle run, which SD6 requires to cost one `GET /v1/cursor` and
+            // nothing else: with nothing pulled, nothing pushed and no gap left by an earlier pass,
+            // there is nothing new to be missing.
+            if (pulled > 0 || pushed > 0 || conflicts > 0 || downloadsOutstanding) {
+                val downloads = blobs.downloadMissing(account)
+                pictures += downloads.downloaded
+                downloadsOutstanding = downloads.workRemains
+            }
+
+            SyncRunResult.Succeeded(SyncSummary(pulled, pushed, conflicts, pictures))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (badLocalState: Exception) {
@@ -219,6 +291,9 @@ class HierarchySync(
             sync.enqueueAllInkStrokes()
             sync.enqueueAllInkErases()
             sync.enqueueAllInkMoves()
+            // Metadata rows only. Their bytes are offered to the server by the push that names
+            // them, one `HEAD` and at most one `PUT` per picture, however many pages show it.
+            sync.enqueueAllAttachments()
         }
     }
 
@@ -367,6 +442,7 @@ class HierarchySync(
                 // has been applied, so advancing it past a row still waiting for its parent would
                 // lose that row for good — the next pull starts above it.
                 invalidateInkText(remoteInkPages)
+                applyPictureCounts()
                 if (orphans.isEmpty()) sync.setCursor(page.cursor)
                 sync.setApplyingRemote(false)
             }
@@ -403,7 +479,8 @@ class HierarchySync(
      */
     private suspend fun parentIsAvailable(change: RemoteChange, applying: Set<String>): Boolean {
         val parentKind = when (change.kind) {
-            SyncKind.Notebook -> return true
+            // Neither has a parent: a notebook is the root, and a picture belongs to no one page.
+            SyncKind.Notebook, SyncKind.Attachment -> return true
             SyncKind.Section -> SyncKind.Notebook
             SyncKind.Page -> SyncKind.Section
             SyncKind.PageContent,
@@ -413,7 +490,7 @@ class HierarchySync(
             -> SyncKind.Page
         }
         val parentID = when (change.kind) {
-            SyncKind.Notebook -> return true
+            SyncKind.Notebook, SyncKind.Attachment -> return true
             SyncKind.Section -> change.raw.requiredString("notebookId")
             SyncKind.Page -> change.raw.requiredString("sectionId")
             SyncKind.PageContent,
@@ -431,7 +508,12 @@ class HierarchySync(
             // naming nothing stored is normal: the stroke may arrive later, or have been purged
             // after seven days on the device that made the operation. Waiting for it would stall the
             // cursor on a row that can never come.
-            SyncKind.PageContent, SyncKind.InkStroke, SyncKind.InkErase, SyncKind.InkMove -> false
+            SyncKind.PageContent,
+            SyncKind.InkStroke,
+            SyncKind.InkErase,
+            SyncKind.InkMove,
+            SyncKind.Attachment,
+            -> false
         }
     }
 
@@ -450,11 +532,27 @@ class HierarchySync(
     private suspend fun pushOutbox(account: SyncAccount): PhaseResult {
         var pushed = 0
         var conflicts = 0
+        var pictures = 0
         var batchCount = 0
 
         while (batchCount++ < MAX_BATCHES_PER_RUN) {
             val pending = loadOrCreatePendingBatch()
-                ?: return PhaseResult.ConflictDone(pushed, conflicts)
+                ?: return PhaseResult.ConflictDone(pushed, conflicts, pictures)
+
+            // The bytes go up before the change that names them. The server refuses it otherwise —
+            // that refusal is what makes reachability knowable to it at all — so this is not an
+            // optimisation of the `missing_blob` path below but the ordinary way a picture syncs.
+            when (val preflight = uploadBlobsFor(account, pending.changes)) {
+                is BlobPhase.Ready -> pictures += preflight.uploaded
+                BlobPhase.Rebuild -> {
+                    // A digest in this batch cannot be delivered. The batch was serialized naming
+                    // it, so it is thrown away and built again without it rather than sent to be
+                    // rejected: the durable batch is what a retry re-sends byte for byte.
+                    metadata.delete(PENDING_BATCH_KEY)
+                    continue
+                }
+                is BlobPhase.Stop -> return PhaseResult.Stop(preflight.result)
+            }
 
             val response = when (
                 val result = client.pushChanges(
@@ -490,6 +588,10 @@ class HierarchySync(
             }
 
             var permanent: PermanentSyncFailure? = null
+            // Handled after the transaction: clearing one means uploading megabytes, and a database
+            // transaction held open across a network transfer would block every writer on the
+            // device for the length of it.
+            val missingBlobs = mutableListOf<PendingChange>()
             db.withTransaction {
                 sync.setApplyingRemote(true)
                 response.applied.forEach { applied ->
@@ -509,12 +611,18 @@ class HierarchySync(
                             enqueueParent(sent)
                             if (sent.parentId == null) permanent = PermanentSyncFailure.MissingParent
                         }
+                        // The one rejection a client can always clear on its own. The queued
+                        // generation is deliberately left where it is: the entity is unchanged and
+                        // correct, it is the server that is missing the bytes it names, so the next
+                        // batch re-sends exactly these fields once they are up.
+                        "missing_blob" -> missingBlobs += sent
                         "too_large" -> permanent = PermanentSyncFailure.ChangeTooLarge
                         "malformed" -> permanent = PermanentSyncFailure.MalformedChange
                         else -> permanent = PermanentSyncFailure.InvalidServerResponse
                     }
                 }
                 invalidateInkText(remoteInkPages)
+                applyPictureCounts()
                 metadata.delete(PENDING_BATCH_KEY)
                 sync.setApplyingRemote(false)
             }
@@ -522,9 +630,117 @@ class HierarchySync(
             publishRemoteInk()
 
             permanent?.let { return PhaseResult.Stop(SyncRunResult.Failed(it)) }
+
+            if (missingBlobs.isNotEmpty()) {
+                when (val repair = repairMissingBlobs(account, missingBlobs)) {
+                    is BlobPhase.Ready -> pictures += repair.uploaded
+                    // Never produced here: the rejected entities are still queued, so the next turn
+                    // of this loop snapshots them again with whatever the repair could not deliver
+                    // already dropped. Named to keep the branch exhaustive.
+                    BlobPhase.Rebuild -> Unit
+                    is BlobPhase.Stop -> return PhaseResult.Stop(repair.result)
+                }
+            }
         }
 
         return PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.MissingParent))
+    }
+
+    /**
+     * Puts the bytes this batch is about to name on the server.
+     *
+     * Reads the digests back out of the serialized batch rather than out of Room, because that is
+     * what will actually be sent: a `pageContent` snapshot has already had this run's undeliverable
+     * digests dropped from its `blobRefs`, and an `attachment` change *is* its digest.
+     *
+     * A picture the server already holds costs nothing here — the state row that proves it is the
+     * one the push wrote when it was first accepted — so a steady-state run makes no byte requests
+     * at all, and a first sync makes one `HEAD` per picture and one `PUT` per picture it has.
+     */
+    private suspend fun uploadBlobsFor(
+        account: SyncAccount,
+        changes: List<PendingChange>,
+    ): BlobPhase {
+        var uploaded = 0
+        var rebuild = false
+        changes.flatMap(::digestsNamedBy).distinct().forEach { digest ->
+            if (digest in undeliverableBlobs) {
+                // Given up on earlier in this same run. A `pageContent` snapshot has already had it
+                // filtered out, so this is reached by a change serialized before that verdict — the
+                // batch is rebuilt rather than sent to be rejected for a reason already known.
+                rebuild = true
+                return@forEach
+            }
+            when (val presence = blobs.ensureUploaded(account, digest)) {
+                is BlobPresence.Present -> if (presence.uploaded) uploaded++
+                BlobPresence.Undeliverable -> {
+                    markUndeliverable(digest)
+                    rebuild = true
+                }
+                is BlobPresence.Stopped -> return BlobPhase.Stop(presence.result)
+            }
+        }
+        return if (rebuild) BlobPhase.Rebuild else BlobPhase.Ready(uploaded)
+    }
+
+    /**
+     * Answers a `missing_blob` rejection the only way it can be answered: by uploading.
+     *
+     * Forced past every memo, because the server has just said it does not hold these bytes — which
+     * is also how a server whose blob volume was lost, but whose database survived, is repaired by
+     * the first device that pushes a change naming a picture.
+     *
+     * [repairedBlobs] is the loop stop. A digest uploaded successfully and then rejected for the
+     * same reason again means the two sides disagree about something this code cannot fix, and
+     * chasing it would spend a thousand round trips per run doing so.
+     */
+    private suspend fun repairMissingBlobs(
+        account: SyncAccount,
+        rejected: List<PendingChange>,
+    ): BlobPhase {
+        var uploaded = 0
+        rejected.flatMap(::digestsNamedBy).distinct().forEach { digest ->
+            if (digest in undeliverableBlobs) return@forEach
+            if (!repairedBlobs.add(digest)) {
+                Log.e(TAG, "Attachment $digest was uploaded and still rejected; dropping the reference")
+                markUndeliverable(digest)
+                return@forEach
+            }
+            when (val presence = blobs.ensureUploaded(account, digest, force = true)) {
+                is BlobPresence.Present -> if (presence.uploaded) uploaded++
+                BlobPresence.Undeliverable -> markUndeliverable(digest)
+                is BlobPresence.Stopped -> return BlobPhase.Stop(presence.result)
+            }
+        }
+        return BlobPhase.Ready(uploaded)
+    }
+
+    /**
+     * Stops naming a digest this device cannot deliver, everywhere it is named.
+     *
+     * The alternative is a wedged account, and it is worth being explicit about the trade: a page
+     * that keeps a picture nobody can supply would be rejected on every push for ever, and it is
+     * pushed in the same batches as everything else the user writes — so one broken picture would
+     * stop notebooks, sections and text from syncing at all. Dropping the reference costs a picture
+     * that is *already* broken on this device the ability to be repaired from here; another device
+     * that still has the bytes uploads them and the reference comes back with its page.
+     *
+     * An `attachment` row is removed from the outbox outright rather than left dirty, because its
+     * id is the digest: there is no version of that row the server would take.
+     */
+    private suspend fun markUndeliverable(digest: String) {
+        if (!undeliverableBlobs.add(digest)) return
+        Log.e(TAG, "Attachment $digest cannot be delivered; pages will be pushed without it")
+        sync.deleteOutbox(SyncKind.Attachment.wire, digest)
+    }
+
+    /** The attachment digests one queued change will name on the wire. */
+    private fun digestsNamedBy(change: PendingChange): List<String> = when (change.kind) {
+        SyncKind.Attachment.wire -> listOf(change.id)
+        SyncKind.PageContent.wire ->
+            (change.payload[BLOB_REFS] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }
+                .orEmpty()
+        else -> emptyList()
     }
 
     private suspend fun resolveVersionConflict(sent: PendingChange, currentJson: JsonObject?) {
@@ -554,6 +770,8 @@ class HierarchySync(
             SyncKind.InkErase.wire,
             SyncKind.InkMove.wire,
             -> SyncKind.Page.wire
+            // An attachment has no parent, so `missing_parent` cannot name one; it never reaches
+            // here because `parentId` is null for that kind.
             else -> return
         }
         sync.enqueueIfAbsent(parentKind, parentId)
@@ -667,6 +885,23 @@ class HierarchySync(
                 base["docSha256"] = JsonPrimitive(Base64.getEncoder().encodeToString(digest))
                 base["format"] = JsonPrimitive(row.format)
                 base["enc"] = JsonPrimitive(PLAIN_ENCODING)
+                // SD7: the server cannot read the document, so this is the only way it can know
+                // which pictures the page still shows — and therefore the only way it can ever free
+                // one. Every push replaces the whole set, so removing a picture from a page is
+                // enough to release it. Always written, never inherited from the stored server row:
+                // a stale set left over from a previous push would keep bytes alive that this page
+                // no longer draws.
+                base[BLOB_REFS] = JsonArray(
+                    pictureIdsIn(row.docJson, row.format)
+                        .asSequence()
+                        .filter(::isBlobDigest)
+                        .filterNot(undeliverableBlobs::contains)
+                        .distinct()
+                        .sorted()
+                        .take(MAX_BLOB_REFS)
+                        .map(::JsonPrimitive)
+                        .toList(),
+                )
                 row.pageId
             }
             SyncKind.InkStroke -> {
@@ -731,6 +966,25 @@ class HierarchySync(
                     inkMoves.targetsForMoves(listOf(row.id)).map { JsonPrimitive(it.strokeId) },
                 )
                 row.pageId
+            }
+            SyncKind.Attachment -> {
+                val row = attachments.byId(outbox.entityId)
+                    ?: throw IllegalStateException("dirty attachment disappeared")
+                // No `deletedAt` to send and no `updatedAt` column to send it from: an attachment is
+                // immutable in every field the protocol carries, so its creation time is the only
+                // honest stamp and the envelope's display value is the same number.
+                base.putEnvelope(null, maxOf(row.createdAt, outbox.changedAt), row.createdAt)
+                base["mimeType"] = JsonPrimitive(row.mimeType)
+                base["pixelWidth"] = JsonPrimitive(row.pixelWidth)
+                base["pixelHeight"] = JsonPrimitive(row.pixelHeight)
+                // Checked against the stored blob by the server on every push and rejected
+                // `malformed` if it disagrees, which is why it is read from the row rather than
+                // from the file: the two are the same number, and the row is what the bytes were
+                // measured as when they were written.
+                base["byteCount"] = JsonPrimitive(row.byteCount)
+                base["createdAt"] = JsonPrimitive(row.createdAt)
+                // `refCount` is deliberately absent — SD7.
+                null
             }
         }
         return PendingChange(
@@ -816,7 +1070,12 @@ class HierarchySync(
         when (change.kind) {
             SyncKind.InkStroke, SyncKind.InkErase, SyncKind.InkMove ->
                 remoteInkPages += change.raw.requiredString("pageId")
-            SyncKind.Notebook, SyncKind.Section, SyncKind.Page, SyncKind.PageContent -> Unit
+            SyncKind.Notebook,
+            SyncKind.Section,
+            SyncKind.Page,
+            SyncKind.PageContent,
+            SyncKind.Attachment,
+            -> Unit
         }
         when (change.kind) {
             SyncKind.Notebook -> notebooks.upsert(
@@ -856,17 +1115,21 @@ class HierarchySync(
                 ),
             )
             SyncKind.PageContent -> {
+                // Read before the write, because the two documents together are what say which
+                // pictures this page stopped showing and which it started.
+                val replaced = contents.byId(change.id)
                 if (change.deletedAt != null) {
                     contents.delete(change.id)
+                    pictureRecounts += PictureRecount(before = replaced, after = null)
                 } else {
-                    contents.upsert(
-                        PageContentEntity(
-                            pageId = change.id,
-                            docJson = requireNotNull(change.documentJson),
-                            updatedAt = displayUpdatedAt,
-                            format = change.raw.requiredString("format"),
-                        ),
+                    val incoming = PageContentEntity(
+                        pageId = change.id,
+                        docJson = requireNotNull(change.documentJson),
+                        updatedAt = displayUpdatedAt,
+                        format = change.raw.requiredString("format"),
                     )
+                    contents.upsert(incoming)
+                    pictureRecounts += PictureRecount(before = replaced, after = incoming)
                 }
             }
             // Ink tombstones are upserted like any other field rather than deleting the row: a
@@ -941,7 +1204,112 @@ class HierarchySync(
                     change.targetIds.map { InkMoveTargetEntity(change.id, it) },
                 )
             }
+
+            /*
+             * A picture another device imported. The row is the metadata; the bytes are fetched
+             * afterwards by the download pass, which finds this row by looking for one whose file
+             * is not there.
+             *
+             * **Inserted, never upserted, and `refCount` is why.** Every synced field describes the
+             * bytes the id is the hash of and cannot have changed — but `refCount` is this device's
+             * own count of the outlines pointing at the picture, deliberately outside the protocol
+             * (`viveCServer/memory/syncPlan.md` SD7), and an upsert carrying the pulled row's zero
+             * would overwrite it. `AttachmentDao.insert` ignores a conflict, so a row already here
+             * keeps the count this device computed.
+             *
+             * **A tombstone is applied by doing nothing.** No build produces one — nothing calls
+             * `AttachmentStore.release`, so a picture is never removed from this database — but one
+             * from a future build would mean "the device that sent it has no outline pointing here
+             * any more", which says nothing about this device: deleting the row would take away a
+             * picture a page open on this screen is still drawing. When local sweeping exists, this
+             * becomes a release of one reference and not a delete.
+             */
+            SyncKind.Attachment -> if (change.deletedAt == null) {
+                attachments.insert(
+                    AttachmentEntity(
+                        id = change.id,
+                        mimeType = change.raw.requiredString("mimeType"),
+                        pixelWidth = change.raw.requiredInt("pixelWidth"),
+                        pixelHeight = change.raw.requiredInt("pixelHeight"),
+                        byteCount = change.raw.requiredLong("byteCount"),
+                        refCount = 0,
+                        createdAt = change.raw.requiredLong("createdAt"),
+                    ),
+                )
+            }
         }
+    }
+
+    /** One pulled body, with the one it replaced, waiting to be counted — [applyPictureCounts]. */
+    private data class PictureRecount(
+        val before: PageContentEntity?,
+        val after: PageContentEntity?,
+    )
+
+    /**
+     * Moves this device's picture reference counts to match documents it did not write.
+     *
+     * The same bookkeeping `NotebookTransferManager` does when a `.vive` bundle replaces a body,
+     * and for the same reason: `refCount` is a local count of the outlines pointing at a picture,
+     * so a document that arrives from outside changes it without any of the editor's code running.
+     * It never sweeps anything — `AttachmentDao.release` floors at zero and the file is left alone —
+     * because a count is not a licence to delete on a device where the page that dropped the picture
+     * may be undone a second later.
+     *
+     * **Drained at the end of the transaction, not as each body is applied**, because `attachment`
+     * is the *last* kind in apply order and `retain` is an `UPDATE`: a picture arriving with the
+     * page that shows it would otherwise be counted before its row existed, and the update would
+     * match nothing. The residual case is a metadata row that lands in a *later* delta page than the
+     * body placing it, which starts at zero and stays there — accepted, because nothing acts on the
+     * count yet (`NotesViewModel.deleteImages` explains why nothing sweeps) and the alternative is
+     * holding a body back for a row that is not its parent.
+     */
+    private suspend fun applyPictureCounts() {
+        if (pictureRecounts.isEmpty()) return
+        val deltas = linkedMapOf<String, Int>()
+        pictureRecounts.forEach { recount ->
+            recount.before?.let { row ->
+                pictureIdsIn(row.docJson, row.format)
+                    .forEach { id -> deltas[id] = deltas.getOrDefault(id, 0) - 1 }
+            }
+            recount.after?.let { row ->
+                pictureIdsIn(row.docJson, row.format)
+                    .forEach { id -> deltas[id] = deltas.getOrDefault(id, 0) + 1 }
+            }
+        }
+        pictureRecounts.clear()
+        deltas.forEach { (id, delta) ->
+            repeat(delta.coerceAtLeast(0)) { attachments.retain(id) }
+            repeat((-delta).coerceAtLeast(0)) { attachments.release(id) }
+        }
+    }
+
+    /**
+     * The attachments a stored document places, in the order it places them.
+     *
+     * **The document is the only record of which pictures a page shows**, which is the whole reason
+     * `blobRefs` exists: the server cannot read `docJson`, so it cannot know what to keep, and this
+     * is the extraction SD7 puts on the client.
+     *
+     * Guarded by a substring test before the decode. A body is decoded twice per pulled row here —
+     * the one being replaced and the one replacing it — and the overwhelming majority of pages have
+     * no picture on them at all, so paying a full parse per page of a first sync to discover that
+     * would be the most expensive thing in the pull. `attachmentId` is a field name of
+     * [Outline.Image] and of nothing else, and it survives both codecs, which write field names as
+     * text. A page whose *text* happens to contain the word costs one wasted decode.
+     *
+     * An undecodable body yields nothing rather than throwing: the editor already refuses to write
+     * to a page it cannot read and says so, and a document nobody can decode cannot be shown to
+     * reference anything.
+     */
+    private fun pictureIdsIn(docJson: String, format: String): List<String> {
+        if (!docJson.contains(IMAGE_FIELD_HINT)) return emptyList()
+        val codec = DocumentCodecs.byId(format) ?: return emptyList()
+        return runCatching {
+            codec.decode(docJson.encodeToByteArray()).migrated().outlines
+                .filterIsInstance<Outline.Image>()
+                .map { it.attachmentId }
+        }.getOrDefault(emptyList())
     }
 
     /**
@@ -1042,6 +1410,20 @@ class HierarchySync(
                 inkPoints = raw.decodeInkPoints()
                 targetIds = raw.requiredStringArray("targetIds")
             }
+            SyncKind.Attachment -> {
+                // The id is a content address and, on this side, a file name: `filesDir/attachments`
+                // is where these bytes land. So it is checked here rather than trusted because the
+                // contract declares a pattern — a server that sent `../` for an id would otherwise
+                // have this build write outside its own attachment directory.
+                require(isBlobDigest(raw.requiredString("id"))) {
+                    "attachment id must be 64 lowercase hex characters"
+                }
+                raw.requiredString("mimeType")
+                raw.requiredInt("pixelWidth")
+                raw.requiredInt("pixelHeight")
+                raw.requiredLong("byteCount")
+                raw.requiredLong("createdAt")
+            }
         }
         return RemoteChange(
             kind = kind,
@@ -1136,7 +1518,13 @@ class HierarchySync(
         // ago, must not hold the operation back — see `applyRemoteRow`.
         InkStroke("inkStroke", 4),
         InkErase("inkErase", 5),
-        InkMove("inkMove", 6);
+        InkMove("inkMove", 6),
+
+        // Last, and the only kind with no parent at all: one picture can appear on several pages,
+        // so there is no page that owns it. Its id is the SHA-256 of the bytes it describes, which
+        // is why there is no `sha256` field — a second place to write an identity is a first chance
+        // for the two to disagree.
+        Attachment("attachment", 7);
 
         companion object {
             fun fromWire(value: String): SyncKind? = entries.firstOrNull { it.wire == value }
@@ -1145,8 +1533,21 @@ class HierarchySync(
 
     private sealed interface PhaseResult {
         data class Done(val count: Int) : PhaseResult
-        data class ConflictDone(val count: Int, val conflicts: Int) : PhaseResult
+        data class ConflictDone(
+            val count: Int,
+            val conflicts: Int,
+            val pictures: Int = 0,
+        ) : PhaseResult
         data class Stop(val result: SyncRunResult) : PhaseResult
+    }
+
+    /** What making the server hold this batch's pictures did to the batch. */
+    private sealed interface BlobPhase {
+        data class Ready(val uploaded: Int) : BlobPhase
+
+        /** A digest cannot be delivered, so what named it has to be snapshotted again without it. */
+        data object Rebuild : BlobPhase
+        data class Stop(val result: SyncRunResult) : BlobPhase
     }
 
     private fun ServerResult.Failed.asSyncResult(): SyncRunResult = if (retryable) {
@@ -1256,6 +1657,17 @@ class HierarchySync(
          */
         const val CAUGHT_UP_KEY = "syncFirstPullCompletedFor"
         const val DISPLAY_UPDATED_AT = "viveDisplayUpdatedAt"
+
+        const val BLOB_REFS = "blobRefs"
+
+        /** `PageContentFields.blobRefs` is `maxItems: 512`. A page with more is not a page. */
+        const val MAX_BLOB_REFS = 512
+
+        /**
+         * A field name only [Outline.Image] has, used to skip decoding a body that cannot mention a
+         * picture. Both codecs write field names as text, so it holds for `cbor/1` as well.
+         */
+        const val IMAGE_FIELD_HINT = "attachmentId"
     }
 }
 

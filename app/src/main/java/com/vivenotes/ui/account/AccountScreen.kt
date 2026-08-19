@@ -590,6 +590,11 @@ private fun SyncStatusLine(status: SyncStatus) {
  * Pushed 0" is a line that trains its reader to stop looking at it, and "nothing to do" is already
  * what a bare timestamp means.
  *
+ * Pictures are counted separately and shown only when a run carried any, because they are the one
+ * thing that makes a sync take noticeably long — a page of photographs is megabytes where a page of
+ * writing is kilobytes — and a reader watching a slow first sync deserves to know that is what it
+ * is doing. A row and its picture are two different units, so they are two different numbers.
+ *
  * Relative rather than a clock time because the question is "is this tablet current", and *five
  * minutes ago* answers it without the reader doing arithmetic. It goes stale only while sync is
  * failing, and that case shows the failure instead.
@@ -606,8 +611,16 @@ private fun syncedAtText(atMillis: Long, summary: SyncSummary?): String {
             DateUtils.getRelativeTimeSpanString(atMillis, now, DateUtils.MINUTE_IN_MILLIS),
         )
     }
-    if (summary == null || (summary.pulled == 0 && summary.pushed == 0)) return whenText
-    return whenText + stringResource(R.string.account_sync_counts, summary.pulled, summary.pushed)
+    if (summary == null) return whenText
+    val pictures = if (summary.pictures == 0) {
+        ""
+    } else {
+        stringResource(R.string.account_sync_pictures, summary.pictures)
+    }
+    if (summary.pulled == 0 && summary.pushed == 0) return whenText + pictures
+    return whenText +
+        stringResource(R.string.account_sync_counts, summary.pulled, summary.pushed) +
+        pictures
 }
 
 @Composable

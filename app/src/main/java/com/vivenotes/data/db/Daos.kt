@@ -68,7 +68,7 @@ interface SyncDao {
             "CASE kind " +
             "WHEN 'notebook' THEN 0 WHEN 'section' THEN 1 WHEN 'page' THEN 2 " +
             "WHEN 'pageContent' THEN 3 WHEN 'inkStroke' THEN 4 WHEN 'inkErase' THEN 5 " +
-            "WHEN 'inkMove' THEN 6 ELSE 7 END, entityId " +
+            "WHEN 'inkMove' THEN 6 WHEN 'attachment' THEN 7 ELSE 8 END, entityId " +
             "LIMIT :limit",
     )
     suspend fun outbox(limit: Int): List<SyncOutboxEntity>
@@ -101,7 +101,8 @@ interface SyncDao {
             "(kind = 'pageContent' AND entityId NOT IN (SELECT pageId FROM page_content)) OR " +
             "(kind = 'inkStroke' AND entityId NOT IN (SELECT id FROM ink_strokes)) OR " +
             "(kind = 'inkErase' AND entityId NOT IN (SELECT id FROM ink_erases)) OR " +
-            "(kind = 'inkMove' AND entityId NOT IN (SELECT id FROM ink_moves))",
+            "(kind = 'inkMove' AND entityId NOT IN (SELECT id FROM ink_moves)) OR " +
+            "(kind = 'attachment' AND entityId NOT IN (SELECT id FROM attachments))",
     )
     suspend fun pruneOrphanedOutbox()
 
@@ -157,6 +158,20 @@ interface SyncDao {
             "SELECT 'inkMove', id, 1, COALESCE(deletedAt, createdAt) FROM ink_moves",
     )
     suspend fun enqueueAllInkMoves()
+
+    /**
+     * Queues this device's pictures — metadata rows only; the bytes go up the byte route first.
+     *
+     * `createdAt` is the whole stamp, without the `COALESCE` the ink kinds need: an attachment is
+     * immutable and this build never tombstones one. `AttachmentStore.release` is written and has no
+     * caller (see `NotesViewModel.deleteImages`), so a picture is never removed from this database
+     * and there is no local event a `deletedAt` could carry.
+     */
+    @Query(
+        "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
+            "SELECT 'attachment', id, 1, createdAt FROM attachments",
+    )
+    suspend fun enqueueAllAttachments()
 }
 
 /** Raw Room projection for the typed recovery model in `data/DeletionRecovery.kt`. */
@@ -680,6 +695,17 @@ interface AttachmentDao {
 
     @Query("SELECT * FROM attachments WHERE refCount <= 0")
     suspend fun unreferenced(): List<AttachmentEntity>
+
+    /**
+     * Every picture this device knows about, ids only.
+     *
+     * Read by the sync's download phase, which answers "which bytes am I missing" by asking the
+     * filesystem rather than by keeping a second table in step with it. A row whose file is absent
+     * *is* the pending download — there is no queue to lose, drain twice, or leave behind when a
+     * process dies mid-transfer. Ids only because the answer is a `stat` per row and nothing else.
+     */
+    @Query("SELECT id FROM attachments")
+    suspend fun allIds(): List<String>
 
     @Query("DELETE FROM attachments WHERE id = :id AND refCount <= 0")
     suspend fun deleteIfUnreferenced(id: String)

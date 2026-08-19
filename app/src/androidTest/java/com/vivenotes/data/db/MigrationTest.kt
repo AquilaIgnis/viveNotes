@@ -829,6 +829,76 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migration20To21QueuesExistingPicturesAndIgnoresAReferenceCountChange() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 20).apply {
+            execSQL("INSERT INTO attachments VALUES ('abc', 'image/webp', 100, 80, 2048, 1, 42)")
+            execSQL("INSERT INTO notebooks VALUES ('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)")
+            execSQL("INSERT INTO sections VALUES ('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)")
+            execSQL("INSERT INTO pages VALUES ('shows', 'section', 'Shows', 0, '', 10, 10, NULL)")
+            execSQL("INSERT INTO pages VALUES ('plain', 'section', 'Plain', 1, '', 10, 10, NULL)")
+            execSQL(
+                "INSERT INTO page_content VALUES " +
+                    "('shows', '{\"outlines\":[{\"t\":\"image\",\"attachmentId\":\"abc\"}]}', 11, 'json/1')",
+            )
+            execSQL(
+                "INSERT INTO page_content VALUES ('plain', '{\"outlines\":[]}', 12, 'json/1')",
+            )
+            execSQL(
+                "INSERT INTO sync_state(singleton, accountId, cursor, applyingRemote) " +
+                    "VALUES(0, 'account', 0, 0)",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            21,
+            true,
+            NotesDatabase.MIGRATION_20_21,
+        ).use { migrated ->
+            // A picture imported before the upgrade is uploaded after it, like every other kind.
+            migrated.query(
+                "SELECT entityId, generation, changedAt FROM sync_outbox WHERE kind = 'attachment'",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("abc", it.getString(0))
+                assertEquals(1L, it.getLong(1))
+                // `createdAt`, not `COALESCE(deletedAt, createdAt)`: an attachment row has neither
+                // an update nor a tombstone to carry.
+                assertEquals(42L, it.getLong(2))
+                assertEquals(false, it.moveToNext())
+            }
+
+            // A page already accepted by the server is not dirty and would never be pushed again,
+            // so the `blobRefs` this phase adds would never reach it. The body that places a
+            // picture is queued once by the migration; the one that does not is left alone.
+            migrated.query(
+                "SELECT entityId FROM sync_outbox WHERE kind = 'pageContent' ORDER BY entityId",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("shows", it.getString(0))
+                assertEquals(false, it.moveToNext())
+            }
+
+            migrated.execSQL("INSERT INTO attachments VALUES ('def', 'image/webp', 10, 10, 64, 0, 43)")
+            migrated.query("SELECT COUNT(*) FROM sync_outbox WHERE kind = 'attachment'").use {
+                it.moveToFirst()
+                assertEquals(2, it.getInt(0))
+            }
+
+            // The one table with no update trigger. `refCount` is per-device reachability and never
+            // syncs (SD7), so pasting a picture must not re-push a row nothing about which changed.
+            migrated.execSQL("UPDATE attachments SET refCount = refCount + 1 WHERE id = 'abc'")
+            migrated.query(
+                "SELECT generation FROM sync_outbox WHERE kind = 'attachment' AND entityId = 'abc'",
+            ).use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals(1L, it.getLong(0))
+            }
+        }
+    }
+
     companion object {
         private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
     }

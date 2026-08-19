@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
+import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.db.NotesDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -109,6 +110,14 @@ class SyncAccounts(
     context: Context,
     private val client: SyncServerClient = SyncServerClient(),
     database: NotesDatabase? = null,
+    /**
+     * Where attachment bytes live, so a run can carry pictures as well as rows.
+     *
+     * Defaulted rather than required because the screens' own tests build this class without a
+     * database at all; with one, the app passes the same [AttachmentStore] the editor draws from,
+     * so a picture downloaded here announces itself to the canvas already showing its frame.
+     */
+    attachments: AttachmentBytes? = null,
     private val deviceName: String = defaultDeviceName(context),
     private val platform: String = defaultPlatform(),
 ) {
@@ -116,7 +125,14 @@ class SyncAccounts(
     private val appContext = context.applicationContext
     private val store = SyncAccountStore(context)
     private val remoteInkSignal = RemoteInkSignal()
-    private val hierarchy = database?.let { HierarchySync(it, client, remoteInkSignal) }
+    private val hierarchy = database?.let { db ->
+        HierarchySync(
+            db = db,
+            client = client,
+            remoteInk = remoteInkSignal,
+            blobs = AttachmentBlobSync(db, client, attachments ?: AttachmentStore(appContext, db)),
+        )
+    }
 
     /**
      * Pages the server has written ink into, by generation — `memory/inkSyncPlan.md` IS5.

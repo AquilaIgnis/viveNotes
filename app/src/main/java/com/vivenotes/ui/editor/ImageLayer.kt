@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -307,9 +309,15 @@ private sealed interface ImageAsset {
  * photograph in it, and this one would be filled by scrolling through a notebook.
  *
  * **A failure is cached exactly like a success**, and deliberately: a picture whose file is gone is
- * not re-checked on every recomposition of the page. A file that arrives afterwards — an import that
- * restores it, say — is picked up the next time the page is opened, which is also when the import
- * would have rewritten the page under it.
+ * not re-checked on every recomposition of the page. What lifts that cache is
+ * [AttachmentStore.arrivals] — bytes actually landing — so the one thing that can change the answer
+ * is also the only thing that asks the question again.
+ *
+ * That signal exists because of sync. Before it, a file could only appear under an open page during
+ * an import, which rewrote the page anyway; now another device's picture arrives seconds after the
+ * frame that points at it, and without a retry the reader would sit looking at a broken plate until
+ * they navigated away and back. Successes are kept across an arrival: a decoded bitmap cannot have
+ * become wrong, since the file is named by the hash of its own contents.
  */
 @Composable
 private fun rememberPageAssets(
@@ -322,10 +330,11 @@ private fun rememberPageAssets(
     val ids = images.map { it.attachmentId }.distinct()
     // The size actually needed, quantised so that dragging a corner does not re-decode every frame.
     val target = images.maxOfOrNull { targetPixelsFor(it, density) } ?: 0
+    val arrivals by attachments.arrivals.collectAsState()
 
-    LaunchedEffect(ids, target) {
+    LaunchedEffect(ids, target, arrivals) {
         ids.forEach { id ->
-            if (assets.containsKey(id)) return@forEach
+            if (assets[id] is ImageAsset.Ready) return@forEach
             // Decoded at the size the page needs rather than the size the file is; the store picks
             // the sample from the header, so a large photograph shown small is never fully decoded.
             val bitmap = attachments.loadBitmap(id, target)

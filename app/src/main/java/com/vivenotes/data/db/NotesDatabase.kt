@@ -29,7 +29,7 @@ import androidx.sqlite.execSQL
         SyncEntityStateEntity::class,
         SyncOutboxEntity::class,
     ],
-    version = 20,
+    version = 21,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -551,6 +551,53 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Puts pictures in the sync outbox — the metadata half of attachments (`syncPlan.md` S5).
+         *
+         * Nothing about the `attachments` table changes. It gains an **insert** trigger and no
+         * update trigger, which is the one asymmetry in `installSyncTriggers` and is worth the
+         * paragraph: everything the protocol carries about an attachment describes the bytes its id
+         * is the hash of, so the row is immutable in every synced field. The only column that ever
+         * changes is `refCount`, which is per-device reachability and deliberately not synced
+         * (`viveCServer/memory/syncPlan.md` SD7) — an update trigger would therefore re-push an
+         * identical row every time a picture was pasted, and every other device would pull it.
+         *
+         * The backfill is guarded on an existing `sync_state` row exactly as 17 -> 18 and 19 -> 20
+         * were: an account activated under an older schema takes `activateLocked`'s fast path after
+         * the upgrade and would never run the new seeding there, while a database that has never
+         * been connected must stay untouched until its owner connects.
+         */
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(connection: SQLiteConnection) {
+                installSyncTriggers(connection)
+                connection.execSQL(
+                    """
+                    INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt)
+                    SELECT 'attachment', id, 1, createdAt FROM attachments
+                    WHERE EXISTS (SELECT 1 FROM sync_state WHERE singleton = 0)
+                    """.trimIndent(),
+                )
+                // And the bodies that place a picture, which is the half that is easy to miss: a
+                // page already accepted by the server is not dirty, so it would never be pushed
+                // again and its `blobRefs` — added to the protocol by this same phase — would never
+                // reach the server at all. The account would then have pictures kept alive only by
+                // their `attachments` rows, and the day a client learns to tombstone one, the
+                // sweeper would free bytes a page still shows.
+                //
+                // `LIKE '%attachmentId%'` is the same test `HierarchySync.pictureIdsIn` makes
+                // before decoding a document: it is a field name of `Outline.Image` and of nothing
+                // else. A false positive costs one re-push of an unchanged body.
+                connection.execSQL(
+                    """
+                    INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt)
+                    SELECT 'pageContent', pageId, 1, updatedAt FROM page_content
+                    WHERE docJson LIKE '%attachmentId%'
+                      AND EXISTS (SELECT 1 FROM sync_state WHERE singleton = 0)
+                    """.trimIndent(),
+                )
+            }
+        }
+
         /** Fresh databases do not run migrations, so they install the same triggers after create. */
         val SYNC_TRIGGER_CALLBACK = object : RoomDatabase.Callback() {
             override fun onCreate(connection: SQLiteConnection) {
@@ -580,24 +627,34 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_17_18,
                     MIGRATION_18_19,
                     MIGRATION_19_20,
+                    MIGRATION_20_21,
                 )
                 .addCallback(SYNC_TRIGGER_CALLBACK)
                 .build()
 
         private fun installSyncTriggers(connection: SQLiteConnection) {
             listOf(
-                Triple("notebook", "notebooks", "id"),
-                Triple("section", "sections", "id"),
-                Triple("page", "pages", "id"),
-                Triple("pageContent", "page_content", "pageId"),
+                SyncedTable("notebook", "notebooks", "id"),
+                SyncedTable("section", "sections", "id"),
+                SyncedTable("page", "pages", "id"),
+                SyncedTable("pageContent", "page_content", "pageId"),
                 // Ink, since schema 20. The target tables get none: they are never an entity, they
                 // travel inside their operation's payload, and they are written in the same
                 // transaction as the operation whose insert already queued it.
-                Triple("inkStroke", "ink_strokes", "id"),
-                Triple("inkErase", "ink_erases", "id"),
-                Triple("inkMove", "ink_moves", "id"),
-            ).forEach { (kind, table, entityIdColumn) ->
-                listOf("insert" to "INSERT", "update" to "UPDATE").forEach { (suffix, event) ->
+                SyncedTable("inkStroke", "ink_strokes", "id"),
+                SyncedTable("inkErase", "ink_erases", "id"),
+                SyncedTable("inkMove", "ink_moves", "id"),
+                // Attachments, since schema 21, and the one kind with no update trigger — see
+                // MIGRATION_20_21 for why an update here would only ever be a `refCount` the
+                // protocol excludes.
+                SyncedTable("attachment", "attachments", "id", queueUpdates = false),
+            ).forEach { (kind, table, entityIdColumn, queueUpdates) ->
+                val events = if (queueUpdates) {
+                    listOf("insert" to "INSERT", "update" to "UPDATE")
+                } else {
+                    listOf("insert" to "INSERT")
+                }
+                events.forEach { (suffix, event) ->
                     connection.execSQL(
                         """
                         CREATE TRIGGER IF NOT EXISTS sync_${table}_$suffix
@@ -622,5 +679,18 @@ abstract class NotesDatabase : RoomDatabase() {
                 }
             }
         }
+
+        /**
+         * One row of [installSyncTriggers]' table: which kind a table's rows are pushed as, where
+         * the entity id lives on them, and whether an update to one is worth telling the server
+         * about. A data class rather than a `Triple` because the fourth field is a boolean, and a
+         * boolean in a tuple is unreadable at the call site.
+         */
+        private data class SyncedTable(
+            val kind: String,
+            val table: String,
+            val entityIdColumn: String,
+            val queueUpdates: Boolean = true,
+        )
     }
 }

@@ -9,10 +9,13 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
+import java.io.File
 import java.net.InetSocketAddress
 
 /**
@@ -38,6 +41,7 @@ class SyncServerClientTest {
     private var requestPath: String? = null
     private var requestQuery: String? = null
     private var requestBody: String? = null
+    private var requestBytes: ByteArray? = null
     private var authorization: String? = null
 
     @Before
@@ -49,7 +53,8 @@ class SyncServerClientTest {
             requestMethod = exchange.requestMethod
             requestPath = exchange.requestURI.path
             requestQuery = exchange.requestURI.query
-            requestBody = exchange.requestBody.readBytes().decodeToString()
+            requestBytes = exchange.requestBody.readBytes()
+            requestBody = requestBytes!!.decodeToString()
             authorization = exchange.requestHeaders.getFirst("Authorization")
             respond(exchange)
         }
@@ -364,6 +369,120 @@ class SyncServerClientTest {
         assertEquals("", requestBody)
     }
 
+    // --- attachment bytes (S5) --------------------------------------------------------------
+
+    @Test
+    fun aBlobHeadAsksTheDocumentedPathAndReportsWhatTheAccountHolds() = runBlocking {
+        respond = { sendEmpty(it, 204) }
+
+        assertEquals(
+            ServerResult.Success(true),
+            SyncServerClient().hasBlob(baseUrl, "vive_abc", DIGEST),
+        )
+        assertEquals("HEAD", requestMethod)
+        assertEquals("/v1/blobs/$DIGEST", requestPath)
+        assertEquals("Bearer vive_abc", authorization)
+
+        respond = { sendEmpty(it, 404) }
+        assertEquals(
+            ServerResult.Success(false),
+            SyncServerClient().hasBlob(baseUrl, "vive_abc", DIGEST),
+        )
+    }
+
+    @Test
+    fun uploadingSendsTheRawBytesAndSaysWhetherTheyWereStored() = runBlocking {
+        val file = temporaryFile(PICTURE)
+        respond = { sendEmpty(it, 201) }
+
+        assertEquals(
+            ServerResult.Success(true),
+            SyncServerClient().uploadBlob(baseUrl, "vive_abc", DIGEST, file),
+        )
+        assertEquals("PUT", requestMethod)
+        assertEquals("/v1/blobs/$DIGEST", requestPath)
+        // The body is the bytes themselves: not JSON, not base64.
+        assertArrayEquals(PICTURE, requestBytes)
+
+        // The same picture from a second device is one file and a 204, which is a success that did
+        // not store anything — the difference the summary counts.
+        respond = { sendEmpty(it, 204) }
+        assertEquals(
+            ServerResult.Success(false),
+            SyncServerClient().uploadBlob(baseUrl, "vive_abc", DIGEST, file),
+        )
+    }
+
+    @Test
+    fun anAttachmentOverTheServersCapIsARefusalToRetry() = runBlocking {
+        val file = temporaryFile(PICTURE)
+        respond = {
+            send(it, 413, """{"error":"payload_too_large","message":"an attachment may not exceed 33554432 bytes"}""")
+        }
+
+        assertEquals(
+            ServerResult.Failed(ConnectFailure.PayloadTooLarge, retryable = false),
+            SyncServerClient().uploadBlob(baseUrl, "vive_abc", DIGEST, file),
+        )
+    }
+
+    @Test
+    fun aDownloadIsKeptOnlyWhenTheBytesHashToTheNameTheyWereFetchedUnder() = runBlocking {
+        val target = temporaryFile(ByteArray(0)).also { it.delete() }
+        respond = { send(it, 200, PICTURE.decodeToString(), "application/octet-stream") }
+
+        assertEquals(
+            ServerResult.Success(true),
+            SyncServerClient().downloadBlob(baseUrl, "vive_abc", DIGEST, target),
+        )
+        assertEquals("GET", requestMethod)
+        assertArrayEquals(PICTURE, target.readBytes())
+
+        // Content addressing makes this check free of trust: bytes that do not hash to their own
+        // name are not the picture the document asked for, whatever produced them. Nothing is left
+        // behind for a caller that only looked for an exception.
+        target.delete()
+        respond = { send(it, 200, "not the picture", "application/octet-stream") }
+        assertEquals(
+            ServerResult.Failed(ConnectFailure.NotAViveServer, retryable = false),
+            SyncServerClient().downloadBlob(baseUrl, "vive_abc", DIGEST, target),
+        )
+        assertFalse(target.exists())
+    }
+
+    @Test
+    fun aPictureTheServerDoesNotHaveIsAFactRatherThanAFailure() = runBlocking {
+        val target = temporaryFile(ByteArray(0)).also { it.delete() }
+        respond = { send(it, 404, """{"error":"not_found","message":"no such attachment"}""") }
+
+        assertEquals(
+            ServerResult.Success(false),
+            SyncServerClient().downloadBlob(baseUrl, "vive_abc", DIGEST, target),
+        )
+        assertFalse(target.exists())
+    }
+
+    @Test
+    fun anIdentityThatIsNotADigestNeverReachesTheNetwork() = runBlocking {
+        val target = temporaryFile(ByteArray(0)).also { it.delete() }
+        respond = { send(it, 200, "") }
+
+        // Uppercase is refused rather than folded, exactly as the server refuses it: two spellings
+        // of one identity is how one picture becomes two files. The traversal case is why this is
+        // checked on the client at all — the digest is a file name here.
+        listOf(DIGEST.uppercase(), "abc", "../../etc/passwd", "").forEach { notADigest ->
+            assertEquals(
+                ServerResult.Failed(ConnectFailure.InvalidAddress, retryable = false),
+                SyncServerClient().hasBlob(baseUrl, "vive_abc", notADigest),
+            )
+            assertEquals(
+                ServerResult.Failed(ConnectFailure.InvalidAddress, retryable = false),
+                SyncServerClient().downloadBlob(baseUrl, "vive_abc", notADigest, target),
+            )
+        }
+        assertNull(requestPath)
+    }
+
     @Test
     fun aBareHostGetsHttpsSoCleartextHasToBeAskedFor() {
         assertEquals("https://notes.example.com", normaliseServerAddress("notes.example.com"))
@@ -390,6 +509,18 @@ class SyncServerClientTest {
         assertNull(normaliseServerAddress("https://user:pw@example.com"))
     }
 
+    /** A response with no body at all, which is the only shape a `HEAD` may answer with. */
+    private fun sendEmpty(exchange: HttpExchange, status: Int) {
+        exchange.sendResponseHeaders(status, -1)
+        exchange.close()
+    }
+
+    private fun temporaryFile(contents: ByteArray): File =
+        File.createTempFile("vive-blob", null).apply {
+            deleteOnExit()
+            writeBytes(contents)
+        }
+
     private fun send(
         exchange: HttpExchange,
         status: Int,
@@ -405,6 +536,12 @@ class SyncServerClientTest {
             exchange.sendResponseHeaders(status, bytes.size.toLong())
             exchange.responseBody.use { it.write(bytes) }
         }
+    }
+
+    private companion object {
+        /** SHA-256 of [PICTURE], the id an attachment would have. */
+        const val DIGEST = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        val PICTURE = "hello".toByteArray()
     }
 
     /**

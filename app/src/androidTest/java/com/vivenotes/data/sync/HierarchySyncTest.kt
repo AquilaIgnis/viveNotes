@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.NotesRepository
+import com.vivenotes.data.db.AttachmentEntity
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkTextEntity
 import com.vivenotes.data.db.InkTextStatus
@@ -30,8 +31,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.vivenotes.model.Outline
+import com.vivenotes.model.PageDoc
+import com.vivenotes.model.JsonDocumentCodec
+import java.io.File
 import java.security.MessageDigest
 import java.util.Base64
+import java.util.UUID
 
 @RunWith(AndroidJUnit4::class)
 class HierarchySyncTest {
@@ -40,6 +46,8 @@ class HierarchySyncTest {
     private lateinit var repository: NotesRepository
     private lateinit var server: InMemorySyncServer
     private lateinit var remoteInk: RemoteInkSignal
+    private lateinit var pictures: TemporaryAttachmentBytes
+    private lateinit var attachmentDirectory: File
     private lateinit var hierarchy: HierarchySync
     private var now = 1_000_000L
 
@@ -53,11 +61,16 @@ class HierarchySyncTest {
         repository = NotesRepository(db, clock = { now })
         server = InMemorySyncServer()
         remoteInk = RemoteInkSignal()
-        hierarchy = HierarchySync(db, server, remoteInk)
+        attachmentDirectory = File(context.cacheDir, "sync-attachments-${UUID.randomUUID()}")
+        pictures = TemporaryAttachmentBytes(attachmentDirectory)
+        hierarchy = HierarchySync(db, server, remoteInk, AttachmentBlobSync(db, server, pictures))
     }
 
     @After
-    fun tearDown() = db.close()
+    fun tearDown() {
+        db.close()
+        attachmentDirectory.deleteRecursively()
+    }
 
     @Test
     fun activatingAnOfflineTreePushesParentsFirstThenCommitsItsPullCursor() = runBlocking {
@@ -275,7 +288,14 @@ class HierarchySyncTest {
             NotesDatabase::class.java,
         ).addCallback(NotesDatabase.SYNC_TRIGGER_CALLBACK).allowMainThreadQueries().build()
         try {
-            val peerResult = HierarchySync(peer, server).run(account()) as SyncRunResult.Succeeded
+            val peerBytes = TemporaryAttachmentBytes(File(attachmentDirectory, "peer"))
+            val peerSync = HierarchySync(
+                peer,
+                server,
+                RemoteInkSignal(),
+                AttachmentBlobSync(peer, server, peerBytes),
+            )
+            val peerResult = peerSync.run(account()) as SyncRunResult.Succeeded
             assertEquals(4, peerResult.summary.pulled)
             assertEquals(document, peer.pageContentDao().byId(pageId)!!.docJson)
         } finally {
@@ -565,11 +585,14 @@ class HierarchySyncTest {
     fun aKindThisBuildCannotStoreParksTheCursorRatherThanSkippingIt() = runBlocking {
         val changedAt = System.currentTimeMillis()
         server.seed(notebookChange("n", "Remote", changedAt))
+        // A kind from a build newer than this one. It was `attachment` until S5 landed, which is
+        // the point: every kind named here eventually becomes one this build stores, and the case
+        // has to keep testing the *unknown* branch rather than quietly testing a known one.
         server.seed(
             JsonObject(
                 linkedMapOf(
-                    "kind" to JsonPrimitive("attachment"),
-                    "id" to JsonPrimitive("attachment-1"),
+                    "kind" to JsonPrimitive("pageRevision"),
+                    "id" to JsonPrimitive("revision-1"),
                     "deletedAt" to JsonNull,
                     "updatedAt" to JsonPrimitive(changedAt),
                 ),
@@ -584,6 +607,216 @@ class HierarchySyncTest {
         assertEquals(SyncRunResult.Failed(PermanentSyncFailure.UnsupportedKind), result)
         assertEquals(0L, db.syncDao().state()!!.cursor)
     }
+
+    // --- attachments (S5) -----------------------------------------------------------------------
+
+    @Test
+    fun aPicturesBytesReachTheServerBeforeTheChangeThatNamesThem() = runBlocking {
+        val bytes = "a photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        val pageId = seedPageWithPicture(digest)
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        // The fake server refuses a `pageContent` or an `attachment` naming bytes it does not hold,
+        // exactly as viveCServer does. Everything applying is therefore the assertion that the
+        // upload happened first — there is no ordering to check separately.
+        assertEquals(listOf("HEAD $digest", "PUT $digest"), server.blobCalls)
+        assertArrayEquals(bytes, server.blobs.getValue(digest))
+        assertEquals(1, result.summary.pictures)
+
+        val pushed = server.pushes.flatten()
+        val body = pushed.single { kindOf(it) == "pageContent" && idOf(it) == pageId }
+        assertEquals(
+            listOf(digest),
+            (body.getValue("blobRefs") as JsonArray).map { it.jsonPrimitive.content },
+        )
+        val attachment = pushed.single { kindOf(it) == "attachment" }
+        assertEquals(digest, idOf(attachment))
+        assertEquals("image/webp", attachment.getValue("mimeType").jsonPrimitive.content)
+        assertEquals(bytes.size.toLong(), attachment.getValue("byteCount").jsonPrimitive.long)
+        // refCount is per-device reachability and never leaves it — SD7.
+        assertNull(attachment["refCount"])
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    @Test
+    fun aSecondRunUploadsNothingBecauseTheAcceptedRowIsProofTheServerHasTheBytes() = runBlocking {
+        val bytes = "a photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        val pageId = seedPageWithPicture(digest)
+        hierarchy.run(account())
+        server.blobCalls.clear()
+
+        now += 1_000
+        repository.saveDoc(pageId, docWithPicture(digest, x = 40f))
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        // The picture moved on the page, so the body is pushed again with the same reference — and
+        // the byte route is not touched at all. A `HEAD` per picture per edit would be one request
+        // per 60 s tick on a notebook full of photographs.
+        assertEquals(
+            listOf(digest),
+            (server.current("pageContent", pageId)!!.getValue("blobRefs") as JsonArray)
+                .map { it.jsonPrimitive.content },
+        )
+        assertEquals(0, result.summary.pictures)
+        assertEquals(emptyList<String>(), server.blobCalls)
+    }
+
+    @Test
+    fun aServerThatLostItsBytesIsRepairedByTheRejectionItSends() = runBlocking {
+        val bytes = "a photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        val pageId = seedPageWithPicture(digest)
+        hierarchy.run(account())
+
+        // The database survived, the blob volume did not: the state row still says the server holds
+        // these bytes, so nothing this device knows would make it upload them again.
+        server.lostBlobs += digest
+        server.blobCalls.clear()
+        now += 1_000
+        repository.saveDoc(pageId, docWithPicture(digest, x = 80f))
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        // No HEAD: the rejection already said what a HEAD would have said.
+        assertEquals(listOf("PUT $digest"), server.blobCalls)
+        assertArrayEquals(bytes, server.blobs.getValue(digest))
+        assertEquals(1, result.summary.pictures)
+        // And the edit it rejected went on to be accepted in the same run rather than being left
+        // for the next one.
+        assertEquals(
+            JsonDocumentCodec.encodeToString(docWithPicture(digest, x = 80f)),
+            decodeDocument(server.current("pageContent", pageId)!!),
+        )
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    @Test
+    fun aPictureThisDeviceCannotSupplyIsDroppedFromTheReferencesRatherThanWedgingEveryPush() =
+        runBlocking {
+            // A broken picture: the row and the outline are here, the file is not. Before S5 this
+            // could not happen; a download interrupted halfway is how it happens now.
+            val bytes = "a photograph".toByteArray()
+            val digest = sha256(bytes)
+            val pageId = seedPageWithPicture(digest)
+
+            val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+            // The page still syncs, without claiming the server should keep bytes nobody has.
+            val body = server.pushes.flatten()
+                .last { kindOf(it) == "pageContent" && idOf(it) == pageId }
+            assertEquals(0, (body.getValue("blobRefs") as JsonArray).size)
+            assertEquals(0, server.blobs.size)
+            // And the metadata row is not left queued: there is no version of it the server would
+            // ever take, so every later push would end on the same rejection.
+            assertTrue(db.syncDao().outbox(512).none { it.kind == "attachment" })
+            assertNull(server.current("attachment", digest))
+            assertTrue(result.summary.pushed > 0)
+        }
+
+    @Test
+    fun aPulledPictureIsFetchedAndCountedAgainstTheDocumentThatShowsIt() = runBlocking {
+        val bytes = "another device's photograph".toByteArray()
+        val digest = sha256(bytes)
+        val changedAt = System.currentTimeMillis()
+        server.blobs[digest] = bytes
+        server.seed(
+            notebookChange("n", "Remote", changedAt),
+            sectionChange("s", "n", "Remote section", changedAt),
+            pageChange("p", "s", "Remote page", changedAt),
+            pageContentChange("p", JsonDocumentCodec.encodeToString(docWithPicture(digest)), changedAt),
+            attachmentChange(digest, bytes.size.toLong(), changedAt),
+        )
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(listOf("GET $digest"), server.blobCalls)
+        assertArrayEquals(bytes, pictures.fileFor(digest).readBytes())
+        assertEquals(1, result.summary.pictures)
+        val row = db.attachmentDao().byId(digest)!!
+        assertEquals(bytes.size.toLong(), row.byteCount)
+        // The pulled document places the picture once, and this device's own reachability count
+        // follows it — nothing in the editor ran to do that.
+        assertEquals(1, row.refCount)
+    }
+
+    @Test
+    fun aPulledAttachmentRowDoesNotOverwriteThisDevicesReferenceCount() = runBlocking {
+        val bytes = "a shared photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        seedPageWithPicture(digest)
+        hierarchy.run(account())
+        val local = db.attachmentDao().byId(digest)!!.refCount
+
+        // The same picture comes back from the server as another device's row.
+        server.seed(attachmentChange(digest, bytes.size.toLong(), System.currentTimeMillis()))
+        hierarchy.run(account())
+
+        // `refCount` is not in the protocol, and a pulled row carrying a zero must not be allowed to
+        // read as "nothing here points at this picture" — that is what a future sweep would act on.
+        assertEquals(local, db.attachmentDao().byId(digest)!!.refCount)
+    }
+
+    @Test
+    fun anAttachmentIdThatIsNotADigestIsRefusedBeforeItCanBecomeAFileName() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(attachmentChange("../../etc/passwd", 12L, changedAt))
+
+        val result = hierarchy.run(account())
+
+        // The id is a path segment on the wire and a file name in `filesDir/attachments` here. The
+        // server pins the pattern; this build does not take its word for it.
+        assertEquals(
+            SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+            result,
+        )
+        assertEquals(0L, db.syncDao().state()!!.cursor)
+        assertEquals(emptyList<String>(), server.blobCalls)
+    }
+
+    /**
+     * A page showing one picture, with its metadata row, as an import would leave them. The bytes
+     * are the caller's business: half these tests are about what happens when they are missing.
+     */
+    private suspend fun seedPageWithPicture(digest: String): String {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        db.attachmentDao().insert(
+            AttachmentEntity(
+                id = digest,
+                mimeType = "image/webp",
+                pixelWidth = 8,
+                pixelHeight = 8,
+                byteCount = pictures.fileFor(digest).takeIf(File::exists)?.length()
+                    ?: "a photograph".toByteArray().size.toLong(),
+                refCount = 0,
+                createdAt = now,
+            ),
+        )
+        db.attachmentDao().retain(digest)
+        repository.saveDoc(pageId, docWithPicture(digest))
+        return pageId
+    }
+
+    private fun docWithPicture(digest: String, x: Float = 0f) = PageDoc(
+        outlines = listOf(
+            Outline.Image(
+                id = "image-1",
+                x = x,
+                y = 0f,
+                width = 100f,
+                height = 100f,
+                attachmentId = digest,
+            ),
+        ),
+    )
 
     private fun strokeRow(id: String, pageId: String, seq: Int) = InkStrokeEntity(
         id = id,
@@ -638,6 +871,21 @@ class HierarchySyncTest {
         val pushes = mutableListOf<List<JsonObject>>()
         var beforeFirstPush: (suspend () -> Unit)? = null
         private var cursor = 0L
+
+        /** The account's blobs, by digest — the `blobs` table and the file behind each row. */
+        val blobs = linkedMapOf<String, ByteArray>()
+
+        /** Every byte-route call, in order, so a test can show what a run did *not* ask for. */
+        val blobCalls = mutableListOf<String>()
+
+        /**
+         * Digests to answer `missing_blob` for even while [blobs] holds them, cleared by an upload.
+         *
+         * This is the server whose database survived and whose blob volume did not — the case
+         * `syncPlan.md` §13.12 designed the 404 and the rejection for. Cleared by the upload
+         * because that is precisely what repairs it.
+         */
+        val lostBlobs = mutableSetOf<String>()
 
         fun seed(vararg changes: JsonObject) {
             cursor++
@@ -701,7 +949,19 @@ class HierarchySyncTest {
                 val current = rows[key]
                 val currentVersion = current?.getValue("version")?.jsonPrimitive?.long ?: 0
                 val baseVersion = incoming.getValue("baseVersion").jsonPrimitive.long
-                if (baseVersion != currentVersion) {
+                val unheld = digestsRequiredBy(incoming)
+                    .filter { it !in blobs || it in lostBlobs }
+                if (unheld.isNotEmpty()) {
+                    // The invariant the whole phase exists to keep: a live row never points at
+                    // bytes the server cannot serve, so it refuses to store one that would.
+                    rejected += RejectedServerChange(
+                        key.first,
+                        key.second,
+                        "missing_blob",
+                        unheld.joinToString(),
+                        null,
+                    )
+                } else if (baseVersion != currentVersion) {
                     rejected += RejectedServerChange(
                         key.first,
                         key.second,
@@ -734,8 +994,61 @@ class HierarchySyncTest {
             token: String,
             deviceId: String,
         ): ServerResult<Unit> = ServerResult.Success(Unit)
+
+        override suspend fun hasBlob(
+            serverBaseUrl: String,
+            token: String,
+            digest: String,
+        ): ServerResult<Boolean> {
+            blobCalls += "HEAD $digest"
+            return ServerResult.Success(digest in blobs && digest !in lostBlobs)
+        }
+
+        override suspend fun uploadBlob(
+            serverBaseUrl: String,
+            token: String,
+            digest: String,
+            file: File,
+        ): ServerResult<Boolean> {
+            blobCalls += "PUT $digest"
+            val bytes = file.readBytes()
+            // The real server hashes what arrives and refuses a body that does not match its name.
+            if (sha256(bytes) != digest) {
+                return ServerResult.Failed(ConnectFailure.InvalidRequest, retryable = false)
+            }
+            // A digest whose file was lost is stored again, not deduplicated: the 201/204 the
+            // real server answers is about the *bytes on disk*, which is exactly what was missing.
+            val wasLost = lostBlobs.remove(digest)
+            val held = blobs.put(digest, bytes) != null
+            return ServerResult.Success(wasLost || !held)
+        }
+
+        override suspend fun downloadBlob(
+            serverBaseUrl: String,
+            token: String,
+            digest: String,
+            target: File,
+        ): ServerResult<Boolean> {
+            blobCalls += "GET $digest"
+            val bytes = blobs[digest]?.takeIf { digest !in lostBlobs }
+                ?: return ServerResult.Success(false)
+            target.writeBytes(bytes)
+            return ServerResult.Success(true)
+        }
+
+        private fun digestsRequiredBy(change: JsonObject): List<String> = when (kindOf(change)) {
+            "attachment" -> listOf(idOf(change))
+            "pageContent" -> (change["blobRefs"] as? JsonArray)
+                .orEmpty()
+                .map { it.jsonPrimitive.content }
+            else -> emptyList()
+        }
     }
 }
+
+private fun sha256(bytes: ByteArray): String =
+    MessageDigest.getInstance("SHA-256").digest(bytes)
+        .joinToString("") { byte -> "%02x".format(byte) }
 
 private fun kindOf(change: JsonObject): String = change.getValue("kind").jsonPrimitive.content
 private fun idOf(change: JsonObject): String = change.getValue("id").jsonPrimitive.content
@@ -886,6 +1199,21 @@ private fun pageContentChange(id: String, document: String, updatedAt: Long): Js
         ),
     )
 }
+
+/** One picture's metadata as the server returns it. The id is the digest — there is no `sha256`. */
+private fun attachmentChange(id: String, byteCount: Long, updatedAt: Long): JsonObject = JsonObject(
+    linkedMapOf(
+        "kind" to JsonPrimitive("attachment"),
+        "id" to JsonPrimitive(id),
+        "deletedAt" to JsonNull,
+        "updatedAt" to JsonPrimitive(updatedAt),
+        "mimeType" to JsonPrimitive("image/webp"),
+        "pixelWidth" to JsonPrimitive(8),
+        "pixelHeight" to JsonPrimitive(8),
+        "byteCount" to JsonPrimitive(byteCount),
+        "createdAt" to JsonPrimitive(updatedAt),
+    ),
+)
 
 private fun decodeDocument(change: JsonObject): String =
     Base64.getDecoder().decode(change.getValue("doc").jsonPrimitive.content).decodeToString()

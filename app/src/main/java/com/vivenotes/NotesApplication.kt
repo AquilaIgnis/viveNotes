@@ -61,7 +61,7 @@ class NotesApplication : Application() {
     val aiModels: AiModelStore by lazy { AiModelStore(this) }
 
     /** Registering this installation with a self-hosted server — `memory/accountPlan.md`. */
-    val syncAccounts: SyncAccounts by lazy { SyncAccounts(this, database = database) }
+    val syncAccounts: SyncAccounts by lazy { SyncAccounts(this, database = database, attachments = attachments) }
     val recognitionEngine: OnnxInkRecognitionEngine by lazy { OnnxInkRecognitionEngine(aiModels) }
 
     /**

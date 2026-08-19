@@ -6,6 +6,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -13,6 +15,7 @@ import java.net.URI
 import java.net.URLEncoder
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
 /**
  * Why connecting to a server failed, in the terms the person who typed the address can act on.
@@ -166,6 +169,52 @@ interface SyncTransport {
         token: String,
         deviceId: String,
     ): ServerResult<Unit>
+
+    // --- attachment bytes ------------------------------------------------------------------------
+    //
+    // The three byte routes of OpenAPI 0.5.0. They are on this interface rather than beside it so a
+    // test double for the change protocol cannot silently answer "the server has every picture" —
+    // uploading before the change that names a digest is the invariant the server refuses a push to
+    // protect, and a fake that skipped it would prove nothing about the client half.
+
+    /**
+     * Whether this account already holds [digest] — `HEAD /v1/blobs/{sha256}`.
+     *
+     * The cheap half of deduplication: the same photograph imported on two tablets costs one round
+     * trip on the second rather than a second upload of the megabytes.
+     */
+    suspend fun hasBlob(
+        serverBaseUrl: String,
+        token: String,
+        digest: String,
+    ): ServerResult<Boolean>
+
+    /**
+     * Uploads [file] under [digest] — `PUT /v1/blobs/{sha256}`.
+     *
+     * True when the bytes were stored (201), false when the account already held them (204). Both
+     * are success: the upload is idempotent because the name is the content.
+     */
+    suspend fun uploadBlob(
+        serverBaseUrl: String,
+        token: String,
+        digest: String,
+        file: File,
+    ): ServerResult<Boolean>
+
+    /**
+     * Downloads [digest] into [target] — `GET /v1/blobs/{sha256}`.
+     *
+     * False means the server has no such attachment for this account (404), which is a fact about
+     * that picture rather than a failure of the connection. [target] exists afterwards only if the
+     * bytes hashed to their own name.
+     */
+    suspend fun downloadBlob(
+        serverBaseUrl: String,
+        token: String,
+        digest: String,
+        target: File,
+    ): ServerResult<Boolean>
 }
 
 /**
@@ -466,6 +515,211 @@ class SyncServerClient(
         }
     }
 
+    /**
+     * `HEAD /v1/blobs/{sha256}` — 204 means the account holds the bytes, 404 that it does not.
+     *
+     * **`Expect: 100-continue` is deliberately not used**, although the contract offers it as the
+     * way to skip this request. `HttpURLConnection` turns an early final response into a
+     * `ProtocolException` thrown out of the output stream rather than a status a caller can read,
+     * on both the JDK and the OkHttp-backed Android implementation — so a 204 for a picture the
+     * server already had would arrive as a transport error. This costs the same round trip the
+     * `Expect` handshake costs and reports the same fact as a status code.
+     */
+    override suspend fun hasBlob(
+        serverBaseUrl: String,
+        token: String,
+        digest: String,
+    ): ServerResult<Boolean> = withContext(Dispatchers.IO) {
+        val url = blobUrl(serverBaseUrl, digest) ?: return@withContext invalidAddress()
+        val connection = try {
+            openConnection(url)
+        } catch (unreachable: IOException) {
+            return@withContext unreachable()
+        }
+        try {
+            connection.requestMethod = "HEAD"
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Authorization", "Bearer $token")
+
+            when (val status = connection.responseCode) {
+                204, 200 -> ServerResult.Success(true)
+                404 -> ServerResult.Success(false)
+                401 -> ServerResult.Unauthorized
+                else -> ServerResult.Failed(
+                    reason = failureForStatus(status),
+                    retryable = status >= 500,
+                )
+            }
+        } catch (failed: IOException) {
+            unreachable()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /**
+     * `PUT /v1/blobs/{sha256}` — the bytes themselves, streamed from disk.
+     *
+     * Streamed rather than read into a `ByteArray` first: an attachment may be 32 MiB, and this runs
+     * on a tablet that is also holding a page of ink. `setFixedLengthStreamingMode` is what keeps
+     * `HttpURLConnection` from buffering the whole body to compute a `Content-Length` itself.
+     *
+     * The size is checked here as well as by the server, so a file that could only ever be refused
+     * is not sent over somebody's mobile connection first.
+     */
+    override suspend fun uploadBlob(
+        serverBaseUrl: String,
+        token: String,
+        digest: String,
+        file: File,
+    ): ServerResult<Boolean> = withContext(Dispatchers.IO) {
+        val url = blobUrl(serverBaseUrl, digest) ?: return@withContext invalidAddress()
+        val length = file.length()
+        if (!file.isFile) {
+            // The bytes this device was going to prove it holds are not there. Reported as a
+            // permanent local failure so the caller stops rather than retrying a missing file.
+            return@withContext ServerResult.Failed(ConnectFailure.InvalidRequest, retryable = false)
+        }
+        if (length > MAX_BLOB_BYTES) {
+            return@withContext ServerResult.Failed(ConnectFailure.PayloadTooLarge, retryable = false)
+        }
+
+        val connection = try {
+            openConnection(url)
+        } catch (unreachable: IOException) {
+            return@withContext unreachable()
+        }
+        try {
+            connection.requestMethod = "PUT"
+            connection.doOutput = true
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.setRequestProperty("Content-Type", "application/octet-stream")
+            connection.setRequestProperty("Accept", "application/json")
+            connection.setFixedLengthStreamingMode(length)
+            connection.outputStream.use { out ->
+                file.inputStream().use { input -> input.copyTo(out, TRANSFER_BUFFER_BYTES) }
+            }
+
+            when (val status = connection.responseCode) {
+                201 -> ServerResult.Success(true)
+                204, 200 -> ServerResult.Success(false)
+                401 -> ServerResult.Unauthorized
+                else -> ServerResult.Failed(
+                    reason = failureFor(status, readBounded(connection.errorStream)),
+                    retryable = status >= 500,
+                )
+            }
+        } catch (failed: IOException) {
+            unreachable()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /**
+     * `GET /v1/blobs/{sha256}` into [target], which is written only if the bytes prove their name.
+     *
+     * **The digest is verified here rather than by the caller**, because this is the only place that
+     * sees the bytes as they arrive and the only place that can refuse them without a second read of
+     * the file. Content addressing makes that check free of trust: bytes that do not hash to the
+     * name they were fetched under are not the picture the document asked for, whatever produced
+     * them — a truncating proxy, a captive portal, the wrong server behind one address.
+     *
+     * [target] is removed on every failure path, so a partial body can never be renamed into the
+     * attachment store by a caller that only checked for an exception.
+     */
+    override suspend fun downloadBlob(
+        serverBaseUrl: String,
+        token: String,
+        digest: String,
+        target: File,
+    ): ServerResult<Boolean> = withContext(Dispatchers.IO) {
+        val url = blobUrl(serverBaseUrl, digest) ?: return@withContext invalidAddress()
+        val connection = try {
+            openConnection(url)
+        } catch (unreachable: IOException) {
+            return@withContext unreachable()
+        }
+        try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.setRequestProperty("Accept", "application/octet-stream")
+
+            val status = connection.responseCode
+            when {
+                status == 404 -> return@withContext ServerResult.Success(false)
+                status == 401 -> return@withContext ServerResult.Unauthorized
+                status !in 200..299 -> return@withContext ServerResult.Failed(
+                    reason = failureFor(status, readBounded(connection.errorStream)),
+                    retryable = status >= 500,
+                )
+            }
+
+            val digested = MessageDigest.getInstance("SHA-256")
+            var written = 0L
+            connection.inputStream.use { input ->
+                FileOutputStream(target).use { out ->
+                    val buffer = ByteArray(TRANSFER_BUFFER_BYTES)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        written += count
+                        // Bounded while it is being written, not after: a server answering with an
+                        // endless body would otherwise fill the device before anything checked.
+                        if (written > MAX_BLOB_BYTES) {
+                            target.delete()
+                            return@withContext ServerResult.Failed(
+                                ConnectFailure.PayloadTooLarge,
+                                retryable = false,
+                            )
+                        }
+                        digested.update(buffer, 0, count)
+                        out.write(buffer, 0, count)
+                    }
+                }
+            }
+            if (digested.digest().toHex() != digest) {
+                target.delete()
+                return@withContext ServerResult.Failed(
+                    ConnectFailure.NotAViveServer,
+                    retryable = false,
+                )
+            }
+            ServerResult.Success(true)
+        } catch (failed: IOException) {
+            target.delete()
+            unreachable()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /**
+     * The byte route's URL, or null when [digest] is not one.
+     *
+     * The shape is checked before a request is built and again wherever the digest becomes a file
+     * name: it arrives from a server response and is used as a path segment on both sides, so
+     * anything but 64 lowercase hex characters is refused rather than escaped. Uppercase is refused
+     * too, exactly as the server refuses it — two spellings of one identity is how one picture
+     * becomes two files, two rows and two uploads.
+     */
+    private fun blobUrl(serverBaseUrl: String, digest: String): URL? {
+        if (!isBlobDigest(digest)) return null
+        return try {
+            URL("$serverBaseUrl/v1/blobs/$digest")
+        } catch (malformed: java.net.MalformedURLException) {
+            null
+        }
+    }
+
     private suspend fun authenticatedRequest(
         serverBaseUrl: String,
         path: String,
@@ -604,6 +858,8 @@ class SyncServerClient(
 
     private companion object {
         const val CONNECT_TIMEOUT_MS = 10_000
+        /** One page of a file at a time, on both byte routes. */
+        const val TRANSFER_BUFFER_BYTES = 64 * 1024
         const val READ_TIMEOUT_MS = 30_000
         const val MAX_RESPONSE_BYTES = 64 * 1024
         const val MAX_API_RESPONSE_BYTES = 10 * 1024 * 1024
@@ -621,6 +877,31 @@ class SyncServerClient(
 
 /** Contract cap shared with [HierarchySync], which splits its durable outbox before transport. */
 internal const val MAX_SYNC_PUSH_BYTES = 4 * 1024 * 1024
+
+/**
+ * `VIVE_MAX_BLOB_BYTES`, the server's per-attachment cap and the only storage limit it has — there
+ * is no per-account quota (`viveCServer/memory/syncPlan.md` §12 decision 1). It is also
+ * `NotebookTransferManager`'s cap for the same field, so a picture that imports from a `.vive`
+ * bundle is a picture that syncs.
+ */
+internal const val MAX_BLOB_BYTES = 32L * 1024 * 1024
+
+/**
+ * Whether [value] can be an attachment's identity: 64 lowercase hex characters.
+ *
+ * The digest is three things at once — the entity id, a `blobRefs` element and a URL path segment —
+ * and on this side it is a *file name* as well. So it is validated wherever it crosses a boundary
+ * rather than trusted because the server promised a pattern: a client that took an id on faith would
+ * let a response name a path outside the attachment directory.
+ */
+internal fun isBlobDigest(value: String): Boolean =
+    value.length == 64 && value.all { it in '0'..'9' || it in 'a'..'f' }
+
+internal fun ByteArray.toHex(): String = buildString(size * 2) {
+    this@toHex.forEach { byte -> append(HEX[(byte.toInt() shr 4) and 0xF]).append(HEX[byte.toInt() and 0xF]) }
+}
+
+private const val HEX = "0123456789abcdef"
 
 private sealed interface RawServerResult {
     data class Response(val status: Int, val payload: String) : RawServerResult
