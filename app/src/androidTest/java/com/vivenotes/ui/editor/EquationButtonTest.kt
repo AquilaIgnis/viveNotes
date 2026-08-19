@@ -127,6 +127,7 @@ class EquationButtonTest {
         zoomToPageWidth = {},
         setTabsLayout = {},
         setCanvasDark = {},
+        setLinkPreviews = {},
         openPane = {},
     )
 }

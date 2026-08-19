@@ -59,6 +59,7 @@ class ViewTabTest {
                         zoomToPageWidth = { fittedToPageWidth = true },
                         setTabsLayout = { tabsLayout = it },
                         setCanvasDark = { canvasDark = it },
+                        setLinkPreviews = {},
                         openPane = { openedPane = it },
                     ),
                 )

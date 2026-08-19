@@ -7,17 +7,17 @@ internal data class AutoEquationCandidate(
     val latex: String,
 )
 
-/** Whether a live preview must step aside so its exact source can receive the caret. */
+/**
+ * Whether a live preview must step aside so its exact source can receive the caret.
+ *
+ * The rule itself is [rangeIsBeingEdited], shared with the link preview, which needs the identical
+ * behaviour over a pasted URL.
+ */
 internal fun AutoEquationCandidate.isBeingEdited(
     editorFocused: Boolean,
     selectionStart: Int,
     selectionEnd: Int,
-): Boolean {
-    if (!editorFocused) return false
-    val from = minOf(selectionStart, selectionEnd).coerceAtLeast(0)
-    val to = maxOf(selectionStart, selectionEnd).coerceAtLeast(0)
-    return if (from == to) from in start..end else from < end && to > start
-}
+): Boolean = rangeIsBeingEdited(start, end, editorFocused, selectionStart, selectionEnd)
 
 /**
  * Finds explicitly bounded LaTeX without trying to guess whether ordinary prose is mathematics.

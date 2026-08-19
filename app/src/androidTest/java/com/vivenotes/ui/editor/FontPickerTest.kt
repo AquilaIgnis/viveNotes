@@ -211,6 +211,7 @@ class FontPickerTest {
         zoomToPageWidth = {},
         setTabsLayout = {},
         setCanvasDark = {},
+        setLinkPreviews = {},
         openPane = {},
     )
 }

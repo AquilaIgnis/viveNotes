@@ -96,10 +96,12 @@ import com.vivenotes.model.PageStyle
 import com.vivenotes.model.search.ContentHit
 import com.vivenotes.math.FormulaToolsState
 import com.vivenotes.math.MathEngine
+import com.vivenotes.richtext.VideoThumbnails
 import com.vivenotes.ui.editor.DrawActions
 import com.vivenotes.ui.editor.AiActions
 import com.vivenotes.ui.editor.EditorPane
 import com.vivenotes.ui.editor.FileActions
+import com.vivenotes.ui.editor.LocalVideoThumbnails
 import com.vivenotes.ui.editor.Ribbon
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
@@ -126,6 +128,8 @@ import com.vivenotes.ui.theme.canvasColorsFor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.semantics.hideFromAccessibility
@@ -166,6 +170,7 @@ private val AUTOMATIC_MATH_ACTIONS = listOf("solve", "evaluate", "simplify")
 fun NotesApp(
     viewModel: NotesViewModel,
     attachments: AttachmentStore,
+    videoThumbnails: VideoThumbnails,
     aiModelStore: AiModelStore,
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
@@ -242,6 +247,10 @@ fun NotesApp(
         }
     }
 
+    val linkPreviews by remember(viewModel) {
+        viewModel.viewSettings.map { it.linkPreviews }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = true)
+
     Box(Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
@@ -254,21 +263,30 @@ fun NotesApp(
                     },
                 ),
         ) {
-            NotesWorkspace(
-                viewModel = viewModel,
-                attachments = attachments,
-                aiModelStore = aiModelStore,
-                recognitionEngine = recognitionEngine,
-                mathEngine = mathEngine,
-                onOpenAccount = {
-                    if (backStack.lastOrNull() != AppDestination.Account) {
-                        backStack.add(AppDestination.Account)
-                    }
-                },
-                // The stored registration, not the in-flight attempt: the ribbon reports what this
-                // installation *has*, which outlives any one visit to the account screen.
-                accountConnected = storedAccount != null,
-            )
+            // Null while the Settings toggle is off, which is the whole of turning the feature
+            // off: an editor with no source draws no cards and opens no connection. Collected as
+            // just this one flag rather than as the whole of `ViewSettings`, because a static
+            // local invalidates everything below it — reading zoom here would rebuild the
+            // workspace on every frame of a pinch.
+            CompositionLocalProvider(
+                LocalVideoThumbnails provides videoThumbnails.takeIf { linkPreviews },
+            ) {
+                NotesWorkspace(
+                    viewModel = viewModel,
+                    attachments = attachments,
+                    aiModelStore = aiModelStore,
+                    recognitionEngine = recognitionEngine,
+                    mathEngine = mathEngine,
+                    onOpenAccount = {
+                        if (backStack.lastOrNull() != AppDestination.Account) {
+                            backStack.add(AppDestination.Account)
+                        }
+                    },
+                    // The stored registration, not the in-flight attempt: the ribbon reports what
+                    // this installation *has*, which outlives any one visit to the account screen.
+                    accountConnected = storedAccount != null,
+                )
+            }
         }
 
         AnimatedVisibility(
@@ -547,6 +565,7 @@ private fun NotesWorkspace(
             zoomToPageWidth = viewModel::zoomToPageWidth,
             setTabsLayout = viewModel::setTabsLayout,
             setCanvasDark = viewModel::setCanvasDark,
+            setLinkPreviews = viewModel::setLinkPreviews,
             openPane = { openPane = it },
         )
     }

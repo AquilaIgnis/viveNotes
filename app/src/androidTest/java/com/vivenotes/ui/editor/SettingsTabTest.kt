@@ -6,7 +6,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.test.platform.app.InstrumentationRegistry
+import com.vivenotes.data.ViewSettings
 import com.vivenotes.ui.panel.ToolPane
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
@@ -20,6 +24,13 @@ class SettingsTabTest {
 
     private var opened = false
     private var pane: ToolPane? = null
+
+    /**
+     * Held as Compose state and driven, rather than read back off a captured lambda: the button
+     * renders its own on/off from this, so a test that only recorded the callback would pass
+     * while the switch sat visibly stuck.
+     */
+    private var linkPreviews by mutableStateOf(true)
 
     @Test
     fun integratedOpensTheModelPane() {
@@ -76,12 +87,38 @@ class SettingsTabTest {
         assertEquals(ToolPane.Hardware, pane)
     }
 
+    /**
+     * Link Previews reports its own state, and toggling it turns the fetch off rather than doing
+     * nothing visible.
+     *
+     * The `active` background is what a user reads the setting off, so the assertion is on the
+     * rendered state after the round trip through the caller — not on the callback alone, which
+     * would still pass if the button were wired to a value it never re-read.
+     */
+    @Test
+    fun linkPreviewsTogglesAndReportsItsState() {
+        setTab()
+
+        compose.onNodeWithTag(SettingsTags.LINK_PREVIEWS).assertIsDisplayed()
+        assertTrue(linkPreviews)
+
+        compose.onNodeWithTag(SettingsTags.LINK_PREVIEWS).performClick()
+        compose.waitForIdle()
+        assertEquals(false, linkPreviews)
+
+        compose.onNodeWithTag(SettingsTags.LINK_PREVIEWS).performClick()
+        compose.waitForIdle()
+        assertEquals(true, linkPreviews)
+    }
+
     private fun setTab() {
         compose.setContent {
             ViveNotesTheme {
                 SettingsTab(
                     ai = AiActions(openIntegrated = { opened = true }),
                     openPane = { pane = it },
+                    viewSettings = ViewSettings(linkPreviews = linkPreviews),
+                    onSetLinkPreviews = { linkPreviews = it },
                 )
             }
         }

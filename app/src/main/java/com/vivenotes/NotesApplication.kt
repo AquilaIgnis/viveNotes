@@ -14,6 +14,7 @@ import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.StarterInkPageFixture
+import com.vivenotes.data.VideoThumbnailStore
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.sync.ForegroundSyncScheduler
@@ -43,6 +44,14 @@ class NotesApplication : Application() {
         )
     }
     val attachments: AttachmentStore by lazy { AttachmentStore(this, database) }
+
+    /**
+     * Thumbnails for the editor's link previews — `richtext/VideoEmbedSpan.kt`.
+     *
+     * Lazy like the rest, which here means an install whose owner never pastes a video link
+     * never creates the cache directory, and the process never opens a socket to Google.
+     */
+    val videoThumbnails: VideoThumbnailStore by lazy { VideoThumbnailStore(this) }
     val notebookTransfers: NotebookTransferManager by lazy {
         NotebookTransferManager(this, database, attachments)
     }

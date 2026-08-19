@@ -32,6 +32,21 @@ data class ViewSettings(
      * state a fresh install is in — the toggle only pins the canvas once it has been used.
      */
     val canvasDark: Boolean? = null,
+    /**
+     * Whether a pasted video link is drawn as its thumbnail — `richtext/VideoEmbedSpan.kt`.
+     *
+     * Here rather than in [EditorDefaults] because it is not about how the user likes to write; it
+     * decides how this device *presents* something already written, which is the line this class is
+     * drawn along. That it never syncs is the point twice over: turning previews off is a statement
+     * about one device's network, and pushing that choice onto another device would be answering a
+     * question nobody asked there.
+     *
+     * Surfaced on the Settings tab rather than beside the other View settings, because what it
+     * actually governs is whether pasting a link makes the app fetch from a host the user did not
+     * choose — see [com.vivenotes.data.VideoThumbnailStore]. Defaulted on: a preview is what someone
+     * pasting a video link is asking for.
+     */
+    val linkPreviews: Boolean = true,
 ) {
     companion object {
         /**
@@ -89,6 +104,7 @@ class ViewSettingsStore(context: Context) {
                 ?.let { name -> TabsLayout.entries.firstOrNull { it.name == name } }
                 ?: TabsLayout.Vertical,
             canvasDark = prefs[CANVAS_DARK],
+            linkPreviews = prefs[LINK_PREVIEWS] ?: true,
         )
     }
 
@@ -104,9 +120,14 @@ class ViewSettingsStore(context: Context) {
         store.edit { it[CANVAS_DARK] = dark }
     }
 
+    suspend fun setLinkPreviews(enabled: Boolean) {
+        store.edit { it[LINK_PREVIEWS] = enabled }
+    }
+
     private companion object {
         val ZOOM = floatPreferencesKey("zoom")
         val TABS_LAYOUT = stringPreferencesKey("tabs_layout")
         val CANVAS_DARK = booleanPreferencesKey("canvas_dark")
+        val LINK_PREVIEWS = booleanPreferencesKey("link_previews")
     }
 }

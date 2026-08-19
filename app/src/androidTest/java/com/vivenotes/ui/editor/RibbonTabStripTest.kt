@@ -144,6 +144,7 @@ class RibbonTabStripTest {
         zoomToPageWidth = {},
         setTabsLayout = {},
         setCanvasDark = {},
+        setLinkPreviews = {},
         openPane = {},
     )
 }

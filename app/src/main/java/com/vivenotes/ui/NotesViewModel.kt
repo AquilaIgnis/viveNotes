@@ -2032,6 +2032,16 @@ class NotesViewModel(
         viewModelScope.launch { viewSettingsStore.setCanvasDark(dark) }
     }
 
+    /**
+     * Turns pasted-video thumbnails on or off for this device — [ViewSettings.linkPreviews].
+     *
+     * Off is not only a visual choice: with no preview the app never fetches from YouTube's image
+     * host, which is the one outbound request it makes to somewhere the user did not configure.
+     */
+    fun setLinkPreviews(enabled: Boolean) {
+        viewModelScope.launch { viewSettingsStore.setLinkPreviews(enabled) }
+    }
+
     // --- draw ----------------------------------------------------------------------------------
 
     /**

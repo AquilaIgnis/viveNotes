@@ -63,6 +63,8 @@ data class ViewActions(
     val zoomToPageWidth: () -> Unit,
     val setTabsLayout: (TabsLayout) -> Unit,
     val setCanvasDark: (Boolean) -> Unit,
+    /** Settings-tab command, carried here because it is stored beside the rest of these. */
+    val setLinkPreviews: (Boolean) -> Unit,
     /** Opens a docked pane for the settings too involved to sit in a drop-down. */
     val openPane: (ToolPane) -> Unit,
 )

@@ -69,6 +69,7 @@ class TextBoxToolkitTest {
                         zoomToPageWidth = {},
                         setTabsLayout = {},
                         setCanvasDark = {},
+                        setLinkPreviews = {},
                         openPane = {},
                     ),
                     pens = List(PenPreset.COUNT) { PenPreset.starting(it) },

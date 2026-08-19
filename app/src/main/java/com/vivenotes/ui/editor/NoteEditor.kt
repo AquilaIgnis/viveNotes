@@ -1,12 +1,17 @@
 package com.vivenotes.ui.editor
 
+import android.content.Context
+import android.content.Intent
 import android.graphics.Typeface
+import android.net.Uri
 import android.text.InputType
 import android.util.TypedValue
 import android.view.ViewGroup
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.model.Block
@@ -14,7 +19,23 @@ import com.vivenotes.model.Mark
 import com.vivenotes.richtext.EditorStyle
 import com.vivenotes.richtext.OutlineEditText
 import com.vivenotes.richtext.SelectionState
+import com.vivenotes.richtext.VideoThumbnails
 import com.vivenotes.ui.theme.LocalCanvasColors
+
+/**
+ * Thumbnails for the editor's link previews, or null while they are switched off.
+ *
+ * A composition local rather than a parameter, which is the exception this file makes to the
+ * project's habit of threading its stores by hand. Every writing surface needs it — text containers
+ * and table cells alike — and a table cell is three composables deep inside `TableContainer`, so
+ * passing it down would put a store nothing in between has any use for into four signatures. It is
+ * the same shape of dependency `LocalCanvasColors` is: something every editor reads and nothing
+ * in the middle acts on.
+ *
+ * Static, so it costs no recomposition to read; `NotesApp` provides it, and provides null when the
+ * Settings toggle is off.
+ */
+val LocalVideoThumbnails = staticCompositionLocalOf<VideoThumbnails?> { null }
 
 /**
  * One writing surface, hosted through [AndroidView] — the one place the Compose shell hands off to a
@@ -51,6 +72,8 @@ internal fun NoteEditor(
     modifier: Modifier = Modifier,
 ) {
     val canvas = LocalCanvasColors.current
+    val thumbnails = LocalVideoThumbnails.current
+    val hostContext = LocalContext.current
 
     AndroidView(
         factory = { context ->
@@ -98,6 +121,8 @@ internal fun NoteEditor(
             editor.equationColor = canvas.text.toArgb()
             editor.setHintTextColor(canvas.secondaryText.toArgb())
             editor.defaultMarks = defaults.asEditorMarks()
+            editor.videoThumbnails = thumbnails
+            editor.onOpenVideo = { url -> hostContext.openExternally(url) }
             // Applied to the view rather than as a Compose height constraint: constraining the
             // wrapper only grows the box around the editor, leaving the text area itself — and its
             // touch target — at the height of its content.
@@ -105,6 +130,21 @@ internal fun NoteEditor(
         },
         modifier = modifier,
     )
+}
+
+/**
+ * Hands a pasted video link to whatever the device opens YouTube with.
+ *
+ * `runCatching` because a device with no browser and no YouTube app resolves nothing, and a note
+ * editor must not crash over a tap on a picture. `NEW_TASK` because the card can be tapped from a
+ * page hosted in any activity, and without it the video would open inside this task's back stack.
+ */
+private fun Context.openExternally(url: String) {
+    runCatching {
+        startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
 }
 
 /**

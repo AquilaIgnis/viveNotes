@@ -760,6 +760,34 @@ fun aboutGlyph(neutral: Color, accent: Color): ImageVector =
         addPath(InfoMark, fill = SolidColor(accent))
     }
 
+/**
+ * Link Previews — a card with a play mark in it, which is literally what the setting draws.
+ *
+ * Hand-drawn rather than traced from a Material Symbol: the symbol set's `smart_display` is a
+ * filled card whose play triangle is a hole punched through it, so its two halves cannot be given
+ * separate colours without redrawing the shape anyway. The accent goes on the triangle, because
+ * the play mark is what distinguishes this from any other rectangle in the ribbon.
+ */
+fun linkPreviewGlyph(neutral: Color, accent: Color): ImageVector = glyph("LinkPreview") {
+    path(
+        stroke = SolidColor(neutral),
+        strokeLineWidth = 1.7f,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(3.2f, 5.6f)
+        lineTo(20.8f, 5.6f)
+        lineTo(20.8f, 18.4f)
+        lineTo(3.2f, 18.4f)
+        close()
+    }
+    path(fill = SolidColor(accent)) {
+        moveTo(10.1f, 8.6f)
+        lineTo(15.6f, 12.0f)
+        lineTo(10.1f, 15.4f)
+        close()
+    }
+}
+
 fun highlightGlyph(neutral: Color, swatch: Color): ImageVector = glyph("Highlight") {
     path(fill = SolidColor(neutral)) {         // pen body
         moveTo(9.0f, 13.4f)

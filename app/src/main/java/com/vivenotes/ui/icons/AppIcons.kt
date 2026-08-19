@@ -39,6 +39,7 @@ class AppIcons(neutral: Color, accent: Color, warn: Color, create: Color) {
     val deleteNotebook = deleteNotebookGlyph(neutral, warn)
     val integrated = integratedGlyph(neutral, accent)
     val hardware = hardwareGlyph(neutral, accent)
+    val linkPreview = linkPreviewGlyph(neutral, accent)
     val about = aboutGlyph(neutral, accent)
 }
 

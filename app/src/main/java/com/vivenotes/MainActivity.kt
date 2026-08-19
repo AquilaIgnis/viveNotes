@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
                 NotesApp(
                     viewModel,
                     app.attachments,
+                    app.videoThumbnails,
                     app.aiModels,
                     app.recognitionEngine,
                     app.mathEngine,

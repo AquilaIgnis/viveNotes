@@ -9,6 +9,7 @@ import android.text.style.AbsoluteSizeSpan
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.BaseInputConnection
 import android.widget.EditText
@@ -17,6 +18,8 @@ import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
 import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
+import com.vivenotes.model.VideoLink
+import com.vivenotes.model.findVideoLinks
 import com.vivenotes.model.opposingScript
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -73,6 +76,29 @@ class OutlineEditText @JvmOverloads constructor(
         codeBackgroundColor = 0x22FFFFFF,
         quoteColor = 0xFF4CAF50.toInt(),
     )
+
+    /**
+     * Where link-preview thumbnails come from, or null to draw no cards at all.
+     *
+     * Null is the off switch as well as the default: the Settings toggle withholds the source rather
+     * than passing a flag beside it, so "previews are off" and "nothing has been wired up" are the
+     * same state and neither can reach the network. See [VideoThumbnails].
+     */
+    var videoThumbnails: VideoThumbnails? = null
+        set(value) {
+            if (field === value) return
+            field = value
+            if (initialised) refreshVideoEmbeds()
+        }
+
+    /**
+     * Opens a pasted video, fired by a tap on a card's play badge.
+     *
+     * A callback rather than an `ACTION_VIEW` built here: this view is the text editor, and knowing
+     * how the app leaves itself is not its job. It also keeps the tap assertable from a test without
+     * an activity actually being launched.
+     */
+    var onOpenVideo: ((url: String) -> Unit)? = null
 
     /** Called after any user edit, debounced by the caller. */
     var onBlocksChanged: ((List<Block>) -> Unit)? = null
@@ -162,6 +188,9 @@ class OutlineEditText @JvmOverloads constructor(
     /** Guards the [TextWatcher] against the edits that normalisation itself makes. */
     private var suppressWatcher = false
 
+    /** The card whose play badge a finger went down on, held until it lifts. See [onTouchEvent]. */
+    private var pressedBadge: VideoEmbedSpan? = null
+
     private val watcher = object : TextWatcher {
         private var insertStart = 0
         private var insertCount = 0
@@ -195,6 +224,7 @@ class OutlineEditText @JvmOverloads constructor(
             onBlocksChanged?.invoke(SpannableCodec.parse(s))
             emitSelectionState()
             refreshAutoEquations()
+            refreshVideoEmbeds()
         }
     }
 
@@ -222,6 +252,7 @@ class OutlineEditText @JvmOverloads constructor(
         hydrateEquations()
         emitSelectionState()
         refreshAutoEquations()
+        refreshVideoEmbeds()
     }
 
     fun blocks(): List<Block> = SpannableCodec.parse(text)
@@ -234,6 +265,7 @@ class OutlineEditText @JvmOverloads constructor(
         if (suppressedMarks.isNotEmpty()) suppressedMarks.clear()
         emitSelectionState()
         refreshAutoEquations()
+        refreshVideoEmbeds()
     }
 
     override fun onFocusChanged(focused: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
@@ -241,6 +273,86 @@ class OutlineEditText @JvmOverloads constructor(
         if (initialised) {
             emitSelectionState()
             refreshAutoEquations()
+            refreshVideoEmbeds()
+        }
+    }
+
+    /**
+     * A card is measured against the editor's content width, so a resize invalidates every one.
+     *
+     * Reached by a container being dragged wider, a table column moving, or the pane layout
+     * changing under a rotation. Without this the cards keep the width they were built at and either
+     * leave a gap or run past the edge, because a [android.text.style.ReplacementSpan] reports its
+     * own size and nothing re-asks it.
+     */
+    override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
+        super.onSizeChanged(width, height, oldWidth, oldHeight)
+        if (initialised && width != oldWidth) refreshVideoEmbeds()
+    }
+
+    /**
+     * Opens a video when its play badge is tapped, and otherwise leaves every touch to the editor.
+     *
+     * **The badge consumes the gesture from the down event onwards**, rather than acting on the up
+     * and letting the widget see both. A tap that both moved the caret and left the app would put
+     * the caret inside the URL on the way out — so the card would be gone and the raw link showing
+     * when the user came back, which is exactly the state the preview exists to avoid. Consuming
+     * the down keeps `EditText`'s own touch state machine out of the gesture entirely, so there is
+     * no half-started selection to unwind.
+     *
+     * The rest of the card is deliberately *not* consumed: a tap there places the caret, which
+     * uncovers the URL for editing. That split is what lets one object be both a video and a piece
+     * of text you can select and delete.
+     */
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val span = badgeAt(event.x, event.y)
+                if (span != null) {
+                    pressedBadge = span
+                    return true
+                }
+            }
+            MotionEvent.ACTION_MOVE -> if (pressedBadge != null) {
+                // Sliding off the badge abandons the tap rather than opening on release, the same
+                // way a button behaves when a finger wanders out of it.
+                if (badgeAt(event.x, event.y) !== pressedBadge) pressedBadge = null
+                return true
+            }
+            MotionEvent.ACTION_UP -> {
+                val span = pressedBadge
+                pressedBadge = null
+                if (span != null) {
+                    if (badgeAt(event.x, event.y) === span) onOpenVideo?.invoke(span.url)
+                    return true
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> if (pressedBadge != null) {
+                pressedBadge = null
+                return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    /** The card whose play badge is under ([x], [y]) in this view's coordinates, or null. */
+    private fun badgeAt(x: Float, y: Float): VideoEmbedSpan? {
+        val editable = text ?: return null
+        val layout = layout ?: return null
+        val spans = editable.getSpans(0, editable.length, VideoEmbedSpan::class.java)
+        if (spans.isEmpty()) return null
+
+        val textX = x - totalPaddingLeft + scrollX
+        val textY = y - totalPaddingTop + scrollY
+        return spans.firstOrNull { span ->
+            val start = editable.getSpanStart(span)
+            if (start < 0) return@firstOrNull false
+            val line = layout.getLineForOffset(start)
+            val left = layout.getPrimaryHorizontal(start)
+            // The card hangs above the baseline — see `VideoEmbedSpan.getSize`, which reports its
+            // whole height as ascent — so the baseline is where its bottom edge is.
+            val cardTop = layout.getLineBaseline(line) - span.cardHeightPx
+            span.badgeContains(textX - left, textY - cardTop)
         }
     }
 
@@ -371,6 +483,7 @@ class OutlineEditText @JvmOverloads constructor(
         if (command.affectsEquationMetrics()) hydrateEquations()
         emitSelectionState()
         refreshAutoEquations()
+        refreshVideoEmbeds()
     }
 
     private fun insertEquation(editable: Editable, latex: String, from: Int, to: Int) {
@@ -550,6 +663,82 @@ class OutlineEditText @JvmOverloads constructor(
         requestLayout()
         invalidate()
     }
+
+    /**
+     * Draws each pasted video link as its thumbnail while leaving the URL itself as ordinary text.
+     *
+     * The same shape as [refreshAutoEquations], and deliberately so — it is the same idea applied to
+     * a different pattern. A card is absent whenever the focused caret or selection touches its
+     * range, so the URL comes back the moment someone goes to edit it; a link whose thumbnail has
+     * not arrived, or cannot be fetched at all, simply never gets a span and stays readable as what
+     * the writer typed.
+     *
+     * Every span is rebuilt rather than reconciled, because `SpannableCodec.normalize` has already
+     * stripped them: it removes all [Derived] spans on every pass, and this runs after it. What
+     * makes that affordable is that the bitmaps are already decoded — [VideoThumbnails.cached] never
+     * touches disk — so a keystroke costs a `findVideoLinks` scan and a handful of `setSpan` calls.
+     */
+    private fun refreshVideoEmbeds() {
+        val editable = text ?: return
+        val source = videoThumbnails
+        val existing = editable.getSpans(0, editable.length, VideoEmbedSpan::class.java)
+        val links = if (source == null) emptyList() else findVideoLinks(editable.toString())
+        val cardWidth = embedMaxWidthPx()
+
+        var changed = false
+        existing.forEach { span ->
+            val start = editable.getSpanStart(span)
+            val end = editable.getSpanEnd(span)
+            val link = links.firstOrNull {
+                it.start == start && it.end == end && it.videoId == span.videoId
+            }
+            if (link == null || isEditing(link) || span.maxWidthPx != cardWidth) {
+                editable.removeSpan(span)
+                changed = true
+            }
+        }
+
+        if (source == null || cardWidth <= 0) {
+            if (changed) refreshEquationLayout()
+            return
+        }
+
+        links.filterNot(::isEditing).forEach { link ->
+            val covered = editable.getSpans(link.start, link.end, VideoEmbedSpan::class.java).any {
+                editable.getSpanStart(it) == link.start && editable.getSpanEnd(it) == link.end
+            }
+            if (covered) return@forEach
+
+            val thumbnail = source.cached(link.videoId)
+            if (thumbnail == null) {
+                // Posted rather than called straight back: the callback lands on the main thread
+                // while this pass may still be walking the buffer, and re-entering it from inside
+                // its own loop would apply spans against offsets it has not finished with.
+                source.request(link.videoId) { post { refreshVideoEmbeds() } }
+                return@forEach
+            }
+            editable.setSpan(
+                VideoEmbedSpan(
+                    videoId = link.videoId,
+                    url = link.url,
+                    thumbnail = thumbnail,
+                    maxWidthPx = cardWidth,
+                    density = resources.displayMetrics.density,
+                ),
+                link.start,
+                link.end,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+            changed = true
+        }
+        if (changed) refreshEquationLayout()
+    }
+
+    /** The content width a card may occupy — see [VideoEmbedSpan.maxWidthPx] for why it is capped. */
+    private fun embedMaxWidthPx(): Int = width - totalPaddingLeft - totalPaddingRight
+
+    private fun isEditing(link: VideoLink): Boolean =
+        rangeIsBeingEdited(link.start, link.end, hasFocus(), selectionStart, selectionEnd)
 
     private fun toggleMark(editable: Editable, mark: Mark, from: Int, to: Int) {
         val here = SpannableCodec.marksAt(editable, from, to)

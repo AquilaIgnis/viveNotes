@@ -233,7 +233,12 @@ fun Ribbon(
                 canUndo = canUndoCanvas,
                 canRedo = canRedoCanvas,
             )
-            RibbonTab.RibonSettings -> SettingsTab(ai = ai, openPane = view.openPane)
+            RibbonTab.RibonSettings -> SettingsTab(
+                ai = ai,
+                openPane = view.openPane,
+                viewSettings = viewSettings,
+                onSetLinkPreviews = view.setLinkPreviews,
+            )
         }
     }
 }
