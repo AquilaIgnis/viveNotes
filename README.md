@@ -87,6 +87,20 @@ and all AI features run entirely on-device.
 
 <a href="https://www.buymeacoffee.com/acidburn" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
+# Dev
+
+## Run all tests
+
+report: app/build/reports/androidTests/connected/
+
+```bash
+
+  ./gradlew connectedDebugAndroidTest
+  ./gradlew connectedDebugAndroidTest \
+    -Pandroid.testInstrumentationRunnerArguments.class=com.vivenotes.ui.editor.PageViewTest
+
+```
+
 # Acknowledgments
 
 - [SymPy](https://www.sympy.org/en/index.html) , powers the math engine

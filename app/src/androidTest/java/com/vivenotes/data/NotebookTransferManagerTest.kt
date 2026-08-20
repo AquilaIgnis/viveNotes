@@ -1,5 +1,6 @@
 package com.vivenotes.data
 
+import android.database.sqlite.SQLiteDatabase
 import android.graphics.Bitmap
 import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
@@ -10,6 +11,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.data.db.AttachmentEntity
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.StrokeColor
+import com.vivenotes.data.db.SyncStateEntity
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.model.Block
 import com.vivenotes.model.Outline
@@ -42,17 +44,27 @@ class NotebookTransferManagerTest {
     private var attachmentFile: File? = null
     private var now = 1_000_000L
 
+    /**
+     * Opens a database wired the way [NotesDatabase.create] wires the real one.
+     *
+     * The callback is the part that matters and the part that was missing: it installs the sync
+     * triggers, so an export taken here carries the same `sqlite_master` a connected device's
+     * export carries. Without it these tests exercised a database shape that only exists in tests,
+     * and a bundle that no build could import passed them all.
+     */
+    private fun openDatabase(name: String): NotesDatabase = Room.databaseBuilder(
+        InstrumentationRegistry.getInstrumentation().targetContext,
+        NotesDatabase::class.java,
+        File(root, name).absolutePath,
+    ).addCallback(NotesDatabase.SYNC_TRIGGER_CALLBACK).allowMainThreadQueries().build()
+
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         root = File(context.cacheDir, "notebook-transfer-manager-test")
         root.deleteRecursively()
         root.mkdirs()
-        db = Room.databaseBuilder(
-            context,
-            NotesDatabase::class.java,
-            File(root, "source.db").absolutePath,
-        ).allowMainThreadQueries().build()
+        db = openDatabase("source.db")
         repository = NotesRepository(db, clock = { now })
         attachmentStore = AttachmentStore(context, db)
         transfers = NotebookTransferManager(
@@ -88,11 +100,7 @@ class NotebookTransferManagerTest {
             .toByteArray()
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val destinationDb = Room.databaseBuilder(
-            context,
-            NotesDatabase::class.java,
-            File(root, "clean-install.db").absolutePath,
-        ).allowMainThreadQueries().build()
+        val destinationDb = openDatabase("clean-install.db")
         try {
             val destinationRepository = NotesRepository(destinationDb, clock = { now })
             destinationRepository.seedIfEmpty()
@@ -110,7 +118,11 @@ class NotebookTransferManagerTest {
 
             assertEquals(importedId, result.notebookId)
             assertEquals(1, destinationDb.notebookDao().count())
-            assertEquals(null, destinationDb.notebookDao().byId(starterId))
+            // Tombstoned, not erased. `retirePlaceholder` stopped hard-deleting the starter when
+            // the sync client landed: the row has to stay so its removal can be pushed, or a device
+            // that already saw the placeholder would keep showing it for ever. Gone from the live
+            // list — which `count()` above asserts — is the whole of what "replaced" means here.
+            assertTrue(destinationDb.notebookDao().byId(starterId)?.deletedAt != null)
             assertTrue(destinationDb.notebookDao().byId(importedId) != null)
         } finally {
             destinationDb.close()
@@ -126,11 +138,7 @@ class NotebookTransferManagerTest {
             .toByteArray()
 
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val destinationDb = Room.databaseBuilder(
-            context,
-            NotesDatabase::class.java,
-            File(root, "edited-install.db").absolutePath,
-        ).allowMainThreadQueries().build()
+        val destinationDb = openDatabase("edited-install.db")
         try {
             val destinationRepository = NotesRepository(destinationDb, clock = { now })
             destinationRepository.seedIfEmpty()
@@ -251,11 +259,7 @@ class NotebookTransferManagerTest {
             .also { transfers.exportNotebook(notebookId, it) }
             .toByteArray()
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val destinationDb = Room.databaseBuilder(
-            context,
-            NotesDatabase::class.java,
-            File(root, "destination.db").absolutePath,
-        ).allowMainThreadQueries().build()
+        val destinationDb = openDatabase("destination.db")
         try {
             val destinationStore = AttachmentStore(context, destinationDb)
             val destinationTransfers = NotebookTransferManager(
@@ -413,6 +417,71 @@ class NotebookTransferManagerTest {
 
         assertTrue(failure is NotebookTransferException)
         assertEquals(before, db.notebookDao().count())
+    }
+
+    /**
+     * A bundle carries the notebook and nothing about the account that exported it.
+     *
+     * The three `sync_*` tables and the triggers that feed them exist on every real install, and
+     * `VACUUM INTO` copies all of it. Left in, three separate things break: `validateSchema`
+     * compares the bundle's table set to `EXPECTED_COLUMNS` exactly and rejects the file, so no
+     * build could import what this build wrote; the surviving triggers fire while the export
+     * rewrites `attachments`, queueing rows into an outbox that is about to be shipped; and the
+     * importer would inherit a cursor belonging to someone else's account and skip deltas it has
+     * never seen. Asserted on the bundle rather than through a round trip because a round trip only
+     * proves the importer accepts the file, not that the account data is gone from it.
+     */
+    @Test
+    fun exportStripsTheSyncLayerFromTheBundle() = runBlocking {
+        db.syncDao().putState(SyncStateEntity(accountId = "account-under-test"))
+        val notebookId = repository.createNotebook("Connected")
+        val sectionId = repository.createSection(notebookId, "Section")
+        repository.createPage(sectionId, "Page")
+        makeAttachment()
+        // The triggers only fire for a connected database, so a silent no-op here would make the
+        // rest of the test vacuous.
+        assertTrue(db.syncDao().outbox(limit = 100).isNotEmpty())
+
+        val bundle = ByteArrayOutputStream()
+            .also { transfers.exportNotebook(notebookId, it) }
+            .toByteArray()
+
+        val extracted = File(root, "bundle.sqlite")
+        ZipInputStream(ByteArrayInputStream(bundle)).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (entry.name == "notebook.sqlite") extracted.writeBytes(zip.readBytes())
+                zip.closeEntry()
+            }
+        }
+        assertTrue(extracted.isFile)
+
+        val objects = SQLiteDatabase.openDatabase(
+            extracted.absolutePath,
+            null,
+            SQLiteDatabase.OPEN_READONLY,
+        ).use { bundleDb ->
+            bundleDb.rawQuery(
+                "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'",
+                null,
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(cursor.getString(0) to cursor.getString(1))
+                }
+            }
+        }
+
+        assertEquals(emptyList<Pair<String, String>>(), objects.filter { it.first == "trigger" })
+        assertEquals(emptyList<Pair<String, String>>(), objects.filter { it.first == "view" })
+        assertEquals(
+            emptyList<String>(),
+            objects.filter { it.first == "table" }.map { it.second }
+                .filter { it.startsWith("sync_") },
+        )
+        // The export edits its own snapshot: what this device still owes its server has to survive
+        // having been asked for a file.
+        assertTrue(db.syncDao().outbox(limit = 100).isNotEmpty())
+        assertTrue(db.syncDao().state() != null)
     }
 
     private suspend fun makeAttachment(): AttachmentEntity {

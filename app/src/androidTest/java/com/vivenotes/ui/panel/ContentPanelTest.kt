@@ -1,6 +1,9 @@
 package com.vivenotes.ui.panel
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -97,13 +100,34 @@ class ContentPanelTest {
     @Test
     fun typingReportsEveryKeystrokeStraightAway() {
         val typed = mutableListOf<String>()
-        setPanel(ContentSearchState(), onQueryChange = { typed += it })
+        // Hoisted, unlike every other test here, because this is the one that types: the field is
+        // value-controlled, so a fixed state would snap it back to empty between keystrokes and the
+        // second character would land in an empty field instead of after the first.
+        var query by mutableStateOf("")
+        compose.setContent {
+            ViveNotesTheme {
+                Column {
+                    ContentPanelHeader(
+                        state = ContentSearchState(query = query),
+                        onQueryChange = {
+                            typed += it
+                            query = it
+                        },
+                    )
+                }
+            }
+        }
 
-        compose.onNodeWithTag(ContentPanelTags.QUERY).performTextInput("inv")
+        // Three calls, not one `performTextInput("inv")`. That helper is a single IME commit
+        // whatever the length of its argument, so it reports once however the field is written —
+        // it measures the harness rather than the panel.
+        compose.onNodeWithTag(ContentPanelTags.QUERY).performTextInput("i")
+        compose.onNodeWithTag(ContentPanelTags.QUERY).performTextInput("n")
+        compose.onNodeWithTag(ContentPanelTags.QUERY).performTextInput("v")
 
         // Three characters, three reports: the field must not wait for the debounced search, or it
         // fights the keyboard.
-        assertEquals(3, typed.size)
+        assertEquals(listOf("i", "in", "inv"), typed)
     }
 
     @Test

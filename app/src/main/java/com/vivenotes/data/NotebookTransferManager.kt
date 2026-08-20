@@ -218,6 +218,35 @@ class NotebookTransferManager(
 
             source.beginTransaction()
             try {
+                // The sync layer goes first, and the triggers go before the tables they read.
+                //
+                // `VACUUM INTO` copies triggers as faithfully as it copies rows, so a snapshot
+                // taken on a connected device arrives here carrying `installSyncTriggers`' work.
+                // Two things then break at once. The insert below that rewrites `attachments` with
+                // export-local refCounts fires `sync_attachments_insert` and queues rows into an
+                // outbox that belongs to the exporting device's account — and `validateSchema`
+                // rejects any bundle holding a trigger at all, so the bundle this method wrote
+                // could not be imported by the build that wrote it. Dropping every trigger rather
+                // than naming the fifteen is deliberate: the format forbids triggers outright, so
+                // export enforces that rule instead of tracking a list that has to be kept in step
+                // with `installSyncTriggers`.
+                source.queryRows(
+                    "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name NOT LIKE 'sqlite_%'",
+                ) { it.getString(0) }.forEach { trigger ->
+                    source.execSQL("DROP TRIGGER IF EXISTS `$trigger`")
+                }
+                // The sync tables themselves are per-device bookkeeping about one account: which
+                // account this install is connected to and where its cursor stands (`sync_state`),
+                // what the server last confirmed for each row (`sync_entity_states`), and what this
+                // device still owes it (`sync_outbox`). None of it describes the notebook, and all
+                // of it is actively wrong on the machine that imports the bundle — a cursor from
+                // someone else's account would make the importer skip deltas it has never seen.
+                // Dropped rather than emptied, for the reason the derived caches below are: it
+                // leaves `EXPECTED_COLUMNS` and `APP_SCHEMA_VERSION` untouched, so a `.vive` from
+                // schema 13 and one from schema 21 are the same file to the importer.
+                source.execSQL("DROP TABLE IF EXISTS sync_outbox")
+                source.execSQL("DROP TABLE IF EXISTS sync_entity_states")
+                source.execSQL("DROP TABLE IF EXISTS sync_state")
                 source.execSQL("DELETE FROM notebooks WHERE id <> ?", arrayOf(notebookId))
                 // Installation identity is not notebook content and must never travel to another
                 // device. The notebook UUID itself remains in both `notebooks.id` and vive_bundle.
