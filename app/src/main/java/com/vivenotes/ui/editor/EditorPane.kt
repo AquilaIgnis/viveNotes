@@ -490,6 +490,15 @@ fun EditorPane(
      * with the page, since ids from the last page mean nothing on this one.
      */
     var selection by remember(pageId) { mutableStateOf<CanvasSelection?>(null) }
+
+    /**
+     * The same thing, reachable from the canvas tap detector — which is keyed on page geometry and so
+     * outlives every change to what is selected. Reading `selection` through the delegate would work
+     * today and stop working the moment `remember(pageId)` hands out a new state, which is exactly
+     * the kind of silent staleness the holders above exist to rule out.
+     */
+    val currentSelection = rememberUpdatedState(selection)
+
     /** Search feedback is emphasis, not an editable object selection. It therefore has no tooltip. */
     var inkSearchHighlight by remember(pageId) { mutableStateOf<InkBounds?>(null) }
     val lassoGesture = remember { LassoGesture() }
@@ -985,8 +994,16 @@ fun EditorPane(
                         window = visibleWindow,
                     )
 
-                    // Placed above the surface but beneath the containers: taps that land on a
-                    // container reach its editor, and only taps on bare canvas create a new one.
+                    // Placed above the surface and beneath everything else on the page, so it hears
+                    // a tap only when nothing else wanted it: taps that land on an object reach its
+                    // layer, taps that land on a container reach its editor, and what is left is
+                    // bare canvas. Two things happen there, in this order — a tap puts down whatever
+                    // is selected, and a tap with nothing selected opens a container.
+                    //
+                    // It used to be the *ancestor* of the object layers, which is how the two were
+                    // ordered before those layers moved in front of the containers. They share their
+                    // touches with what is underneath instead now, and this is simply the last
+                    // sibling to be asked.
                     Box(
                         Modifier
                             .fillMaxSize()
@@ -999,6 +1016,27 @@ fun EditorPane(
                             ) {
                                 val onTap: (Offset) -> Unit = tap@ { offset ->
                                     pastePopupAt = null
+                                    // Putting the selection down is this tap's first duty, and it
+                                    // ends the gesture — TA11's "a tap on bare canvas clears the
+                                    // page's selection". It used to belong to `ShapeLayer`, which
+                                    // paid for it by consuming a down it had no shape under; that
+                                    // stopped being affordable when the object layers moved in front
+                                    // of the text containers, where such a down is also every tap
+                                    // into a text box. The rule costs what it always did — two taps,
+                                    // the first to drop the object and the second to do what was
+                                    // asked — and a tap that landed on an object or a container is
+                                    // never one of them, because both are asked before this is.
+                                    //
+                                    // The caret goes with it, whatever tool is in hand — TA11 again,
+                                    // and the table is the case that makes it a rule: a cell is a
+                                    // real `EditText`, so nothing else would take the focus and the
+                                    // keyboard off it, and the grid would drop its handles while the
+                                    // cell went on being typed into.
+                                    if (currentSelection.value != null) {
+                                        dismissTextInput()
+                                        selection = null
+                                        return@tap
+                                    }
                                     // Dismissing the popup is not a tool's business, so it happens
                                     // either way; placing something is, so it does not.
                                     //
@@ -1055,52 +1093,104 @@ fun EditorPane(
                                     detectTapGestures(onTap = onTap)
                                 }
                             },
-                    ) {
-                        // A child of the tap target rather than a sibling above it, which is what
-                        // orders the two: the main pass bubbles, so a child is asked first, and the
-                        // detectors above wait for an *unconsumed* down. A shape therefore takes the
-                        // gesture off the bare canvas, and everything the layer declines falls
-                        // through to the tap that opens a text container. As siblings, hit testing
-                        // stopped at whichever was on top and the other never saw the gesture at all.
-                        //
-                        // Inside the zoom, too — see ShapeLayer for why a shape can live in the page
-                        // where ink cannot — and still beneath the text containers, so a shape drawn
-                        // behind one cannot steal its caret.
-                        ShapeLayer(
-                            shapes = shapes,
-                            selection = selection,
-                            lassoGesture = lassoGesture.takeIf { lassoing },
-                            // While the shape tool is armed a drag draws a new shape, and while the
-                            // lasso or Insert Space is the overlay owns every gesture on the page —
-                            // in none of the three may this layer also try to edit what is under the
-                            // pointer.
-                            interactive = shaping == null && !lassoing && !insertingSpace,
-                            visibleWindow = visibleWindow,
-                            // This layer's tap is what clears the page's selection (TA11), and with
-                            // a table selected it is the *only* thing that hears a tap on bare
-                            // canvas — it consumes the down, so the detector above never runs. The
-                            // caret has to leave here too, or it stays behind in a cell whose
-                            // handles have just disappeared.
-                            onSelect = {
-                                dismissTextInput()
-                                selection = it
-                            },
-                            onMoveShape = onMoveShape,
-                            onResizeShape = onResizeShape,
-                            onResizeShapeArm = onResizeShapeArm,
-                        ) {
-                            // Above the shapes and below the text containers, which is where a table
-                            // sits too (TA11): a formula is something you put *on* a drawing, and a
-                            // container drawn over it keeps its caret. Its own tap has to be declined
-                            // while a tool is armed, or arming ƒ over an existing equation would
-                            // select that one instead of placing a new one beside it.
-                            //
-                            // **Inside the shape layer, not beside it.** As siblings the two filled
-                            // the same page and Compose gave every touch to whichever was on top, so
-                            // this one quietly ate all of them: tapping a shape, dragging one and
-                            // grabbing a corner were all dead, and a tap on a shape opened a text
-                            // container instead. Nested, the child is asked first and the shapes get
-                            // whatever it declines. See `ShapeLayer.above`.
+                    )
+
+                    outlines.forEach { box ->
+                        key(pageRevision, box.id) {
+                            OutlineContainer(
+                                box = box,
+                                initialBlocks = initialBlocksFor(box.id),
+                                editorStyle = editorStyle,
+                                defaults = defaults,
+                                focused = focusedOutlineId == box.id,
+                                requestFocus = pendingFocusId == box.id,
+                                // Only ever set alongside this container's own focus request, and
+                                // cleared with it, so a stale range cannot be applied to the next
+                                // container that happens to ask for focus.
+                                selectRange = pendingSelection.takeIf { pendingFocusId == box.id },
+                                onFocusHandled = {
+                                    pendingFocusId = null
+                                    pendingSelection = null
+                                },
+                                onFocused = { view ->
+                                    focusedEditor = view
+                                    focusedOutlineId = box.id
+                                    lastFocusedEditor = view
+                                    lastFocusedOutlineId = box.id
+                                    // A caret is a different way of saying where you are, so it
+                                    // takes over from whatever was selected on the canvas. This is
+                                    // the mirror of the object layers' own `onSelect`, which takes
+                                    // the caret out of wherever it was: without both halves a shape
+                                    // kept its handles and its bar while the writing had the
+                                    // keyboard, and the ribbon went on offering Border and Fill for
+                                    // something the next keystroke could not touch.
+                                    //
+                                    // The lasso's preview goes with the selection, for the reason
+                                    // `ClearCanvasSelection` gives: it holds the transform the
+                                    // handles were drawn from, and one outliving the selection is a
+                                    // rectangle around nothing.
+                                    //
+                                    // A **table cell does the opposite on purpose** — TA11, where
+                                    // putting a caret in a cell *selects* its table, because a cell
+                                    // has no chrome of its own to say which grid it belongs to. That
+                                    // is why this lives here and not in `NoteEditor`.
+                                    if (selection != null) {
+                                        selection = null
+                                        lassoGesture.clear()
+                                    }
+                                },
+                                onBlurred = {
+                                    if (focusedOutlineId == box.id) {
+                                        focusedOutlineId = null
+                                        focusedEditor = null
+                                    }
+                                    if (retainedEquationOutlineId != box.id) onOutlineBlurred(box.id)
+                                },
+                                onBlocksChanged = { blocks ->
+                                    nonEmpty[box.id] = blocks.any { it.text.isNotBlank() }
+                                    onBlocksChanged(box.id, blocks)
+                                },
+                                onSelectionChanged = onSelectionChanged,
+                                onMarkArmed = onMarkArmed,
+                                onMove = { x, y -> onMoveOutline(box.id, x, y) },
+                                onResize = { width -> onResizeOutline(box.id, width) },
+                                onSetMinHeight = { height -> onSetOutlineMinHeight(box.id, height) },
+                                onMeasured = { heightPx -> heights[box.id] = heightPx },
+                            )
+                        }
+                    }
+
+                    // Prime Object is in front of the writing, in the draw and in the hit test —
+                    // and this is the one place where that whole order is decided.
+                    //
+                    // The bug it exists for: an object dragged onto a text container could not be
+                    // tapped at all. No selection, no move, no corner handles; the only way back to
+                    // it was to drag the text box off it first. A container's editor is a real
+                    // Android View, and `pointerInteropFilter` hands it the DOWN as the event
+                    // *tunnels* past — before any ordinary bubbling-pass gesture handler runs — so
+                    // whatever sat under it stayed silent however the layers were ordered.
+                    //
+                    // Two things answer it, and neither works alone. This stack is composed last, so
+                    // it is drawn over the containers and hit-tested before them, and it declares
+                    // [sharingTouchesWithSiblings] so that hit testing carries on past it to the
+                    // containers, the header and the bare-canvas tap target underneath — a full-page
+                    // layer that did not would take every touch on the page and give nothing back.
+                    // And the three layers claim their DOWN on the **tunnelling** pass, because
+                    // sharing appends the branch below to the same path rather than keeping the two
+                    // apart: on the bubbling pass the topmost layout is asked *last*, which is
+                    // exactly backwards for this. `sharingTouchesWithSiblings` argues that out.
+                    //
+                    // Tunnelling outermost-first is also why the stack reads inside out: pictures
+                    // hold formulas, which hold shapes, and each layer draws its own canvas *after*
+                    // the slot it holds. So the order a touch is offered in is pictures, formulas,
+                    // shapes, containers, bare canvas — and the paint order is the one it always was,
+                    // shapes under formulas under pictures. A layer with nothing under the finger
+                    // consumes nothing and the touch simply carries on.
+                    //
+                    // Inside the zoom — see ShapeLayer for why a shape can live in the page where
+                    // ink cannot.
+                    Box(Modifier.fillMaxSize().sharingTouchesWithSiblings()) {
+                        val shapesAndFormulas: @Composable BoxScope.() -> Unit = {
                             EquationLayer(
                                 equations = equations,
                                 selection = selection,
@@ -1118,29 +1208,59 @@ fun EditorPane(
                                     onResizeEquations(setOf(id), anchorX, anchorY, scaleX, scaleY)
                                 },
                             ) {
-                                // The fifth kind, inside the fourth for the reason the fourth is
-                                // inside the third — `docs/plan.md` entry 24, and `ShapeLayer.above`.
-                                attachments?.let { store ->
-                                    ImageLayer(
-                                        images = images,
-                                        selection = selection,
-                                        attachments = store,
-                                        lassoGesture = lassoGesture.takeIf { lassoing },
-                                        interactive = shaping == null && !lassoing &&
-                                            !equationArmed && !tableArmed && !insertingSpace,
-                                        visibleWindow = visibleWindow,
-                                        onSelect = {
-                                            dismissTextInput()
-                                            selection = it
-                                        },
-                                        onMove = { id, dx, dy -> onMoveImages(setOf(id), dx, dy) },
-                                        onResize = { id, anchorX, anchorY, scaleX, scaleY ->
-                                            onResizeImages(setOf(id), anchorX, anchorY, scaleX, scaleY)
-                                        },
-                                        density = density.density,
-                                    )
-                                }
+                                ShapeLayer(
+                                    shapes = shapes,
+                                    selection = selection,
+                                    lassoGesture = lassoGesture.takeIf { lassoing },
+                                    // While the shape tool is armed a drag draws a new shape, and
+                                    // while the lasso or Insert Space is, the overlay owns every
+                                    // gesture on the page — in none of the three may this layer
+                                    // also try to edit what is under the pointer.
+                                    interactive = shaping == null && !lassoing && !insertingSpace,
+                                    visibleWindow = visibleWindow,
+                                    // Only ever a *selection*. Clearing one belongs to the
+                                    // bare-canvas tap now: this layer used to pay for it by
+                                    // consuming a down it had no shape under, and in front of the
+                                    // containers such a down is also every tap into a text box.
+                                    // The caret still has to leave here, or it stays behind in a
+                                    // cell whose handles have just disappeared.
+                                    onSelect = {
+                                        dismissTextInput()
+                                        selection = it
+                                    },
+                                    onMoveShape = onMoveShape,
+                                    onResizeShape = onResizeShape,
+                                    onResizeShapeArm = onResizeShapeArm,
+                                )
                             }
+                        }
+
+                        // The pictures hold all of it, when there is a store to read them from:
+                        // it is absent in previews and in this pane's own tests, and the layer is
+                        // then simply not composed.
+                        val store = attachments
+                        if (store != null) {
+                            ImageLayer(
+                                attachments = store,
+                                images = images,
+                                selection = selection,
+                                lassoGesture = lassoGesture.takeIf { lassoing },
+                                interactive = shaping == null && !lassoing &&
+                                    !equationArmed && !tableArmed && !insertingSpace,
+                                visibleWindow = visibleWindow,
+                                onSelect = {
+                                    dismissTextInput()
+                                    selection = it
+                                },
+                                onMove = { id, dx, dy -> onMoveImages(setOf(id), dx, dy) },
+                                onResize = { id, anchorX, anchorY, scaleX, scaleY ->
+                                    onResizeImages(setOf(id), anchorX, anchorY, scaleX, scaleY)
+                                },
+                                density = density.density,
+                                beneath = shapesAndFormulas,
+                            )
+                        } else {
+                            shapesAndFormulas()
                         }
                     }
 
@@ -1155,10 +1275,13 @@ fun EditorPane(
                         )
                     }
 
-                    // Between the shapes and the text containers — `docs/tablePlan.md` TA11. Compose
-                    // hit-tests the last child first, so this is also the order in which the three
-                    // compete for a touch: a table takes its own taps from a shape drawn under it,
-                    // and a container drawn over a table keeps its caret.
+                    // In front of all of it — `docs/tablePlan.md` TA11, half amended. Compose
+                    // hit-tests the last sibling first, so a table is asked before the object layers
+                    // and before the containers they hold. TA11's first half is what that keeps: a
+                    // table takes its own taps from a shape drawn under it. Its second half is gone
+                    // with the rest of the old order — a text container drawn over a table used to
+                    // keep its caret, and now yields the overlap to it, for the same reason a shape
+                    // dragged onto a container takes its own taps back.
                     tables.forEach { table ->
                         key(pageRevision, table.id) {
                             TableContainer(
@@ -1234,50 +1357,6 @@ fun EditorPane(
                                 focusCell = pendingCellFocus,
                                 onCellFocusHandled = { pendingCellFocus = null },
                                 onMeasured = { heightPx -> heights[table.id] = heightPx },
-                            )
-                        }
-                    }
-
-                    outlines.forEach { box ->
-                        key(pageRevision, box.id) {
-                            OutlineContainer(
-                                box = box,
-                                initialBlocks = initialBlocksFor(box.id),
-                                editorStyle = editorStyle,
-                                defaults = defaults,
-                                focused = focusedOutlineId == box.id,
-                                requestFocus = pendingFocusId == box.id,
-                                // Only ever set alongside this container's own focus request, and
-                                // cleared with it, so a stale range cannot be applied to the next
-                                // container that happens to ask for focus.
-                                selectRange = pendingSelection.takeIf { pendingFocusId == box.id },
-                                onFocusHandled = {
-                                    pendingFocusId = null
-                                    pendingSelection = null
-                                },
-                                onFocused = { view ->
-                                    focusedEditor = view
-                                    focusedOutlineId = box.id
-                                    lastFocusedEditor = view
-                                    lastFocusedOutlineId = box.id
-                                },
-                                onBlurred = {
-                                    if (focusedOutlineId == box.id) {
-                                        focusedOutlineId = null
-                                        focusedEditor = null
-                                    }
-                                    if (retainedEquationOutlineId != box.id) onOutlineBlurred(box.id)
-                                },
-                                onBlocksChanged = { blocks ->
-                                    nonEmpty[box.id] = blocks.any { it.text.isNotBlank() }
-                                    onBlocksChanged(box.id, blocks)
-                                },
-                                onSelectionChanged = onSelectionChanged,
-                                onMarkArmed = onMarkArmed,
-                                onMove = { x, y -> onMoveOutline(box.id, x, y) },
-                                onResize = { width -> onResizeOutline(box.id, width) },
-                                onSetMinHeight = { height -> onSetOutlineMinHeight(box.id, height) },
-                                onMeasured = { heightPx -> heights[box.id] = heightPx },
                             )
                         }
                     }

@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -94,13 +95,15 @@ internal fun EquationLayer(
     ) -> Unit = { _, _, _, _, _ -> },
     modifier: Modifier = Modifier,
     /**
-     * The next layer up, composed as a **child** rather than a sibling.
+     * The next layer **down**, composed as a child rather than a sibling — `ShapeLayer` goes here.
      *
-     * The same slot, for the same reason, that `ShapeLayer.above` exists and that this layer occupies:
-     * two full-page layers side by side means Compose gives every touch to whichever is on top and the
-     * other goes silently dead — `docs/plan.md` entry 24. `ImageLayer` is what goes in here.
+     * A slot rather than a sibling because two full-page layers side by side means Compose gives
+     * every touch to whichever is on top and the other goes silently dead — `docs/plan.md` entry 24.
+     * Nesting is what orders them instead, and these layers claim a touch on the tunnelling pass,
+     * where a parent is asked before its child: a formula takes a touch that lands on one, and the
+     * shapes get what it declines.
      */
-    above: @Composable BoxScope.() -> Unit = {},
+    beneath: @Composable BoxScope.() -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val handleFill = MaterialTheme.colorScheme.surface
@@ -149,7 +152,8 @@ internal fun EquationLayer(
             // kill every drag on its first applied frame.
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    val down = awaitFirstDown()
+                    // Tunnelling pass — see `ShapeLayer`, where the whole ordering is set out.
+                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
                     if (!currentInteractive.value) return@awaitEachGesture
                     val all = currentEquations.value
                     val held = currentSelection.value
@@ -250,6 +254,9 @@ internal fun EquationLayer(
                 }
             },
     ) {
+        // First, so the formulas paint over it and are offered the touch before it — see [beneath].
+        beneath()
+
         Canvas(Modifier.fillMaxSize()) {
             val revision = lassoGesture?.renderRevision ?: 0
             val moving = lassoGesture?.takeIf { it.isTransforming && revision >= 0 }
@@ -288,8 +295,6 @@ internal fun EquationLayer(
                 ?.singleOrNull { selection?.isEquationOnly == true && it.id in heldIds }
                 ?.let { drawEquationSelection(previewOf(it), accent, handleFill, density) }
         }
-        // Last, so it draws over the formulas and is hit-tested before them — see [above].
-        above()
     }
 }
 

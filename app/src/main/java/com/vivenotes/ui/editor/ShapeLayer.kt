@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -28,6 +27,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
@@ -61,10 +61,17 @@ internal const val SHAPE_LAYER_TAG = "shape-layer"
  * because a front-buffered surface cannot be scaled without going soft; a shape is an ordinary
  * vector redrawn every frame, so it can simply be part of the page and inherit its transform.
  *
- * Drawn beneath the text containers: a shape is usually something writing sits on top of, and it
- * keeps the containers' own hit targets in front where a tap expects to find them. It is composed as
- * a *child* of the bare-canvas tap target for the same reason in the other direction — see the call
- * site in `EditorPane`, where that nesting is what decides which of the two owns a gesture.
+ * Drawn — and hit-tested — **in front of** the page's text containers. It used to be behind them, on
+ * the reading that a shape is something writing sits on top of; what that actually bought was a
+ * shape that could not be tapped at all once one was dragged over a container, because a container's
+ * editor is a real Android View and is handed the DOWN as the event tunnels past it, before any
+ * bubbling-pass handler runs. This layer claims its own DOWN on that same tunnelling pass, which is
+ * what puts Prime Object in front of the writing. The cost is the mirror image: a shape deliberately
+ * parked *behind* a container now takes the taps that land inside it, and has to be moved off to
+ * type there.
+ *
+ * It is the innermost of the three object layers and so has no slot of its own — [EquationLayer]
+ * holds it, [ImageLayer] holds that, and the call site in `EditorPane` sets out the whole order.
  *
  * A shape is selected and moved **whole**, and with one exception it is resized whole too. Its
  * segments are how it is stored and drawn — they are what carries the occluded edges a solid needs
@@ -109,26 +116,6 @@ internal fun ShapeLayer(
     onResizeShapeArm: (shapeId: String, segmentId: String, atEnd: Boolean, along: Float) -> Unit =
         { _, _, _, _ -> },
     modifier: Modifier = Modifier,
-    /**
-     * The object layers that sit **over** the shapes — currently [EquationLayer].
-     *
-     * A slot rather than a sibling, and it is a hit-testing rule rather than a drawing one. Compose
-     * delivers a pointer event to the **topmost** node under it and to that node's ancestors; two
-     * overlapping siblings do not both get a say. So while this was composed beside [ShapeLayer] —
-     * same `fillMaxSize`, same page — the upper one silently took every touch on the page, and a tap
-     * on a shape fell straight past to the bare-canvas tap target above them both: selecting a shape,
-     * dragging one and grabbing a corner all stopped working the day equations arrived, with nothing
-     * to show for it but a text container opening where the shape was.
-     *
-     * As a child it is asked first and this layer is its ancestor, so the order becomes what it reads
-     * as: an equation takes a touch that lands on one, and everything it declines falls through to
-     * the shapes, and then to the canvas. That is the same arrangement, for the same reason, that
-     * makes this layer a child of that tap target rather than a sibling of it — see the call site.
-     *
-     * Composed after the [Canvas] below, so the draw order is unchanged: equations still paint over
-     * shapes, which is what a formula written on top of a drawing should do.
-     */
-    above: @Composable BoxScope.() -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val handleFill = MaterialTheme.colorScheme.surface
@@ -176,9 +163,14 @@ internal fun ShapeLayer(
                 // move nor resize worked at all. Deciding once, on the down, is what makes both
                 // possible.
                 awaitEachGesture {
-                    // Unconsumed only: anything nested deeper than this layer is dispatched to first
-                    // and has already had its say.
-                    val down = awaitFirstDown()
+                    // Unconsumed only, and on the **tunnelling** pass — which is what puts this
+                    // layer in front of the text containers rather than behind them.
+                    // `sharingTouchesWithSiblings` and the call site in `EditorPane` are where that
+                    // is argued out; the two layers wrapping this one are asked first, on the same
+                    // pass, so a picture or a formula over a shape still takes its own touch. The
+                    // rest of the gesture stays on the bubbling pass, where consuming a sample still
+                    // beats the scroll containers around the page.
+                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
                     if (!currentInteractive.value) return@awaitEachGesture
                     val shapes = currentShapes.value
                     val held = currentSelection.value
@@ -211,10 +203,14 @@ internal fun ShapeLayer(
                         else -> shapes.topmostNear(startX, startY)
                     }
 
-                    // Nothing of ours under the finger, and no selection to clear: leave the gesture
-                    // unconsumed for the tap target this layer sits inside, whose tap on bare canvas
-                    // is what opens a text container.
-                    if (target == null && held == null) return@awaitEachGesture
+                    // Nothing of ours under the finger: leave the gesture alone entirely. It falls
+                    // to the text container under it if there is one, and then to the bare-canvas
+                    // tap target, which is what clears the page's selection and what opens a new
+                    // container. Clearing the selection used to be done here, by consuming a down
+                    // with no target — that was affordable while this layer sat *behind* the
+                    // containers and never heard a tap meant for one. In front of them it is not:
+                    // it would eat every tap into a text box for as long as anything was selected.
+                    if (target == null) return@awaitEachGesture
                     down.consume()
 
                     val slop = viewConfiguration.touchSlop
@@ -224,23 +220,19 @@ internal fun ShapeLayer(
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        // Every sample of a gesture that is ours to drag, moved or not — not only the
-                        // ones past the slop. A single unconsumed sample with the finger still down is
-                        // exactly what the scroll containers around the page are waiting for: since
-                        // Compose 1.9 a scroll that lost the slop race keeps watching the final pass
-                        // and picks the drag back up (`ComposeFoundationFlags.DragGesturePickUpEnabled`),
-                        // so leaving the pre-slop samples free handed the rest of every shape drag to
-                        // the page as a pan. When the gesture is *not* ours — a press held only so
-                        // that a tap can clear the selection — the samples stay free on purpose,
-                        // because that press is still a pan.
-                        if (target != null) change.consume()
+                        // Every sample, moved or not — not only the ones past the slop. A single
+                        // unconsumed sample with the finger still down is exactly what the scroll
+                        // containers around the page are waiting for: since Compose 1.9 a scroll that
+                        // lost the slop race keeps watching the final pass and picks the drag back up
+                        // (`ComposeFoundationFlags.DragGesturePickUpEnabled`), so leaving the pre-slop
+                        // samples free handed the rest of every shape drag to the page as a pan.
+                        change.consume()
                         if (!change.pressed) {
-                            change.consume()
                             // A press that never travelled is a tap, whatever it landed on. Reported
                             // as the target rather than as the shape under the finger, so that a tap
                             // on a handle keeps the selection the handle belongs to.
                             if (!dragging) {
-                                currentOnSelect.value(target?.let(CanvasSelection::ofShape))
+                                currentOnSelect.value(CanvasSelection.ofShape(target))
                             }
                             // The resize lands here, in one write, against the geometry it was
                             // measured from — see [ShapeResize].
@@ -270,11 +262,11 @@ internal fun ShapeLayer(
                             dragging = true
                             last = change.position
                             // The handles and the tooltip belong to whatever is being dragged.
-                            if (target != null && selected?.id != target.id) {
+                            if (selected?.id != target.id) {
                                 currentOnSelect.value(CanvasSelection.ofShape(target))
                             }
                         }
-                        if (dragging && target != null) {
+                        if (dragging) {
                             when (handle) {
                                 // Measured against the shape as it was when the drag began, and only
                                 // drawn: nothing is written until the finger lifts. See [ShapeResize].
@@ -402,9 +394,6 @@ internal fun ShapeLayer(
                 ?.singleOrNull { selection?.isShapeOnly == true && it.id in held }
                 ?.let { drawSelection(previewOf(it), accent, handleFill, pageScale) }
         }
-
-        // Last, so it draws over the shapes and is hit-tested before them — see [above].
-        above()
     }
 }
 

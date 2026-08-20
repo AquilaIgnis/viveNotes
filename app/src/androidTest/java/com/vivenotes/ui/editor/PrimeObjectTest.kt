@@ -23,7 +23,9 @@ import com.vivenotes.model.Outline
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.ink.ShapeKind
 import com.vivenotes.model.ink.seedSegments
+import com.vivenotes.model.Run
 import com.vivenotes.richtext.FormatCommand
+import com.vivenotes.ui.OutlineBox
 import com.vivenotes.ui.theme.ViveNotesTheme
 
 /**
@@ -46,13 +48,19 @@ class PrimeObjectTest {
     val compose = createComposeRule()
 
     private val shapes = mutableStateOf(emptyList<Outline.Shape>())
+    private val outlines = mutableStateOf(emptyList<OutlineBox>())
     private val textArmed = mutableStateOf(false)
     private val commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 4)
     private var created: Pair<Float, Float>? = null
     private lateinit var density: Density
 
-    private fun setPage(shapes: List<Outline.Shape>, textArmed: Boolean = false) {
+    private fun setPage(
+        shapes: List<Outline.Shape>,
+        textArmed: Boolean = false,
+        outlines: List<OutlineBox> = emptyList(),
+    ) {
         this.shapes.value = shapes
+        this.outlines.value = outlines
         this.textArmed.value = textArmed
         created = null
         compose.setContent {
@@ -68,9 +76,12 @@ class PrimeObjectTest {
                     onZoomPinched = {},
                     onZoomCommitted = {},
                     onTitleChange = {},
-                    outlines = emptyList(),
+                    outlines = this@PrimeObjectTest.outlines.value,
                     pageRevision = 0,
-                    initialBlocksFor = { listOf(Block.empty()) },
+                    // Non-empty on purpose: a container's chrome is shown only when it is *focused
+                    // and holds text*, so the move grip is the one node a test can assert the caret
+                    // by — an empty container is a caret position and shows nothing at all.
+                    initialBlocksFor = { listOf(Block(id = "b", runs = listOf(Run("A note")))) },
                     commands = commands,
                     onBlocksChanged = { _, _ -> },
                     onSelectionChanged = {},
@@ -185,5 +196,81 @@ class PrimeObjectTest {
         compose.waitForIdle()
 
         compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+    }
+
+    /**
+     * The bug this order was changed for: *"if i move an object on top of a text box it's
+     * impossible to click on the object without moving the whole text box"*.
+     *
+     * A container's editor is a real Android View. Compose tunnels the DOWN to it before any
+     * bubbling-pass gesture handler runs, and `pointerInteropFilter` consumes it there — so while
+     * the object layers were composed beneath the containers, a shape dragged onto one could not be
+     * selected, moved or resized at all, and the only way back to it was to drag the text box off
+     * it. The layers are in front now, and this is the assertion that says so.
+     */
+    @Test
+    fun aTapOnAShapeLyingOverATextContainerReachesTheShape() {
+        setPage(
+            shapes = listOf(square(left = 240f, top = 240f, side = 60f)),
+            outlines = listOf(OutlineBox(id = "note", x = 200f, y = 200f, width = 220f)),
+        )
+
+        // On the square's own top edge, and well inside the container's box — a rectangle is a
+        // border, and `topmostNear` hit-tests the segments rather than the filled area.
+        tapPage(270f, 240f)
+
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OutlineTags.MOVE).assertDoesNotExist()
+    }
+
+    /**
+     * The other half, and the one that makes the change survivable: a full-page layer placed in
+     * front of the containers would otherwise swallow every tap on the page. It does not, because
+     * the layer shares its touches with the siblings underneath and consumes only where it has
+     * something of its own — see `sharingTouchesWithSiblings`.
+     */
+    @Test
+    fun aTapOnTheContainerBesideTheShapeStillReachesItsEditor() {
+        setPage(
+            shapes = listOf(square(left = 240f, top = 240f, side = 60f)),
+            outlines = listOf(OutlineBox(id = "note", x = 200f, y = 200f, width = 220f)),
+        )
+
+        // Inside the container's editor — below the grip strip it starts under, above the strip the
+        // bottom handle is reserved in, and well to the left of the square.
+        tapPage(215f, 234f)
+
+        // The grip is the assertion: a container shows its chrome only once it is focused and holds
+        // text, so the grip existing *is* the caret having landed in it. Not the tooltip — that bar
+        // is raised for every kind of selection, a focused text container included (TD3), so it
+        // cannot tell this apart from a shape having been picked up.
+        compose.onNodeWithTag(OutlineTags.MOVE).assertIsDisplayed()
+    }
+
+    /**
+     * The other direction of the same rule: a caret takes over from a selection.
+     *
+     * Selecting an object has always taken the caret out of wherever it was; without the mirror of
+     * it, a shape kept its handles and its bar while the writing had the keyboard, and the ribbon
+     * went on offering Border and Fill for something the next keystroke could not touch.
+     *
+     * Asserted on the *thickness* control rather than on the bar itself, because the bar is raised
+     * for a focused text container too (TD3) and so says nothing about which of the two is up.
+     * Border belongs to a shape alone.
+     */
+    @Test
+    fun puttingTheCaretInAContainerDropsTheSelectedObject() {
+        setPage(
+            shapes = listOf(square(left = 240f, top = 240f, side = 60f)),
+            outlines = listOf(OutlineBox(id = "note", x = 200f, y = 200f, width = 220f)),
+        )
+
+        tapPage(270f, 240f)
+        compose.onNodeWithTag(OBJECT_THICKNESS_TAG).assertIsDisplayed()
+
+        tapPage(215f, 234f)
+
+        compose.onNodeWithTag(OutlineTags.MOVE).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_THICKNESS_TAG).assertDoesNotExist()
     }
 }

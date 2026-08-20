@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -53,10 +54,11 @@ internal const val IMAGE_LAYER_TAG = "image-layer"
 /**
  * The pictures on the page — feature E6, as Prime Objects.
  *
- * **Nested inside [EquationLayer], not beside it.** `docs/plan.md` entry 24 is the whole argument and
- * it cost a day: two full-page layers as siblings means Compose hands every touch to whichever is on
- * top, and the one underneath goes quietly dead. The fourth kind went inside the third; this is the
- * fifth, and it goes inside the fourth.
+ * **[EquationLayer] is nested inside this one, not beside it.** `docs/plan.md` entry 24 is the whole
+ * argument and it cost a day: two full-page layers as siblings means Compose hands every touch to
+ * whichever is on top, and the one underneath goes quietly dead. The three are one chain instead —
+ * and this is its outermost link, because a picture is the frontmost of the three and the touch is
+ * claimed on the way *down*. See the call site in `EditorPane`.
  *
  * Selection, drag-to-move and four-corner resize are AD7, and the geometry matches [ShapeLayer] and
  * [EquationLayer] to the dp for the reason they match each other: an affordance that behaves
@@ -98,7 +100,11 @@ internal fun ImageLayer(
     ) -> Unit = { _, _, _, _, _ -> },
     density: Float,
     modifier: Modifier = Modifier,
-    above: @Composable BoxScope.() -> Unit = {},
+    /**
+     * The next layer **down** — [EquationLayer], and [ShapeLayer] inside that. This is the outermost
+     * of the three, so it is asked first and paints last. See [EquationLayer.beneath].
+     */
+    beneath: @Composable BoxScope.() -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val handleFill = MaterialTheme.colorScheme.surface
@@ -146,7 +152,8 @@ internal fun ImageLayer(
             // a finger already on the glass will never send.
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    val down = awaitFirstDown()
+                    // Tunnelling pass — see `ShapeLayer`, where the whole ordering is set out.
+                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
                     if (!currentInteractive.value) return@awaitEachGesture
                     val all = currentImages.value
                     val held = currentSelection.value
@@ -243,6 +250,9 @@ internal fun ImageLayer(
                 }
             },
     ) {
+        // First, so the pictures paint over it and are offered the touch before it — see [beneath].
+        beneath()
+
         Canvas(Modifier.fillMaxSize()) {
             val revision = lassoGesture?.renderRevision ?: 0
             val moving = lassoGesture?.takeIf { it.isTransforming && revision >= 0 }
@@ -280,8 +290,6 @@ internal fun ImageLayer(
                 ?.singleOrNull { selection?.isImageOnly == true && it.id in heldIds }
                 ?.let { drawImageSelection(previewOf(it), accent, handleFill, density) }
         }
-        // Last, so it draws over the pictures and is hit-tested before them — see `ShapeLayer.above`.
-        above()
     }
 }
 
