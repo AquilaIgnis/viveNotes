@@ -88,6 +88,28 @@ data class NotebookEntity(
     val createdAt: Long,
     val updatedAt: Long,
     val deletedAt: Long? = null,
+    /**
+     * When this notebook was taken off the rail, or null while it is on it.
+     *
+     * Not a second kind of tombstone: nothing under here is deleted, purged or hidden from search,
+     * and [deletedAt] stays null. It is a shelf — see `memory/closedNotebooksPlan.md`.
+     *
+     * Synced, like [expanded] and for the same reason: it lives on the entity, so it travels with
+     * it. The server carries it as an unrecognised property of `NotebookFields`, which
+     * `additionalProperties: true` permits and the client's retained `serverJson` preserves.
+     */
+    val closedAt: Long? = null,
+    /**
+     * When this notebook's contents were moved to the server and removed from this device.
+     *
+     * Always set together with [closedAt], and always the narrower claim of the two: the notebook,
+     * its sections and its pages are all still here. What is gone is `page_content`,
+     * `page_revisions`, the three ink tables and the pictures no remaining page reaches — which is
+     * effectively all of the bytes, and none of the rows a pulled change can name as a parent. That
+     * distinction is the whole reason the skeleton survives; `NotebookCloudArchive` explains what
+     * evicting it would do to the cursor.
+     */
+    val cloudOnlyAt: Long? = null,
 )
 
 @Entity(

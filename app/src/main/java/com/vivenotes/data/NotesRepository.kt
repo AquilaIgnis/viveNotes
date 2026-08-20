@@ -15,6 +15,7 @@ import com.vivenotes.data.db.InkMoveEntity
 import com.vivenotes.data.db.InkMoveTargetEntity
 import com.vivenotes.data.db.InkMoveWithTargets
 import com.vivenotes.data.db.LocalMetadataEntity
+import com.vivenotes.data.db.ClosedNotebook
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.NotesDatabase
@@ -315,6 +316,29 @@ class NotesRepository(
         clearReplaceableStarter()
         notebooks.softDelete(id, clock())
     }
+
+    /**
+     * Takes a notebook off the rail without deleting anything.
+     *
+     * [clearReplaceableStarter] for the same reason every other mutation calls it: shelving the
+     * seeded "My Notebook" is a decision about it, so a device that connects afterwards must not
+     * treat it as untouched packaging and throw it away.
+     */
+    suspend fun closeNotebook(id: String) {
+        clearReplaceableStarter()
+        val now = clock()
+        notebooks.setClosed(id, now, now)
+    }
+
+    /** Puts it back in the rail. A cloud-only notebook has to be brought back before this. */
+    suspend fun reopenNotebook(id: String) {
+        clearReplaceableStarter()
+        notebooks.setClosed(id, null, clock())
+    }
+
+    fun observeClosedNotebooks(): Flow<List<ClosedNotebook>> = notebooks.observeClosed()
+
+    suspend fun notebookById(id: String): NotebookEntity? = notebooks.byId(id)
 
     // --- sections --------------------------------------------------------------------------
 

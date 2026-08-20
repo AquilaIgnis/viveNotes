@@ -12,6 +12,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -73,6 +74,7 @@ import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.data.ViewSettingsStore
+import com.vivenotes.data.db.ClosedNotebook
 import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
@@ -3844,6 +3846,46 @@ class NotesViewModel(
             }
         }
     }
+
+    /**
+     * Takes a notebook off the rail. Nothing is deleted — see `memory/closedNotebooksPlan.md`.
+     *
+     * The selection dance is [deleteNotebook]'s, and it is needed for exactly the same reason: the
+     * tree flow stops carrying the notebook, but `selectedSection` would go on pointing inside it
+     * and the editor would keep showing a page nobody can navigate back to. There is no undo notice
+     * because the shelf itself is the undo, one command away on the File tab.
+     */
+    fun closeNotebook(notebookId: String) {
+        viewModelScope.launch {
+            val owned = _uiState.value.tree
+                .firstOrNull { it.notebook.id == notebookId }
+                ?.liveSections.orEmpty()
+                .map { it.id }
+                .toSet()
+            if (selectedSection.value in owned) persist()
+            repository.closeNotebook(notebookId)
+            if (selectedSection.value in owned) {
+                closeOpenSection()
+                // As in `deleteNotebook`: the flow may not have re-emitted, so the notebook that
+                // just left can still be at the front of the list this reads.
+                _uiState.value.tree
+                    .firstOrNull { it.notebook.id != notebookId }
+                    ?.liveSections?.firstOrNull()
+                    ?.let { selectSection(it.id) }
+            }
+        }
+    }
+
+    /** Puts a closed notebook back on the rail, and selects it so the press has somewhere to land. */
+    fun reopenNotebook(notebookId: String) {
+        viewModelScope.launch {
+            repository.reopenNotebook(notebookId)
+            repository.sectionsInNotebook(notebookId).firstOrNull()?.let { selectSection(it.id) }
+        }
+    }
+
+    /** The shelf, for the Closed Notebooks screen. */
+    val closedNotebooks: Flow<List<ClosedNotebook>> = repository.observeClosedNotebooks()
 
     /** Empties the editor of a section that has just been deleted, before anything else is chosen. */
     private fun closeOpenSection() {

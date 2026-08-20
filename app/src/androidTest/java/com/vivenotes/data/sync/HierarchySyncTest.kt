@@ -780,6 +780,261 @@ class HierarchySyncTest {
         assertEquals(emptyList<String>(), server.blobCalls)
     }
 
+    // --- the closed-notebook shelf, and moving one to the cloud -------------------------------
+    //
+    // `memory/closedNotebooksPlan.md`.
+
+    @Test
+    fun closingANotebookTravelsToTheServerAndBackAsAnOrdinaryField() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        repository.createSection(notebookId, "Section")
+        hierarchy.run(account())
+
+        repository.closeNotebook(notebookId)
+        hierarchy.run(account())
+
+        // Both keys are written on every push, and `closedAt` carries the shelf.
+        val pushed = server.current("notebook", notebookId)!!
+        assertEquals(now, pushed.getValue("closedAt").jsonPrimitive.long)
+        assertTrue(pushed.getValue("cloudOnlyAt") is JsonNull)
+
+        // And a device pulling it applies it, so the notebook leaves that rail too.
+        db.notebookDao().setClosed(notebookId, null, now)
+        db.syncDao().deleteOutbox("notebook", notebookId)
+        db.syncDao().deleteEntityState("notebook", notebookId)
+        db.syncDao().setCursor(0)
+        hierarchy.run(account())
+        assertEquals(now, db.notebookDao().byId(notebookId)!!.closedAt)
+    }
+
+    /**
+     * Reopening has to travel as well, and the only way it can is by the key being written when it
+     * is null. A push that omitted it would leave the retained `serverJson`'s old value standing and
+     * the notebook would stay closed on every other device for ever.
+     */
+    @Test
+    fun reopeningANotebookClearsTheFieldOnTheServerRatherThanOmittingIt() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        repository.closeNotebook(notebookId)
+        hierarchy.run(account())
+        assertEquals(now, server.current("notebook", notebookId)!!.getValue("closedAt").jsonPrimitive.long)
+
+        repository.reopenNotebook(notebookId)
+        hierarchy.run(account())
+
+        val reopened = server.current("notebook", notebookId)!!
+        assertTrue("closedAt must be cleared, not dropped", reopened.getValue("closedAt") is JsonNull)
+    }
+
+    @Test
+    fun movingANotebookToTheCloudLeavesTheIndexAndTakesEverythingElse() = runBlocking {
+        val bytes = "a photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        val pageId = seedPageWithPicture(digest)
+        val notebookId = db.sectionDao().byId(db.pageDao().byId(pageId)!!.sectionId)!!.notebookId
+        db.inkStrokeDao().upsert(listOf(strokeRow("stroke-1", pageId, seq = 0)))
+        repository.closeNotebook(notebookId)
+        hierarchy.run(account())
+        assertTrue("everything must be on the server first", db.syncDao().outbox(512).isEmpty())
+
+        assertEquals(CloudArchiveResult.Moved, hierarchy.evictToCloud(notebookId))
+
+        // The index survives: a `sections` or `pages` row deleted here is a parent a pulled change
+        // cannot find, and a pull that cannot place a row never advances its cursor again.
+        assertNotNull(db.notebookDao().byId(notebookId))
+        assertEquals(1, db.sectionDao().allInNotebook(notebookId).size)
+        assertEquals(1, db.pageDao().allInNotebook(notebookId).size)
+
+        // The payload does not.
+        assertNull(db.pageContentDao().byId(pageId))
+        assertEquals(0, db.inkStrokeDao().countForPages(listOf(pageId)))
+        assertNull(db.attachmentDao().byId(digest))
+        assertFalse(pictures.fileFor(digest).exists())
+
+        // And the notebook says where its bytes went, in a row that is queued for the account.
+        val row = db.notebookDao().byId(notebookId)!!
+        assertNotNull(row.cloudOnlyAt)
+        assertNotNull(row.closedAt)
+        assertTrue(db.syncDao().outbox(512).any { it.kind == "notebook" && it.entityId == notebookId })
+    }
+
+    /**
+     * The whole safety argument, asserted directly. An empty outbox is the server's own statement
+     * that it holds every byte this device could offer, and without one there is nothing entitling
+     * this to delete a local copy.
+     */
+    @Test
+    fun aNotebookWithUnsentChangesIsNotEvicted() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        hierarchy.run(account())
+        repository.saveDoc(pageId, PageDoc(outlines = emptyList()))
+
+        val result = hierarchy.evictToCloud(notebookId)
+
+        assertTrue(result is CloudArchiveResult.NotUploaded)
+        assertNotNull("nothing may be deleted", db.pageContentDao().byId(pageId))
+        assertNull(db.notebookDao().byId(notebookId)!!.cloudOnlyAt)
+    }
+
+    /**
+     * A picture two notebooks show survives the eviction of one of them.
+     *
+     * The reachable set is computed from the documents rather than from `refCount`, because a pulled
+     * row is documented as arriving at zero — trusting the count here would delete the file behind a
+     * picture the other notebook is still drawing.
+     */
+    @Test
+    fun aPictureAnotherNotebookStillShowsIsNotEvictedWithThisOne() = runBlocking {
+        val bytes = "a shared photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        val leavingPage = seedPageWithPicture(digest)
+        val leavingNotebook = db.sectionDao()
+            .byId(db.pageDao().byId(leavingPage)!!.sectionId)!!.notebookId
+
+        val stayingNotebook = repository.createNotebook("Staying")
+        val stayingSection = repository.createSection(stayingNotebook, "Section")
+        val stayingPage = repository.createPage(stayingSection, "Page")
+        repository.saveDoc(stayingPage, docWithPicture(digest))
+
+        repository.closeNotebook(leavingNotebook)
+        hierarchy.run(account())
+
+        assertEquals(CloudArchiveResult.Moved, hierarchy.evictToCloud(leavingNotebook))
+
+        assertNotNull("the row must survive", db.attachmentDao().byId(digest))
+        assertTrue("the bytes must survive", pictures.fileFor(digest).exists())
+        assertNotNull("the other notebook is untouched", db.pageContentDao().byId(stayingPage))
+    }
+
+    @Test
+    fun bringingANotebookBackDownloadsItsBodiesInkAndPicturesWithoutMovingTheCursor() = runBlocking {
+        val bytes = "a photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        val pageId = seedPageWithPicture(digest)
+        val notebookId = db.sectionDao().byId(db.pageDao().byId(pageId)!!.sectionId)!!.notebookId
+        db.inkStrokeDao().upsert(listOf(strokeRow("stroke-1", pageId, seq = 0)))
+        repository.closeNotebook(notebookId)
+        hierarchy.run(account())
+        val cursorBeforeEviction = db.syncDao().state()!!.cursor
+        hierarchy.evictToCloud(notebookId)
+
+        // Another device writes something unrelated while this one is fetching its notebook back.
+        // The replay reads *past* that row — it starts at zero and ends at the server's cursor —
+        // and committing what it read would be a promise that a row nobody applied had been.
+        server.seed(notebookChange("elsewhere", "Another device", now + 1))
+
+        assertEquals(CloudArchiveResult.BroughtBack, hierarchy.restoreFromCloud(account(), notebookId))
+
+        assertNotNull(db.pageContentDao().byId(pageId))
+        assertEquals(1, db.inkStrokeDao().countForPages(listOf(pageId)))
+        assertNotNull(db.attachmentDao().byId(digest))
+        assertArrayEquals(bytes, pictures.fileFor(digest).readBytes())
+
+        // Back on the rail, and no longer claiming its bytes are elsewhere.
+        val row = db.notebookDao().byId(notebookId)!!
+        assertNull(row.cloudOnlyAt)
+        assertNull(row.closedAt)
+
+        // The replay is not a pull, and this is the loss that proves it: the concurrent notebook was
+        // read by the replay and deliberately not applied, so the cursor has to stay below it or the
+        // next ordinary run starts above it and it is gone for good.
+        assertEquals(cursorBeforeEviction, db.syncDao().state()!!.cursor)
+        assertNull(db.notebookDao().byId("elsewhere"))
+
+        hierarchy.run(account())
+        assertNotNull("the row the replay skipped must still be pullable", db.notebookDao().byId("elsewhere"))
+    }
+
+    /**
+     * The replay writes under `applyingRemote`, or this device queues a push of the entire notebook
+     * it has just finished downloading — and the server would take every row as a fresh version.
+     */
+    @Test
+    fun bringingANotebookBackQueuesNothingForTheServer() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        repository.closeNotebook(notebookId)
+        hierarchy.run(account())
+        hierarchy.evictToCloud(notebookId)
+        // Only the shelf columns are queued by the eviction itself; send them and start clean.
+        hierarchy.run(account())
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+
+        hierarchy.restoreFromCloud(account(), notebookId)
+
+        assertNotNull(db.pageContentDao().byId(pageId))
+        assertEquals(
+            "only the notebook row, carrying the cleared columns",
+            listOf("notebook"),
+            db.syncDao().outbox(512).map { it.kind },
+        )
+    }
+
+    /**
+     * The other half of an account-wide move: a device that pulls the flag evicts its own copy.
+     *
+     * After the push and never after the pull — a device offline when the move happened may hold an
+     * edit nobody else has, and the empty-outbox check is what stops this taking it away. The next
+     * test is that half.
+     */
+    @Test
+    fun aDeviceThatPullsTheCloudOnlyFlagEvictsItsOwnCopy() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        hierarchy.run(account())
+
+        // Another device moved it: the notebook row comes back with both columns set.
+        val moved = server.current("notebook", notebookId)!!.toMutableMap().apply {
+            this["closedAt"] = JsonPrimitive(now)
+            this["cloudOnlyAt"] = JsonPrimitive(now)
+            this["updatedAt"] = JsonPrimitive(now + 1)
+        }.let(::JsonObject)
+        server.seed(moved)
+
+        hierarchy.run(account())
+
+        assertNull("the body has to go", db.pageContentDao().byId(pageId))
+        assertNotNull("the index has to stay", db.pageDao().byId(pageId))
+        assertNotNull(db.sectionDao().byId(sectionId))
+
+        // And it says nothing back. The flag arrived from the server, so restamping it with this
+        // device's clock would push a notebook row carrying no news — once per device that enforces.
+        assertEquals(now, db.notebookDao().byId(notebookId)!!.cloudOnlyAt)
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    @Test
+    fun anUnsentEditUnderACloudOnlyNotebookIsPushedRatherThanDestroyed() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        hierarchy.run(account())
+
+        // This device was offline: it has an edit nobody has seen, and the flag is waiting for it.
+        repository.saveDoc(pageId, PageDoc(outlines = listOf(Outline.Text.empty())))
+        val moved = server.current("notebook", notebookId)!!.toMutableMap().apply {
+            this["closedAt"] = JsonPrimitive(now)
+            this["cloudOnlyAt"] = JsonPrimitive(now)
+            this["updatedAt"] = JsonPrimitive(now + 1)
+        }.let(::JsonObject)
+        server.seed(moved)
+
+        hierarchy.run(account())
+
+        // The edit reached the server before anything local was deleted, which is the whole reason
+        // the enforcement runs after the push phase.
+        val body = server.current("pageContent", pageId)
+        assertNotNull("the unsent edit must have gone up", body)
+        assertNull("and only then may the local copy go", db.pageContentDao().byId(pageId))
+    }
+
     /**
      * A page showing one picture, with its metadata row, as an import would leave them. The bytes
      * are the caller's business: half these tests are about what happens when they are missing.

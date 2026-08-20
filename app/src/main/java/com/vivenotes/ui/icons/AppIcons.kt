@@ -37,6 +37,8 @@ class AppIcons(neutral: Color, accent: Color, warn: Color, create: Color) {
     val deletedItems = deletedItemsGlyph(neutral, create)
     val exportNotebook = exportNotebookGlyph(neutral, accent)
     val deleteNotebook = deleteNotebookGlyph(neutral, warn)
+    val closeNotebook = closeNotebookGlyph(neutral, accent)
+    val closedNotebooks = closedNotebooksGlyph(neutral, accent)
     val integrated = integratedGlyph(neutral, accent)
     val hardware = hardwareGlyph(neutral, accent)
     val linkPreview = linkPreviewGlyph(neutral, accent)

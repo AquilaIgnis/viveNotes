@@ -328,6 +328,42 @@ class SyncAccounts(
         }
         return result
     }
+
+    /**
+     * Moves a closed notebook's contents to the server and removes them from this device.
+     *
+     * The sync run in front is not a convenience: `HierarchySync.evictToCloud` refuses to delete
+     * anything while the outbox holds work, and an empty outbox is the server's own statement that
+     * it has every byte this device could offer. The run behind is what tells the other devices,
+     * since the shelf columns travel on the notebook row like any other edit.
+     *
+     * Both are ordinary runs and take the sync mutex, so they are deliberately *outside* the
+     * eviction rather than inside it — calling `synchronize` from within would deadlock on a lock
+     * this class does not own.
+     */
+    suspend fun moveNotebookToCloud(notebookId: String): CloudArchiveResult {
+        val hierarchy = this.hierarchy ?: return CloudArchiveResult.NoAccount
+        store.account.first() ?: return CloudArchiveResult.NoAccount
+        when (val run = synchronize()) {
+            is SyncRunResult.Succeeded -> Unit
+            null -> return CloudArchiveResult.NoAccount
+            else -> return CloudArchiveResult.Failed(run)
+        }
+        val moved = hierarchy.evictToCloud(notebookId)
+        if (moved == CloudArchiveResult.Moved) synchronize()
+        return moved
+    }
+
+    /** Downloads a cloud-only notebook again and puts it back on the rail. */
+    suspend fun bringNotebookBack(notebookId: String): CloudArchiveResult {
+        val hierarchy = this.hierarchy ?: return CloudArchiveResult.NoAccount
+        val account = store.account.first() ?: return CloudArchiveResult.NoAccount
+        val restored = hierarchy.restoreFromCloud(account, notebookId)
+        // So the cleared shelf columns reach the account: another device holding this notebook in
+        // the cloud has to stop evicting it before it can show it again.
+        if (restored == CloudArchiveResult.BroughtBack) synchronize()
+        return restored
+    }
 }
 
 /**

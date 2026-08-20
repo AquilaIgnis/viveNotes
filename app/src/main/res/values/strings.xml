@@ -60,4 +60,31 @@
     <string name="account_error_not_vive">Something answered at that address, but it is not a viveNotes server.</string>
     <string name="account_error_revoked">This device\'s access was revoked on the server, so it has been disconnected. Sign in again to register it.</string>
     <string name="account_error_not_stored">This device registered with the server, but its token could not be saved, so it cannot be used. Free some storage and connect again — the unused device can be removed from the server\'s dashboard.</string>
+    <!--
+        The closed-notebook shelf. "Closed" rather than "archived": nothing here has been put away
+        for keeping, and the notebook is one press from being back where it was.
+    -->
+    <string name="closed_notebooks">Closed Notebooks</string>
+    <string name="closed_notebooks_empty">No notebooks are closed. Closing one takes it off the panel without deleting anything.</string>
+    <string name="closed_notebooks_on_device">On this device</string>
+    <string name="closed_notebooks_in_cloud">In the cloud</string>
+    <!--
+        Says what is missing rather than what is present, because that is the part with a
+        consequence: a notebook whose pages are on the server cannot be searched or opened offline.
+    -->
+    <string name="closed_notebooks_in_cloud_supporting">These notebooks\' pages are on your server and not on this device, so they cannot be searched or opened until you bring one back.</string>
+    <string name="closed_notebooks_no_account">Connect an account on the Account screen to bring these back.</string>
+    <string name="closed_notebook_contents">%1$d sections · %2$d pages</string>
+    <string name="closed_notebook_open">Open</string>
+    <string name="closed_notebook_move_to_cloud">Move to cloud</string>
+    <string name="closed_notebook_bring_back">Bring back</string>
+    <!--
+        One line per CloudArchiveResult that is worth reporting. Each says what to do next, because
+        every one of them is recoverable by doing something.
+    -->
+    <string name="closed_notebook_needs_account">Connect a server on the Account screen first. Moving a notebook to the cloud needs somewhere to put it.</string>
+    <string name="closed_notebook_not_uploaded">This device still has %1$d changes to upload. Nothing was removed — try again once syncing has caught up.</string>
+    <string name="closed_notebook_gone">That notebook is no longer here.</string>
+    <string name="closed_notebook_failed">The notebook could not be moved. Nothing was removed from this device.</string>
+    <string name="closed_notebook_restore_failed">The notebook could not be brought back. It is still on the server.</string>
 </resources>

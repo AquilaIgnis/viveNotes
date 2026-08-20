@@ -76,6 +76,18 @@ interface SyncDao {
     @Query("SELECT * FROM sync_outbox WHERE kind = :kind AND entityId = :entityId")
     suspend fun outboxEntry(kind: String, entityId: String): SyncOutboxEntity?
 
+    /**
+     * How much is still waiting to reach the server, of any kind.
+     *
+     * Read by `NotebookCloudArchive` before it deletes anything. Deliberately the whole outbox and
+     * not the rows under one notebook: a queued `attachment` names no notebook — its id is a digest
+     * and one picture can appear anywhere — so "nothing under this notebook is dirty" cannot be
+     * asked honestly, and the question that matters is whether this device has told the server
+     * everything. Zero is the only answer that makes deleting the local copy safe.
+     */
+    @Query("SELECT COUNT(*) FROM sync_outbox")
+    suspend fun outboxSize(): Int
+
     @Query(
         "DELETE FROM sync_outbox WHERE kind = :kind AND entityId = :entityId " +
             "AND generation = :generation",
@@ -344,15 +356,61 @@ interface DeletionPurgeDao {
     suspend fun expiredPages(cutoff: Long): Int
 }
 
+/**
+ * One row of the closed-notebook shelf: the notebook, and what it holds.
+ *
+ * `@Embedded` rather than a flat copy of every column so the screen keeps working on
+ * [NotebookEntity] — including [NotebookEntity.cloudOnlyAt], which is what decides whether this row
+ * is listed as being on the device or in the cloud.
+ */
+data class ClosedNotebook(
+    @androidx.room.Embedded val notebook: NotebookEntity,
+    val sectionCount: Int,
+    val pageCount: Int,
+)
+
 @Dao
 interface NotebookDao {
 
+    /**
+     * The rail's tree: live, open notebooks.
+     *
+     * `closedAt IS NULL` is the whole of what closing a notebook does to the workspace. It is not a
+     * tombstone — the rows stay, search still reads them, the purge never sees them — so this is the
+     * only place the distinction has to be made. `memory/closedNotebooksPlan.md`.
+     */
     @Transaction
-    @Query("SELECT * FROM notebooks WHERE deletedAt IS NULL ORDER BY sortIndex")
+    @Query(
+        "SELECT * FROM notebooks WHERE deletedAt IS NULL AND closedAt IS NULL ORDER BY sortIndex",
+    )
     fun observeTree(): Flow<List<NotebookWithSections>>
 
     @Query("SELECT * FROM notebooks WHERE deletedAt IS NULL ORDER BY sortIndex")
     fun observeAll(): Flow<List<NotebookEntity>>
+
+    /**
+     * The shelf, newest first, with what each notebook holds counted in SQL.
+     *
+     * Counted rather than joined through `@Relation` because the screen wants pages as well as
+     * sections and neither list is ever rendered — a relation would load every section row of every
+     * closed notebook to display two numbers. A cloud-only notebook keeps its sections and pages, so
+     * these counts stay truthful after a move to the cloud; the bytes behind them are what left.
+     */
+    @Query(
+        """
+        SELECT n.*,
+            (SELECT COUNT(*) FROM sections s
+             WHERE s.notebookId = n.id AND s.deletedAt IS NULL) AS sectionCount,
+            (SELECT COUNT(*) FROM pages p
+             JOIN sections s2 ON s2.id = p.sectionId
+             WHERE s2.notebookId = n.id AND s2.deletedAt IS NULL AND p.deletedAt IS NULL)
+                AS pageCount
+        FROM notebooks n
+        WHERE n.deletedAt IS NULL AND n.closedAt IS NOT NULL
+        ORDER BY n.closedAt DESC
+        """,
+    )
+    fun observeClosed(): Flow<List<ClosedNotebook>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(notebook: NotebookEntity)
@@ -372,6 +430,31 @@ interface NotebookDao {
 
     @Query("UPDATE notebooks SET expanded = :expanded WHERE id = :id")
     suspend fun setExpanded(id: String, expanded: Boolean)
+
+    /**
+     * Puts a notebook on the shelf, or takes it back off.
+     *
+     * Unlike [setExpanded] this does move `updatedAt`. Expansion is a scroll position; closing is
+     * something the owner decided, and a notebook whose row claims it has not changed since last
+     * year while sitting on a shelf it was put on this morning is a row that lies. OCC is settled by
+     * the server's version either way, so the clock here is display metadata only.
+     */
+    @Query("UPDATE notebooks SET closedAt = :closedAt, updatedAt = :now WHERE id = :id")
+    suspend fun setClosed(id: String, closedAt: Long?, now: Long)
+
+    /**
+     * Records that this notebook's contents now live only on the server, or that they are back.
+     *
+     * Deliberately separate from [setClosed] and written in its own transaction by
+     * [com.vivenotes.data.sync.NotebookCloudArchive]: the eviction that precedes it must be able to
+     * fail without leaving a notebook claiming its bytes are somewhere they are not.
+     */
+    @Query("UPDATE notebooks SET cloudOnlyAt = :cloudOnlyAt, updatedAt = :now WHERE id = :id")
+    suspend fun setCloudOnly(id: String, cloudOnlyAt: Long?, now: Long)
+
+    /** Every notebook the account holds whose bytes are not on this device. */
+    @Query("SELECT * FROM notebooks WHERE deletedAt IS NULL AND cloudOnlyAt IS NOT NULL")
+    suspend fun cloudOnly(): List<NotebookEntity>
 
     @Query("UPDATE notebooks SET deletedAt = :now, updatedAt = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
@@ -530,6 +613,27 @@ interface PageContentDao {
 
     @Query("DELETE FROM page_content WHERE pageId = :pageId")
     suspend fun delete(pageId: String)
+
+    /**
+     * Drops the bodies of named pages, leaving the page rows themselves.
+     *
+     * Written for `NotebookCloudArchive`: moving a notebook to the cloud evicts the payload and
+     * keeps the index, because a `pages` row that stopped existing is a parent a pulled change
+     * cannot find, and a pull that cannot place a row never advances its cursor again.
+     */
+    @Query("DELETE FROM page_content WHERE pageId IN (:pageIds)")
+    suspend fun deleteForPages(pageIds: List<String>)
+
+    /**
+     * Every stored body that could name a picture.
+     *
+     * The `LIKE` is the same guard `HierarchySync.pictureIdsIn` applies before decoding: it is a
+     * field name of `Outline.Image` and of nothing else, and both codecs write field names as text.
+     * Filtering in SQL rather than in Kotlin is what keeps the eviction's survivor scan proportional
+     * to the pages that have pictures on them instead of to every page on the device.
+     */
+    @Query("SELECT * FROM page_content WHERE docJson LIKE '%attachmentId%'")
+    suspend fun picturePlacingBodies(): List<PageContentEntity>
 }
 
 @Dao
@@ -580,6 +684,17 @@ interface PageRevisionDao {
     @Query("DELETE FROM page_revisions WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
 
+    /**
+     * Drops every saved version of the named pages.
+     *
+     * Version history is device-local — `page_revisions` is not a sync kind — so a notebook moved to
+     * the cloud loses it and does not get it back. That is stated rather than worked around: the
+     * server holds current state, and inventing a way to upload history would be a different
+     * feature. `memory/closedNotebooksPlan.md`.
+     */
+    @Query("DELETE FROM page_revisions WHERE pageId IN (:pageIds)")
+    suspend fun deleteForPages(pageIds: List<String>)
+
     @Query(
         "DELETE FROM page_revisions WHERE pageId = :pageId AND id NOT IN " +
             "(SELECT id FROM page_revisions WHERE pageId = :pageId " +
@@ -590,6 +705,20 @@ interface PageRevisionDao {
 
 @Dao
 interface InkStrokeDao {
+
+    /**
+     * Removes these pages' rows outright, for `NotebookCloudArchive`.
+     *
+     * Not a tombstone. A tombstone asks the server to forget them, and moving a notebook to the
+     * cloud asks it to be the one thing that remembers. Erase and move targets go with their
+     * operation by foreign key.
+     */
+    @Query("DELETE FROM ink_strokes WHERE pageId IN (:pageIds)")
+    suspend fun deleteForPages(pageIds: List<String>)
+
+    /** Tombstones included: the question is whether any ink row is still stored for these pages. */
+    @Query("SELECT COUNT(*) FROM ink_strokes WHERE pageId IN (:pageIds)")
+    suspend fun countForPages(pageIds: List<String>): Int
 
     /**
      * A page's live ink, in draw order. Tombstones are excluded, never removed.
@@ -709,6 +838,17 @@ interface AttachmentDao {
 
     @Query("DELETE FROM attachments WHERE id = :id AND refCount <= 0")
     suspend fun deleteIfUnreferenced(id: String)
+
+    /**
+     * Removes rows regardless of `refCount`, for `HierarchySync.evictToCloud`.
+     *
+     * Unconditional on purpose. `refCount` is maintained by the paths that write documents, and a
+     * pulled picture is documented as arriving at zero, so it cannot be the authority on what is
+     * still reachable. The eviction works that out from the documents themselves and hands the
+     * answer here. `attachment_text` goes with each row by foreign key.
+     */
+    @Query("DELETE FROM attachments WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
 }
 
 /** The recognized-text cache of [AttachmentTextEntity] — `memory/imageOcrPlan.md` IO2, IO3, IO6. */
@@ -795,6 +935,16 @@ interface InkTextDao {
 @Dao
 interface InkEraseDao {
 
+    /**
+     * Removes these pages' rows outright, for `NotebookCloudArchive`.
+     *
+     * Not a tombstone. A tombstone asks the server to forget them, and moving a notebook to the
+     * cloud asks it to be the one thing that remembers. Erase and move targets go with their
+     * operation by foreign key.
+     */
+    @Query("DELETE FROM ink_erases WHERE pageId IN (:pageIds)")
+    suspend fun deleteForPages(pageIds: List<String>)
+
     @Transaction
     @Query("SELECT * FROM ink_erases WHERE pageId = :pageId AND deletedAt IS NULL ORDER BY createdAt, id")
     suspend fun byPage(pageId: String): List<InkEraseWithTargets>
@@ -852,6 +1002,16 @@ interface InkEraseDao {
 
 @Dao
 interface InkMoveDao {
+
+    /**
+     * Removes these pages' rows outright, for `NotebookCloudArchive`.
+     *
+     * Not a tombstone. A tombstone asks the server to forget them, and moving a notebook to the
+     * cloud asks it to be the one thing that remembers. Erase and move targets go with their
+     * operation by foreign key.
+     */
+    @Query("DELETE FROM ink_moves WHERE pageId IN (:pageIds)")
+    suspend fun deleteForPages(pageIds: List<String>)
 
     @Transaction
     @Query("SELECT * FROM ink_moves WHERE pageId = :pageId AND deletedAt IS NULL ORDER BY createdAt, id")

@@ -194,6 +194,26 @@ class AttachmentBlobSync(
     suspend fun hasMissingBytes(): Boolean = missingBytes().isNotEmpty()
 
     /**
+     * Deletes the local copies of pictures nothing on this device reaches any more.
+     *
+     * The caller — `HierarchySync.evictToCloud` — has already removed their `attachments` rows in
+     * the same operation, and that ordering is not cosmetic: [missingBytes] answers "what is
+     * pending" by looking for a row whose file is absent, so a file deleted while its row survived
+     * would be re-downloaded on the next tick, which is the opposite of what moving a notebook to
+     * the cloud was asked to do.
+     *
+     * [serverHolds] is deliberately *not* cleared. It records what the server has, and this device
+     * dropping its copy does not change that; forgetting would cost a needless `HEAD` the day the
+     * same picture is pasted again.
+     */
+    fun discard(ids: Collection<String>): Int = ids.count { id ->
+        if (!isBlobDigest(id)) return@count false
+        deferred -= id
+        bytes.stagingFor(id).delete()
+        bytes.fileFor(id).delete()
+    }
+
+    /**
      * The pictures this device knows about and does not have, minus the ones it has stopped asking
      * for. An id that cannot be a digest is skipped rather than requested: it could not name a blob,
      * and it must never reach a URL or a file name.

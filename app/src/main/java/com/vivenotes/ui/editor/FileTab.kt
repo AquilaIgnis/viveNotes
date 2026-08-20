@@ -16,6 +16,8 @@ data class FileActions(
     val importNotebook: () -> Unit = {},
     val deleteNotebook: () -> Unit = {},
     val openDeletedItems: () -> Unit = {},
+    val closeNotebook: () -> Unit = {},
+    val openClosedNotebooks: () -> Unit = {},
 )
 
 internal object FileTags {
@@ -24,6 +26,8 @@ internal object FileTags {
     const val EXPORT_NOTEBOOK = "file-export-notebook"
     const val IMPORT_NOTEBOOK = "file-import-notebook"
     const val DELETE_NOTEBOOK = "file-delete-notebook"
+    const val CLOSE_NOTEBOOK = "file-close-notebook"
+    const val CLOSED_NOTEBOOKS = "file-closed-notebooks"
 }
 
 /** Commands about the open file rather than its content or the device running the app. */
@@ -51,8 +55,30 @@ internal fun FileTab(
                 icon = { active -> TwoToneIcon({ it.deletedItems }, active) },
             )
         }
+        // Beside Deleted Items rather than beside Close Notebook, because the two shelves are the
+        // same idea — places things go that are not in the panel — and somebody hunting for a
+        // notebook they cannot see will look at whichever of them they find first.
+        Box(Modifier.testTag(FileTags.CLOSED_NOTEBOOKS)) {
+            RibbonCommand(
+                label = "Closed Notebooks",
+                onClick = actions.openClosedNotebooks,
+                icon = { active -> TwoToneIcon({ it.closedNotebooks }, active) },
+            )
+        }
 
         Divider()
+        // With Export and Import, not with Delete: all three act on the notebook that is open, and
+        // none of them takes anything away. The divider below is what separates the one that does.
+        Box(Modifier.testTag(FileTags.CLOSE_NOTEBOOK)) {
+            RibbonCommand(
+                label = "Close Notebook",
+                onClick = actions.closeNotebook,
+                enabled = notebookOpen,
+                // The cross in the accent, not the warning red — see `closeNotebookGlyph`. Closing
+                // removes nothing, and the colour is what says so before the label is read.
+                icon = { active -> TwoToneIcon({ it.closeNotebook }, active) },
+            )
+        }
         Box(Modifier.testTag(FileTags.EXPORT_NOTEBOOK)) {
             RibbonCommand(
                 label = "Export Notebook",

@@ -216,6 +216,18 @@ class NotebookTransferManager(
                 ::readNotebook,
             ).singleOrNull() ?: throw NotebookTransferException("The selected notebook no longer exists.")
 
+            // A notebook whose contents were moved to the cloud has pages and no bodies, so it would
+            // export as a bundle of empty documents that looks like a successful backup and is not
+            // one. Refused here, before anything is staged, and read straight from the snapshot
+            // because `readNotebook` predates the column. `memory/closedNotebooksPlan.md`.
+            val cloudOnly = source.queryRows(
+                "SELECT cloudOnlyAt FROM notebooks WHERE id = ?",
+                arrayOf(notebookId),
+            ) { it.isNull(0) }.singleOrNull() == false
+            if (cloudOnly) throw NotebookTransferException(
+                "This notebook's contents are in the cloud. Bring it back to this device first.",
+            )
+
             source.beginTransaction()
             try {
                 // The sync layer goes first, and the triggers go before the tables they read.
@@ -248,6 +260,15 @@ class NotebookTransferManager(
                 source.execSQL("DROP TABLE IF EXISTS sync_entity_states")
                 source.execSQL("DROP TABLE IF EXISTS sync_state")
                 source.execSQL("DELETE FROM notebooks WHERE id <> ?", arrayOf(notebookId))
+                // Which shelf a notebook sits on is this account's business and not the notebook's
+                // content, so an imported notebook always arrives open and on the device it was
+                // imported to. Dropped rather than nulled for the reason the tables above are:
+                // `validateSchema` compares the bundle's columns to `EXPECTED_COLUMNS` exactly, and
+                // leaving them would mean no build from schema 22 onward could import what it wrote.
+                // `ALTER TABLE ... DROP COLUMN` needs SQLite 3.35, which every `minSdk = 35` device
+                // has several versions past.
+                source.execSQL("ALTER TABLE notebooks DROP COLUMN closedAt")
+                source.execSQL("ALTER TABLE notebooks DROP COLUMN cloudOnlyAt")
                 // Installation identity is not notebook content and must never travel to another
                 // device. The notebook UUID itself remains in both `notebooks.id` and vive_bundle.
                 source.execSQL("DROP TABLE IF EXISTS local_metadata")

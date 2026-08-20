@@ -106,7 +106,10 @@ import com.vivenotes.ui.editor.Ribbon
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.R
+import com.vivenotes.data.sync.CloudArchiveResult
 import com.vivenotes.ui.account.AccountScreen
+import com.vivenotes.ui.closed.ClosedNotebooksScreen
 import com.vivenotes.ui.panel.AiModelsPanelContent
 import com.vivenotes.ui.panel.ContentPanelContent
 import com.vivenotes.ui.panel.ContentPanelHeader
@@ -148,6 +151,9 @@ private const val MATH_ANALYSIS_DEBOUNCE_MS = 350L
 private enum class AppDestination {
     Workspace,
     Account,
+
+    /** The closed-notebook shelf — `memory/closedNotebooksPlan.md`. */
+    ClosedNotebooks,
 }
 
 /**
@@ -192,6 +198,7 @@ fun NotesApp(
         mutableStateListOf(AppDestination.Workspace)
     }
     val accountOpen = backStack.lastOrNull() == AppDestination.Account
+    val closedNotebooksOpen = backStack.lastOrNull() == AppDestination.ClosedNotebooks
     val spatialMotion = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
     val effectsMotion = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
 
@@ -246,6 +253,35 @@ fun NotesApp(
             backStack.removeLast()
         }
     }
+    val closeShelf = {
+        if (backStack.lastOrNull() == AppDestination.ClosedNotebooks) {
+            backStack.removeLast()
+        }
+    }
+
+    // Held beside the connect scope, one level above the destination, for the same reason it is:
+    // moving a notebook to the cloud is a sync run, an eviction and a second sync run, and a Back
+    // press part-way through must not cancel it — that is the window where the rows are deleted.
+    val closedNotebooks by viewModel.closedNotebooks
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    var cloudBusyNotebookId by remember { mutableStateOf<String?>(null) }
+    var cloudMessage by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+
+    fun runCloudArchive(notebookId: String, move: Boolean) {
+        if (cloudBusyNotebookId != null) return
+        cloudBusyNotebookId = notebookId
+        cloudMessage = null
+        connectScope.launch {
+            val result = if (move) {
+                syncAccounts.moveNotebookToCloud(notebookId)
+            } else {
+                syncAccounts.bringNotebookBack(notebookId)
+            }
+            cloudMessage = cloudArchiveMessage(context, result, move)
+            cloudBusyNotebookId = null
+        }
+    }
 
     val linkPreviews by remember(viewModel) {
         viewModel.viewSettings.map { it.linkPreviews }.distinctUntilChanged()
@@ -256,7 +292,7 @@ fun NotesApp(
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (accountOpen) {
+                    if (accountOpen || closedNotebooksOpen) {
                         Modifier.semantics { hideFromAccessibility() }
                     } else {
                         Modifier
@@ -282,6 +318,11 @@ fun NotesApp(
                             backStack.add(AppDestination.Account)
                         }
                     },
+                    onOpenClosedNotebooks = {
+                        if (backStack.lastOrNull() != AppDestination.ClosedNotebooks) {
+                            backStack.add(AppDestination.ClosedNotebooks)
+                        }
+                    },
                     // The stored registration, not the in-flight attempt: the ribbon reports what
                     // this installation *has*, which outlives any one visit to the account screen.
                     accountConnected = storedAccount != null,
@@ -291,6 +332,35 @@ fun NotesApp(
                     serverUnreachable = storedAccount != null && syncStatus.serverUnreachable,
                 )
             }
+        }
+
+        AnimatedVisibility(
+            visible = closedNotebooksOpen,
+            enter = slideInHorizontally(
+                animationSpec = spatialMotion,
+                initialOffsetX = { it },
+            ) + fadeIn(animationSpec = effectsMotion),
+            exit = slideOutHorizontally(
+                animationSpec = spatialMotion,
+                targetOffsetX = { it },
+            ) + fadeOut(animationSpec = effectsMotion),
+        ) {
+            ClosedNotebooksScreen(
+                notebooks = closedNotebooks,
+                onBack = closeShelf,
+                onOpen = { id ->
+                    viewModel.reopenNotebook(id)
+                    // Straight back to the workspace: reopening puts the notebook in the rail and
+                    // selects its first section, and staying here would leave the person looking at
+                    // a list the notebook has just left.
+                    closeShelf()
+                },
+                onMoveToCloud = { id -> runCloudArchive(id, move = true) },
+                onBringBack = { id -> runCloudArchive(id, move = false) },
+                accountConnected = storedAccount != null,
+                busyNotebookId = cloudBusyNotebookId,
+                message = cloudMessage,
+            )
         }
 
         AnimatedVisibility(
@@ -354,6 +424,31 @@ fun NotesApp(
     }
 }
 
+/**
+ * What to say after a move to the cloud, or a restore, that did not simply work.
+ *
+ * A plain function taking a [android.content.Context] rather than a composable reading
+ * [androidx.compose.ui.res.stringResource]: it is called from a coroutine that outlives the screen,
+ * which is the whole reason the operation runs where it does.
+ *
+ * Success returns null. There is nothing to say — the list the person is looking at has already
+ * moved the notebook from one section to the other, which is a better report than a sentence.
+ */
+private fun cloudArchiveMessage(
+    context: android.content.Context,
+    result: CloudArchiveResult,
+    move: Boolean,
+): String? = when (result) {
+    CloudArchiveResult.Moved, CloudArchiveResult.BroughtBack, CloudArchiveResult.AlreadyDone -> null
+    CloudArchiveResult.NoAccount -> context.getString(R.string.closed_notebook_needs_account)
+    is CloudArchiveResult.NotUploaded ->
+        context.getString(R.string.closed_notebook_not_uploaded, result.pending)
+    CloudArchiveResult.UnknownNotebook -> context.getString(R.string.closed_notebook_gone)
+    is CloudArchiveResult.Failed -> context.getString(
+        if (move) R.string.closed_notebook_failed else R.string.closed_notebook_restore_failed,
+    )
+}
+
 @Composable
 private fun NotesWorkspace(
     viewModel: NotesViewModel,
@@ -362,6 +457,7 @@ private fun NotesWorkspace(
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
     onOpenAccount: () -> Unit,
+    onOpenClosedNotebooks: () -> Unit,
     accountConnected: Boolean,
     serverUnreachable: Boolean,
 ) {
@@ -444,10 +540,15 @@ private fun NotesWorkspace(
         pendingSectionPages = pendingSectionDelete?.let { viewModel.pageCount(it.id) }
     }
     var pendingNotebookDelete by remember { mutableStateOf<NotebookEntity?>(null) }
+    var pendingNotebookClose by remember { mutableStateOf<NotebookEntity?>(null) }
     /** As above: null until the counts have been read. */
     var pendingNotebookContents by remember { mutableStateOf<NotebookContents?>(null) }
-    LaunchedEffect(pendingNotebookDelete) {
-        pendingNotebookContents = pendingNotebookDelete?.let { viewModel.notebookContents(it.id) }
+    // One slot for both confirmations, because only one of them can ever be open: both are reached
+    // from the ribbon, and an `AlertDialog` is modal, so the row that would set the other is not
+    // reachable while either is up.
+    LaunchedEffect(pendingNotebookDelete, pendingNotebookClose) {
+        val subject = pendingNotebookDelete ?: pendingNotebookClose
+        pendingNotebookContents = subject?.let { viewModel.notebookContents(it.id) }
     }
     /** The docked pane, if any. Deliberately not persisted: it is where you are, not what you have. */
     var openPane by remember { mutableStateOf<ToolPane?>(null) }
@@ -609,7 +710,7 @@ private fun NotesWorkspace(
     val currentNotebook = state.tree
         .firstOrNull { entry -> entry.liveSections.any { it.id == state.selectedSectionId } }
         ?.notebook
-    val fileActions = remember(viewModel, exportFileName, currentNotebook) {
+    val fileActions = remember(viewModel, exportFileName, currentNotebook, onOpenClosedNotebooks) {
         FileActions(
             openVersionHistory = {
                 openPane = ToolPane.VersionHistory
@@ -627,6 +728,10 @@ private fun NotesWorkspace(
             deleteNotebook = {
                 pendingNotebookDelete = currentNotebook
             },
+            closeNotebook = {
+                pendingNotebookClose = currentNotebook
+            },
+            openClosedNotebooks = onOpenClosedNotebooks,
         )
     }
 
@@ -995,6 +1100,17 @@ private fun NotesWorkspace(
             onConfirm = {
                 viewModel.deleteNotebook(notebook.id)
                 pendingNotebookDelete = null
+            },
+        )
+    }
+    pendingNotebookClose?.let { notebook ->
+        CloseNotebookDialog(
+            notebook = notebook,
+            contents = pendingNotebookContents,
+            onDismiss = { pendingNotebookClose = null },
+            onConfirm = {
+                viewModel.closeNotebook(notebook.id)
+                pendingNotebookClose = null
             },
         )
     }
@@ -1602,6 +1718,57 @@ private fun DeleteNotebookDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm) { Text("Delete") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+/**
+ * Confirms closing the notebook the ribbon's File tab is pointed at.
+ *
+ * A confirmation for something that deletes nothing looks like ceremony, and is not. Closing is
+ * reached from a toolbar rather than from the notebook's own row, sits two buttons from Delete
+ * Notebook in a row that scrolls under the finger, and its whole effect is that a notebook *stops
+ * being on screen* — which is also what deleting looks like from the rail. Somebody who meant one
+ * and got the other has no way to tell which they got except by finding out where it went. So the
+ * title names the notebook, which is the only place the ribbon's aim can be checked, and the body
+ * says the two things that separate this from the button beside it: nothing is deleted, and here is
+ * where it went.
+ *
+ * The counts are the same ones [DeleteNotebookDialog] reads, and they are doing a different job
+ * here — not "this is how much you are about to lose" but "this is how much is going with it", so
+ * the notebook can be recognised by its size when it is looked for again.
+ */
+@Composable
+private fun CloseNotebookDialog(
+    notebook: NotebookEntity,
+    contents: NotebookContents?,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Close ${notebook.name}?") },
+        text = {
+            Text(
+                buildString {
+                    append("Nothing is deleted. ")
+                    if (contents != null && (contents.sections > 0 || contents.pages > 0)) {
+                        append(
+                            "Its ${countOf(contents.sections, "section")} and " +
+                                "${countOf(contents.pages, "page")} stay where they are, and the ",
+                        )
+                    } else {
+                        append("The ")
+                    }
+                    append("notebook leaves the panel until you open it again from Closed Notebooks.")
+                },
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("Close") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

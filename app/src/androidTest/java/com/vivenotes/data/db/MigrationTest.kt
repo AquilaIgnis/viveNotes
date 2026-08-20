@@ -899,6 +899,54 @@ class MigrationTest {
         }
     }
 
+    @Test
+    fun migration21To22LeavesEveryExistingNotebookOpenAndOnTheDevice() {
+        helper.createDatabase(ROOM_MIGRATION_DB, 21).apply {
+            execSQL("INSERT INTO notebooks VALUES ('open', 'Open', 1, 0, 1, 10, 10, NULL)")
+            execSQL("INSERT INTO notebooks VALUES ('gone', 'Gone', 1, 1, 1, 10, 10, 99)")
+            execSQL(
+                "INSERT INTO sync_state(singleton, accountId, cursor, applyingRemote) " +
+                    "VALUES(0, 'account', 0, 0)",
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            ROOM_MIGRATION_DB,
+            22,
+            true,
+            NotesDatabase.MIGRATION_21_22,
+        ).use { migrated ->
+            // Nothing is backfilled, and null in both columns is exactly the right answer: no build
+            // before this one could close a notebook, so every existing row is open and here.
+            migrated.query("SELECT id, closedAt, cloudOnlyAt FROM notebooks ORDER BY id").use {
+                assertEquals(true, it.moveToFirst())
+                assertEquals("gone", it.getString(0))
+                assertTrue(it.isNull(1))
+                assertTrue(it.isNull(2))
+                assertEquals(true, it.moveToNext())
+                assertEquals("open", it.getString(0))
+                assertTrue(it.isNull(1))
+                assertTrue(it.isNull(2))
+                assertEquals(false, it.moveToNext())
+            }
+
+            // And nothing is queued by the migration either. Unlike 19 -> 20 and 20 -> 21 there is
+            // nothing to backfill: the notebook triggers have existed since schema 17, so the first
+            // time either column is actually written it queues a push like any other edit.
+            //
+            // That trigger firing is deliberately *not* asserted here, because this helper cannot
+            // show it: `createDatabase` builds its schema-21 database from the exported JSON, and
+            // Room does not record triggers in a schema export — so no database reached from here
+            // has any. `HierarchySyncTest.closingANotebookTravelsToTheServerAndBackAsAnOrdinaryField`
+            // is where it is asserted, on a real `NotesDatabase` with `SYNC_TRIGGER_CALLBACK`.
+            migrated.query("SELECT COUNT(*) FROM sync_outbox").use {
+                it.moveToFirst()
+                assertEquals(0, it.getInt(0))
+            }
+        }
+    }
+
     companion object {
         private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
     }

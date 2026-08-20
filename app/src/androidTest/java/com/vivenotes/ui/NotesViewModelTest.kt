@@ -29,6 +29,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -1724,6 +1725,62 @@ class NotesViewModelTest {
             assertTrue(vm.deletedItems.value.items.isEmpty())
             assertEquals(listOf(notebookId), vm.uiState.value.tree.map { it.notebook.id })
         }
+
+    /**
+     * Closing needs the same selection dance as deleting, and for exactly the same reason: the tree
+     * flow stops carrying the notebook, but nothing else would notice that the open page belongs to
+     * one the rail no longer lists.
+     */
+    @Test
+    fun closingTheOpenNotebookOpensAnotherOneAndDeletesNothing() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val seeded = vm.uiState.value.tree.single().notebook.id
+        vm.createNotebook("Second")
+        advanceUntilIdle()
+        val second = vm.uiState.value.tree.single { it.notebook.id != seeded }
+        val closedSection = second.liveSections.single().id
+
+        vm.closeNotebook(second.notebook.id)
+        advanceUntilIdle()
+
+        assertEquals(listOf(seeded), vm.uiState.value.tree.map { it.notebook.id })
+        val open = vm.uiState.value.selectedSectionId
+        assertNotNull("the editor was left with no section open", open)
+        assertTrue(
+            "the selection stayed inside the closed notebook",
+            vm.uiState.value.tree.single().liveSections.any { it.id == open },
+        )
+
+        // The difference from deleting, and the whole point of the feature: nothing is tombstoned,
+        // so it never appears in Deleted items and the purge will never see it.
+        assertNull(db.notebookDao().byId(second.notebook.id)!!.deletedAt)
+        assertNotNull(db.sectionDao().byId(closedSection))
+        assertTrue(vm.deletedItems.value.items.isEmpty())
+    }
+
+    @Test
+    fun aClosedNotebookIsOnTheShelfAndComesBackOffIt() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val seeded = vm.uiState.value.tree.single().notebook.id
+        vm.createNotebook("Second")
+        advanceUntilIdle()
+        val second = vm.uiState.value.tree.single { it.notebook.id != seeded }.notebook.id
+
+        vm.closeNotebook(second)
+        advanceUntilIdle()
+        assertEquals(listOf(second), vm.closedNotebooks.first().map { it.notebook.id })
+
+        vm.reopenNotebook(second)
+        advanceUntilIdle()
+
+        assertTrue(vm.closedNotebooks.first().isEmpty())
+        assertTrue(vm.uiState.value.tree.map { it.notebook.id }.contains(second))
+        // Reopening selects it, or the press lands somewhere the person cannot see.
+        assertTrue(
+            vm.uiState.value.tree.single { it.notebook.id == second }
+                .liveSections.any { it.id == vm.uiState.value.selectedSectionId },
+        )
+    }
 
     /** What the confirmation reads out before the user agrees to it. */
     @Test

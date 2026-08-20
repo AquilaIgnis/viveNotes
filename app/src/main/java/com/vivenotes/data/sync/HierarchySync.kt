@@ -3,6 +3,7 @@ package com.vivenotes.data.sync
 import android.util.Log
 import androidx.room.withTransaction
 import com.vivenotes.data.EraserMode
+import com.vivenotes.data.DocumentRevisionPayload
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.db.AttachmentEntity
 import com.vivenotes.data.db.InkEraseEntity
@@ -15,6 +16,7 @@ import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.data.db.PageEntity
+import com.vivenotes.data.db.PageRevisionEntity
 import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.data.db.SyncEntityStateEntity
 import com.vivenotes.data.db.SyncOutboxEntity
@@ -110,6 +112,7 @@ class HierarchySync(
     private val sections = db.sectionDao()
     private val pages = db.pageDao()
     private val contents = db.pageContentDao()
+    private val revisions = db.pageRevisionDao()
     private val inkStrokes = db.inkStrokeDao()
     private val inkErases = db.inkEraseDao()
     private val inkMoves = db.inkMoveDao()
@@ -226,6 +229,11 @@ class HierarchySync(
                     is PhaseResult.Stop -> return@withLock finalPull.result
                 }
             }
+
+            // After the push and never after the pull. A device that was offline while another one
+            // moved a notebook to the cloud may be holding an edit nobody else has, and evicting on
+            // the pull would destroy it; by here those bytes have gone up.
+            enforceCloudOnly()
 
             // **Last, after this device's own writes have gone out.** A first sync of a
             // photographed notebook is tens of megabytes of pictures, and putting them ahead of the
@@ -850,6 +858,17 @@ class HierarchySync(
                 base["sortIndex"] = JsonPrimitive(row.sortIndex)
                 base["expanded"] = JsonPrimitive(row.expanded)
                 base["createdAt"] = JsonPrimitive(row.createdAt)
+                // The shelf, and whether the bytes are still here. Both written **always**, as
+                // `JsonNull` when null, rather than omitted: `base` starts from the retained
+                // `serverJson`, so an omitted key leaves the previous value standing and reopening a
+                // notebook — or bringing one back from the cloud — would never propagate.
+                //
+                // The server carries them as unrecognised properties of `NotebookFields`, which
+                // `additionalProperties: true` allows. That same retention is why a build older than
+                // schema 22 pushing a rename does not reopen the notebook everywhere: it sends back
+                // the value it never parsed. `memory/closedNotebooksPlan.md`.
+                base["closedAt"] = row.closedAt?.let(::JsonPrimitive) ?: JsonNull
+                base["cloudOnlyAt"] = row.cloudOnlyAt?.let(::JsonPrimitive) ?: JsonNull
                 null
             }
             SyncKind.Section -> {
@@ -1088,6 +1107,10 @@ class HierarchySync(
                     createdAt = change.raw.requiredLong("createdAt"),
                     updatedAt = displayUpdatedAt,
                     deletedAt = change.deletedAt,
+                    // Optional, not required: a row last written by a build older than schema 22
+                    // carries neither, and absent is exactly what "open, and on this device" means.
+                    closedAt = change.raw.optionalLong("closedAt"),
+                    cloudOnlyAt = change.raw.optionalLong("cloudOnlyAt"),
                 ),
             )
             SyncKind.Section -> sections.upsert(
@@ -1346,6 +1369,11 @@ class HierarchySync(
                 raw.requiredString("name")
                 raw.requiredInt("colorArgb")
                 raw.requiredBoolean("expanded")
+                // Absent on anything written before schema 22, so optional — but validated here
+                // rather than at apply time like everything else, because a non-numeric value would
+                // otherwise throw inside the transaction that commits the cursor.
+                raw.optionalLong("closedAt")
+                raw.optionalLong("cloudOnlyAt")
             }
             SyncKind.Section -> {
                 raw.requiredInt("sortIndex")
@@ -1636,10 +1664,347 @@ class HierarchySync(
         return points
     }
 
+
+    // --- moving a notebook to the cloud, and bringing it back ---------------------------------
+    //
+    // `memory/closedNotebooksPlan.md`. Both live in this class rather than in one of their own for a
+    // reason that is not negotiable: they have to be serialized against ordinary runs by the same
+    // [mutex]. A replay writing rows while a tick applies a delta, or an eviction deleting rows a
+    // push is part-way through snapshotting, is a corrupt account rather than a slow one.
+
+    /**
+     * Removes a notebook's contents from this device, leaving them on the server.
+     *
+     * The whole safety argument is the first check: **the outbox must be empty**. The server accepts
+     * a `pageContent` only when it already holds the pictures it names — `missing_blob` is the
+     * refusal — so an empty outbox is the server saying, in its own words, that it has every byte
+     * this device could offer it. Nothing is deleted before it has said so. It is deliberately the
+     * whole outbox rather than the rows under this notebook: a queued `attachment` names no
+     * notebook, because its id is a digest and one picture can appear anywhere.
+     *
+     * What goes: `page_content`, `page_revisions`, the three ink tables, the derived handwriting
+     * cache, and the `attachments` rows and files nothing else on this device reaches. What stays:
+     * the notebook, its sections and its pages. That is not squeamishness about a few hundred bytes
+     * a row — [parentIsAvailable] holds back a pulled row whose parent is missing, and
+     * [pullIfNeeded] will not advance the cursor while anything is held. A `sections` row deleted
+     * here would meet the next `page` change another device makes for it and stop this device
+     * syncing at all, for every notebook, silently. The payload is effectively all of the bytes.
+     *
+     * No trigger suppression and no tombstones. The sync triggers are `AFTER INSERT` and
+     * `AFTER UPDATE`, so a delete queues nothing; and a tombstone is how a client asks the server to
+     * forget a row, which is the exact opposite of what this asks of it. What the deletes *do*
+     * require is [SyncDao.pruneOrphanedOutbox] in the same transaction — [snapshot] answers a queued
+     * row whose table row has gone with "dirty pageContent disappeared", and fails every push from
+     * then on.
+     *
+     * The shelf columns are written in a **second** transaction, with the triggers live so the other
+     * devices learn. Second, because the eviction has to be free to fail without leaving a notebook
+     * claiming its bytes are somewhere they are not.
+     */
+    suspend fun evictToCloud(notebookId: String): CloudArchiveResult = mutex.withLock {
+        val notebook = notebooks.byId(notebookId)
+            ?: return@withLock CloudArchiveResult.UnknownNotebook
+        evictToCloudLocked(notebook)
+    }
+
+    private suspend fun evictToCloudLocked(notebook: NotebookEntity): CloudArchiveResult {
+        if (notebook.deletedAt != null) return CloudArchiveResult.UnknownNotebook
+        if (sync.state() == null) return CloudArchiveResult.NoAccount
+        val pending = sync.outboxSize()
+        if (pending > 0) return CloudArchiveResult.NotUploaded(pending)
+
+        val evicted = try {
+            db.withTransaction {
+                val pageIds = pages.allInNotebook(notebook.id).map { it.id }
+                if (pageIds.isEmpty()) return@withTransaction emptyList()
+                val orphaned = picturesReachedOnlyBy(pageIds)
+                // Chunked below SQLite's bind limit, which a notebook of a few thousand pages would
+                // otherwise cross — and the failure mode of not chunking is an exception on
+                // somebody's largest notebook only.
+                pageIds.chunked(SQLITE_BIND_CHUNK).forEach { chunk ->
+                    contents.deleteForPages(chunk)
+                    revisions.deleteForPages(chunk)
+                    inkStrokes.deleteForPages(chunk)
+                    inkErases.deleteForPages(chunk)
+                    inkMoves.deleteForPages(chunk)
+                    // Derived from ink that has just gone, and rebuilt from the strokes when they
+                    // come back. Its picture twin, `attachment_text`, needs no line here: it
+                    // cascades from the `attachments` row below.
+                    inkText.deleteForPages(chunk)
+                }
+                orphaned.chunked(SQLITE_BIND_CHUNK).forEach { attachments.deleteByIds(it) }
+                sync.pruneOrphanedOutbox()
+                orphaned
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failed: Exception) {
+            Log.e(TAG, "Could not evict notebook ${notebook.id} to the cloud", failed)
+            return CloudArchiveResult.Failed(SyncRunResult.Failed(PermanentSyncFailure.LocalData))
+        }
+
+        // After the transaction commits, so a rollback can never leave a surviving row pointing at
+        // a file that is gone.
+        blobs.discard(evicted)
+
+        // Only what is missing, and only because this also runs from [enforceCloudOnly]: a device
+        // evicting what another one moved would otherwise stamp the columns with its own clock and
+        // push a notebook row saying nothing new. Rewriting a value that arrived from the server is
+        // how a field nobody edited acquires a version history.
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            if (notebook.closedAt == null) notebooks.setClosed(notebook.id, now, now)
+            if (notebook.cloudOnlyAt == null) notebooks.setCloudOnly(notebook.id, now, now)
+        }
+        return CloudArchiveResult.Moved
+    }
+
+    /**
+     * The digests this notebook places that nothing left on the device still reaches.
+     *
+     * Computed from the documents, not from `refCount`, which cannot answer it: a pulled picture is
+     * documented as arriving with a count of zero and the ones already in Room were never
+     * backfilled. A wrong count here deletes the file behind a picture another notebook still draws.
+     *
+     * **Only *current* bodies are consulted on the surviving side**, and that is a deliberate,
+     * bounded inexactness rather than an oversight. A `page_revisions` payload is gzipped, so the
+     * substring test cannot see into it and answering exactly would mean inflating up to
+     * [NotesRepository.MAX_REVISIONS_PER_PAGE] documents for every page on the device — hundreds of
+     * megabytes of blobs read to answer a question about a handful of digests. What that costs is
+     * narrow and self-healing: a saved version of a page in *another* notebook, showing the
+     * byte-identical picture that its current body no longer shows, renders it missing until this
+     * notebook is brought back — at which point the same digest is downloaded to the same file name
+     * and the old version draws again. The evicted notebook's own revisions are read, because they
+     * are being deleted in the same breath and their pictures would otherwise be stranded.
+     *
+     * The surviving-side scan is one pass, guarded by the substring test in [pictureIdsIn]: the
+     * overwhelming majority of pages have no picture on them at all. It runs for a press somebody
+     * made and on no sync path.
+     */
+    private suspend fun picturesReachedOnlyBy(pageIds: List<String>): List<String> {
+        val leaving = buildSet {
+            pageIds.chunked(SQLITE_BIND_CHUNK).forEach { chunk ->
+                contents.byIds(chunk).forEach { addAll(pictureIdsIn(it.docJson, it.format)) }
+                revisions.byPageIds(chunk).forEach { addAll(picturesIn(it)) }
+            }
+        }
+        if (leaving.isEmpty()) return emptyList()
+
+        val evicting = pageIds.toSet()
+        val staying = buildSet {
+            contents.picturePlacingBodies().forEach { row ->
+                if (row.pageId !in evicting) addAll(pictureIdsIn(row.docJson, row.format))
+            }
+        }
+        return (leaving - staying).toList()
+    }
+
+    /** The pictures a saved version places, or none if its payload cannot be read. */
+    private fun picturesIn(revision: PageRevisionEntity): List<String> = runCatching {
+        DocumentRevisionPayload.unpack(revision).outlines
+            .filterIsInstance<Outline.Image>()
+            .map { it.attachmentId }
+    }.getOrDefault(emptyList())
+
+    /**
+     * Downloads a cloud-only notebook's contents again and puts it back on this device.
+     *
+     * There is no per-notebook read in the contract — `GET /v1/changes` takes `since` and `limit`
+     * and nothing else — so this replays the account from zero and keeps only what belongs to the
+     * notebook. The cost is worth stating plainly: it reads the account's whole current state to
+     * extract one notebook. It is a deliberate, once-in-a-while, user-pressed action, and it works
+     * against the server that is deployed today. The fix is an optional `notebookId` on that
+     * operation, which is a server change and is therefore not assumed here.
+     *
+     * Three things make this a replay rather than a pull:
+     *
+     *  - **The cursor never moves.** These rows all sit at or below it. This device already promised
+     *    it had accounted for them, and it had — it accounted for them by deciding not to keep them.
+     *  - **Only the evicted kinds are applied.** Notebooks, sections and pages were never evicted
+     *    and are kept current by ordinary sync, so writing a replayed copy of one would undo a
+     *    rename made since. Their entity states are left alone for the same reason.
+     *  - **`applyingRemote` is set.** Every write here is an insert, and inserts fire the outbox
+     *    triggers: without it this device would immediately queue a push of everything it has just
+     *    finished downloading.
+     *
+     * An `attachment` has no parent and the protocol cannot say which notebook it belongs to, so
+     * those rows are buffered through the replay and then narrowed to the digests the restored
+     * documents actually name. Applying the rest would be worse than wasteful: a row whose file is
+     * absent *is* a pending download, so it would schedule bytes for notebooks still in the cloud.
+     */
+    suspend fun restoreFromCloud(
+        account: SyncAccount,
+        notebookId: String,
+    ): CloudArchiveResult = mutex.withLock {
+        val notebook = notebooks.byId(notebookId)
+            ?: return@withLock CloudArchiveResult.UnknownNotebook
+        if (notebook.deletedAt != null) return@withLock CloudArchiveResult.UnknownNotebook
+        if (notebook.cloudOnlyAt == null) return@withLock CloudArchiveResult.AlreadyDone
+        if (sync.state() == null) return@withLock CloudArchiveResult.NoAccount
+
+        val wanted = pages.allInNotebook(notebookId).map { it.id }.toSet()
+        val pictureRows = mutableMapOf<String, RemoteChange>()
+        val restored = mutableListOf<Pair<String, String>>()
+
+        var cursor = 0L
+        var hasMore: Boolean
+        var replayed = 0
+        do {
+            val page = when (
+                val result = client.pullChanges(account.serverUrl, account.token, cursor)
+            ) {
+                is ServerResult.Success -> result.value
+                ServerResult.Unauthorized ->
+                    return@withLock CloudArchiveResult.Failed(SyncRunResult.Revoked)
+                is ServerResult.Failed ->
+                    return@withLock CloudArchiveResult.Failed(result.asSyncResult())
+            }
+
+            val parsed = try {
+                // A kind this build cannot store is dropped rather than fatal, which is the opposite
+                // of what [pullIfNeeded] does and is right for the opposite reason: that loop is
+                // about to commit a cursor promising the row was applied, and this one commits
+                // nothing. The next ordinary run still refuses to advance past it, loudly.
+                page.changes.mapNotNull(::parseRemoteChange)
+            } catch (malformed: IllegalArgumentException) {
+                return@withLock CloudArchiveResult.Failed(
+                    SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+                )
+            }
+
+            val mine = parsed.filter { change ->
+                when (change.kind) {
+                    SyncKind.PageContent,
+                    SyncKind.InkStroke,
+                    SyncKind.InkErase,
+                    SyncKind.InkMove,
+                    -> change.raw.requiredString("pageId") in wanted
+                    SyncKind.Attachment -> {
+                        pictureRows[change.id] = change
+                        false
+                    }
+                    // Never evicted, so never restored. A replayed copy is by definition not newer
+                    // than what ordinary sync has already put in Room.
+                    SyncKind.Notebook, SyncKind.Section, SyncKind.Page -> false
+                }
+            }
+            mine.forEach { change ->
+                if (change.kind == SyncKind.PageContent && change.deletedAt == null) {
+                    restored += requireNotNull(change.documentJson) to
+                        change.raw.requiredString("format")
+                }
+            }
+
+            try {
+                db.withTransaction {
+                    sync.setApplyingRemote(true)
+                    mine.forEach { change ->
+                        sync.putEntityState(change.asEntityState())
+                        applyRemoteRow(change)
+                    }
+                    invalidateInkText(remoteInkPages)
+                    applyPictureCounts()
+                    sync.setApplyingRemote(false)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failed: Exception) {
+                Log.e(TAG, "Could not write a replayed change for notebook $notebookId", failed)
+                return@withLock CloudArchiveResult.Failed(
+                    SyncRunResult.Failed(PermanentSyncFailure.LocalData),
+                )
+            }
+            publishRemoteInk()
+
+            cursor = page.cursor
+            hasMore = page.hasMore
+            if (hasMore && page.changes.isEmpty()) {
+                return@withLock CloudArchiveResult.Failed(
+                    SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+                )
+            }
+        } while (hasMore && ++replayed < MAX_REPLAY_PAGES)
+
+        if (hasMore) {
+            Log.e(TAG, "Replay for notebook $notebookId did not finish in $MAX_REPLAY_PAGES pages")
+            return@withLock CloudArchiveResult.Failed(
+                SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+            )
+        }
+
+        val needed = restored.flatMapTo(mutableSetOf()) { (json, format) ->
+            pictureIdsIn(json, format)
+        }
+        try {
+            db.withTransaction {
+                sync.setApplyingRemote(true)
+                pictureRows.values.filter { it.id in needed }.forEach { change ->
+                    sync.putEntityState(change.asEntityState())
+                    applyRemoteRow(change)
+                }
+                sync.setApplyingRemote(false)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failed: Exception) {
+            Log.e(TAG, "Could not write the pictures replayed for notebook $notebookId", failed)
+            return@withLock CloudArchiveResult.Failed(
+                SyncRunResult.Failed(PermanentSyncFailure.LocalData),
+            )
+        }
+
+        // Triggers live: the other devices have to learn this notebook is worth holding again, and
+        // putting it back on the rail is the press somebody just made.
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            notebooks.setCloudOnly(notebookId, null, now)
+            notebooks.setClosed(notebookId, null, now)
+        }
+
+        val downloads = blobs.downloadMissing(account)
+        downloadsOutstanding = downloads.workRemains
+        CloudArchiveResult.BroughtBack
+    }
+
+    /**
+     * Evicts what another device moved to the cloud.
+     *
+     * Called after the push phase and never after the pull, which is the whole of what makes it
+     * safe: a device that was offline while the move happened may hold an edit nobody else has, and
+     * evicting on the pull would destroy it. By the time the push has run those bytes are on the
+     * server, and [evictToCloudLocked]'s empty-outbox check is the proof of it — a notebook whose
+     * rows are still queued is simply left alone until the run that manages to send them.
+     *
+     * The cheap emptiness test comes first so that a steady-state run over a device that settled
+     * into this state months ago costs two indexed reads per cloud-only notebook and nothing else.
+     */
+    private suspend fun enforceCloudOnly() {
+        for (notebook in notebooks.cloudOnly()) {
+            val pageIds = pages.allInNotebook(notebook.id).map { it.id }
+            if (pageIds.isEmpty()) continue
+            val stillHere = pageIds.chunked(SQLITE_BIND_CHUNK).any { chunk ->
+                contents.byIds(chunk).isNotEmpty() || inkStrokes.countForPages(chunk) > 0
+            }
+            if (!stillHere) continue
+            val result = evictToCloudLocked(notebook)
+            Log.i(TAG, "Notebook ${notebook.id} is cloud-only on the account: $result")
+        }
+    }
+
     private companion object {
         const val TAG = "HierarchySync"
         const val MAX_PUSH_CHANGES = 512
         const val MAX_BATCHES_PER_RUN = 1_024
+
+        /**
+         * A bound on the replay [restoreFromCloud] performs, so a server that answers `hasMore`
+         * for ever cannot spin one press into an endless download. At the transport's page size
+         * this is far more of an account than anybody has.
+         */
+        const val MAX_REPLAY_PAGES = 4_096
+
+        /** `NotesRepository.SQLITE_BIND_CHUNK`, which is private to it. SQLite's limit is 999. */
+        const val SQLITE_BIND_CHUNK = 400
         const val MAX_DOCUMENT_BYTES = 2 shl 20
         const val PENDING_BATCH_KEY = "syncPendingHierarchyBatch"
         const val PLAIN_ENCODING = "none/1"

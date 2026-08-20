@@ -484,6 +484,78 @@ class NotebookTransferManagerTest {
         assertTrue(db.syncDao().state() != null)
     }
 
+    /**
+     * Which shelf a notebook sits on is this account's business, not the notebook's content.
+     *
+     * Asserted on the extracted database rather than on a round trip, for the reason
+     * [exportStripsTheSyncLayerFromTheBundle] is: a round trip only proves the importer accepts the
+     * file, and the claim here is that the columns are not in it. Keeping `EXPECTED_COLUMNS`
+     * untouched is what lets a `.vive` written before schema 22 still import.
+     */
+    @Test
+    fun exportDropsTheShelfColumnsSoTheBundleFormatIsUnchanged() = runBlocking {
+        val notebookId = repository.createNotebook("Closed")
+        val sectionId = repository.createSection(notebookId, "Section")
+        repository.createPage(sectionId, "Page")
+        repository.closeNotebook(notebookId)
+
+        val bundle = ByteArrayOutputStream()
+            .also { transfers.exportNotebook(notebookId, it) }
+            .toByteArray()
+
+        val extracted = File(root, "shelf.sqlite")
+        ZipInputStream(ByteArrayInputStream(bundle)).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (entry.name == "notebook.sqlite") extracted.writeBytes(zip.readBytes())
+                zip.closeEntry()
+            }
+        }
+
+        val columns = SQLiteDatabase.openDatabase(
+            extracted.absolutePath,
+            null,
+            SQLiteDatabase.OPEN_READONLY,
+        ).use { bundleDb ->
+            bundleDb.rawQuery("PRAGMA table_info(notebooks)", null).use { cursor ->
+                buildList { while (cursor.moveToNext()) add(cursor.getString(1)) }
+            }
+        }
+
+        assertEquals(
+            listOf(
+                "id", "name", "colorArgb", "sortIndex", "expanded",
+                "createdAt", "updatedAt", "deletedAt",
+            ),
+            columns,
+        )
+        // The export edits its snapshot, not the live database.
+        assertEquals(now, db.notebookDao().byId(notebookId)!!.closedAt)
+    }
+
+    /**
+     * A cloud-only notebook has pages and no bodies, so exporting it would write a bundle of empty
+     * documents that looks like a successful backup and is not one.
+     */
+    @Test
+    fun exportRefusesANotebookWhoseContentsAreInTheCloud() = runBlocking {
+        val notebookId = repository.createNotebook("Elsewhere")
+        val sectionId = repository.createSection(notebookId, "Section")
+        repository.createPage(sectionId, "Page")
+        db.notebookDao().setClosed(notebookId, now, now)
+        db.notebookDao().setCloudOnly(notebookId, now, now)
+
+        val failure = runCatching {
+            transfers.exportNotebook(notebookId, ByteArrayOutputStream())
+        }.exceptionOrNull()
+
+        assertTrue(failure is NotebookTransferException)
+        assertTrue(
+            "the message has to say what to do about it",
+            failure!!.message!!.contains("Bring it back"),
+        )
+    }
+
     private suspend fun makeAttachment(): AttachmentEntity {
         val bytes = ByteArrayOutputStream().use { output ->
             val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)

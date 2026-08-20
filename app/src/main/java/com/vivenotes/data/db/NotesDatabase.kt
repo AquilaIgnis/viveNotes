@@ -29,7 +29,7 @@ import androidx.sqlite.execSQL
         SyncEntityStateEntity::class,
         SyncOutboxEntity::class,
     ],
-    version = 21,
+    version = 22,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -598,6 +598,27 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * The closed-notebook shelf: `closedAt`, and `cloudOnlyAt` for one whose contents now live
+         * only on the server.
+         *
+         * Nothing is backfilled and nothing is queued. No build before this one could close a
+         * notebook, so every existing row is open and on this device — which is precisely what null
+         * says in both columns — and the notebook triggers installed since schema 17 already queue
+         * a push the first time either column is written.
+         *
+         * Both are added to a table the `.vive` format pins the columns of, so
+         * `NotebookTransferManager.prepareNotebookDatabase` drops them from its snapshot rather than
+         * `EXPECTED_COLUMNS` growing. Which shelf a notebook sits on is this account's business, not
+         * the notebook's content, and an imported notebook should always arrive open.
+         */
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE notebooks ADD COLUMN closedAt INTEGER")
+                connection.execSQL("ALTER TABLE notebooks ADD COLUMN cloudOnlyAt INTEGER")
+            }
+        }
+
         /** Fresh databases do not run migrations, so they install the same triggers after create. */
         val SYNC_TRIGGER_CALLBACK = object : RoomDatabase.Callback() {
             override fun onCreate(connection: SQLiteConnection) {
@@ -628,6 +649,7 @@ abstract class NotesDatabase : RoomDatabase() {
                     MIGRATION_18_19,
                     MIGRATION_19_20,
                     MIGRATION_20_21,
+                    MIGRATION_21_22,
                 )
                 .addCallback(SYNC_TRIGGER_CALLBACK)
                 .build()

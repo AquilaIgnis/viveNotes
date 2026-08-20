@@ -99,6 +99,41 @@ class FileTabTest {
         assertFalse(asked)
     }
 
+    @Test
+    fun closeNotebookActsOnASelectedNotebook() {
+        var closed = false
+        setTab(pageOpen = false, notebookOpen = true, close = { closed = true })
+
+        compose.onNodeWithTag(FileTags.CLOSE_NOTEBOOK).performClick()
+
+        assertTrue(closed)
+    }
+
+    /**
+     * The same rule Export and Delete follow: with nothing selected there is no notebook for the
+     * command to name, and a press that silently picked one would be worse than an inert button.
+     */
+    @Test
+    fun closeNotebookIsInertWithoutASelectedNotebook() {
+        var closed = false
+        setTab(pageOpen = false, notebookOpen = false, close = { closed = true })
+
+        compose.onNodeWithTag(FileTags.CLOSE_NOTEBOOK).performTouchInput { click() }
+
+        assertFalse(closed)
+    }
+
+    /** The shelf is a place, not a command about the open file, so it needs nothing selected. */
+    @Test
+    fun closedNotebooksIsAvailableWithoutAnOpenNotebookOrPage() {
+        var opened = false
+        setTab(pageOpen = false, notebookOpen = false, closedNotebooks = { opened = true })
+
+        compose.onNodeWithTag(FileTags.CLOSED_NOTEBOOKS).performClick()
+
+        assertTrue(opened)
+    }
+
     private fun setTab(
         pageOpen: Boolean,
         notebookOpen: Boolean = pageOpen,
@@ -107,6 +142,8 @@ class FileTabTest {
         import: () -> Unit = {},
         delete: () -> Unit = {},
         deletedItems: () -> Unit = {},
+        close: () -> Unit = {},
+        closedNotebooks: () -> Unit = {},
     ) {
         compose.setContent {
             ViveNotesTheme {
@@ -117,6 +154,8 @@ class FileTabTest {
                         importNotebook = import,
                         deleteNotebook = delete,
                         openDeletedItems = deletedItems,
+                        closeNotebook = close,
+                        openClosedNotebooks = closedNotebooks,
                     ),
                     pageOpen = pageOpen,
                     notebookOpen = notebookOpen,

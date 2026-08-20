@@ -41,6 +41,30 @@ private inline fun glyph(name: String, block: ImageVector.Builder.() -> Unit): I
     ).apply(block).build()
 
 /**
+ * [glyph], for artwork taken from Microsoft's Fluent UI System Icons.
+ *
+ * A third box, because Fluent authors in a 20x20 viewport with the origin at the *top* left and y
+ * measured downwards — plain SVG convention, and neither of the two above. So there is no
+ * translating group here: pasting a Fluent export's path data in verbatim already lands it where it
+ * belongs, which is the same reason [materialGlyph] keeps Google's inverted box rather than
+ * rescaling it. Nothing is re-derived by hand, so nothing can be re-derived wrongly.
+ *
+ * The 24.dp default matches every other glyph in this file, so a 20-unit drawing fills the same
+ * square a 960-unit one does and the ribbon's icons stay one size.
+ */
+private inline fun fluentGlyph(
+    name: String,
+    block: ImageVector.Builder.() -> Unit,
+): ImageVector =
+    ImageVector.Builder(
+        name = name,
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 20f,
+        viewportHeight = 20f,
+    ).apply(block).build()
+
+/**
  * [glyph], for artwork traced from a Material Symbol rather than drawn from scratch here.
  *
  * Google's exports are authored in a 960×960 box whose origin sits at the *bottom* left
@@ -704,6 +728,113 @@ private val BookMark = addPathNodes(
     "M640-800v245q0 12-10 17.5t-20-.5l-49-30q-10-6-20.5-6t-20.5 6l-49 30q-10 " +
         "6-20.5.5T440-555v-245Z",
 )
+
+/**
+ * `ic_fluent_notebook_arrow_curve_down_20_regular` — the notebook, its three rings, and nothing else.
+ *
+ * Fluent rather than a Material Symbol because Google ships no "close a notebook": every book in its
+ * set is open, exported, imported or bookmarked, and the nearest thing to putting one away was a
+ * cross laid over a cover, which reads as deleting it. This one has the gesture built in.
+ *
+ * Split the way every glyph here is split, and the halves are unusually clean: this subpath is the
+ * cover and the spiral, the one below is the badge. Both are lifted verbatim — Fluent's exports
+ * start every subpath with an absolute `M`, so unlike Google's chained relative movetos there is
+ * nothing to rewrite and nothing to get wrong in the rewriting.
+ */
+private val NotebookCover = addPathNodes(
+    "M2.99487 10.3988C3.31176 10.561 3.64645 10.6933 3.99524 10.7921V16C3.99524 16.5523 4.44312 " +
+        "17 4.9956 17H12.9985C13.551 17 13.9989 16.5523 13.9989 16V4C13.9989 3.44772 13.551 3 " +
+        "12.9985 3H10.4008C10.2178 2.64222 9.99683 2.30711 9.74311 2H12.9985C14.1035 2 14.9993 " +
+        "2.89543 14.9993 4V16C14.9993 17.1046 14.1035 18 12.9985 18H4.9956C3.89063 18 2.99487 " +
+        "17.1046 2.99487 16V10.3988Z" +
+        "M15.9996 6H16.4998C16.7761 6 17 6.22386 17 6.5V8C17 8.27614 16.7761 8.5 16.4998 " +
+        "8.5H15.9996V6Z" +
+        "M16.4998 9.5H15.9996V12H16.4998C16.7761 12 17 11.7761 17 11.5V10C17 9.72386 16.7761 " +
+        "9.5 16.4998 9.5Z" +
+        "M15.9996 13H16.4998C16.7761 13 17 13.2239 17 13.5V15C17 15.2761 16.7761 15.5 16.4998 " +
+        "15.5H15.9996V13Z",
+)
+
+/**
+ * The badge, with the curving arrow knocked out of it.
+ *
+ * **One declaration, and it has to be**: the arrow is not drawn, it is a counter-wound subpath cut
+ * through the disc, and it only reads as a hole while the winding rule can see both. Separated from
+ * the cover so the *gesture* — a notebook being put away — is what takes the accent, which is the
+ * rule the whole file follows.
+ */
+private val NotebookArrowBadge = addPathNodes(
+    "M1 5.5C1 3.01472 3.01546 1 5.50165 1C7.98784 1 10.0033 3.01472 10.0033 5.5C10.0033 7.98528 " +
+        "7.98784 10 5.50165 10C3.01546 10 1 7.98528 1 5.5Z" +
+        "M7.39879 6.39645L6.50202 7.29289V5.75C6.50202 4.23122 5.27034 3 3.75101 3H3.50092C3.22467 " +
+        "3 3.00073 3.22386 3.00073 3.5C3.00073 3.77614 3.22467 4 3.50092 4H3.75101C4.71786 4 " +
+        "5.50165 4.7835 5.50165 5.75V7.29289L4.60487 6.39645C4.40954 6.20118 4.09284 6.20118 " +
+        "3.89751 6.39645C3.70217 6.59171 3.70217 6.90829 3.89751 7.10355L5.65027 8.85567C5.69774 " +
+        "8.90256 5.75225 8.93802 5.81037 8.96206C5.86934 8.98651 5.93401 9 6.00183 9C6.06965 9 " +
+        "6.13432 8.98651 6.19329 8.96206C6.25228 8.93766 6.30755 8.90149 6.35551 8.85355L8.10615 " +
+        "7.10355C8.30148 6.90829 8.30148 6.59171 8.10615 6.39645C7.91082 6.20118 7.59412 6.20118 " +
+        "7.39879 6.39645Z",
+)
+
+/**
+ * Material Symbols Rounded `menu_book`, split at the seam its own export already has.
+ *
+ * The covers and the two page holes stay in one declaration — the pages are counter-wound and only
+ * read as pages while the winding rule can see them with the outline. Google's chained relative
+ * movetos were made absolute when the subpaths were lifted: `m260 42` after the first page's `Z` is
+ * `M520-278`, `m-40 97` after the second is `M480-181`. Each of those lands on a coordinate the
+ * subpath states again in its own commands, which is what checks the arithmetic.
+ *
+ * The degenerate `M280-494Z` between them is dropped. It draws nothing, and it exists only as the
+ * anchor the following relative moveto was measured from — an anchor no longer needed now that the
+ * rules carry absolute coordinates of their own.
+ */
+private val MenuBookCovers = addPathNodes(
+    "M260-320q47 0 91.5 10.5T440-278v-394q-41-24-87-36t-93-12q-36 0-71.5 7T120-692v396q35-12 " +
+        "69.5-18t70.5-6Z" +
+        "M520-278q44-21 88.5-31.5T700-320q36 0 70.5 6t69.5 18v-396q-33-14-68.5-21t-71.5-7q-47 " +
+        "0-93 12t-87 36v394Z" +
+        "M480-181q-14 0-26.5-3.5T430-194q-39-23-82-34.5T260-240q-42 0-82.5 11T100-198q-21 " +
+        "11-40.5-1T40-234v-482q0-11 5.5-21T62-752q46-24 96-36t102-12q58 0 113.5 15T480-740q51-30 " +
+        "106.5-45T700-800q52 0 102 12t96 36q11 5 16.5 15t5.5 21v482q0 23-19.5 35t-40.5 " +
+        "1q-37-20-77.5-31T700-240q-45 0-88 11.5T530-194q-11 6-23.5 9.5T480-181Z",
+)
+
+/** The three rules on its right-hand page — the part that says the book is open and being read. */
+private val MenuBookRules = addPathNodes(
+    "M560-609q0-9 6.5-18.5T581-640q29-10 58-15t61-5q20 0 39.5 2.5T778-651q9 2 15.5 10t6.5 18q0 " +
+        "17-11 25t-28 4q-14-3-29.5-4.5T700-600q-26 0-51 5t-48 13q-18 7-29.5-1T560-609Z" +
+        "M560-389q0-9 6.5-18.5T581-420q29-10 58-15t61-5q20 0 39.5 2.5T778-431q9 2 15.5 10t6.5 18q0 " +
+        "17-11 25t-28 4q-14-3-29.5-4.5T700-380q-26 0-51 4.5T601-363q-18 7-29.5-.5T560-389Z" +
+        "M560-499q0-9 6.5-18.5T581-530q29-10 58-15t61-5q20 0 39.5 2.5T778-541q9 2 15.5 10t6.5 18q0 " +
+        "17-11 25t-28 4q-14-3-29.5-4.5T700-490q-26 0-51 5t-48 13q-18 7-29.5-1T560-499Z",
+)
+
+/**
+ * Close Notebook — the notebook, with an arrow curving down into a badge on its corner.
+ *
+ * **The badge is in the accent, not the warning red, and that is the whole message.** Red on this
+ * tab means "what a glyph removes" and belongs to Delete Notebook alone; closing removes nothing, so
+ * the colour is what tells the two apart before either label is read.
+ */
+fun closeNotebookGlyph(neutral: Color, accent: Color): ImageVector =
+    fluentGlyph("CloseNotebook") {
+        addPath(NotebookCover, fill = SolidColor(neutral))
+        addPath(NotebookArrowBadge, fill = SolidColor(accent))
+    }
+
+/**
+ * Closed Notebooks — `menu_book`, the one open book in a row of closed ones.
+ *
+ * Four commands on this tab now show a book, which is ordinarily the thing to avoid. This one gets
+ * away with it by being the only landscape, open, ruled one: the shape is legible at 18dp before any
+ * of the detail is, so it reads as a *list of notebooks* rather than as a fourth cover.
+ */
+fun closedNotebooksGlyph(neutral: Color, accent: Color): ImageVector =
+    materialGlyph("ClosedNotebooks") {
+        addPath(MenuBookCovers, fill = SolidColor(neutral))
+        addPath(MenuBookRules, fill = SolidColor(accent))
+    }
 
 /** Version History — the dial is a clock, the hands are the *time* part of it. */
 fun versionHistoryGlyph(neutral: Color, accent: Color): ImageVector =
