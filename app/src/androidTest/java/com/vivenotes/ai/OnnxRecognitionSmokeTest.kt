@@ -4,8 +4,16 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.vivenotes.data.InkPageLoader
+import com.vivenotes.data.NotesRepository
+import com.vivenotes.data.StarterInkPageFixture
+import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.ink.CanvasSelection
+import com.vivenotes.ink.InkBounds
+import com.vivenotes.ink.projectionKey
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -137,5 +145,85 @@ class OnnxRecognitionSmokeTest {
             engine.close()
             bitmap.recycle()
         }
+    }
+
+    /**
+     * Runs the formula the user actually sees second on the seeded Recognition Test page.
+     *
+     * Sequences 10..22 are the handwritten `x² - 4 = 0` in
+     * `default_notebook/recognition_page_2.json`. Loading the full page first is intentional: it
+     * replays the fixture's real eraser operations, and selecting its live projections exercises
+     * the same persisted-ink -> bitmap -> FormulaNet path as the Math button.
+     */
+    @Test
+    fun savedPageTwoFormulaRunsThroughTheRealRecognitionPipeline() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val models = AiModelStore(context, autoDownload = false)
+        withTimeout(60_000) {
+            models.state.first { it.formulaLatex !is AiModelInstallState.Verifying }
+        }
+        assumeTrue(
+            "FormulaNet is not installed on this device",
+            models.state.value.formulaLatex == AiModelInstallState.Installed,
+        )
+
+        val db = Room.inMemoryDatabaseBuilder(context, NotesDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val bitmap = try {
+            val repository = NotesRepository(
+                db,
+                starterInkPage = StarterInkPageFixture.load(context),
+            )
+            repository.seedIfEmpty()
+            val pageId = db.query(
+                "SELECT id FROM pages WHERE title = ? AND deletedAt IS NULL",
+                arrayOf("Recognition Test"),
+            ).use { cursor ->
+                check(cursor.moveToFirst()) { "seeded Recognition Test page is missing" }
+                cursor.getString(0)
+            }
+            val formulaIds = repository.inkFor(pageId)
+                .filter { it.seq in PAGE_TWO_FORMULA_SEQUENCES }
+                .mapTo(mutableSetOf()) { it.id }
+            val page = InkPageLoader(repository).load(pageId)
+            val formula = page.strokes.filter { it.id in formulaIds }
+            val bounds = formula.mapNotNull { it.pageBounds }.union()
+            renderInkSelection(
+                strokes = page.strokes,
+                selection = CanvasSelection(
+                    inkIds = formula.mapTo(mutableSetOf()) { it.id },
+                    projections = formula.mapTo(mutableSetOf()) { it.projectionKey },
+                    bounds = bounds,
+                ),
+            )
+        } finally {
+            db.close()
+        }
+
+        val engine = OnnxInkRecognitionEngine(models)
+        try {
+            val latex = withTimeout(60_000) { engine.recognizeFormula(bitmap).latex }
+            assertEquals("x^{2}-4=0", latex.filterNot(Char::isWhitespace))
+        } finally {
+            engine.close()
+            bitmap.recycle()
+        }
+    }
+
+    private fun List<InkBounds>.union(): InkBounds {
+        check(isNotEmpty()) { "saved page-2 formula resolved to no live ink" }
+        return drop(1).fold(first()) { result, next ->
+            InkBounds(
+                left = minOf(result.left, next.left),
+                top = minOf(result.top, next.top),
+                right = maxOf(result.right, next.right),
+                bottom = maxOf(result.bottom, next.bottom),
+            )
+        }
+    }
+
+    private companion object {
+        val PAGE_TWO_FORMULA_SEQUENCES = 10..22
     }
 }

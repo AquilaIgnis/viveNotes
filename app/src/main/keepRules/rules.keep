@@ -1,12 +1,6 @@
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
-#
-# For more details, see
-#   https://d.android.com/r/tools/r8/keep-rules
-
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# ONNX Runtime's native bridge resolves these Java classes, constructors and fields by their
+# original names. The 1.27.0 Android AAR carries no consumer keep rules, so full-mode R8 otherwise
+# renames the Java side successfully and inference aborts in JNI at GetMethodID/FindClass time.
+# The whole bridge is only ~120 KiB of bytecode and this package-level boundary also covers output
+# types added by future ONNX Runtime updates.
+-keep class ai.onnxruntime.** { *; }

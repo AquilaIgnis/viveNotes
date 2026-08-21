@@ -149,6 +149,13 @@ class PageViewTest {
         compose.waitForIdle()
     }
 
+    /** Taps a point measured from the page canvas, independent of where the tablet centres it. */
+    private fun tapCanvas(xDp: Float, yDp: Float) {
+        val offset = with(density) { Offset(xDp.dp.toPx(), yDp.dp.toPx()) }
+        compose.onNodeWithTag(PageTags.CANVAS).performTouchInput { click(offset) }
+        compose.waitForIdle()
+    }
+
     private fun pageSize() = compose.onNodeWithTag(PageTags.SURFACE).fetchSemanticsNode().size
 
     @Test
@@ -208,7 +215,7 @@ class PageViewTest {
         compose.waitUntil(timeoutMillis = 2_000) { selection.value.editorFocused }
 
         // Well below the grid: two default rows and the gutter reach about 160dp down the page.
-        tapScreen(200f, 420f)
+        tapCanvas(200f, 420f)
 
         compose.waitUntil(timeoutMillis = 2_000) { !selection.value.editorFocused }
     }

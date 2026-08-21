@@ -219,11 +219,9 @@ private fun ColumnScope.FormulaToolsContent(
     // in Preview.
     //
     // `BuildConfig.DEBUG` is a `static final` constant, so the block below is not merely hidden in
-    // release — the Kotlin compiler folds the condition and never emits it. That matters here
-    // rather than being a detail: this project turns **R8 off** for release
-    // (`buildTypes.release.optimization.enable = false`), so nothing downstream would have stripped
-    // a runtime check. Verified rather than assumed: "Understood as" appears in the debug APK's dex
-    // and in none of the release APK's.
+    // release: the compiler folds the condition before R8 processes the release artifact. Verified
+    // rather than assumed: "Understood as" appears in the debug APK's dex and in none of the
+    // release APK's.
     //
     // `analysis.summary`, `variables` and `normalizedLatex` stay in the model regardless — the
     // actions are derived from the same analysis, and a debug read-out is worth keeping the moment

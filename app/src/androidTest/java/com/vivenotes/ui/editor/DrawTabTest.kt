@@ -2,8 +2,9 @@ package com.vivenotes.ui.editor
 
 import android.graphics.Color as AndroidColor
 import android.os.SystemClock
-import android.view.InputDevice
 import android.view.MotionEvent
+import android.view.View
+import android.view.inspector.WindowInspector
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
@@ -16,12 +17,15 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -202,6 +206,11 @@ class DrawTabTest {
 
         tapOutsidePopup()
 
+        // Popup dismissal crosses Android windows. On physical devices the injected UP can return
+        // before the popup owner's state update is observed by the activity's Compose test clock.
+        compose.waitUntil(timeoutMillis = 2_000) {
+            compose.onAllNodesWithTag(PenPanelTags.PREVIEW).fetchSemanticsNodes().isEmpty()
+        }
         compose.onNodeWithTag(PenPanelTags.PREVIEW).assertDoesNotExist()
     }
 
@@ -888,21 +897,45 @@ class DrawTabTest {
     private fun requireNonNull(pen: PenPreset?): PenPreset =
         requireNotNull(pen) { "the pane wrote nothing back" }
 
-    /** Popup dismissal is window-level, so inject through Android rather than one Compose owner. */
+    /**
+     * Deliver the same [MotionEvent.ACTION_OUTSIDE] that Android sends to a focusable popup.
+     *
+     * A physical-display coordinate is not stable here: its edge can belong to a gesture inset,
+     * letterbox, or another display after earlier instrumentation tests. The popup is its own
+     * Android window, so address that window directly instead of guessing where Android will route
+     * a synthetic screen coordinate.
+     */
     private fun tapOutsidePopup() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val display = instrumentation.targetContext.resources.displayMetrics
-        val downTime = SystemClock.uptimeMillis()
-        listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP).forEachIndexed { index, action ->
+        var popupRoot: View? = null
+        // Its Compose semantics can be visible one frame before WindowManager has attached the
+        // popup window, especially hundreds of tests into a physical-device run. Window focus is
+        // deliberately irrelevant: an outside event is valid for a non-focusable popup as well.
+        compose.waitUntil(timeoutMillis = 5_000) {
+            instrumentation.runOnMainSync {
+                val activity = ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(Stage.RESUMED)
+                    .single()
+                val activityRoot = activity.window.decorView.rootView
+                popupRoot = WindowInspector.getGlobalWindowViews().firstOrNull { candidate ->
+                    candidate.rootView !== activityRoot && candidate.isAttachedToWindow
+                }
+            }
+            popupRoot != null
+        }
+        instrumentation.runOnMainSync {
+            val now = SystemClock.uptimeMillis()
             val event = MotionEvent.obtain(
-                downTime,
-                downTime + index,
-                action,
-                display.widthPixels - 2f,
-                display.heightPixels / 2f,
+                now,
+                now,
+                MotionEvent.ACTION_OUTSIDE,
+                0f,
+                0f,
                 0,
-            ).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
-            instrumentation.uiAutomation.injectInputEvent(event, true)
+            )
+            check(checkNotNull(popupRoot).dispatchTouchEvent(event)) {
+                "the popup did not consume ACTION_OUTSIDE"
+            }
             event.recycle()
         }
         compose.waitForIdle()

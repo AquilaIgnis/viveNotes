@@ -26,6 +26,23 @@ room {
 private val allAbis = listOf("arm64-v8a", "x86_64")
 
 /**
+ * Points the instrumented suite at the **release** build: `./gradlew connectedAndroidTest
+ * -PtestRelease`, or the no-uninstall route in `CLAUDE.md`. When building the two APKs by hand,
+ * request both `assembleReleaseAndroidTest` **and** `assembleRelease`: the first regenerates the
+ * app mapping used to rewrite test references, but it does not package the matching app APK.
+ *
+ * It is the only way to see what R8 breaks. Unit tests run on the JVM against unminified classes and
+ * a debug APK is not minified at all, so nothing else in the project exercises the shipping bytecode.
+ * AGP re-runs R8 over the test APK with the app's own mapping file, which is what keeps test code
+ * resolving app classes under their obfuscated names.
+ *
+ * Two things it has to switch on as well: the release build gets [releaseAbis] = [allAbis] so it
+ * installs on an x86_64 emulator, and it gets signed (see the `release` build type), because a test
+ * APK may only instrument a package carrying the same certificate.
+ */
+private val testRelease: Boolean = project.hasProperty("testRelease")
+
+/**
  * ABIs the **release** APK keeps: arm64-v8a only, which is every device this ships to. Debug keeps
  * all of [allAbis] so it still installs on the x86_64 emulator.
  *
@@ -55,7 +72,7 @@ private val releaseAbis: List<String> =
         ?.split(",")
         ?.map(String::trim)
         ?.filter(String::isNotEmpty)
-        ?: listOf("arm64-v8a")
+        ?: if (testRelease) allAbis else listOf("arm64-v8a")
 
 android {
     namespace = "com.vivenotes"
@@ -93,6 +110,11 @@ android {
         }
     }
 
+    // Instrumented tests are built against `debug` unless [testRelease] says otherwise.
+    if (testRelease) {
+        testBuildType = "release"
+    }
+
     buildTypes {
         release {
             // AGP 9.2 still uses the legacy switches; AGP 9.3+ can replace these with
@@ -100,6 +122,22 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            // Applies to the androidTest APK's own R8 run, which only happens under [testRelease];
+            // inert otherwise, since a debug test APK is not minified.
+            testProguardFiles("proguard-rules-androidTest.pro")
+            // The shipping release is deliberately left **unsigned** — it is signed by hand with the
+            // real key, which lives outside this repository. Under [testRelease] it has to be
+            // signed with something, because an unsigned APK cannot be installed and a test APK may
+            // only instrument a package carrying its own certificate. The ordinary debug keystore
+            // lets this replace a debug-signed emulator build in place. It deliberately cannot
+            // replace a physical tablet's production-signed APK; never uninstall that APK merely to
+            // make the test certificate fit, because doing so wipes its database and downloaded
+            // model.
+            if (testRelease) {
+                signingConfig = signingConfigs.getByName("debug")
+                // Test infrastructure the app APK has to retain for the test APK to resolve it.
+                proguardFiles("proguard-rules-testRelease.pro")
+            }
         }
     }
     compileOptions {
@@ -213,4 +251,10 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    // `createComposeRule` needs its otherwise-empty ComponentActivity declared in the app under
+    // test. Keep that test-only manifest out of normal release artifacts: it joins release only
+    // for the explicitly requested minified instrumentation variant.
+    if (testRelease) {
+        releaseImplementation(libs.androidx.compose.ui.test.manifest)
+    }
 }

@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import com.vivenotes.BuildConfig
 import com.vivenotes.ui.copyRecognizedText
 import com.vivenotes.math.FormulaToolsState
 import com.vivenotes.math.MathAction
@@ -92,15 +93,7 @@ class RecognitionPanelTest {
         }
     }
 
-    /**
-     * The interpretation read-out is **debug-only** and the actions beside it are not.
-     *
-     * Instrumented tests run against the debug variant, so `BuildConfig.DEBUG` is true here and the
-     * "Understood as" half of this still asserts what it always did. What it can no longer prove is
-     * the release build, where that section is compiled out — which is why the actions are asserted
-     * in the same test rather than a separate one: they are derived from the same `MathAnalysis`,
-     * and the failure worth catching is an analysis that arrives and produces nothing usable.
-     */
+    /** The interpretation read-out is debug-only and the actions beside it ship in both variants. */
     @Test
     fun parsedEquationShowsInterpretationAndRelevantActions() {
         var action = ""
@@ -124,9 +117,14 @@ class RecognitionPanelTest {
             onMathAction = { action = it },
         )
 
-        compose.onNodeWithText("Understood as").assertExists()
-        compose.onNodeWithText("Equation · Variables: x").assertExists()
-        compose.onNodeWithTag(RecognitionPanelTags.INTERPRETATION).assertExists()
+        if (BuildConfig.DEBUG) {
+            compose.onNodeWithText("Understood as").assertExists()
+            compose.onNodeWithText("Equation · Variables: x").assertExists()
+            compose.onNodeWithTag(RecognitionPanelTags.INTERPRETATION).assertExists()
+        } else {
+            compose.onNodeWithText("Understood as").assertDoesNotExist()
+            compose.onNodeWithTag(RecognitionPanelTags.INTERPRETATION).assertDoesNotExist()
+        }
         compose.onNodeWithTag(RecognitionPanelTags.action("solve")).performClick()
         assertEquals("solve", action)
     }

@@ -425,7 +425,17 @@ fun EditorPane(
      * Reads through the state itself rather than being captured, because the gesture handlers that
      * call it are keyed on page geometry and outlive the composition that built them.
      */
-    val dismissTextInput: () -> Unit = { focusedEditor?.deactivateTextInput() }
+    val dismissTextInput: () -> Unit = {
+        focusedEditor?.let { editor ->
+            editor.deactivateTextInput()
+            // `clearFocus()` normally publishes this from the View's focus callback. A pointer
+            // gesture can finish in the same frame as the AndroidView/Compose hand-off, though,
+            // and on a large-screen host that callback is not guaranteed to arrive before the
+            // ribbon reads its state. Dismissal is already definitive, so publish the definitive
+            // state here as well; a later identical blur update is harmless.
+            onSelectionChanged(SelectionState())
+        }
+    }
 
     /**
      * The row or column held by a tap on its gutter handle — `docs/tablePlan.md` TA16.
