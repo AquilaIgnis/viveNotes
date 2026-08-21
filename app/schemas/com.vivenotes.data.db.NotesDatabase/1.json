@@ -1,12 +1,12 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 19,
-    "identityHash": "77f7a9264c182906550a4243fdea025b",
+    "version": 1,
+    "identityHash": "716b15d1aa8dc9904a8694705a2e8502",
     "entities": [
       {
         "tableName": "notebooks",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `colorArgb` INTEGER NOT NULL, `sortIndex` INTEGER NOT NULL, `expanded` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `colorArgb` INTEGER NOT NULL, `sortIndex` INTEGER NOT NULL, `expanded` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `closedAt` INTEGER, `cloudOnlyAt` INTEGER, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -53,6 +53,16 @@
           {
             "fieldPath": "deletedAt",
             "columnName": "deletedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "closedAt",
+            "columnName": "closedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cloudOnlyAt",
+            "columnName": "cloudOnlyAt",
             "affinity": "INTEGER"
           }
         ],
@@ -1198,7 +1208,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '77f7a9264c182906550a4243fdea025b')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '716b15d1aa8dc9904a8694705a2e8502')"
     ]
   }
 }

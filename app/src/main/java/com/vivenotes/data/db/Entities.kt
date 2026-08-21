@@ -216,7 +216,11 @@ data class PageRevisionEntity(
     val byteCount: Int,
     val sha256: String,
     val payload: ByteArray,
-    /** Defaults exist only because SQLite requires them while schema 13 adds these columns. */
+    /**
+     * The SQL defaults were what SQLite demanded when these columns were added to a table that
+     * already held rows. Nothing reads them — Room writes every column — and they stay because
+     * removing one is a schema change for no gain.
+     */
     @ColumnInfo(defaultValue = "'none/1'") val inkFormat: String = "none/1",
     @ColumnInfo(defaultValue = "'none'") val inkEncoding: String = "none",
     @ColumnInfo(defaultValue = "0") val inkByteCount: Int = 0,
@@ -328,7 +332,8 @@ data class InkStrokeEntity(
      * than instead of it, so a build that does not know this column still finds a colour that was
      * correct when it was written.
      *
-     * Null on every row older than schema 11, meaning the intent was never recorded.
+     * Null means the intent was never recorded: a row from a build that predates the column, or
+     * one imported from a `.vive` such a build wrote.
      */
     val colorFollowsTheme: Boolean? = null,
     val epsilon: Float,

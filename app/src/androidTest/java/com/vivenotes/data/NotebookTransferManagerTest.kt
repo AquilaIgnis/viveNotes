@@ -490,7 +490,7 @@ class NotebookTransferManagerTest {
      * Asserted on the extracted database rather than on a round trip, for the reason
      * [exportStripsTheSyncLayerFromTheBundle] is: a round trip only proves the importer accepts the
      * file, and the claim here is that the columns are not in it. Keeping `EXPECTED_COLUMNS`
-     * untouched is what lets a `.vive` written before schema 22 still import.
+     * untouched is what lets a `.vive` written before the shelf existed still import.
      */
     @Test
     fun exportDropsTheShelfColumnsSoTheBundleFormatIsUnchanged() = runBlocking {

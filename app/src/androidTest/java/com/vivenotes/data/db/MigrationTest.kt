@@ -1,25 +1,32 @@
 package com.vivenotes.data.db
 
-import androidx.sqlite.driver.AndroidSQLiteDriver
-import androidx.sqlite.execSQL
+import androidx.room.Room
+import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.room.testing.MigrationTestHelper
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.junit.Rule
-import java.io.File
 
 /**
- * Exercises the migration SQL against a v1-shaped table.
+ * The schema baseline, and the place every future migration gets its case.
  *
- * A migration that drops or fails to backfill a column silently destroys notes, and there is no
- * way to notice by reading the one-line `ALTER TABLE` — the interesting part is what happens to
- * rows that already exist.
+ * **There is no migration to exercise yet.** [NotesDatabase] version 1 is a consolidated baseline:
+ * the twenty-one development migrations before it were collapsed into the entity definitions once
+ * it was certain that no database outside this repository had ever run one. What survives from the
+ * suite they had is what nothing else covers — that the schema the entities compile to is the
+ * schema committed under `app/schemas/`, and the two table guarantees that live in SQL rather than
+ * in Kotlin and would otherwise be believed rather than known.
+ *
+ * The next schema change puts its test back here, shaped like the ones that were removed: seed a
+ * database at the old version with `helper.createDatabase`, apply the migration through
+ * `helper.runMigrationsAndValidate`, and assert on the rows that already existed. Room validates
+ * the new shape by itself; what no one can see by reading a one-line `ALTER TABLE` is what became
+ * of the rows, and that is the half that silently destroys notes.
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {
@@ -30,924 +37,126 @@ class MigrationTest {
         NotesDatabase::class.java,
     )
 
-    private lateinit var file: File
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Before
     fun setUp() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        file = File(context.cacheDir, "migration-test.db")
-        file.delete()
+        context.deleteDatabase(BASELINE_DB)
     }
 
     @After
     fun tearDown() {
-        file.delete()
+        context.deleteDatabase(BASELINE_DB)
     }
 
+    /**
+     * The committed baseline is the schema this build expects.
+     *
+     * `createDatabase` builds a database from `app/schemas/1.json` and nothing else, including the
+     * identity hash it writes into `room_master_table`; opening the real [NotesDatabase] over that
+     * file makes Room compare that hash against the one compiled from the entities. It therefore
+     * fails both ways round — an entity changed without re-exporting, or an export never committed
+     * — and either would leave the first real migration test unwritable, because seeding an old
+     * version is exactly this call reading exactly that file.
+     */
     @Test
-    fun migration1To2AddsFormatAndBackfillsExistingRows() {
-        val driver = AndroidSQLiteDriver()
+    fun theCommittedBaselineIsTheSchemaTheEntitiesCompileTo() {
+        helper.createDatabase(BASELINE_DB, 1).close()
 
-        driver.open(file.absolutePath).use { connection ->
-            // The v1 shape of page_content, before documents recorded their codec.
-            connection.execSQL(
-                """
-                CREATE TABLE page_content (
-                    pageId TEXT NOT NULL PRIMARY KEY,
-                    docJson TEXT NOT NULL,
-                    updatedAt INTEGER NOT NULL
-                )
-                """.trimIndent(),
-            )
-            connection.execSQL(
-                """INSERT INTO page_content VALUES ('p1', '{"outlines":[]}', 42)""",
-            )
-
-            NotesDatabase.MIGRATION_1_2.migrate(connection)
-
-            connection.prepare("SELECT pageId, docJson, updatedAt, format FROM page_content").use {
-                assertEquals(true, it.step())
-                assertEquals("p1", it.getText(0))
-                assertEquals("""{"outlines":[]}""", it.getText(1))
-                assertEquals(42L, it.getLong(2))
-                assertEquals("existing rows must be attributed to the codec that wrote them", "json/1", it.getText(3))
-            }
-        }
-    }
-
-    @Test
-    fun migration3To5StoresTypedEraseMasksAndCascadesTheirTargets() {
-        val driver = AndroidSQLiteDriver()
-
-        driver.open(file.absolutePath).use { connection ->
-            connection.execSQL("PRAGMA foreign_keys = ON")
-            // Only the referenced keys are relevant to this migration's two new tables.
-            connection.execSQL("CREATE TABLE pages (id TEXT NOT NULL PRIMARY KEY)")
-            connection.execSQL("CREATE TABLE ink_strokes (id TEXT NOT NULL PRIMARY KEY)")
-
-            NotesDatabase.MIGRATION_3_4.migrate(connection)
-
-            connection.execSQL("INSERT INTO pages VALUES ('page')")
-            connection.execSQL("INSERT INTO ink_strokes VALUES ('stroke')")
-            connection.execSQL(
-                "INSERT INTO ink_erases VALUES ('erase', 'page', 18.0, X'0102', 'ink/androidx1', 42)",
-            )
-            connection.execSQL("INSERT INTO ink_erase_targets VALUES ('erase', 'stroke')")
-
-            NotesDatabase.MIGRATION_4_5.migrate(connection)
-
-            connection.prepare(
-                """
-                SELECT ink_erase_targets.strokeId, ink_erases.mode
-                FROM ink_erase_targets
-                JOIN ink_erases ON ink_erases.id = ink_erase_targets.eraseId
-                WHERE eraseId = 'erase'
-                """.trimIndent(),
-            ).use {
-                assertEquals(true, it.step())
-                assertEquals("stroke", it.getText(0))
-                assertEquals("Normal", it.getText(1))
-            }
-
-            connection.execSQL("DELETE FROM ink_erases WHERE id = 'erase'")
-            connection.prepare("SELECT COUNT(*) FROM ink_erase_targets").use {
-                assertEquals(true, it.step())
-                assertEquals(0L, it.getLong(0))
-            }
-        }
-    }
-
-    @Test
-    fun migration5To6StoresLassoMovesAndCascadesTheirTargets() {
-        val driver = AndroidSQLiteDriver()
-
-        driver.open(file.absolutePath).use { connection ->
-            connection.execSQL("PRAGMA foreign_keys = ON")
-            connection.execSQL("CREATE TABLE pages (id TEXT NOT NULL PRIMARY KEY)")
-            connection.execSQL("CREATE TABLE ink_strokes (id TEXT NOT NULL PRIMARY KEY)")
-
-            NotesDatabase.MIGRATION_5_6.migrate(connection)
-
-            connection.execSQL("INSERT INTO pages VALUES ('page')")
-            connection.execSQL("INSERT INTO ink_strokes VALUES ('stroke')")
-            connection.execSQL(
-                "INSERT INTO ink_moves VALUES " +
-                    "('move', 'page', 12.0, -4.0, X'0102', 'ink/lasso-f32le1', 42)",
-            )
-            connection.execSQL("INSERT INTO ink_move_targets VALUES ('move', 'stroke')")
-
-            connection.prepare(
-                """
-                SELECT ink_move_targets.strokeId, ink_moves.dxDp, ink_moves.dyDp
-                FROM ink_move_targets
-                JOIN ink_moves ON ink_moves.id = ink_move_targets.moveId
-                WHERE moveId = 'move'
-                """.trimIndent(),
-            ).use {
-                assertEquals(true, it.step())
-                assertEquals("stroke", it.getText(0))
-                assertEquals(12.0, it.getDouble(1), 0.001)
-                assertEquals(-4.0, it.getDouble(2), 0.001)
-            }
-
-            connection.execSQL("DELETE FROM ink_moves WHERE id = 'move'")
-            connection.prepare("SELECT COUNT(*) FROM ink_move_targets").use {
-                assertEquals(true, it.step())
-                assertEquals(0L, it.getLong(0))
-            }
-        }
-    }
-
-    @Test
-    fun migration6To7MakesExistingEraseAndMoveOperationsUndoableAndActive() {
-        val driver = AndroidSQLiteDriver()
-
-        driver.open(file.absolutePath).use { connection ->
-            connection.execSQL(
-                """
-                CREATE TABLE ink_erases (
-                    id TEXT NOT NULL PRIMARY KEY,
-                    pageId TEXT NOT NULL,
-                    mode TEXT NOT NULL,
-                    sizeDp REAL NOT NULL,
-                    points BLOB NOT NULL,
-                    enc TEXT NOT NULL,
-                    createdAt INTEGER NOT NULL
-                )
-                """.trimIndent(),
-            )
-            connection.execSQL(
-                """
-                CREATE TABLE ink_moves (
-                    id TEXT NOT NULL PRIMARY KEY,
-                    pageId TEXT NOT NULL,
-                    dxDp REAL NOT NULL,
-                    dyDp REAL NOT NULL,
-                    points BLOB NOT NULL,
-                    enc TEXT NOT NULL,
-                    createdAt INTEGER NOT NULL
-                )
-                """.trimIndent(),
-            )
-            connection.execSQL(
-                "INSERT INTO ink_erases VALUES ('erase', 'page', 'Normal', 18.0, X'01', 'ink/androidx1', 41)",
-            )
-            connection.execSQL(
-                "INSERT INTO ink_moves VALUES ('move', 'page', 4.0, 8.0, X'02', 'ink/lasso-f32le1', 42)",
-            )
-
-            NotesDatabase.MIGRATION_6_7.migrate(connection)
-
-            connection.prepare(
-                "SELECT COALESCE(deletedAt, -1) FROM ink_erases WHERE id = 'erase'",
-            ).use {
-                assertEquals(true, it.step())
-                assertEquals("an existing erase did not remain active", -1L, it.getLong(0))
-            }
-            connection.prepare(
-                "SELECT COALESCE(deletedAt, -1) FROM ink_moves WHERE id = 'move'",
-            ).use {
-                assertEquals(true, it.step())
-                assertEquals("an existing move did not remain active", -1L, it.getLong(0))
-            }
-        }
-    }
-
-    @Test
-    fun migration7To8LeavesExistingInkUngrouped() {
-        val driver = AndroidSQLiteDriver()
-
-        driver.open(file.absolutePath).use { connection ->
-            connection.execSQL("CREATE TABLE ink_strokes (id TEXT NOT NULL PRIMARY KEY)")
-            connection.execSQL("INSERT INTO ink_strokes VALUES ('stroke')")
-
-            NotesDatabase.MIGRATION_7_8.migrate(connection)
-
-            connection.prepare("SELECT groupId FROM ink_strokes WHERE id = 'stroke'").use {
-                assertEquals(true, it.step())
-                assertEquals(true, it.isNull(0))
-            }
-        }
-    }
-
-    @Test
-    fun migration8To9KeepsExistingMovesAsTranslationOnly() {
-        val driver = AndroidSQLiteDriver()
-
-        driver.open(file.absolutePath).use { connection ->
-            connection.execSQL(
-                """
-                CREATE TABLE ink_moves (
-                    id TEXT NOT NULL PRIMARY KEY,
-                    pageId TEXT NOT NULL,
-                    dxDp REAL NOT NULL,
-                    dyDp REAL NOT NULL,
-                    points BLOB NOT NULL,
-                    enc TEXT NOT NULL,
-                    createdAt INTEGER NOT NULL,
-                    deletedAt INTEGER
-                )
-                """.trimIndent(),
-            )
-            connection.execSQL(
-                "INSERT INTO ink_moves VALUES ('move', 'page', 4.0, 8.0, X'01', 'ink/lasso-f32le1', 42, NULL)",
-            )
-
-            NotesDatabase.MIGRATION_8_9.migrate(connection)
-
-            connection.prepare(
-                "SELECT scaleX, scaleY, anchorX, anchorY FROM ink_moves WHERE id = 'move'",
-            ).use {
-                assertEquals(true, it.step())
-                assertEquals(1.0, it.getDouble(0), 0.001)
-                assertEquals(1.0, it.getDouble(1), 0.001)
-                assertEquals(0.0, it.getDouble(2), 0.001)
-                assertEquals(0.0, it.getDouble(3), 0.001)
-            }
-        }
-    }
-
-    @Test
-    fun migration9To10AddsAttachmentsAndLeavesExistingContentAlone() {
-        val driver = AndroidSQLiteDriver()
-
-        driver.open(file.absolutePath).use { connection ->
-            connection.execSQL(
-                """
-                CREATE TABLE page_content (
-                    pageId TEXT NOT NULL PRIMARY KEY,
-                    docJson TEXT NOT NULL,
-                    updatedAt INTEGER NOT NULL,
-                    format TEXT NOT NULL DEFAULT 'json/1'
-                )
-                """.trimIndent(),
-            )
-            connection.execSQL(
-                "INSERT INTO page_content VALUES ('page', '{\"outlines\":[]}', 42, 'json/1')",
-            )
-
-            NotesDatabase.MIGRATION_9_10.migrate(connection)
-
-            // A pure create: nothing existed that could reference an attachment, so no document is
-            // rewritten and no row is backfilled.
-            connection.prepare("SELECT COUNT(*) FROM attachments").use {
-                assertEquals(true, it.step())
-                assertEquals(0, it.getLong(0).toInt())
-            }
-            connection.prepare("SELECT docJson FROM page_content WHERE pageId = 'page'").use {
-                assertEquals(true, it.step())
-                assertEquals("{\"outlines\":[]}", it.getText(0))
-            }
-        }
-    }
-
-    @Test
-    fun anAttachmentStartsUnreferencedAndCannotBeReleasedBelowZero() {
-        val driver = AndroidSQLiteDriver()
-
-        driver.open(file.absolutePath).use { connection ->
-            NotesDatabase.MIGRATION_9_10.migrate(connection)
-            connection.execSQL(
-                "INSERT INTO attachments VALUES ('abc', 'image/jpeg', 100, 80, 2048, 0, 42)",
-            )
-
-            // The guard that matters: a double release must not drive the count negative, because a
-            // negative count reads as "sweepable" and would delete a file something still points at.
-            connection.execSQL("UPDATE attachments SET refCount = MAX(refCount - 1, 0) WHERE id = 'abc'")
-            connection.execSQL("UPDATE attachments SET refCount = MAX(refCount - 1, 0) WHERE id = 'abc'")
-
-            connection.prepare("SELECT refCount FROM attachments WHERE id = 'abc'").use {
-                assertEquals(true, it.step())
-                assertEquals(0, it.getLong(0).toInt())
-            }
+        val database = Room.databaseBuilder(context, NotesDatabase::class.java, BASELINE_DB)
+            .addCallback(NotesDatabase.SYNC_TRIGGER_CALLBACK)
+            .build()
+        try {
+            runBlocking { assertEquals(emptyList<String>(), database.attachmentDao().allIds()) }
+        } finally {
+            database.close()
         }
     }
 
     /**
-     * Ink drawn before the automatic flag existed must come through as NULL, not as false.
+     * A double release must not drive an attachment's reference count negative.
      *
-     * The distinction is the whole fix: false means "the user picked this colour, leave it alone",
-     * and defaulting old rows to it would permanently freeze every stroke already on a page at the
-     * colour the canvas happened to be when it was drawn — which is the bug. NULL means "never
-     * recorded", which is what lets `automaticColorOr` infer it and let the ink follow the page.
+     * A negative count reads as "sweepable" everywhere it is asked, so the floor is what stands
+     * between a mistimed release and deleting the bytes of a picture a page still shows. It is
+     * `MAX(refCount - 1, 0)` in one DAO query and asserting it needs a real table.
      */
     @Test
-    fun migration10To11LeavesExistingStrokesUnrecordedRatherThanDeliberate() {
-        val driver = AndroidSQLiteDriver()
+    fun anAttachmentStartsUnreferencedAndCannotBeReleasedBelowZero() = runBlocking {
+        withDatabase { database ->
+            val attachments = database.attachmentDao()
+            attachments.insert(
+                AttachmentEntity(
+                    id = "sha-one",
+                    mimeType = "image/jpeg",
+                    pixelWidth = 100,
+                    pixelHeight = 80,
+                    byteCount = 2048,
+                    createdAt = 42L,
+                ),
+            )
+            assertEquals(0, attachments.byId("sha-one")?.refCount)
 
-        driver.open(file.absolutePath).use { connection ->
-            connection.execSQL(
-                """
-                CREATE TABLE ink_strokes (
-                    id TEXT NOT NULL PRIMARY KEY,
-                    pageId TEXT NOT NULL,
-                    seq INTEGER NOT NULL,
-                    brushFamily TEXT NOT NULL,
-                    brushVersion INTEGER NOT NULL,
-                    sizeDp REAL NOT NULL,
-                    colorArgb INTEGER NOT NULL,
-                    epsilon REAL NOT NULL,
-                    stabilization INTEGER NOT NULL,
-                    minX REAL NOT NULL,
-                    minY REAL NOT NULL,
-                    maxX REAL NOT NULL,
-                    maxY REAL NOT NULL,
-                    points BLOB NOT NULL,
-                    enc TEXT NOT NULL,
-                    createdAt INTEGER NOT NULL,
-                    deletedAt INTEGER,
-                    groupId TEXT
-                )
-                """.trimIndent(),
-            )
-            // -1 is 0xFFFFFFFF: what the automatic pen resolved to on a dark canvas, and what every
-            // stroke drawn that way was stored as.
-            connection.execSQL(
-                "INSERT INTO ink_strokes VALUES ('s1', 'p1', 0, 'pressure-pen', 1, 2.0, -1, " +
-                    "0.1, 0, 0.0, 0.0, 1.0, 1.0, X'00', 'v1', 42, NULL, NULL)",
-            )
+            attachments.retain("sha-one")
+            attachments.release("sha-one")
+            attachments.release("sha-one")
 
-            NotesDatabase.MIGRATION_10_11.migrate(connection)
-
-            connection.prepare(
-                "SELECT colorArgb, colorFollowsTheme FROM ink_strokes WHERE id = 's1'",
-            ).use {
-                assertEquals(true, it.step())
-                // The stored colour is untouched — the migration adds a column, it does not repaint
-                // ink the user has already drawn.
-                assertEquals(-1, it.getLong(0).toInt())
-                assertEquals(true, it.isNull(1))
-            }
-        }
-    }
-
-    @Test
-    fun migration11To12PreservesDocumentsAndMatchesTheExportedSchema() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 11).apply {
-            execSQL(
-                "INSERT INTO notebooks VALUES " +
-                    "('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)",
-            )
-            execSQL(
-                "INSERT INTO sections VALUES " +
-                    "('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)",
-            )
-            execSQL(
-                "INSERT INTO pages VALUES " +
-                    "('page', 'section', 'Page', 0, 'kept', 10, 10, NULL)",
-            )
-            execSQL(
-                "INSERT INTO page_content VALUES " +
-                    "('page', '{\"outlines\":[]}', 10, 'json/1')",
-            )
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            12,
-            true,
-            NotesDatabase.MIGRATION_11_12,
-        ).use { migrated ->
-            migrated.query("SELECT docJson FROM page_content WHERE pageId = 'page'").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals("{\"outlines\":[]}", it.getString(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM page_revisions").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-        }
-    }
-
-    @Test
-    fun migration12To13DropsPrereleaseDocumentOnlyRevisions() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 12).apply {
-            execSQL(
-                "INSERT INTO notebooks VALUES " +
-                    "('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)",
-            )
-            execSQL(
-                "INSERT INTO sections VALUES " +
-                    "('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)",
-            )
-            execSQL(
-                "INSERT INTO pages VALUES " +
-                    "('page', 'section', 'Page', 0, 'kept', 10, 10, NULL)",
-            )
-            execSQL(
-                "INSERT INTO page_revisions VALUES " +
-                    "('revision', 'page', 10, 'json/1', 'gzip/1', 2, 'abc', X'01')",
-            )
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            13,
-            true,
-            NotesDatabase.MIGRATION_12_13,
-        ).use { migrated ->
-            migrated.query("SELECT COUNT(*) FROM page_revisions").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-        }
-    }
-
-    @Test
-    fun migration13To14AddsLocalMetadataWithoutChangingNotebooks() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 13).apply {
-            execSQL(
-                "INSERT INTO notebooks VALUES " +
-                    "('notebook-uuid', 'Notebook', 1, 0, 1, 10, 10, NULL)",
-            )
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            14,
-            true,
-            NotesDatabase.MIGRATION_13_14,
-        ).use { migrated ->
-            migrated.query("SELECT id FROM notebooks").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals("notebook-uuid", it.getString(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM local_metadata").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-        }
-    }
-
-    @Test
-    fun migration14To15AddsPictureTextKeyedByAttachment() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 14).apply {
-            execSQL(
-                "INSERT INTO attachments VALUES " +
-                    "('sha-one', 'image/webp', 800, 600, 1024, 1, 10)",
-            )
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            15,
-            true,
-            NotesDatabase.MIGRATION_14_15,
-        ).use { migrated ->
-            // Nothing is backfilled: every row is derived from pixels by a named engine, so the
-            // first indexing pass is what fills this in.
-            migrated.query("SELECT COUNT(*) FROM attachment_text").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-            migrated.execSQL(
-                "INSERT INTO attachment_text VALUES " +
-                    "('sha-one', 'hello', 1, 0.9, 'ppocrv5-en/1', 'Read', 42, 10)",
-            )
-            migrated.query("SELECT COUNT(*) FROM attachment_text").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(1L, it.getLong(0))
-            }
+            assertEquals(0, attachments.byId("sha-one")?.refCount)
         }
     }
 
     /**
-     * IO3, in the place it can actually be proved: recognized text must not outlive its picture.
+     * A picture's recognized text dies with the picture.
      *
-     * Run against the migrated database rather than a Room-built one so it covers the migration's
-     * own `CREATE TABLE` — a cascade written into the entity but omitted from the migration SQL
-     * would leave exactly this bug on every upgraded install and none of the fresh ones.
+     * `attachment_text` is derived from bytes that an `AttachmentStore.release` can delete for
+     * good, and the foreign key is the only thing that removes the reading with them —
+     * `ImageTextDao.deleteOrphans` exists to notice if it ever stops firing, and this is where it
+     * is proved to fire at all.
      */
     @Test
-    fun deletingAnAttachmentDeletesItsRecognizedText() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 14).apply {
-            execSQL(
-                "INSERT INTO attachments VALUES " +
-                    "('sha-one', 'image/webp', 800, 600, 1024, 0, 10)",
+    fun deletingAnAttachmentDeletesItsRecognizedText() = runBlocking {
+        withDatabase { database ->
+            database.attachmentDao().insert(
+                AttachmentEntity(
+                    id = "sha-one",
+                    mimeType = "image/webp",
+                    pixelWidth = 800,
+                    pixelHeight = 600,
+                    byteCount = 1024,
+                    createdAt = 10L,
+                ),
             )
-            close()
-        }
+            database.imageTextDao().upsert(
+                AttachmentTextEntity(
+                    attachmentId = "sha-one",
+                    text = "hello",
+                    lineCount = 1,
+                    confidence = 0.9f,
+                    engine = "ppocrv5-en/1",
+                    status = ImageTextStatus.Read,
+                    durationMs = 42L,
+                    updatedAt = 10L,
+                ),
+            )
+            assertEquals(1, database.imageTextDao().byIds(listOf("sha-one")).size)
 
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            15,
-            true,
-            NotesDatabase.MIGRATION_14_15,
-        ).use { migrated ->
-            migrated.execSQL("PRAGMA foreign_keys = ON")
-            migrated.execSQL(
-                "INSERT INTO attachment_text VALUES " +
-                    "('sha-one', 'hello', 1, 0.9, 'ppocrv5-en/1', 'Read', 42, 10)",
-            )
-            migrated.execSQL("DELETE FROM attachments WHERE id = 'sha-one'")
-            migrated.query("SELECT COUNT(*) FROM attachment_text").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-        }
-    }
+            database.attachmentDao().deleteIfUnreferenced("sha-one")
 
-    @Test
-    fun migration15To16AddsPageHandwritingCacheAndRaceGeneration() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 15).apply {
-            execSQL(
-                "INSERT INTO notebooks VALUES " +
-                    "('notebook', 'Notebook', 0, 0, 1, 1, 1, NULL)",
-            )
-            execSQL(
-                "INSERT INTO sections VALUES " +
-                    "('section', 'notebook', 'Section', 0, 0, 1, 1, NULL)",
-            )
-            execSQL(
-                "INSERT INTO pages VALUES " +
-                    "('page', 'section', 'Page', 0, '', 1, 1, NULL)",
-            )
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            16,
-            true,
-            NotesDatabase.MIGRATION_15_16,
-        ).use { migrated ->
-            migrated.execSQL("PRAGMA foreign_keys = ON")
-            migrated.execSQL(
-                "INSERT INTO ink_text VALUES " +
-                    "('page', '[]', 0, 0, 'layout', 'ppocrv5-en-ink/1', 'Empty', 5, 10)",
-            )
-            migrated.execSQL("INSERT INTO ink_text_generation VALUES ('page', 3)")
-            migrated.query("SELECT generation FROM ink_text_generation WHERE pageId = 'page'").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(3L, it.getLong(0))
-            }
-
-            migrated.execSQL("DELETE FROM pages WHERE id = 'page'")
-            migrated.query("SELECT COUNT(*) FROM ink_text").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM ink_text_generation").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
+            assertEquals(emptyList<AttachmentTextEntity>(), database.imageTextDao().byIds(listOf("sha-one")))
         }
     }
 
-    @Test
-    fun migration16To17AddsDormantSyncTriggersAndGenerationSafeOutbox() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 16).apply {
-            execSQL(
-                "INSERT INTO notebooks VALUES " +
-                    "('notebook', 'Before', 1, 0, 1, 10, 10, NULL)",
-            )
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            17,
-            true,
-            NotesDatabase.MIGRATION_16_17,
-        ).use { migrated ->
-            // Migration does not infer whether a token held in another DataStore is still valid.
-            migrated.query("SELECT COUNT(*) FROM sync_outbox").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-
-            migrated.execSQL(
-                "INSERT INTO sync_state(singleton, accountId, cursor, applyingRemote) " +
-                    "VALUES(0, 'account', 0, 0)",
-            )
-            migrated.execSQL("UPDATE notebooks SET name = 'One' WHERE id = 'notebook'")
-            migrated.execSQL("UPDATE notebooks SET name = 'Two' WHERE id = 'notebook'")
-            migrated.query(
-                "SELECT kind, entityId, generation, changedAt FROM sync_outbox",
-            ).use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals("notebook", it.getString(0))
-                assertEquals("notebook", it.getString(1))
-                assertEquals(2L, it.getLong(2))
-                assertTrue(it.getLong(3) > 0L)
-            }
-
-            // Remote application uses the same transaction-local switch and must not echo.
-            migrated.execSQL("UPDATE sync_state SET applyingRemote = 1 WHERE singleton = 0")
-            migrated.execSQL("UPDATE notebooks SET name = 'Remote' WHERE id = 'notebook'")
-            migrated.query("SELECT generation FROM sync_outbox").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(2L, it.getLong(0))
-            }
+    private inline fun withDatabase(block: (NotesDatabase) -> Unit) {
+        val database = Room.inMemoryDatabaseBuilder(context, NotesDatabase::class.java)
+            .addCallback(NotesDatabase.SYNC_TRIGGER_CALLBACK)
+            .build()
+        try {
+            block(database)
+        } finally {
+            database.close()
         }
     }
 
-    @Test
-    fun migration17To18QueuesPageContentByItsPageId() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 17).apply {
-            execSQL(
-                "INSERT INTO notebooks VALUES " +
-                    "('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)",
-            )
-            execSQL(
-                "INSERT INTO sections VALUES " +
-                    "('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)",
-            )
-            execSQL(
-                "INSERT INTO pages VALUES " +
-                    "('page', 'section', 'Page', 0, '', 10, 10, NULL)",
-            )
-            execSQL("INSERT INTO page_content VALUES ('page', '{}', 10, 'json/1')")
-            execSQL(
-                "INSERT INTO sync_state(singleton, accountId, cursor, applyingRemote) " +
-                    "VALUES(0, 'account', 0, 0)",
-            )
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            18,
-            true,
-            NotesDatabase.MIGRATION_17_18,
-        ).use { migrated ->
-            migrated.query(
-                "SELECT generation FROM sync_outbox WHERE kind = 'pageContent'",
-            ).use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(1L, it.getLong(0))
-            }
-
-            migrated.execSQL("UPDATE page_content SET docJson = '{\"one\":1}' WHERE pageId = 'page'")
-            migrated.execSQL("UPDATE page_content SET docJson = '{\"two\":2}' WHERE pageId = 'page'")
-            migrated.query(
-                "SELECT kind, entityId, generation FROM sync_outbox WHERE kind = 'pageContent'",
-            ).use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals("pageContent", it.getString(0))
-                assertEquals("page", it.getString(1))
-                assertEquals(3L, it.getLong(2))
-            }
-        }
-    }
-
-    @Test
-    fun migration18To19KeepsTargetsWhoseStrokeIsGoneAndSwapsTheDrawOrderIndex() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 18).apply {
-            execSQL("INSERT INTO notebooks VALUES ('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)")
-            execSQL("INSERT INTO sections VALUES ('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)")
-            execSQL("INSERT INTO pages VALUES ('page', 'section', 'Page', 0, '', 10, 10, NULL)")
-            execSQL(
-                "INSERT INTO ink_strokes(id, pageId, seq, brushFamily, brushVersion, sizeDp, " +
-                    "colorArgb, colorFollowsTheme, epsilon, stabilization, minX, minY, maxX, maxY, " +
-                    "points, enc, createdAt, groupId, deletedAt) VALUES " +
-                    "('stroke', 'page', 7, 'marker', 1, 4.0, -16777216, NULL, 0.1, 0, " +
-                    "0.0, 0.0, 1.0, 1.0, x'01', 'ink/v1', 10, NULL, NULL)",
-            )
-            execSQL(
-                "INSERT INTO ink_erases(id, pageId, mode, sizeDp, points, enc, createdAt, deletedAt) " +
-                    "VALUES ('erase', 'page', 'Normal', 8.0, x'01', 'ink/v1', 11, NULL)",
-            )
-            execSQL("INSERT INTO ink_erase_targets VALUES ('erase', 'stroke')")
-            execSQL(
-                "INSERT INTO ink_moves(id, pageId, dxDp, dyDp, scaleX, scaleY, anchorX, anchorY, " +
-                    "points, enc, createdAt, deletedAt) VALUES " +
-                    "('move', 'page', 3.0, 4.0, 1.0, 1.0, 0.0, 0.0, x'01', 'ink/v1', 12, NULL)",
-            )
-            execSQL("INSERT INTO ink_move_targets VALUES ('move', 'stroke')")
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            19,
-            true,
-            NotesDatabase.MIGRATION_18_19,
-        ).use { migrated ->
-            // The rebuild copies target rows verbatim rather than re-deriving them from anything.
-            migrated.query("SELECT strokeId FROM ink_erase_targets WHERE eraseId = 'erase'").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals("stroke", it.getString(0))
-            }
-
-            migrated.execSQL("PRAGMA foreign_keys = ON")
-
-            // The case this migration exists for: the seven-day purge removes a stroke an operation
-            // still names. Before 19 the cascade took the target row with it, which rewrote an
-            // operation that is meant to be immutable and, once ink replicates, made an operation
-            // whose stroke had been purged impossible to insert at all.
-            migrated.execSQL("DELETE FROM ink_strokes WHERE id = 'stroke'")
-            migrated.query("SELECT COUNT(*) FROM ink_erase_targets").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(1L, it.getLong(0))
-            }
-            migrated.query("SELECT COUNT(*) FROM ink_move_targets").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(1L, it.getLong(0))
-            }
-
-            // The operation's own key still cascades, so a purged erase never strands its targets.
-            migrated.execSQL("DELETE FROM ink_erases WHERE id = 'erase'")
-            migrated.query("SELECT COUNT(*) FROM ink_erase_targets").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(0L, it.getLong(0))
-            }
-
-            val indices = buildList {
-                migrated.query("PRAGMA index_list(`ink_strokes`)").use {
-                    while (it.moveToNext()) add(it.getString(it.getColumnIndexOrThrow("name")))
-                }
-            }
-            assertTrue("index_ink_strokes_pageId_seq_id" in indices)
-            assertTrue("index_ink_strokes_pageId" !in indices)
-        }
-    }
-
-    @Test
-    fun migration19To20QueuesExistingInkAndTriggersOnNewInk() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 19).apply {
-            execSQL("INSERT INTO notebooks VALUES ('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)")
-            execSQL("INSERT INTO sections VALUES ('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)")
-            execSQL("INSERT INTO pages VALUES ('page', 'section', 'Page', 0, '', 10, 10, NULL)")
-            execSQL(
-                "INSERT INTO ink_strokes(id, pageId, seq, brushFamily, brushVersion, sizeDp, " +
-                    "colorArgb, colorFollowsTheme, epsilon, stabilization, minX, minY, maxX, maxY, " +
-                    "points, enc, createdAt, groupId, deletedAt) VALUES " +
-                    "('drawn-before', 'page', 0, 'marker', 1, 4.0, -16777216, NULL, 0.1, 0, " +
-                    "0.0, 0.0, 1.0, 1.0, x'01', 'ink/v1', 10, NULL, NULL)",
-            )
-            execSQL(
-                "INSERT INTO sync_state(singleton, accountId, cursor, applyingRemote) " +
-                    "VALUES(0, 'account', 0, 0)",
-            )
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            20,
-            true,
-            NotesDatabase.MIGRATION_19_20,
-        ).use { migrated ->
-            // Everything already drawn becomes the first ink outbox, or an installation that
-            // upgrades never uploads the ink it already has.
-            migrated.query(
-                "SELECT entityId, generation FROM sync_outbox WHERE kind = 'inkStroke'",
-            ).use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals("drawn-before", it.getString(0))
-                assertEquals(1L, it.getLong(1))
-            }
-
-            migrated.execSQL(
-                "INSERT INTO ink_erases(id, pageId, mode, sizeDp, points, enc, createdAt, deletedAt) " +
-                    "VALUES ('erase', 'page', 'Normal', 8.0, x'01', 'ink/v1', 11, NULL)",
-            )
-            // Targets are not entities: they travel inside their operation's payload, and a trigger
-            // on them would queue a key no kind can push.
-            migrated.execSQL("INSERT INTO ink_erase_targets VALUES ('erase', 'drawn-before')")
-            migrated.query("SELECT kind, entityId FROM sync_outbox ORDER BY kind").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals("inkErase", it.getString(0))
-                assertEquals(true, it.moveToNext())
-                assertEquals("inkStroke", it.getString(0))
-                assertEquals(false, it.moveToNext())
-            }
-
-            // Erasing is an update on the stroke, and it has to queue the row again.
-            migrated.execSQL("UPDATE ink_strokes SET deletedAt = 20 WHERE id = 'drawn-before'")
-            migrated.query(
-                "SELECT generation FROM sync_outbox WHERE kind = 'inkStroke'",
-            ).use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(2L, it.getLong(0))
-            }
-        }
-    }
-
-    @Test
-    fun migration20To21QueuesExistingPicturesAndIgnoresAReferenceCountChange() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 20).apply {
-            execSQL("INSERT INTO attachments VALUES ('abc', 'image/webp', 100, 80, 2048, 1, 42)")
-            execSQL("INSERT INTO notebooks VALUES ('notebook', 'Notebook', 1, 0, 1, 10, 10, NULL)")
-            execSQL("INSERT INTO sections VALUES ('section', 'notebook', 'Section', 1, 0, 10, 10, NULL)")
-            execSQL("INSERT INTO pages VALUES ('shows', 'section', 'Shows', 0, '', 10, 10, NULL)")
-            execSQL("INSERT INTO pages VALUES ('plain', 'section', 'Plain', 1, '', 10, 10, NULL)")
-            execSQL(
-                "INSERT INTO page_content VALUES " +
-                    "('shows', '{\"outlines\":[{\"t\":\"image\",\"attachmentId\":\"abc\"}]}', 11, 'json/1')",
-            )
-            execSQL(
-                "INSERT INTO page_content VALUES ('plain', '{\"outlines\":[]}', 12, 'json/1')",
-            )
-            execSQL(
-                "INSERT INTO sync_state(singleton, accountId, cursor, applyingRemote) " +
-                    "VALUES(0, 'account', 0, 0)",
-            )
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            21,
-            true,
-            NotesDatabase.MIGRATION_20_21,
-        ).use { migrated ->
-            // A picture imported before the upgrade is uploaded after it, like every other kind.
-            migrated.query(
-                "SELECT entityId, generation, changedAt FROM sync_outbox WHERE kind = 'attachment'",
-            ).use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals("abc", it.getString(0))
-                assertEquals(1L, it.getLong(1))
-                // `createdAt`, not `COALESCE(deletedAt, createdAt)`: an attachment row has neither
-                // an update nor a tombstone to carry.
-                assertEquals(42L, it.getLong(2))
-                assertEquals(false, it.moveToNext())
-            }
-
-            // A page already accepted by the server is not dirty and would never be pushed again,
-            // so the `blobRefs` this phase adds would never reach it. The body that places a
-            // picture is queued once by the migration; the one that does not is left alone.
-            migrated.query(
-                "SELECT entityId FROM sync_outbox WHERE kind = 'pageContent' ORDER BY entityId",
-            ).use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals("shows", it.getString(0))
-                assertEquals(false, it.moveToNext())
-            }
-
-            migrated.execSQL("INSERT INTO attachments VALUES ('def', 'image/webp', 10, 10, 64, 0, 43)")
-            migrated.query("SELECT COUNT(*) FROM sync_outbox WHERE kind = 'attachment'").use {
-                it.moveToFirst()
-                assertEquals(2, it.getInt(0))
-            }
-
-            // The one table with no update trigger. `refCount` is per-device reachability and never
-            // syncs (SD7), so pasting a picture must not re-push a row nothing about which changed.
-            migrated.execSQL("UPDATE attachments SET refCount = refCount + 1 WHERE id = 'abc'")
-            migrated.query(
-                "SELECT generation FROM sync_outbox WHERE kind = 'attachment' AND entityId = 'abc'",
-            ).use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals(1L, it.getLong(0))
-            }
-        }
-    }
-
-    @Test
-    fun migration21To22LeavesEveryExistingNotebookOpenAndOnTheDevice() {
-        helper.createDatabase(ROOM_MIGRATION_DB, 21).apply {
-            execSQL("INSERT INTO notebooks VALUES ('open', 'Open', 1, 0, 1, 10, 10, NULL)")
-            execSQL("INSERT INTO notebooks VALUES ('gone', 'Gone', 1, 1, 1, 10, 10, 99)")
-            execSQL(
-                "INSERT INTO sync_state(singleton, accountId, cursor, applyingRemote) " +
-                    "VALUES(0, 'account', 0, 0)",
-            )
-            close()
-        }
-
-        helper.runMigrationsAndValidate(
-            ROOM_MIGRATION_DB,
-            22,
-            true,
-            NotesDatabase.MIGRATION_21_22,
-        ).use { migrated ->
-            // Nothing is backfilled, and null in both columns is exactly the right answer: no build
-            // before this one could close a notebook, so every existing row is open and here.
-            migrated.query("SELECT id, closedAt, cloudOnlyAt FROM notebooks ORDER BY id").use {
-                assertEquals(true, it.moveToFirst())
-                assertEquals("gone", it.getString(0))
-                assertTrue(it.isNull(1))
-                assertTrue(it.isNull(2))
-                assertEquals(true, it.moveToNext())
-                assertEquals("open", it.getString(0))
-                assertTrue(it.isNull(1))
-                assertTrue(it.isNull(2))
-                assertEquals(false, it.moveToNext())
-            }
-
-            // And nothing is queued by the migration either. Unlike 19 -> 20 and 20 -> 21 there is
-            // nothing to backfill: the notebook triggers have existed since schema 17, so the first
-            // time either column is actually written it queues a push like any other edit.
-            //
-            // That trigger firing is deliberately *not* asserted here, because this helper cannot
-            // show it: `createDatabase` builds its schema-21 database from the exported JSON, and
-            // Room does not record triggers in a schema export — so no database reached from here
-            // has any. `HierarchySyncTest.closingANotebookTravelsToTheServerAndBackAsAnOrdinaryField`
-            // is where it is asserted, on a real `NotesDatabase` with `SYNC_TRIGGER_CALLBACK`.
-            migrated.query("SELECT COUNT(*) FROM sync_outbox").use {
-                it.moveToFirst()
-                assertEquals(0, it.getInt(0))
-            }
-        }
-    }
-
-    companion object {
-        private const val ROOM_MIGRATION_DB = "notes-room-migration-test"
+    private companion object {
+        const val BASELINE_DB = "baseline-schema.db"
     }
 }

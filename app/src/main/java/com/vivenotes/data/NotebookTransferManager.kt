@@ -254,8 +254,9 @@ class NotebookTransferManager(
                 // of it is actively wrong on the machine that imports the bundle — a cursor from
                 // someone else's account would make the importer skip deltas it has never seen.
                 // Dropped rather than emptied, for the reason the derived caches below are: it
-                // leaves `EXPECTED_COLUMNS` and `APP_SCHEMA_VERSION` untouched, so a `.vive` from
-                // schema 13 and one from schema 21 are the same file to the importer.
+                // leaves `EXPECTED_COLUMNS` and `APP_SCHEMA_VERSION` untouched, so a `.vive`
+                // written before the sync layer existed and one written after it are the same file
+                // to the importer.
                 source.execSQL("DROP TABLE IF EXISTS sync_outbox")
                 source.execSQL("DROP TABLE IF EXISTS sync_entity_states")
                 source.execSQL("DROP TABLE IF EXISTS sync_state")
@@ -264,7 +265,7 @@ class NotebookTransferManager(
                 // content, so an imported notebook always arrives open and on the device it was
                 // imported to. Dropped rather than nulled for the reason the tables above are:
                 // `validateSchema` compares the bundle's columns to `EXPECTED_COLUMNS` exactly, and
-                // leaving them would mean no build from schema 22 onward could import what it wrote.
+                // leaving them in would mean no build that has the shelf could import what it wrote.
                 // `ALTER TABLE ... DROP COLUMN` needs SQLite 3.35, which every `minSdk = 35` device
                 // has several versions past.
                 source.execSQL("ALTER TABLE notebooks DROP COLUMN closedAt")
@@ -277,7 +278,7 @@ class NotebookTransferManager(
                 // that build ships. Dropped rather than carried for the reason `page_revisions` is
                 // carried: a revision is something a person made, and this is something a model
                 // guessed. It also keeps `EXPECTED_COLUMNS` and the bundle format unchanged, so
-                // every `.vive` written before schema 15 still imports.
+                // every `.vive` written before picture text was cached still imports.
                 source.execSQL("DROP TABLE IF EXISTS attachment_text")
                 // Handwriting readings are likewise derived from replayed ink and local model
                 // behavior. The destination rebuilds them from the canonical stroke rows.

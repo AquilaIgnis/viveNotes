@@ -195,8 +195,8 @@ class NotesRepository(
      * their direct cascade is exercised first; hierarchy parents go before children so deleting an
      * expired notebook removes its whole hidden branch in one foreign-key cascade.
      *
-     * A target row naming a purged *stroke* is deliberately left behind: since schema 19 the target
-     * tables reference their operation and not the stroke, because a cascade from the stroke side
+     * A target row naming a purged *stroke* is deliberately left behind: the target tables
+     * reference their operation and not the stroke, because a cascade from the stroke side
      * would edit an operation that is supposed to be immutable, and a replicated operation has to
      * arrive with the same payload it was pushed with. Replay ignores a target it cannot find, so
      * the leftover is two short strings and no behaviour. `memory/inkSyncPlan.md` §2.2.

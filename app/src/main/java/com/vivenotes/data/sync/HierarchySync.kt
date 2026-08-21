@@ -864,8 +864,8 @@ class HierarchySync(
                 // notebook — or bringing one back from the cloud — would never propagate.
                 //
                 // The server carries them as unrecognised properties of `NotebookFields`, which
-                // `additionalProperties: true` allows. That same retention is why a build older than
-                // schema 22 pushing a rename does not reopen the notebook everywhere: it sends back
+                // `additionalProperties: true` allows. That same retention is why a build without
+                // the shelf pushing a rename does not reopen the notebook everywhere: it sends back
                 // the value it never parsed. `memory/closedNotebooksPlan.md`.
                 base["closedAt"] = row.closedAt?.let(::JsonPrimitive) ?: JsonNull
                 base["cloudOnlyAt"] = row.cloudOnlyAt?.let(::JsonPrimitive) ?: JsonNull
@@ -1107,7 +1107,7 @@ class HierarchySync(
                     createdAt = change.raw.requiredLong("createdAt"),
                     updatedAt = displayUpdatedAt,
                     deletedAt = change.deletedAt,
-                    // Optional, not required: a row last written by a build older than schema 22
+                    // Optional, not required: a row last written by a build without the shelf
                     // carries neither, and absent is exactly what "open, and on this device" means.
                     closedAt = change.raw.optionalLong("closedAt"),
                     cloudOnlyAt = change.raw.optionalLong("cloudOnlyAt"),
@@ -1369,7 +1369,7 @@ class HierarchySync(
                 raw.requiredString("name")
                 raw.requiredInt("colorArgb")
                 raw.requiredBoolean("expanded")
-                // Absent on anything written before schema 22, so optional — but validated here
+                // Absent on anything a build without the shelf wrote, so optional — but validated here
                 // rather than at apply time like everything else, because a non-numeric value would
                 // otherwise throw inside the transaction that commits the cursor.
                 raw.optionalLong("closedAt")
