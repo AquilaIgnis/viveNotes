@@ -674,8 +674,14 @@ class NotesViewModel(
      * Held here rather than in `NotesApp`'s `remember` because it is no longer only the tab strip's
      * business: a stylus button changes the tool, and the tab that shows tools has to come forward
      * with it — see `ui/StylusButtons.kt`. Transient like [_tool], and for the same reason.
+     *
+     * **Draw is the tab a session opens on**, not Document. This is a stylus-first app on a tablet:
+     * the pen is already in hand, so the ribbon should be showing the pens rather than a text
+     * toolbar nobody reached for. Nothing switches it back automatically — taking the caret does
+     * *not* bring Document forward, deliberately: a ribbon that moves under a stylus while you are
+     * writing is worse than one tap.
      */
-    private val _activeTab = MutableStateFlow(RibbonTab.Document)
+    private val _activeTab = MutableStateFlow(RibbonTab.Draw)
     val activeTab: StateFlow<RibbonTab> = _activeTab.asStateFlow()
 
     fun selectRibbonTab(tab: RibbonTab) {

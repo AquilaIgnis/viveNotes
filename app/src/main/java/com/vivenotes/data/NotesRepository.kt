@@ -25,12 +25,8 @@ import com.vivenotes.data.db.PageEntity
 import com.vivenotes.data.db.PageRevisionEntity
 import com.vivenotes.data.db.PageRevisionSummary
 import com.vivenotes.data.db.SectionEntity
-import com.vivenotes.model.Block
-import com.vivenotes.model.BlockType
 import com.vivenotes.model.DocumentCodecs
-import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
-import com.vivenotes.model.PageStyle
 import com.vivenotes.model.isBlank
 import com.vivenotes.model.migrated
 import com.vivenotes.model.TextDocumentCodec
@@ -95,7 +91,13 @@ class NotesRepository(
      * to use a compact binary codec independently.
      */
     private val codec: TextDocumentCodec = DocumentCodecs.default,
-    /** Optional real-ink page bundled by the application for clean-install recognition tests. */
+    /**
+     * Optional real-ink page seeded beside the Welcome page — `memory/ai.md`.
+     *
+     * Null in the app: `NotesApplication` stopped passing it, so a clean install seeds one empty
+     * page rather than a stranger's handwriting. The asset and [StarterInkPageFixture] stay for the
+     * recognition suites, which need real persisted ink with its erase and lasso operations intact.
+     */
     private val starterInkPage: StarterInkPageFixture? = null,
     /** Injectable so checkpoint-window behavior has deterministic instrumentation tests. */
     private val clock: () -> Long = System::currentTimeMillis,
@@ -1083,6 +1085,11 @@ class NotesRepository(
     /**
      * Seeds a starter notebook so the first launch is not an empty void. Only ever runs when the
      * database has no notebooks at all, so it cannot resurrect content the user deleted.
+     *
+     * The Welcome page is deliberately **empty** — [createPage] already writes `PageDoc.empty()`.
+     * It used to open with a text outline explaining the ribbon, which put a container under the
+     * pen before the owner had drawn anything and made the first gesture on a stylus-first app a
+     * text selection. A blank page teaches the same lesson faster.
      */
     suspend fun seedIfEmpty() {
         if (notebooks.count() > 0) return
@@ -1091,33 +1098,7 @@ class NotesRepository(
         val gettingStarted = createSection(notebookId, "Getting Started")
         createSection(notebookId, "Ideas")
 
-        val pageId = createPage(gettingStarted, "Welcome")
-        saveDoc(
-            pageId,
-            PageDoc(
-                outlines = listOf(
-                    Outline.Text(
-                        id = newId(),
-                        // Clear of the title band: outline coordinates start at the page's own
-                        // top-left corner, so a seeded page has to place itself below the header
-                        // rather than being pushed down by it.
-                        y = PageStyle.TITLE_BAND_DP,
-                        blocks = listOf(
-                            Block.of("This is a page. Type anywhere to start writing.", BlockType.Paragraph),
-                            Block.of("", BlockType.Paragraph),
-                            Block.of("Formatting", BlockType.Heading2),
-                            Block.of("Use the ribbon above to style text.", BlockType.Bullet),
-                            Block.of("Bold, italic, underline, highlight and colour all work.", BlockType.Bullet),
-                            Block.of("Tab and Shift+Tab change indent level.", BlockType.Bullet),
-                            Block.of("", BlockType.Paragraph),
-                            Block.of("Organising", BlockType.Heading2),
-                            Block.of("Notebooks hold sections, sections hold pages.", BlockType.Bullet),
-                            Block.of("Add a page with the button above the page list.", BlockType.Bullet),
-                        ),
-                    ),
-                ),
-            ),
-        )
+        createPage(gettingStarted, "Welcome")
 
         starterInkPage?.let { fixture ->
             val fixturePageId = createPage(gettingStarted, fixture.title)

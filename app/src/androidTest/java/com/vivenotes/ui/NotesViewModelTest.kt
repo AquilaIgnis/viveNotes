@@ -63,7 +63,9 @@ import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.pageBounds
 import com.vivenotes.ink.projectionKey
 import com.vivenotes.model.Block
+import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
+import com.vivenotes.model.newId
 import com.vivenotes.model.Orientation
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
@@ -138,10 +140,11 @@ class NotesViewModelTest {
         Dispatchers.resetMain()
     }
 
-    /** Builds a settled view model sitting on the seeded Welcome page. */
+    /** Builds a settled view model sitting on the seeded Welcome page, text already on it. */
     private suspend fun seededViewModel(
         remoteInk: StateFlow<Map<String, Long>>? = null,
     ): NotesViewModel {
+        seedStarterText()
         val vm = NotesViewModel(
             repository,
             attachments,
@@ -155,6 +158,50 @@ class NotesViewModelTest {
         assertNotNull("expected the seeded page to be open", vm.uiState.value.selectedPageId)
         return vm
     }
+
+    /**
+     * Puts a text outline on the seeded Welcome page.
+     *
+     * A fresh install seeds an *empty* page — `NotesRepository.seedIfEmpty` stopped writing the
+     * starter body, and `NotesApplication` no longer passes the bundled ink fixture either — but
+     * this suite is about the load/edit/save cycle over a page that has a container on it, so the
+     * text the seed used to write now lives here. Written the same way the seed wrote it: after
+     * `createPage` has already stored an empty document, so the page still carries a checkpoint of
+     * that blank body for the version-history tests to restore to.
+     *
+     * Idempotent, and deliberately so — a test that builds a second view model over the same
+     * repository must not have its edits overwritten by a second seeding.
+     */
+    private suspend fun seedStarterText() {
+        repository.seedIfEmpty()
+        val pageId = db.query("SELECT id FROM pages ORDER BY sortIndex LIMIT 1", emptyArray())
+            .use { cursor ->
+                check(cursor.moveToFirst()) { "seeding produced no page" }
+                cursor.getString(0)
+            }
+        val load = repository.loadDoc(pageId)
+        // Blankness, not outline count: `PageDoc.empty()` is already one empty text box, which is
+        // what `createPage` stored and what the editor gives every new page to put a caret in.
+        if (load is PageLoad.Loaded && load.doc.plainText().isBlank()) {
+            repository.saveDoc(pageId, starterDoc())
+        }
+    }
+
+    /** The body `seedIfEmpty` used to write. Kept verbatim: assertions below match on its text. */
+    private fun starterDoc() = PageDoc(
+        outlines = listOf(
+            Outline.Text(
+                id = newId(),
+                y = PageStyle.TITLE_BAND_DP,
+                blocks = listOf(
+                    Block.of("This is a page. Type anywhere to start writing.", BlockType.Paragraph),
+                    Block.of("", BlockType.Paragraph),
+                    Block.of("Formatting", BlockType.Heading2),
+                    Block.of("Use the ribbon above to style text.", BlockType.Bullet),
+                ),
+            ),
+        ),
+    )
 
     /** A selection naming objects by id. Bounds do not matter to the clipboard, only membership. */
     private fun selectionOf(
@@ -208,20 +255,24 @@ class NotesViewModelTest {
     }
 
     /**
-     * Regression: the seeded page was blanked by the first thing that saved it.
+     * Regression: a page was blanked by the first thing that saved it.
      *
-     * Seeding creates a page's row and writes its content a moment later. The tree observer used
-     * to start alongside the seed, so it could open the page in that gap, load the empty document
+     * Creating a page writes its row and its content separately. The tree observer used to start
+     * alongside first-run seeding, so it could open the page in that gap, load the empty document
      * the row was created with, and hold it — and the first save wrote that emptiness over the
-     * seed. Found on a clean install by changing the page colour, which is a save that touches no
+     * body. Found on a clean install by changing the page colour, which is a save that touches no
      * text at all.
+     *
+     * The seed no longer writes a body of its own, so the original gap is gone from the product;
+     * what still has to hold is the second half — a save that reads no text must not write the
+     * open page's text away. [seedStarterText] puts the body there before the view model opens it.
      */
     @Test
     fun theSeededPageIsNotBlankedByASaveThatTouchesNoText() = runTest(dispatcher) {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!
         assertTrue(
-            "the view model opened the seeded page before its content was written",
+            "the view model opened the page without its stored content",
             vm.initialBlocksFor(vm.uiState.value.outlines.first().id).any { it.text.isNotBlank() },
         )
 
@@ -312,7 +363,7 @@ class NotesViewModelTest {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!
 
-        // First-run seeding replaces the page's initial empty body, which gives this test an older
+        // [seedStarterText] replaces the page's initial empty body, which gives this test an older
         // checkpoint to restore without manufacturing repository state behind the ViewModel.
         vm.loadVersionHistory()
         advanceUntilIdle()

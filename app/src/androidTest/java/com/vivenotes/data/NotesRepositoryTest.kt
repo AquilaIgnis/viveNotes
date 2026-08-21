@@ -476,8 +476,14 @@ class NotesRepositoryTest {
         )
     }
 
+    /**
+     * The fixture is no longer part of a real first launch — `NotesApplication` passes no
+     * `starterInkPage`, so an install seeds one empty Welcome page. It stays a seedable fixture for
+     * the recognition suites, which need real persisted ink with its erases and lasso moves intact,
+     * and this is what guards that path.
+     */
     @Test
-    fun aFreshInstallSeedsTheBundledTabletInkAsPageTwo() = runBlocking {
+    fun aSeededStarterInkFixtureLandsAsPageTwoWithItsOperations() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val fixture = StarterInkPageFixture.load(context)
         repository = NotesRepository(db, starterInkPage = fixture)

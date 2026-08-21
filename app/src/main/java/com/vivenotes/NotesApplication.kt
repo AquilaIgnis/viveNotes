@@ -13,7 +13,6 @@ import com.vivenotes.data.InkTextIndexer
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.PenSettingsStore
-import com.vivenotes.data.StarterInkPageFixture
 import com.vivenotes.data.VideoThumbnailStore
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
@@ -37,12 +36,15 @@ class NotesApplication : Application() {
 
     val database: NotesDatabase by lazy { NotesDatabase.create(this) }
     val databaseBackups: DatabaseBackupManager by lazy { DatabaseBackupManager(this, database) }
-    val repository: NotesRepository by lazy {
-        NotesRepository(
-            database,
-            starterInkPage = StarterInkPageFixture.load(this),
-        )
-    }
+    /**
+     * No `starterInkPage`: a fresh install seeds one empty Welcome page and nothing else.
+     *
+     * The bundled `Recognition Test` ink is still an asset and `StarterInkPageFixture` still loads
+     * it — the recognition suites construct their own repository with it — but shipping it as page
+     * two of everyone's notebook made the first thing the owner saw a page of someone else's
+     * handwriting.
+     */
+    val repository: NotesRepository by lazy { NotesRepository(database) }
     val attachments: AttachmentStore by lazy { AttachmentStore(this, database) }
 
     /**
