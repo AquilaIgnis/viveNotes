@@ -50,9 +50,11 @@ android {
 
     buildTypes {
         release {
-            optimization {
-                enable = false
-            }
+            // AGP 9.2 still uses the legacy switches; AGP 9.3+ can replace these with
+            // `optimization { enable = true }`. Rules in src/main/keepRules are merged by AGP.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
     }
     compileOptions {
