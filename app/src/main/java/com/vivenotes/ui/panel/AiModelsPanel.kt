@@ -68,7 +68,7 @@ fun ColumnScope.AiModelsPanelContent(
         ModelCard(
             name = "PP-OCRv5 Mobile",
             purpose = "Handwriting and pictures to searchable text",
-            size = "12.7 MB · included with viveNotes",
+            size = "12.7 MB · included with ViveNotes",
             state = state.handwritingText,
             modifier = Modifier.testTag(AiPanelTags.TEXT_MODEL),
         )

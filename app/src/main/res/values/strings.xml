@@ -1,13 +1,13 @@
 <resources>
-    <string name="app_name">viveNotes</string>
+    <string name="app_name">ViveNotes</string>
     <string name="account">Account</string>
     <string name="navigate_back">Back</string>
     <string name="account_title">Your notes, wherever you write</string>
-    <string name="account_supporting_text">Sign in to sync your notebooks across devices, or connect viveNotes to a server you control.</string>
+    <string name="account_supporting_text">Sign in to sync your notebooks across devices, or connect ViveNotes to a server you control.</string>
     <string name="account_log_in">Log in</string>
     <string name="account_sign_up">Sign up</string>
     <string name="account_self_host">Self host</string>
-    <string name="account_self_host_description">Connect to your own viveNotes server.</string>
+    <string name="account_self_host_description">Connect to your own ViveNotes server.</string>
     <string name="account_server_url">Server URL</string>
     <string name="account_server_url_example">https://notes.example.com</string>
     <string name="account_email">Email</string>
@@ -35,7 +35,7 @@
     <string name="account_sync_error_local">The local sync queue could not be read. The notes themselves are still stored locally.</string>
     <string name="account_sync_error_large">One local hierarchy change is larger than the server accepts.</string>
     <string name="account_sync_error_malformed">The server rejected one local hierarchy change as malformed.</string>
-    <string name="account_sync_error_unsupported">This account holds changes a newer version of the app wrote. Update viveNotes to keep syncing.</string>
+    <string name="account_sync_error_unsupported">This account holds changes a newer version of the app wrote. Update ViveNotes to keep syncing.</string>
     <string name="account_sync_error_parent">A section or page could not be sent because its parent is missing.</string>
     <string name="account_disconnect_failed">The device could not be revoked. Its token was kept so you can try again.</string>
     <string name="account_disconnecting">Revoking this device</string>
@@ -45,7 +45,7 @@
         Says what cannot be undone rather than "are you sure": the token is not recoverable, and the
         device row it belongs to outlives it on the server until somebody removes it.
     -->
-    <string name="account_disconnect_body">The server will revoke this device, then viveNotes will forget its token. Notes already on this device stay here.</string>
+    <string name="account_disconnect_body">The server will revoke this device, then ViveNotes will forget its token. Notes already on this device stay here.</string>
     <string name="account_disconnect_cancel">Cancel</string>
     <!--
         One message per ConnectFailure. Each names what to change, because the person reading it is
@@ -57,7 +57,7 @@
     <string name="account_error_request">The server would not accept those details. Check the email address, and that the password is at least 8 characters.</string>
     <string name="account_error_too_large">Those details are longer than the server accepts.</string>
     <string name="account_error_server">The server could not complete the request. Check its logs, then try again.</string>
-    <string name="account_error_not_vive">Something answered at that address, but it is not a viveNotes server.</string>
+    <string name="account_error_not_vive">Something answered at that address, but it is not a ViveNotes server.</string>
     <string name="account_error_revoked">This device\'s access was revoked on the server, so it has been disconnected. Sign in again to register it.</string>
     <string name="account_error_not_stored">This device registered with the server, but its token could not be saved, so it cannot be used. Free some storage and connect again — the unused device can be removed from the server\'s dashboard.</string>
     <!--

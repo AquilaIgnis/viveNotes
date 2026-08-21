@@ -799,7 +799,7 @@ class SyncServerClient(
      * handles authentication itself, and on the JVM implementation it consumes a 401's body while
      * looking for a challenge it can answer, leaving `getErrorStream()` null. Android's
      * implementation is OkHttp-backed and hands the body over, so without this the *same* wrong
-     * password would report "not a viveNotes server" in unit tests and "credentials rejected" on
+     * password would report "not a ViveNotes server" in unit tests and "credentials rejected" on
      * device. Reading the status is what makes the two agree.
      */
     private fun failureFor(status: Int, payload: String): ConnectFailure {
@@ -870,8 +870,16 @@ class SyncServerClient(
         const val MAX_DEVICE_NAME = 128
         const val MAX_PLATFORM = 64
 
-        /** `name` is required and must be non-empty after trimming. */
-        const val FALLBACK_DEVICE_NAME = "viveNotes"
+        /**
+         * `name` is required and must be non-empty after trimming.
+         *
+         * Spelt as the product is spelt to the user (`R.string.app_name`), because that is where it
+         * is read: the account screen shows it back as "Registered as ViveNotes", and it names the
+         * row in the server's own device list. It is a literal rather than a string resource on
+         * purpose — this file is deliberately Android-free so `app/src/test` can drive it against a
+         * real loopback server, and reaching for a `Context` here would end that.
+         */
+        const val FALLBACK_DEVICE_NAME = "ViveNotes"
     }
 }
 

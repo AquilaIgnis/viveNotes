@@ -47,7 +47,7 @@ data class SyncAccount(
  * replacement is not settled; what it bought on a device with file-based encryption and a lock
  * screen was protection against another app reading the file, which app-private storage already
  * gives. The credential's real defence is that it is revocable: `DELETE /v1/devices/{id}` from any
- * other device, or the admin dashboard, kills it. Revisit if viveNotes ever holds something that
+ * other device, or the admin dashboard, kills it. Revisit if ViveNotes ever holds something that
  * cannot be revoked.
  *
  * One JSON blob rather than five keys, for the reason [com.vivenotes.data.PenSettingsStore] uses

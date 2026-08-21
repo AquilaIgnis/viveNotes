@@ -117,7 +117,7 @@ class SyncServerClientTest {
         val sent = Json.parseToJsonElement(requestBody.orEmpty()).jsonObject
         // `name` is required and must be non-empty after trimming, so an emulator image with a
         // blank Build.MODEL must not produce a 400.
-        assertEquals("viveNotes", sent.getValue("name").jsonPrimitive.content)
+        assertEquals("ViveNotes", sent.getValue("name").jsonPrimitive.content)
     }
 
     /**

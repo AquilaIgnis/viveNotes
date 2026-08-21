@@ -125,14 +125,6 @@ android {
             // Applies to the androidTest APK's own R8 run, which only happens under [testRelease];
             // inert otherwise, since a debug test APK is not minified.
             testProguardFiles("proguard-rules-androidTest.pro")
-            // The shipping release is deliberately left **unsigned** — it is signed by hand with the
-            // real key, which lives outside this repository. Under [testRelease] it has to be
-            // signed with something, because an unsigned APK cannot be installed and a test APK may
-            // only instrument a package carrying its own certificate. The ordinary debug keystore
-            // lets this replace a debug-signed emulator build in place. It deliberately cannot
-            // replace a physical tablet's production-signed APK; never uninstall that APK merely to
-            // make the test certificate fit, because doing so wipes its database and downloaded
-            // model.
             if (testRelease) {
                 signingConfig = signingConfigs.getByName("debug")
                 // Test infrastructure the app APK has to retain for the test APK to resolve it.
