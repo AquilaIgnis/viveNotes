@@ -1714,12 +1714,14 @@ class NotesViewModelTest {
             vm.deleteNotebook(notebookId)
             advanceUntilIdle()
 
-            val deletion = notice.await()
-            assertEquals(DeletedItemKind.Notebook, deletion.key.kind)
-            assertEquals(notebookId, deletion.key.id)
+            // Non-null because the notebook holds the seeded Welcome page: a delete that throws
+            // something away is recoverable and says so by carrying a key — `NotesRepository.flush`.
+            val key = notice.await().key!!
+            assertEquals(DeletedItemKind.Notebook, key.kind)
+            assertEquals(notebookId, key.id)
             assertEquals(listOf(notebookId), vm.deletedItems.value.items.map { it.key.id })
 
-            vm.restoreDeletedItem(deletion.key)
+            vm.restoreDeletedItem(key)
             advanceUntilIdle()
 
             assertTrue(vm.deletedItems.value.items.isEmpty())
@@ -1805,6 +1807,41 @@ class NotesViewModelTest {
         assertEquals(before.pages + 1, after.pages)
     }
 
+    /**
+     * What the two delete confirmations read the recovery sentence off, and the only part of that
+     * wording a test can reach: nothing composes `NotesApp` itself. A blank notebook is not kept in
+     * Deleted Items, so a dialog promising it would be is the last thing the user reads before
+     * agreeing. `memory/blankFlushPlan.md`.
+     */
+    @Test
+    fun theDeleteConfirmationsAreToldWhetherTheyAreAboutToFlush() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val written = vm.uiState.value.tree.single().notebook.id
+        val emptyNotebook = repository.createNotebook("Nothing in it")
+        val emptySection = repository.createSection(emptyNotebook, "New Section")
+        advanceUntilIdle()
+
+        assertTrue(vm.notebookContents(emptyNotebook).blank)
+        assertTrue(vm.sectionContents(emptySection).blank)
+        assertFalse("the seeded notebook has a written page in it", vm.notebookContents(written).blank)
+    }
+
+    /** A flush has nothing to put back, so the snackbar it raises carries no key to put it back with. */
+    @Test
+    fun flushingSomethingBlankAnnouncesItWithNoUndo() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val notebookId = repository.createNotebook("Nothing in it")
+        repository.createSection(notebookId, "New Section")
+        advanceUntilIdle()
+        val notice = async { vm.deletionNotices.first() }
+
+        vm.deleteNotebook(notebookId)
+        advanceUntilIdle()
+
+        assertNull(notice.await().key)
+        assertTrue(vm.deletedItems.value.items.isEmpty())
+    }
+
     @Test
     fun deletingAndRestoringTheOpenPageKeepsEditsStillInsideTheAutosaveWindow() =
         runTest(dispatcher) {
@@ -1817,12 +1854,13 @@ class NotesViewModelTest {
             vm.deletePage(pageId)
             advanceUntilIdle()
 
-            val deletion = notice.await()
-            assertEquals(pageId, deletion.key.id)
-            assertEquals(DeletedItemKind.Page, deletion.key.kind)
+            // Typed on immediately before the delete, so it is not blank and is recoverable.
+            val key = notice.await().key!!
+            assertEquals(pageId, key.id)
+            assertEquals(DeletedItemKind.Page, key.kind)
             assertEquals(listOf(pageId), vm.deletedItems.value.items.map { it.key.id })
 
-            vm.restoreDeletedItem(deletion.key)
+            vm.restoreDeletedItem(key)
             advanceUntilIdle()
 
             assertTrue(vm.deletedItems.value.items.isEmpty())

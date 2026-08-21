@@ -52,6 +52,7 @@ import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.DeletedItem
 import com.vivenotes.data.DeletedItemKey
 import com.vivenotes.data.DeletedItemKind
+import com.vivenotes.data.DeletionOutcome
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
@@ -383,9 +384,14 @@ data class DeletedItemsState(
     val error: String? = null,
 )
 
-/** One completed delete offered immediately as a snackbar Undo convenience. */
+/**
+ * One completed delete, announced as a snackbar.
+ *
+ * [key] is null when the delete was a flush: it held nothing, so nothing was kept and there is no
+ * row left to put back. The snackbar shows no Undo for one — `memory/blankFlushPlan.md`.
+ */
 data class DeletionNotice(
-    val key: DeletedItemKey,
+    val key: DeletedItemKey?,
     val message: String,
 )
 
@@ -413,6 +419,21 @@ data class NotebookTransferState(
 data class NotebookContents(
     val sections: Int,
     val pages: Int,
+    /**
+     * Whether deleting it would flush it rather than tombstone it —
+     * `NotesRepository.notebookIsBlank`.
+     *
+     * Read for the confirmation's wording and nothing else: the decision is made again inside the
+     * delete, against the database rather than against a snapshot a dialog has been holding while
+     * the user thought about it.
+     */
+    val blank: Boolean = false,
+)
+
+/** The same two questions for a section's delete confirmation. */
+data class SectionContents(
+    val pages: Int,
+    val blank: Boolean = false,
 )
 
 data class NotesUiState(
@@ -3770,7 +3791,10 @@ class NotesViewModel(
     }
 
     /** For the delete confirmation, which says how many pages go with the section. */
-    suspend fun pageCount(sectionId: String): Int = repository.pageCount(sectionId)
+    suspend fun sectionContents(sectionId: String): SectionContents = SectionContents(
+        pages = repository.pageCount(sectionId),
+        blank = repository.sectionIsBlank(sectionId),
+    )
 
     /**
      * What a notebook would take with it, for its delete confirmation.
@@ -3781,6 +3805,7 @@ class NotesViewModel(
     suspend fun notebookContents(notebookId: String): NotebookContents = NotebookContents(
         sections = repository.sectionsInNotebook(notebookId).size,
         pages = repository.pagesInNotebook(notebookId).size,
+        blank = repository.notebookIsBlank(notebookId),
     )
 
     fun deleteSection(sectionId: String) {
@@ -3791,11 +3816,13 @@ class NotesViewModel(
             .orEmpty()
         viewModelScope.launch {
             if (selectedSection.value == sectionId) persist()
-            repository.deleteSection(sectionId)
+            val outcome = repository.deleteSection(sectionId)
             deletionNoticeChannel.send(
-                DeletionNotice(
+                noticeFor(
+                    outcome = outcome,
                     key = DeletedItemKey(sectionId, DeletedItemKind.Section),
-                    message = "${sectionName.ifBlank { "Section" }} moved to Deleted items.",
+                    name = sectionName.ifBlank { "Section" },
+                    subject = "section",
                 ),
             )
             if (selectedSection.value == sectionId) {
@@ -3828,11 +3855,13 @@ class NotesViewModel(
                 .map { it.id }
                 .toSet()
             if (selectedSection.value in owned) persist()
-            repository.deleteNotebook(notebookId)
+            val outcome = repository.deleteNotebook(notebookId)
             deletionNoticeChannel.send(
-                DeletionNotice(
+                noticeFor(
+                    outcome = outcome,
                     key = DeletedItemKey(notebookId, DeletedItemKind.Notebook),
-                    message = "${notebookName.ifBlank { "Notebook" }} moved to Deleted items.",
+                    name = notebookName.ifBlank { "Notebook" },
+                    subject = "notebook",
                 ),
             )
             if (selectedSection.value in owned) {
@@ -3909,14 +3938,35 @@ class NotesViewModel(
             .ifBlank { "Untitled page" }
         viewModelScope.launch {
             if (_uiState.value.selectedPageId == pageId) persist()
-            repository.deletePage(pageId)
+            val outcome = repository.deletePage(pageId)
             deletionNoticeChannel.send(
-                DeletionNotice(
+                noticeFor(
+                    outcome = outcome,
                     key = DeletedItemKey(pageId, DeletedItemKind.Page),
-                    message = "$pageName moved to Deleted items.",
+                    name = pageName,
+                    subject = "page",
                 ),
             )
         }
+    }
+
+    /**
+     * What to say about a delete that has already happened.
+     *
+     * A flush gets no key, so the snackbar offers no Undo — there is nothing left to restore, and a
+     * button that silently fails is worse than no button. It says so in words as well: "deleted for
+     * good" is the only warning the user gets that this one did not go to Deleted Items, and it is
+     * given after the fact rather than in a second confirmation dialog because what was thrown away
+     * was, by construction, nothing. `memory/blankFlushPlan.md`.
+     */
+    private fun noticeFor(
+        outcome: DeletionOutcome,
+        key: DeletedItemKey,
+        name: String,
+        subject: String,
+    ): DeletionNotice = when (outcome) {
+        DeletionOutcome.Tombstoned -> DeletionNotice(key, "$name moved to Deleted items.")
+        DeletionOutcome.Flushed -> DeletionNotice(null, "Empty $subject deleted for good.")
     }
 
     /** Restores one item from either the durable pane or a transient snackbar action. */

@@ -31,6 +31,7 @@ import com.vivenotes.model.DocumentCodecs
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
 import com.vivenotes.model.PageStyle
+import com.vivenotes.model.isBlank
 import com.vivenotes.model.migrated
 import com.vivenotes.model.TextDocumentCodec
 import com.vivenotes.model.newId
@@ -56,6 +57,20 @@ sealed interface PageLoad {
      * or exported; callers must not overwrite the page while in this state.
      */
     data class Unreadable(val rawJson: String, val cause: Throwable) : PageLoad
+}
+
+/**
+ * What a delete did with the row it was given — `memory/blankFlushPlan.md`.
+ *
+ * The distinction is the user's, not the database's: one of these can be taken back and the other
+ * never happened as far as anything downstream is concerned.
+ */
+enum class DeletionOutcome {
+    /** Tombstoned: listed in Deleted Items for the retention window, and pushed as a tombstone. */
+    Tombstoned,
+
+    /** Held nothing, so nothing was kept. The rows are gone, and there is nothing to restore. */
+    Flushed,
 }
 
 /** Direct tombstone rows removed by one maintenance transaction; cascaded child counts are omitted. */
@@ -125,9 +140,20 @@ class NotesRepository(
      *
      * Room invalidates this flow when any hierarchy table changes, so the recovery pane survives
      * process death and stays current without a UI-owned refresh protocol.
+     *
+     * **Only tombstones still inside the recovery window.** The pane tells the user that recovery
+     * lasts [DELETION_RETENTION_DAYS] days, and an expired row is one the next purge removes — it is
+     * listed today and gone tomorrow with nothing having happened in between, which is worse than
+     * not listing it. It is also what makes a flush invisible without a marker of its own: a flushed
+     * row is a tombstone written already expired. `memory/blankFlushPlan.md`.
+     *
+     * The cutoff is read per emission rather than per collector. A row that expires while the pane
+     * is open therefore stays on screen until something else changes a hierarchy table — which is
+     * the same staleness the purge itself has, since it runs daily and not at the instant of expiry.
      */
     fun observeDeletedItems(): Flow<List<DeletedItem>> = deletionRecovery.observeRoots().map { rows ->
-        rows.map { row ->
+        val recoverableSince = clock() - DELETION_RETENTION_MILLIS
+        rows.filter { it.deletedAt > recoverableSince }.map { row ->
             DeletedItem(
                 key = DeletedItemKey(row.id, DeletedItemKind.valueOf(row.kind)),
                 name = row.name,
@@ -189,7 +215,15 @@ class NotesRepository(
                 notebooks = deletionPurge.expiredNotebooks(cutoff),
                 sections = deletionPurge.expiredSections(cutoff),
                 pages = deletionPurge.expiredPages(cutoff),
-            )
+            ).also {
+                // In the same transaction as the deletes, for the reason `HierarchySync.evictToCloud`
+                // does it: the six statements above are guarded against removing a row whose *own*
+                // generation is queued, but nothing guards what they cascade. An expired page takes
+                // its `page_content` with it, and a `pageContent` generation still queued for that
+                // body would answer the next push with "dirty page content disappeared" and fail
+                // every push from then on.
+                sync.pruneOrphanedOutbox()
+            }
         }
     }
 
@@ -312,9 +346,23 @@ class NotesRepository(
     suspend fun setNotebookExpanded(id: String, expanded: Boolean) =
         notebooks.setExpanded(id, expanded)
 
-    suspend fun deleteNotebook(id: String) {
+    /**
+     * Tombstones a notebook, or flushes it if it never held anything.
+     *
+     * See [flush] for what the second answer means and [notebookIsBlank] for when it is given. The
+     * caller has to look at the outcome: a flush cannot be undone, so offering an Undo for one is
+     * offering a button that does nothing.
+     */
+    suspend fun deleteNotebook(id: String): DeletionOutcome {
         clearReplaceableStarter()
-        notebooks.softDelete(id, clock())
+        // Deciding and acting in one transaction, because Room serializes transactions against each
+        // other: a pull writing a page into this notebook cannot land between the two and turn a
+        // correct flush into a delete of something that now holds content.
+        return db.withTransaction {
+            if (notebookIsBlank(id)) return@withTransaction flush(DeletedItemKind.Notebook, id)
+            notebooks.softDelete(id, clock())
+            DeletionOutcome.Tombstoned
+        }
     }
 
     /**
@@ -366,9 +414,14 @@ class NotesRepository(
         sections.rename(id, name, clock())
     }
 
-    suspend fun deleteSection(id: String) {
+    /** Tombstones a section, or flushes an empty one — see [deleteNotebook] and [flush]. */
+    suspend fun deleteSection(id: String): DeletionOutcome {
         clearReplaceableStarter()
-        sections.softDelete(id, clock())
+        return db.withTransaction {
+            if (sectionIsBlank(id)) return@withTransaction flush(DeletedItemKind.Section, id)
+            sections.softDelete(id, clock())
+            DeletionOutcome.Tombstoned
+        }
     }
 
     /** How much a section takes with it when deleted — what the confirmation is worth reading for. */
@@ -416,9 +469,14 @@ class NotesRepository(
         pages.rename(id, title, clock())
     }
 
-    suspend fun deletePage(id: String) {
+    /** Tombstones a page, or flushes one that was never written on — see [deleteNotebook], [flush]. */
+    suspend fun deletePage(id: String): DeletionOutcome {
         clearReplaceableStarter()
-        pages.softDelete(id, clock())
+        return db.withTransaction {
+            if (pageIsBlank(id)) return@withTransaction flush(DeletedItemKind.Page, id)
+            pages.softDelete(id, clock())
+            DeletionOutcome.Tombstoned
+        }
     }
 
     /**
@@ -466,6 +524,164 @@ class NotesRepository(
             if (sortIndex(row) != index) write(id(row), index)
         }
     }
+
+    // --- flushing what was never written ------------------------------------------------------
+    //
+    // `memory/blankFlushPlan.md`. Making a notebook makes a section; making a section makes a page.
+    // Somebody who makes one of those, looks at it and deletes it has produced nothing, and a week
+    // of it in Deleted Items, a push to the server and a copy of it on every other device are all
+    // answers to a question nobody asked.
+
+    /**
+     * Whether deleting this notebook would throw nothing away.
+     *
+     * Answered from the pages, because that is where content lives: a section holds a name, and a
+     * notebook of five carefully named empty sections is still a notebook of nothing. Tombstoned
+     * pages count too — see [pagesAreBlank].
+     *
+     * **A closed or cloud-only notebook is never blank**, whatever it holds. A cloud-only one has no
+     * bodies, no ink and no versions *on this device* while the server holds all of them, so it
+     * would look emptier than anything else in the database; and the server stores a delete of a
+     * closed notebook as a live cloud-only row rather than a tombstone (`docs/openapi.yaml`,
+     * "Deleting a closed notebook keeps it"), so a device that flushed its rows would meet the
+     * notebook again on its next pull with nothing left to draw it from.
+     */
+    suspend fun notebookIsBlank(id: String): Boolean {
+        val notebook = notebooks.byId(id) ?: return false
+        if (!notebook.holdsItsOwnContents) return false
+        return pagesAreBlank(pages.allInNotebook(id))
+    }
+
+    /** Whether deleting this section would throw nothing away — see [notebookIsBlank]. */
+    suspend fun sectionIsBlank(id: String): Boolean {
+        val section = sections.byId(id) ?: return false
+        val notebook = notebooks.byId(section.notebookId) ?: return false
+        if (!notebook.holdsItsOwnContents) return false
+        return pagesAreBlank(pages.allInSection(id))
+    }
+
+    /** Whether deleting this page would throw nothing away — see [notebookIsBlank]. */
+    suspend fun pageIsBlank(id: String): Boolean {
+        val page = pages.byId(id) ?: return false
+        val section = sections.byId(page.sectionId) ?: return false
+        val notebook = notebooks.byId(section.notebookId) ?: return false
+        if (!notebook.holdsItsOwnContents) return false
+        return pagesAreBlank(listOf(page))
+    }
+
+    private val NotebookEntity.holdsItsOwnContents: Boolean
+        get() = closedAt == null && cloudOnlyAt == null
+
+    /**
+     * Whether every one of these pages is empty of everything worth keeping.
+     *
+     * Tombstones are included by every caller on purpose: a deleted page with text on it is still
+     * restorable from Deleted Items, and flushing the section around it would take it away without
+     * ever naming it.
+     *
+     * The four tests, and why each is the one it is:
+     * - **Title.** Typed by a person, and the only content a page carries outside its body.
+     * - **Body.** Decoded and asked [com.vivenotes.model.isBlank], not matched against
+     *   `pages.preview`: the preview is the document's first line of *text*, so a page holding one
+     *   photograph has an empty one. A body that will not decode is never blank — unreadable is not
+     *   empty, and `PageLoad.Unreadable` exists precisely so that such a page is never overwritten.
+     *   A page with no `page_content` row at all is blank, which is what the missing row means for a
+     *   page that has never been saved.
+     * - **Ink**, tombstones included. An erased stroke is still ink somebody drew, and the erase
+     *   that removed it can be undone.
+     * - **Versions.** A page with a history has been written on, whatever it says now. This is the
+     *   blunt end of the rule and it stays blunt: the *first* edit of a page checkpoints the empty
+     *   body it replaced, so a page typed on once and emptied again keeps a revision holding nothing
+     *   and will never be flushed. Keeping it costs a row. Guessing the other way loses version
+     *   history somebody could still have opened.
+     */
+    private suspend fun pagesAreBlank(rows: List<PageEntity>): Boolean {
+        if (rows.any { it.title.isNotBlank() }) return false
+        return rows.map { it.id }.chunked(SQLITE_BIND_CHUNK).all { chunk ->
+            ink.countForPages(chunk) == 0 &&
+                revisions.countForPages(chunk) == 0 &&
+                contents.byIds(chunk).all { row ->
+                    (decodeDoc(row) as? PageLoad.Loaded)?.doc?.isBlank() == true
+                }
+        }
+    }
+
+    /**
+     * Deletes something blank without keeping any of it.
+     *
+     * The tombstone is written **already expired** — `deletedAt` a full retention window in the
+     * past, `updatedAt` at now — and that one number is the whole mechanism. Nothing had to be
+     * taught what a flush is: [observeDeletedItems] lists tombstones inside the window and so never
+     * sees it, [purgeExpiredDeletions] collects tombstones outside the window and so takes it on the
+     * first run, which happens here before this function returns; and the push carries the same
+     * backdated stamp through the ordinary protocol, so the other devices apply a delete that is
+     * expired when it lands and flush it in turn. No new kind, no marker table, no migration.
+     *
+     * **What the server has never heard of, it is never told.** The entity's own queued generation
+     * is dropped when there is no `sync_entity_states` row for it *and* the durable pending batch
+     * does not name it — the second half because a batch already serialized will be re-sent byte for
+     * byte after a lost response, and a create that lands on the server with no delete queued behind
+     * it is a notebook that comes back on the next pull. Both reads and the write sit in this
+     * transaction, and `HierarchySync.loadOrCreatePendingBatch` builds a batch inside one of its
+     * own, so SQLite's single writer settles the race in whichever direction it happens: either the
+     * batch exists and is seen, or it is built after the row has already gone from the outbox.
+     *
+     * The subtree below needs nothing pruned by name. The purge removes the flushed row, foreign
+     * keys cascade its sections, pages, bodies, ink and versions away, and the
+     * `pruneOrphanedOutbox` in that same transaction drops whatever those rows had queued. A blank
+     * notebook whose creation was never pushed therefore reaches the server as nothing at all.
+     *
+     * When the server *has* acknowledged it, the tombstone stays queued and the purge steps over it
+     * — its outbox entry is the guard — so the rows survive until the delete has actually been
+     * delivered. It is invisible from this moment either way; the next flush, the next app start or
+     * the daily purge worker is what finally collects it.
+     */
+    private suspend fun flush(kind: DeletedItemKind, id: String): DeletionOutcome {
+        val now = clock()
+        val expiredAt = now - DELETION_RETENTION_MILLIS
+        db.withTransaction {
+            when (kind) {
+                DeletedItemKind.Notebook -> notebooks.flush(id, expiredAt, now)
+                DeletedItemKind.Section -> sections.flush(id, expiredAt, now)
+                DeletedItemKind.Page -> pages.flush(id, expiredAt, now)
+            }
+            if (!serverKnowsOf(kind, id)) sync.deleteOutbox(kind.syncKind, id)
+            // The same `now` the tombstone was backdated from, so `deletedAt <= cutoff` is exact
+            // rather than a race against the clock advancing between two calls.
+            purgeExpiredDeletions(now)
+        }
+        return DeletionOutcome.Flushed
+    }
+
+    /**
+     * Whether the server has already been told this entity exists, or is about to be.
+     *
+     * The pending batch is tested by substring rather than by decoding it. `HierarchySync`'s change
+     * model is private to it, and reaching into the sync layer from here to parse one field would
+     * invert the dependency for a question a `String.contains` answers: ids are UUIDs, so a false
+     * match is not a practical possibility, and a false match would only cost one pushed tombstone
+     * for something the server was going to be told about anyway.
+     */
+    private suspend fun serverKnowsOf(kind: DeletedItemKind, id: String): Boolean {
+        if (sync.knownEntityIds(kind.syncKind, listOf(id)).isNotEmpty()) return true
+        return localMetadata.value(PENDING_SYNC_BATCH_KEY)?.contains(id) == true
+    }
+
+    /**
+     * The wire name `HierarchySync.SyncKind` pushes this row under.
+     *
+     * Spelled out here rather than imported for the reason [serverKnowsOf] gives; `DeletionPurgeDao`
+     * writes the same three strings into its SQL for the same reason. Both these and
+     * [PENDING_SYNC_BATCH_KEY] are pinned to the sync layer's own spelling by behaviour rather than
+     * by a string comparison: `HierarchySyncTest` flushes against a real `HierarchySync` and a
+     * server, so a name that drifted would show up as a delete that never travelled.
+     */
+    private val DeletedItemKind.syncKind: String
+        get() = when (this) {
+            DeletedItemKind.Notebook -> "notebook"
+            DeletedItemKind.Section -> "section"
+            DeletedItemKind.Page -> "page"
+        }
 
     /**
      * Loads a page body.
@@ -928,6 +1144,12 @@ class NotesRepository(
         const val DELETION_RETENTION_MILLIS = DELETION_RETENTION_DAYS * 24L * 60L * 60L * 1_000L
 
         const val REPLACEABLE_STARTER_KEY = "replaceableStarterNotebookId"
+
+        /**
+         * `HierarchySync.PENDING_BATCH_KEY`, repeated rather than imported — see
+         * [NotesRepository.serverKnowsOf]. The two are asserted equal by the flush suite.
+         */
+        const val PENDING_SYNC_BATCH_KEY = "syncPendingHierarchyBatch"
         /** Coalesces the editor's 400 ms autosaves into useful checkpoints instead of near-duplicates. */
         const val REVISION_CHECKPOINT_INTERVAL_MS = 30_000L
         const val MAX_REVISIONS_PER_PAGE = 40

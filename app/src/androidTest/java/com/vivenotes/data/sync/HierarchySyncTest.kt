@@ -1112,6 +1112,78 @@ class HierarchySyncTest {
         createdAt = now,
     )
 
+    // --- deleting something blank -------------------------------------------------------------
+    //
+    // `memory/blankFlushPlan.md`. The local half is in `BlankFlushTest`; what is here is the half
+    // only a server can answer, and it is the half that can go wrong quietly: a delete that never
+    // travels leaves a notebook standing on the account for ever, and a create that travels after
+    // its delete was dropped comes back on the next pull.
+
+    @Test
+    fun aNotebookFlushedBeforeItsFirstPushIsNeverMentionedToTheServer() = runBlocking {
+        hierarchy.run(account())
+        val notebookId = repository.createNotebook("New Notebook")
+        repository.createSection(notebookId, "New Section")
+        assertTrue("nothing was queued to begin with", db.syncDao().outbox(64).isNotEmpty())
+
+        repository.deleteNotebook(notebookId)
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(0, result.summary.pushed)
+        assertTrue(server.pushes.isEmpty())
+        assertNull(server.current("notebook", notebookId))
+    }
+
+    /**
+     * The same notebook one sync later. The server has it, so the delete has to travel — and only
+     * once it has been acknowledged may the rows go, which is what the purge's outbox guard means.
+     */
+    @Test
+    fun aNotebookTheServerAlreadyHoldsIsFlushedByATombstoneAndThenCollected() = runBlocking {
+        val notebookId = repository.createNotebook("New Notebook")
+        val sectionId = repository.createSection(notebookId, "New Section")
+        hierarchy.run(account())
+        // `JsonNull`, not an absent key: every push writes the envelope whole.
+        assertEquals(JsonNull, server.current("notebook", notebookId)!!["deletedAt"])
+
+        repository.deleteNotebook(notebookId)
+        assertNotNull("the rows left before the delete was sent", db.notebookDao().byId(notebookId))
+
+        hierarchy.run(account())
+
+        assertNotNull(server.current("notebook", notebookId)!!.getValue("deletedAt").jsonPrimitive.long)
+        repository.purgeExpiredDeletions()
+        assertNull(db.notebookDao().byId(notebookId))
+        assertNull(db.sectionDao().byId(sectionId))
+        assertTrue("the queue outlived the rows", db.syncDao().outbox(64).isEmpty())
+    }
+
+    /**
+     * The race the flush is actually careful about: a batch already serialized is re-sent byte for
+     * byte after a lost response, so its rows are on their way to the server whatever this device
+     * decides next. Dropping the queued delete here would land the create with nothing behind it.
+     */
+    @Test
+    fun aFlushDoesNotDropTheDeleteOfSomethingAlreadyInAStrandedBatch() = runBlocking {
+        hierarchy.run(account())
+        val notebookId = repository.createNotebook("New Notebook")
+        server.failNextPush = ServerResult.Failed(ConnectFailure.Unreachable, retryable = true)
+        hierarchy.run(account())
+        assertNotNull(
+            "the batch should have been kept for a byte-identical retry",
+            db.localMetadataDao().value(NotesRepository.PENDING_SYNC_BATCH_KEY),
+        )
+
+        repository.deleteNotebook(notebookId)
+        hierarchy.run(account())
+        hierarchy.run(account())
+
+        assertNotNull(
+            "the server was left holding a notebook nothing would ever delete",
+            server.current("notebook", notebookId)!!.getValue("deletedAt").jsonPrimitive.long,
+        )
+    }
+
     private fun account() = SyncAccount(
         serverUrl = "http://unused",
         accountId = "account",
@@ -1125,6 +1197,9 @@ class HierarchySyncTest {
         private val log = mutableListOf<JsonObject>()
         val pushes = mutableListOf<List<JsonObject>>()
         var beforeFirstPush: (suspend () -> Unit)? = null
+
+        /** Consumed by the next push, so a test can leave a serialized batch stranded on disk. */
+        var failNextPush: ServerResult.Failed? = null
         private var cursor = 0L
 
         /** The account's blobs, by digest — the `blobs` table and the file behind each row. */
@@ -1194,6 +1269,10 @@ class HierarchySyncTest {
             beforeFirstPush?.also { callback ->
                 beforeFirstPush = null
                 callback()
+            }
+            failNextPush?.also { failure ->
+                failNextPush = null
+                return failure
             }
 
             val applied = mutableListOf<AppliedServerChange>()

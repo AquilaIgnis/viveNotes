@@ -52,6 +52,15 @@ interface SyncDao {
     @Query("DELETE FROM sync_entity_states WHERE kind = :kind AND entityId = :entityId")
     suspend fun deleteEntityState(kind: String, entityId: String)
 
+    /**
+     * Which of these ids the server has already acknowledged.
+     *
+     * Read before a flush drops queued work: an entity with a state row has been accepted by the
+     * server, so its delete has to travel or it stands there forever. `memory/blankFlushPlan.md`.
+     */
+    @Query("SELECT entityId FROM sync_entity_states WHERE kind = :kind AND entityId IN (:entityIds)")
+    suspend fun knownEntityIds(kind: String, entityIds: List<String>): List<String>
+
     @Query("DELETE FROM sync_outbox")
     suspend fun clearOutbox()
 
@@ -459,6 +468,19 @@ interface NotebookDao {
     @Query("UPDATE notebooks SET deletedAt = :now, updatedAt = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
 
+    /**
+     * A blank row's delete: the tombstone is written **already expired**.
+     *
+     * `deletedAt` one whole retention window in the past is what makes a flush need no marker of its
+     * own — Deleted Items lists tombstones inside the window and never sees it, the purge collects
+     * rows outside the window and takes it on its first run, and the push carries the same backdated
+     * stamp so every other device flushes it too. `updatedAt` stays at now, because the row really
+     * did change now and that is the number the server and the lists display.
+     * `memory/blankFlushPlan.md`.
+     */
+    @Query("UPDATE notebooks SET deletedAt = :expiredAt, updatedAt = :now WHERE id = :id")
+    suspend fun flush(id: String, expiredAt: Long, now: Long)
+
     @Query("SELECT COALESCE(MAX(sortIndex), -1) + 1 FROM notebooks")
     suspend fun nextSortIndex(): Int
 
@@ -494,6 +516,10 @@ interface SectionDao {
 
     @Query("UPDATE sections SET deletedAt = :now, updatedAt = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
+
+    /** A blank section's delete — see [NotebookDao.flush]. */
+    @Query("UPDATE sections SET deletedAt = :expiredAt, updatedAt = :now WHERE id = :id")
+    suspend fun flush(id: String, expiredAt: Long, now: Long)
 
     @Query("SELECT COALESCE(MAX(sortIndex), -1) + 1 FROM sections WHERE notebookId = :notebookId")
     suspend fun nextSortIndex(notebookId: String): Int
@@ -553,6 +579,10 @@ interface PageDao {
     @Query("UPDATE pages SET deletedAt = :now, updatedAt = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
 
+    /** A blank page's delete — see [NotebookDao.flush]. */
+    @Query("UPDATE pages SET deletedAt = :expiredAt, updatedAt = :now WHERE id = :id")
+    suspend fun flush(id: String, expiredAt: Long, now: Long)
+
     @Query("SELECT COALESCE(MAX(sortIndex), -1) + 1 FROM pages WHERE sectionId = :sectionId")
     suspend fun nextSortIndex(sectionId: String): Int
 
@@ -592,6 +622,16 @@ interface PageDao {
             "WHERE s.notebookId = :notebookId ORDER BY s.sortIndex, p.sortIndex",
     )
     suspend fun allInNotebook(notebookId: String): List<PageEntity>
+
+    /**
+     * Every page row of one section, tombstones included.
+     *
+     * The tombstones are the reason this is not [inSection]: deciding whether a section can be
+     * flushed means asking whether anything under it is still worth recovering, and a deleted page
+     * with text in it is exactly that. `memory/blankFlushPlan.md`.
+     */
+    @Query("SELECT * FROM pages WHERE sectionId = :sectionId ORDER BY sortIndex")
+    suspend fun allInSection(sectionId: String): List<PageEntity>
 }
 
 @Dao
@@ -663,6 +703,15 @@ interface PageRevisionDao {
 
     @Query("SELECT MAX(createdAt) FROM page_revisions WHERE pageId = :pageId")
     suspend fun newestTimestamp(pageId: String): Long?
+
+    /**
+     * How many saved versions these pages hold, for the blank test in `NotesRepository`.
+     *
+     * A count rather than a read of the payloads: they are gzipped, and the question is only whether
+     * a page has a history at all.
+     */
+    @Query("SELECT COUNT(*) FROM page_revisions WHERE pageId IN (:pageIds)")
+    suspend fun countForPages(pageIds: List<String>): Int
 
     /** Exact-content candidates used to keep restore toggles from cloning the same checkpoints. */
     @Query(

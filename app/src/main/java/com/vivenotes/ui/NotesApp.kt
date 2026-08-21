@@ -518,14 +518,17 @@ private fun NotesWorkspace(
     // burst of deletes replaces their transient message.
     LaunchedEffect(viewModel, snackbarHostState) {
         viewModel.deletionNotices.collectLatest { notice ->
+            // No key means the delete was a flush: it held nothing, so nothing was kept and there is
+            // nothing to put back. `memory/blankFlushPlan.md`.
             val result = snackbarHostState.showSnackbar(
                 message = notice.message,
-                actionLabel = "Undo",
+                actionLabel = notice.key?.let { "Undo" },
                 withDismissAction = true,
                 duration = SnackbarDuration.Long,
             )
-            if (result == SnackbarResult.ActionPerformed) {
-                viewModel.restoreDeletedItem(notice.key)
+            val key = notice.key
+            if (key != null && result == SnackbarResult.ActionPerformed) {
+                viewModel.restoreDeletedItem(key)
             }
         }
     }
@@ -535,9 +538,9 @@ private fun NotesWorkspace(
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
     var pendingSectionDelete by remember { mutableStateOf<SectionEntity?>(null) }
     /** Null until the count has been read, which is what the dialog's vaguer wording covers. */
-    var pendingSectionPages by remember { mutableStateOf<Int?>(null) }
+    var pendingSectionContents by remember { mutableStateOf<SectionContents?>(null) }
     LaunchedEffect(pendingSectionDelete) {
-        pendingSectionPages = pendingSectionDelete?.let { viewModel.pageCount(it.id) }
+        pendingSectionContents = pendingSectionDelete?.let { viewModel.sectionContents(it.id) }
     }
     var pendingNotebookDelete by remember { mutableStateOf<NotebookEntity?>(null) }
     var pendingNotebookClose by remember { mutableStateOf<NotebookEntity?>(null) }
@@ -1084,7 +1087,7 @@ private fun NotesWorkspace(
     pendingSectionDelete?.let { section ->
         DeleteSectionDialog(
             section = section,
-            pageCount = pendingSectionPages,
+            contents = pendingSectionContents,
             onDismiss = { pendingSectionDelete = null },
             onConfirm = {
                 viewModel.deleteSection(section.id)
@@ -1646,12 +1649,13 @@ private fun NameEntryDialog(
  *
  * The asymmetry is the point: a section takes every page in it out of reach in one tap, and the
  * count is the part worth reading before agreeing to it. The rows are only tombstoned and remain
- * available from the app-wide Deleted Items pane.
+ * available from the app-wide Deleted Items pane — unless the section holds nothing at all, which
+ * is deleted outright and has to say so instead. `memory/blankFlushPlan.md`.
  */
 @Composable
 private fun DeleteSectionDialog(
     section: SectionEntity,
-    pageCount: Int?,
+    contents: SectionContents?,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -1660,15 +1664,19 @@ private fun DeleteSectionDialog(
         title = { Text("Delete ${section.name}?") },
         text = {
             Text(
-                buildString {
-                    append(
-                        when (pageCount) {
-                            null, 0 -> "This section will be removed."
-                            1 -> "Its 1 page will go with it."
-                            else -> "Its $pageCount pages will go with it."
-                        },
-                    )
-                    append(" You can restore it later from Deleted Items.")
+                if (contents?.blank == true) {
+                    NOTHING_TO_KEEP
+                } else {
+                    buildString {
+                        append(
+                            when (contents?.pages) {
+                                null, 0 -> "This section will be removed."
+                                1 -> "Its 1 page will go with it."
+                                else -> "Its ${contents.pages} pages will go with it."
+                            },
+                        )
+                        append(" You can restore it later from Deleted Items.")
+                    }
                 },
             )
         },
@@ -1702,17 +1710,21 @@ private fun DeleteNotebookDialog(
         title = { Text("Delete ${notebook.name}?") },
         text = {
             Text(
-                buildString {
-                    append(
-                        when {
-                            contents == null || (contents.sections == 0 && contents.pages == 0) ->
-                                "This notebook will be removed."
-                            else ->
-                                "Its ${countOf(contents.sections, "section")} and " +
-                                    "${countOf(contents.pages, "page")} will go with it."
-                        },
-                    )
-                    append(" You can restore it later from Deleted Items.")
+                if (contents?.blank == true) {
+                    NOTHING_TO_KEEP
+                } else {
+                    buildString {
+                        append(
+                            when {
+                                contents == null || (contents.sections == 0 && contents.pages == 0) ->
+                                    "This notebook will be removed."
+                                else ->
+                                    "Its ${countOf(contents.sections, "section")} and " +
+                                        "${countOf(contents.pages, "page")} will go with it."
+                            },
+                        )
+                        append(" You can restore it later from Deleted Items.")
+                    }
                 },
             )
         },
@@ -1724,6 +1736,21 @@ private fun DeleteNotebookDialog(
         },
     )
 }
+
+/**
+ * What both delete confirmations say instead when there is nothing in the thing being deleted.
+ *
+ * A blank notebook or section is flushed rather than tombstoned, so the usual promise of Deleted
+ * Items would be a lie — and it is the last sentence somebody reads before pressing Delete, which
+ * makes it the only place the difference can still change their mind. It replaces the count as well
+ * as the promise: "its 2 pages will go with it" is true and useless when both pages are empty.
+ *
+ * A notebook whose contents have not been read yet keeps the ordinary wording, because a delete that
+ * turns out to be recoverable after a dialog said nothing about recovery disappoints nobody.
+ * `memory/blankFlushPlan.md`.
+ */
+private const val NOTHING_TO_KEEP =
+    "There is nothing in it, so it will be deleted for good rather than kept in Deleted Items."
 
 /**
  * Confirms closing the notebook the ribbon's File tab is pointed at.

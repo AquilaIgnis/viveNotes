@@ -886,3 +886,24 @@ fun PageDoc.plainText(): String = outlines
         }
     }
     .joinToString("\n")
+
+/**
+ * Whether this document holds nothing at all — `memory/blankFlushPlan.md`.
+ *
+ * Deleting a page that was never written on flushes it instead of tombstoning it, and this is the
+ * half of that decision the document can answer. Deliberately **not** `plainText().isBlank()`: a
+ * page holding one photograph, one shape or an empty table flattens to no text whatsoever, and
+ * discarding it because of that would be the one mistake this predicate must never make. Only a
+ * text container can be empty; every other kind of outline is content by existing.
+ *
+ * [PageDoc.empty] is blank, which is the point — it is exactly what `createPage` writes.
+ *
+ * The page's [PageStyle] is not consulted. Someone who set an untouched page to A4 and then deleted
+ * it chose a paper size for a page they threw away, and there is nothing in that worth keeping in a
+ * recovery list for a week.
+ */
+fun PageDoc.isBlank(): Boolean = outlines.all { outline ->
+    outline is Outline.Text && outline.blocks.all { block ->
+        block.runs.all { run -> run.plainText.isBlank() }
+    }
+}
