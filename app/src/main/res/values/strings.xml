@@ -77,7 +77,8 @@
     <string name="closed_notebook_contents">%1$d sections · %2$d pages</string>
     <string name="closed_notebook_open">Open</string>
     <string name="closed_notebook_move_to_cloud">Move to cloud</string>
-    <string name="closed_notebook_bring_back">Bring back</string>
+    <!-- Content description for the cloud-download icon button; the shelf shows no label there. -->
+    <string name="closed_notebook_bring_back">Bring back to this device</string>
     <!--
         One line per CloudArchiveResult that is worth reporting. Each says what to do next, because
         every one of them is recoverable by doing something.

@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -16,6 +17,7 @@ import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -149,6 +151,52 @@ class ClosedNotebooksScreenTest {
         compose.onNodeWithTag(ClosedNotebooksTags.busy("here")).assertDoesNotExist()
         compose.onNodeWithTag(ClosedNotebooksTags.moveToCloud("here")).performClick()
         assertEquals(listOf("here"), moved)
+    }
+
+    /**
+     * A running restore rings its button instead of replacing it.
+     *
+     * The distinction is the point of drawing the ring *around* the icon button: the thing that was
+     * pressed stays where it was pressed, so the row neither reflows nor loses the affordance under
+     * the pointer. It does go dead, like every other button on the shelf, while the sync mutex is
+     * held.
+     */
+    @Test
+    fun aRunningRestoreRingsItsDownloadButtonRatherThanReplacingIt() {
+        notebooks = listOf(closed("elsewhere", cloudOnly = true))
+        connected = true
+        busy = "elsewhere"
+        setScreen()
+
+        compose.onNodeWithTag(ClosedNotebooksTags.busy("elsewhere")).assertIsDisplayed()
+        compose.onNodeWithTag(ClosedNotebooksTags.bringBack("elsewhere")).assertIsDisplayed()
+        compose.onNodeWithTag(ClosedNotebooksTags.bringBack("elsewhere")).assertIsNotEnabled()
+
+        busy = null
+        compose.waitForIdle()
+        compose.onNodeWithTag(ClosedNotebooksTags.busy("elsewhere")).assertDoesNotExist()
+        compose.onNodeWithTag(ClosedNotebooksTags.bringBack("elsewhere")).performClick()
+        assertEquals(listOf("elsewhere"), broughtBack)
+    }
+
+    /**
+     * Open leads and Move to cloud follows.
+     *
+     * Order carries the meaning here — the shelf is usually opened to open something, and the
+     * irreversible-feeling action is the one further from the reading edge — so it is worth an
+     * assertion rather than being left to whoever next edits the row.
+     */
+    @Test
+    fun openLeadsAndMoveToCloudFollows() {
+        notebooks = listOf(closed("here", cloudOnly = false))
+        connected = true
+        setScreen()
+
+        val open = compose.onNodeWithTag(ClosedNotebooksTags.open("here"))
+            .getUnclippedBoundsInRoot()
+        val toCloud = compose.onNodeWithTag(ClosedNotebooksTags.moveToCloud("here"))
+            .getUnclippedBoundsInRoot()
+        assertTrue("Open should sit left of Move to cloud", open.left < toCloud.left)
     }
 
     /** A refusal has to be visible, and a success has nothing to say the list has not said. */

@@ -27,6 +27,7 @@ object MaterialSymbols {
     val Category: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_category)
     val Check: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_check)
     val Close: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_close)
+    val CloudDownload: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_cloud_download)
     val CloudOff: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_cloud_off)
     val ContentCopy: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_content_copy)
     val ContentCut: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_content_cut)
