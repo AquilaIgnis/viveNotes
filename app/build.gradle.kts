@@ -13,6 +13,50 @@ room {
     schemaDirectory("$projectDir/schemas")
 }
 
+/**
+ * Every ABI the project builds native code for.
+ *
+ * Declared here and merged into `defaultConfig`, and it has to live there. **Chaquopy reads
+ * `android.defaultConfig.ndk.abiFilters` plus product flavours and nothing else**
+ * (`PythonPlugin.getAbis`), and fails the build outright if the result is empty, so a build type
+ * naming its own would be invisible to it. Nor would that narrow anything: AGP's
+ * `MergedNdkConfig.append` calls `abiFilters.addAll(...)` for every contributor, so defaultConfig,
+ * flavours and build type are *unioned* — a build type can only ever add an ABI, never drop one.
+ */
+private val allAbis = listOf("arm64-v8a", "x86_64")
+
+/**
+ * ABIs the **release** APK keeps: arm64-v8a only, which is every device this ships to. Debug keeps
+ * all of [allAbis] so it still installs on the x86_64 emulator.
+ *
+ * Measured: the unsigned APK falls from 139,151,305 to 88,965,966 bytes, a 36.1% cut — nearly twice
+ * what enabling R8 was worth. x86_64's `libonnxruntime.so` was 33,975,544 of that on its own —
+ * native libraries are page-aligned rather than deflated under `extractNativeLibs=false`, so it cost
+ * every byte.
+ *
+ * Because `abiFilters` cannot subtract (see [allAbis]), the narrowing happens at packaging instead,
+ * which is the one place AGP exposes per variant. Three consequences worth knowing:
+ *
+ *  - **A release APK will not run on an x86_64 emulator**, and R8 runs only in release, so a
+ *    minification-only bug cannot be reproduced there by default. Build one that can with
+ *    `./gradlew assembleRelease -PreleaseAbis=arm64-v8a,x86_64`.
+ *  - **Chaquopy still emits its x86_64 assets** — `stdlib-x86_64.imy`, `requirements-x86_64.imy` and
+ *    `bootstrap-native/x86_64/`, 3,145,771 bytes — because its ABI set is per-project, not
+ *    per-variant, and assets are outside `packaging` anyway. They are inert: the matching `.so`
+ *    files are gone and the bootstrap resolves its ABI at runtime. Removing them would take either
+ *    an ABI product flavour, which renames every Gradle task documented in `CLAUDE.md` and in CI,
+ *    or deleting files out of another plugin's task output. Neither is worth 3.5% of the APK.
+ *  - `packageRelease` logs *"There are no .so files available to package in the APK for x86_64"* on
+ *    every release build: `abiFilters` still names the ABI, because Chaquopy needs it to, and the
+ *    packager is reporting that nothing survived for it. Benign.
+ */
+private val releaseAbis: List<String> =
+    (project.findProperty("releaseAbis") as String?)
+        ?.split(",")
+        ?.map(String::trim)
+        ?.filter(String::isNotEmpty)
+        ?: listOf("arm64-v8a")
+
 android {
     namespace = "com.vivenotes"
     // 37, because Compose 1.12 refuses to be compiled against anything older — see the material3
@@ -41,10 +85,11 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            // androidx.ink ships libink.so per ABI at roughly 1.2MB each. Shipping all four costs
-            // ~4.6MB in a single APK for architectures nothing here runs on; these two cover real
-            // devices and the emulator.
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            // androidx.ink ships libink.so per ABI at roughly 1.2MB each, ONNX Runtime's is 27-33MB,
+            // and Chaquopy adds a libpython with its own OpenSSL and SQLite. All four Android ABIs
+            // would be well over 100MB for architectures nothing here runs on; these two cover real
+            // devices and the emulator, and [releaseAbis] narrows what actually ships further still.
+            abiFilters += allAbis
         }
     }
 
@@ -71,6 +116,23 @@ android {
     }
 }
 
+/**
+ * Drops whatever [releaseAbis] leaves out of the release APK.
+ *
+ * `packaging.jniLibs.excludes` is the per-variant equivalent of `abiFilters`; the `android.packaging`
+ * DSL block is project-wide and would take x86_64 out of the debug APK as well. Patterns match the
+ * merger's own path space, which is `lib/<abi>/<file>.so` — see
+ * `build/intermediates/merged_native_libs/<variant>/.../out/lib/`, which holds all four Android ABIs
+ * because `abiFilters` is not applied until packaging. `MergeNativeLibsTask` applies these excludes
+ * before that, so the two never contradict each other.
+ */
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        variant.packaging.jniLibs.excludes.addAll(
+            (allAbis - releaseAbis.toSet()).map { abi -> "lib/$abi/**" }
+        )
+    }
+}
 /**
  * Which CPython builds the requirements venv.
  *
