@@ -31,7 +31,7 @@ and all AI features run entirely on-device.
         </a>
       </td>
       <td align="center">
-        <a href="#">
+        <a href="https://github.com/AquilaIgnis/viveNotes/releases/latest">
           <img src="repo/apk.png" height="80" alt="Download APK">
         </a>
       </td>
