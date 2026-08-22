@@ -1,6 +1,0 @@
-# ONNX Runtime's native bridge resolves these Java classes, constructors and fields by their
-# original names. The 1.27.0 Android AAR carries no consumer keep rules, so full-mode R8 otherwise
-# renames the Java side successfully and inference aborts in JNI at GetMethodID/FindClass time.
-# The whole bridge is only ~120 KiB of bytecode and this package-level boundary also covers output
-# types added by future ONNX Runtime updates.
--keep class ai.onnxruntime.** { *; }
