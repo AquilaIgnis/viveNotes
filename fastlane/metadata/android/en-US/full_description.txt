@@ -1,0 +1,5 @@
+A handwritten note-taking app built for students, combining the natural feel of pen and paper with the power
+of digital documents.
+
+All features are completely free, including cross-device sync. Your notes stay private: no data leaves your device,
+and all AI features run entirely on-device.
