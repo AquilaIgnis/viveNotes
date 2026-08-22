@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vive Notes — handwritten notes for students</title>
+    <meta
+      name="description"
+      content="A handwritten note-taking app for students. On-device handwriting and math recognition, free cross-device sync, and nothing leaves your device."
+    />
+    <meta name="theme-color" content="#101215" />
+    <link rel="icon" type="image/png" href="repo/favicon-64.png" />
+    <link rel="stylesheet" href="css/style.css" />
+    <meta property="og:title" content="Vive Notes" />
+    <meta
+      property="og:description"
+      content="Handwritten notes for students. On-device AI, free sync, nothing leaves your device."
+    />
+    <meta property="og:image" content="repo/g1.png" />
+    <meta property="og:type" content="website" />
+  </head>
+
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="topbar">
+      <a class="brand" href="#top">
+        <img src="repo/viveNotes-256.png" alt="" width="34" height="34" />
+        <span>Vive&thinsp;Notes</span>
+      </a>
+      <nav class="topnav">
+        <a href="#features">Features</a>
+        <a href="#math">Math</a>
+        <a href="#gallery">Gallery</a>
+        <a href="#roadmap">Roadmap</a>
+        <a class="ghost" href="https://github.com/AquilaIgnis/viveNotes"
+          >Source</a
+        >
+        <a class="cta" href="#download">Download</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <!-- ───────────────────────── hero ───────────────────────── -->
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">
+            <span class="dot"></span>Free · On-device · Local AI
+          </p>
+          <h1>
+            Feels like paper.<br /><span class="ink"
+              >Thinks like software.<svg
+                class="underline"
+                viewBox="0 0 420 22"
+                aria-hidden="true"
+                preserveAspectRatio="none"
+              >
+                <path d="M4 15C61 7 129 5 196 8c58 3 118 9 172 3" /></svg
+            ></span>
+          </h1>
+          <p class="lede">
+            A handwritten note-taking app built for students, combining the
+            natural feel of pen and paper with the power of digital documents.
+          </p>
+          <p class="lede muted">
+            Every feature is free, cross-device sync included. Your notes stay
+            private: no data leaves your device, and all AI runs on it.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#download">Get the APK</a>
+            <a
+              class="btn btn-quiet"
+              href="https://github.com/AquilaIgnis/viveNotes"
+              >View source</a
+            >
+          </div>
+          <ul class="specs">
+            <li><b>7&thinsp;ms</b><span>render at 10k&nbsp;strokes</span></li>
+            <li><b>0</b><span>network calls for AI</span></li>
+            <li><b>.vive</b><span>open export format</span></li>
+          </ul>
+        </div>
+
+        <figure class="hero-shot">
+          <img
+            src="repo/g1.png"
+            alt="Vive Notes editor with a Calculus notebook, page list, and handwritten integrals on grid paper"
+            width="2568"
+            height="1466"
+            fetchpriority="high"
+          />
+        </figure>
+      </section>
+
+      <!-- ───────────────────────── pillars ───────────────────────── -->
+      <section class="pillars" aria-label="Why Vive Notes">
+        <article>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 3 4 6.5v5c0 4.6 3.2 8.7 8 9.8 4.8-1.1 8-5.2 8-9.8v-5L12 3Z"
+            />
+            <path d="m8.6 12.2 2.4 2.4 4.4-4.6" />
+          </svg>
+          <h3>Nothing leaves the device</h3>
+          <p>
+            Notes, OCR, handwriting recognition and the math engine all run
+            locally. There is no telemetry and no account to make.
+          </p>
+        </article>
+        <article>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11a8 8 0 0 0-13.6-4.6L4 8.8" />
+            <path d="M4 4v5h5" />
+            <path d="M4 13a8 8 0 0 0 13.6 4.6L20 15.2" />
+            <path d="M20 20v-5h-5" />
+          </svg>
+          <h3>Sync you host yourself</h3>
+          <p>
+            Cross-device sync is free and always was. Point it at your own
+            <a href="https://github.com/AquilaIgnis/viveCServer">sync server</a>
+            and the data never touches anyone else's.
+          </p>
+        </article>
+        <article>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M3 17.5 14.4 6.1a2.3 2.3 0 0 1 3.3 0l.6.6a2.3 2.3 0 0 1 0 3.3L6.9 21.4 2.5 22l.5-4.5Z"
+            />
+            <path d="m13 7.5 3.5 3.5" />
+          </svg>
+          <h3>Built for a stylus</h3>
+          <p>
+            Pressure, smoothing, configurable pens, hardware keyboard shortcuts
+            and stylus button mappings — tuned on real tablets.
+          </p>
+        </article>
+      </section>
+
+      <!-- ───────────────────────── features ───────────────────────── -->
+      <section id="features" class="section">
+        <p class="kicker">Features</p>
+        <h2>Everything, and none of it upsold.</h2>
+
+        <div class="grid">
+          <article class="card">
+            <h3>Fuzzy notebook search</h3>
+            <p>
+              One query across typed text, tables, handwriting, and text found
+              inside images.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Handwriting &amp; formula recognition</h3>
+            <p>
+              On-device recognition with math solving, evaluation and graphing
+              built on top of it.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Ink that keeps up</h3>
+            <p>
+              7&thinsp;ms frames on pages carrying more than ten thousand
+              strokes.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Infinite free-form canvas</h3>
+            <p>Pages grow in any direction — no fixed sheet to run out of.</p>
+          </article>
+          <article class="card">
+            <h3>Rich-text editing</h3>
+            <p>
+              Headings, lists, checkboxes, styles, tables and images alongside
+              your ink.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Native LaTeX</h3>
+            <p>
+              Inline and free-form equations, rendered natively rather than as
+              images.
+            </p>
+          </article>
+          <article class="card">
+            <h3>On-device image OCR</h3>
+            <p>
+              Drop in a photo or a slide; its text becomes searchable like
+              everything else.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Custom paper</h3>
+            <p>Ruled, dotted, hexagonal, and grids at several sizes.</p>
+          </article>
+          <article class="card">
+            <h3>Snapshots &amp; revisions</h3>
+            <p>
+              The database snapshots itself automatically, and any revision can
+              be restored.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Open export format</h3>
+            <p>
+              Everything exports to <code>.vive</code>, a documented format you
+              can read yourself.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Keyboard &amp; stylus mapping</h3>
+            <p>
+              Hardware shortcuts, and stylus buttons bound to the tools you
+              actually use.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Free, all of it</h3>
+            <p>No subscription, no paid tier, no feature held back for one.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ───────────────────────── math showcase ───────────────────────── -->
+      <section id="math" class="section showcase">
+        <div class="showcase-copy">
+          <p class="kicker accent-orange">Math engine</p>
+          <h2>Write it by hand.<br />Get an answer back.</h2>
+          <p>
+            Lasso a handwritten expression and Vive Notes reads it into LaTeX,
+            then hands it to a full symbolic engine. Matrices, series, integrals
+            and equations all get the same treatment.
+          </p>
+          <ul class="ticks">
+            <li>Transpose, RREF, rank, inverse, eigenvalues and null space</li>
+            <li>Evaluate, solve, and test series convergence</li>
+            <li>Copy out the LaTeX, or copy the result</li>
+            <li>Powered on-device by SymPy through Chaquopy</li>
+          </ul>
+        </div>
+        <div class="showcase-shots">
+          <figure>
+            <img
+              src="repo/g8.jpeg"
+              alt="A handwritten infinite series recognized into LaTeX, with a convergence result reading Diverges"
+              width="1349"
+              height="1233"
+              loading="lazy"
+            />
+          </figure>
+          <figure>
+            <img
+              src="repo/g7.jpeg"
+              alt="A handwritten 2 by 2 matrix recognized into LaTeX with matrix actions and computed eigenvalues"
+              width="1140"
+              height="1567"
+              loading="lazy"
+            />
+          </figure>
+        </div>
+      </section>
+
+      <!-- ───────────────────────── documents showcase ───────────────────────── -->
+      <section class="section showcase reverse">
+        <div class="showcase-copy">
+          <p class="kicker">Documents</p>
+          <h2>A word processor sharing the page with your pen.</h2>
+          <p>
+            Typed notes, headings, bullet lists, highlights and images live on
+            the same canvas as your handwriting — so a lecture slide, its
+            summary, and your margin scribbles stay together.
+          </p>
+          <ul class="ticks">
+            <li>Full text styling, alignment, lists and checkboxes</li>
+            <li>Images with searchable OCR'd text</li>
+            <li>Inline equations wherever the cursor is</li>
+          </ul>
+        </div>
+        <div class="showcase-shots single">
+          <figure>
+            <img
+              src="repo/g2.png"
+              alt="A biology page mixing typed notes on meiosis with an imported diagram and highlighted text"
+              width="2572"
+              height="1386"
+              loading="lazy"
+            />
+          </figure>
+        </div>
+      </section>
+
+      <!-- ───────────────────────── ink strip ───────────────────────── -->
+      <section class="section strip">
+        <p class="kicker">Ink</p>
+        <h2>Pens that behave like pens.</h2>
+        <div class="strip-grid">
+          <figure class="wide">
+            <img
+              src="repo/g3.jpeg"
+              alt="Handwritten lines on ruled dark paper"
+              width="2677"
+              height="867"
+              loading="lazy"
+            />
+          </figure>
+          <figure class="fit-cover">
+            <img
+              src="repo/g6.jpeg"
+              alt="A dimensioned sketch on dotted paper"
+              width="1497"
+              height="1030"
+              loading="lazy"
+            />
+          </figure>
+          <figure class="fit-contain">
+            <img
+              src="repo/g4.jpeg"
+              alt="The shape tool panel with 3D primitives, border width, style and colour options"
+              width="690"
+              height="999"
+              loading="lazy"
+            />
+          </figure>
+        </div>
+      </section>
+
+      <!-- ───────────────────────── gallery ───────────────────────── -->
+      <section id="gallery" class="section">
+        <p class="kicker">Gallery</p>
+        <h2>Screens.</h2>
+        <p class="section-note">Select any shot to open it full size.</p>
+        <div class="gallery">
+          <a class="shot" href="#v-g5"
+            ><img
+              src="repo/g5.jpeg"
+              alt="Geometry solids drawn with the shape tool and handwritten volume formulas"
+              width="2427"
+              height="1440"
+              loading="lazy"
+          /></a>
+          <a class="shot" href="#v-g1"
+            ><img
+              src="repo/g1.png"
+              alt="Notebook, section and page navigation beside a handwritten calculus page"
+              width="2568"
+              height="1466"
+              loading="lazy"
+          /></a>
+          <a class="shot" href="#v-g2"
+            ><img
+              src="repo/g2.png"
+              alt="Typed biology notes with an imported diagram"
+              width="2572"
+              height="1386"
+              loading="lazy"
+          /></a>
+          <a class="shot" href="#v-g7"
+            ><img
+              src="repo/g7.jpeg"
+              alt="Matrix recognition panel"
+              width="1140"
+              height="1567"
+              loading="lazy"
+          /></a>
+          <a class="shot" href="#v-g8"
+            ><img
+              src="repo/g8.jpeg"
+              alt="Series convergence panel"
+              width="1349"
+              height="1233"
+              loading="lazy"
+          /></a>
+          <a class="shot" href="#v-g6"
+            ><img
+              src="repo/g6.jpeg"
+              alt="Dimensioned sketch on dotted paper"
+              width="1497"
+              height="1030"
+              loading="lazy"
+          /></a>
+        </div>
+      </section>
+
+      <!-- css-only lightbox targets -->
+      <div class="lightbox" id="v-g5">
+        <a class="lb-close" href="#gallery" aria-label="Close">×</a
+        ><img
+          src="repo/g5.jpeg"
+          alt="Geometry solids drawn with the shape tool and handwritten volume formulas"
+        />
+      </div>
+      <div class="lightbox" id="v-g1">
+        <a class="lb-close" href="#gallery" aria-label="Close">×</a
+        ><img
+          src="repo/g1.png"
+          alt="Notebook, section and page navigation beside a handwritten calculus page"
+        />
+      </div>
+      <div class="lightbox" id="v-g2">
+        <a class="lb-close" href="#gallery" aria-label="Close">×</a
+        ><img
+          src="repo/g2.png"
+          alt="Typed biology notes with an imported diagram"
+        />
+      </div>
+      <div class="lightbox" id="v-g7">
+        <a class="lb-close" href="#gallery" aria-label="Close">×</a
+        ><img src="repo/g7.jpeg" alt="Matrix recognition panel" />
+      </div>
+      <div class="lightbox" id="v-g8">
+        <a class="lb-close" href="#gallery" aria-label="Close">×</a
+        ><img src="repo/g8.jpeg" alt="Series convergence panel" />
+      </div>
+      <div class="lightbox" id="v-g6">
+        <a class="lb-close" href="#gallery" aria-label="Close">×</a
+        ><img src="repo/g6.jpeg" alt="Dimensioned sketch on dotted paper" />
+      </div>
+
+      <!-- ───────────────────────── download ───────────────────────── -->
+      <section id="download" class="section download">
+        <p class="kicker">Download</p>
+        <h2>Get Vive Notes.</h2>
+        <p class="section-note">Android 15 and up, phones and tablets.</p>
+
+        <div class="stores">
+          <a
+            class="store available"
+            href="https://github.com/AquilaIgnis/viveNotes/releases/latest"
+          >
+            <img src="repo/apk.png" alt="Download the APK" height="72" />
+            <span class="store-name">Direct APK</span>
+            <span class="badge on">Available</span>
+          </a>
+          <div class="store">
+            <img src="repo/fdroid.png" alt="F-Droid" height="72" />
+            <span class="store-name">F-Droid</span>
+            <span class="badge">Coming soon</span>
+          </div>
+          <div class="store">
+            <img
+              src="repo/Google_Play_Store.svg"
+              alt="Google Play"
+              height="72"
+            />
+            <span class="store-name">Google Play</span>
+            <span class="badge">Coming soon</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ───────────────────────── roadmap ───────────────────────── -->
+      <section id="roadmap" class="section roadmap">
+        <div>
+          <p class="kicker">Roadmap</p>
+          <h2>What's next.</h2>
+          <ul class="todo">
+            <li>F-Droid release</li>
+            <li>Play Store</li>
+            <li>Linux &amp; Windows port</li>
+            <li>Apple</li>
+            <li>Web client</li>
+          </ul>
+        </div>
+        <aside class="panel">
+          <h3>Run your own sync</h3>
+          <p>
+            The sync server is a separate project you can self-host, so no third
+            party ever holds your notebooks.
+          </p>
+          <a
+            class="btn btn-quiet"
+            href="https://github.com/AquilaIgnis/viveCServer"
+            >viveCServer →</a
+          >
+          <hr />
+          <h3>Support the project</h3>
+          <p>
+            Vive Notes is free and stays free. If it's carrying you through a
+            semester, coffee helps.
+          </p>
+          <a class="btn btn-coffee" href="https://www.buymeacoffee.com/acidburn"
+            >Buy me a coffee</a
+          >
+        </aside>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="foot-brand">
+        <img src="repo/viveNotes-256.png" alt="" width="40" height="40" />
+        <div>
+          <b>Vive Notes</b>
+          <span>by AquilaIgnis · Source First License 1.1</span>
+        </div>
+      </div>
+      <div class="foot-cols">
+        <div>
+          <h4>Project</h4>
+          <a href="https://github.com/AquilaIgnis/viveNotes">Source</a>
+          <a href="https://github.com/AquilaIgnis/viveNotes/releases/latest"
+            >Releases</a
+          >
+          <a href="https://github.com/AquilaIgnis/viveCServer">Sync server</a>
+        </div>
+        <div>
+          <h4>Built on</h4>
+          <a href="https://www.sympy.org/en/index.html">SymPy</a>
+          <a href="https://chaquo.com/chaquopy/">Chaquopy</a>
+          <a href="https://github.com/PaddlePaddle/PaddleOCR">PaddleOCR</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
