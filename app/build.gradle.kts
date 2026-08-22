@@ -99,7 +99,9 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // The physical-device suite runs for roughly twenty minutes. Its test-only runner keeps
+        // the display awake so Compose hosts are not hidden by the lock screen halfway through.
+        testInstrumentationRunner = "com.vivenotes.ViveNotesTestRunner"
 
         ndk {
             // androidx.ink ships libink.so per ABI at roughly 1.2MB each, ONNX Runtime's is 27-33MB,

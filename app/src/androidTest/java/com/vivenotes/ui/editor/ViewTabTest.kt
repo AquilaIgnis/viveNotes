@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -145,7 +146,9 @@ class ViewTabTest {
     fun switchBackgroundFlipsWhateverTheCanvasCurrentlyIs() {
         setTab()
 
-        compose.onNodeWithText("Switch Background").performClick()
+        compose.onNodeWithText("Switch Background")
+            .performScrollTo()
+            .performClick()
 
         // The theme under test is whatever the device is set to, so assert it made a choice at all
         // rather than which one — the direction is covered by it being the opposite of the canvas.

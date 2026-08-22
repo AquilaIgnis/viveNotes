@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.semantics.SemanticsProperties
 import com.vivenotes.data.DrawTool
@@ -74,7 +75,7 @@ class EquationButtonTest {
     fun equationRequiresARealEditorCaret() {
         setRibbon(SelectionState(editorFocused = false))
 
-        compose.onNodeWithTag(EquationTags.INLINE).performClick()
+        openEquationPanel()
         compose.onNodeWithText("Insert equation").assertDoesNotExist()
     }
 
@@ -82,7 +83,7 @@ class EquationButtonTest {
     fun opensWithTheExampleAndRetainsTheEditorTarget() {
         setRibbon(SelectionState(editorFocused = true))
 
-        compose.onNodeWithTag(EquationTags.INLINE).performClick()
+        openEquationPanel()
 
         compose.onNodeWithText("Insert equation").assertIsDisplayed()
         val source = compose.onNodeWithTag(EquationTags.SOURCE)
@@ -95,7 +96,7 @@ class EquationButtonTest {
     fun opensAnExistingEquationForUpdate() {
         setRibbon(SelectionState(equation = "x^2", editorFocused = true))
 
-        compose.onNodeWithTag(EquationTags.INLINE).performClick()
+        openEquationPanel()
 
         compose.onNodeWithText("Edit equation").assertIsDisplayed()
         val source = compose.onNodeWithTag(EquationTags.SOURCE)
@@ -107,7 +108,7 @@ class EquationButtonTest {
     @Test
     fun validatesAndSendsDelimiterFreeLatex() {
         setRibbon(SelectionState(editorFocused = true))
-        compose.onNodeWithTag(EquationTags.INLINE).performClick()
+        openEquationPanel()
         compose.onNodeWithTag(EquationTags.SOURCE).performTextReplacement("x^2+y^2=z^2")
 
         compose.onNodeWithTag(EquationTags.SUBMIT).performClick()
@@ -115,6 +116,14 @@ class EquationButtonTest {
         compose.waitUntil(timeoutMillis = 10_000) {
             commands.any { it == FormatCommand.InsertEquation("x^2+y^2=z^2") }
         }
+    }
+
+    /** Equation sits at the far end of the horizontally scrolling Document ribbon. */
+    private fun openEquationPanel() {
+        compose.onNodeWithTag(EquationTags.INLINE)
+            .performScrollTo()
+            .performClick()
+        compose.waitForIdle()
     }
 
     private fun noopViewActions() = ViewActions(

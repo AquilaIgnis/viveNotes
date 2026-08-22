@@ -4,6 +4,8 @@ import android.view.KeyEvent
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -32,7 +34,7 @@ class StylusButtonDispatchTest {
 
     @Test
     fun theButtonBringsTheDrawTabForward() {
-        // The app opens on Home, so the Draw tab's tools are not on screen to begin with.
+        openDocumentTab()
         compose.onNodeWithContentDescription("Pen 1").assertDoesNotExist()
 
         pressStylusButton()
@@ -56,6 +58,7 @@ class StylusButtonDispatchTest {
      */
     @Test
     fun theDownPressIsClaimedWithoutActing() {
+        openDocumentTab()
         compose.runOnUiThread {
             val consumed = compose.activity.onKeyDown(
                 KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY,
@@ -65,7 +68,7 @@ class StylusButtonDispatchTest {
         }
         compose.waitForIdle()
 
-        // Still on Home: the down-press changed nothing, so the Draw tab never came forward.
+        // Still on Document: the down-press changed nothing, so Draw never came forward.
         compose.onNodeWithContentDescription("Pen 1").assertDoesNotExist()
     }
 
@@ -95,6 +98,7 @@ class StylusButtonDispatchTest {
      */
     @Test
     fun anUnboundClickCountIsLeftToFallThrough() {
+        openDocumentTab()
         compose.runOnUiThread {
             assertFalse(
                 "an unbound press must not be claimed at down",
@@ -113,8 +117,14 @@ class StylusButtonDispatchTest {
         }
         compose.waitForIdle()
 
-        // And it did nothing: still on Home, with no tool armed by it.
+        // And it did nothing: still on Document, with no tool armed by it.
         compose.onNodeWithContentDescription("Pen 1").assertDoesNotExist()
+    }
+
+    /** Draw is the startup tab now, so tests of tab forwarding first move somewhere else. */
+    private fun openDocumentTab() {
+        compose.onNodeWithText("Document").performClick()
+        compose.waitForIdle()
     }
 
     private fun pressStylusButton(keyCode: Int = KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY) {

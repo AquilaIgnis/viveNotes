@@ -75,6 +75,8 @@ class InkOverlayTest {
     private var dragged = 0f
     private var flung = false
     private var strokes = 0
+    /** Finished by InProgressStrokesView's renderer thread, observed by the test thread. */
+    @Volatile
     private var lastStroke: Stroke? = null
     private var partialErases = 0
     private var objectEraseCalls = 0
@@ -365,9 +367,7 @@ class InkOverlayTest {
             }
             up()
         }
-        compose.waitForIdle()
-
-        val inputs = lastStroke?.inputs ?: error("the ruled gesture recorded no stroke")
+        val inputs = awaitLastStroke("the ruled gesture recorded no stroke").inputs
         assertTrue("a stroke needs more than one point to be straight", inputs.size >= 2)
 
         val first = inputs.get(0)
@@ -395,9 +395,7 @@ class InkOverlayTest {
             moveTo(Offset(400f, 860f))
             up()
         }
-        compose.waitForIdle()
-
-        val inputs = lastStroke?.inputs ?: error("the gesture recorded no stroke")
+        val inputs = awaitLastStroke("the gesture recorded no stroke").inputs
         val onTheRuler = (0 until inputs.size).count {
             abs(inputs.get(it).y - (300f - Ruler.BAND_DP / 2f)) < 1f
         }
@@ -417,9 +415,7 @@ class InkOverlayTest {
             moveTo(Offset(600f, 400f))
             up()
         }
-        compose.waitForIdle()
-
-        val inputs = lastStroke?.inputs ?: error("the ruled gesture recorded no stroke")
+        val inputs = awaitLastStroke("the ruled gesture recorded no stroke").inputs
         (0 until inputs.size).forEach { index ->
             val point = inputs.get(index)
             assertEquals(
@@ -440,6 +436,12 @@ class InkOverlayTest {
 
         assertTrue("a finger that cannot draw did not pan the page", dragged != 0f)
         assertEquals("a finger that cannot draw laid down ink", 0, strokes)
+    }
+
+    /** Compose idleness does not include InProgressStrokesView's renderer-thread callback. */
+    private fun awaitLastStroke(failure: String): Stroke {
+        compose.waitUntil(timeoutMillis = 5_000) { lastStroke != null }
+        return lastStroke ?: error(failure)
     }
 
     @Test

@@ -89,7 +89,13 @@ and all AI features run entirely on-device.
 
 # Dev
 
-## Run all tests
+## Run all tests on Release ( arm and R8)
+
+```bash
+./gradlew connectedAndroidTest -PtestRelease
+```
+
+## Run all tests on Debug
 
 report: app/build/reports/androidTests/connected/
 
