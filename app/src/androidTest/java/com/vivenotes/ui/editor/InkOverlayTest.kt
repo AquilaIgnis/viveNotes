@@ -1232,6 +1232,22 @@ class InkOverlayTest {
         compose.waitForIdle()
     }
 
+    /**
+     * [awaitLastStroke]'s counting twin, for the negative cases: the hold did nothing, so the
+     * freehand stroke is still on its way back from the renderer thread and `up()` has not committed
+     * it yet. Reading [strokes] straight after [liftPointer] is a race that a real tablet wins and
+     * the CI emulator — software GL — loses, which is what made these four the only tests that ever
+     * failed there.
+     *
+     * The clock stays frozen while this waits. Re-enabling it before the lift would let the hold
+     * timer fire in the cases that pause for deliberately less than a second, which is the whole
+     * point of them. Nothing here needs the clock anyway: the count is bumped by a main-thread post
+     * from the renderer, not by anything Compose drives.
+     */
+    private fun awaitTheStroke(failure: String = "the lift committed no stroke") {
+        compose.waitUntil(conditionDescription = failure, timeoutMillis = 5_000) { strokes == 1 }
+    }
+
     @Test
     fun pausingAtTheEndOfALineReplacesItWithAStraightOne() {
         compose.mainClock.autoAdvance = false
@@ -1271,7 +1287,7 @@ class InkOverlayTest {
         liftPointer()
 
         assertNull("a brief pause is not a hold", straightened)
-        assertEquals(1, strokes)
+        awaitTheStroke()
     }
 
     /** A pause in the middle of handwriting must not turn the word into a line. */
@@ -1292,7 +1308,7 @@ class InkOverlayTest {
         liftPointer()
 
         assertNull("a zigzag is not a line", straightened)
-        assertEquals("and it is still the stroke the user drew", 1, strokes)
+        awaitTheStroke("and it is still the stroke the user drew")
     }
 
     /** The pen's own setting, so a pen it is turned off for behaves exactly as it did before. */
@@ -1307,7 +1323,7 @@ class InkOverlayTest {
 
         assertNull(straightened)
         liftPointer()
-        assertEquals(1, strokes)
+        awaitTheStroke()
     }
 
     /**
@@ -1330,6 +1346,6 @@ class InkOverlayTest {
 
         assertNull(straightened)
         liftPointer()
-        assertEquals(1, strokes)
+        awaitTheStroke()
     }
 }
