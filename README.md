@@ -21,7 +21,7 @@ and all AI features run entirely on-device.
   <tbody>
     <tr>
       <td align="center">
-        <a href="#">
+        <a href="https://vivenotes.net/#download">
           <img src="repo/fdroid.png" height="80" alt="Get it on F-Droid">
         </a>
       </td>
@@ -37,7 +37,7 @@ and all AI features run entirely on-device.
       </td>
     </tr>
     <tr>
-      <td align="center"><b>Coming Soon!</b></td>
+      <td align="center"><b>Available</b></td>
       <td align="center"><b>Coming Soon!</b></td>
       <td align="center">Available</td>
     </tr>
