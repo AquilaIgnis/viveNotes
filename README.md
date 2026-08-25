@@ -77,7 +77,7 @@ and all AI features run entirely on-device.
 
 # Road Map
 
-- [ ] Fdroid release
+- [x] Fdroid release
 - [ ] Play Store
 - [ ] Linux & windows port
 - [ ] Apple
