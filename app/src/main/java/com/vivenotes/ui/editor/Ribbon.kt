@@ -43,6 +43,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import com.vivenotes.BuildConfig
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
@@ -119,6 +120,10 @@ internal object FontTags {
 }
 
 internal object RibbonTags {
+    /** The empty hand. Left of [FINGER], and in a release build left of [ACCOUNT] alone. */
+    const val POINTER = "ribbon-pointer"
+
+    /** Debug builds only — see the button itself in `TabStrip`. */
     const val FINGER = "ribbon-finger"
     const val ACCOUNT = "ribbon-account"
 
@@ -191,6 +196,8 @@ fun Ribbon(
         TabStrip(
             activeTab = activeTab,
             onTabChange = onTabChange,
+            tool = tool,
+            onSelectPointer = { draw.selectTool(DrawTool.None) },
             allowFinger = allowFinger,
             onToggleFinger = { draw.setDrawWithFinger(!allowFinger) },
             showBack = showBack,
@@ -259,6 +266,9 @@ fun Ribbon(
 private fun TabStrip(
     activeTab: RibbonTab,
     onTabChange: (RibbonTab) -> Unit,
+    /** What is in hand, so the empty hand can show whether it is the current answer. */
+    tool: DrawTool,
+    onSelectPointer: () -> Unit,
     allowFinger: Boolean,
     onToggleFinger: () -> Unit,
     showBack: Boolean,
@@ -317,19 +327,40 @@ private fun TabStrip(
             }
         }
 
-        // Who may draw is not a tab, and it is not a Draw-tab setting either: it decides whether a
-        // finger on the canvas marks the page or scrolls it, which is true on every tab. So it sits
-        // here, past the weighted tab list and therefore hard against the right edge, where it stays
-        // put while the tabs scroll.
+        // The empty hand, which used to head the Draw tab's tray. Putting a tool down is not a
+        // drawing setting: a pen stays armed while you type, so the moment you want the pointer is
+        // usually on some other tab, and reaching it cost a trip to Draw and back. Past the weighted
+        // tab list like the two buttons after it, so it holds its place while the tabs scroll.
         RibbonButton(
-            icon = MaterialSymbols.TouchApp,
-            label = if (allowFinger) "Drawing with finger and stylus" else "Stylus only",
-            active = allowFinger,
-            onClick = onToggleFinger,
+            icon = MaterialSymbols.ArrowSelectorTool,
+            label = "No tool",
+            active = tool == DrawTool.None,
+            onClick = onSelectPointer,
             modifier = Modifier
-                .padding(end = 6.dp)
-                .testTag(RibbonTags.FINGER),
+                .padding(end = 2.dp)
+                .testTag(RibbonTags.POINTER),
         )
+
+        // Who may draw is not a tab, and it is not a Draw-tab setting either: it decides whether a
+        // finger on the canvas marks the page or scrolls it, which is true on every tab.
+        //
+        // **Debug builds only.** `BuildConfig.DEBUG` is a compile-time constant, so the release APK
+        // does not carry this button rather than carrying it hidden. It earns a permanent ribbon
+        // slot while developing — an emulator has no stylus, so with it off there is no way to draw
+        // at all — and does not earn one on the tablet this ships to, where a stylus is the point
+        // and turning it on is a once-ever decision. *Let a finger draw* in Settings > Hardware is
+        // the shipped control and writes the same DataStore flag.
+        if (BuildConfig.DEBUG) {
+            RibbonButton(
+                icon = MaterialSymbols.TouchApp,
+                label = if (allowFinger) "Drawing with finger and stylus" else "Stylus only",
+                active = allowFinger,
+                onClick = onToggleFinger,
+                modifier = Modifier
+                    .padding(end = 6.dp)
+                    .testTag(RibbonTags.FINGER),
+            )
+        }
         // A dot rather than the pressed-state chrome `active` would give: that chrome means "this
         // control is on", and the account button is not a toggle — it opens a screen. A badge says
         // something is true *about* what it opens, which is what being connected is.

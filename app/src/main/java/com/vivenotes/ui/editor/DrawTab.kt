@@ -77,7 +77,6 @@ internal object DrawTags {
     const val ERASER = "draw-eraser"
     const val HIGHLIGHTER = "draw-highlighter"
     const val LASSO = "draw-lasso"
-    const val NONE = "draw-none"
     const val RULER = "draw-ruler"
     const val INSERT_SPACE = "draw-insert-space"
     fun pen(index: Int) = "draw-pen-$index"
@@ -86,8 +85,10 @@ internal object DrawTags {
 /**
  * The Draw tab: undo and redo, three pens, an eraser.
  *
- * The tray opens with the empty hand — the one button that arms nothing, so putting a tool down is a
- * gesture of its own rather than something you get to by picking up a different tool.
+ * **The empty hand is no longer in this tray.** It moved to the tab strip, immediately left of the
+ * finger button, for the same reason that one lives there: putting a tool down is not a drawing
+ * setting, and the moment you want it is usually on another tab — a pen stays armed while you type,
+ * and reaching the pointer used to cost a trip to Draw and back. See `TabStrip` in `Ribbon.kt`.
  *
  * The pens are deliberately identical — they exist so that three colours are one tap apart instead
  * of a trip through a menu, which is the whole reason a pen tray has more than one pen in it. What
@@ -102,10 +103,11 @@ internal object DrawTags {
  * Insert Space is the odd one out and has no settings at all: it edits the emptiness rather than any
  * object, and how much of it is the drag itself — see `com.vivenotes.model.PageSpace`.
  *
- * The finger button decides whether a direct touch draws or scrolls. It is a device property rather
- * than a pen setting — whether you own a stylus is not an attribute of pen 2 — and defaults to off,
- * which is what lets a finger pan the page while the pen draws on it. On a device with no stylus,
- * including an emulator, turning it on is the only way to draw at all.
+ * The finger button is not in this tray either, and a release APK does not carry it anywhere in the
+ * ribbon: it is a debug convenience, because an emulator has no stylus and with the setting off
+ * there is no way to draw on one at all. *Let a finger draw* in Settings > Hardware is the shipped
+ * control, writing the same device-scoped flag — whether you own a stylus is not an attribute of
+ * pen 2. It defaults to off, which is what lets a finger pan the page while the pen draws on it.
  */
 @Composable
 internal fun DrawTab(
@@ -148,19 +150,6 @@ internal fun DrawTab(
         )
 
         Divider()
-
-        // The off position of the tray. Every other button here arms something, so without it the
-        // only way to stop drawing was to arm a different tool — and `DrawTool.None` was reachable
-        // only as a side effect, from the Home tab's T toggle or from finishing a shape. Heads the
-        // group rather than sitting apart from it: it is the same choice as the pens, made empty.
-        Box(Modifier.testTag(DrawTags.NONE)) {
-            RibbonButton(
-                icon = MaterialSymbols.ArrowSelectorTool,
-                label = "No tool",
-                active = tool == DrawTool.None,
-                onClick = { actions.selectTool(DrawTool.None) },
-            )
-        }
 
         pens.forEachIndexed { index, pen ->
             PenButton(

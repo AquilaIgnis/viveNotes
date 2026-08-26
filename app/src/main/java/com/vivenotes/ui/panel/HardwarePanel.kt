@@ -162,6 +162,9 @@ private fun ColumnScope.StylusSettings(
     buttons: StylusButtonMap,
     onSetButtons: (StylusButtonMap) -> Unit,
 ) {
+    // **The only way to reach this in a shipped build.** The ribbon's finger button is compiled out
+    // of release by `BuildConfig.DEBUG` — see `TabStrip` in `ui/editor/Ribbon.kt` — so this row is
+    // the setting rather than a second copy of a control already on screen.
     PanelSetting(
         label = "Let a finger draw"
     ) {

@@ -6,8 +6,11 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
+import com.vivenotes.BuildConfig
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
@@ -23,19 +26,92 @@ import com.vivenotes.ui.theme.ViveNotesTheme
 /**
  * The tab strip's own controls, as opposed to the tabs.
  *
- * These are app-wide actions rather than tabs: whether a finger may draw and opening the account
- * destination. The fixed strip keeps both available while the document tabs scroll underneath.
+ * These are app-wide actions rather than tabs: putting the armed tool down, whether a finger may
+ * draw, and opening the account destination. The fixed strip keeps them available while the document
+ * tabs scroll underneath.
  */
 class RibbonTabStripTest {
 
     @get:Rule
     val compose = createComposeRule()
 
+    private var selectedTool: DrawTool? = null
     private var fingerDrawing: Boolean? = null
     private var accountOpened = false
 
+    /**
+     * The empty hand, moved off the Draw tab. Putting a tool down is not a drawing setting: a pen
+     * stays armed while you type, so the tap that disarms it must not cost a trip to Draw and back.
+     */
+    @Test
+    fun thePointerPutsTheArmedToolDown() {
+        setRibbon(tool = DrawTool.Pen(1))
+
+        compose.onNodeWithTag(RibbonTags.POINTER).performClick()
+
+        assertEquals(DrawTool.None, selectedTool)
+    }
+
+    /** The whole point of the move: it is not the Draw tab's, so it does not leave with the tab. */
+    @Test
+    fun thePointerIsThereWithTheDocumentTabOpen() {
+        setRibbon(activeTab = RibbonTab.Document)
+
+        compose.onNodeWithTag(RibbonTags.POINTER).assertIsDisplayed()
+    }
+
+    @Test
+    fun thePointerIsStillThereWithTheDrawTabOpen() {
+        setRibbon(activeTab = RibbonTab.Draw)
+
+        compose.onNodeWithTag(RibbonTags.POINTER).assertIsDisplayed()
+    }
+
+    /** "Left of the finger button" is the whole placement, and a row is easy to reorder. */
+    @Test
+    fun thePointerSitsLeftOfTheFingerButton() {
+        assumeTrue("the finger button ships in debug only", BuildConfig.DEBUG)
+        setRibbon()
+
+        val pointer = compose.onNodeWithTag(RibbonTags.POINTER).fetchSemanticsNode().boundsInRoot
+        val finger = compose.onNodeWithTag(RibbonTags.FINGER).fetchSemanticsNode().boundsInRoot
+
+        assertTrue("$pointer is not left of $finger", pointer.right <= finger.left)
+    }
+
+    /**
+     * Holds in a release build too, where the finger button is gone and the pointer would otherwise
+     * be free to drift past the one control that is still to its right.
+     */
+    @Test
+    fun thePointerSitsLeftOfTheAccountButton() {
+        setRibbon()
+
+        val pointer = compose.onNodeWithTag(RibbonTags.POINTER).fetchSemanticsNode().boundsInRoot
+        val account = compose.onNodeWithTag(RibbonTags.ACCOUNT).fetchSemanticsNode().boundsInRoot
+
+        assertTrue("$pointer is not left of $account", pointer.right <= account.left)
+    }
+
+    /**
+     * The finger button is a debug convenience — an emulator has no stylus — and `BuildConfig.DEBUG`
+     * is a compile-time constant, so a release APK does not contain it at all. *Let a finger draw*
+     * in Settings > Hardware is what a shipped build offers, writing the same flag.
+     */
+    @Test
+    fun theFingerButtonShipsInDebugBuildsOnly() {
+        setRibbon()
+
+        if (BuildConfig.DEBUG) {
+            compose.onNodeWithTag(RibbonTags.FINGER).assertIsDisplayed()
+        } else {
+            compose.onNodeWithTag(RibbonTags.FINGER).assertDoesNotExist()
+        }
+    }
+
     @Test
     fun theFingerButtonTogglesWhoMayDraw() {
+        assumeTrue("the finger button ships in debug only", BuildConfig.DEBUG)
         setRibbon(allowFinger = false)
 
         compose.onNodeWithTag(RibbonTags.FINGER).performClick()
@@ -45,6 +121,7 @@ class RibbonTabStripTest {
 
     @Test
     fun theFingerButtonTurnsBackOff() {
+        assumeTrue("the finger button ships in debug only", BuildConfig.DEBUG)
         setRibbon(allowFinger = true)
 
         compose.onNodeWithTag(RibbonTags.FINGER).performClick()
@@ -52,16 +129,10 @@ class RibbonTabStripTest {
         assertEquals(false, fingerDrawing)
     }
 
-    /** The whole point of the move: it is not the Draw tab's, so it does not leave with the tab. */
-    @Test
-    fun theFingerButtonIsThereWithTheHomeTabOpen() {
-        setRibbon(activeTab = RibbonTab.Document)
-
-        compose.onNodeWithTag(RibbonTags.FINGER).assertIsDisplayed()
-    }
-
+    /** It is not the Draw tab's either, so it does not leave with the tab. */
     @Test
     fun theFingerButtonIsStillThereWithTheDrawTabOpen() {
+        assumeTrue("the finger button ships in debug only", BuildConfig.DEBUG)
         setRibbon(activeTab = RibbonTab.Draw)
 
         compose.onNodeWithTag(RibbonTags.FINGER).assertIsDisplayed()
@@ -129,6 +200,7 @@ class RibbonTabStripTest {
 
     private fun setRibbon(
         activeTab: RibbonTab = RibbonTab.Document,
+        tool: DrawTool = DrawTool.None,
         allowFinger: Boolean = false,
         accountConnected: Boolean = false,
         serverUnreachable: Boolean = false,
@@ -150,10 +222,10 @@ class RibbonTabStripTest {
                     eraser = EraserSettings(),
                     highlighter = HighlighterSettings(),
                     shape = ShapeSettings(),
-                    tool = DrawTool.None,
+                    tool = tool,
                     allowFinger = allowFinger,
                     draw = DrawActions(
-                        selectTool = {},
+                        selectTool = { selectedTool = it },
                         updatePen = { _, _ -> },
                         updateEraser = {},
                         setDrawWithFinger = { fingerDrawing = it },
