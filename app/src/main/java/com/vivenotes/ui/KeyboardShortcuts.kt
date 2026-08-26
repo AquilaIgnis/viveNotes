@@ -5,7 +5,7 @@ import android.view.KeyboardShortcutGroup
 import android.view.KeyboardShortcutInfo
 
 /**
- * The app's hardware-keyboard shortcuts — feature **L2**, `docs/features.md`.
+ * The app's hardware-keyboard shortcuts — feature **L2**, `memory/features.md`.
  *
  * **One table, two readers.** [APP_SHORTCUTS] is both what [handleShortcut] dispatches and what
  * [shortcutGroups] hands the system's Meta + / helper panel. A shortcut that works but is not listed
@@ -75,7 +75,7 @@ internal val APP_SHORTCUTS: List<AppShortcut> = listOf(
     AppShortcut("Indent", "Paragraph", KeyEvent.KEYCODE_TAB, modifiers = 0),
     AppShortcut("Outdent", "Paragraph", KeyEvent.KEYCODE_TAB, KeyEvent.META_SHIFT_ON),
 
-    // The same key, listed twice on purpose — `docs/tablePlan.md` TA17. Inside a table Tab walks the
+    // The same key, listed twice on purpose — `memory/tablePlan.md` TA17. Inside a table Tab walks the
     // grid and only indents where the walk runs out, so a panel that named one meaning would be
     // wrong wherever the caret actually was.
     AppShortcut("Next cell", "Table", KeyEvent.KEYCODE_TAB, modifiers = 0),

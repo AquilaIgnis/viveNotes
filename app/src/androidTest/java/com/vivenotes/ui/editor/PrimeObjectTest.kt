@@ -29,7 +29,7 @@ import com.vivenotes.ui.OutlineBox
 import com.vivenotes.ui.theme.ViveNotesTheme
 
 /**
- * Prime Object, as the whole page assembles it — `docs/diagram.md`, Prime Object Class:
+ * Prime Object, as the whole page assembles it — `memory/diagram.md`, Prime Object Class:
  *
  * > *prime behavior : can be moved around canvas freely, taping on object selects it bring "base
  * > object toolkit", on being selected sow a rectangle around object with 4 vertices that allow re

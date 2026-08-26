@@ -603,7 +603,7 @@ interface PageDao {
 
     /**
      * Every live page of a notebook, in reading order — the corpus the Content panel searches
-     * (`docs/searchPlan.md` CS2).
+     * (`memory/searchPlan.md` CS2).
      *
      * Metadata only: `page_content` is a separate table precisely so that listing pages does not drag
      * every document body along, and the search index relies on that to decide which bodies it

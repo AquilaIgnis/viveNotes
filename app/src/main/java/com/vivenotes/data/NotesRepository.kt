@@ -231,7 +231,7 @@ class NotesRepository(
 
     // --- content search --------------------------------------------------------------------
     //
-    // The Content panel's corpus, in the two halves `docs/searchPlan.md` CS7 splits it into: the page
+    // The Content panel's corpus, in the two halves `memory/searchPlan.md` CS7 splits it into: the page
     // rows, which are cheap and tell the index what has changed, and the bodies of only those pages
     // whose stamp has moved.
 
@@ -544,7 +544,7 @@ class NotesRepository(
      * **A closed or cloud-only notebook is never blank**, whatever it holds. A cloud-only one has no
      * bodies, no ink and no versions *on this device* while the server holds all of them, so it
      * would look emptier than anything else in the database; and the server stores a delete of a
-     * closed notebook as a live cloud-only row rather than a tombstone (`docs/openapi.yaml`,
+     * closed notebook as a live cloud-only row rather than a tombstone (`viveCServer/docs/openapi.yaml`,
      * "Deleting a closed notebook keeps it"), so a device that flushed its rows would meet the
      * notebook again on its next pull with nothing left to draw it from.
      */
@@ -870,7 +870,7 @@ class NotesRepository(
      *
      * Rows rather than the document: ink does not travel through [saveDoc], so drawing never
      * rewrites the document column and autosave latency stays independent of how much ink is on the
-     * page. See `docs/inkPlan.md` ID2.
+     * page. See `memory/inkPlan.md` ID2.
      */
     suspend fun inkFor(pageId: String): List<InkStrokeEntity> = ink.byPage(pageId)
 

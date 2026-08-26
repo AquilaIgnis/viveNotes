@@ -158,7 +158,7 @@ data class OutlineBox(
 )
 
 /**
- * A hit the user asked to see — `docs/searchPlan.md` CS9.
+ * A hit the user asked to see — `memory/searchPlan.md` CS9.
  *
  * Carries where to go rather than what was found: the page it is on, the box that holds it, and the
  * range to select once that box has an editor. [tableId] is set for a cell, because a cell has no
@@ -214,7 +214,7 @@ private sealed interface InkHistoryMutation {
 }
 
 /**
- * One reversible action on the canvas, of whatever kind — `docs/inkPlan.md` §5.4 SD10.
+ * One reversible action on the canvas, of whatever kind — `memory/inkPlan.md` §5.4 SD10.
  *
  * **One ring across kinds, not one ring per kind.** Undo is a button, not a mode: what it reverses is
  * the last thing you did on this page, and a user who draws a stroke, drops a shape and presses Undo
@@ -263,7 +263,7 @@ private sealed interface CanvasHistoryEntry {
     ) : CanvasHistoryEntry
 
     /**
-     * A structural edit to the text containers — `docs/textBoxPlan.md` TD5: delete and paste, the two
+     * A structural edit to the text containers — `memory/textBoxPlan.md` TD5: delete and paste, the two
      * things the TextBox toolkit can do.
      *
      * **The blocks half is scoped to the containers this edit touched, and the geometry half is not.**
@@ -283,7 +283,7 @@ private sealed interface CanvasHistoryEntry {
     ) : CanvasHistoryEntry
 
     /**
-     * An edit to the tables — `docs/tablePlan.md` TA10.
+     * An edit to the tables — `memory/tablePlan.md` TA10.
      *
      * The same two-halves shape [Texts] has, for the same reason: the table list is safe to snapshot
      * whole because typing never changes it, and the block map is not, because typing changes it
@@ -451,7 +451,7 @@ data class NotesUiState(
     /** Pictures on the canvas — E6. Frames only; the pixels are in `attachments`. */
     val images: List<Outline.Image> = emptyList(),
     /**
-     * The tables on the canvas — `docs/tablePlan.md`. **The grid, not the writing in it.**
+     * The tables on the canvas — `memory/tablePlan.md`. **The grid, not the writing in it.**
      *
      * Split the way a text container is split, and for that reason: this changes when a row is added
      * or a column dragged, and a cell's text changes on every keystroke, so keeping the two together
@@ -600,15 +600,15 @@ class NotesViewModel(
     val highlighter: StateFlow<HighlighterSettings> = penSettingsStore.highlighter
         .stateIn(viewModelScope, SharingStarted.Eagerly, HighlighterSettings())
 
-    /** The armed shape and how it is drawn — `docs/inkPlan.md` §5.4. A property of the user (ID5). */
+    /** The armed shape and how it is drawn — `memory/inkPlan.md` §5.4. A property of the user (ID5). */
     val shape: StateFlow<ShapeSettings> = penSettingsStore.shape
         .stateIn(viewModelScope, SharingStarted.Eagerly, ShapeSettings())
 
-    /** Which ruler and how big — `docs/rulerPlan.md` RD2. A property of the user, like [shape]. */
+    /** Which ruler and how big — `memory/rulerPlan.md` RD2. A property of the user, like [shape]. */
     val ruler: StateFlow<RulerSettings> = penSettingsStore.ruler
         .stateIn(viewModelScope, SharingStarted.Eagerly, RulerSettings())
 
-    /** How the next table arrives — `docs/tablePlan.md` TA7. A property of the user, like [shape]. */
+    /** How the next table arrives — `memory/tablePlan.md` TA7. A property of the user, like [shape]. */
     val table: StateFlow<TableSettings> = penSettingsStore.table
         .stateIn(viewModelScope, SharingStarted.Eagerly, TableSettings())
 
@@ -626,7 +626,7 @@ class NotesViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /**
-     * What the pen's barrel-button clicks do — [StylusButtonMap], and `docs/stylusPlan.md`.
+     * What the pen's barrel-button clicks do — [StylusButtonMap], and `memory/stylusPlan.md`.
      *
      * `Eagerly` and not lazily, unlike most of the settings flows: key dispatch reads `.value`
      * synchronously on the UI thread from `MainActivity.onKeyDown`, which can happen before anything
@@ -695,7 +695,7 @@ class NotesViewModel(
      * Stateless, because the pen has already done the counting: a double click arrives as its own
      * keycode rather than as two presses this had to time.
      *
-     * **Only a tool action brings the Draw tab forward** — `docs/stylusPlan.md` SB7. A button that
+     * **Only a tool action brings the Draw tab forward** — `memory/stylusPlan.md` SB7. A button that
      * silently changes what the pen does, while the ribbon still shows Home, is a tool swap you have
      * to discover by drawing; an undo is already visible on the page, and moving the ribbon for it
      * would be a second change nobody asked for.
@@ -730,7 +730,7 @@ class NotesViewModel(
     val canvasUndoState: StateFlow<CanvasUndoState> = _canvasUndoState.asStateFlow()
 
     /**
-     * The shared prime object clipboard — `docs/diagram.md`.
+     * The shared prime object clipboard — `memory/diagram.md`.
      *
      * One clipboard for every kind on the canvas, not one per kind: copy a stroke and a shape in the
      * same loop and both come back on the same paste. Session-local, and shallow — native strokes are
@@ -830,7 +830,7 @@ class NotesViewModel(
      * Live block content per **content box** — a text container, or one cell of a table.
      *
      * Held outside [uiState] on purpose, for the reason [OutlineBox] gives. Keyed by an id rather
-     * than by an outline since `docs/tablePlan.md` TA2: a cell is a box that holds blocks and has no
+     * than by an outline since `memory/tablePlan.md` TA2: a cell is a box that holds blocks and has no
      * geometry of its own, so it belongs in the same map a container's content does — which is what
      * puts the whole Home ribbon inside a table without a second content path to keep in step.
      */
@@ -1540,7 +1540,7 @@ class NotesViewModel(
 
     // --- content search ---------------------------------------------------------------------------
     //
-    // `docs/searchPlan.md`. The panel owns the query, this owns everything the query needs: the
+    // `memory/searchPlan.md`. The panel owns the query, this owns everything the query needs: the
     // notebook to search (CS2), the open page's live text (CS8), and where a result leads (CS9).
 
     private val searchIndex = ContentSearchIndex(repository)
@@ -1816,7 +1816,7 @@ class NotesViewModel(
     }
 
     /**
-     * Deletes containers outright — the TextBox toolkit's Delete, `docs/textBoxPlan.md` TD5.
+     * Deletes containers outright — the TextBox toolkit's Delete, `memory/textBoxPlan.md` TD5.
      *
      * **The "last container always survives" rule in [onOutlineBlurred] does not apply here.** That
      * one exists to sweep up boxes nobody asked for; this is a box someone asked to be rid of, and a
@@ -2110,7 +2110,7 @@ class NotesViewModel(
         // Text is the one tool that wants the caret and the IME; every other one — including
         // nothing at all — takes the page's gestures and should put them away first.
         if (tool != DrawTool.Text) _commands.tryEmit(FormatCommand.DeactivateTextInput)
-        // And the same for what is selected *on* the page — `docs/diagram.md`, Prime Object Class:
+        // And the same for what is selected *on* the page — `memory/diagram.md`, Prime Object Class:
         // "Selecting any other tool removes selection of object." Only on an actual change, which is
         // what "any other tool" says: re-tapping the tool already in hand has not selected another
         // one, and taking the selection away there would make the armed button feel like a reset.
@@ -2152,7 +2152,7 @@ class NotesViewModel(
     }
 
     /**
-     * Lays the ruler on the page, or picks it up — `docs/rulerPlan.md` RD1.
+     * Lays the ruler on the page, or picks it up — `memory/rulerPlan.md` RD1.
      *
      * Not [selectTool], and that is the whole design: a ruler is not something you draw *with*, it is
      * something you draw *against*, so it composes with whatever is in hand instead of replacing it.
@@ -2365,7 +2365,7 @@ class NotesViewModel(
     }
 
     /**
-     * Moves one arm's free end along its own axis — the L's per-arm handles, `docs/inkPlan.md` SD9.
+     * Moves one arm's free end along its own axis — the L's per-arm handles, `memory/inkPlan.md` SD9.
      *
      * The arm is looked up again here rather than passed in, so what is edited is an arm of the
      * shape as it stands now. That matters because the caller measured it a gesture ago: an arm the
@@ -2387,7 +2387,7 @@ class NotesViewModel(
      * Sets the border width of every selected shape — the shape half of the object toolkit.
      *
      * Not the same thing as `ShapeSettings.borderWidth`, which is how the *user* likes to draw shapes
-     * and lives in DataStore (`docs/inkPlan.md` SD4). This edits the document. Changing one must never
+     * and lives in DataStore (`memory/inkPlan.md` SD4). This edits the document. Changing one must never
      * change the other: one travels with the page, the other with the person.
      */
     fun setShapeBorderWidth(shapeIds: Set<String>, width: Float) {
@@ -2719,7 +2719,7 @@ class NotesViewModel(
     // --- tables ---------------------------------------------------------------------------------
 
     /**
-     * Puts a table where the user tapped — `docs/tablePlan.md` TA7.
+     * Puts a table where the user tapped — `memory/tablePlan.md` TA7.
      *
      * A document edit on the same footing as [insertShape], and it ends the same way: the tool goes
      * back down and the new object is handed to the caller so the page can select it. The handles are
@@ -2745,7 +2745,7 @@ class NotesViewModel(
             borderFollowsTheme = settings.colorFollowsTheme,
             borderWidth = settings.borderWidth.toFloat(),
             fillArgb = settings.fillArgb,
-            // A ruling for the stylus rather than a grid of text fields — `docs/tablePlan.md` TA15,
+            // A ruling for the stylus rather than a grid of text fields — `memory/tablePlan.md` TA15,
             // and a setting rather than a second tool since it moved into the Table pane.
             inkOnly = settings.inkOnly,
         )
@@ -2812,7 +2812,7 @@ class NotesViewModel(
     }
 
     /**
-     * The four actions the diagram asks of the class — `docs/diagram.md`, Table Class.
+     * The four actions the diagram asks of the class — `memory/diagram.md`, Table Class.
      *
      * All four take the row or column to act *at*, which the bar works out from where the caret is
      * (TA6). The model refuses what the caps or the last-row rule forbid, and [editTables] treats an
@@ -2895,7 +2895,7 @@ class NotesViewModel(
 
     /**
      * The one door every table edit goes through: page guard, state, cell blocks, history, autosave —
-     * `editShapes`' counterpart, and `docs/tablePlan.md` TA10.
+     * `editShapes`' counterpart, and `memory/tablePlan.md` TA10.
      *
      * [touched] names the cells whose *blocks* this edit adds or removes, and is what keeps the
      * history entry from reaching sideways into cells that were only being typed in. The grid is
@@ -4057,7 +4057,7 @@ class NotesViewModel(
 
         // The same "content unknown → write nothing at all" guard, over cells. What is *not* the
         // same is the blank case: a blank cell is written where a blank container is skipped —
-        // `docs/tablePlan.md` TA12. An empty container is a caret position nobody typed in; an empty
+        // `memory/tablePlan.md` TA12. An empty container is a caret position nobody typed in; an empty
         // cell is part of the grid's shape, and dropping it would resize the table on reload.
         val tables = mutableListOf<Outline.Table>()
         for (table in state.tables) {

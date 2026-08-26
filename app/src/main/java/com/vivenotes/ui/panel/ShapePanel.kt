@@ -73,8 +73,8 @@ object ShapePanelTags {
 }
 
 /**
- * The Insert Shape pane, laid out as `docs/references/shapes-tooltip.jpeg` lays it out —
- * `docs/inkPlan.md` §5.4.
+ * The Insert Shape pane, laid out as `memory/references/shapes-tooltip.jpeg` lays it out —
+ * `memory/inkPlan.md` §5.4.
  *
  * **Show 3D lines** is crossed out in the reference, so it is absent entirely rather than disabled —
  * the treatment the middle pen kind gets in [PenPanelContent].

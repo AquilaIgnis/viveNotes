@@ -72,7 +72,7 @@ import com.vivenotes.ui.theme.LocalCanvasColors
 internal val TABLE_GUTTER: Dp = 16.dp
 
 /**
- * One row or one column of one table, held — `docs/tablePlan.md` TA16.
+ * One row or one column of one table, held — `memory/tablePlan.md` TA16.
  *
  * **Not a `CanvasSelection`.** That one holds *objects on the page*, across kinds; this is a place
  * inside a single object, and it exists for one reason: so that Insert below and Delete row know
@@ -103,7 +103,7 @@ internal object TableTags {
 }
 
 /**
- * One table on the page — `docs/tablePlan.md`.
+ * One table on the page — `memory/tablePlan.md`.
  *
  * **A composable rather than a layer, unlike `ShapeLayer`.** A shape is a vector and can be drawn by
  * one canvas for the whole page; a table is a grid of real `EditText`s, so it has to be composed. That
@@ -161,7 +161,7 @@ internal fun TableContainer(
      */
     onSelect: () -> Unit = {},
     /**
-     * A cell to put the caret in, when it belongs to this table — `docs/searchPlan.md` CS9.
+     * A cell to put the caret in, when it belongs to this table — `memory/searchPlan.md` CS9.
      *
      * A revealed search result, and so far the only thing that focuses a cell from outside the grid.
      * The caller clears it through [onCellFocusHandled] once it has been taken.
@@ -248,7 +248,7 @@ internal fun TableContainer(
                 ) {
                     // The grip says what it is rather than being a plain square: the six-dot drag
                     // indicator is the platform's own word for "take hold of this and move it", and
-                    // `docs/references/table-tooltip1.jpeg` puts the same dotted handle in the same
+                    // `memory/references/table-tooltip1.jpeg` puts the same dotted handle in the same
                     // corner. Tinted onto the accent block, so it reads at 16dp.
                     if (selected) {
                         Icon(
@@ -354,7 +354,7 @@ internal fun TableContainer(
             )
 
             // **One scale handle, at the bottom right** — TA4, and what
-            // `docs/references/table-tooltip1.jpeg` shows. A table's top and left edges carry the
+            // `memory/references/table-tooltip1.jpeg` shows. A table's top and left edges carry the
             // row and column gutters, so a handle at either of those corners would sit within a
             // finger's width of a handle that does something else entirely. The gesture is the
             // shape's own: drag to scale, anchored at the opposite corner.
@@ -422,7 +422,7 @@ private fun TableGrid(
     headerTint: Color,
 ) {
     /**
-     * Every cell's editor, so Tab can put the caret in the next one — `docs/tablePlan.md` TA17.
+     * Every cell's editor, so Tab can put the caret in the next one — `memory/tablePlan.md` TA17.
      *
      * Held here because this is the one place that knows both halves: the grid says which cell comes
      * next, and only the composition that made the editors can reach the one that renders it. The
@@ -439,7 +439,7 @@ private fun TableGrid(
     val currentTable = rememberUpdatedState(table)
 
     /**
-     * Hands the caret to a revealed cell — `docs/searchPlan.md` CS9.
+     * Hands the caret to a revealed cell — `memory/searchPlan.md` CS9.
      *
      * Keyed on the editor map as well as on the request, because a result opened on another page
      * arrives before the cells that will render it: the map fills in a frame or two later, and this
@@ -540,7 +540,7 @@ private fun TableGrid(
                                 .padding(CELL_PADDING),
                         ) {
                             if (table.inkOnly) {
-                                // **Empty space, and empty on purpose** — `docs/tablePlan.md` TA15.
+                                // **Empty space, and empty on purpose** — `memory/tablePlan.md` TA15.
                                 //
                                 // Not a disabled editor, not a read-only one: nothing at all. A cell
                                 // with any pointer input in it consumes the touch, and the whole
@@ -582,7 +582,7 @@ private fun TableGrid(
 }
 
 /**
- * A cell asked to take the caret, and what it should select when it does — `docs/searchPlan.md` CS9.
+ * A cell asked to take the caret, and what it should select when it does — `memory/searchPlan.md` CS9.
  *
  * [selection] is in the cell's own editor offsets, exactly as a container's is, since a cell holds
  * blocks the same way (TA2). Null selects nothing and leaves the caret where focus puts it.
@@ -593,7 +593,7 @@ internal data class CellFocus(val cellId: String, val selection: TextRange? = nu
 private const val FOCUS_ATTEMPTS = 5
 
 /**
- * Tab's whole behaviour inside a grid — `docs/tablePlan.md` TA17.
+ * Tab's whole behaviour inside a grid — `memory/tablePlan.md` TA17.
  *
  * The caret lands at the *end* of the destination's text rather than selecting it. Selecting is what
  * a spreadsheet does, because there a cell holds one value that Tab is usually about to replace; this
@@ -642,7 +642,7 @@ private fun SelectionOutline(accent: Color, left: Dp, top: Dp, width: Dp, height
 /**
  * One column's width handle: a bar lying across the direction it drags in.
  *
- * **Two gestures on one target** — `docs/tablePlan.md` TA16. Dragging it sets the column's width,
+ * **Two gestures on one target** — `memory/tablePlan.md` TA16. Dragging it sets the column's width,
  * which is what it has always done; *tapping* it holds that column, which is what makes Insert right
  * and Delete column mean something without a caret. The two cannot collide: one has travelled and
  * the other has not.

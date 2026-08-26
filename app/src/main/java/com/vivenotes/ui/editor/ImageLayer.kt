@@ -54,7 +54,7 @@ internal const val IMAGE_LAYER_TAG = "image-layer"
 /**
  * The pictures on the page — feature E6, as Prime Objects.
  *
- * **[EquationLayer] is nested inside this one, not beside it.** `docs/plan.md` entry 24 is the whole
+ * **[EquationLayer] is nested inside this one, not beside it.** `memory/plan.md` entry 24 is the whole
  * argument and it cost a day: two full-page layers as siblings means Compose hands every touch to
  * whichever is on top, and the one underneath goes quietly dead. The three are one chain instead —
  * and this is its outermost link, because a picture is the frontmost of the three and the touch is

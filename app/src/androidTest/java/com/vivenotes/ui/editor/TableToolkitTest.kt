@@ -39,7 +39,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The Table Class — `docs/diagram.md`, planned in `docs/tablePlan.md`.
+ * The Table Class — `memory/diagram.md`, planned in `memory/tablePlan.md`.
  *
  * Four things are worth pinning here and none of them is arithmetic; the arithmetic is in
  * `TableOpsTest`, which runs on the JVM. This covers the parts that need a device: that **Insert

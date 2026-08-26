@@ -63,7 +63,7 @@ internal const val EQUATION_LAYER_TAG = "equation-layer"
  * how big an equation is stays exact — see `Outline.Equation`, and contrast a table, whose height
  * only the canvas can know (TA3).
  *
- * Selection, four-corner resize and drag-to-move are `docs/plan.md` AD7, and the geometry deliberately
+ * Selection, four-corner resize and drag-to-move are `memory/plan.md` AD7, and the geometry deliberately
  * matches [ShapeLayer]'s to the dp: same hit radius, same anchor at the opposite corner, same dashed
  * box and same handles. An affordance that behaves differently depending on what is under it is worse
  * than not having one.
@@ -98,7 +98,7 @@ internal fun EquationLayer(
      * The next layer **down**, composed as a child rather than a sibling — `ShapeLayer` goes here.
      *
      * A slot rather than a sibling because two full-page layers side by side means Compose gives
-     * every touch to whichever is on top and the other goes silently dead — `docs/plan.md` entry 24.
+     * every touch to whichever is on top and the other goes silently dead — `memory/plan.md` entry 24.
      * Nesting is what orders them instead, and these layers claim a touch on the tunnelling pass,
      * where a parent is asked before its child: a formula takes a touch that lands on one, and the
      * shapes get what it declines.

@@ -111,7 +111,7 @@ private val LightColors = lightColorScheme(
 )
 
 /**
- * Accents for the two-tone icons, sampled from the ribbon in `docs/references/`.
+ * Accents for the two-tone icons, sampled from the ribbon in `memory/references/`.
  *
  * These are deliberately *not* part of the [androidx.compose.material3.ColorScheme]. An accent
  * here marks what a glyph means — blue for emphasis, green for create, gold for tag — so it
@@ -124,7 +124,7 @@ private val LightColors = lightColorScheme(
  * `primary` are neighbours rather than opposites, so a glyph's "this is emphasis" blue and the
  * shell's "this is the app" blue no longer separate on hue alone. They still separate on *place* —
  * an accent is inside an icon, the brand colour is chrome around it — and the sampled blue is what
- * `docs/references/generalUI.png` actually shows. Left alone deliberately; if the two ever read as
+ * `memory/references/generalUI.png` actually shows. Left alone deliberately; if the two ever read as
  * one thing, the fix is to move this blue, never to point it at the scheme.
  *
  * They are still theme-*aware*, because a colour picked to read against the dark ribbon does not
@@ -214,7 +214,7 @@ private val AppTypography = Typography(
 )
 
 /**
- * **M3 Expressive, applied at the root** — `docs/expressivePlan.md` EX1–EX3.
+ * **M3 Expressive, applied at the root** — `memory/expressivePlan.md` EX1–EX3.
  *
  * [MaterialExpressiveTheme] rather than `MaterialTheme` is nearly the whole of the adoption. Most of
  * expressive is not a component you call: this flips the CompositionLocal that the ordinary components

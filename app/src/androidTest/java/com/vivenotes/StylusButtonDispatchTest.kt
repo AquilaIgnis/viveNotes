@@ -89,7 +89,7 @@ class StylusButtonDispatchTest {
     }
 
     /**
-     * A press bound to nothing is **not consumed, at either end** — `docs/stylusPlan.md` SB5.
+     * A press bound to nothing is **not consumed, at either end** — `memory/stylusPlan.md` SB5.
      *
      * Three clicks is unbound by default, and the failure this guards is the tempting one: claiming
      * every stylus keycode at key-down while acting only on the bound ones at up. That would leave an

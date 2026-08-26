@@ -5,7 +5,7 @@ import kotlin.math.floor
 import kotlin.math.hypot
 
 /**
- * What is selected on the page, across every kind of object on it — `docs/plan.md` AD7.
+ * What is selected on the page, across every kind of object on it — `memory/plan.md` AD7.
  *
  * AD7's first consequence, made a type: *"selection is a page-level concept, not a per-layer one. A
  * lasso that returns only ink is a lasso that will need rewriting the first time a shape is inside
@@ -29,7 +29,7 @@ data class CanvasSelection(
     val path: List<InkPoint> = emptyList(),
     val inkIds: Set<String> = emptySet(),
     val shapeIds: Set<String> = emptySet(),
-    /** Tables — `docs/tablePlan.md` TA4. The third id set, added for the third kind. */
+    /** Tables — `memory/tablePlan.md` TA4. The third id set, added for the third kind. */
     val tableIds: Set<String> = emptySet(),
     /** Equations placed on the canvas — the fourth kind, and the fourth id set. */
     val equationIds: Set<String> = emptySet(),
@@ -162,7 +162,7 @@ data class CanvasSelection(
             bounds = shape.pageBounds(),
         )
 
-        /** One table, selected by putting a caret in any of its cells — `docs/tablePlan.md` TA11. */
+        /** One table, selected by putting a caret in any of its cells — `memory/tablePlan.md` TA11. */
         fun ofTable(table: TableBounds): CanvasSelection = CanvasSelection(
             tableIds = setOf(table.id),
             bounds = table.bounds,
@@ -186,7 +186,7 @@ data class CanvasSelection(
  * A table as the selection sees it: an id, and the rectangle the **canvas** measured for it.
  *
  * Not `Outline.Table`, deliberately. A table's height is whatever its cells' text wraps to, and the
- * document only stores each row's floor (`docs/tablePlan.md` TA3) — so the model's idea of how tall a
+ * document only stores each row's floor (`memory/tablePlan.md` TA3) — so the model's idea of how tall a
  * table is runs short the moment a cell overflows, and a selection rectangle that runs short is a
  * lasso that misses and a toolbar that sits on top of the thing it belongs to. The canvas knows the
  * true height because it laid the table out, so it is the canvas that says.
@@ -196,7 +196,7 @@ data class CanvasSelection(
 data class TableBounds(val id: String, val bounds: InkBounds)
 
 /**
- * The shared prime object clipboard's contents — `docs/diagram.md`.
+ * The shared prime object clipboard's contents — `memory/diagram.md`.
  *
  * One clipboard holding every kind, rather than one per kind, so that a loop drawn round a stroke and
  * a shape copies both and pastes both. Shallow by design: a native `Stroke` is immutable and an
@@ -206,7 +206,7 @@ data class CanvasClipboard(
     val strokes: List<PageStroke> = emptyList(),
     val shapes: List<Outline.Shape> = emptyList(),
     /**
-     * Text containers, carried whole — `docs/textBoxPlan.md` TD5.
+     * Text containers, carried whole — `memory/textBoxPlan.md` TD5.
      *
      * `Outline.Text` rather than the `OutlineBox` the canvas lays out with, because that one is
      * geometry alone and a copied text box without its text is a rectangle. This is the one place the
@@ -215,7 +215,7 @@ data class CanvasClipboard(
      */
     val texts: List<Outline.Text> = emptyList(),
     /**
-     * Tables, carried with every cell's blocks — `docs/tablePlan.md` TA4.
+     * Tables, carried with every cell's blocks — `memory/tablePlan.md` TA4.
      *
      * Read out of the ViewModel's block map on the way in rather than off `uiState.tables`, whose
      * cells hold what the page was *loaded* with and go stale the moment anything is typed. A table
@@ -426,7 +426,7 @@ private const val CLOSING_TRAVEL = 8f
  *
  * **Tables are deliberately not here**, and are missing from the signature rather than filtered out of
  * it, so that putting them back has to be a decision rather than an oversight. A table is a large
- * rectangle of mostly empty cells, and an ink-only one (`docs/tablePlan.md` TA15) is a ruling drawn
+ * rectangle of mostly empty cells, and an ink-only one (`memory/tablePlan.md` TA15) is a ruling drawn
  * *to be written inside*: a tap in it is how the ink there is reached, so letting the grid answer for
  * that area would put every stroke inside a table out of reach of the tool meant to select it. A loop
  * still takes a table exactly as it always did.

@@ -357,7 +357,7 @@ class OutlineEditTextTest {
     // --- font size ---------------------------------------------------------------------------
 
     /**
-     * The bug in `docs/screenshots/font.png`: text resized to 20 while the ribbon still read 12.
+     * The bug, reported from a screenshot: text resized to 20 while the ribbon still read 12.
      *
      * Setting a size removed nothing, because a span's real size was compared against a zeroed
      * placeholder and never matched. The new span drew over the old one, so the text looked right

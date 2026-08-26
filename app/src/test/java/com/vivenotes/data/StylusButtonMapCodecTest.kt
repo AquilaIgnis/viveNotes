@@ -5,7 +5,7 @@ import org.junit.Test
 
 /**
  * How a stored binding survives a build that does not have the action it names —
- * `docs/stylusPlan.md` SB4.
+ * `memory/stylusPlan.md` SB4.
  *
  * Not a test of [PenSettingsStore]: that needs a `Context` and is out of reach until Robolectric lands
  * (risk R10). It is a test of [penSettingsJson], the configuration the store actually decodes with, so

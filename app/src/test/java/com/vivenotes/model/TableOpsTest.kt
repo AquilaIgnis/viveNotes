@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The Table Class's grid arithmetic — `docs/tablePlan.md`, step 0 of §3.
+ * The Table Class's grid arithmetic — `memory/tablePlan.md`, step 0 of §3.
  *
  * Deliberately the largest piece of pure logic in the feature, because it is the piece that *runs on
  * this host* (R10) and the piece where a mistake is silent: a column removed from `columns` but not

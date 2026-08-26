@@ -82,7 +82,7 @@ enum class ToolPane(val title: String) {
     Recognition("Recognition"),
     Hardware("Hardware"),
 
-    /** Fuzzy search over the notebook's text boxes and fields — `docs/searchPlan.md` CS1. */
+    /** Fuzzy search over the notebook's text boxes and fields — `memory/searchPlan.md` CS1. */
     Content("Content"),
 }
 
@@ -100,7 +100,7 @@ internal object PanelTags {
  *
  * Some controls do not belong in a drop-down: Paper Size is four labelled fields and two groups,
  * and a menu that size stops being a menu and becomes a form floating over the page it describes.
- * The reference does the same thing — `docs/references/views-pages.png` is exactly this pane — and
+ * The reference does the same thing — `memory/references/views-pages.png` is exactly this pane — and
  * a docked panel also stays open while you watch the page change under it, which is the whole point
  * of a control that alters the page's geometry.
  */
@@ -386,7 +386,7 @@ fun PanelMeasure(
  *
  * The Pen pane is laid out this way rather than with [PanelRow]'s fixed label column, because its
  * controls are switches and chips of different widths that the reference aligns to the margin —
- * `docs/references/pen-tooltip.jpeg`. [info] adds the (i) beside the label — see [InfoIcon].
+ * `memory/references/pen-tooltip.jpeg`. [info] adds the (i) beside the label — see [InfoIcon].
  */
 @Composable
 fun PanelSetting(label: String, info: String? = null, trailing: @Composable () -> Unit) {

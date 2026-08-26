@@ -12,7 +12,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
+import kotlin.math.PI
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import com.vivenotes.data.RulerKind
@@ -20,7 +23,7 @@ import com.vivenotes.ink.Ruler
 import com.vivenotes.ui.theme.ViveNotesTheme
 
 /**
- * The ruler's own gesture, composed alone — `docs/rulerPlan.md` RD4.
+ * The ruler's own gesture, composed alone — `memory/rulerPlan.md` RD4.
  *
  * Written because driving this through the running app proved worthless: the dial travels with the
  * ruler, so every check needed a fresh screenshot to aim at, and a tap that misses lands on the page
@@ -116,6 +119,56 @@ class RulerGestureTest {
 
         assertEquals("a drag is not a tap", 0, taps)
         assertEquals("and it should have carried the ruler", 200f, moved.x, 8f)
+    }
+
+    /**
+     * **Two fingers carry it as far as the hand went, and no further.**
+     *
+     * The reported bug, counted rather than photographed (RR6). The old detector followed one
+     * nominated finger — `pressed.first()` — and that finger changes identity the moment the hand
+     * adds or lifts one, so lifting the *first* of a pair handed the ruler a delta the width of the
+     * hand: here, a 400px sideways jump on top of the 100px the fingers actually travelled.
+     */
+    @Test
+    fun twoFingersCarryTheRulerByWhatTheHandMovedNotByHowFarApartItIs() {
+        setGesture(ruler())
+
+        compose.onNodeWithTag(tag).performTouchInput {
+            down(0, Offset(300f, 500f))
+            down(1, Offset(700f, 500f))
+            updatePointerTo(0, Offset(300f, 600f))
+            updatePointerTo(1, Offset(700f, 600f))
+            move()
+            // Lifted one at a time, which is what a hand does and what used to produce the jump.
+            up(0)
+            up(1)
+        }
+        compose.waitForIdle()
+
+        assertEquals("the hand went nowhere sideways", 0f, moved.x, 8f)
+        assertEquals("and 100 down", 100f, moved.y, 8f)
+        assertEquals("two fingers are never a tap on the dial", 0, taps)
+    }
+
+    /** And the twist between them turns it, without the pair also dragging it about. */
+    @Test
+    fun twoFingersTwistingTurnTheRulerInPlace() {
+        setGesture(ruler())
+
+        compose.onNodeWithTag(tag).performTouchInput {
+            down(0, Offset(300f, 500f))
+            down(1, Offset(700f, 500f))
+            // A quarter turn about the midpoint they started on, which does not move.
+            updatePointerTo(0, Offset(500f, 300f))
+            updatePointerTo(1, Offset(500f, 700f))
+            move()
+            up(0)
+            up(1)
+        }
+        compose.waitForIdle()
+
+        assertEquals("a quarter turn", (PI / 2).toFloat(), turned, 0.05f)
+        assertTrue("and the centre stayed put", abs(moved.x) < 8f && abs(moved.y) < 8f)
     }
 
     @Test

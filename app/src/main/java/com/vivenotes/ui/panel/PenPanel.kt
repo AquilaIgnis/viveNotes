@@ -65,7 +65,7 @@ object PenPanelTags {
 }
 
 /**
- * The pen settings pane, laid out as `docs/references/pen-tooltip.jpeg` lays it out.
+ * The pen settings pane, laid out as `memory/references/pen-tooltip.jpeg` lays it out.
  *
  * Sized to fit the floating settings surface without scrolling in the common tablet layout. The
  * popup itself constrains and scrolls the content when the screen or font scale leaves less room.

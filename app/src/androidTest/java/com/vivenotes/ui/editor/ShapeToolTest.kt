@@ -69,7 +69,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Insert Shape — `docs/inkPlan.md` §5.4.
+ * Insert Shape — `memory/inkPlan.md` §5.4.
  *
  * The button has two homes and one armed tool behind them, which is exactly the shape of code where
  * one tab silently stops arming anything. The pane's grid is the other risk: a page of chips whose
@@ -295,7 +295,7 @@ class ShapeToolTest {
     fun theFillSwatchWearsTheFill() {
         // Read off the pixels rather than off the state that produced them. The swatch is now the
         // only thing in the pane that says what the fill *is*, so "correct data, nothing on screen"
-        // is exactly the failure this has to see — the lesson from `docs/plan.md` §1a entry 14.
+        // is exactly the failure this has to see — the lesson from `memory/plan.md` §1a entry 14.
         val red = 0xFFE53935.toInt()
         setPanel(ShapeSettings(fillArgb = red))
 
@@ -771,7 +771,7 @@ class ShapeToolTest {
         assertEquals("the tap fell through to the canvas as well", 0, canvasTaps)
     }
     // -----------------------------------------------------------------------------------------
-    // The toolkit: base plus what a shape adds — `docs/diagram.md`
+    // The toolkit: base plus what a shape adds — `memory/diagram.md`
     // -----------------------------------------------------------------------------------------
 
     private fun setToolkit(extras: @Composable RowScope.() -> Unit) {
@@ -807,7 +807,7 @@ class ShapeToolTest {
 
     @Test
     fun aShapeToolkitCarriesLineThicknessLineTypeAndFill() {
-        // `docs/diagram.md` names the Shapes Class toolkit exactly: "line thickness, line type, fill".
+        // `memory/diagram.md` names the Shapes Class toolkit exactly: "line thickness, line type, fill".
         setToolkit {
             ThicknessAction(width = 3) { borderWidth = it }
             LineTypeAction(current = LineType.Solid) { lineType = it }

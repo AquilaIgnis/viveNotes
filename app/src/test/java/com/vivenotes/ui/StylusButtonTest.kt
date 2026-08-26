@@ -21,7 +21,7 @@ class StylusButtonTest {
     // --- the default map: nobody who ignores the pane can tell this became configurable ----------
 
     /**
-     * `docs/stylusPlan.md` SB4. These three assertions are the whole promise of the defaults: single
+     * `memory/stylusPlan.md` SB4. These three assertions are the whole promise of the defaults: single
      * click toggles pen and eraser, double click reaches the lasso, and a third click is unbound —
      * exactly what the hard-coded version shipped with.
      */

@@ -21,7 +21,7 @@ import com.vivenotes.data.StylusButtonMap
  * layout — a Lenovo Tab Pen Plus ships `/system/usr/keylayout/Vendor_17ef_Product_617f.kl` with
  * `PEN_ONE_CLICK`, `PEN_TWO_CLICK`, `PEN_THREE_CLICK` and `PEN_LONG_CLICK`.
  *
- * **What each click count *does* is the user's choice** — `docs/stylusPlan.md`, decisions SB1–SB9.
+ * **What each click count *does* is the user's choice** — `memory/stylusPlan.md`, decisions SB1–SB9.
  * This file holds the two pure halves of that: which press a keycode is, and what a bound
  * [StylusAction] arms. The stored bindings are [StylusButtonMap] in `data/PenSettings.kt`, and the
  * `when` that turns an action into a call is `NotesViewModel.pressStylusButton`.
@@ -48,7 +48,7 @@ internal fun NotesViewModel.handleStylusButton(keyCode: Int): Boolean {
 /**
  * Whether a keycode is one of ours *and* currently bound, for claiming the down-press we act on at up.
  *
- * **Both halves read the same bindings, and must** — `docs/stylusPlan.md` SB5. Claiming every stylus
+ * **Both halves read the same bindings, and must** — `memory/stylusPlan.md` SB5. Claiming every stylus
  * keycode here while acting on only the bound ones at up would turn an unbound press into a
  * *swallowed* press: it would stop falling through to whatever else wanted it, which is the property
  * the feature deliberately has. The two cannot disagree in practice, since changing a binding between

@@ -1,7 +1,7 @@
 [versions]
 agp = "9.2.1"
 # Kotlin version bundled by AGP 9.2.1's built-in Kotlin support. The compose and
-# serialization compiler plugins must track this exactly. See docs/plan.md §11.
+# serialization compiler plugins must track this exactly. See memory/plan.md §11.
 kotlin = "2.2.10"
 # Independently versioned since KSP 2.3.0 — it no longer tracks `kotlin` above. 2.3.6 is the
 # minimum that registers generated sources without `android.disallowKotlinSourceSets=false`.
@@ -10,7 +10,7 @@ ksp = "2.3.6"
 activityCompose = "1.10.1"
 composeBom = "2025.09.00"
 
-# M3 Expressive, on purpose and on pre-release — decided 2026-08-09, `docs/plan.md` §1a.
+# M3 Expressive, on purpose and on pre-release — decided 2026-08-09, `memory/plan.md` §1a.
 #
 # `ContainedLoadingIndicator` exists in **no stable material3 and in no Compose BOM**. Verified by
 # reading the AARs, not the release notes: 1.4.0 (which even the newest BOM, 2026.06.01, pins) ships

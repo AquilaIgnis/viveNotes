@@ -51,10 +51,10 @@ data class DrawActions(
     val updateEraser: (EraserSettings) -> Unit,
     val updateHighlighter: (HighlighterSettings) -> Unit = {},
     val updateShape: (ShapeSettings) -> Unit = {},
-    /** How the next table arrives — `docs/tablePlan.md` TA7. A preference, never an edit. */
+    /** How the next table arrives — `memory/tablePlan.md` TA7. A preference, never an edit. */
     val updateTable: (TableSettings) -> Unit = {},
     val updateRuler: (RulerSettings) -> Unit = {},
-    /** Lays the ruler on the page, or picks it up again — `docs/rulerPlan.md` RD1. */
+    /** Lays the ruler on the page, or picks it up again — `memory/rulerPlan.md` RD1. */
     val toggleRuler: () -> Unit = {},
     /**
      * Takes a composed formula in hand: the next tap on bare canvas places it.
@@ -94,7 +94,7 @@ internal object DrawTags {
  * of a trip through a menu, which is the whole reason a pen tray has more than one pen in it. What
  * distinguishes them on screen is therefore the colour of each pencil itself.
  *
- * Holding a pen opens its settings (`docs/references/pen-tooltip.jpeg`). Tapping the pen that is
+ * Holding a pen opens its settings (`memory/references/pen-tooltip.jpeg`). Tapping the pen that is
  * already selected does the same thing, because a gesture nobody discovers is a gesture nobody uses.
  *
  * Undo and redo are icon-only — their glyphs are universal, so a label would only cost width in a
@@ -322,7 +322,7 @@ private fun HighlighterButton(
 }
 
 /**
- * The ruler — `docs/rulerPlan.md` RD7.
+ * The ruler — `memory/rulerPlan.md` RD7.
  *
  * **Tap toggles, hold configures**, which is deliberately not the eraser's bargain. Every other
  * control in this tray is picked *up*, so tapping an already-selected one is free to mean "show me

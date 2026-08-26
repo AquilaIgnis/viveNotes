@@ -278,7 +278,7 @@ internal fun EquationSourceDialog(
                 if (submitting) {
                     // Uncontained, and sized to the label it replaces — the same call the recognition
                     // panel's in-button spinner makes, for the same reason: a contained indicator
-                    // inside a button is a container in a container. `docs/expressivePlan.md` EX6.
+                    // inside a button is a container in a container. `memory/expressivePlan.md` EX6.
                     LoadingIndicator(Modifier.size(18.dp))
                 } else {
                     Text(if (editing) "Update" else "Insert")

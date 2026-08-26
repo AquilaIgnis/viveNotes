@@ -107,7 +107,7 @@ class OutlineEditText @JvmOverloads constructor(
 
     /**
      * What Tab does when this editor is a table cell: move the caret on, and say whether it moved —
-     * `docs/tablePlan.md` TA17.
+     * `memory/tablePlan.md` TA17.
      *
      * Null in a text container, which is the common case and the one Tab already had an answer for:
      * inside a note, indent is what a writer means. A cell is where that stops being true, because

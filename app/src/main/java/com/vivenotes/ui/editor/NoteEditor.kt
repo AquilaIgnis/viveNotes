@@ -42,7 +42,7 @@ val LocalVideoThumbnails = staticCompositionLocalOf<VideoThumbnails?> { null }
  * View (AD6).
  *
  * Extracted from `OutlineContainer` when tables arrived, because a table cell is the same thing: a
- * box that holds blocks (`docs/tablePlan.md` TA2). Two copies of this configuration would be two
+ * box that holds blocks (`memory/tablePlan.md` TA2). Two copies of this configuration would be two
  * places for the base text size, the input type or the default marks to drift apart, and the first
  * symptom of that is text in a table that renders half a point off the text beside it.
  *
@@ -63,7 +63,7 @@ internal fun NoteEditor(
     onSelectionChanged: (SelectionState) -> Unit,
     onMarkArmed: (Mark) -> Unit = {},
     /**
-     * Where Tab goes, for an editor that is a table cell — `docs/tablePlan.md` TA17. Returns whether
+     * Where Tab goes, for an editor that is a table cell — `memory/tablePlan.md` TA17. Returns whether
      * it moved; null, and false, both leave Tab as the indent it is in a text container.
      */
     onTabNavigate: ((forward: Boolean) -> Boolean)? = null,

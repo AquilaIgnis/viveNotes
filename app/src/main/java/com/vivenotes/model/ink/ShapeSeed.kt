@@ -5,7 +5,7 @@ import kotlin.math.sin
 
 /**
  * Turns a [ShapeKind] and the box it was dragged out into the segments that shape starts as —
- * `docs/inkPlan.md` §5.4.
+ * `memory/inkPlan.md` §5.4.
  *
  * The seam between the two halves of the geometry. [trace] answers *what does this shape look like*,
  * which is what a picker chip and a live drag preview need; this answers *what segments is it made

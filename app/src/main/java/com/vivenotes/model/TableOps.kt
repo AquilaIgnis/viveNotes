@@ -3,7 +3,7 @@ package com.vivenotes.model
 import com.vivenotes.model.Outline.Table
 
 /**
- * Everything the Table Class's toolkit does to a grid — `docs/diagram.md`, `docs/tablePlan.md` TA6.
+ * Everything the Table Class's toolkit does to a grid — `memory/diagram.md`, `memory/tablePlan.md` TA6.
  *
  * Pure functions on the document model, with no Android in sight, for the reason `ShapeSegment`'s
  * geometry is: this is the half of the feature that can be *tested on this host* (R10), and it is the

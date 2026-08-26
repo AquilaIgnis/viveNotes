@@ -20,7 +20,7 @@ import kotlinx.serialization.json.jsonObject
 private val Context.penPreferences: DataStore<Preferences> by preferencesDataStore("pens")
 
 /**
- * Pen types from `docs/references/pen-tooltip.jpeg`.
+ * Pen types from `memory/references/pen-tooltip.jpeg`.
  *
  * The middle entry of that row is crossed out in the screenshot, so it is not here at all — the
  * same handling the View tab gives Dock to Desktop and the rest of the crossed-out list.
@@ -38,7 +38,7 @@ enum class EraserMode(val label: String) {
     Object("Object"),
 }
 
-/** The two rulers — `docs/rulerPlan.md`. A straightedge, and a semicircle for arcs. */
+/** The two rulers — `memory/rulerPlan.md`. A straightedge, and a semicircle for arcs. */
 @Serializable
 enum class RulerKind(val label: String) {
     Straight("Straight"),
@@ -46,7 +46,7 @@ enum class RulerKind(val label: String) {
 }
 
 /**
- * The ruler you draw against — `docs/rulerPlan.md` RD2.
+ * The ruler you draw against — `memory/rulerPlan.md` RD2.
  *
  * Only what describes *the user*: which ruler they reach for and how big they like it. Whether it is
  * currently out, and where it is lying, are facts about this moment rather than about anyone, so they
@@ -61,7 +61,7 @@ data class RulerSettings(
      *
      * **The straightedge has no length here**, and that is the point: it always spans the viewport
      * (RD3a), so its length is a layout fact rather than a preference. It was a setting until the
-     * reference plate settled the question — the ruler in `docs/references/ruler.png` runs off both
+     * reference plate settled the question — the ruler in `memory/references/ruler.png` runs off both
      * edges of the frame, which is what a straightedge you lay across your work does.
      */
     val diameterDp: Int = DEFAULT_DIAMETER,
@@ -134,7 +134,7 @@ data class EraserSettings(
 }
 
 /**
- * The Insert Shape tool — `docs/inkPlan.md` §5.4.
+ * The Insert Shape tool — `memory/inkPlan.md` §5.4.
  *
  * Not a [PenPreset], for the reason [HighlighterSettings] is not: the questions differ. A shape has
  * no nib, no pressure response and no stabilization — it is traced along an ideal path, so there is
@@ -174,7 +174,7 @@ data class ShapeSettings(
 }
 
 /**
- * The Insert Table tool — `docs/tablePlan.md` TA7, and `docs/references/table-opts.jpeg` field for
+ * The Insert Table tool — `memory/tablePlan.md` TA7, and `memory/references/table-opts.jpeg` field for
  * field.
  *
  * Every value here describes *the user*, per ID5: how you like a table to start. What the table
@@ -248,7 +248,7 @@ fun ShapeSettings.forCanvasTheme(isDark: Boolean): ShapeSettings =
  * [EditorDefaults] rather than anything in `PageDoc`. A pen is how someone likes to write; the brush
  * recorded on a stroke is a property of that stroke and travels with it to another device. Getting
  * that boundary wrong is a sync bug rather than a refactor, so it is worth stating twice:
- * `docs/inkPlan.md` ID5 has the full three-way rule.
+ * `memory/inkPlan.md` ID5 has the full three-way rule.
  *
  * Defaults are the values the reference screenshot is showing.
  */
@@ -383,7 +383,7 @@ sealed interface DrawTool {
     data object Shape : DrawTool
 
     /**
-     * Insert Table: the next tap on bare canvas puts a table there — `docs/tablePlan.md` TA7.
+     * Insert Table: the next tap on bare canvas puts a table there — `memory/tablePlan.md` TA7.
      *
      * A tool rather than a button that drops one, for the reason [Shape] is one: a page is a canvas,
      * and what goes on it goes where you put it. How many rows and columns it arrives with is
@@ -423,7 +423,7 @@ sealed interface DrawTool {
 
     /**
      * Text: a tap on bare canvas opens a container and puts a caret in it —
-     * `docs/textBoxPlan.md` TD2.
+     * `memory/textBoxPlan.md` TD2.
      *
      * This *was* [None], which is why the Home tab's **T** button could be pressed but never
      * unpressed: the name said "nothing armed" and the behaviour said "text armed", so there was
@@ -439,7 +439,7 @@ sealed interface DrawTool {
 }
 
 /**
- * What one press of the stylus's barrel button does — `docs/stylusPlan.md` SB2.
+ * What one press of the stylus's barrel button does — `memory/stylusPlan.md` SB2.
  *
  * Every entry is something the ribbon can already do, reached through a view-model method that
  * already exists: this is a second way to reach a capability, never a new one. What is *not* here is
@@ -470,7 +470,7 @@ enum class StylusAction(val label: String) {
 }
 
 /**
- * What each click count does — `docs/stylusPlan.md` SB1 and SB3.
+ * What each click count does — `memory/stylusPlan.md` SB1 and SB3.
  *
  * **The unit is a completed click count, not "the button".** The pen reports one, two and three
  * clicks as three separate keycodes because its firmware has already done the timing, so there are

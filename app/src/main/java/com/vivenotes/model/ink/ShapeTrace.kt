@@ -39,7 +39,7 @@ const val PAGE_SOLID = 1
  * split happens (AD5) — and, more immediately, so the geometry is covered by JVM tests rather than
  * by eyeballing a device.
  *
- * This is `docs/inkPlan.md` §5.3's `traceShape`, built early. §5.4 (Insert Shape) needs it to lay an
+ * This is `memory/inkPlan.md` §5.3's `traceShape`, built early. §5.4 (Insert Shape) needs it to lay an
  * ideal shape down from nothing; §5.1–5.3 (hold to snap) will need the same function to replace a
  * freehand stroke with an ideal one. Building the picker first leaves 11f only its classifier to
  * write.
@@ -94,7 +94,7 @@ enum class ShapeKind(val label: String, val page: Int) {
 /**
  * One shape's geometry, as polylines of interleaved x/y in page units.
  *
- * `FloatArray` rather than a list of points because `docs/inkPlan.md` §5.2 already declares
+ * `FloatArray` rather than a list of points because `memory/inkPlan.md` §5.2 already declares
  * `ShapeFit.classify(points: FloatArray, …)` — the two halves of the feature then speak one
  * language, and neither allocates an object per point.
  *
@@ -102,7 +102,7 @@ enum class ShapeKind(val label: String, val page: Int) {
  * directly without the caller having to know which kinds close.
  *
  * [hidden] is the edges a solid occludes, drawn dotted. It is empty for every flat shape — see
- * `docs/inkPlan.md` §5.4 SD3 for why there is no toggle.
+ * `memory/inkPlan.md` §5.4 SD3 for why there is no toggle.
  *
  * [fill] is the region a fill colour paints, and it is **not** the same as [solid]. For a flat shape
  * the two are the same closed outline, but a wireframe cube has no single inside: filling its twelve
@@ -563,7 +563,7 @@ private fun appendArc(
  * which at any size a page shape reaches is under a hundredth of a page unit — far below what any
  * zoom can show. Because it is driven by *length*, the same function serves a 28dp picker chip and
  * a 400dp shape on the page: the chip gets about two dozen segments, the page shape gets the 1°
- * step `docs/inkPlan.md` §5.3 asks for, and neither is a special case.
+ * step `memory/inkPlan.md` §5.3 asks for, and neither is a special case.
  *
  * The floor matters more than it looks: without it a chip-sized ellipse would be a hexagon.
  */

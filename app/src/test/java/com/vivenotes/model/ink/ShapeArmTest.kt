@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The arms of an L, and what a handle on one of them may do — `docs/inkPlan.md` §5.4 SD9.
+ * The arms of an L, and what a handle on one of them may do — `memory/inkPlan.md` §5.4 SD9.
  *
  * All of this is geometry, so it belongs here rather than on a device: which ends a shape offers,
  * which axis each runs along, and what a drag along that axis leaves untouched. The failure it is

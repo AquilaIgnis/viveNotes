@@ -21,7 +21,7 @@ import java.security.MessageDigest
  * Why connecting to a server failed, in the terms the person who typed the address can act on.
  *
  * Deliberately not the HTTP status and not the server's `message` field: viveCServer's contract
- * (`docs/openapi.yaml`) says client logic branches on the `error` code and treats `message` as
+ * (`viveCServer/docs/openapi.yaml`) says client logic branches on the `error` code and treats `message` as
  * human-readable detail that may change. This enum is that decision made once, at the boundary, so
  * no caller is tempted to match on prose.
  */

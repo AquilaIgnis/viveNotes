@@ -147,7 +147,7 @@ private val CANVAS_TRAILING_SPACE = 320.dp
 private val CANVAS_TRAILING_WIDTH = 200.dp
 private val CANVAS_MIN_WIDTH = 720.dp
 /**
- * How far inside the window a revealed search result is placed — `docs/searchPlan.md` CS9.
+ * How far inside the window a revealed search result is placed — `memory/searchPlan.md` CS9.
  *
  * Not flush against the corner: a container scrolled hard against the edge has its move grip and its
  * left rule off screen, and a result that lands there reads as having overshot.
@@ -230,7 +230,7 @@ fun EditorPane(
     onMarkArmed: (Mark) -> Unit,
     onCreateOutline: (Float, Float) -> String,
     /**
-     * Whether the Home tab's **T** is pressed — `docs/textBoxPlan.md` TD2.
+     * Whether the Home tab's **T** is pressed — `memory/textBoxPlan.md` TD2.
      *
      * A tap on bare canvas opens a container only while it is, which is the whole of what the toggle
      * toggles. Defaulted true so the canvas can be exercised in isolation, and because a test that
@@ -241,7 +241,7 @@ fun EditorPane(
     onResizeOutline: (String, Float) -> Unit,
     onSetOutlineMinHeight: (String, Float) -> Unit,
     onOutlineBlurred: (String) -> Unit,
-    /** The TextBox toolkit — `docs/textBoxPlan.md` TD3–TD5. */
+    /** The TextBox toolkit — `memory/textBoxPlan.md` TD3–TD5. */
     onCopyOutline: (String) -> Unit = {},
     onDeleteOutlines: (Set<String>) -> Unit = {},
     /**
@@ -257,7 +257,7 @@ fun EditorPane(
     /** Drawn while the Paper Size pane is open, so the margins being edited are visible. */
     showPrintMargins: Boolean,
     /**
-     * A search result to show — `docs/searchPlan.md` CS9.
+     * A search result to show — `memory/searchPlan.md` CS9.
      *
      * A standing request rather than an event, because it usually arrives while the page it names is
      * still loading: it is honoured on the first composition where that page is open *and* the box it
@@ -279,14 +279,14 @@ fun EditorPane(
     /** The armed shape's settings, or null when Insert Shape is not the tool in hand. */
     shaping: ShapeSettings? = null,
     /**
-     * The ruler's settings while it is out, or null while it is away — `docs/rulerPlan.md`.
+     * The ruler's settings while it is out, or null while it is away — `memory/rulerPlan.md`.
      *
      * Only *which* ruler and how big, per RD2. Where it is lying is this composable's business,
      * because it is a fact about this moment and nothing outside the canvas has any use for it.
      */
     ruler: RulerSettings? = null,
     /**
-     * The tables on the page, and everything the Table Class can do to one — `docs/tablePlan.md`.
+     * The tables on the page, and everything the Table Class can do to one — `memory/tablePlan.md`.
      *
      * `tableArmed` is Insert Table in hand (TA7): the next tap on bare canvas puts one there, and
      * [onInsertTable] returns its id so the page can select what it just made.
@@ -401,7 +401,7 @@ fun EditorPane(
     var focusedOutlineId by remember { mutableStateOf<String?>(null) }
 
     /**
-     * The table cell with the caret in it, if any — `docs/tablePlan.md` TA6.
+     * The table cell with the caret in it, if any — `memory/tablePlan.md` TA6.
      *
      * Beside [focusedOutlineId] rather than folded into it: the two never both hold something (one
      * editor has focus), but they mean different things to everything downstream. A container id
@@ -411,7 +411,7 @@ fun EditorPane(
     var focusedCellId by remember { mutableStateOf<String?>(null) }
 
     /**
-     * Puts text input away, wherever on the page it is — `docs/tablePlan.md` TA11.
+     * Puts text input away, wherever on the page it is — `memory/tablePlan.md` TA11.
      *
      * **Nothing else on this canvas ever would.** An editor is a real `EditText` (AD6), and Compose
      * does not touch the focus of a View it is only hosting, so a tap that lands anywhere but in
@@ -438,7 +438,7 @@ fun EditorPane(
     }
 
     /**
-     * The row or column held by a tap on its gutter handle — `docs/tablePlan.md` TA16.
+     * The row or column held by a tap on its gutter handle — `memory/tablePlan.md` TA16.
      *
      * Beside the selection rather than inside it, for the reason [TableAxis] gives: a `CanvasSelection`
      * holds objects on the page, and this is a place inside one of them.
@@ -484,7 +484,7 @@ fun EditorPane(
     val currentEquations = rememberUpdatedState(equations)
 
     /**
-     * Which containers currently hold text — `docs/textBoxPlan.md` TD3.
+     * Which containers currently hold text — `memory/textBoxPlan.md` TD3.
      *
      * The toolkit appears under the same rule the container's own chrome does, *focused and
      * non-empty*, and that second half is known here rather than in the ViewModel: an empty
@@ -514,7 +514,7 @@ fun EditorPane(
     val lassoGesture = remember { LassoGesture() }
 
     /**
-     * The tables as rectangles, measured — `docs/tablePlan.md` TA3 and [TableBounds].
+     * The tables as rectangles, measured — `memory/tablePlan.md` TA3 and [TableBounds].
      *
      * A table's height is whatever its cells' text wraps to and the document stores only each row's
      * floor, so the model runs short the moment a cell overflows. The canvas laid the table out, so
@@ -603,7 +603,7 @@ fun EditorPane(
                     if (!editorWasFocused && outlineId != null) onOutlineBlurred(outlineId)
                     onSelectionChanged(SelectionState())
                 }
-                // Picking up another tool drops the object selection — `docs/diagram.md`, Prime
+                // Picking up another tool drops the object selection — `memory/diagram.md`, Prime
                 // Object Class. The lasso's preview goes with it for the reason Delete clears both:
                 // it holds the transform the handles were drawn from, and a live one outliving the
                 // selection is a rectangle over nothing. `heldAxis` needs no line here — it is
@@ -699,7 +699,7 @@ fun EditorPane(
     val flingSpec = rememberSplineBasedDecay<Float>()
 
     /**
-     * Scrolls a revealed search result into view and hands the caret to it — `docs/searchPlan.md` CS9.
+     * Scrolls a revealed search result into view and hands the caret to it — `memory/searchPlan.md` CS9.
      *
      * Keyed on the page's geometry as well as on the request, because the request almost always
      * arrives before the page it names: opening a result switches page, and the containers land a few
@@ -1285,7 +1285,7 @@ fun EditorPane(
                         )
                     }
 
-                    // In front of all of it — `docs/tablePlan.md` TA11, half amended. Compose
+                    // In front of all of it — `memory/tablePlan.md` TA11, half amended. Compose
                     // hit-tests the last sibling first, so a table is asked before the object layers
                     // and before the containers they hold. TA11's first half is what that keeps: a
                     // table takes its own taps from a shape drawn under it. Its second half is gone
@@ -1562,7 +1562,7 @@ fun EditorPane(
                                 onEdit = { onEditEquation(held.equationIds, it) },
                             )
                         }
-                        // The Table Class's half — `docs/tablePlan.md` TA6. The row and column
+                        // The Table Class's half — `memory/tablePlan.md` TA6. The row and column
                         // actions need *one* table to act on and a place in it, so they appear for a
                         // single held table; the rules and the fill apply to any number.
                         if (held.isTableOnly) {
@@ -1600,7 +1600,7 @@ fun EditorPane(
                                     heldAxis = null
                                 }
 
-                                // **The bar follows what is held** — `docs/tablePlan.md` TA16, and
+                                // **The bar follows what is held** — `memory/tablePlan.md` TA16, and
                                 // what `table-tooltip1.jpeg` and `2` differ by. With a row or a
                                 // column held there is one thing the verbs are about, so they stop
                                 // needing a menu and become the Material Symbols that draw them.
@@ -1636,7 +1636,7 @@ fun EditorPane(
                 )
             }
 
-            // The TextBox toolkit — `docs/textBoxPlan.md` TD3. It hangs off the *focused* container
+            // The TextBox toolkit — `memory/textBoxPlan.md` TD3. It hangs off the *focused* container
             // rather than off a selection, because TD1 declined the object-selection half of AD7:
             // there is exactly one container a bar could be about, and it is the one you are in.
             //
@@ -1991,7 +1991,7 @@ internal object OutlineTags {
 /**
  * Selects [range] in this editor, clamped to the text it is actually holding.
  *
- * The offsets come from the document (`docs/searchPlan.md` CS5) and are applied to a View that may
+ * The offsets come from the document (`memory/searchPlan.md` CS5) and are applied to a View that may
  * still be a frame behind it — a table cell mid-rebuild, a container whose blocks have not been set.
  * Clamping keeps that a caret in the wrong place for one frame rather than an exception.
  */
@@ -2012,7 +2012,7 @@ internal fun OutlineContainer(
     focused: Boolean,
     requestFocus: Boolean,
     /**
-     * What to select once focus arrives, in editor offsets — `docs/searchPlan.md` CS9.
+     * What to select once focus arrives, in editor offsets — `memory/searchPlan.md` CS9.
      *
      * Null for every other way a container gets focus, which leaves the caret where the editor puts
      * it. Clamped to the text actually present: the offsets were computed from the document, and a

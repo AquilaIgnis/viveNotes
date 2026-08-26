@@ -1179,7 +1179,7 @@ private fun ToolPaneHost(
     style: PageStyle,
     /** Hardware pane, a property of this device — see `HardwarePanelContent` on the pane's two scopes. */
     allowFinger: Boolean,
-    /** Hardware pane, a property of the user — `docs/stylusPlan.md` SB3. */
+    /** Hardware pane, a property of the user — `memory/stylusPlan.md` SB3. */
     stylusButtons: StylusButtonMap,
     aiModels: AiModelsState,
     onDownloadFormula: () -> Unit,
@@ -1189,7 +1189,7 @@ private fun ToolPaneHost(
     onCopyRecognition: (String) -> Unit,
     onMathAction: (String) -> Unit,
     onCopyMathResult: (String) -> Unit,
-    /** Content pane — the query, and what it found across the notebook (`docs/searchPlan.md`). */
+    /** Content pane — the query, and what it found across the notebook (`memory/searchPlan.md`). */
     contentSearch: ContentSearchState,
     /** How far reading this notebook's pictures has got — `memory/imageOcrPlan.md` IO6. */
     imageTextProgress: ImageTextProgress,
@@ -1366,7 +1366,7 @@ private fun EditorSurface(
 internal const val SEARCH_AFFORDANCE_TAG = "canvas-search"
 
 /**
- * The magnifier floating at the canvas's top-right — feature C7, `docs/searchPlan.md` CS10.
+ * The magnifier floating at the canvas's top-right — feature C7, `memory/searchPlan.md` CS10.
  *
  * Over the page rather than in the ribbon so it is reachable from every tab, Draw included, and so
  * that finding something does not cost a tab switch in the middle of a thought.
@@ -1476,7 +1476,7 @@ private fun PageEditor(
         ruler = ruler.takeIf { rulerOut },
         tables = state.tables,
         // One tool places a table on the next tap; which *kind* rides in on the settings, so the
-        // canvas never learns there are two — `docs/tablePlan.md` TA15.
+        // canvas never learns there are two — `memory/tablePlan.md` TA15.
         tableArmed = tool == DrawTool.Table,
         onInsertTable = { x, y -> viewModel.insertTable(themedTable, x, y) },
         equations = state.equations,

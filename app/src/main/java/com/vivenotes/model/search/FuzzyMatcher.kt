@@ -18,7 +18,7 @@ data class TextMatch(val score: Int, val spans: List<MatchSpan>) {
 }
 
 /**
- * Typo-tolerant matching of a query against one block of text — `docs/searchPlan.md` CS6.
+ * Typo-tolerant matching of a query against one block of text — `memory/searchPlan.md` CS6.
  *
  * **Every term must match.** A query is split on whitespace and each term scored independently, so
  * adding a word narrows the search rather than widening it. That is the behaviour anyone expects from

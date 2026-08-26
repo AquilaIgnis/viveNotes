@@ -71,7 +71,7 @@ internal const val OBJECT_EQUATION_EDIT_TAG = "object-tooltip-equation-edit"
  */
 internal const val OBJECT_RECOGNIZE_TAG = "object-tooltip-recognize"
 
-/** The Table Class's half of the toolkit — `docs/tablePlan.md` TA6. */
+/** The Table Class's half of the toolkit — `memory/tablePlan.md` TA6. */
 internal object TableActionTags {
     const val ROW = "object-tooltip-row"
     const val COLUMN = "object-tooltip-column"
@@ -102,7 +102,7 @@ private val INK_COLORS = listOf(
  */
 
 /**
- * The base object toolkit — `docs/diagram.md`, and `docs/plan.md` AD7.
+ * The base object toolkit — `memory/diagram.md`, and `memory/plan.md` AD7.
  *
  * Colour, copy, delete: the three things that mean something for *anything* placed on the canvas.
  * Deliberately not ink's own — it takes a swatch and three callbacks rather than a stroke list, so a
@@ -121,7 +121,7 @@ private val INK_COLORS = listOf(
 internal fun ObjectTooltip(
     /**
      * The colour the selection is drawn in, or **null for a kind that has no colour of its own** —
-     * `docs/textBoxPlan.md` TD4, and the first time anything drops a member of the base bar.
+     * `memory/textBoxPlan.md` TD4, and the first time anything drops a member of the base bar.
      *
      * Not a retreat from SD8's "a base plus per-kind extras, never a base with more flags". [extras]
      * is where a kind's *own* actions go; this is the base saying an action does not apply, which is
@@ -247,7 +247,7 @@ internal fun ObjectTooltip(
  * Ink's half of the toolkit: several strokes can be one object.
  *
  * Absent for shapes — not disabled — because a shape is already a single object and has nothing to
- * group with. `docs/diagram.md` puts grouping outside the base toolkit for exactly that reason.
+ * group with. `memory/diagram.md` puts grouping outside the base toolkit for exactly that reason.
  */
 @Composable
 internal fun RowScope.GroupAction(
@@ -317,7 +317,7 @@ internal fun RowScope.RecognitionAction(
 }
 
 /**
- * The TextBox's half of the toolkit — `docs/diagram.md`: *"select all : selects all text on TextBox
+ * The TextBox's half of the toolkit — `memory/diagram.md`: *"select all : selects all text on TextBox
  * container"*, and the only action the class adds.
  *
  * A word rather than a glyph, like Group beside it: there is no Material Symbol that reads as "select
@@ -388,10 +388,10 @@ internal fun RowScope.EquationEditAction(latex: String?, onEdit: (String) -> Uni
 }
 
 /**
- * A shape's half of the toolkit: the border it is stroked with — `docs/diagram.md`, Shapes Class.
+ * A shape's half of the toolkit: the border it is stroked with — `memory/diagram.md`, Shapes Class.
  *
  * **Not the same setting as the pane's Border width**, which is the user's default for the *next*
- * shape and lives in DataStore (`docs/inkPlan.md` SD4). This edits the object in the document. The two
+ * shape and lives in DataStore (`memory/inkPlan.md` SD4). This edits the object in the document. The two
  * look alike deliberately — it is the same [PanelSlider] — and must not be merged: one is a property
  * of the user, the other of the page, and collapsing them is a sync bug, not a refactor.
  *
@@ -437,8 +437,8 @@ internal fun RowScope.ThicknessAction(
 }
 
 /**
- * The Table Class's half of the toolkit — `docs/diagram.md`: *"add row, remove row, add column,
- * remove column"*, and `docs/tablePlan.md` TA6.
+ * The Table Class's half of the toolkit — `memory/diagram.md`: *"add row, remove row, add column,
+ * remove column"*, and `memory/tablePlan.md` TA6.
  *
  * **Two menus rather than four buttons.** As four the bar is nine controls wide; as two it is five,
  * and each menu has room for the verbs the diagram's four leave open.
@@ -488,7 +488,7 @@ internal fun RowScope.TableColumnAction(
 }
 
 /**
- * The row half of the toolkit **when a row is held** — `docs/tablePlan.md` TA16.
+ * The row half of the toolkit **when a row is held** — `memory/tablePlan.md` TA16.
  *
  * The menus above are what the bar shows when there is nothing but a caret to go on. Tap a row's
  * handle and the verbs stop needing a menu: there is one row this is about, so the actions become
@@ -601,7 +601,7 @@ private fun GridMenu(
 }
 
 /**
- * A shape's fill — `docs/inkPlan.md` §5.4 SD7, which this is the reversal of.
+ * A shape's fill — `memory/inkPlan.md` §5.4 SD7, which this is the reversal of.
  *
  * **Only for a shape with an inside.** A line, an arrow and an L have none, and the caller leaves this
  * out for them rather than showing it dead: an action a kind cannot perform is absent for it, which is

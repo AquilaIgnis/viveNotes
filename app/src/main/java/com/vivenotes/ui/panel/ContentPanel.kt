@@ -59,7 +59,7 @@ internal object ContentPanelTags {
 }
 
 /**
- * The query field — `docs/searchPlan.md` CS1, pinned above the results by [ToolPanel]'s header slot.
+ * The query field — `memory/searchPlan.md` CS1, pinned above the results by [ToolPanel]'s header slot.
  *
  * Its own composable rather than the first row of the list, because a field that scrolls away is a
  * field you cannot correct: the whole interaction here is type, look, retype.

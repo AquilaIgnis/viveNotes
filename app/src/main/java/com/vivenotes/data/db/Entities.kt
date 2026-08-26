@@ -277,7 +277,7 @@ data class NotebookWithSections(
  * hundreds of kilobytes because someone typed a character. Ink is also append-mostly and immutable —
  * a stroke, once lifted, never changes — which is what makes row-per-stroke match both the access
  * pattern and, later, the merge: a grow-only set of immutable strokes converges without conflict.
- * See `docs/inkPlan.md` ID2 and §8.
+ * See `memory/inkPlan.md` ID2 and §8.
  *
  * Only [points] is opaque. Brush, bounds and order stay in readable columns, so `sqlite3` still
  * answers what is on a page.

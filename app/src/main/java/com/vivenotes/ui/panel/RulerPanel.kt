@@ -37,7 +37,7 @@ object RulerPanelTags {
 }
 
 /**
- * The floating settings shown under the ruler in the Draw ribbon — `docs/rulerPlan.md` RD7.
+ * The floating settings shown under the ruler in the Draw ribbon — `memory/rulerPlan.md` RD7.
  *
  * The eraser's pane in shape: cards choosing what the tool is, then how big it is. What differs is
  * that the cards draw miniatures of the two rulers instead of wearing icons — the thing being chosen

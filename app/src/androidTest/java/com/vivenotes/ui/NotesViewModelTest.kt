@@ -663,7 +663,7 @@ class NotesViewModelTest {
     }
 
     /**
-     * Prime Object's fourth rule — `docs/diagram.md`: *"Selecting any other tool removes selection
+     * Prime Object's fourth rule — `memory/diagram.md`: *"Selecting any other tool removes selection
      * of object."* The pane holds the selection, so what the ViewModel owes it is the command, on a
      * real change and not otherwise.
      */
@@ -936,7 +936,7 @@ class NotesViewModelTest {
 
     @Test
     fun aTextBoxCopiesPastesDeletesAndUndoesWithItsText() = runTest(dispatcher) {
-        // `docs/textBoxPlan.md` TD5. A container is two halves in two places — the box in `uiState`
+        // `memory/textBoxPlan.md` TD5. A container is two halves in two places — the box in `uiState`
         // and its blocks in a private map — so the thing worth asserting is the *text*, not the
         // rectangle: every way of getting this wrong produces a box of the right size and no words.
         val vm = seededViewModel()
@@ -2113,7 +2113,7 @@ class NotesViewModelTest {
         withTimeout(STORE_TIMEOUT_MS) { viewSettings.settings.first { it.zoom == 1.75f } }
     }
 
-    // --- tables — `docs/tablePlan.md` ----------------------------------------------------------
+    // --- tables — `memory/tablePlan.md` ----------------------------------------------------------
 
     /** The cell at [row], [column] of the only table on the page. */
     private fun NotesViewModel.cellId(row: Int, column: Int): String =

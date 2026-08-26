@@ -9,7 +9,7 @@ import com.vivenotes.model.PaperSize
 import com.vivenotes.model.PrintMargins
 
 /**
- * The Paper Size pane, laid out as `docs/references/views-pages.png` does it.
+ * The Paper Size pane, laid out as `memory/references/views-pages.png` does it.
  *
  * Width and Height are readouts for a named size and fields for [PaperSize.Custom] — the same two
  * rows either way, because a size *is* a width and a height, and hiding them for the named sizes

@@ -63,7 +63,7 @@ class SpannableCodecTest {
     }
 
     /**
-     * The invariant the Content panel's offsets stand on — `docs/searchPlan.md` CS5.
+     * The invariant the Content panel's offsets stand on — `memory/searchPlan.md` CS5.
      *
      * `Block.editorText` is the model's claim about what [SpannableCodec.render] writes, and a search
      * hit's position is handed straight to `setSelection` on the strength of it. This is the only

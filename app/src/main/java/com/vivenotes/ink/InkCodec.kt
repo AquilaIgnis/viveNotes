@@ -49,7 +49,7 @@ object InkCodec {
      * Who wrote the point blob.
      *
      * `androidx.ink`'s own delta-compressed protobuf, chosen to get ink working rather than for
-     * keeps: `docs/inkPlan.md` §7.3 argues for owning this encoding, because a content hash over
+     * keeps: `memory/inkPlan.md` §7.3 argues for owning this encoding, because a content hash over
      * bytes a dependency controls turns a library upgrade into a full resync. Recording the encoder
      * per row is what makes that swap a rolling change instead of a migration — the same property
      * `page_content.format` gives documents.
@@ -59,7 +59,7 @@ object InkCodec {
     /** Little-endian count followed by x/y float pairs, all in page dp. */
     const val MOVE_ENCODING = "ink/lasso-f32le1"
 
-    /** Stock brush versions are pinned, never `LATEST`; see `docs/inkPlan.md` ID6. */
+    /** Stock brush versions are pinned, never `LATEST`; see `memory/inkPlan.md` ID6. */
     const val BRUSH_VERSION = 1
 
     private const val FAMILY_PRESSURE_PEN = "pressure-pen"
@@ -83,7 +83,7 @@ object InkCodec {
     }
 
     /**
-     * How a stabilization level smooths the input — `docs/inkPlan.md` §4, finally applied.
+     * How a stabilization level smooths the input — `memory/inkPlan.md` §4, finally applied.
      *
      * **The library does the maths, not us.** `BrushFamily.inputModel` is Ink's own stroke modeller:
      * a sliding window over recent samples, run in native code *inside* the authoring pipeline. A
@@ -123,7 +123,7 @@ object InkCodec {
      * number here restyles every stroke ever drawn at that level. A different curve is a new level,
      * or a new column — never an edit to this one.
      *
-     * This reverses `docs/inkPlan.md` **ID4**, which located stabilization in a pre-filter over the
+     * This reverses `memory/inkPlan.md` **ID4**, which located stabilization in a pre-filter over the
      * raw samples so the filtered points were what got persisted. The harm ID4 named — "changing the
      * smoothing slider silently rewrites every drawing ever made" — is answered instead by the
      * per-stroke column: a stroke replays at the level it was drawn at, not the level in hand. What

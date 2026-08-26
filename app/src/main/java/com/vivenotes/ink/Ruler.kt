@@ -7,7 +7,7 @@ import kotlin.math.hypot
 import kotlin.math.sin
 
 /**
- * A ruler lying on the page — `docs/rulerPlan.md`.
+ * A ruler lying on the page — `memory/rulerPlan.md`.
  *
  * Page units throughout (RD3), so it stays where it was put when the page scrolls or zooms, and so
  * its graduations are a real inch apart at 100%.
@@ -85,29 +85,54 @@ data class Ruler(
     }
 
     /**
+     * Which side of the ruler a point is drawing against — the half of [snap] that must be decided
+     * once and then held, RD5a.
+     *
+     * A straight ruler has two long edges, so this is which of them; a semicircle has one drawing
+     * edge, so it is only the tie-break at the ends. Either way it is asked on the down and never
+     * again, because the answer flips as the hand crosses the middle.
+     */
+    fun sideOf(point: InkPoint): RulerSide {
+        val local = toLocal(point)
+        val across = when (kind) {
+            // Across the band: which of the two long edges the line runs along.
+            RulerKind.Straight -> local.y
+            // Along the flat edge: which end of the arc, which is all a semicircle can be unsure of.
+            RulerKind.Protractor -> local.x
+        }
+        // Sitting exactly on the middle is the one ambiguous case; it takes the `+` side rather
+        // than turning on a sign that is about to wobble.
+        return if (across < 0f) RulerSide.Negative else RulerSide.Positive
+    }
+
+    /**
      * The point on the drawing edge that [point] becomes.
      *
-     * A straight ruler has two long edges and snaps to whichever is nearer, so it draws from either
-     * side; ends are clamped, because a ruler runs out. The semicircle projects radially onto its
-     * arc, and a point past either end of the arc lands on that end for the same reason.
+     * A straight ruler snaps across onto [side], so it draws from either edge; ends are clamped,
+     * because a ruler runs out. The semicircle projects radially onto its arc, and a point past
+     * either end of the arc lands on that end for the same reason.
+     *
+     * **[side] is given rather than worked out here**, and that is the whole of RD5a: a point on
+     * its own answers *whichever edge is nearer now*, which is a different edge once the hand has
+     * crossed the ruler — so a stroke swept over the body used to leap to the far edge, dragging a
+     * line across the ruler's face to get there. The caller holds the answer for the stroke.
      */
-    fun snap(point: InkPoint): InkPoint {
+    fun snap(point: InkPoint, side: RulerSide): InkPoint {
         val local = toLocal(point)
+        val sign = if (side == RulerSide.Negative) -1f else 1f
         return when (kind) {
             RulerKind.Straight -> toPage(
                 InkPoint(
                     x = local.x.coerceIn(-reach, reach),
-                    // Sitting exactly on the centre line is the one ambiguous case; it takes the
-                    // `+` edge rather than flickering between the two.
-                    y = if (local.y < 0f) -BAND_DP / 2f else BAND_DP / 2f,
+                    y = sign * BAND_DP / 2f,
                 ),
             )
             RulerKind.Protractor -> {
                 val distance = hypot(local.x, local.y)
                 // Dead centre has no direction to project along, and neither does anything below
-                // the flat edge: both take the nearer end of the arc.
+                // the flat edge: both fall back to the end the stroke set out from.
                 if (local.y > 0f || distance == 0f) {
-                    toPage(InkPoint(if (local.x < 0f) -reach else reach, 0f))
+                    toPage(InkPoint(sign * reach, 0f))
                 } else {
                     toPage(InkPoint(local.x / distance * reach, local.y / distance * reach))
                 }
@@ -207,3 +232,11 @@ data class Ruler(
 
 /** Where a ruler is lying, with no opinion about which ruler it is — RD2. */
 data class RulerPlacement(val centerX: Float, val centerY: Float, val angleRadians: Float)
+
+/**
+ * Which side of the ruler a stroke is being drawn against — [Ruler.sideOf], held by the stroke.
+ *
+ * Named for the sign of the ruler-frame axis it settles, because the axis differs by kind and the
+ * sign does not: `y` across the straightedge's band, `x` along the semicircle's flat edge.
+ */
+enum class RulerSide { Negative, Positive }

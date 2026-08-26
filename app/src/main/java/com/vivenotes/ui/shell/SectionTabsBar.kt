@@ -44,7 +44,7 @@ private val SELECTED_TAB_HEIGHT = 36.dp
 
 /**
  * Sections as a strip of coloured tabs across the top — the View tab's horizontal Tabs Layout,
- * matching `docs/references/views-horizontal.png`.
+ * matching `memory/references/views-horizontal.png`.
  *
  * The same selection the [NotebookRail] makes, arranged for a wide window rather than a tall one:
  * the notebook becomes a chooser instead of a tree, and its sections become tabs. Nothing below

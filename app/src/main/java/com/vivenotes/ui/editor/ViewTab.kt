@@ -87,7 +87,7 @@ private val RULE_LINE_LABELS = listOf(
 )
 
 /**
- * The View tab from `docs/references/viewsTab.png`.
+ * The View tab from `memory/references/viewsTab.png`.
  *
  * Dock to Desktop, New Docked Window, New Window and New Quick Note are crossed out in that
  * screenshot and so are not here at all.
@@ -97,7 +97,7 @@ private val RULE_LINE_LABELS = listOf(
  * this pair: this app has no chrome to hide that the two would toggle between — the ribbon and the
  * panes are already the whole window, and the panes hide themselves by swipe. Two dead buttons at the
  * head of the tab pushed the controls that do work off to the right. Feature F1 in
- * `docs/features.md` is dropped, not deferred.
+ * `memory/features.md` is dropped, not deferred.
  */
 @Composable
 internal fun ViewTab(

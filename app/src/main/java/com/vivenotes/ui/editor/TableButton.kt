@@ -29,7 +29,7 @@ import com.vivenotes.ui.panel.TablePanelContent
 internal const val TABLE_BUTTON_TAG = "insert-table"
 
 /**
- * Insert Table — `docs/tablePlan.md` TA7.
+ * Insert Table — `memory/tablePlan.md` TA7.
  *
  * The interaction is [ShapeButton]'s, deliberately: a tap arms the tool, and holding — or tapping the
  * tool already in hand — opens its settings. Two buttons on the same tab behaving differently would

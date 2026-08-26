@@ -55,7 +55,7 @@ import kotlin.math.hypot
 internal const val SHAPE_LAYER_TAG = "shape-layer"
 
 /**
- * The shapes on the page — `docs/inkPlan.md` §5.4.
+ * The shapes on the page — `memory/inkPlan.md` §5.4.
  *
  * Sits **inside** the zoomed page layer, unlike `InkOverlay`. Ink has to live outside the zoom
  * because a front-buffered surface cannot be scaled without going soft; a shape is an ordinary
@@ -80,7 +80,7 @@ internal const val SHAPE_LAYER_TAG = "shape-layer"
  * four, head and tail of each arm, and each drags along its own axis alone. Pulling a tail back past
  * the corner is what turns an L into a cross. See SD9.
  *
- * Selection, four-corner resize, drag-to-move and double-tap-to-select are `docs/plan.md` AD7: they
+ * Selection, four-corner resize, drag-to-move and double-tap-to-select are `memory/plan.md` AD7: they
  * belong to *an object on the canvas*, not to shapes, and ink already has the same set. The corner
  * geometry deliberately matches `LassoGesture`'s — same hit radius, same anchor at the opposite
  * corner — because an affordance that behaves differently depending on what is underneath it is
@@ -758,7 +758,7 @@ private val HANDLE_REACH: Dp = SelectionChrome.HANDLE_REACH
  * area, not a disc painted into a canvas, so it is a different thing that happens to look similar.
  */
 /**
- * Whether a page-space box is worth drawing — the object half of `docs/inkPlan.md` §3.2.
+ * Whether a page-space box is worth drawing — the object half of `memory/inkPlan.md` §3.2.
  *
  * Ink got this first, and for the obvious reason: a page can hold ten thousand strokes. The document
  * kinds got it late and are *worse* per element, not better — a shape is a path per segment, a formula

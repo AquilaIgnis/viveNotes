@@ -28,7 +28,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The TextBox Class — `docs/diagram.md`, planned in `docs/textBoxPlan.md`.
+ * The TextBox Class — `memory/diagram.md`, planned in `memory/textBoxPlan.md`.
  *
  * Two things are worth pinning here and neither is about text. The **T button** was a mode switch
  * that could be pressed and never unpressed, because `DrawTool.None` *was* text mode (TD2). And the
@@ -142,7 +142,7 @@ class TextBoxToolkitTest {
 
     @Test
     fun aTextBoxGetsCopyDeleteAndSelectAllButNoColour() {
-        // `docs/diagram.md`: "hide color from [Prime Object], add select all". Colour is a mark on a
+        // `memory/diagram.md`: "hide color from [Prime Object], add select all". Colour is a mark on a
         // run — the Home tab owns it — so a container-level swatch would fight the ribbon.
         setTextToolkit()
 

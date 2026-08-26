@@ -7,7 +7,7 @@ import kotlin.math.abs
 enum class ShapeAxis { Horizontal, Vertical }
 
 /**
- * One end of one arm, draggable on its own — `docs/inkPlan.md` §5.4 SD9.
+ * One end of one arm, draggable on its own — `memory/inkPlan.md` §5.4 SD9.
  *
  * The L is what this exists for: its two arms are the two axes, and lengthening one of them has
  * nothing to do with the other. The four corner handles scale a shape *whole* (AD7), which is the

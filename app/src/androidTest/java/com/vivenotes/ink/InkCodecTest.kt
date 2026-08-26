@@ -139,7 +139,7 @@ class InkCodecTest {
         PenPreset.starting(0).copy(kind = PenKind.Calligraphy, pressure = pressure)
 
     // ---------------------------------------------------------------------------------------
-    // Stabilization — `docs/inkPlan.md` §4, applied 2026-08-10
+    // Stabilization — `memory/inkPlan.md` §4, applied 2026-08-10
     // ---------------------------------------------------------------------------------------
 
     /** A straight line with a 10 Hz tremor on it, sampled at 120 Hz — the shake a stabilizer is for. */

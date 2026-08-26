@@ -386,7 +386,7 @@ class DrawTabTest {
     // --- the ruler -------------------------------------------------------------------------------
 
     /**
-     * A ruler is not a tool — `docs/rulerPlan.md` RD1. It is something you draw *against*, so it
+     * A ruler is not a tool — `memory/rulerPlan.md` RD1. It is something you draw *against*, so it
      * must not disarm the pen you were going to draw along it with.
      */
     @Test
@@ -541,7 +541,7 @@ class DrawTabTest {
     }
 
     /**
-     * The middle pen type in `docs/references/pen-tooltip.jpeg` is crossed out, which this project
+     * The middle pen type in `memory/references/pen-tooltip.jpeg` is crossed out, which this project
      * reads as out of scope — so it is absent rather than disabled, the way the View tab handles
      * Dock to Desktop. Only two cards exist.
      */

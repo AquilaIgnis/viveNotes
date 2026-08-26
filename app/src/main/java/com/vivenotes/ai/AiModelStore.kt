@@ -398,7 +398,7 @@ class AiModelStore internal constructor(
          * either model, so this was found on the device and nowhere else.
          *
          * The lesson for the next candidate: printed BLEU does not predict this app's accuracy, and
-         * the eval set in `docs/ai.md` open question 4 is the only thing that will.
+         * the eval set in `memory/ai.md` open question 4 is the only thing that will.
          */
         private val FORMULA_MODEL = ModelArtifact(
             fileName = "pp-formulanet-s.onnx",

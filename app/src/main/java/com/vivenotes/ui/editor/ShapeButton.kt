@@ -29,7 +29,7 @@ import com.vivenotes.ui.panel.ShapePanelContent
 internal const val SHAPE_BUTTON_TAG = "insert-shape"
 
 /**
- * Insert Shape — `docs/inkPlan.md` §5.4.
+ * Insert Shape — `memory/inkPlan.md` §5.4.
  *
  * Lives in its own file because it is composed by **two** tabs. It belongs on Draw, beside the
  * things that make marks; and on Insert, because that is where someone goes looking to put a shape

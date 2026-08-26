@@ -51,9 +51,9 @@ data class ContentSearchOutcome(
 )
 
 /**
- * The Content panel's corpus, held in memory and rebuilt a page at a time — `docs/searchPlan.md` CS7.
+ * The Content panel's corpus, held in memory and rebuilt a page at a time — `memory/searchPlan.md` CS7.
  *
- * **No FTS table and no schema change.** `page_fts` is designed (A7, `docs/plan.md` §7) and not built;
+ * **No FTS table and no schema change.** `page_fts` is designed (A7, `memory/plan.md` §7) and not built;
  * this is what a notebook-sized search costs without it: one cheap query for the page rows, a decode
  * of only those whose `updatedAt` has moved since they were last seen, and matching in memory. The
  * first query on a notebook pays to decode it once; later ones pay for what changed. When the FTS

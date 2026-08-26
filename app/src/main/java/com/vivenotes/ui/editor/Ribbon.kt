@@ -161,9 +161,9 @@ fun Ribbon(
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
-    /** How the next table arrives — `docs/tablePlan.md` TA7. Draw tab only. */
+    /** How the next table arrives — `memory/tablePlan.md` TA7. Draw tab only. */
     table: TableSettings = TableSettings(),
-    /** The ruler that is out, and whether it is — `docs/rulerPlan.md`. */
+    /** The ruler that is out, and whether it is — `memory/rulerPlan.md`. */
     ruler: RulerSettings = RulerSettings(),
     rulerOut: Boolean = false,
     tool: DrawTool,
@@ -227,7 +227,7 @@ fun Ribbon(
                 onCommand = onCommand,
                 onSetDefault = onSetDefault,
                 textMode = tool == DrawTool.Text,
-                // A toggle, per `docs/textBoxPlan.md` TD2: pressing it again puts the tool down
+                // A toggle, per `memory/textBoxPlan.md` TD2: pressing it again puts the tool down
                 // rather than doing nothing, and with nothing in hand a tap on bare canvas stops
                 // opening containers.
                 onTextMode = {

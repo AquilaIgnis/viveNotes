@@ -5,7 +5,6 @@ import android.graphics.Paint
 import android.graphics.RectF
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateRotation
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -37,7 +36,7 @@ private const val DIVISIONS = 10
 private const val DP_PER_CM = PageStyle.DP_PER_INCH / 2.54f
 
 /**
- * Moves and turns the ruler — `docs/rulerPlan.md` RD4 and RD6.
+ * Moves and turns the ruler — `memory/rulerPlan.md` RD4 and RD6.
  *
  * **One finger on it slides it; two twist it.** That is how every drawing app does this and it is
  * what the object affords: you hold a ruler, you do not operate a handle bolted to its end.
@@ -46,6 +45,15 @@ private const val DP_PER_CM = PageStyle.DP_PER_INCH / 2.54f
  * mounted *before* [detectPinchZoom] on the same ancestor node, so on the `Initial` pass it is asked
  * first; if the gesture began on the ruler it consumes, and the pinch stands down. A gesture that
  * began anywhere else is never touched, and the page zooms exactly as it did.
+ *
+ * **However many fingers are on it, they are one hand** — RD4b. Everything below is measured
+ * against the *centroid* of whatever is currently down, and the centroid is re-seeded rather than
+ * carried whenever the set of pointers changes. Both halves matter: no single finger can be
+ * nominated as the one that carries the ruler, because `changes` is ordered by pointer index and
+ * the moment the hand adds or lifts one the "first" pressed pointer becomes a different finger — a
+ * delta taken from it is then the span of the hand rather than the distance it moved, and the ruler
+ * jumps an inch sideways. Repeated every time a finger settles, drifts off, or lands a frame late,
+ * that is the flicker that made a second finger unusable while one worked.
  *
  * [rulerAt] is read per gesture rather than captured, because the ruler moves as the gesture runs.
  */
@@ -66,54 +74,61 @@ internal suspend fun PointerInputScope.detectRulerDrag(
         // feature. A pen on the ruler falls straight through to the ink overlay and comes out ruled.
         if (down.type != PointerType.Touch) return@awaitEachGesture
         val ruler = rulerAt() ?: return@awaitEachGesture
-        if (!ruler.grabs(toPage().pagePointOf(down.position))) return@awaitEachGesture
+        val start = toPage().pagePointOf(down.position)
+        if (!ruler.grabs(start)) return@awaitEachGesture
 
         down.consume()
-        val start = toPage().pagePointOf(down.position)
         // A tap on the dial is a rotate, but only if it stays a tap — the dial sits in the middle of
         // the body, so a drag that begins there still has to slide the ruler.
-        var onDial = ruler.grabsDial(start)
+        val onDial = ruler.grabsDial(start)
         var travelled = false
-        var last = start
+        // The hand, reduced to a point, and who it is made of. Both in view pixels: the anchor is
+        // subtracted from the next centroid before anything reaches the page, so the conversion
+        // happens once, on a delta.
+        val origin = down.position
+        var anchor = origin
+        var hand = setOf(down.id)
+
         while (true) {
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val pressed = event.changes.filter { it.pressed }
             if (pressed.isEmpty()) break
 
-            if (pressed.size >= 2) {
-                // Two fingers: the twist between them turns it, and the pair sliding together still
-                // carries it along — one gesture, both meanings, the way a hand on a ruler works.
-                onTurn(event.calculateRotation() * DEGREES_TO_RADIANS)
-                val pan = event.calculatePan()
-                if (pan != Offset.Zero) {
-                    val origin = toPage().pagePointOf(Offset.Zero)
-                    val moved = toPage().pagePointOf(pan)
-                    onMove(moved.x - origin.x, moved.y - origin.y)
-                }
-                // The anchor is meaningless once a second finger is involved; re-seed it so lifting
-                // back to one finger does not jump the ruler by however far the pair travelled.
-                last = toPage().pagePointOf(pressed.first().position)
+            val centroid = pressed.fold(Offset.Zero) { total, change -> total + change.position } /
+                pressed.size.toFloat()
+            val ids = pressed.mapTo(mutableSetOf()) { it.id }
+
+            if (ids != hand) {
+                // A finger arrived or left. The centroid moves by however far apart the hand is
+                // spread and none of that is the hand moving, so this frame re-seeds and reports
+                // nothing. One dropped frame of travel is invisible; the jump it replaces was not.
+                hand = ids
+                anchor = centroid
+                // A pair that lands and twists by a degree is still a turn and never a tap, however
+                // still it was held — so the dial is ruled out the moment a second finger arrives.
+                if (ids.size >= 2) travelled = true
             } else {
-                val point = toPage().pagePointOf(pressed.first().position)
-                if (hypot(point.x - start.x, point.y - start.y) > toPage().pageLengthOf(viewConfiguration.touchSlop)) {
-                    travelled = true
+                // Any two of them twisting turns it. `calculateRotation` averages over every pointer
+                // that was down for both samples, so a third finger steadies the reading rather than
+                // confusing it — which is the other half of being tolerant of a whole hand.
+                if (ids.size >= 2) onTurn(event.calculateRotation() * DEGREES_TO_RADIANS)
+                if (centroid != anchor) {
+                    val page = toPage()
+                    val from = page.pagePointOf(anchor)
+                    val to = page.pagePointOf(centroid)
+                    onMove(to.x - from.x, to.y - from.y)
+                    anchor = centroid
                 }
-                onMove(point.x - last.x, point.y - last.y)
-                last = point
             }
-            if (pressed.size >= 2) travelled = true
+
+            if (!travelled && (centroid - origin).getDistance() > viewConfiguration.touchSlop) {
+                travelled = true
+            }
             event.changes.forEach { if (it.pressed) it.consume() }
         }
 
         if (onDial && !travelled) onTapDial()
     }
-}
-
-/** A view-pixel distance in page units, so a slop is the same size on screen at any zoom. */
-private fun Matrix.pageLengthOf(pixels: Float): Float {
-    val values = FloatArray(9)
-    getValues(values)
-    return pixels * hypot(values[Matrix.MSCALE_X], values[Matrix.MSKEW_Y])
 }
 
 private const val DEGREES_TO_RADIANS = (Math.PI / 180.0).toFloat()
@@ -205,7 +220,7 @@ internal fun drawRuler(
 }
 
 /**
- * The straightedge, drawn to `docs/references/ruler.png`.
+ * The straightedge, drawn to `memory/references/ruler.png`.
  *
  * Measured off that image rather than invented: a **centimetre** scale with millimetre graduations
  * (10 fine ticks to the unit, at 140.5px to a unit in a 2914px-wide plate — 62.7dp, and a centimetre

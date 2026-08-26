@@ -10,7 +10,7 @@ import kotlin.math.sqrt
 import kotlinx.serialization.Serializable
 
 /**
- * One edge of a shape — `docs/inkPlan.md` §5.4.
+ * One edge of a shape — `memory/inkPlan.md` §5.4.
  *
  * A shape is a **list of these**. They are how its geometry is stored and drawn, and in particular
  * they are what carries [hidden]: a solid's occluded edges have to be distinguishable from its

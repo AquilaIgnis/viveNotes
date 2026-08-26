@@ -16,7 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * What the Content panel searches, and where a hit says it is — `docs/searchPlan.md` CS3–CS5.
+ * What the Content panel searches, and where a hit says it is — `memory/searchPlan.md` CS3–CS5.
  *
  * The offsets are the part worth guarding: they are handed straight to `setSelection`, so a block
  * counted wrong does not fail here — it silently highlights the wrong words on the page.

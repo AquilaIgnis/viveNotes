@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * What a fill colour paints — `docs/inkPlan.md` §5.4 SD7.
+ * What a fill colour paints — `memory/inkPlan.md` §5.4 SD7.
  *
  * The question is "which shapes have an inside, and where is it", and every wrong answer draws
  * something rather than failing: a cube filled along its twelve edges is a self-crossing mess, an L

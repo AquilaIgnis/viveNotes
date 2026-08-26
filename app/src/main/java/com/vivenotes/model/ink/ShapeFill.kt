@@ -3,7 +3,7 @@ package com.vivenotes.model.ink
 import com.vivenotes.model.Outline
 
 /**
- * The region a fill colour paints, or empty for a shape with no inside — `docs/inkPlan.md` §5.4 SD7.
+ * The region a fill colour paints, or empty for a shape with no inside — `memory/inkPlan.md` §5.4 SD7.
  *
  * **Not the same thing as the border.** A cube's twelve edges are what it is *stroked* along; what it
  * *covers* is one hexagon, and painting the edges as a path would fill three faces in three

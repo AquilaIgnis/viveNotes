@@ -34,8 +34,8 @@ object TablePanelTags {
 }
 
 /**
- * The Insert Table pane, laid out as `docs/references/table-opts.jpeg` lays it out —
- * `docs/tablePlan.md` TA7.
+ * The Insert Table pane, laid out as `memory/references/table-opts.jpeg` lays it out —
+ * `memory/tablePlan.md` TA7.
  *
  * Field for field, in the plate's order: header column, header row, column count, row count, border
  * width, border colour, fill colour. The plate's counts are chips showing a number, which is

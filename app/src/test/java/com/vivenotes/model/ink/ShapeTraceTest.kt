@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The geometry behind Insert Shape (`docs/inkPlan.md` §5.4).
+ * The geometry behind Insert Shape (`memory/inkPlan.md` §5.4).
  *
  * Worth testing on the JVM rather than by eye on a device, because every one of these failures is
  * silent: a shape that is subtly off-centre, an ellipse that is a hexagon at chip size, or a solid

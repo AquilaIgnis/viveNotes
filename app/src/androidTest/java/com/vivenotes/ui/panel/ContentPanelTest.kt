@@ -23,7 +23,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The Content panel's own behaviour — `docs/searchPlan.md` CS1, CS4.
+ * The Content panel's own behaviour — `memory/searchPlan.md` CS1, CS4.
  *
  * Composed against a made-up result set rather than a database, so what is under test is the panel:
  * that a page's matches are grouped under it, that a title match is the heading rather than a row

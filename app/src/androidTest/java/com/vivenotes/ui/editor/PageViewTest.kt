@@ -51,7 +51,7 @@ import kotlin.math.sqrt
  * appear under the finger while the caret went somewhere else. That is invisible in the code and
  * obvious only when something actually taps the screen.
  *
- * **Needs a large-screen device**, which is what the app targets (`docs/plan.md` §1) and what CI
+ * **Needs a large-screen device**, which is what the app targets (`memory/plan.md` §1) and what CI
  * runs on. [zoomScalesWhatIsDrawnWithoutRelayingOutThePage] measures the sheet against the window,
  * so on a phone-sized window the sheet is already clipped at 1x and the comparison is meaningless.
  */
@@ -160,7 +160,7 @@ class PageViewTest {
 
     @Test
     fun tappingBareCanvasCreatesAContainerOnlyWhileTheTextToolIsArmed() {
-        // `docs/textBoxPlan.md` TD2. The T button had no off state because `DrawTool.None` *was*
+        // `memory/textBoxPlan.md` TD2. The T button had no off state because `DrawTool.None` *was*
         // text mode; with the two separated, putting the tool down has to actually stop the taps.
         setPage(style = PageStyle(hideTitle = true), textArmed = false)
 
@@ -193,7 +193,7 @@ class PageViewTest {
     }
 
     /**
-     * A tap on bare canvas ends text input, wherever it was — `docs/tablePlan.md` TA11.
+     * A tap on bare canvas ends text input, wherever it was — `memory/tablePlan.md` TA11.
      *
      * The table is the case that made this a bug worth a test. TA11 clears the *selection* through
      * `ShapeLayer`, which knows nothing about editors, so the table stopped showing a single handle

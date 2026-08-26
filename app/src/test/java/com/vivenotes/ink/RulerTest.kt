@@ -9,7 +9,7 @@ import kotlin.math.PI
 import kotlin.math.hypot
 
 /**
- * The ruler's arithmetic — `docs/rulerPlan.md` RD8.
+ * The ruler's arithmetic — `memory/rulerPlan.md` RD8.
  *
  * Projection onto a rotated edge looks right in several arrangements and is correct in one, and
  * nothing about it is visible until a stroke lands somewhere strange. The rotated cases are the ones
@@ -48,11 +48,14 @@ class RulerTest {
 
     // --- the straightedge --------------------------------------------------------------------
 
+    /** Where a stroke would land if it were starting here — the down's own reading. */
+    private fun Ruler.snapFrom(point: InkPoint) = snap(point, sideOf(point))
+
     @Test
     fun `a stroke above the ruler lands on its upper edge`() {
         val ruler = straight()
         // 30dp above the band's top edge, which sits at 400 - 60.
-        val snapped = ruler.snap(InkPoint(560f, 400f - Ruler.BAND_DP / 2f - 30f))
+        val snapped = ruler.snapFrom(InkPoint(560f, 400f - Ruler.BAND_DP / 2f - 30f))
 
         assertPoint("upper edge", InkPoint(560f, 400f - Ruler.BAND_DP / 2f), snapped)
     }
@@ -61,15 +64,41 @@ class RulerTest {
     @Test
     fun `a stroke below the ruler lands on its lower edge`() {
         val ruler = straight()
-        val snapped = ruler.snap(InkPoint(560f, 400f + Ruler.BAND_DP / 2f + 30f))
+        val snapped = ruler.snapFrom(InkPoint(560f, 400f + Ruler.BAND_DP / 2f + 30f))
 
         assertPoint("lower edge", InkPoint(560f, 400f + Ruler.BAND_DP / 2f), snapped)
+    }
+
+    /**
+     * The edge is the *stroke's*, not the sample's — RD5a.
+     *
+     * The bug this holds off was reported from a device: a line swept along the ruler and over its
+     * body flipped onto the far edge halfway, and joined the two halves with a run straight across
+     * the ruler's face. Asking each point which edge is nearer is what does that, because the
+     * answer changes the moment the hand crosses the middle.
+     */
+    @Test
+    fun `a stroke crossing the ruler stays on the edge it started from`() {
+        val ruler = straight()
+        val start = InkPoint(400f, 400f - Ruler.BAND_DP / 2f - 10f)
+        val side = ruler.sideOf(start)
+
+        assertEquals("started above it", RulerSide.Negative, side)
+        // The hand has crossed to the far side of the body. The line has not.
+        val crossed = ruler.snap(InkPoint(600f, 400f + Ruler.BAND_DP / 2f + 10f), side)
+
+        assertPoint("still the upper edge", InkPoint(600f, 400f - Ruler.BAND_DP / 2f), crossed)
+        assertEquals(
+            "and the sample on its own would have said otherwise",
+            RulerSide.Positive,
+            ruler.sideOf(InkPoint(600f, 400f + Ruler.BAND_DP / 2f + 10f)),
+        )
     }
 
     @Test
     fun `a ruler runs out, so the ends clamp`() {
         val ruler = straight()
-        val past = ruler.snap(InkPoint(5000f, 300f))
+        val past = ruler.snapFrom(InkPoint(5000f, 300f))
 
         assertEquals("clamped to the + end", 500f + 400f, past.x, 0.01f)
         assertEquals(400f - Ruler.BAND_DP / 2f, past.y, 0.01f)
@@ -85,7 +114,7 @@ class RulerTest {
 
         // 40dp to the right of the centre is now 40dp *across* the ruler, so it lands on the edge
         // 60dp out — at the same distance along, which is the page's y.
-        val snapped = ruler.snap(InkPoint(500f + 40f, 400f + 200f))
+        val snapped = ruler.snapFrom(InkPoint(500f + 40f, 400f + 200f))
 
         assertEquals("stayed at its distance along", 400f + 200f, snapped.y, 0.01f)
         assertEquals("pulled onto the near edge", 500f + Ruler.BAND_DP / 2f, snapped.x, 0.01f)
@@ -97,7 +126,8 @@ class RulerTest {
         val edge = (0..10).map { step ->
             // A wobbling hand: the along-axis advances, the across-axis wanders.
             val wobble = if (step % 2 == 0) 22f else -14f
-            ruler.snap(ruler.toPage(InkPoint(-300f + step * 60f, Ruler.BAND_DP / 2f + 20f + wobble)))
+            val point = ruler.toPage(InkPoint(-300f + step * 60f, Ruler.BAND_DP / 2f + 20f + wobble))
+            ruler.snap(point, RulerSide.Positive)
         }
 
         val first = edge.first()
@@ -253,7 +283,7 @@ class RulerTest {
     fun `the semicircle snaps onto its arc at the radius`() {
         val ruler = protractor()
         // Somewhere above the centre, inside the disc.
-        val snapped = ruler.snap(InkPoint(600f, 300f))
+        val snapped = ruler.snapFrom(InkPoint(600f, 300f))
 
         assertEquals("on the arc", 400f, hypot(snapped.x - 500f, snapped.y - 400f), 0.01f)
         assertTrue("stayed on the drawing side", snapped.y <= 400f)
@@ -263,23 +293,34 @@ class RulerTest {
     @Test
     fun `the arc is reached along the line from the centre`() {
         val ruler = protractor()
-        val snapped = ruler.snap(InkPoint(500f, 100f))
+        val snapped = ruler.snapFrom(InkPoint(500f, 100f))
 
         assertPoint("straight up", InkPoint(500f, 0f), snapped)
     }
 
     @Test
-    fun `below the flat edge clamps to the nearer end of the arc`() {
+    fun `below the flat edge clamps to the end the stroke set out from`() {
         val ruler = protractor()
 
-        assertPoint("+ end", InkPoint(900f, 400f), ruler.snap(InkPoint(700f, 600f)))
-        assertPoint("- end", InkPoint(100f, 400f), ruler.snap(InkPoint(300f, 600f)))
+        assertPoint("+ end", InkPoint(900f, 400f), ruler.snapFrom(InkPoint(700f, 600f)))
+        assertPoint("- end", InkPoint(100f, 400f), ruler.snapFrom(InkPoint(300f, 600f)))
+
+        // The arc has one drawing edge, so the held side is only this tie-break — and it holds:
+        // a stroke that began at the `+` end does not leap the whole arc because the hand dipped
+        // below the flat edge over on the left.
+        val fromThePlusEnd = ruler.sideOf(InkPoint(700f, 300f))
+        assertEquals(RulerSide.Positive, fromThePlusEnd)
+        assertPoint(
+            "stayed at the end it came from",
+            InkPoint(900f, 400f),
+            ruler.snap(InkPoint(300f, 600f), fromThePlusEnd),
+        )
     }
 
     /** No direction to project along, so it takes an end rather than dividing by zero. */
     @Test
     fun `the exact centre is not a division by zero`() {
-        val snapped = protractor().snap(InkPoint(500f, 400f))
+        val snapped = protractor().snapFrom(InkPoint(500f, 400f))
 
         assertEquals(400f, hypot(snapped.x - 500f, snapped.y - 400f), 0.01f)
     }

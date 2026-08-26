@@ -67,7 +67,7 @@ internal object HardwareTags {
  * without a tap.
  *
  * **The pane's subject is hardware; the scope of each setting in it is still decided one setting at a
- * time** — the three-way split in `CLAUDE.md` and `docs/inkPlan.md` ID5. *Let a finger draw* describes
+ * time** — the three-way split in `CLAUDE.md` and `memory/inkPlan.md` ID5. *Let a finger draw* describes
  * **this device**: whether a stylus is in the room is not a property of a notebook, and must never
  * travel to another device with one. The button bindings below it describe **the user** (SB3): "double
  * click means highlighter" is a working habit like "pen 2 is red", and it should follow its owner to a
@@ -116,7 +116,7 @@ fun ColumnScope.HardwarePanelContent(
 }
 
 /**
- * One device in the picker — `docs/expressivePlan.md` EX7.
+ * One device in the picker — `memory/expressivePlan.md` EX7.
  *
  * A real [ToggleButton] rather than the hand-built `Column` with a swapped background colour this
  * used to be. It is the same control Material already has a name for — a segmented, mutually
@@ -175,7 +175,7 @@ private fun ColumnScope.StylusSettings(
 }
 
 /**
- * What the barrel button's clicks do — `docs/stylusPlan.md` SB8.
+ * What the barrel button's clicks do — `memory/stylusPlan.md` SB8.
  *
  * Three rows always, even on a pen with no triple click. The app cannot know how many clicks the pen
  * in your pocket reports — a keycode only says what has been pressed, never what *could* be — and a
@@ -228,7 +228,7 @@ private fun PenButtonRow(
  *
  * A reference rather than a setting, and worth the space: the shortcuts work today but the only way
  * to find them was the system's Meta + / panel, which nobody presses by accident. Rebinding is not
- * offered because nothing in the app can rebind them yet — see `docs/features.md` L2.
+ * offered because nothing in the app can rebind them yet — see `memory/features.md` L2.
  */
 @Composable
 private fun ColumnScope.KeyboardSettings() {

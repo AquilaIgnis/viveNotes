@@ -8,7 +8,7 @@ import com.vivenotes.ai.InkTextRegion
 import com.vivenotes.ink.InkBounds
 
 /**
- * What a hit was found in — `docs/searchPlan.md` CS3.
+ * What a hit was found in — `memory/searchPlan.md` CS3.
  *
  * Ink, equations, shapes and pictures are absent on purpose rather than merely unimplemented: the
  * plan's table says why for each, and adding one means deciding what its snippet reads like and what
@@ -21,7 +21,7 @@ enum class ContentKind {
     /** A block of a text container — a text box. */
     Text,
 
-    /** A block of one table cell — the "grid of text fields" of `docs/tablePlan.md` TA15. */
+    /** A block of one table cell — the "grid of text fields" of `memory/tablePlan.md` TA15. */
     Cell,
 
     /**

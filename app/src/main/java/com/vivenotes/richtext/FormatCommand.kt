@@ -34,7 +34,7 @@ sealed interface FormatCommand {
 
     /**
      * Drops whatever is selected on the canvas, because the user picked a different tool —
-     * `docs/diagram.md`, Prime Object Class: *"Selecting any other tool removes selection of
+     * `memory/diagram.md`, Prime Object Class: *"Selecting any other tool removes selection of
      * object."*
      *
      * The canvas twin of [DeactivateTextInput], emitted from the same line of `selectTool` and for
@@ -70,7 +70,7 @@ sealed interface FormatCommand {
 
     /**
      * Selects everything in the focused container — the TextBox toolkit's own action,
-     * `docs/textBoxPlan.md` TD4.
+     * `memory/textBoxPlan.md` TD4.
      *
      * A command rather than a call on the view, even though the bar is raised a few dp from the
      * editor it is about: AD6's whole point is that there is one way to drive the editor, and a

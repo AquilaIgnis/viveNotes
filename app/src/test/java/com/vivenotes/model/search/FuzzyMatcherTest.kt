@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The matcher's three tiers and their ranking — `docs/searchPlan.md` CS6.
+ * The matcher's three tiers and their ranking — `memory/searchPlan.md` CS6.
  *
  * This is where the feature is actually verified: the panel, the index and the reveal all need a
  * device, and this does not (R10). What is pinned here is the behaviour a user would notice — that a

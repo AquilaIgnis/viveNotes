@@ -340,7 +340,7 @@ class InkOverlayTest {
     // --- the ruler -------------------------------------------------------------------------------
 
     /**
-     * A ruled stroke comes out straight however badly the hand wobbles — `docs/rulerPlan.md` RD5.
+     * A ruled stroke comes out straight however badly the hand wobbles — `memory/rulerPlan.md` RD5.
      *
      * The one assertion that says the feature works. The gesture below wanders 30px either side of
      * the ruler's edge as it travels; unruled, the recorded stroke follows that wander, and the

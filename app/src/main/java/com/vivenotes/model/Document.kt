@@ -317,7 +317,7 @@ sealed interface Outline {
     }
 
     /**
-     * A shape placed on the canvas — `docs/inkPlan.md` §5.4.
+     * A shape placed on the canvas — `memory/inkPlan.md` §5.4.
      *
      * **An object, not ink.** A handful of numbers rather than a blob of digitizer samples, so ID2's
      * argument for keeping strokes in their own table does not apply: a shape belongs in the
@@ -490,9 +490,9 @@ sealed interface Outline {
     }
 
     /**
-     * A table placed on the canvas — `docs/tablePlan.md`.
+     * A table placed on the canvas — `memory/tablePlan.md`.
      *
-     * **An object, not a block.** `docs/plan.md` §4 sketched a table as `BlockType.Table` inside a
+     * **An object, not a block.** `memory/plan.md` §4 sketched a table as `BlockType.Table` inside a
      * text container, which predates AD7; TA1 supersedes it. The diagram says the class *implements
      * Prime Object*, and every row of that — lassoed, dragged, resized by its corners, copied,
      * deleted, undone — belongs to something placed on the page rather than to a paragraph inside
@@ -531,7 +531,7 @@ sealed interface Outline {
         val borderWidth: Float = 1f,
         val fillArgb: Int? = null,
         /**
-         * **A ruling to write on with a stylus, not a grid of text fields** — `docs/tablePlan.md`
+         * **A ruling to write on with a stylus, not a grid of text fields** — `memory/tablePlan.md`
          * TA15, the Draw tab's table.
          *
          * The same object with the same toolkit, geometry and history; the difference is what a cell
@@ -591,7 +591,7 @@ sealed interface Outline {
         }
 
         /**
-         * Where Tab goes from [cellId], or null when there is nowhere further — `docs/tablePlan.md`
+         * Where Tab goes from [cellId], or null when there is nowhere further — `memory/tablePlan.md`
          * TA17.
          *
          * **Reading order, not the row alone.** The last cell of a row hands on to the first of the
@@ -664,7 +664,7 @@ sealed interface Outline {
     }
 
     /**
-     * Reserved. Stylus input is deferred (docs/inital.md), but declaring the variant now means
+     * Reserved. Stylus input is deferred (memory/initial.md), but declaring the variant now means
      * adding ink later is additive rather than a migration.
      */
     @Serializable
@@ -681,7 +681,7 @@ sealed interface Outline {
 /**
  * One row of an [Outline.Table]: a height floor, and one cell per column.
  *
- * [minHeight] is a floor rather than a height — `docs/tablePlan.md` TA3. The row renders as tall as
+ * [minHeight] is a floor rather than a height — `memory/tablePlan.md` TA3. The row renders as tall as
  * its tallest cell needs and never shorter than this, which is the same promise the text container's
  * bottom edge makes.
  */
@@ -693,7 +693,7 @@ data class TableRow(
 )
 
 /**
- * One cell: an id, and the blocks it holds — `docs/tablePlan.md` TA2.
+ * One cell: an id, and the blocks it holds — `memory/tablePlan.md` TA2.
  *
  * **Content-shaped like a text container and geometry-shaped like nothing.** The blocks are the same
  * type a container's are, held in the ViewModel under the same map and rendered by the same
@@ -728,7 +728,7 @@ data class Block(
     val text: String get() = runs.joinToString("") { it.plainText }
 
     /**
-     * The block exactly as the editor holds it — `docs/searchPlan.md` CS5.
+     * The block exactly as the editor holds it — `memory/searchPlan.md` CS5.
      *
      * **Not the same string as [text]**, and the difference is the whole reason this exists: [text]
      * substitutes an equation run's LaTeX source, while the editor writes one
