@@ -1,0 +1,8 @@
+<resources>
+    <!--
+        Overrides the main source set for the debug variant only. Two launcher icons under one name
+        is a coin flip every time you open the app, and the whole point of the suffixed
+        `applicationId` in `build.gradle.kts` is that both are installed at once.
+    -->
+    <string name="app_name">ViveNotes Debug</string>
+</resources>

@@ -118,6 +118,27 @@ android {
     }
 
     buildTypes {
+        debug {
+            /*
+             * Its own installed package, so a work-in-progress build and the shipping one sit side
+             * by side on the same tablet instead of replacing each other. Every store the app has —
+             * the Room database, DataStore, cached attachments — lives inside the package's own data
+             * directory, so the split is automatic and complete: neither install can read the
+             * other's notes, and installing one never touches the other's data.
+             *
+             * **`namespace` is deliberately not suffixed.** That is the compile-time package for
+             * `R` and `BuildConfig`, and moving it would rewrite every import in the project for no
+             * gain. Only `applicationId` — the id Android installs under — changes here.
+             *
+             * The debug app is `com.vivenotes.debug`; release keeps the bare `com.vivenotes` that
+             * an installed copy already carries, so a release build upgrades that copy in place.
+             */
+            applicationIdSuffix = ".debug"
+            // `AboutDialog` reads the version off the installed package, so this is what tells the
+            // two apart from inside the app. The launcher tells them apart by `app_name`, which
+            // `src/debug/res/values/strings.xml` overrides for this variant alone.
+            versionNameSuffix = "-debug"
+        }
         release {
             // AGP 9.2 still uses the legacy switches; AGP 9.3+ can replace these with
             // `optimization { enable = true }`. Rules in src/main/keepRules are merged by AGP.
