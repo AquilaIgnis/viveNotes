@@ -8,6 +8,12 @@ of digital documents.
 All features are completely free, including cross-device sync. Your notes stay private: no data leaves your device,
 and all AI features run entirely on-device.
 
+<iframe width="560" height="315"
+src="https://www.youtube-nocookie.com/embed/UMixtcPbUgo?si=R3vJ_uzbNs3iaSuM" title="YouTube video player"
+frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media;
+gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen>
+</iframe>
+
 # Download
 
 <table>
