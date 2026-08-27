@@ -562,11 +562,20 @@ class PageViewTest {
     // exactly the failure worth catching. One render per test, because comparing two renders means
     // capturing a frame right after a state change, which is a race the assertion cannot see.
 
+    // **Flatness is measured by how much of the sheet one colour covers, not by a count of one.**
+    // `InkOverlay` holds its authoring view for as long as the page is open now, and that view
+    // brings a `SurfaceView` with it — which switches `captureToImage` off the render-node path and
+    // onto `PixelCopy` of the whole window. What comes back then has the status bar's clock and the
+    // navigation handle painted over the page, a few thousand pixels of system chrome this test
+    // never asked for and cannot turn off. Everything the assertion is actually about survives:
+    // anything *painted on the page* would cover far more than the slack below, and the ruled cases
+    // beside this one still only ask for more than one colour.
     @Test
     fun anUnruledPageIsOneFlatColour() {
         setPage(style = PageStyle(hideTitle = true, paper = PaperSize.A6, ruleLines = RuleLines.None))
 
-        assertEquals(1, distinctColoursInsideThePage())
+        val flattest = largestColourShareInsideThePage()
+        assertTrue("an unruled page should be one flat colour, was $flattest of it", flattest > 0.99f)
     }
 
     @Test
@@ -617,6 +626,24 @@ class PageViewTest {
             "hexagonal paper has no continuous vertical side: $paintedRows/$sampledRows rows painted",
             paintedRows >= sampledRows * 3 / 4,
         )
+    }
+
+    /** The share of the sheet held by its commonest colour — 1f for a page nothing is painted on. */
+    private fun largestColourShareInsideThePage(): Float {
+        val image = compose.onNodeWithTag(PageTags.SURFACE).captureToImage()
+        val pixels = IntArray(image.width * image.height)
+        image.readPixels(pixels)
+        val inset = 8
+        val counts = HashMap<Int, Int>()
+        var total = 0
+        for (y in inset until image.height - inset) {
+            for (x in inset until image.width - inset) {
+                val colour = pixels[y * image.width + x]
+                counts[colour] = (counts[colour] ?: 0) + 1
+                total++
+            }
+        }
+        return (counts.values.maxOrNull() ?: 0).toFloat() / total
     }
 
     /** Colours within the sheet, kept clear of its own border. */

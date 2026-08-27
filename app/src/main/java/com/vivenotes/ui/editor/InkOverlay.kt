@@ -424,7 +424,28 @@ internal fun InkOverlay(
             mark = canvasInk.copy(alpha = 0.72f).toArgb(),
         )
     }
-    Box(modifier.clipToBounds().testTag(INK_OVERLAY_TAG).onSizeChanged { viewportSize = it }) {
+    /** Whether anything in hand owns the page's gestures — the condition the touch filter is on. */
+    val armed = brush != null || erasing || lassoing || shaping != null || insertingSpace
+
+    Box(
+        modifier
+            .clipToBounds()
+            // With nothing in hand the overlay has to be *transparent to touch*, and since the
+            // authoring view below is composed whether or not a tool is armed, being transparent is
+            // no longer the same as being absent: an `AndroidView` carries a pointer-input node of
+            // its own, so the moment it is in the tree it is a hit target, and Compose stops at the
+            // first sibling it hits. Left alone that killed the page — no scrolling and no tap into
+            // a text container while the pointer was the tool. The marker node is exactly the lever
+            // for that; see `sharingTouchesWithSiblings`.
+            //
+            // Only while nothing is armed, deliberately. With a tool in hand the filter below is in
+            // front of the authoring view and takes the gesture first, and it is *meant* to own it
+            // outright — that is why `handleInk` pans the page itself rather than declining to a
+            // sibling that would never be asked.
+            .then(if (armed) Modifier else Modifier.sharingTouchesWithSiblings())
+            .testTag(INK_OVERLAY_TAG)
+            .onSizeChanged { viewportSize = it },
+    ) {
         // Finished ink, drawn by us rather than left in the authoring view: the authoring view
         // renders with the transform it was given when the stroke started, so it would not follow a
         // later scroll. Reading the transform here in the draw scope means scrolling re-runs this
@@ -507,52 +528,77 @@ internal fun InkOverlay(
             }
         }
 
-        // Composed only while a tool is armed: this is the expensive half — a front-buffered
-        // surface and its render thread — and there is no reason to hold one while nobody is
-        // drawing.
-        if (brush != null || erasing) {
-            AndroidView(
-                factory = { context ->
-                    // Wrapped rather than hosted directly. An AndroidView reports the gesture as
-                    // consumed if its view hierarchy handles it, and Compose then stops hit-testing
-                    // — which took every finger drag meant for the scroll container underneath, so
-                    // the page could not be panned while a pen was in hand. This view needs no
-                    // touch of its own: it is fed events by hand from the filter above it.
-                    TouchTransparent(context).apply {
-                        addView(
-                            InProgressStrokesView(context).apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                )
-                                // Sets up the renderer and its thread now rather than on the first
-                                // stroke, where the cost lands as visible lag on the very first
-                                // mark someone makes.
-                                eagerInit()
-                                addFinishedStrokesListener(
-                                    object : InProgressStrokesFinishedListener {
-                                        override fun onStrokesFinished(
-                                            strokes: Map<InProgressStrokeId, Stroke>,
-                                        ) {
-                                            strokes.values.forEach(currentOnFinished)
-                                            // Handed over, so the authoring view stops drawing
-                                            // them. Held any longer and they would be drawn twice,
-                                            // and would not follow a scroll.
-                                            removeFinishedStrokes(strokes.keys)
-                                        }
-                                    },
-                                )
-                                wetView = this
-                            },
-                        )
-                    }
-                },
-                onRelease = { wetView = null },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
+        // Held for as long as the page is open, and **never rebuilt when the tool changes**.
+        //
+        // This used to be composed only while a tool was armed — it is the expensive half, a
+        // front-buffered surface and its render thread, and holding one while nobody is drawing
+        // looked like waste. It cost ink instead. Arming a pen with nothing in hand then had to
+        // build the whole surface at the exact moment the user was reaching for the page, and the
+        // first stroke fell into the gap two different ways:
+        //
+        //  - The touch filter below is composed on the same recomposition, so a pen that came down
+        //    before that frame landed had its whole gesture taken by the scroll container — Android
+        //    gives the gesture to whoever took the down, so it never came back as ink.
+        //  - Worse, a stroke that did start went nowhere. `InProgressStrokesView` renders into a
+        //    `SurfaceView` whose viewport only exists after `surfaceChanged` reports a size, and
+        //    `CanvasInProgressStrokesRenderHelperV33.requestStrokeCohortHandoffToHwui` drops the
+        //    finished cohort on a null viewport. `onStrokeCohortHandoffToHwuiComplete` then never
+        //    fires, the manager's `newCohortStartAwaitingHandoff` latch stays set, and from that
+        //    point its `onDraw` returns immediately: no wet ink is ever drawn again and no stroke
+        //    ever reaches [onStrokeFinished]. That is the "swap to a pen and the page stops taking
+        //    ink" bug, and it stayed broken until something rebuilt the view.
+        //
+        // Both are races against surface setup, so the fix is to do that setup once, while the page
+        // is still loading and the pen is nowhere near the glass. What it costs is one surface and
+        // one render thread held while the pointer is the tool — which is the tool nobody stays on,
+        // in an app whose whole point is the pen.
+        //
+        // The touch filter below stays conditional, because *it* has to be absent with nothing in
+        // hand or it swallows the taps that belong to the canvas (`memory/rulerPlan.md` RD6). This
+        // one cannot be absent and cannot be silent either — an `AndroidView` brings a pointer-input
+        // node with it — so the overlay shares its hit path with its siblings while nothing is
+        // armed. See the root `Box` above.
+        AndroidView(
+            factory = { context ->
+                // Wrapped rather than hosted directly. An AndroidView reports the gesture as
+                // consumed if its view hierarchy handles it, and Compose then stops hit-testing
+                // — which took every finger drag meant for the scroll container underneath, so
+                // the page could not be panned while a pen was in hand. This view needs no
+                // touch of its own: it is fed events by hand from the filter above it.
+                TouchTransparent(context).apply {
+                    addView(
+                        InProgressStrokesView(context).apply {
+                            layoutParams = ViewGroup.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                            )
+                            // Sets up the renderer and its thread now rather than on the first
+                            // stroke, where the cost lands as visible lag on the very first
+                            // mark someone makes.
+                            eagerInit()
+                            addFinishedStrokesListener(
+                                object : InProgressStrokesFinishedListener {
+                                    override fun onStrokesFinished(
+                                        strokes: Map<InProgressStrokeId, Stroke>,
+                                    ) {
+                                        strokes.values.forEach(currentOnFinished)
+                                        // Handed over, so the authoring view stops drawing
+                                        // them. Held any longer and they would be drawn twice,
+                                        // and would not follow a scroll.
+                                        removeFinishedStrokes(strokes.keys)
+                                    }
+                                },
+                            )
+                            wetView = this
+                        },
+                    )
+                }
+            },
+            onRelease = { wetView = null },
+            modifier = Modifier.fillMaxSize(),
+        )
 
-        if (brush != null || erasing || lassoing || shaping != null || insertingSpace) {
+        if (armed) {
             Box(
                 Modifier
                     .fillMaxSize()
