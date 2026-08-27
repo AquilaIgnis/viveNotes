@@ -39,6 +39,8 @@ class AccountScreenTest {
 
     private val connectCalls = mutableListOf<Triple<String, String, String>>()
     private var disconnects = 0
+    private var forceDisconnects = 0
+    private var disconnectFailure by mutableStateOf<ConnectFailure?>(null)
     private var syncs = 0
     private var syncing by mutableStateOf(false)
     private var syncStatus by mutableStateOf(SyncStatus())
@@ -222,6 +224,35 @@ class AccountScreenTest {
         assertEquals(1, disconnects)
     }
 
+    /**
+     * The way out of a server that never answers again.
+     *
+     * Without it the stored registration is a one-way door: it is what this screen shows instead of
+     * the connect form, so a device whose server is offline could neither revoke itself nor move to
+     * another server. The offer is deliberately not on screen before the ordinary revoke has been
+     * tried and failed — it leaves a live device row behind on the server.
+     */
+    @Test
+    fun aFailedRevokeOffersTheLocalOnlyWayOut() {
+        setScreen()
+        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+
+        compose.onNodeWithTag(AccountTags.DISCONNECT_ANYWAY).assertDoesNotExist()
+
+        disconnectFailure = ConnectFailure.Unreachable
+
+        // What stays behind is stated beside the button rather than behind a second dialog: the
+        // person has already confirmed a disconnect, and this is the only part of it that differs.
+        compose.onNodeWithText(context.getString(R.string.account_disconnect_anyway_note))
+            .performScrollTo()
+            .assertIsDisplayed()
+        compose.onNodeWithTag(AccountTags.DISCONNECT_ANYWAY).performScrollTo().performClick()
+
+        assertEquals(1, forceDisconnects)
+        // The failed route is not retried on the way out; nothing goes to the server at all.
+        assertEquals(0, disconnects)
+    }
+
     @Test
     fun syncNowShowsProgressAndThenASummary() {
         setScreen()
@@ -349,7 +380,9 @@ class AccountScreenTest {
                     syncing = syncing,
                     syncStatus = syncStatus,
                     onSync = { syncs++ },
+                    disconnectFailure = disconnectFailure,
                     onDisconnect = { disconnects++ },
+                    onForceDisconnect = { forceDisconnects++ },
                 )
             }
         }

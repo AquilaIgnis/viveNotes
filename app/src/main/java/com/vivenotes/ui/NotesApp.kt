@@ -419,6 +419,22 @@ fun NotesApp(
                         }
                     }
                 },
+                // The offer that follows a failed revoke. Same local clean-up, no request in front
+                // of it: a server that cannot be reached to be told is exactly the one this has to
+                // work without, or the registration it refuses to give up keeps this installation
+                // from ever reaching another server.
+                onForceDisconnect = {
+                    if (!disconnecting) {
+                        disconnecting = true
+                        connectScope.launch {
+                            syncAccounts.forgetConnection()
+                            disconnectFailure = null
+                            // As above: with the stored account gone, the empty form says so.
+                            selfHostConnection = SelfHostConnection.Idle
+                            disconnecting = false
+                        }
+                    }
+                },
             )
         }
     }

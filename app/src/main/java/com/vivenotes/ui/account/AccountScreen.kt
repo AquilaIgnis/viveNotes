@@ -93,6 +93,9 @@ internal object AccountTags {
     const val SYNC_OFFLINE = "account-sync-offline"
     const val DISCONNECT = "account-disconnect"
     const val DISCONNECT_CONFIRM = "account-disconnect-confirm"
+
+    /** The local-only way out, shown only once a revoke has failed. */
+    const val DISCONNECT_ANYWAY = "account-disconnect-anyway"
 }
 
 /**
@@ -127,6 +130,11 @@ fun AccountScreen(
     disconnecting: Boolean = false,
     disconnectFailure: ConnectFailure? = null,
     onDisconnect: () -> Unit = {},
+    /**
+     * Forget the server without revoking this device on it, for a server that cannot be told.
+     * Offered only after [onDisconnect] has failed.
+     */
+    onForceDisconnect: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onBack)
@@ -235,6 +243,7 @@ fun AccountScreen(
                                 disconnecting = disconnecting,
                                 disconnectFailure = disconnectFailure,
                                 onDisconnect = { confirmDisconnect = true },
+                                onForceDisconnect = onForceDisconnect,
                             )
                         }
                         return@Column
@@ -433,6 +442,7 @@ private fun ConnectedPanel(
     disconnecting: Boolean,
     disconnectFailure: ConnectFailure?,
     onDisconnect: () -> Unit,
+    onForceDisconnect: () -> Unit,
 ) {
     val accents = LocalIconAccents.current
     val connectedSyncingDescription = stringResource(R.string.account_syncing)
@@ -527,12 +537,34 @@ private fun ConnectedPanel(
         }
     }
 
+    // A failed revoke is not a locked door. The stored registration is what this screen shows in
+    // place of the connect form, so without a local-only way out a server that never answers again
+    // would keep this installation for itself — see `SyncAccounts.forgetConnection`. It appears only
+    // here, after the polite route has actually been tried and has actually failed, and it says what
+    // it leaves behind rather than asking a second time whether the person is sure.
     if (disconnectFailure != null) {
         Text(
             text = stringResource(R.string.account_disconnect_failed),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
+        Text(
+            text = stringResource(R.string.account_disconnect_anyway_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(
+            onClick = onForceDisconnect,
+            enabled = !disconnecting,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(AccountTags.DISCONNECT_ANYWAY),
+        ) {
+            Text(
+                text = stringResource(R.string.account_disconnect_anyway),
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
 

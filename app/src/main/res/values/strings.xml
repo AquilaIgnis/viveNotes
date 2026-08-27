@@ -38,6 +38,13 @@
     <string name="account_sync_error_unsupported">This account holds changes a newer version of the app wrote. Update ViveNotes to keep syncing.</string>
     <string name="account_sync_error_parent">A section or page could not be sent because its parent is missing.</string>
     <string name="account_disconnect_failed">The device could not be revoked. Its token was kept so you can try again.</string>
+    <!--
+        Offered only after a revoke has already failed. It names the one thing that stays behind,
+        because that is the whole difference between this and the ordinary disconnect: nobody tells
+        the server, so the device outlives this app's copy of its token.
+    -->
+    <string name="account_disconnect_anyway_note">Server did not respond</string>
+    <string name="account_disconnect_anyway">Forget Server</string>
     <string name="account_disconnecting">Revoking this device</string>
     <string name="account_disconnect">Disconnect</string>
     <string name="account_disconnect_title">Disconnect from this server?</string>
@@ -45,14 +52,14 @@
         Says what cannot be undone rather than "are you sure": the token is not recoverable, and the
         device row it belongs to outlives it on the server until somebody removes it.
     -->
-    <string name="account_disconnect_body">The server will revoke this device, then ViveNotes will forget its token. Notes already on this device stay here.</string>
+    <string name="account_disconnect_body">The server will revoke this device. Notes already on this device stay here.</string>
     <string name="account_disconnect_cancel">Cancel</string>
     <!--
         One message per ConnectFailure. Each names what to change, because the person reading it is
         the same person who runs the server: "could not connect" tells them nothing they cannot see.
     -->
     <string name="account_error_address">That is not a server address. Try something like https://notes.example.com.</string>
-    <string name="account_error_unreachable">Nothing answered at that address. Check the address and port, and that the server is running.</string>
+    <string name="account_error_unreachable">Nothing answered at that address. Check the address and port.</string>
     <string name="account_error_credentials">That email and password do not match an account on this server.</string>
     <string name="account_error_request">The server would not accept those details. Check the email address, and that the password is at least 8 characters.</string>
     <string name="account_error_too_large">Those details are longer than the server accepts.</string>

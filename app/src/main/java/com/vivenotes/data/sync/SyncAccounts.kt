@@ -143,7 +143,7 @@ class SyncAccounts(
      */
     val remoteInk: StateFlow<Map<String, Long>> = remoteInkSignal.pages
 
-    /** Null until connected. Survives launches; cleared by [disconnect]. */
+    /** Null until connected. Survives launches; cleared by [disconnect] or [forgetConnection]. */
     val account: Flow<SyncAccount?> = store.account
 
     private val _status = MutableStateFlow(SyncStatus())
@@ -237,9 +237,7 @@ class SyncAccounts(
             TokenCheck.Valid -> SelfHostConnection.Connected(account.serverUrl, account.deviceName)
 
             TokenCheck.Revoked -> {
-                store.clear()
-                hierarchy?.deactivate(account.accountId)
-                _status.value = SyncStatus()
+                forget(account)
                 SelfHostConnection.Failed(ConnectFailure.Revoked)
             }
 
@@ -255,6 +253,9 @@ class SyncAccounts(
      *
      * Network and 5xx failures leave the credential standing so the user can try again. A 401 means
      * it was already revoked and is therefore the other successful local-disconnect path.
+     *
+     * Asking the server first is the polite order, not a precondition for leaving it:
+     * [forgetConnection] is the way out when the answer never comes.
      */
     suspend fun disconnect(): DisconnectResult {
         val account = store.account.first() ?: return DisconnectResult.Disconnected
@@ -262,14 +263,39 @@ class SyncAccounts(
             is ServerResult.Success,
             ServerResult.Unauthorized,
             -> {
-                store.clear()
-                hierarchy?.deactivate(account.accountId)
-                // Nothing about the old server's syncing is true of the next one.
-                _status.value = SyncStatus()
+                forget(account)
                 DisconnectResult.Disconnected
             }
             is ServerResult.Failed -> DisconnectResult.Failed(result.reason)
         }
+    }
+
+    /**
+     * Forgets the registration without the server's agreement, for when it cannot give one.
+     *
+     * A revoke that cannot be delivered used to be the end of the road. The stored registration is
+     * what the account screen shows *instead of* the connect form, so a server that stayed down —
+     * decommissioned, moved, or reachable only from a network this tablet has left — held this
+     * installation to itself with no way to reach another one. Being unable to tell that server
+     * anything is a reason to leave it, not a reason to be kept by it.
+     *
+     * The cost is real and the screen states it before offering this: the device row stays in the
+     * server's list and its token stays valid there until somebody removes it from that list or the
+     * admin dashboard. Nothing holds that token afterwards — this deletes the only copy — but it is
+     * an entry the operator has to prune by hand, which is why this is the second offer and never
+     * the first.
+     */
+    suspend fun forgetConnection() {
+        val account = store.account.first() ?: return
+        forget(account)
+    }
+
+    /** The local half of a disconnect, identical whichever route arrives at it. */
+    private suspend fun forget(account: SyncAccount) {
+        store.clear()
+        hierarchy?.deactivate(account.accountId)
+        // Nothing about the old server's syncing is true of the next one.
+        _status.value = SyncStatus()
     }
 
     /**
