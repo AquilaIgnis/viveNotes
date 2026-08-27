@@ -96,8 +96,8 @@ android {
         applicationId = "com.vivenotes"
         minSdk = 35
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         // The physical-device suite runs for roughly twenty minutes. Its test-only runner keeps
         // the display awake so Compose hosts are not hidden by the lock screen halfway through.
