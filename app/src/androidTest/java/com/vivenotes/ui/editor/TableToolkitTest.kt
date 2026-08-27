@@ -292,6 +292,24 @@ class TableToolkitTest {
         compose.waitUntil(timeoutMillis = 2_000) { focusedCell == id }
     }
 
+    /**
+     * Waits for the caret rather than asserting on the frame after the key, the way [focusCell]
+     * already waits for the click it sends.
+     *
+     * A cell's editor is a View registered on `onViewCreated`, and `moveCaret` gives up quietly
+     * when the destination is not attached yet — the reveal path retries across frames for exactly
+     * that reason. So Tab across a row boundary can take a frame longer than `waitForIdle` waits,
+     * which on a loaded emulator read as Tab doing nothing at all. What a user gets is the caret
+     * arriving, not the caret arriving this frame.
+     *
+     * The wait is allowed to time out so the assertion below reports which cell actually holds the
+     * caret; a bare `waitUntil` would fail with nothing but a duration.
+     */
+    private fun assertCaretReaches(expected: String?) {
+        runCatching { compose.waitUntil(timeoutMillis = 2_000) { focusedCell == expected } }
+        assertEquals(expected, focusedCell)
+    }
+
     @Test
     fun tabMovesTheCaretToTheNextColumn() {
         val table = table(columns = 3, rows = 2)
@@ -300,7 +318,7 @@ class TableToolkitTest {
 
         pressTab()
 
-        assertEquals(table.cellAt(0, 1)?.id, focusedCell)
+        assertCaretReaches(table.cellAt(0, 1)?.id)
     }
 
     /** The half that makes the key worth having: the end of a row is not the end of the table. */
@@ -312,7 +330,7 @@ class TableToolkitTest {
 
         pressTab()
 
-        assertEquals(table.cellAt(1, 0)?.id, focusedCell)
+        assertCaretReaches(table.cellAt(1, 0)?.id)
     }
 
     @Test
@@ -323,7 +341,7 @@ class TableToolkitTest {
 
         pressTab(shift = true)
 
-        assertEquals(table.cellAt(0, 2)?.id, focusedCell)
+        assertCaretReaches(table.cellAt(0, 2)?.id)
     }
 
     /**
@@ -339,7 +357,7 @@ class TableToolkitTest {
 
         pressTab()
 
-        assertEquals(table.cellAt(1, 1)?.id, focusedCell)
+        assertCaretReaches(table.cellAt(1, 1)?.id)
     }
 
     /**

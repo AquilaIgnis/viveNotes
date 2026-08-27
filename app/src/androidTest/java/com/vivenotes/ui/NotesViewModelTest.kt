@@ -2356,6 +2356,14 @@ class NotesViewModelTest {
     }
 
     private companion object {
-        const val STORE_TIMEOUT_MS = 5_000L
+        /**
+         * A guard against a write that never lands, not a claim about how fast one is.
+         *
+         * Five seconds was enough on a developer's machine and not on a CI emulator running the
+         * whole suite on a software GPU, so the three tests that wait on a real DataStore write
+         * failed there at random while every other test in this class passed. Generous costs
+         * nothing on a run that is going to pass anyway.
+         */
+        const val STORE_TIMEOUT_MS = 30_000L
     }
 }
