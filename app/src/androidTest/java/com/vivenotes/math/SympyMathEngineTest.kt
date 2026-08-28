@@ -109,6 +109,25 @@ class SympyMathEngineTest {
     }
 
     @Test
+    fun degreeMarksBecomeRadianMultiplesOrAreRefusedOutright() = runBlocking {
+        // SymPy trigonometry is radians-only and the mark is outside the LaTeX grammar, so before
+        // degrees.py "^\\circ" parsed as exponentiation by a variable named circ, and 30 degrees
+        // was evaluated as 30 radians.
+        assertEquals("\\frac{1}{2}", engine.execute("\\sin(30^\\circ)", "simplify").latex)
+        assertEquals("\\frac{1}{2}", engine.execute("\\sin(30\u00B0)", "simplify").latex)
+        assertEquals("1", engine.execute("\\tan(45^\\circ)", "simplify").latex)
+
+        // FormulaNet emits one token at a time, so 36 reaches the engine as "3 6". Attaching the
+        // mark to the trailing digit alone answered sin(3 * 6 degrees) = 0.309 for a written 36.
+        assertEquals("0.587785252293", engine.execute("\\sin ( 3 6 ^ { \\circ } )", "decimal").latex)
+
+        // A mark the rewrite cannot attach to a whole token fails closed. Rewriting it anyway would
+        // drop the factor inside the subscript and answer a different question without saying so.
+        assertNotNull(engine.analyze("\\theta_{2}^\\circ").error)
+        assertNotNull(engine.analyze("\\theta _ { 2 } ^ { \\circ }").error)
+    }
+
+    @Test
     fun malformedLatexAndUnlistedOperationsFailClosed() = runBlocking {
         assertNotNull(engine.analyze("x -").error)
         assertNotNull(engine.execute("x^2", "matrix_inverse").error)

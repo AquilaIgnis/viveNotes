@@ -14,6 +14,7 @@ from sympy.core.relational import Relational
 from sympy.matrices.matrixbase import MatrixBase
 from sympy.parsing.latex import parse_latex
 
+import degrees
 import greeks
 
 
@@ -133,11 +134,15 @@ _LIMIT_PLACEMENT_DIRECTIVE = re.compile(r"\\(?:no)?limits(?![A-Za-z])\s*")
 
 
 def _normalize_latex(source: str) -> str:
-    """Remove TeX-only layout directives which do not change the represented mathematics."""
+    """Rewrite notation the ANTLR grammar rejects into the mathematics it stands for."""
     # FormulaNet can emit ``\int\limits_0^1``. ``\limits`` and ``\nolimits`` only control where
     # TeX draws an operator's bounds, but SymPy's ANTLR grammar rejects them. Keeping the integral,
     # sum, or other operator and its following bounds is therefore a semantics-preserving adapter.
-    return _LIMIT_PLACEMENT_DIRECTIVE.sub("", source)
+    source = _LIMIT_PLACEMENT_DIRECTIVE.sub("", source)
+    source = degrees.to_radians(source)
+    if degrees.has_stray_mark(source):
+        raise MathInputError("A degree mark must follow a number, a variable, or a bracketed group.")
+    return source
 
 
 _MATRIX_ENVIRONMENT = re.compile(
