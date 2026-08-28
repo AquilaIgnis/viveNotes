@@ -6,6 +6,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -83,6 +84,33 @@ class AiModelStoreTest {
         settle(store)
 
         assertTrue("reached for $attempted with auto-download off", attempted.isEmpty())
+    }
+
+    /**
+     * Half a debug bundle is no bundle, not a broken install.
+     *
+     * `app/src/debug/assets/ai/dev/` holds a committed 2 MB tokenizer next to a gitignored 232 MB
+     * ONNX, so most builds carry exactly one of the two. Reporting that as Failed cost more than a
+     * misleading message: the eager fetch acts only on NotInstalled, so the false failure also
+     * turned off the download that would have supplied the missing file, and the pane showed an
+     * install error at every launch instead of fetching the package once.
+     */
+    @Test
+    fun anIncompleteBundledPackageLeavesTheStoreReadyToDownload() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = AiModelStore(context, downloader = refusingDownloader(), autoDownload = false)
+
+        val state = settle(store)
+
+        assumeTrue(
+            "this machine has the whole bundled package — see app/src/debug/assets/ai/dev/",
+            state.formulaLatex != AiModelInstallState.Installed,
+        )
+        assertEquals(
+            "an incomplete bundle must read as NotInstalled so the first run can fetch it",
+            AiModelInstallState.NotInstalled,
+            state.formulaLatex,
+        )
     }
 
     private companion object {

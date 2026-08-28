@@ -3,6 +3,7 @@ package com.vivenotes.ai
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -154,6 +155,11 @@ class AiModelStore internal constructor(
                 _state.value = AiModelsState(textState, AiModelInstallState.NotInstalled)
                 throw cancelled
             } catch (failure: Exception) {
+                // The pane can only show one short line, and several of the ways this fails —
+                // a redirect refused, a TLS chain rejected, a digest mismatch — arrive with a
+                // message too terse to act on. The stack trace is the difference between
+                // "Download failed" and knowing which hop failed, so it goes to the log.
+                Log.w(TAG, "FormulaNet package download failed after $completedBytes bytes", failure)
                 staging.deleteRecursively()
                 _state.value = AiModelsState(
                     handwritingText = textState,
@@ -228,17 +234,30 @@ class AiModelStore internal constructor(
         }
     }
 
-    /** Debug builds carry both optional files so a clean emulator install needs no network. */
+    /**
+     * Debug builds carry both optional files so a clean emulator install needs no network.
+     *
+     * **All of them, or none.** `pp-formulanet-s.onnx` is gitignored — 232 MB — while the 2 MB
+     * tokenizer beside it is committed, so *half a package* is the ordinary state of a fresh clone,
+     * not a symptom of anything. Half is therefore no bundled package at all: returning null leaves
+     * the caller on whatever the installed package says, which is NotInstalled, and NotInstalled is
+     * the one state the first-run fetch acts on.
+     *
+     * Gating on "any file present" instead — which is what this did until 2026-08-27 — reported
+     * `Failed("Bundled FormulaNet model is unavailable")` on every clone that had not hand-placed
+     * the ONNX. That was not merely a wrong message. Because the eager fetch fires only on
+     * NotInstalled, the false Failed also suppressed the download that would have fixed it, so the
+     * package never arrived on its own and the pane showed an install error at every launch.
+     */
     private fun installBundledFormulaPackageIfPresent(): AiModelInstallState? {
         val bundledNames = appContext.assets.list(DEBUG_FORMULA_ASSETS_DIRECTORY)?.toSet().orEmpty()
-        if (FORMULA_ARTIFACTS.none { it.fileName in bundledNames }) return null
+        if (!FORMULA_ARTIFACTS.all { it.fileName in bundledNames }) return null
 
         val staging = File(modelsRoot, ".$FORMULA_DIRECTORY-debug-${System.nanoTime()}.part")
         return try {
             modelsRoot.mkdirsOrThrow()
             staging.mkdirsOrThrow()
             FORMULA_ARTIFACTS.forEach { artifact ->
-                require(artifact.fileName in bundledNames) { "Debug FormulaNet package is incomplete" }
                 copyVerifiedAsset(
                     assetPath = "$DEBUG_FORMULA_ASSETS_DIRECTORY/${artifact.fileName}",
                     destination = File(staging, artifact.fileName),
@@ -248,7 +267,8 @@ class AiModelStore internal constructor(
             File(staging, VERIFIED_MARKER).writeText(FORMULA_MARKER)
             installStagedDirectory(staging, formulaDirectory)
             AiModelInstallState.Installed
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
+            Log.w(TAG, "Bundled FormulaNet package could not be hydrated", failure)
             staging.deleteRecursively()
             AiModelInstallState.Failed("Bundled FormulaNet model is unavailable")
         }
@@ -332,6 +352,7 @@ class AiModelStore internal constructor(
     data class FormulaModelFiles(val model: File, val tokenizer: File)
 
     companion object {
+        private const val TAG = "AiModelStore"
         private const val MODELS_DIRECTORY = "ai_models"
 
         /**

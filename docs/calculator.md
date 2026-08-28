@@ -5,34 +5,34 @@ picks the buttons, `_execute` / `_execute_matrix` run them). Kotlin bridge: `mat
 
 Buttons are listed in display order. A row with a condition only appears when the condition holds.
 
-Every table below was checked against the running engine on 2026-08-09, not read off the source.
+All supported operations are on `app/build/python/pip/debug/common/sympy/parsing/latex/LaTeX.g4`
 
 ## Run automatically
 
 Once a formula is understood, the panel runs one action without being asked — the first of
 `solve`, `evaluate`, `simplify` that the object offers (`AUTOMATIC_MATH_ACTIONS` in `ui/NotesApp.kt`).
 
-| Object | Runs |
-|---|---|
-| Equation, Relation | Solve |
-| Integral, Derivative, Unevaluated operation, Series | Evaluate |
-| Expression | Simplify |
-| Matrix | nothing — no arbitrary default |
+| Object                                              | Runs                           |
+| --------------------------------------------------- | ------------------------------ |
+| Equation, Relation                                  | Solve                          |
+| Integral, Derivative, Unevaluated operation, Series | Evaluate                       |
+| Expression                                          | Simplify                       |
+| Matrix                                              | nothing — no arbitrary default |
 
 Tapping a different action afterwards sticks; the automatic run fires once per analysis, not per tap.
 
 ## How input is classified
 
-| Parsed as                 | Shown as                |
-| ------------------------- | ----------------------- |
-| `MatrixBase`              | `Matrix · R × C`        |
-| `Integral`                | `Integral`              |
-| `Derivative`              | `Derivative`            |
-| `Sum` over an infinite limit | `Series`             |
+| Parsed as                          | Shown as                |
+| ---------------------------------- | ----------------------- |
+| `MatrixBase`                       | `Matrix · R × C`        |
+| `Integral`                         | `Integral`              |
+| `Derivative`                       | `Derivative`            |
+| `Sum` over an infinite limit       | `Series`                |
 | `Sum` (finite), `Product`, `Limit` | `Unevaluated operation` |
-| `Equality`                | `Equation`              |
-| other `Relational`        | `Relation`              |
-| anything else             | `Expression`            |
+| `Equality`                         | `Equation`              |
+| other `Relational`                 | `Relation`              |
+| anything else                      | `Expression`            |
 
 ## Matrix
 
@@ -83,9 +83,9 @@ Covers finite `Sum`, `Product` and `Limit` as well as integrals and derivatives.
 A `Sum` with one index running to infinity. Evaluate still applies and still runs automatically;
 Convergence is the added button.
 
-| Button      | Condition | Result                                                        |
-| ----------- | --------- | ------------------------------------------------------------- |
-| Evaluate    | —         | `simplify(expr.doit())` — the closed form, where one exists    |
+| Button      | Condition | Result                                                                               |
+| ----------- | --------- | ------------------------------------------------------------------------------------ |
+| Evaluate    | —         | `simplify(expr.doit())` — the closed form, where one exists                          |
 | Convergence | —         | Diverges · Converges · Converges absolutely · Converges conditionally · Undetermined |
 
 **SymPy exposes no individually addressable convergence test.** `Sum.is_convergent()` walks a fixed
@@ -100,7 +100,7 @@ The first branch that reaches a verdict wins and the rest never run. There is no
 guess. "Converges conditionally" is derived: convergent, not absolutely so.
 
 **A divergence verdict is withheld for trigonometric summands.** Traced through 1.14.0: the p-series
-branch *discards the bounded factor* and decides on the `1/n^p` remainder alone, and it sits ahead of
+branch _discards the bounded factor_ and decides on the `1/n^p` remainder alone, and it sits ahead of
 Dirichlet in the cascade, so Dirichlet never runs. For p > 1 that is harmless — Σsin(n)/n² returns
 `True` correctly. For p ≤ 1 it is wrong on exactly the interesting cases: Σsin(n)/n and Σcos(n)/n
 both converge and both return `False`, identically to the genuinely divergent Σsin(n). Those report

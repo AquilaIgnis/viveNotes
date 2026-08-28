@@ -95,6 +95,20 @@ class SympyMathEngineTest {
     }
 
     @Test
+    fun greekFunctionNamesEvaluateOnlyAtTheArityWhichMakesThemFunctions() = runBlocking {
+        // parse_latex leaves every name outside its grammar as an undefined function, so before
+        // greeks.py these evaluated to themselves and the Simplify button silently did nothing.
+        assertEquals("24", engine.execute("\\Gamma(5)", "simplify").latex)
+        assertEquals("\\sqrt{\\pi}", engine.execute("\\Gamma(\\frac{1}{2})", "simplify").latex)
+        assertEquals("\\frac{1}{12}", engine.execute("\\beta(2,3)", "simplify").latex)
+
+        // A lone Greek letter, and one applied at an arity where it is not that function, stay the
+        // coefficient or unknown function the writer meant.
+        assertEquals("\\beta", engine.execute("\\beta", "simplify").latex)
+        assertTrue(engine.execute("\\beta(t)", "simplify").latex.orEmpty().contains("\\beta"))
+    }
+
+    @Test
     fun malformedLatexAndUnlistedOperationsFailClosed() = runBlocking {
         assertNotNull(engine.analyze("x -").error)
         assertNotNull(engine.execute("x^2", "matrix_inverse").error)

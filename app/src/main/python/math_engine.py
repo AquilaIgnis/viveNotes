@@ -14,6 +14,8 @@ from sympy.core.relational import Relational
 from sympy.matrices.matrixbase import MatrixBase
 from sympy.parsing.latex import parse_latex
 
+import greeks
+
 
 #: What every operation hands back to Kotlin before it is serialized: ``title``, ``latex``, and
 #: optionally ``message`` or ``graph``. Values are mixed, so ``Any`` is honest rather than lazy here.
@@ -95,6 +97,7 @@ def _parse(source: str) -> ParsedInput:
     if expression is None:
         # strict=True prevents the ANTLR backend from accepting only a valid prefix such as `x -`.
         expression = parse_latex(source, backend="antlr", strict=True)
+    expression = greeks.bind_functions(expression)
     expression = _bind_constants(expression)
     _check_complexity(expression)
     return expression
