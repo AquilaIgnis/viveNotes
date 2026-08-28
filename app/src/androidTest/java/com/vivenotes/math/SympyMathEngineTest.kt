@@ -38,6 +38,40 @@ class SympyMathEngineTest {
     }
 
     @Test
+    fun aQuadraticPairOfRootsSolvesToOnePlusMinusRoot() = runBlocking {
+        // A rational centre and an irrational spread — the shape the quadratic formula produces, and
+        // the only shape that folds. Surd and imaginary spreads fold alike.
+        val surds = engine.execute("x^2+10x+5=0", "solve")
+        assertNull(surds.error)
+        assertEquals("x = -5 \\pm 2 \\sqrt{5}", surds.latex)
+        assertTrue(surds.message.orEmpty().contains("Two roots"))
+
+        val imaginary = engine.execute("x^2+2x+5=0", "solve")
+        assertEquals("x = -1 \\pm 2 i", imaginary.latex)
+
+        val centredOnZero = engine.execute("x^2-5=0", "solve")
+        assertEquals("x = \\pm \\sqrt{5}", centredOnZero.latex)
+    }
+
+    @Test
+    fun rootsNotWorthAPlusMinusStayAList() = runBlocking {
+        // Rational roots: ± would turn 1 and 2 into the arithmetic puzzle 3/2 ± 1/2.
+        val rational = engine.execute("x^2-3x+2=0", "solve")
+        assertNull(rational.error)
+        assertTrue(rational.latex.orEmpty().startsWith("\\left["))
+        assertNull(rational.message)
+
+        // An irrational centre: 0 and √2 share no half, and folding would invent a √2/2 that appears
+        // in neither root.
+        val unshared = engine.execute("x^2-\\sqrt{2}x=0", "solve")
+        assertTrue(unshared.latex.orEmpty().startsWith("\\left["))
+
+        // Three roots, one of them a conjugate pair: ± across three would misstate the answer.
+        val cubic = engine.execute("x^3+1=0", "solve")
+        assertTrue(cubic.latex.orEmpty().startsWith("\\left["))
+    }
+
+    @Test
     fun expressionCanIntegrateAndProduceNativeGraphSamples() = runBlocking {
         val analysis = engine.analyze("\\sin(x)")
         assertTrue(analysis.actions.any { it.id == "integrate" })

@@ -336,8 +336,7 @@ def _execute(expression: ParsedInput, action_id: str) -> ResultPayload:
 
     symbols: list[sp.Symbol] = _symbols(expression)
     if action_id == "solve":
-        result = sp.solve(expression, symbols, dict=True)
-        return _latex_result("Solutions", result, "No symbolic solution was found." if not result else None)
+        return _solve_result(expression, symbols)
     if action_id == "simplify":
         result = sp.simplify(expression)
         return _latex_result("Simplified", result)
@@ -482,6 +481,90 @@ def _stacked_latex(equations: list[sp.Equality]) -> str:
 
 def _latex_result(title: str, result: Any, message: str | None = None) -> ResultPayload:
     return {"title": title, "latex": sp.latex(result), "message": message}
+
+
+def _solve_result(expression: ParsedInput, symbols: list[sp.Symbol]) -> ResultPayload:
+    r"""The solution set, with a two-root pair folded into a single ``a \pm b`` root.
+
+    A quadratic is what this exists for. SymPy hands its two roots back as two separate dicts, and
+    ``\left[\left\{x : -5 - 2 \sqrt{5}\right\}, \left\{x : -5 + 2 \sqrt{5}\right\}\right]`` says one
+    thing twice at twice the width — the halves differ in a single character. ``x = -5 \pm 2\sqrt{5}``
+    is how the pair is written by hand, and it is what the quadratic formula produced before SymPy
+    split it in two.
+
+    **Only that shape is rewritten**, and [_plus_minus_latex] says exactly which. Everything else —
+    one root, three or more, a solution in several unknowns, roots that are plainly rational — prints
+    as the list SymPy returned, because ± would then be a claim about the answer rather than a way of
+    writing it down.
+    """
+    solutions = sp.solve(expression, symbols, dict=True)
+    if not solutions:
+        return _latex_result("Solutions", solutions, "No symbolic solution was found.")
+    folded: str | None = _plus_minus_latex(solutions)
+    if folded is None:
+        return _latex_result("Solutions", solutions)
+    return {
+        "title": "Solutions",
+        "latex": folded,
+        "message": "Two roots differing only in one sign, written as one.",
+    }
+
+
+def _plus_minus_latex(solutions: Any) -> str | None:
+    r"""``x = a \pm b`` when ``solutions`` is one pair worth writing that way, else ``None``.
+
+    Every pair of roots can be *arranged* as ``a \pm b`` — halve their sum and their difference — so
+    the question is only which pairs are better read that way. The test is the quadratic formula
+    itself: ``(-b \pm \sqrt{D}) / 2a`` over rational coefficients has a **rational centre** and an
+    **irrational spread**, which is exactly the pair whose two halves are the same characters twice.
+    That covers ``-5 \pm 2\sqrt{5}`` and ``-1 \pm 2i`` alike, since an imaginary spread is no more
+    rational than a surd is.
+
+    Both halves of the test earn their place:
+
+    * a rational spread is a pair like ``1`` and ``2``, which folds to the arithmetic puzzle
+      ``\frac{3}{2} \pm \frac{1}{2}`` — longer *and* harder than the two roots it replaces;
+    * an irrational centre is a pair like ``0`` and ``\sqrt{2}``, whose halves share nothing, and
+      folding it invents a ``\frac{\sqrt{2}}{2}`` that appears in neither root.
+
+    An unknown answer — a spread carrying a free parameter, where ``is_rational`` is ``None`` rather
+    than ``False`` — counts as irrational here, so a pair such as ``1 \pm \sqrt{a}`` folds instead of
+    listing. That is the direction to be wrong in: the folded form stays true whatever ``a`` is.
+
+    ``solutions`` is typed ``Any`` because ``solve`` is: it answers a list of dicts for an equation
+    but a boolean expression for an inequality, so every assumption about the shape is checked here
+    rather than trusted.
+    """
+    if not isinstance(solutions, list) or len(solutions) != 2:
+        return None
+    first, second = solutions
+    if not isinstance(first, dict) or not isinstance(second, dict):
+        return None
+    if len(first) != 1 or len(second) != 1:
+        return None
+    (symbol, lower), = first.items()
+    (other, upper), = second.items()
+    if symbol != other:
+        return None
+
+    centre: sp.Expr = sp.simplify((lower + upper) / 2)
+    spread: sp.Expr = sp.simplify((upper - lower) / 2)
+    # ``solve`` promises no order, and ``x = -5 \pm -2\sqrt{5}`` is the same pair written badly.
+    if spread.could_extract_minus_sign():
+        spread = -spread
+    if spread == 0:
+        return None
+    if centre.is_rational is not True or spread.is_rational is True:
+        return None
+
+    # ``\pm`` binds tighter than ``+``, so a spread that is itself a sum has to be bracketed or
+    # ``3 \pm 1 + \sqrt{2}`` reads as ``(3 \pm 1) + \sqrt{2}`` — a different pair of numbers.
+    body: str = sp.latex(spread)
+    if isinstance(spread, sp.Add):
+        body = rf"\left({body}\right)"
+    if centre == 0:
+        return rf"{sp.latex(symbol)} = \pm {body}"
+    return rf"{sp.latex(symbol)} = {sp.latex(centre)} \pm {body}"
 
 
 def _verdict_result(verdict: str, message: str | None = None) -> ResultPayload:

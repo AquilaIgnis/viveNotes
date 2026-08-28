@@ -3,8 +3,10 @@ package com.vivenotes.ui.panel
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -12,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.ButtonDefaults
@@ -46,6 +50,7 @@ import com.vivenotes.BuildConfig
 import com.vivenotes.math.FormulaToolsState
 import com.vivenotes.math.MathGraph
 import com.vivenotes.richtext.createEquationRenderer
+import com.vivenotes.richtext.fittedTo
 import io.ratex.RaTeXRenderer
 import kotlin.math.abs
 
@@ -371,6 +376,17 @@ private val PREVIEW_FONT_SIZE = 24.sp
 private val PREVIEW_MIN_HEIGHT = 96.dp
 private val PREVIEW_PADDING = 32.dp
 
+/** Kept clear on each side of a fitted formula, so shrinking it does not put it against the edge. */
+private val PREVIEW_SIDE_PADDING = 8.dp
+
+/**
+ * A result may shrink to 40% of [PREVIEW_FONT_SIZE] and no further — roughly 9.6sp.
+ *
+ * Below that the answer is on screen without being readable, which is not better than scrolling for
+ * it. Anything still too wide at the floor keeps this size and scrolls sideways instead.
+ */
+private const val MIN_FIT_SCALE = 0.4f
+
 /**
  * The interpretation renders at 85%.
  *
@@ -487,40 +503,65 @@ private fun EquationPreview(latex: String, scale: Float = 1f) {
         .fillMaxWidth()
         .background(MaterialTheme.colorScheme.surfaceContainerLow)
         .testTag(RecognitionPanelTags.PREVIEW)
-    when (val current = preview) {
-        EquationPreviewState.Empty -> Box(
-            modifier = baseModifier.height(minHeight),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "Enter LaTeX to preview it",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    // The width the formula has to live in has to be known before it can be sized to fit, and only
+    // the layout knows it — the pane is resizable and this composable is used at two scales.
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // An unbounded width — a horizontally scrolling parent — has no width to fit to, so nothing
+        // is shrunk and nothing is stretched to a box size that does not exist.
+        val bounded = constraints.hasBoundedWidth
+        val boxWidth = if (bounded) maxWidth else 0.dp
+        val fittingWidthPx = if (bounded) {
+            with(density) { (boxWidth - PREVIEW_SIDE_PADDING * 2).toPx() }
+        } else {
+            Float.MAX_VALUE
         }
-        is EquationPreviewState.Failed -> Box(
-            modifier = baseModifier.height(minHeight).padding(12.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = current.message,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        is EquationPreviewState.Ready -> {
-            val renderer = current.renderer
-            val contentHeightPx = renderer.heightPx + renderer.depthPx
-            val previewHeight = with(density) {
-                (contentHeightPx + verticalPadding.toPx()).toDp().coerceAtLeast(minHeight)
+        when (val current = preview) {
+            EquationPreviewState.Empty -> Box(
+                modifier = baseModifier.height(minHeight),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Enter LaTeX to preview it",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            Canvas(modifier = baseModifier.height(previewHeight)) {
-                val x = ((size.width - renderer.widthPx) / 2f).coerceAtLeast(0f)
-                val y = ((size.height - contentHeightPx) / 2f).coerceAtLeast(0f)
-                drawContext.canvas.nativeCanvas.apply {
-                    save()
-                    translate(x, y)
-                    renderer.draw(this)
-                    restore()
+            is EquationPreviewState.Failed -> Box(
+                modifier = baseModifier.height(minHeight).padding(12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = current.message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            is EquationPreviewState.Ready -> {
+                // Rebuilding a renderer is arithmetic over a display list that is already laid out,
+                // so a resize costs nothing and the parse above is keyed on the LaTeX alone: dragging
+                // the pane wider re-fits the formula without re-parsing it.
+                val renderer = remember(current.renderer, fittingWidthPx) {
+                    current.renderer.fittedTo(fittingWidthPx, fontSizePx * MIN_FIT_SCALE)
+                }
+                val contentHeightPx = renderer.heightPx + renderer.depthPx
+                val previewHeight = with(density) {
+                    (contentHeightPx + verticalPadding.toPx()).toDp().coerceAtLeast(minHeight)
+                }
+                // Wider than the box only when even the smallest allowed type did not fit, and then
+                // the surplus scrolls. Drawing it anyway is what put the tail of a long result off
+                // the side of the pane where nothing could reach it.
+                val canvasWidth = with(density) { renderer.widthPx.toDp() + PREVIEW_SIDE_PADDING * 2 }
+                    .coerceAtLeast(boxWidth)
+                Box(baseModifier.height(previewHeight).horizontalScroll(rememberScrollState())) {
+                    Canvas(Modifier.width(canvasWidth).height(previewHeight)) {
+                        val x = ((size.width - renderer.widthPx) / 2f).coerceAtLeast(0f)
+                        val y = ((size.height - contentHeightPx) / 2f).coerceAtLeast(0f)
+                        drawContext.canvas.nativeCanvas.apply {
+                            save()
+                            translate(x, y)
+                            renderer.draw(this)
+                            restore()
+                        }
+                    }
                 }
             }
         }

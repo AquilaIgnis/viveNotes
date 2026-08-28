@@ -70,6 +70,22 @@ Tapping a different action afterwards sticks; the automatic run fires once per a
 | Factor   | ≥ 1 symbol, `lhs − rhs` polynomial | `factor(lhs − rhs) = 0`               |
 | Graph    | 1 symbol, or `y = f(x)` form       | plot                                  |
 
+**A quadratic's two roots print once.** SymPy returns them as two solutions differing in one
+character — `x = -5 - 2\sqrt5` and `x = -5 + 2\sqrt5` — and the list of both is wider than the pane
+it is drawn in. It is shown as `x = -5 \pm 2\sqrt{5}`, which is what the quadratic formula produced
+before SymPy split it, and how the pair is written by hand.
+
+The pair folds when its **centre is rational and its spread is not** — `\pm 2\sqrt5`, `\pm 2i`,
+`\pm\sqrt{a}` alike, since an imaginary spread is no more rational than a surd. Everything else
+prints as the list SymPy returned: rational roots such as 1 and 2, which would fold to the puzzle
+`\frac{3}{2} \pm \frac{1}{2}`; a pair like 0 and `\sqrt2`, whose halves share nothing and whose
+folded form invents a `\frac{\sqrt2}{2}` in neither root; a single root; three or more roots; and a
+solution in more than one unknown.
+
+**A result too wide for the pane is drawn smaller**, down to 40% of the normal size, and what still
+does not fit at that floor scrolls sideways. Nothing is wrapped: a renderer breaking a formula where
+it does not know the terms end reads worse than a small formula.
+
 ## Integral · Derivative · Unevaluated operation
 
 | Button   | Condition | Result                  |
@@ -78,7 +94,7 @@ Tapping a different action afterwards sticks; the automatic run fires once per a
 
 Covers finite `Sum`, `Product` and `Limit` as well as integrals and derivatives.
 
-## Series
+## Series $\sum$
 
 A `Sum` with one index running to infinity. Evaluate still applies and still runs automatically;
 Convergence is the added button.
@@ -114,7 +130,7 @@ nothing rather than downgrading the verdict.
 
 Measured on the bundled corpus, desktop CPython: every case above lands under 80 ms.
 
-## Limits
+## Limits $\lim_{x\to\infty}$
 
 | Limit           | Value                                        |
 | --------------- | -------------------------------------------- |
@@ -127,6 +143,18 @@ Measured on the bundled corpus, desktop CPython: every case above lands under 80
 | Graph range     | \|y\| ≤ 1 000 000; non-finite points dropped |
 
 Exceeding one is an error message in the panel, not a crash.
+
+# Defaults
+
+Trigonometric functions `Decimal` always assume **Radians** . To calculate Degrees use $^{\circ}$ for example
+$\sin(32^{\circ})$
+
+## Supported functions
+
+| Trigger  | function |
+| -------- | -------- |
+| $\Gamma$ | Gamma    |
+| $\Beta$  | Beta     |
 
 ## Input
 
