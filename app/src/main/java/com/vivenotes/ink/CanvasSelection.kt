@@ -201,6 +201,33 @@ fun CanvasSelection?.lineShape(shapes: List<Outline.Shape>): Outline.Shape? = th
     ?.takeIf { it.kind.hasEnds }
 
 /**
+ * True when this selection is **ink and rules**: strokes, plus at most the shapes that are strokes in
+ * all but storage — the line and the arrow ([ShapeKind.hasEnds]).
+ *
+ * The Math toolkit's gate, and a widening of [isShapeOnly]'s neighbour [isInkOnly], which is what it
+ * used to be. A fraction bar drawn with the Line tool is a fraction bar: it is part of the formula on
+ * the page, the eye reads it as one, and refusing to hand it to the recogniser meant `\frac` came
+ * back as two numbers side by side. Same for a vector's arrow and for the bar over a radical. What
+ * makes those kinds admissible is not that they are shapes but that they are *marks* — a stroke the
+ * user chose to draw straight — so the test is the kind, and a rectangle or a cube is still no part
+ * of an equation.
+ *
+ * **Ink is still required.** A lasso holding only lines is a diagram, not a formula, and handing it
+ * to a formula model would produce confident nonsense. So this is ink, optionally ruled.
+ *
+ * A shape id that resolves to nothing fails the test rather than being skipped: a selection naming
+ * something the page no longer has is one whose contents cannot be vouched for.
+ */
+fun CanvasSelection?.isInkAndLines(shapes: List<Outline.Shape>): Boolean {
+    val held = this ?: return false
+    if (held.inkIds.isEmpty()) return false
+    if (held.tableIds.isNotEmpty() || held.equationIds.isNotEmpty() || held.imageIds.isNotEmpty()) {
+        return false
+    }
+    return held.shapeIds.all { id -> shapes.firstOrNull { it.id == id }?.kind?.hasEnds == true }
+}
+
+/**
  * A table as the selection sees it: an id, and the rectangle the **canvas** measured for it.
  *
  * Not `Outline.Table`, deliberately. A table's height is whatever its cells' text wraps to, and the

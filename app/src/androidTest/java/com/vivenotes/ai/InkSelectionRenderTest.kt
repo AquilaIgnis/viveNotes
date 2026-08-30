@@ -13,6 +13,10 @@ import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.projectionKey
+import com.vivenotes.model.Outline
+import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.seedSegments
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -76,7 +80,7 @@ class InkSelectionRenderTest {
         )
 
         // And what the view model hands recognition: the stored strokes, not the painted ones.
-        val bitmap = renderInkSelection(strokes, selection)
+        val bitmap = renderInkSelection(strokes, emptyList(), selection)
         try {
             assertTrue(
                 "the selection resolved to no strokes, so recognition would read a blank page",
@@ -84,6 +88,66 @@ class InkSelectionRenderTest {
             )
         } finally {
             bitmap.recycle()
+        }
+    }
+
+    @Test
+    fun aFractionBarDrawnWithTheLineToolIsInkedForTheModelToo() {
+        // The reason the renderer takes shapes at all. A bar laid down with the Line tool is part of
+        // the formula around it, and a formula handed over without it reads as two numbers with a
+        // gap. The stroke is up at y = 20..60; the bar is well below it, so the pixels it adds can
+        // be counted on their own rather than inferred from a total.
+        val strokes = listOf(PageStroke("s1", stroke(AUTOMATIC_LIGHT), colorFollowsTheme = true))
+        var next = 0
+        val bar = Outline.Shape(
+            id = "bar",
+            kind = ShapeKind.Line,
+            segments = seedSegments(ShapeKind.Line, 20f, 90f, 100f, 90f) { "seg-${next++}" },
+        ).withRecomputedBounds()
+        val selection = CanvasSelection(
+            inkIds = setOf("s1"),
+            shapeIds = setOf("bar"),
+            projections = strokes.map { it.projectionKey }.toSet(),
+            bounds = InkBounds(left = 0f, top = 0f, right = 120f, bottom = 110f),
+        )
+
+        val withBar = renderInkSelection(strokes, listOf(bar), selection)
+        val withoutBar = renderInkSelection(strokes, emptyList(), selection)
+        try {
+            assertTrue(
+                "the line was left out of what the model is shown",
+                inkPixels(withBar) > inkPixels(withoutBar),
+            )
+        } finally {
+            withBar.recycle()
+            withoutBar.recycle()
+        }
+    }
+
+    @Test
+    fun aShapeTheSelectionDoesNotHoldIsNotDrawnIn() {
+        // The crop is the selection's, so a line lying elsewhere on the page must not appear in it —
+        // the filter is by id, not by whether the geometry happens to fall inside the bounds.
+        val strokes = listOf(PageStroke("s1", stroke(AUTOMATIC_LIGHT), colorFollowsTheme = true))
+        var next = 0
+        val elsewhere = Outline.Shape(
+            id = "not-held",
+            kind = ShapeKind.Line,
+            segments = seedSegments(ShapeKind.Line, 20f, 90f, 100f, 90f) { "seg-${next++}" },
+        ).withRecomputedBounds()
+        val selection = CanvasSelection(
+            inkIds = setOf("s1"),
+            projections = strokes.map { it.projectionKey }.toSet(),
+            bounds = InkBounds(left = 0f, top = 0f, right = 120f, bottom = 110f),
+        )
+
+        val rendered = renderInkSelection(strokes, listOf(elsewhere), selection)
+        val inkAlone = renderInkSelection(strokes, emptyList(), selection)
+        try {
+            assertEquals(inkPixels(inkAlone), inkPixels(rendered))
+        } finally {
+            rendered.recycle()
+            inkAlone.recycle()
         }
     }
 }

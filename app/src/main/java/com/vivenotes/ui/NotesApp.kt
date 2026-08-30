@@ -584,11 +584,14 @@ private fun NotesWorkspace(
         recognition = RecognitionPanelState(kind = kind, running = true)
         openPane = ToolPane.Recognition
         val selectedStrokes = strokes
+        // The rules the selection holds travel with the ink — see `renderInkSelection`. Read here
+        // with the strokes so both are the page as it was when Math was pressed.
+        val selectedShapes = state.shapes
         recognitionScope.launch {
             var bitmap: android.graphics.Bitmap? = null
             try {
                 val rendered = withContext(Dispatchers.Default) {
-                    renderInkSelection(selectedStrokes, selection)
+                    renderInkSelection(selectedStrokes, selectedShapes, selection)
                 }
                 bitmap = rendered
                 recognition = RecognitionPanelState(

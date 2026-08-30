@@ -191,6 +191,8 @@ class OnnxRecognitionSmokeTest {
             val bounds = formula.mapNotNull { it.pageBounds }.union()
             renderInkSelection(
                 strokes = page.strokes,
+                // Ink alone on this page; the rules a formula may hold are `InkSelectionRenderTest`'s.
+                shapes = emptyList(),
                 selection = CanvasSelection(
                     inkIds = formula.mapTo(mutableSetOf()) { it.id },
                     projections = formula.mapTo(mutableSetOf()) { it.projectionKey },

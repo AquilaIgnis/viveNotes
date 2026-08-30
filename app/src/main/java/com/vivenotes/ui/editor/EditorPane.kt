@@ -107,6 +107,7 @@ import com.vivenotes.model.ink.canFill
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.CanvasSelection
+import com.vivenotes.ink.isInkAndLines
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkLassoSelection
@@ -1513,7 +1514,9 @@ fun EditorPane(
                     // The kind-specific half. Only a selection of one kind has one: over a mixed
                     // loop there is nothing both halves agree on, so the bar shows its base alone.
                     extras = {
-                        if (held.isInkOnly) {
+                        // Ink, and the lines and arrows drawn among it: a fraction bar laid down
+                        // with the Line tool is part of the formula — `isInkAndLines`.
+                        if (held.isInkAndLines(shapes)) {
                             RecognitionAction(
                                 formulaAvailable = formulaRecognitionAvailable,
                                 enabled = !recognitionRunning,
