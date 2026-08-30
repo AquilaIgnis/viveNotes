@@ -1,7 +1,13 @@
 package com.vivenotes.model.ink
 
 import com.vivenotes.model.Outline
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * One end of a shape that *is* a line — `memory/inkPlan.md` §5.4 SD12.
@@ -79,6 +85,10 @@ fun Outline.Shape.endNear(x: Float, y: Float, reach: Float): ShapeEnd? = ends()
  * direction left to be pulled back out along, and its two handles land on the same point with
  * nothing between them to grab — the same reason [MIN_ARM_LENGTH] exists, and the same fate if it
  * did not.
+ *
+ * And **aimed**: a drag landing within [END_SNAP_TOLERANCE] of an eighth-turn is taken to mean that
+ * eighth-turn exactly — see [aimedFrom]. Nothing else in the app can tell you a line is level, so a
+ * line that is meant to be level has to become level on its own.
  */
 fun Outline.Shape.withEnd(end: ShapeEnd, x: Float, y: Float): Outline.Shape {
     if (!kind.hasEnds) return this
@@ -86,9 +96,7 @@ fun Outline.Shape.withEnd(end: ShapeEnd, x: Float, y: Float): Outline.Shape {
 
     val fixedX = if (end.atEnd) shaft.x1 else shaft.x2
     val fixedY = if (end.atEnd) shaft.y1 else shaft.y2
-    val heldX = if (end.atEnd) shaft.x2 else shaft.x1
-    val heldY = if (end.atEnd) shaft.y2 else shaft.y1
-    val (movedX, movedY) = heldOff(fixedX, fixedY, x, y, heldX, heldY)
+    val (movedX, movedY) = aimEnd(end, x, y)
 
     val tracing = trace(
         kind,
@@ -108,14 +116,49 @@ fun Outline.Shape.withEnd(end: ShapeEnd, x: Float, y: Float): Outline.Shape {
 }
 
 /**
- * The requested point, pushed back out to [MIN_LINE_LENGTH] from the end that is staying put.
+ * Where [end] lands for a finger at ([x], [y]) — the snap and the minimum length applied, and nothing
+ * else. The point [withEnd] will use.
  *
- * Along the direction the finger asked for, so a drag that crosses the far end comes out the other
- * side pointing the way it was pushed rather than snapping back to where the line already was. Only
- * a drag landing *exactly* on the fixed end has no direction of its own, and that one keeps the
- * line's current heading — anything else would spin it at random on the last pixel of travel.
+ * Public so that a caller who has to hold the result to something *else* can ask before committing:
+ * the page's origin corner is one such wall, and a snap turns the line after any clamp on the finger
+ * has already been applied — see `withEndOnPage`. Answering "where would this go" separately from
+ * "put it there" is what keeps the preview and the commit on one number.
  */
-private fun heldOff(
+fun Outline.Shape.aimEnd(end: ShapeEnd, x: Float, y: Float): Pair<Float, Float> {
+    val shaft = segments.firstOrNull() ?: return x to y
+    return aimedFrom(
+        fixedX = if (end.atEnd) shaft.x1 else shaft.x2,
+        fixedY = if (end.atEnd) shaft.y1 else shaft.y2,
+        x = x,
+        y = y,
+        heldX = if (end.atEnd) shaft.x2 else shaft.x1,
+        heldY = if (end.atEnd) shaft.y2 else shaft.y1,
+    )
+}
+
+/**
+ * Where the end actually lands for a finger at ([x], [y]): the requested point with the angle snapped
+ * and the length held off [MIN_LINE_LENGTH], both measured from the end that is staying put.
+ *
+ * **The angle snaps to an eighth-turn and the length never does.** A drag within
+ * [END_SNAP_TOLERANCE] of level, upright or 45° is read as meaning that exactly, and the length stays
+ * whatever the finger reached — so the gesture is still "put this end here", with only the one
+ * quantity a hand cannot hit by eye taken out of its hands. Snapping the length as well would be a
+ * grid, which is a different feature and one nothing here asked for.
+ *
+ * Set against the alternative of *showing* the angle and leaving the aim to the user: a readout tells
+ * you that you are at 89.4°, and then you still cannot get to 90 — the pixel you would need is
+ * smaller than the finger asking for it. The snap is what makes level reachable at all.
+ *
+ * The length is held off along the **aimed** direction, so the two rules compose: a drag pushed
+ * through the far end comes back out along the eighth-turn it was nearest, not along the raw one.
+ * Only a drag landing *exactly* on the fixed end has no direction of its own, and that one keeps the
+ * line's current heading — anything else would spin it at random on the last pixel of travel.
+ *
+ * A snapped end is placed from [eighthTurn]'s exact unit vectors rather than from `cos`/`sin`, so
+ * level really is level: see there.
+ */
+private fun aimedFrom(
     fixedX: Float,
     fixedY: Float,
     x: Float,
@@ -124,18 +167,71 @@ private fun heldOff(
     heldY: Float,
 ): Pair<Float, Float> {
     val reach = hypot(x - fixedX, y - fixedY)
-    if (reach >= MIN_LINE_LENGTH) return x to y
-
-    val (dirX, dirY) = if (reach > 0f) {
-        (x - fixedX) / reach to (y - fixedY) / reach
+    val direction = if (reach > 0f) {
+        atan2(y - fixedY, x - fixedX)
     } else {
         val heading = hypot(heldX - fixedX, heldY - fixedY)
         // A line with no length at all has no heading either; east is as good an answer as any, and
         // is the direction a fresh one is dragged out in.
-        if (heading > 0f) (heldX - fixedX) / heading to (heldY - fixedY) / heading else 1f to 0f
+        if (heading > 0f) atan2(heldY - fixedY, heldX - fixedX) else 0f
     }
-    return (fixedX + dirX * MIN_LINE_LENGTH) to (fixedY + dirY * MIN_LINE_LENGTH)
+    val length = reach.coerceAtLeast(MIN_LINE_LENGTH)
+
+    val eighth = (direction / SNAP_STEP).roundToInt()
+    if (abs(direction - eighth * SNAP_STEP) <= SNAP_REACH) {
+        val (unitX, unitY) = eighthTurn(eighth)
+        return (fixedX + length * unitX) to (fixedY + length * unitY)
+    }
+    // Neither rule has anything to say, so the end goes exactly where it was asked to — no round
+    // trip through polar coordinates to blunt it.
+    if (length == reach) return x to y
+    return (fixedX + length * cos(direction)) to (fixedY + length * sin(direction))
 }
+
+/**
+ * The unit vector of one eighth-turn, by index — clockwise from east, as page coordinates run.
+ *
+ * **Written out rather than taken from `cos` and `sin` of the angle**, which answer -4.4e-8 for a
+ * quarter turn rather than 0. The whole point of the snap is that a line laid flat *is* flat: its two
+ * ends share a y exactly, its stored height is exactly zero, and a 45° line's two legs are exactly
+ * equal rather than equal to seven decimal places. A residue that small is invisible on screen and
+ * still spoils every exact answer downstream — the bounds, an equality test, an exporter's idea of
+ * whether this line is horizontal.
+ */
+private fun eighthTurn(index: Int): Pair<Float, Float> = when (((index % 8) + 8) % 8) {
+    0 -> 1f to 0f
+    1 -> HALF_ROOT_TWO to HALF_ROOT_TWO
+    2 -> 0f to 1f
+    3 -> -HALF_ROOT_TWO to HALF_ROOT_TWO
+    4 -> -1f to 0f
+    5 -> -HALF_ROOT_TWO to -HALF_ROOT_TWO
+    6 -> 0f to -1f
+    else -> HALF_ROOT_TWO to -HALF_ROOT_TWO
+}
+
+private const val HALF_ROOT_TWO = 0.70710678f
+
+private val SNAP_STEP = PI.toFloat() / 4f
+
+private val SNAP_REACH = END_SNAP_TOLERANCE * PI.toFloat() / 180f
+
+/**
+ * How near an eighth-turn a drag has to come before it is taken to mean it, in degrees.
+ *
+ * The one number the feature is tuned by, and it is a trade: every degree of it is a degree of angle
+ * that can no longer be drawn. Three takes 6° out of each 45° arc — an eighth of the range — leaving
+ * 39° of every arc free. Against roughly a degree of steadiness in a hand drawing a 200dp line, that
+ * is about three times the wobble it has to absorb: enough that aiming for level lands on level, and
+ * little enough that a line meant to lean by five degrees still leans by five degrees.
+ *
+ * It was 7° for a day, which caught more than it should: a third of every direction on the page
+ * became unreachable, and a deliberate shallow lean kept coming back flat.
+ *
+ * Whether the snap should be escapable is the open question here, and it is a UI one: there is no
+ * modifier key on a tablet, so it would have to be a hold, a second finger, or a setting. Nothing is
+ * built for it, and until something is, angles within this of an eighth-turn are simply unreachable.
+ */
+const val END_SNAP_TOLERANCE = 3f
 
 /** A tracing's polylines cut into the two-point edges the segments store, in seeding order. */
 private fun ShapeTracing.edges(): List<FloatArray> = solid.flatMap { polyline ->

@@ -115,9 +115,9 @@ import com.vivenotes.model.ink.canFill
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.ink.withEndOnPage
 import com.vivenotes.model.ink.ends
 import com.vivenotes.model.ink.withArm
-import com.vivenotes.model.ink.withEnd
 import com.vivenotes.model.PaperDimensions
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.PrintMargins
@@ -2398,7 +2398,7 @@ class NotesViewModel(
     fun moveShapeEnd(shapeId: String, atEnd: Boolean, x: Float, y: Float) {
         updateShapeOutline(shapeId) { shape ->
             val end = shape.ends().firstOrNull { it.atEnd == atEnd }
-            end?.let { shape.withEnd(it, x, y) } ?: shape
+            end?.let { shape.withEndOnPage(it, x, y) } ?: shape
         }
     }
 

@@ -39,6 +39,7 @@ import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
 import com.vivenotes.ink.TAP_REACH
 import com.vivenotes.ink.pageBounds
+import com.vivenotes.ink.withEndOnPage
 import com.vivenotes.model.Outline
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.ShapeArm
@@ -52,7 +53,6 @@ import com.vivenotes.model.ink.ends
 import com.vivenotes.model.ink.fillRegion
 import com.vivenotes.model.ink.contours
 import com.vivenotes.model.ink.withArm
-import com.vivenotes.model.ink.withEnd
 import com.vivenotes.ui.panel.pathEffect
 import kotlin.math.hypot
 
@@ -350,15 +350,14 @@ internal fun ShapeLayer(
                                 // travel across the line as well as along it is what turns the
                                 // shape: the end goes where the finger is, and the line follows.
                                 is Handle.End -> {
+                                    // Reported raw. The origin corner is still a wall — but the end
+                                    // is aimed onto an eighth-turn *after* any clamp here would
+                                    // have run, so holding it to the page is `withEndOnPage`'s, and
+                                    // clamping the finger as well would only bend the angle it is
+                                    // about to snap.
                                     val point = change.position / density + endGrab
-                                    // The origin corner is a wall for an endpoint exactly as it is
-                                    // for a whole shape — [PageBounds].
-                                    endMove.value = ShapeEndMove(
-                                        target.id,
-                                        handle.end.atEnd,
-                                        PageBounds.clampX(point.x),
-                                        PageBounds.clampY(point.y),
-                                    )
+                                    endMove.value =
+                                        ShapeEndMove(target.id, handle.end.atEnd, point.x, point.y)
                                 }
 
                                 // Measured from where the drag began rather than from the last
@@ -410,7 +409,7 @@ internal fun ShapeLayer(
                 arming?.shapeId == shape.id -> shape.withArm(arming.arm, arming.along)
                 ending?.shapeId == shape.id -> shape.ends()
                     .firstOrNull { it.atEnd == ending.atEnd }
-                    ?.let { shape.withEnd(it, ending.x, ending.y) } ?: shape
+                    ?.let { shape.withEndOnPage(it, ending.x, ending.y) } ?: shape
                 nudging?.shapeId == shape.id -> shape.translated(nudging.dx, nudging.dy)
                 // The lasso's transform is in page units, which is what a shape's coordinates
                 // already are — so it applies with no conversion, unlike ink, which needs it

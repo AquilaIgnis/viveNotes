@@ -55,9 +55,9 @@ import com.vivenotes.model.ink.PAGE_SOLID
 import com.vivenotes.model.ink.ShapeKind
 import com.vivenotes.model.ink.arms
 import com.vivenotes.model.ink.seedSegments
+import com.vivenotes.ink.withEndOnPage
 import com.vivenotes.model.ink.ends
 import com.vivenotes.model.ink.withArm
-import com.vivenotes.model.ink.withEnd
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.panel.PenPanelTags
 import com.vivenotes.ui.panel.ShapePanelContent
@@ -527,13 +527,14 @@ class ShapeToolTest {
                                             arm?.let { shape.withArm(it, along) } ?: shape
                                         }
                                     },
-                                    // And NotesViewModel.moveShapeEnd, end lookup included.
+                                    // And NotesViewModel.moveShapeEnd, end lookup and the page
+                                    // hold included — the snap can aim an end off the page.
                                     onMoveShapeEnd = { id, atEnd, x, y ->
                                         endCalls++
                                         shapes = shapes.map { shape ->
                                             if (shape.id != id) return@map shape
                                             val end = shape.ends().firstOrNull { it.atEnd == atEnd }
-                                            end?.let { shape.withEnd(it, x, y) } ?: shape
+                                            end?.let { shape.withEndOnPage(it, x, y) } ?: shape
                                         }
                                     },
                                 )

@@ -50,6 +50,7 @@ import com.vivenotes.data.ShapeSettings
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.TAP_REACH
 import com.vivenotes.ink.lineShape
+import com.vivenotes.ink.withEndOnPage
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.InkLassoMove
@@ -76,7 +77,6 @@ import com.vivenotes.model.ink.ShapeEnd
 import com.vivenotes.model.ink.StraightLineFit
 import com.vivenotes.model.ink.endNear
 import com.vivenotes.model.ink.ends
-import com.vivenotes.model.ink.withEnd
 import com.vivenotes.model.ink.trace
 import com.vivenotes.ui.theme.LocalCanvasColors
 import kotlinx.coroutines.Dispatchers
@@ -2377,16 +2377,15 @@ internal class LassoGesture {
      * The line with its grabbed end taken to where the finger is, rebuilt from the shape the drag
      * began with — never from the previous frame, for the reason `withEnd` is absolute.
      *
-     * The origin corner is a wall for an endpoint as it is for everything else ([PageBounds]).
+     * The origin corner is a wall for an endpoint as it is for everything else, and it is
+     * `withEndOnPage` that holds it there — the snap turns the line after a clamp on the finger
+     * would have run, so clamping here would only bend the angle it is about to snap to.
      */
     private fun updateLineEnd(point: InkPoint) {
         val shape = endShape ?: return
         val handle = endHandle ?: return
-        endAt = InkPoint(
-            PageBounds.clampX(point.x + endGrab.x),
-            PageBounds.clampY(point.y + endGrab.y),
-        )
-        endPreview = shape.withEnd(handle, endAt.x, endAt.y)
+        endAt = InkPoint(point.x + endGrab.x, point.y + endGrab.y)
+        endPreview = shape.withEndOnPage(handle, endAt.x, endAt.y)
         invalidateDraw()
     }
 

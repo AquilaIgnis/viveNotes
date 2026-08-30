@@ -105,14 +105,15 @@ class ShapeEndTest {
     fun `the bounds follow the end that moved`() {
         // Stored bounds are what the canvas lays out, hit-tests and draws the selection box from, so
         // an end drag that left them behind gives a line its own selection no longer contains.
+        // (40, 90) is 66° — well clear of every eighth-turn, so the snap has nothing to say here.
         val line = line()
 
-        val turned = line.withEnd(line.end(atEnd = true), x = 60f, y = 80f)
+        val turned = line.withEnd(line.end(atEnd = true), x = 40f, y = 90f)
 
         assertEquals(0f, turned.x, TOLERANCE)
         assertEquals(0f, turned.y, TOLERANCE)
-        assertEquals(60f, turned.width, TOLERANCE)
-        assertEquals(80f, turned.height, TOLERANCE)
+        assertEquals(40f, turned.width, TOLERANCE)
+        assertEquals(90f, turned.height, TOLERANCE)
     }
 
     @Test
@@ -144,6 +145,111 @@ class ShapeEndTest {
         val shaft = crushed.segments.single()
         assertEquals(MIN_LINE_LENGTH, shaft.x2, TOLERANCE)
         assertEquals(0f, shaft.y2, TOLERANCE)
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // The snap: an eighth-turn is what a hand cannot hit by eye, so it is what the drag rounds to
+    // -------------------------------------------------------------------------------------------
+
+    @Test
+    fun `an end dragged near level is laid exactly level`() {
+        // Exactly, not nearly: the stored y is the same float, so the line's height is zero and
+        // anything downstream asking "is this horizontal" gets a straight answer.
+        val line = line()
+
+        val flat = line.withEnd(line.end(atEnd = true), x = 100f, y = 3f)
+
+        val shaft = flat.segments.single()
+        assertEquals("the end was left where the finger was", 0f, shaft.y2, 0f)
+        assertEquals(0f, flat.height, 0f)
+        assertTrue("it snapped backwards", shaft.x2 > shaft.x1)
+    }
+
+    @Test
+    fun `and near upright, exactly upright`() {
+        val line = line()
+
+        val upright = line.withEnd(line.end(atEnd = true), x = 4f, y = 100f)
+
+        val shaft = upright.segments.single()
+        assertEquals(0f, shaft.x2, 0f)
+        assertEquals(0f, upright.width, 0f)
+    }
+
+    @Test
+    fun `a diagonal snaps to legs that are exactly equal`() {
+        // The other half of "exactly": a 45° line drawn from cos and sin would have legs equal to
+        // seven decimal places, which is not the same as being a diagonal.
+        val line = line()
+
+        val diagonal = line.withEnd(line.end(atEnd = true), x = 100f, y = 92f)
+
+        val shaft = diagonal.segments.single()
+        assertEquals(shaft.x2 - shaft.x1, shaft.y2 - shaft.y1, 0f)
+    }
+
+    @Test
+    fun `the snap takes the angle and leaves the length alone`() {
+        // Only the one quantity a hand cannot hit by eye is taken out of its hands. Snapping the
+        // length too would be a grid, which is a different feature.
+        val line = line()
+        val asked = hypot(100f, 3f)
+
+        val flat = line.withEnd(line.end(atEnd = true), x = 100f, y = 3f)
+
+        val shaft = flat.segments.single()
+        assertEquals(asked, hypot(shaft.x2 - shaft.x1, shaft.y2 - shaft.y1), TOLERANCE)
+    }
+
+    @Test
+    fun `an angle well off an eighth-turn is left where the finger put it`() {
+        // The snap has to be escapable by simply meaning it: 22° is nobody's idea of level.
+        val line = line()
+
+        val leaning = line.withEnd(line.end(atEnd = true), x = 100f, y = 40f)
+
+        val shaft = leaning.segments.single()
+        assertEquals(100f, shaft.x2, TOLERANCE)
+        assertEquals(40f, shaft.y2, TOLERANCE)
+    }
+
+    @Test
+    fun `the angle is measured from the end that is staying put`() {
+        // Not from the page, and not from the line's old heading: dragging the tail aims it at the
+        // tip, which is what "this line is level" means when the other end is the fixed one.
+        val line = line()
+
+        val flat = line.withEnd(line.end(atEnd = false), x = -100f, y = 6f)
+
+        val shaft = flat.segments.single()
+        assertEquals("the tail did not level against the tip", 0f, shaft.y1, 0f)
+        assertTrue("it snapped past the tip", shaft.x1 < shaft.x2)
+    }
+
+    @Test
+    fun `an arrow is aimed by the same rule`() {
+        // It goes through the same `withEnd`, so the head is re-traced onto the snapped heading
+        // rather than onto the raw one.
+        val arrow = arrow()
+
+        val flat = arrow.withEnd(arrow.end(atEnd = true), x = 4f, y = 100f)
+
+        val shaft = flat.segments.single { it.id == arrow.segments.first().id }
+        assertEquals(0f, shaft.x2, 0f)
+        val (tipX, _) = flat.headTip()
+        assertEquals("the head was left off the snapped shaft", 0f, tipX, 0f)
+    }
+
+    @Test
+    fun `a snapped drag is still idempotent`() {
+        // The layer previews per frame and commits the same numbers on the lift, so a snap that
+        // moved again on the second application would land somewhere the drag never showed.
+        val line = line()
+
+        val once = line.withEnd(line.end(atEnd = true), x = 100f, y = 3f)
+        val twice = once.withEnd(once.end(atEnd = true), x = 100f, y = 3f)
+
+        assertEquals(once, twice)
     }
 
     @Test
