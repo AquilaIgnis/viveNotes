@@ -475,6 +475,24 @@ fun NotesApp(
                         selfHostConnection = syncAccounts.connect(serverUrl, email, password)
                     }
                 },
+                // The managed account's two email-and-password routes. Same scope as everything
+                // else that ends in a device token, and signing up has a second thing to lose: a
+                // cancelled call after the account was created leaves an account on the server with
+                // no device on it.
+                onLogIn = { email, password ->
+                    disconnectFailure = null
+                    selfHostConnection = ServerConnection.Connecting
+                    connectScope.launch {
+                        selfHostConnection = syncAccounts.logInToCloud(email, password)
+                    }
+                },
+                onSignUp = { email, password ->
+                    disconnectFailure = null
+                    selfHostConnection = ServerConnection.Connecting
+                    connectScope.launch {
+                        selfHostConnection = syncAccounts.signUpForCloud(email, password)
+                    }
+                },
                 syncing = syncing,
                 syncStatus = syncStatus,
                 onSync = {

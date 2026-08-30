@@ -135,6 +135,9 @@ data class SyncStatus(
             ConnectFailure.ServerError,
             ConnectFailure.NotStored,
             ConnectFailure.Revoked,
+            ConnectFailure.SignupClosed,
+            ConnectFailure.EmailTaken,
+            ConnectFailure.AccountCreatedNotRegistered,
             // The Google failures cannot arise from a sync run either — nothing in the protocol
             // touches those endpoints — but they are named rather than caught by an `else` so this
             // stays exhaustive and a new failure has to be considered here.
@@ -282,6 +285,79 @@ class SyncAccounts(
             is DeviceRegistration.Rejected -> ServerConnection.Failed(registration.reason)
         }
     }
+
+    /**
+     * Creates an account on a server and connects this installation to it, in that order.
+     *
+     * Two requests, because the contract is two requests: `POST /v1/accounts` mints an account and
+     * **no credential at all**, and `POST /v1/devices` is the only endpoint that returns a token.
+     * They are joined here rather than in the screen so that nobody can do half of it — a created
+     * account with no device is the one outcome of this flow that leaves something behind on the
+     * server.
+     *
+     * That outcome is reported as [ConnectFailure.AccountCreatedNotRegistered] rather than as
+     * whatever the second request said, because the instruction it needs is neither request's
+     * message: the account exists, and the way in is now Sign in. Pressing Create account again
+     * would only answer `email_taken`.
+     *
+     * [ConnectFailure.NotStored] is the exception and keeps its own meaning — the device *did*
+     * register, and the thing to fix is local storage rather than anything on the server.
+     */
+    suspend fun register(
+        typedAddress: String,
+        email: String,
+        password: String,
+    ): ServerConnection {
+        val serverUrl = normaliseServerAddress(typedAddress)
+            ?: return ServerConnection.Failed(ConnectFailure.InvalidAddress)
+
+        when (val created = client.createAccount(serverUrl, email, password)) {
+            is AccountCreation.Created -> Unit
+            is AccountCreation.Rejected -> return ServerConnection.Failed(created.reason)
+        }
+
+        return when (
+            val registration = client.registerDevice(
+                serverBaseUrl = serverUrl,
+                email = email,
+                password = password,
+                deviceName = deviceName,
+                platform = platform,
+            )
+        ) {
+            is DeviceRegistration.Registered -> when (
+                val unstored = adopt(
+                    serverUrl = serverUrl,
+                    accountId = registration.accountId,
+                    deviceId = registration.deviceId,
+                    token = registration.token,
+                )
+            ) {
+                null -> ServerConnection.Connected(serverUrl, deviceName)
+                else -> ServerConnection.Failed(unstored)
+            }
+
+            is DeviceRegistration.Rejected ->
+                ServerConnection.Failed(ConnectFailure.AccountCreatedNotRegistered)
+        }
+    }
+
+    /**
+     * Logs in to the **managed** deployment with an email and a password.
+     *
+     * [connect] with the address supplied rather than typed. That is the entire difference, and it
+     * is the point: a managed account is not something a person should have to know a hostname for,
+     * and the app already knows the one hostname there is.
+     *
+     * Carries [connect]'s warning unchanged — `POST /v1/devices` mints a new device row every time,
+     * so this must not be called speculatively or retried automatically.
+     */
+    suspend fun logInToCloud(email: String, password: String): ServerConnection =
+        connect(cloudServerUrl, email, password)
+
+    /** [register] against the managed deployment: create the account, then connect this device. */
+    suspend fun signUpForCloud(email: String, password: String): ServerConnection =
+        register(cloudServerUrl, email, password)
 
     /**
      * Signs in to the managed deployment with Google, creating the account if there is not one yet.

@@ -511,6 +511,94 @@ class SyncServerClientTest {
     }
 
     /** A response with no body at all, which is the only shape a `HEAD` may answer with. */
+    // ------------------------------------------------------------ Account creation ----
+
+    @Test
+    fun creatingAnAccountSendsTheContractsBodyAndReturnsTheId() = runBlocking {
+        respond = {
+            send(it, 201, """{"accountId":"a62c615f-5a73-47bb-b704-ad49cf527ec2"}""")
+        }
+
+        val result = SyncServerClient().createAccount(
+            serverBaseUrl = baseUrl,
+            email = "  Owner@Example.com  ",
+            password = " correct horse ",
+        )
+
+        assertEquals("POST", requestMethod)
+        assertEquals("/v1/accounts", requestPath)
+        // No credential exists yet; this is the request that makes one possible.
+        assertNull(authorization)
+        val sent = Json.parseToJsonElement(requestBody!!).jsonObject
+        assertEquals("Owner@Example.com", sent["email"]!!.jsonPrimitive.content)
+        // Never trimmed: whitespace in a password is part of it.
+        assertEquals(" correct horse ", sent["password"]!!.jsonPrimitive.content)
+        assertEquals(
+            AccountCreation.Created("a62c615f-5a73-47bb-b704-ad49cf527ec2"),
+            result,
+        )
+    }
+
+    /** The default posture of a viveCServer, so it must not read as anything having gone wrong. */
+    @Test
+    fun aServerWithRegistrationsClosedSaysSoRatherThanRefusingCredentials() = runBlocking {
+        respond = {
+            send(
+                it,
+                403,
+                """{"error":"signup_closed","message":"this server does not accept registrations"}""",
+            )
+        }
+
+        val result = SyncServerClient().createAccount(baseUrl, "owner@example.com", "correct horse")
+
+        assertEquals(AccountCreation.Rejected(ConnectFailure.SignupClosed), result)
+    }
+
+    @Test
+    fun anAddressAlreadyInUseIsItsOwnFailure() = runBlocking {
+        respond = {
+            send(it, 409, """{"error":"email_taken","message":"an account already exists"}""")
+        }
+
+        val result = SyncServerClient().createAccount(baseUrl, "owner@example.com", "correct horse")
+
+        assertEquals(AccountCreation.Rejected(ConnectFailure.EmailTaken), result)
+    }
+
+    /**
+     * The status has to carry these two on its own whenever the body does not arrive. Everywhere
+     * else in this contract a 403 is bad credentials and a 409 is nothing at all, so without the
+     * per-route fallback a closed signup would tell the user their password was wrong.
+     */
+    @Test
+    fun bodilessRefusalsStillMeanClosedSignupAndTakenAddress() = runBlocking {
+        respond = { sendEmpty(it, 403) }
+        val closed = SyncServerClient().createAccount(baseUrl, "owner@example.com", "correct horse")
+
+        respond = { sendEmpty(it, 409) }
+        val taken = SyncServerClient().createAccount(baseUrl, "owner@example.com", "correct horse")
+
+        assertEquals(AccountCreation.Rejected(ConnectFailure.SignupClosed), closed)
+        assertEquals(AccountCreation.Rejected(ConnectFailure.EmailTaken), taken)
+    }
+
+    /** A password under the contract's minimum, if the disabled button is ever got around. */
+    @Test
+    fun aRejectedPasswordComesBackAsAnInvalidRequest() = runBlocking {
+        respond = {
+            send(
+                it,
+                400,
+                """{"error":"invalid_request","message":"password must be at least 8 characters"}""",
+            )
+        }
+
+        val result = SyncServerClient().createAccount(baseUrl, "owner@example.com", "short")
+
+        assertEquals(AccountCreation.Rejected(ConnectFailure.InvalidRequest), result)
+    }
+
     // ---------------------------------------------------------------- Google auth ----
 
     @Test

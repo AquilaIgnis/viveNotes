@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.data.sync.ConnectFailure
+import com.vivenotes.data.sync.MIN_ACCOUNT_PASSWORD
 import com.vivenotes.data.sync.PermanentSyncFailure
 import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncRunResult
@@ -78,6 +79,8 @@ import com.vivenotes.ui.theme.LocalIconAccents
 internal object AccountTags {
     const val SCREEN = "account-screen"
     const val BACK = "account-back"
+    const val LOGIN = "account-login"
+    const val SIGN_UP = "account-sign-up"
     const val GOOGLE = "account-google"
 
     /** On the spinner inside the Google button, so a test can tell waiting from idle. */
@@ -95,6 +98,20 @@ internal object AccountTags {
     const val EMAIL = "account-email"
     const val PASSWORD = "account-password"
     const val CONNECT = "account-connect"
+
+    /**
+     * The managed account's own fields, distinct from the self-host form's.
+     *
+     * Two panels that are never open together could share tags, but only until one of them is
+     * mid-exit-animation while the other opens — at which point a test would find two nodes and
+     * fail somewhere unrelated to what it was checking.
+     */
+    const val CLOUD_EMAIL = "account-cloud-email"
+    const val CLOUD_PASSWORD = "account-cloud-password"
+    const val CLOUD_CONFIRM = "account-cloud-confirm"
+    const val CLOUD_SUBMIT = "account-cloud-submit"
+    const val CLOUD_PROGRESS = "account-cloud-progress"
+    const val CLOUD_STATUS = "account-cloud-status"
 
     /** On the spinner *inside* the button, so a test can tell waiting from idle. */
     const val CONNECT_PROGRESS = "account-connect-progress"
@@ -116,14 +133,20 @@ internal object AccountTags {
 /**
  * Account entry point for managed and self-hosted sync.
  *
- * Two routes to one place, offered at deliberately different weights. **Sign in with Google is the
- * default**: one button, because `POST /v1/auth/google` is one endpoint that logs in or registers as
- * the account turns out to need, so the screen never asks somebody to declare which they are.
- * Registering against a server by hand is the second offer, folded away behind a text link, because
- * it is the answer for people running their own server and a distraction for everyone else.
+ * Three routes to one place, in descending order of how many people want them.
  *
- * Both end in the same place — a base URL and a device token — so [connection] describes both and
- * the connected panel is written once (`viveCServer/docs/openapi.yaml`).
+ * **Sign in with Google sits on top and is the default**: one button, because `POST /v1/auth/google`
+ * is one endpoint that logs in or registers as the account turns out to need, so the screen never
+ * asks somebody to declare which they are. Below it, **Log in and Sign up** are the same managed
+ * account reached with an email and a password — and neither asks for a server address, because
+ * there is one managed deployment and [com.vivenotes.BuildConfig.CLOUD_BASE_URL] already names it.
+ *
+ * **Self host is the third and is a different server**, run by whoever is using it, so it is the one
+ * route that has an address to type. Keeping that field out of Log in and Sign up is the whole point
+ * of the separation: a managed account is not something a person should have to know a hostname for.
+ *
+ * All three end in the same place — a base URL and a device token — so [connection] describes all of
+ * them and the connected panel is written once (`viveCServer/docs/openapi.yaml`).
  *
  * Presentational, including the connect flow: [connection] comes in and [onConnect] goes out, so the
  * request lives in a scope that outlives this screen. That matters more here than it looks. The
@@ -156,6 +179,16 @@ fun AccountScreen(
     /** True for the session in which Google sign-in created the account, rather than found it. */
     accountCreated: Boolean = false,
     connection: ServerConnection = ServerConnection.Idle,
+    /**
+     * Sign in to the **managed** account with an email and password — `POST /v1/devices` against the
+     * deployment this build was compiled for. No server address, because there is nothing to choose.
+     */
+    onLogIn: (email: String, password: String) -> Unit = { _, _ -> },
+    /**
+     * Create the managed account, then connect — `POST /v1/accounts` followed by `POST /v1/devices`.
+     */
+    onSignUp: (email: String, password: String) -> Unit = { _, _ -> },
+    /** The self-hosted route, which is a different server and keeps its address field. */
     onConnect: (serverUrl: String, email: String, password: String) -> Unit = { _, _, _ -> },
     /** Whether *this screen's* Sync now is in flight — the button's own spinner, not the clock's. */
     syncing: Boolean = false,
@@ -179,12 +212,38 @@ fun AccountScreen(
     // Passwords should not be written into saved-instance state or retained after leaving the flow.
     var password by remember { mutableStateOf("") }
     var confirmDisconnect by remember { mutableStateOf(false) }
+
+    // The managed account's panel: whether it is open, and which of the two buttons opened it.
+    // Saved, because a configuration change in the middle of filling it must not silently turn
+    // Sign up back into Log in.
+    var cloudExpanded by rememberSaveable { mutableStateOf(false) }
+    var cloudSignUp by rememberSaveable { mutableStateOf(false) }
+    var cloudEmail by rememberSaveable { mutableStateOf("") }
+    // Composition-only, like the self-host form's password and for the same reason.
+    var cloudPassword by remember { mutableStateOf("") }
+    var cloudConfirmPassword by remember { mutableStateOf("") }
     val spatialMotion = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
     val effectsMotion = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
 
     // The spinner replaces the button's label, so without this the button loses its accessible name
     // for as long as the request runs. Read here because a semantics lambda is not composable.
     val connectingLabel = stringResource(R.string.account_connecting)
+    val creatingLabel = stringResource(R.string.account_creating)
+
+    // Pressing the button that is already showing folds the panel away again; pressing the other
+    // one switches modes without closing. Self host closes, because the two are alternatives.
+    fun openCloudPanel(signUp: Boolean) {
+        if (cloudExpanded && cloudSignUp == signUp) {
+            cloudExpanded = false
+        } else {
+            cloudExpanded = true
+            cloudSignUp = signUp
+            selfHostExpanded = false
+            // The confirmation belongs to signing up. Left behind from a previous pass it could
+            // silently satisfy a check the person did not make this time.
+            cloudConfirmPassword = ""
+        }
+    }
 
     val connected = connection as? ServerConnection.Connected
 
@@ -199,6 +258,8 @@ fun AccountScreen(
     LaunchedEffect(connected != null) {
         if (connected != null) {
             password = ""
+            cloudPassword = ""
+            cloudConfirmPassword = ""
             selfHostExpanded = true
         }
     }
@@ -334,18 +395,184 @@ fun AccountScreen(
                         )
                     }
 
-                    // The second offer, and visibly so: a text link under a full-width button, in
-                    // the supporting colour. The disclosure it opens is unchanged — this is the same
-                    // `POST /v1/devices` flow it always was, just no longer competing for the eye.
-                    Spacer(Modifier.height(20.dp))
+                    // The email-and-password way into the **managed** account, unchanged in shape
+                    // from before Google was added. Neither of these asks for a server address:
+                    // there is one managed deployment and the build already knows it. Typing a host
+                    // belongs to Self host below, which is a different server and a different
+                    // project.
+                    Spacer(Modifier.height(24.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Button(
+                            onClick = { openCloudPanel(signUp = false) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag(AccountTags.LOGIN),
+                        ) {
+                            Text(stringResource(R.string.account_log_in))
+                        }
+                        OutlinedButton(
+                            onClick = { openCloudPanel(signUp = true) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag(AccountTags.SIGN_UP),
+                        ) {
+                            Text(stringResource(R.string.account_sign_up))
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = cloudExpanded,
+                        enter = expandVertically(animationSpec = spatialMotion) +
+                            fadeIn(animationSpec = effectsMotion),
+                        exit = shrinkVertically(animationSpec = spatialMotion) +
+                            fadeOut(animationSpec = effectsMotion),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            OutlinedTextField(
+                                value = cloudEmail,
+                                onValueChange = { cloudEmail = it },
+                                label = { Text(stringResource(R.string.account_email)) },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Email,
+                                    imeAction = ImeAction.Next,
+                                ),
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(AccountTags.CLOUD_EMAIL),
+                            )
+                            OutlinedTextField(
+                                value = cloudPassword,
+                                onValueChange = { cloudPassword = it },
+                                label = { Text(stringResource(R.string.account_password)) },
+                                // Only while signing up: the minimum is a rule about a *new*
+                                // password, and showing it beside an existing one would read as a
+                                // claim about the password the person already has.
+                                supportingText = if (cloudSignUp) {
+                                    { Text(stringResource(R.string.account_password_minimum)) }
+                                } else {
+                                    null
+                                },
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Password,
+                                    imeAction = ImeAction.Done,
+                                ),
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(AccountTags.CLOUD_PASSWORD),
+                            )
+
+                            // Signing up only. A mistyped password here cannot be recovered — the
+                            // server stores an Argon2id hash and there is no reset flow in this
+                            // contract — so the second field is the one chance to catch the typo
+                            // before it becomes an account nobody can get into. Logging in needs no
+                            // such thing: a wrong password there is simply refused.
+                            val mismatch = cloudSignUp &&
+                                cloudConfirmPassword.isNotEmpty() &&
+                                cloudConfirmPassword != cloudPassword
+                            if (cloudSignUp) {
+                                OutlinedTextField(
+                                    value = cloudConfirmPassword,
+                                    onValueChange = { cloudConfirmPassword = it },
+                                    label = {
+                                        Text(stringResource(R.string.account_confirm_password))
+                                    },
+                                    isError = mismatch,
+                                    // Only once something has been typed: an empty second field is
+                                    // unfinished, not wrong, and colouring it red the moment the
+                                    // first one is filled scolds somebody who is still going.
+                                    supportingText = if (mismatch) {
+                                        { Text(stringResource(R.string.account_password_mismatch)) }
+                                    } else {
+                                        null
+                                    },
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Password,
+                                        imeAction = ImeAction.Done,
+                                    ),
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag(AccountTags.CLOUD_CONFIRM),
+                                )
+                            }
+
+                            val busy = connection is ServerConnection.Connecting
+                            Button(
+                                onClick = {
+                                    if (cloudSignUp) {
+                                        onSignUp(cloudEmail, cloudPassword)
+                                    } else {
+                                        onLogIn(cloudEmail, cloudPassword)
+                                    }
+                                },
+                                // Signing up adds the contract's eight-character minimum, refused
+                                // here rather than by the server: a shorter password has exactly one
+                                // possible answer, and a round trip to hear it is a wasted one.
+                                enabled = !busy &&
+                                    cloudEmail.isNotBlank() &&
+                                    if (cloudSignUp) {
+                                        cloudPassword.length >= MIN_ACCOUNT_PASSWORD &&
+                                            cloudConfirmPassword == cloudPassword
+                                    } else {
+                                        cloudPassword.isNotEmpty()
+                                    },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(AccountTags.CLOUD_SUBMIT),
+                            ) {
+                                if (busy) {
+                                    LoadingIndicator(
+                                        Modifier
+                                            .size(18.dp)
+                                            .testTag(AccountTags.CLOUD_PROGRESS)
+                                            .semantics {
+                                                contentDescription = if (cloudSignUp) {
+                                                    creatingLabel
+                                                } else {
+                                                    connectingLabel
+                                                }
+                                            },
+                                    )
+                                } else {
+                                    Text(
+                                        stringResource(
+                                            if (cloudSignUp) {
+                                                R.string.account_create
+                                            } else {
+                                                R.string.account_log_in
+                                            },
+                                        ),
+                                    )
+                                }
+                            }
+
+                            ConnectionStatus(connection, AccountTags.CLOUD_STATUS)
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
                     TextButton(
-                        onClick = { selfHostExpanded = !selfHostExpanded },
+                        onClick = {
+                            selfHostExpanded = !selfHostExpanded
+                            // The two panels are alternatives, so opening one closes the other. Both
+                            // open at once would show two email fields and two submit buttons.
+                            if (selfHostExpanded) cloudExpanded = false
+                        },
                         modifier = Modifier.testTag(AccountTags.SELF_HOST),
                     ) {
-                        Text(
-                            text = stringResource(R.string.account_or_self_host),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        Text(stringResource(R.string.account_self_host))
                     }
 
                     AnimatedVisibility(
@@ -437,7 +664,7 @@ fun AccountScreen(
                                 }
                             }
 
-                            ConnectionStatus(connection)
+                            ConnectionStatus(connection, AccountTags.CONNECT_STATUS)
                         }
                     }
                 }
@@ -923,13 +1150,13 @@ private const val CONNECTED_PLATE_ALPHA = 0.14f
  * they get the error colour and a sentence naming what to change.
  */
 @Composable
-private fun ConnectionStatus(connection: ServerConnection) {
+private fun ConnectionStatus(connection: ServerConnection, testTag: String) {
     when (connection) {
         is ServerConnection.Failed -> Text(
             text = stringResource(failureMessage(connection.reason)),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.testTag(AccountTags.CONNECT_STATUS),
+            modifier = Modifier.testTag(testTag),
         )
 
         is ServerConnection.Connected,
@@ -964,4 +1191,7 @@ private fun failureMessage(reason: ConnectFailure): Int = when (reason) {
     ConnectFailure.AccountUnavailable -> R.string.account_error_account_unavailable
     ConnectFailure.NoGoogleAccount -> R.string.account_error_no_google_account
     ConnectFailure.GoogleNotConfigured -> R.string.account_error_google_unconfigured
+    ConnectFailure.SignupClosed -> R.string.account_error_signup_closed
+    ConnectFailure.EmailTaken -> R.string.account_error_email_taken
+    ConnectFailure.AccountCreatedNotRegistered -> R.string.account_error_created_not_registered
 }

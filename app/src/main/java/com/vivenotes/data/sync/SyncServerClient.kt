@@ -60,6 +60,33 @@ enum class ConnectFailure {
     NotStored,
 
     /**
+     * `403 signup_closed` — this deployment does not accept registrations over HTTP.
+     *
+     * The **default** on viveCServer (`SignupModeClosed`), not an error state: a self-hosted server
+     * reachable from the internet with open registration is a service somebody else's users end up
+     * on. So the message says to ask the operator rather than suggesting anything is broken.
+     */
+    SignupClosed,
+
+    /**
+     * `409 email_taken`.
+     *
+     * Also what a *retried* creation says after the account was made and the device registration
+     * that followed it failed, which is why the message names signing in rather than only stating
+     * the conflict.
+     */
+    EmailTaken,
+
+    /**
+     * The account was created and then this device could not be registered on it.
+     *
+     * Its own outcome because it is the one failure that leaves something behind on the server:
+     * pressing Create account again would say `email_taken`, and the actual instruction — the
+     * account exists, sign in with it — is not what any of the transport failures would say.
+     */
+    AccountCreatedNotRegistered,
+
+    /**
      * `400 invalid_challenge` — the single-use nonce was expired, already spent, or never issued.
      *
      * Almost always time: `VIVE_GOOGLE_CHALLENGE_TTL` defaults to five minutes, and a sheet left
@@ -148,6 +175,20 @@ sealed interface TokenCheck {
      * delete a working, non-reissuable credential because it could not reach the server to ask.
      */
     data class Unknown(val reason: ConnectFailure) : TokenCheck
+}
+
+/**
+ * The outcome of `POST /v1/accounts`.
+ *
+ * Creating the account is only half of joining a server: it mints no credential, so it is always
+ * followed by `POST /v1/devices` for the token. See [SyncAccounts.register], which is the only
+ * caller and exists so that no one can do half of it.
+ */
+sealed interface AccountCreation {
+
+    data class Created(val accountId: String) : AccountCreation
+
+    data class Rejected(val reason: ConnectFailure) : AccountCreation
 }
 
 /** The outcome of `POST /v1/devices`. */
@@ -453,6 +494,44 @@ class SyncServerClient(
             DeviceRegistration.Rejected(ConnectFailure.Unreachable)
         } finally {
             connection.disconnect()
+        }
+    }
+
+    /**
+     * `POST /v1/accounts` — creates an account from an email address and a password.
+     *
+     * **Deployment-gated**, and closed by default: a server that has not opted in answers
+     * `403 signup_closed`, which is a configuration statement rather than a fault. The endpoint
+     * returns no credential of any kind, only an id, so the caller must follow it with
+     * [registerDevice] to get a token.
+     *
+     * [serverBaseUrl] must already have been through [normaliseServerAddress].
+     */
+    suspend fun createAccount(
+        serverBaseUrl: String,
+        email: String,
+        password: String,
+    ): AccountCreation {
+        val body = syncJson.encodeToString(
+            CreateAccountRequest.serializer(),
+            // Trimmed on this side too, because the server trims and lowercases before storing: a
+            // trailing space from autofill would otherwise create an account whose address does not
+            // read back the way it was typed. The password is never trimmed.
+            CreateAccountRequest(email = email.trim(), password = password),
+        ).encodeToByteArray()
+
+        return when (val raw = unauthenticatedRequest(serverBaseUrl, "/v1/accounts", "POST", body)) {
+            RawServerResult.InvalidAddress -> AccountCreation.Rejected(ConnectFailure.InvalidAddress)
+            RawServerResult.Unreachable -> AccountCreation.Rejected(ConnectFailure.Unreachable)
+            is RawServerResult.Response -> if (raw.status in 200..299) {
+                val created = runCatching {
+                    syncJson.decodeFromString(CreateAccountResponse.serializer(), raw.payload)
+                }.getOrNull()
+                    ?: return AccountCreation.Rejected(ConnectFailure.NotAViveServer)
+                AccountCreation.Created(created.accountId)
+            } else {
+                AccountCreation.Rejected(accountFailureFor(raw.status, raw.payload))
+            }
         }
     }
 
@@ -1142,6 +1221,29 @@ class SyncServerClient(
     }.getOrNull()?.error
 
     /**
+     * [failureFor] for `POST /v1/accounts`, whose two documented refusals are statuses no other
+     * endpoint in this client uses for anything.
+     *
+     * The bodiless fallback matters here as much as it does on a 401: a 403 anywhere else in this
+     * contract is bad credentials, and a 409 anywhere else is not a thing at all, so without these
+     * two lines a closed signup would read as a wrong password and a taken address as "not a
+     * ViveNotes server".
+     */
+    private fun accountFailureFor(status: Int, payload: String): ConnectFailure =
+        when (errorCode(payload)) {
+            "signup_closed" -> ConnectFailure.SignupClosed
+            "email_taken" -> ConnectFailure.EmailTaken
+            null -> when (status) {
+                403 -> ConnectFailure.SignupClosed
+                409 -> ConnectFailure.EmailTaken
+                else -> failureForStatus(status)
+            }
+            // invalid_request — a malformed address or a password under eight characters — plus
+            // payload_too_large, internal, and anything newer.
+            else -> failureFor(status, payload)
+        }
+
+    /**
      * [failureFor] for the Google routes, whose error codes are their own and whose 401 is not the
      * device endpoint's 401.
      *
@@ -1238,6 +1340,17 @@ class SyncServerClient(
         const val FALLBACK_DEVICE_NAME = "ViveNotes"
     }
 }
+
+/**
+ * The shortest password `POST /v1/accounts` accepts — `auth.MinPasswordChars` on the server and
+ * `minLength` in the contract.
+ *
+ * Checked on this side as well so that Create account is simply disabled rather than sending a
+ * request whose only possible answer is `400 invalid_request`. Counted in Kotlin chars against the
+ * server's bytes, which can never be the more permissive of the two: UTF-8 gives every char at
+ * least one byte.
+ */
+internal const val MIN_ACCOUNT_PASSWORD = 8
 
 /** Contract cap shared with [HierarchySync], which splits its durable outbox before transport. */
 internal const val MAX_SYNC_PUSH_BYTES = 4 * 1024 * 1024
@@ -1337,6 +1450,17 @@ private data class GoogleAuthenticationResponse(
     val token: String,
     val tokenExpiresAt: String,
     val createdAccount: Boolean,
+)
+
+@Serializable
+private data class CreateAccountRequest(
+    val email: String,
+    val password: String,
+)
+
+@Serializable
+private data class CreateAccountResponse(
+    @SerialName("accountId") val accountId: String,
 )
 
 @Serializable

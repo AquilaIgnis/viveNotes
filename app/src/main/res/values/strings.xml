@@ -4,11 +4,13 @@
     <string name="navigate_back">Back</string>
     <string name="account_title">Your notes, wherever you write</string>
     <string name="account_supporting_text">Sign in to sync your notebooks across devices, or connect ViveNotes to a server you control.</string>
+    <string name="account_log_in">Log in</string>
+    <string name="account_sign_up">Sign up</string>
+    <string name="account_self_host">Self host</string>
     <string name="account_google_sign_in">Continue with Google</string>
     <string name="account_google_signing_in">Signing in with Google</string>
     <string name="account_google_explainer">One button signs you in or creates your account.</string>
     <string name="account_google_unconfigured">Sign in with Google is not available in this build.</string>
-    <string name="account_or_self_host">Prefer your own server?</string>
     <string name="account_link_title">Finish connecting this account</string>
     <string name="account_link_body">An account already uses this email address. Enter its password once and your Google sign-in will be linked to it from now on.</string>
     <string name="account_link_email">Account email</string>
@@ -23,6 +25,11 @@
     <string name="account_email">Email</string>
     <string name="account_password">Password</string>
     <string name="account_connect">Connect</string>
+    <string name="account_create">Create account</string>
+    <string name="account_creating">Creating your account</string>
+    <string name="account_password_minimum">At least 8 characters</string>
+    <string name="account_confirm_password">Confirm password</string>
+    <string name="account_password_mismatch">Those passwords do not match.</string>
     <string name="account_connecting">Connecting to the server</string>
     <string name="account_connected_title">Connected</string>
     <string name="account_connected_device">Registered as %1$s</string>
@@ -76,6 +83,9 @@
     <string name="account_error_server">The server could not complete the request. Check its logs, then try again.</string>
     <string name="account_error_not_vive">Something answered at that address, but it is not a ViveNotes server.</string>
     <string name="account_error_revoked">This device\'s access was revoked on the server, so it has been disconnected. Sign in again to register it.</string>
+    <string name="account_error_signup_closed">This server does not accept new registrations. Ask whoever runs it to create your account, then sign in.</string>
+    <string name="account_error_email_taken">An account already uses that email address. Use Log in instead.</string>
+    <string name="account_error_created_not_registered">Your account was created, but this device could not be connected to it. Use Log in to finish connecting.</string>
     <string name="account_error_challenge">That sign-in took too long and has expired. Try again.</string>
     <string name="account_error_google_token">The server would not accept this Google sign-in. Its Google client ID and the app\'s do not match.</string>
     <string name="account_error_google_unavailable">Google sign-in is unavailable on the server right now. Try again in a moment.</string>
