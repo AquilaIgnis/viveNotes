@@ -81,6 +81,16 @@ enum class ShapeKind(val label: String, val page: Int) {
      */
     val hasArms: Boolean get() = this == L
 
+    /**
+     * True for the kinds that *are* a line between two points — see
+     * [ShapeEnd][com.vivenotes.model.ink.ShapeEnd].
+     *
+     * They are edited by moving those two points rather than by scaling a box, so they carry two
+     * handles instead of AD7's four corners. Named here beside [hasArms] because it is the same sort
+     * of judgement: which affordance a kind is asking for, decided once, in the kind.
+     */
+    val hasEnds: Boolean get() = this == Line || this == Arrow
+
     companion object {
         const val PAGE_COUNT = 2
 

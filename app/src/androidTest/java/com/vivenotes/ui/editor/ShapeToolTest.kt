@@ -55,7 +55,9 @@ import com.vivenotes.model.ink.PAGE_SOLID
 import com.vivenotes.model.ink.ShapeKind
 import com.vivenotes.model.ink.arms
 import com.vivenotes.model.ink.seedSegments
+import com.vivenotes.model.ink.ends
 import com.vivenotes.model.ink.withArm
+import com.vivenotes.model.ink.withEnd
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.panel.PenPanelTags
 import com.vivenotes.ui.panel.ShapePanelContent
@@ -414,6 +416,7 @@ class ShapeToolTest {
     private var fill: Int? = null
     private var resizeCalls = 0
     private var armCalls = 0
+    private var endCalls = 0
     private var moveCalls = 0
 
     /** A square, in page dp, seeded the way [com.vivenotes.ui.NotesViewModel.insertShape] seeds one. */
@@ -440,6 +443,16 @@ class ShapeToolTest {
         ).withRecomputedBounds()
     }
 
+    /** A line, the kind whose handles are its own two ends rather than four corners. */
+    private fun line(x1: Float, y1: Float, x2: Float, y2: Float): Outline.Shape {
+        var next = 0
+        return Outline.Shape(
+            id = "line",
+            kind = ShapeKind.Line,
+            segments = seedSegments(ShapeKind.Line, x1, y1, x2, y2) { "seg-${next++}" },
+        ).withRecomputedBounds()
+    }
+
     /**
      * The layer where it actually lives: inside both scroll containers, over the bare-canvas tap
      * target, with the moves applied — which is the whole point. Handing the callbacks to a sink
@@ -451,6 +464,7 @@ class ShapeToolTest {
         selectedId = selected
         canvasTaps = 0
         moveCalls = 0
+        endCalls = 0
         compose.setContent {
             ViveNotesTheme {
                 var shapes by remember { mutableStateOf(listOf(shape)) }
@@ -511,6 +525,15 @@ class ShapeToolTest {
                                                 it.segmentId == segmentId && it.atEnd == atEnd
                                             }
                                             arm?.let { shape.withArm(it, along) } ?: shape
+                                        }
+                                    },
+                                    // And NotesViewModel.moveShapeEnd, end lookup included.
+                                    onMoveShapeEnd = { id, atEnd, x, y ->
+                                        endCalls++
+                                        shapes = shapes.map { shape ->
+                                            if (shape.id != id) return@map shape
+                                            val end = shape.ends().firstOrNull { it.atEnd == atEnd }
+                                            end?.let { shape.withEnd(it, x, y) } ?: shape
                                         }
                                     },
                                 )
@@ -716,6 +739,52 @@ class ShapeToolTest {
         assertEquals("the foot's far end moved", 160f, crossed.width, 1f)
         assertEquals("the upright was dragged too", 40f, crossed.y, 1f)
         assertEquals("the upright was dragged too", 80f, crossed.height, 1f)
+    }
+
+    @Test
+    fun draggingALinesEndSidewaysTurnsItRatherThanScalingIt() {
+        // SD12, and the reason a line does not carry the four corner handles: no scale of a box can
+        // turn a horizontal line, so the handle that could is the end itself.
+        setPage(line(40f, 120f, 160f, 120f), selected = "line")
+        val tip = at(160f, 120f)
+
+        drag(tip, listOf(at(150f, 160f), at(40f, 240f)))
+
+        val turned = onPage.single()
+        assertEquals("the tip did not follow the finger down", 120f, turned.height, 1f)
+        assertEquals("the line was stretched rather than turned", 0f, turned.width, 1f)
+        assertEquals("the far end moved", 40f, turned.x, 1f)
+        assertEquals("the far end moved", 120f, turned.y, 1f)
+        assertEquals("an end drag committed a corner resize", 0, resizeCalls)
+        assertEquals("the page panned instead of the end moving", 0, vertical.value)
+    }
+
+    @Test
+    fun aLinesBoxCornerIsNotAHandle() {
+        // A diagonal line, so its box has two corners that are nowhere near either end — the two a
+        // corner handle would still be offered at. There is no handle there any more: the grab falls
+        // through to the body and moves the whole line, which is what a grab anywhere else does.
+        setPage(line(40f, 40f, 160f, 160f), selected = "line")
+        val boxCorner = at(160f, 40f)
+
+        drag(boxCorner, listOf(at(160f, 80f), at(160f, 120f)))
+
+        val dragged = onPage.single()
+        assertEquals("a corner handle scaled the line", 120f, dragged.width, 1f)
+        assertEquals("a corner handle scaled the line", 120f, dragged.height, 1f)
+        assertEquals("the line was not carried by the drag", 120f, dragged.y, 1f)
+        assertEquals(0, resizeCalls)
+        assertEquals(1, moveCalls)
+    }
+
+    @Test
+    fun anEndDragIsOneEditNoMatterHowManyFramesItTakes() {
+        setPage(line(40f, 120f, 160f, 120f), selected = "line")
+        val tip = at(160f, 120f)
+
+        drag(tip, (1..8).map { tip + Offset(0f, it * 20f) })
+
+        assertEquals("an end drag should commit exactly once", 1, endCalls)
     }
 
     @Test

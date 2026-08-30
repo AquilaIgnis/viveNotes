@@ -1531,6 +1531,7 @@ private fun PageEditor(
         onMoveShape = viewModel::moveShape,
         onResizeShape = viewModel::resizeShape,
         onResizeShapeArm = viewModel::resizeShapeArm,
+        onMoveShapeEnd = viewModel::moveShapeEnd,
         onMoveShapes = viewModel::moveShapes,
         onResizeShapes = viewModel::resizeShapes,
         onDeleteShapes = viewModel::deleteShapes,

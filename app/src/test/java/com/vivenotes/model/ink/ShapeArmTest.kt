@@ -71,9 +71,10 @@ class ShapeArmTest {
     }
 
     @Test
-    fun `a line has two ends but is not a kind that offers them`() {
-        // The gate is the kind, not the geometry: an arrow's head has loose ends that mean nothing to
-        // pull on, and a line already resizes end to end by its corners.
+    fun `a line has two ends but they are not arms`() {
+        // The gate is the kind, not the geometry. A line's ends are handles — SD12, and
+        // `ShapeEndTest` — but they are not *arms*: an arm runs on one axis, and the whole of what a
+        // line's end handle is for is leaving that axis.
         var next = 0
         val line = Outline.Shape(
             id = "line",
@@ -176,16 +177,43 @@ class ShapeArmTest {
     }
 
     @Test
-    fun `a tail is clamped against its own arm, not against the other one`() {
-        // The one limit: an end may pass the other arm freely — that is the cross — but may not be
-        // pushed through the far end of the line it belongs to.
+    fun `a tail stops where its arm crosses the other one`() {
+        // The bug this limit was added for: the foot's corner end could be shortened all the way to
+        // MIN_ARM_LENGTH of its own tip, which walks it out from under the upright and leaves an L
+        // that is two loose strokes lying near each other. It stops at the upright instead.
         val ell = ell()
 
         val crushed = ell.withArm(ell.tailOn(ShapeAxis.Horizontal), along = 400f)
 
         val foot = crushed.segments.single { it.id == ell.tailOn(ShapeAxis.Horizontal).segmentId }
-        assertEquals(120f - MIN_ARM_LENGTH, foot.x1, TOLERANCE)
+        assertEquals("the foot let go of the upright", 20f, foot.x1, TOLERANCE)
         assertTrue("the foot turned around", foot.x1 < foot.x2)
+    }
+
+    @Test
+    fun `the upright is held by the same rule, on its own axis`() {
+        // Up the page is decreasing y, so shortening the upright from the corner end means dragging
+        // *up* — past the foot, and off it.
+        val ell = ell()
+
+        val crushed = ell.withArm(ell.tailOn(ShapeAxis.Vertical), along = -400f)
+
+        val upright = crushed.segments.single { it.id == ell.tailOn(ShapeAxis.Vertical).segmentId }
+        assertEquals("the upright let go of the foot", 130f, upright.y2, TOLERANCE)
+        assertEquals("the far end moved", 30f, upright.y1, TOLERANCE)
+    }
+
+    @Test
+    fun `a cross cannot be pulled back apart through its own crossing`() {
+        // Outward is free and inward is not, all the way through: once the foot has been taken past
+        // the upright, the crossing it now holds is the crossing it may not retreat through.
+        val crossed = ell().withArm(ell().tailOn(ShapeAxis.Horizontal), along = -40f)
+            .let { it.withArm(it.tailOn(ShapeAxis.Vertical), along = 200f) }
+
+        val pulled = crossed.withArm(crossed.tailOn(ShapeAxis.Horizontal), along = 300f)
+
+        val foot = pulled.segments.single { it.y1 == it.y2 }
+        assertEquals(20f, foot.x1, TOLERANCE)
     }
 
     @Test

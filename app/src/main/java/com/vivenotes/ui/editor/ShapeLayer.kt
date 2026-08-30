@@ -44,11 +44,15 @@ import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.ShapeArm
 import com.vivenotes.model.ink.ShapeAxis
 import com.vivenotes.model.ink.ShapeContour
+import com.vivenotes.model.ink.ShapeEnd
 import com.vivenotes.model.ink.ShapeSegment
 import com.vivenotes.model.ink.arms
+import com.vivenotes.model.ink.endNear
+import com.vivenotes.model.ink.ends
 import com.vivenotes.model.ink.fillRegion
 import com.vivenotes.model.ink.contours
 import com.vivenotes.model.ink.withArm
+import com.vivenotes.model.ink.withEnd
 import com.vivenotes.ui.panel.pathEffect
 import kotlin.math.hypot
 
@@ -73,12 +77,18 @@ internal const val SHAPE_LAYER_TAG = "shape-layer"
  * It is the innermost of the three object layers and so has no slot of its own — [EquationLayer]
  * holds it, [ImageLayer] holds that, and the call site in `EditorPane` sets out the whole order.
  *
- * A shape is selected and moved **whole**, and with one exception it is resized whole too. Its
+ * A shape is selected and moved **whole**, and with two exceptions it is resized whole too. Its
  * segments are how it is stored and drawn — they are what carries the occluded edges a solid needs
  * dotted — but they are not separately editable, so there is no way to pull one corner of a hexagon
- * out of shape. The exception is an *arm end* ([ShapeArm]), on a kind that declares arms: the L has
- * four, head and tail of each arm, and each drags along its own axis alone. Pulling a tail back past
- * the corner is what turns an L into a cross. See SD9.
+ * out of shape. The exceptions are both *ends*, and a kind declares which sort it has:
+ *
+ * - an **arm end** ([ShapeArm]), on a kind with arms: the L has four, head and tail of each arm, and
+ *   each drags along its own axis alone. Pulling a tail back past the corner turns an L into a
+ *   cross; pulling one back *through* the other arm is the one thing it may not do, since that is
+ *   the L coming apart rather than changing shape. See SD9.
+ * - a **line end** ([ShapeEnd]), on a kind that is a line: the line and the arrow carry one handle
+ *   per end instead of four corners, and each drags in both directions at once, so moving one across
+ *   the line turns the shape rather than stretching it. See SD12.
  *
  * Selection, four-corner resize, drag-to-move and double-tap-to-select are `memory/plan.md` AD7: they
  * belong to *an object on the canvas*, not to shapes, and ink already has the same set. The corner
@@ -115,6 +125,9 @@ internal fun ShapeLayer(
     /** One arm's free end, moved to [along] on its own axis — see [ShapeArm]. */
     onResizeShapeArm: (shapeId: String, segmentId: String, atEnd: Boolean, along: Float) -> Unit =
         { _, _, _, _ -> },
+    /** One end of a line or an arrow, moved to where the finger left it — see [ShapeEnd]. */
+    onMoveShapeEnd: (shapeId: String, atEnd: Boolean, x: Float, y: Float) -> Unit =
+        { _, _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val accent = MaterialTheme.colorScheme.primary
@@ -133,6 +146,7 @@ internal fun ShapeLayer(
     val currentOnMove = rememberUpdatedState(onMoveShape)
     val currentOnResize = rememberUpdatedState(onResizeShape)
     val currentOnResizeArm = rememberUpdatedState(onResizeShapeArm)
+    val currentOnMoveEnd = rememberUpdatedState(onMoveShapeEnd)
 
     // The corner drag in flight, drawn but not yet written — see [ShapeResize]. A holder rather than
     // a delegated `var` for the same reason as the states above: the gesture handler below outlives
@@ -141,6 +155,9 @@ internal fun ShapeLayer(
 
     /** The arm drag in flight, held and committed the same way the corner drag is. */
     val armResize = remember { mutableStateOf<ShapeArmResize?>(null) }
+
+    /** And a line's end, likewise — see [ShapeEndMove]. */
+    val endMove = remember { mutableStateOf<ShapeEndMove?>(null) }
 
     /** And the move, for the reason [ShapeMove] gives — which is undo's, not arithmetic's. */
     val move = remember { mutableStateOf<ShapeMove?>(null) }
@@ -191,6 +208,14 @@ internal fun ShapeLayer(
                     val armGrab = (handle as? Handle.Arm)?.arm?.let { arm ->
                         arm.along - if (arm.axis == ShapeAxis.Horizontal) startX else startY
                     } ?: 0f
+
+                    // The same, in both directions at once: a line's end handle is drawn *on* its
+                    // end, so the offset is only however far off centre the finger landed — but
+                    // without it the end still jumps that far on the first sample, and on a short
+                    // line that is most of its length.
+                    val endGrab = (handle as? Handle.End)?.end?.let { end ->
+                        Offset(end.x - startX, end.y - startY)
+                    } ?: Offset.Zero
 
                     // The shape this gesture moves, chosen on the down and held for the whole of it:
                     // the selected one when the finger came down inside it, otherwise whatever it
@@ -253,6 +278,14 @@ internal fun ShapeLayer(
                                     pending.along,
                                 )
                             }
+                            endMove.value?.let { pending ->
+                                currentOnMoveEnd.value(
+                                    pending.shapeId,
+                                    pending.atEnd,
+                                    pending.x,
+                                    pending.y,
+                                )
+                            }
                             move.value?.let { pending ->
                                 currentOnMove.value(pending.shapeId, pending.dx, pending.dy)
                             }
@@ -312,6 +345,22 @@ internal fun ShapeLayer(
                                     )
                                 }
 
+                                // Both coordinates, because a line's end has no axis of its own —
+                                // which is the whole difference from an arm. Taking the finger's
+                                // travel across the line as well as along it is what turns the
+                                // shape: the end goes where the finger is, and the line follows.
+                                is Handle.End -> {
+                                    val point = change.position / density + endGrab
+                                    // The origin corner is a wall for an endpoint exactly as it is
+                                    // for a whole shape — [PageBounds].
+                                    endMove.value = ShapeEndMove(
+                                        target.id,
+                                        handle.end.atEnd,
+                                        PageBounds.clampX(point.x),
+                                        PageBounds.clampY(point.y),
+                                    )
+                                }
+
                                 // Measured from where the drag began rather than from the last
                                 // sample, so the travel is one number the whole way through and the
                                 // touch slop is not folded into it.
@@ -334,6 +383,7 @@ internal fun ShapeLayer(
                     // size the finger was still moving away from.
                     resize.value = null
                     armResize.value = null
+                    endMove.value = null
                     move.value = null
                 }
             },
@@ -346,6 +396,7 @@ internal fun ShapeLayer(
             val held = selection?.shapeIds.orEmpty()
             val resizing = resize.value
             val arming = armResize.value
+            val ending = endMove.value
             val nudging = move.value
 
             // The corner drag and the lasso are both preview-only, so both are applied here rather
@@ -357,6 +408,9 @@ internal fun ShapeLayer(
                     resizing.anchorX, resizing.anchorY, resizing.scaleX, resizing.scaleY,
                 )
                 arming?.shapeId == shape.id -> shape.withArm(arming.arm, arming.along)
+                ending?.shapeId == shape.id -> shape.ends()
+                    .firstOrNull { it.atEnd == ending.atEnd }
+                    ?.let { shape.withEnd(it, ending.x, ending.y) } ?: shape
                 nudging?.shapeId == shape.id -> shape.translated(nudging.dx, nudging.dy)
                 // The lasso's transform is in page units, which is what a shape's coordinates
                 // already are — so it applies with no conversion, unlike ink, which needs it
@@ -435,6 +489,20 @@ private data class ShapeArmResize(
 )
 
 /**
+ * A line's end in flight: where the finger has taken one end of a line or an arrow.
+ *
+ * Two coordinates rather than [ShapeArmResize]'s one, because that is the difference between the two
+ * gestures — an arm end runs on rails and a line's end does not. Held and committed the same way, and
+ * for the same reasons: one document edit, one autosave, nothing left behind by a cancel.
+ */
+private data class ShapeEndMove(
+    val shapeId: String,
+    val atEnd: Boolean,
+    val x: Float,
+    val y: Float,
+)
+
+/**
  * A move in flight: how far the shape has travelled since the drag began.
  *
  * A move used to be the one gesture here that wrote every frame, which was safe arithmetic — deltas
@@ -448,8 +516,15 @@ private data class ShapeMove(
     val dy: Float,
 )
 
-/** The live lasso move or resize, applied for the draw only — nothing is written until the up. */
-private fun Outline.Shape.withLassoPreview(gesture: LassoGesture): Outline.Shape {
+/**
+ * The live lasso move, resize or end drag, applied for the draw only — nothing is written until the up.
+ *
+ * `internal` and shared with `InkOverlay`, which draws the lasso's own chrome: the handles have to
+ * sit on the shape as it is being previewed, and a second copy of this rule is a second answer to
+ * where the shape currently is.
+ */
+internal fun Outline.Shape.withLassoPreview(gesture: LassoGesture): Outline.Shape {
+    gesture.lineEndPreview()?.takeIf { it.id == id }?.let { return it }
     val offset = gesture.previewOffset()
     val scale = gesture.previewScale()
     val anchor = gesture.previewAnchor()
@@ -504,11 +579,17 @@ private fun DrawScope.drawShape(shape: Outline.Shape, canvasInkArgb: Int) {
 }
 
 /**
- * A dashed box around the selected shape.
+ * A dashed box around the selected shape, with its handles on it.
  *
- * The whole of the selection affordance, because the whole of the interaction is "this one, and it
- * moves". A line is thin and a wireframe is mostly empty, so without a box there would be nothing to
- * show a tap had landed until the shape started moving.
+ * The box is most of the selection affordance, because the whole of the interaction is "this one, and
+ * it moves": a wireframe is mostly empty, so without it there would be nothing to show a tap had
+ * landed until the shape started moving.
+ *
+ * **A line and an arrow get no box** (SD12). Theirs would be a rectangle drawn around something that
+ * is not a rectangle — degenerate on a straight line, and on a diagonal one a box whose corners the
+ * shape does not go near — and it advertises a resize those kinds do not have. The two end handles
+ * are the whole of it, and two discs on the line's own ends say "this one" clearly enough, which the
+ * bare box never did for a shape it fits this badly.
  */
 private fun DrawScope.drawSelection(
     shape: Outline.Shape,
@@ -522,23 +603,34 @@ private fun DrawScope.drawSelection(
     val right = left + shape.width * scale + padding * 2
     val bottom = top + shape.height * scale + padding * 2
 
-    drawRect(
-        color = accent,
-        topLeft = Offset(left, top),
-        size = Size(right - left, bottom - top),
-        style = Stroke(
-            width = SELECTION_STROKE.toPx(),
-            pathEffect = PathEffect.dashPathEffect(
-                floatArrayOf(SELECTION_DASH.toPx(), SELECTION_DASH.toPx()),
+    // The four corner discs are the box's, drawn the way the lasso draws its own — surface disc,
+    // accent ring, and the radius off [SelectionChrome] — so the two selections are the same
+    // affordance rather than two that merely do the same thing (AD7).
+    //
+    // A line has neither: two handles on its own two ends, and no box behind them. The same disc, in
+    // a different place, because it is the same *kind* of grab — take this point and put it
+    // somewhere — rather than four on a box, half of which have no side to pull on and none of which
+    // can turn the line.
+    val ends = shape.ends()
+    val points = if (ends.isEmpty()) {
+        drawRect(
+            color = accent,
+            topLeft = Offset(left, top),
+            size = Size(right - left, bottom - top),
+            style = Stroke(
+                width = SELECTION_STROKE.toPx(),
+                pathEffect = PathEffect.dashPathEffect(
+                    floatArrayOf(SELECTION_DASH.toPx(), SELECTION_DASH.toPx()),
+                ),
             ),
-        ),
-    )
+        )
+        listOf(left to top, right to top, right to bottom, left to bottom)
+    } else {
+        ends.map { end -> (end.x * scale) to (end.y * scale) }
+    }
 
-    // Four corners, drawn the way the lasso draws its own — surface disc, accent ring, and the
-    // radius off [SelectionChrome] — so the two selections are the same affordance rather than two
-    // that merely do the same thing (AD7).
     val radius = HANDLE_RADIUS.toPx()
-    listOf(left to top, right to top, right to bottom, left to bottom).forEach { (x, y) ->
+    points.forEach { (x, y) ->
         drawCircle(handleFill, radius, Offset(x, y))
         drawCircle(accent, radius, Offset(x, y), style = Stroke(width = SELECTION_STROKE.toPx()))
     }
@@ -601,10 +693,11 @@ private fun DrawScope.drawArmHandle(arm: ShapeArm, accent: Color, handleFill: Co
 
 private enum class Corner { TopLeft, TopRight, BottomRight, BottomLeft }
 
-/** What the finger came down on: one of the four corners, or one arm's tab. */
+/** What the finger came down on: one of the four corners, one arm's tab, or a line's own end. */
 private sealed interface Handle {
     data class Box(val corner: Corner) : Handle
     data class Arm(val arm: ShapeArm) : Handle
+    data class End(val end: ShapeEnd) : Handle
 }
 
 private fun Outline.Shape.cornerPoint(corner: Corner): Pair<Float, Float> = when (corner) {
@@ -633,10 +726,18 @@ private fun Outline.Shape.anchorFor(corner: Corner): Pair<Float, Float> = corner
  * rule is distance — and it is what puts the boundary between the two exactly halfway along the gap
  * the tab is drawn across.
  *
+ * A line's two ends are not in that contest: they are the *whole* handle set for their kinds, and the
+ * corners are not offered at all (SD12).
+ *
  * Page units, so [HANDLE_REACH] and [ARM_HANDLE_GAP] are read as plain dp — the same numbers the
  * draw scales by density, and the reason the two cannot disagree about where a handle is.
  */
 private fun Outline.Shape.handleNear(x: Float, y: Float): Handle? {
+    // A line's ends *replace* its corners rather than joining them: the two sets would sit on top of
+    // each other on a diagonal line — its ends are two corners of its own bounding box — and the
+    // grab that turned the line would half the time scale it instead. A kind has one or the other.
+    if (kind.hasEnds) return endNear(x, y, HANDLE_REACH.value)?.let(Handle::End)
+
     val candidates = Corner.entries.map { corner ->
         val (cx, cy) = cornerPoint(corner)
         Handle.Box(corner) to hypot(x - cx, y - cy)
@@ -687,8 +788,10 @@ internal fun Outline.Shape.armChromeExtent(): Pair<Float, Float> {
 /**
  * How far the dragged corner has travelled from the anchor, as a scale factor.
  *
- * Null for a shape with no extent on an axis — a horizontal line has zero height, and dividing by it
- * would send every point to infinity. Those resize on their long axis alone.
+ * Null for a shape with no extent on an axis — one dragged out with no travel in y has zero height,
+ * and dividing by it would send every point to infinity. Those resize on their long axis alone. The
+ * line and the arrow, which are the kinds that are *always* flat, never reach this: they carry end
+ * handles instead of corners (SD12), and this is only ever called for a corner.
  */
 private fun Outline.Shape.scaleFor(corner: Corner, x: Float, y: Float): Pair<Float, Float>? {
     val (anchorX, anchorY) = anchorFor(corner)

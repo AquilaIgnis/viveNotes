@@ -115,7 +115,9 @@ import com.vivenotes.model.ink.canFill
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.ends
 import com.vivenotes.model.ink.withArm
+import com.vivenotes.model.ink.withEnd
 import com.vivenotes.model.PaperDimensions
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.PrintMargins
@@ -2380,6 +2382,23 @@ class NotesViewModel(
         updateShapeOutline(shapeId) { shape ->
             val arm = shape.arms().firstOrNull { it.segmentId == segmentId && it.atEnd == atEnd }
             arm?.let { shape.withArm(it, along) } ?: shape
+        }
+    }
+
+    /**
+     * Moves one end of a line or an arrow to where the finger left it — `memory/inkPlan.md` SD12.
+     *
+     * The line's own resize, in place of the four corners every other kind gets: both coordinates,
+     * so a drag across the line turns it rather than stretching it, and the arrow's head is re-traced
+     * onto the new heading by [withEnd].
+     *
+     * Looked up again here rather than passed in, and absolute but idempotent, for exactly the
+     * reasons [resizeShapeArm] gives — it is the same gesture with one fewer constraint.
+     */
+    fun moveShapeEnd(shapeId: String, atEnd: Boolean, x: Float, y: Float) {
+        updateShapeOutline(shapeId) { shape ->
+            val end = shape.ends().firstOrNull { it.atEnd == atEnd }
+            end?.let { shape.withEnd(it, x, y) } ?: shape
         }
     }
 

@@ -339,6 +339,7 @@ fun EditorPane(
     onMoveShape: (String, Float, Float) -> Unit = { _, _, _ -> },
     onResizeShape: (String, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     onResizeShapeArm: (String, String, Boolean, Float) -> Unit = { _, _, _, _ -> },
+    onMoveShapeEnd: (String, Boolean, Float, Float) -> Unit = { _, _, _, _ -> },
     /**
      * The lasso's halves, taking the whole set at once: one gesture is one edit and so one Undo,
      * however many shapes it caught.
@@ -1241,6 +1242,7 @@ fun EditorPane(
                                     onMoveShape = onMoveShape,
                                     onResizeShape = onResizeShape,
                                     onResizeShapeArm = onResizeShapeArm,
+                                    onMoveShapeEnd = onMoveShapeEnd,
                                 )
                             }
                         }
@@ -1432,6 +1434,7 @@ fun EditorPane(
                 onResizeShapes = { ids, anchor, scaleX, scaleY ->
                     onResizeShapes(ids, anchor.x, anchor.y, scaleX, scaleY)
                 },
+                onMoveShapeEnd = onMoveShapeEnd,
                 onMoveTables = onMoveTables,
                 onResizeTables = { ids, anchor, scaleX, scaleY ->
                     onResizeTables(ids, anchor.x, anchor.y, scaleX, scaleY)

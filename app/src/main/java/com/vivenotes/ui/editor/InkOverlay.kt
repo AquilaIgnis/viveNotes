@@ -48,6 +48,8 @@ import com.vivenotes.data.EraserSettings
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.ink.CanvasSelection
+import com.vivenotes.ink.TAP_REACH
+import com.vivenotes.ink.lineShape
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.InkLassoMove
@@ -70,7 +72,11 @@ import com.vivenotes.ink.eraseObjects
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageSpace
 import com.vivenotes.model.SpaceCut
+import com.vivenotes.model.ink.ShapeEnd
 import com.vivenotes.model.ink.StraightLineFit
+import com.vivenotes.model.ink.endNear
+import com.vivenotes.model.ink.ends
+import com.vivenotes.model.ink.withEnd
 import com.vivenotes.model.ink.trace
 import com.vivenotes.ui.theme.LocalCanvasColors
 import kotlinx.coroutines.Dispatchers
@@ -197,6 +203,8 @@ internal fun InkOverlay(
     onResizeSelection: (InkLassoResize) -> Unit = {},
     onMoveShapes: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+    /** One end of a lassoed line, in place of the corner resize it has no corners for — SD12. */
+    onMoveShapeEnd: (String, Boolean, Float, Float) -> Unit = { _, _, _, _ -> },
     onMoveTables: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onMoveEquations: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
@@ -263,6 +271,7 @@ internal fun InkOverlay(
     val currentImages by rememberUpdatedState(images)
     val currentOnMoveShapes by rememberUpdatedState(onMoveShapes)
     val currentOnResizeShapes by rememberUpdatedState(onResizeShapes)
+    val currentOnMoveShapeEnd by rememberUpdatedState(onMoveShapeEnd)
     val currentOnMoveEquations by rememberUpdatedState(onMoveEquations)
     val currentOnResizeEquations by rememberUpdatedState(onResizeEquations)
     val currentOnMoveImages by rememberUpdatedState(onMoveImages)
@@ -499,7 +508,8 @@ internal fun InkOverlay(
                 }
                 if (currentLassoing && gestureRevision >= 0) {
                     drawLasso(
-                        native, matrix, lassoGesture, currentSelection, lassoColor, lassoHandleFill,
+                        native, matrix, lassoGesture, currentSelection, currentShapes,
+                        lassoColor, lassoHandleFill,
                     )
                 }
                 currentShaping?.takeIf { shapeRevision >= 0 }?.let { settings ->
@@ -654,6 +664,7 @@ internal fun InkOverlay(
                             onSelect = currentOnSelect,
                             onMoveShapes = currentOnMoveShapes,
                             onResizeShapes = currentOnResizeShapes,
+                            onMoveShapeEnd = currentOnMoveShapeEnd,
                             onMoveTables = currentOnMoveTables,
                             onResizeTables = currentOnResizeTables,
                             onMoveEquations = currentOnMoveEquations,
@@ -840,6 +851,7 @@ private fun handleInk(
     onResizeSelection: (InkLassoResize) -> Unit,
     onMoveShapes: (Set<String>, Float, Float) -> Unit,
     onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit,
+    onMoveShapeEnd: (String, Boolean, Float, Float) -> Unit,
     onMoveTables: (Set<String>, Float, Float) -> Unit,
     onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit,
     onMoveEquations: (Set<String>, Float, Float) -> Unit,
@@ -921,6 +933,7 @@ private fun handleInk(
             onResize = onResizeSelection,
             onMoveShapes = onMoveShapes,
             onResizeShapes = onResizeShapes,
+            onMoveShapeEnd = onMoveShapeEnd,
             onMoveTables = onMoveTables,
             onResizeTables = onResizeTables,
             onMoveEquations = onMoveEquations,
@@ -1283,6 +1296,8 @@ private fun drawLasso(
     pageToView: Matrix,
     gesture: LassoGesture,
     selection: CanvasSelection?,
+    /** Read only to answer [lineShape]: whether what is held is one line, which has no box. */
+    shapes: List<Outline.Shape>,
     color: Int,
     /** The fill inside a corner handle — `colorScheme.surface`, as every object layer uses. */
     handleColor: Int,
@@ -1306,6 +1321,32 @@ private fun drawLasso(
         }
         canvas.drawPath(path, tracePaint)
     }
+    val handleRadius = SelectionChrome.HANDLE_RADIUS.value
+    val handleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = handleColor
+        style = Paint.Style.FILL
+    }
+
+    // A lassoed line gets exactly what a tapped one gets: two handles on its own ends, and no box
+    // (SD12). It used to get the generic rectangle and four corners here, which is the same shape
+    // `ShapeLayer` had stopped drawing — one affordance that changed depending on which tool had
+    // selected it, and four handles that pointed at a resize the kind does not have.
+    val line = selection.lineShape(shapes)
+    if (line != null) {
+        val drawn = line.withLassoPreview(gesture)
+        val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            style = Paint.Style.STROKE
+            strokeWidth = SelectionChrome.STROKE.value
+        }
+        drawn.ends().forEach { end ->
+            canvas.drawCircle(end.x, end.y, handleRadius, handleFill)
+            canvas.drawCircle(end.x, end.y, handleRadius, linePaint)
+        }
+        canvas.restoreToCount(checkpoint)
+        return
+    }
+
     gesture.previewBounds(selection)?.let { bounds ->
         // **Page units are dp**, so the chrome is drawn from [SelectionChrome] as it stands, with no
         // division by [scale] — those are the same numbers `ShapeLayer`, `EquationLayer` and
@@ -1327,11 +1368,6 @@ private fun drawLasso(
         val right = bounds.right + padding
         val bottom = bounds.bottom + padding
         canvas.drawRect(left, top, right, bottom, selectionPaint)
-        val handleRadius = SelectionChrome.HANDLE_RADIUS.value
-        val handleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.color = handleColor
-            style = Paint.Style.FILL
-        }
         listOf(
             left to top,
             right to top,
@@ -1956,7 +1992,7 @@ private const val GUIDE_FALLBACK_SPAN = 2000f
  * keeping its own idea of how far the finger has travelled.
  */
 internal class LassoGesture {
-    private enum class Mode { Idle, Drawing, Moving, Resizing }
+    private enum class Mode { Idle, Drawing, Moving, Resizing, LineEnd }
     private enum class Corner { TopLeft, TopRight, BottomRight, BottomLeft }
 
     private var mode by mutableStateOf(Mode.Idle)
@@ -1970,6 +2006,21 @@ internal class LassoGesture {
     private var resizeScale by mutableStateOf(InkPoint(1f, 1f))
 
     /**
+     * The line being end-dragged, as it was on the down; which of its two ends was grabbed; how far
+     * off centre the finger landed on it; and where that end now is.
+     *
+     * [endPreview] is the shape the drag has made, rebuilt from [endShape] every sample rather than
+     * from the last one — the same absolute contract `withEnd` keeps for the tap path, so the frames
+     * of one drag cannot accumulate. It is what both the chrome here and `ShapeLayer` inside the zoom
+     * draw, so the handles and the line they belong to can never disagree.
+     */
+    private var endShape: Outline.Shape? = null
+    private var endHandle: ShapeEnd? = null
+    private var endGrab = InkPoint(0f, 0f)
+    private var endAt = InkPoint(0f, 0f)
+    private var endPreview by mutableStateOf<Outline.Shape?>(null)
+
+    /**
      * What the selection occupied when the gesture began, held so the origin corner can be enforced
      * against it — [PageBounds].
      *
@@ -1981,8 +2032,12 @@ internal class LassoGesture {
     var renderRevision by mutableIntStateOf(0)
         private set
 
-    /** True while a move or resize is being dragged, so a draw knows to apply [applyPreview]. */
-    val isTransforming: Boolean get() = mode == Mode.Moving || mode == Mode.Resizing
+    /** True while a move, resize or end drag is in flight, so a draw knows to apply the preview. */
+    val isTransforming: Boolean
+        get() = mode == Mode.Moving || mode == Mode.Resizing || mode == Mode.LineEnd
+
+    /** The line an end drag has made, or null — read by every layer that draws the shape. */
+    fun lineEndPreview(): Outline.Shape? = endPreview.takeIf { mode == Mode.LineEnd }
 
     fun drawingPath(): List<InkPoint> = if (mode == Mode.Drawing) path else emptyList()
 
@@ -1991,6 +2046,9 @@ internal class LassoGesture {
         when (mode) {
             Mode.Moving -> bounds.translated(preview.x, preview.y)
             Mode.Resizing -> bounds.scaled(resizeAnchor, resizeScale.x, resizeScale.y)
+            // Not a transform of the old rectangle: an end drag turns the line, so the box around it
+            // is whatever the new geometry measures. The tooltip anchors to this.
+            Mode.LineEnd -> endPreview?.pageBounds() ?: bounds
             else -> bounds
         }
     }
@@ -2028,6 +2086,7 @@ internal class LassoGesture {
         preview = InkPoint(0f, 0f)
         resizeScale = InkPoint(1f, 1f)
         startBounds = null
+        forgetLineEnd()
         invalidateDraw()
     }
 
@@ -2052,6 +2111,7 @@ internal class LassoGesture {
         onResize: (InkLassoResize) -> Unit,
         onMoveShapes: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
         onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+        onMoveShapeEnd: (String, Boolean, Float, Float) -> Unit = { _, _, _, _ -> },
         onMoveTables: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
         onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
         onMoveEquations: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
@@ -2063,15 +2123,30 @@ internal class LassoGesture {
             MotionEvent.ACTION_DOWN -> {
                 pointerId = event.getPointerId(event.actionIndex)
                 val point = event.pagePoint(event.actionIndex, toPage)
-                val corner = selection?.bounds?.cornerNear(point)
+                // One line held alone has ends where everything else has corners, and never both —
+                // SD12, and the same question `ShapeLayer.handleNear` asks of a tapped one.
+                val line = selection.lineShape(shapes)
+                val grabbedEnd = line?.endNear(point.x, point.y, SelectionChrome.HANDLE_REACH.value)
+                val corner = if (line == null) selection?.bounds?.cornerNear(point) else null
                 startBounds = selection?.bounds
-                if (selection != null && corner != null) {
+                if (line != null && grabbedEnd != null) {
+                    mode = Mode.LineEnd
+                    endShape = line
+                    endHandle = grabbedEnd
+                    endGrab = InkPoint(grabbedEnd.x - point.x, grabbedEnd.y - point.y)
+                    endAt = InkPoint(grabbedEnd.x, grabbedEnd.y)
+                    endPreview = line
+                    preview = InkPoint(0f, 0f)
+                } else if (selection != null && corner != null) {
                     mode = Mode.Resizing
                     resizeStart = corner.point(selection.bounds)
                     resizeAnchor = corner.opposite().point(selection.bounds)
                     resizeScale = InkPoint(1f, 1f)
                     preview = InkPoint(0f, 0f)
-                } else if (selection != null && selection.bounds.contains(point)) {
+                } else if (
+                    selection != null &&
+                    selection.bounds.holdsBody(point, if (line != null) TAP_REACH else 0f)
+                ) {
                     mode = Mode.Moving
                     start = point
                     preview = InkPoint(0f, 0f)
@@ -2099,6 +2174,7 @@ internal class LassoGesture {
                         invalidateDraw()
                     }
                     Mode.Resizing -> updateResize(event.pagePoint(index, toPage))
+                    Mode.LineEnd -> updateLineEnd(event.pagePoint(index, toPage))
                     Mode.Idle -> Unit
                 }
                 true
@@ -2201,6 +2277,20 @@ internal class LassoGesture {
                             onSelect(selection.scaled(resizeAnchor, scale.x, scale.y))
                         }
                     }
+                    Mode.LineEnd -> {
+                        updateLineEnd(event.pagePoint(event.actionIndex, toPage))
+                        val shape = endShape
+                        val handle = endHandle
+                        val moved = endPreview
+                        // A press on the handle that never travelled is not an edit — and the
+                        // selection it would rewrite is the one already on screen.
+                        if (shape != null && handle != null && moved != null && moved != shape) {
+                            onMoveShapeEnd(shape.id, handle.atEnd, endAt.x, endAt.y)
+                            // The bounds are the new geometry's; the loop that made the selection is
+                            // kept, as the move and resize arms keep theirs.
+                            onSelect(selection?.copy(bounds = moved.pageBounds()))
+                        }
+                    }
                     Mode.Idle -> Unit
                 }
                 mode = Mode.Idle
@@ -2208,6 +2298,7 @@ internal class LassoGesture {
                 preview = InkPoint(0f, 0f)
                 resizeScale = InkPoint(1f, 1f)
                 startBounds = null
+                forgetLineEnd()
                 invalidateDraw()
                 true
             }
@@ -2271,8 +2362,45 @@ internal class LassoGesture {
         preview = InkPoint(0f, 0f)
         resizeScale = InkPoint(1f, 1f)
         startBounds = null
+        forgetLineEnd()
         invalidateDraw()
     }
+
+    private fun forgetLineEnd() {
+        endShape = null
+        endHandle = null
+        endGrab = InkPoint(0f, 0f)
+        endPreview = null
+    }
+
+    /**
+     * The line with its grabbed end taken to where the finger is, rebuilt from the shape the drag
+     * began with — never from the previous frame, for the reason `withEnd` is absolute.
+     *
+     * The origin corner is a wall for an endpoint as it is for everything else ([PageBounds]).
+     */
+    private fun updateLineEnd(point: InkPoint) {
+        val shape = endShape ?: return
+        val handle = endHandle ?: return
+        endAt = InkPoint(
+            PageBounds.clampX(point.x + endGrab.x),
+            PageBounds.clampY(point.y + endGrab.y),
+        )
+        endPreview = shape.withEnd(handle, endAt.x, endAt.y)
+        invalidateDraw()
+    }
+
+    /**
+     * Whether the point is on the selection's body, with [slack] of room around it.
+     *
+     * Exact for a rectangle, and not for a line: a horizontal line's bounds have no height at all, so
+     * a body test against them is a demand for the one row of pixels the line occupies. It was
+     * affordable while a lassoed line also carried four corner handles standing 6dp outside those
+     * bounds — there was always something to grab — and stopped being so the moment those went (SD12).
+     */
+    private fun InkBounds.holdsBody(point: InkPoint, slack: Float): Boolean =
+        point.x >= left - slack && point.x <= right + slack &&
+            point.y >= top - slack && point.y <= bottom + slack
 
     private fun invalidateDraw() {
         renderRevision = if (renderRevision == Int.MAX_VALUE) 0 else renderRevision + 1

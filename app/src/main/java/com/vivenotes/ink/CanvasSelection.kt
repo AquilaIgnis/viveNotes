@@ -1,6 +1,7 @@
 package com.vivenotes.ink
 
 import com.vivenotes.model.Outline
+import com.vivenotes.model.ink.ShapeKind
 import kotlin.math.floor
 import kotlin.math.hypot
 
@@ -181,6 +182,23 @@ data class CanvasSelection(
         )
     }
 }
+
+/**
+ * The one line-like shape this selection holds *by itself*, or null — `memory/inkPlan.md` §5.4 SD12.
+ *
+ * The question every piece of selection chrome has to ask before it draws a box with four corners on
+ * it, because a line and an arrow have neither ([ShapeKind.hasEnds]): they carry a handle on each of
+ * their own two ends instead. Asked here rather than in each drawing site so that a tapped line and a
+ * lassoed one cannot end up with different chrome — which is exactly what they had, the lasso
+ * drawing the generic rectangle over a shape the layer had stopped drawing one for.
+ *
+ * Alone, and only alone: a loop holding a line and anything else is a *group*, and a group is moved
+ * and scaled as a rectangle whatever is inside it.
+ */
+fun CanvasSelection?.lineShape(shapes: List<Outline.Shape>): Outline.Shape? = this
+    ?.takeIf { it.isShapeOnly && it.shapeIds.size == 1 }
+    ?.let { held -> shapes.firstOrNull { it.id in held.shapeIds } }
+    ?.takeIf { it.kind.hasEnds }
 
 /**
  * A table as the selection sees it: an id, and the rectangle the **canvas** measured for it.

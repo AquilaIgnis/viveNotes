@@ -58,11 +58,18 @@ fun Outline.Shape.arms(): List<ShapeArm> =
  * Moves one end of one arm to [along] on its own axis, leaving the other coordinate — and every
  * other segment — exactly where it was.
  *
- * Clamped to [MIN_ARM_LENGTH] from the arm's *own other end*, and to nothing else — an end may pass
- * the other arm as far as it likes, which is the whole of how an L becomes a cross. Without the one
- * limit a fast drag would flip an arm through zero, and a horizontal arm that now points left is one
- * no further drag can straighten: its axis reads back the other way round, so the handle that
- * shortened it now lengthens it.
+ * **Two limits, both floors on how short the arm may be pulled.** [MIN_ARM_LENGTH] from the arm's
+ * *own other end*, without which a fast drag would flip an arm through zero — and a horizontal arm
+ * that now points left is one no further drag can straighten, since its axis reads back the other
+ * way round and the handle that shortened it now lengthens it. And the **junction**: an end may not
+ * be pulled back past a point where its arm currently crosses another one ([junctionWith]).
+ *
+ * The junction limit is what keeps an L an L. Its two arms are two segments that happen to meet, and
+ * nothing but this stopped either of them being shortened until they no longer did — leaving a
+ * corner with a gap in it, or two loose strokes lying near each other, from a gesture that reads as
+ * "make this arm shorter". Outward travel is untouched, so an end still passes the other arm as far
+ * as it likes, which is the whole of how an L becomes a cross; what it may no longer do is retreat
+ * back through the crossing it is holding.
  *
  * **Absolute, like a corner drag and unlike a move.** It sets where the end is rather than how far
  * it has come, so applying it twice with the same value is applying it once — which is what lets the
@@ -78,15 +85,22 @@ fun Outline.Shape.withArm(arm: ShapeArm, along: Float): Outline.Shape {
         arm.atEnd -> segment.y1
         else -> segment.y2
     }
-    val limited = if (arm.outward >= 0f) {
-        maxOf(along, anchor + MIN_ARM_LENGTH)
-    } else {
-        minOf(along, anchor - MIN_ARM_LENGTH)
-    }
+    // The coordinate the drag does not change: the arm's own line, and so the line the rest of the
+    // shape is asked where it crosses.
     val across = if (horizontal) {
         if (arm.atEnd) segment.y2 else segment.y1
     } else {
         if (arm.atEnd) segment.x2 else segment.x1
+    }
+    // Every crossing this arm is currently holding. The binding one is the furthest along the
+    // direction the end lies in — retreating past the nearest would already have let go of it.
+    val junctions = segments.mapNotNull { other ->
+        if (other.id == arm.segmentId) null else segment.junctionWith(other, arm.axis, across)
+    }
+    val limited = if (arm.outward >= 0f) {
+        maxOf(along, anchor + MIN_ARM_LENGTH, junctions.maxOrNull() ?: Float.NEGATIVE_INFINITY)
+    } else {
+        minOf(along, anchor - MIN_ARM_LENGTH, junctions.minOrNull() ?: Float.POSITIVE_INFINITY)
     }
     val moved = if (horizontal) {
         segment.withEnd(arm.atEnd, limited, across)
@@ -133,11 +147,51 @@ internal fun List<ShapeSegment>.arms(): List<ShapeArm> = flatMap { segment ->
 }
 
 /**
+ * Where [other] crosses the line this arm's segment runs along, on the arm's own axis — or null when
+ * it does not, or when the crossing is one this arm is not currently holding.
+ *
+ * The whole of the junction limit, and the reason it needs no knowledge of the L: it asks where two
+ * segments meet, and reports the answer as the single coordinate an arm drag can move. [across] is
+ * the arm's other coordinate, the one the drag leaves alone, so the question is "at what [axis] does
+ * [other] reach this line".
+ *
+ * **Only a crossing that already exists.** A shape whose arms have somehow come apart — one saved
+ * before this limit, say — is left as it is rather than snapped back together the moment a handle is
+ * grabbed. Dragging the arm back over the other one restores the junction, and from then on it holds.
+ *
+ * Chords, not arcs: an arm is a straight segment on a kind that declares arms ([ShapeKind.hasArms]),
+ * so there is no bulge here to account for.
+ */
+private fun ShapeSegment.junctionWith(
+    other: ShapeSegment,
+    axis: ShapeAxis,
+    across: Float,
+): Float? {
+    val horizontal = axis == ShapeAxis.Horizontal
+    val fromAcross = if (horizontal) other.y1 else other.x1
+    val toAcross = if (horizontal) other.y2 else other.x2
+    val span = toAcross - fromAcross
+    // Alongside rather than across: two parallel segments have no one point to hold on to.
+    if (span == 0f) return null
+    val travelled = (across - fromAcross) / span
+    // It stops short of this arm's line, so there is nothing here to hold.
+    if (travelled < 0f || travelled > 1f) return null
+
+    val fromAlong = if (horizontal) other.x1 else other.y1
+    val toAlong = if (horizontal) other.x2 else other.y2
+    val at = fromAlong + travelled * (toAlong - fromAlong)
+
+    val ownFrom = if (horizontal) x1 else y1
+    val ownTo = if (horizontal) x2 else y2
+    return at.takeIf { it >= minOf(ownFrom, ownTo) && it <= maxOf(ownFrom, ownTo) }
+}
+
+/**
  * How short an arm may be pulled, in page units.
  *
  * Not zero: an arm dragged to nothing leaves two handles sitting on top of each other with nothing
  * between them to grab, and the shape reads as having lost a side rather than as having a very short
- * one. It is the only limit on an arm — either end may pass the *other arm* freely, which is how a
- * cross is drawn.
+ * one. The other limit is the junction — an end may pass the *other arm* freely on the way out,
+ * which is how a cross is drawn, but may not retreat back through it.
  */
 const val MIN_ARM_LENGTH = 8f
