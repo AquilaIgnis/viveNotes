@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -50,10 +51,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -63,7 +68,7 @@ import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.data.sync.ConnectFailure
 import com.vivenotes.data.sync.PermanentSyncFailure
-import com.vivenotes.data.sync.SelfHostConnection
+import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncRunResult
 import com.vivenotes.data.sync.SyncStatus
 import com.vivenotes.data.sync.SyncSummary
@@ -73,9 +78,19 @@ import com.vivenotes.ui.theme.LocalIconAccents
 internal object AccountTags {
     const val SCREEN = "account-screen"
     const val BACK = "account-back"
-    const val LOGIN = "account-login"
-    const val SIGN_UP = "account-sign-up"
+    const val GOOGLE = "account-google"
+
+    /** On the spinner inside the Google button, so a test can tell waiting from idle. */
+    const val GOOGLE_PROGRESS = "account-google-progress"
+    const val GOOGLE_STATUS = "account-google-status"
     const val SELF_HOST = "account-self-host"
+
+    /** The password-account link dialog, raised only by `409 account_link_required`. */
+    const val LINK_DIALOG = "account-link-dialog"
+    const val LINK_EMAIL = "account-link-email"
+    const val LINK_PASSWORD = "account-link-password"
+    const val LINK_CONFIRM = "account-link-confirm"
+    const val LINK_CANCEL = "account-link-cancel"
     const val SERVER_URL = "account-server-url"
     const val EMAIL = "account-email"
     const val PASSWORD = "account-password"
@@ -99,11 +114,16 @@ internal object AccountTags {
 }
 
 /**
- * Account entry point for hosted and self-hosted sync.
+ * Account entry point for managed and self-hosted sync.
  *
- * Hosted `Log in` and `Sign up` deliberately remain callbacks: there is no hosted service, so this
- * screen does not invent an API contract for one. **Self host is real** — it registers this device
- * against `POST /v1/devices` (`viveCServer/docs/openapi.yaml`).
+ * Two routes to one place, offered at deliberately different weights. **Sign in with Google is the
+ * default**: one button, because `POST /v1/auth/google` is one endpoint that logs in or registers as
+ * the account turns out to need, so the screen never asks somebody to declare which they are.
+ * Registering against a server by hand is the second offer, folded away behind a text link, because
+ * it is the answer for people running their own server and a distraction for everyone else.
+ *
+ * Both end in the same place — a base URL and a device token — so [connection] describes both and
+ * the connected panel is written once (`viveCServer/docs/openapi.yaml`).
  *
  * Presentational, including the connect flow: [connection] comes in and [onConnect] goes out, so the
  * request lives in a scope that outlives this screen. That matters more here than it looks. The
@@ -119,9 +139,23 @@ internal object AccountTags {
 @Composable
 fun AccountScreen(
     onBack: () -> Unit,
-    onLogIn: () -> Unit = {},
-    onSignUp: () -> Unit = {},
-    connection: SelfHostConnection = SelfHostConnection.Idle,
+    /** False when the build carries no Google Web client id: the button is shown disabled, not hidden. */
+    googleAvailable: Boolean = true,
+    signingInWithGoogle: Boolean = false,
+    onSignInWithGoogle: () -> Unit = {},
+    /**
+     * The last Google attempt's failure, or null. Separate from [connection] because the two routes
+     * fail independently and a message under the wrong button is a message about the wrong thing.
+     */
+    googleFailure: ConnectFailure? = null,
+    /** Raised by `409 account_link_required`, which has exactly one resolution — see [onLinkAccount]. */
+    linkRequired: Boolean = false,
+    linking: Boolean = false,
+    onLinkAccount: (email: String, password: String) -> Unit = { _, _ -> },
+    onCancelLink: () -> Unit = {},
+    /** True for the session in which Google sign-in created the account, rather than found it. */
+    accountCreated: Boolean = false,
+    connection: ServerConnection = ServerConnection.Idle,
     onConnect: (serverUrl: String, email: String, password: String) -> Unit = { _, _, _ -> },
     /** Whether *this screen's* Sync now is in flight — the button's own spinner, not the clock's. */
     syncing: Boolean = false,
@@ -152,7 +186,7 @@ fun AccountScreen(
     // for as long as the request runs. Read here because a semantics lambda is not composable.
     val connectingLabel = stringResource(R.string.account_connecting)
 
-    val connected = connection as? SelfHostConnection.Connected
+    val connected = connection as? ServerConnection.Connected
 
     // Once the token exists the password has no further use, so it stops being held. Deliberately
     // not done on failure: a wrong password is usually a typo in one character, and clearing the
@@ -237,6 +271,7 @@ fun AccountScreen(
                         ) {
                             ConnectedPanel(
                                 connected = connected,
+                                accountCreated = accountCreated,
                                 syncStatus = syncStatus,
                                 syncing = syncing,
                                 onSync = onSync,
@@ -262,34 +297,55 @@ fun AccountScreen(
                     )
 
                     Spacer(Modifier.height(28.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Button(
-                            onClick = onLogIn,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag(AccountTags.LOGIN),
-                        ) {
-                            Text(stringResource(R.string.account_log_in))
-                        }
-                        OutlinedButton(
-                            onClick = onSignUp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag(AccountTags.SIGN_UP),
-                        ) {
-                            Text(stringResource(R.string.account_sign_up))
-                        }
+                    GoogleSignInButton(
+                        enabled = googleAvailable && !signingInWithGoogle,
+                        signingIn = signingInWithGoogle,
+                        onClick = onSignInWithGoogle,
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(
+                            if (googleAvailable) {
+                                R.string.account_google_explainer
+                            } else {
+                                // A build with no Web client id says so here rather than letting the
+                                // button fail with a provider error that reads like the person's
+                                // Google account is at fault.
+                                R.string.account_google_unconfigured
+                            },
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+
+                    // Suppressed while the link dialog is up, because that dialog shows the same
+                    // failure with wording of its own. Two copies of one message is one of them
+                    // being read out twice by a screen reader.
+                    if (googleFailure != null && !linkRequired) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(failureMessage(googleFailure)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.testTag(AccountTags.GOOGLE_STATUS),
+                        )
                     }
 
-                    Spacer(Modifier.height(12.dp))
+                    // The second offer, and visibly so: a text link under a full-width button, in
+                    // the supporting colour. The disclosure it opens is unchanged — this is the same
+                    // `POST /v1/devices` flow it always was, just no longer competing for the eye.
+                    Spacer(Modifier.height(20.dp))
                     TextButton(
                         onClick = { selfHostExpanded = !selfHostExpanded },
                         modifier = Modifier.testTag(AccountTags.SELF_HOST),
                     ) {
-                        Text(stringResource(R.string.account_self_host))
+                        Text(
+                            text = stringResource(R.string.account_or_self_host),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
 
                     AnimatedVisibility(
@@ -352,7 +408,7 @@ fun AccountScreen(
                                     .testTag(AccountTags.PASSWORD),
                             )
 
-                            val connecting = connection is SelfHostConnection.Connecting
+                            val connecting = connection is ServerConnection.Connecting
                             Button(
                                 onClick = { onConnect(serverUrl, email, password) },
                                 // Blank fields are refused here rather than by the server: all three
@@ -389,6 +445,111 @@ fun AccountScreen(
         }
     }
 
+    // `409 account_link_required` has exactly one resolution in the contract, and this is it: the
+    // Google email already belongs to a password account, and creating a second account would split
+    // one person's notes across two. So the dialog is not a choice — it is the next request.
+    //
+    // The email is typed rather than filled in from the ID token. Those claims are unverified until
+    // the server has checked Google's signature, and it re-derives the address from the verified
+    // token to compare against this one anyway; asking costs one field and keeps an unverified
+    // string from ever being shown back as a fact.
+    if (linkRequired) {
+        var linkEmail by remember { mutableStateOf("") }
+        // Composition-only, like the connect form's password, and for the same reason.
+        var linkPassword by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = onCancelLink,
+            title = { Text(stringResource(R.string.account_link_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.account_link_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    OutlinedTextField(
+                        value = linkEmail,
+                        onValueChange = { linkEmail = it },
+                        label = { Text(stringResource(R.string.account_link_email)) },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next,
+                        ),
+                        singleLine = true,
+                        enabled = !linking,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(AccountTags.LINK_EMAIL),
+                    )
+                    OutlinedTextField(
+                        value = linkPassword,
+                        onValueChange = { linkPassword = it },
+                        label = { Text(stringResource(R.string.account_link_password)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done,
+                        ),
+                        singleLine = true,
+                        enabled = !linking,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(AccountTags.LINK_PASSWORD),
+                    )
+                    if (googleFailure != null) {
+                        // The failure of the *link* attempt, shown in the dialog that caused it
+                        // rather than behind it — the dialog stays open so the password can be
+                        // corrected without starting a second sign-in.
+                        Text(
+                            text = stringResource(
+                                // A 401 here has two causes, not the one the general message names:
+                                // the password, or an email that is not the Google address just
+                                // used. The server cannot say which, so the sentence covers both.
+                                if (googleFailure == ConnectFailure.InvalidCredentials) {
+                                    R.string.account_error_link_credentials
+                                } else {
+                                    failureMessage(googleFailure)
+                                },
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                val linkingLabel = stringResource(R.string.account_linking)
+                TextButton(
+                    onClick = { onLinkAccount(linkEmail, linkPassword) },
+                    enabled = !linking && linkEmail.isNotBlank() && linkPassword.isNotEmpty(),
+                    modifier = Modifier.testTag(AccountTags.LINK_CONFIRM),
+                ) {
+                    if (linking) {
+                        // Same treatment as Connect and the Google button: the spinner replaces the
+                        // label, so it carries the name the label was providing.
+                        LoadingIndicator(
+                            Modifier
+                                .size(18.dp)
+                                .semantics { contentDescription = linkingLabel },
+                        )
+                    } else {
+                        Text(stringResource(R.string.account_link_confirm))
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onCancelLink,
+                    enabled = !linking,
+                    modifier = Modifier.testTag(AccountTags.LINK_CANCEL),
+                ) {
+                    Text(stringResource(R.string.account_link_cancel))
+                }
+            },
+            modifier = Modifier.testTag(AccountTags.LINK_DIALOG),
+        )
+    }
+
     // Confirmed rather than immediate: the token cannot be reissued, so a stray tap costs a
     // credential and leaves a device on the server that this app can no longer revoke.
     if (confirmDisconnect) {
@@ -420,6 +581,64 @@ fun AccountScreen(
 }
 
 /**
+ * Sign in with Google, drawn as the screen's primary action.
+ *
+ * A **neutral** container rather than the scheme's `primary`, and that is Google's requirement
+ * rather than a taste call: the four-colour G is a brand mark that may not be recoloured and is
+ * specified against a light or dark neutral, not against an app's accent. `surfaceContainerHighest`
+ * with `onSurface` is the M3 token pair that lands closest in both themes, so the button stays part
+ * of this app's surface language while the mark keeps its own colours.
+ *
+ * It is the most prominent control on the card because it is the only one: the second route is a
+ * text link below. Full width for the same reason the connect button is — this card is capped at
+ * 560dp, and a centred half-width button inside it reads as one of two things when there is one.
+ *
+ * The spinner replaces the whole label, so the button carries an explicit content description for
+ * as long as it is up; without it the control loses its accessible name mid-request.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun GoogleSignInButton(
+    enabled: Boolean,
+    signingIn: Boolean,
+    onClick: () -> Unit,
+) {
+    val signingInLabel = stringResource(R.string.account_google_signing_in)
+
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(AccountTags.GOOGLE),
+    ) {
+        if (signingIn) {
+            LoadingIndicator(
+                Modifier
+                    .size(18.dp)
+                    .testTag(AccountTags.GOOGLE_PROGRESS)
+                    .semantics { contentDescription = signingInLabel },
+            )
+        } else {
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_google_g),
+                contentDescription = null,
+                // Untinted: the mark carries its own four colours and tinting it would flatten it
+                // to one. This is the same reason `AboutDialog` draws `ic_github` unrecoloured.
+                tint = Color.Unspecified,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(stringResource(R.string.account_google_sign_in))
+        }
+    }
+}
+
+/**
  * What the disclosure shows once this installation holds a device token.
  *
  * Green, from [com.vivenotes.ui.theme.IconAccents] rather than from the colour scheme, because the
@@ -435,7 +654,9 @@ fun AccountScreen(
 @Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private fun ConnectedPanel(
-    connected: SelfHostConnection.Connected,
+    connected: ServerConnection.Connected,
+    /** Only the sign-in that created the account says so, and only for that session. */
+    accountCreated: Boolean,
     syncStatus: SyncStatus,
     syncing: Boolean,
     onSync: () -> Unit,
@@ -475,7 +696,16 @@ private fun ConnectedPanel(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.account_connected_title),
+                    // "Account created" is the one thing the single Google button cannot show any
+                    // other way: the server is the only party that knows whether it found the
+                    // account or made it, and it says so once, in the response.
+                    text = stringResource(
+                        if (accountCreated) {
+                            R.string.account_connected_created
+                        } else {
+                            R.string.account_connected_title
+                        },
+                    ),
                     style = MaterialTheme.typography.titleSmall,
                     color = accents.green,
                     modifier = Modifier.testTag(AccountTags.CONNECT_STATUS),
@@ -693,18 +923,18 @@ private const val CONNECTED_PLATE_ALPHA = 0.14f
  * they get the error colour and a sentence naming what to change.
  */
 @Composable
-private fun ConnectionStatus(connection: SelfHostConnection) {
+private fun ConnectionStatus(connection: ServerConnection) {
     when (connection) {
-        is SelfHostConnection.Failed -> Text(
+        is ServerConnection.Failed -> Text(
             text = stringResource(failureMessage(connection.reason)),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.testTag(AccountTags.CONNECT_STATUS),
         )
 
-        is SelfHostConnection.Connected,
-        SelfHostConnection.Idle,
-        SelfHostConnection.Connecting,
+        is ServerConnection.Connected,
+        ServerConnection.Idle,
+        ServerConnection.Connecting,
         -> Unit
     }
 }
@@ -726,4 +956,12 @@ private fun failureMessage(reason: ConnectFailure): Int = when (reason) {
     ConnectFailure.NotAViveServer -> R.string.account_error_not_vive
     ConnectFailure.NotStored -> R.string.account_error_not_stored
     ConnectFailure.Revoked -> R.string.account_error_revoked
+    ConnectFailure.InvalidChallenge -> R.string.account_error_challenge
+    ConnectFailure.InvalidGoogleToken -> R.string.account_error_google_token
+    ConnectFailure.GoogleUnavailable -> R.string.account_error_google_unavailable
+    ConnectFailure.IdentityConflict -> R.string.account_error_identity_conflict
+    ConnectFailure.IdempotencyConflict -> R.string.account_error_idempotency
+    ConnectFailure.AccountUnavailable -> R.string.account_error_account_unavailable
+    ConnectFailure.NoGoogleAccount -> R.string.account_error_no_google_account
+    ConnectFailure.GoogleNotConfigured -> R.string.account_error_google_unconfigured
 }

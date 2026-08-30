@@ -13,6 +13,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
@@ -510,6 +511,270 @@ class SyncServerClientTest {
     }
 
     /** A response with no body at all, which is the only shape a `HEAD` may answer with. */
+    // ---------------------------------------------------------------- Google auth ----
+
+    @Test
+    fun creatingAChallengeReturnsTheNonceToHandToCredentialManager() = runBlocking {
+        respond = {
+            send(
+                it,
+                201,
+                """
+                {
+                  "challengeId": "0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01",
+                  "nonce": "Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG0",
+                  "expiresAt": "2026-08-30T12:05:00Z"
+                }
+                """.trimIndent(),
+            )
+        }
+
+        val result = SyncServerClient().createGoogleChallenge(baseUrl)
+
+        assertEquals("POST", requestMethod)
+        assertEquals("/v1/auth/google/challenges", requestPath)
+        // No credential: this is the one call made before the installation has any.
+        assertNull(authorization)
+        val challenge = (result as ServerResult.Success).value
+        assertEquals("0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01", challenge.challengeId)
+        assertEquals("Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG0", challenge.nonce)
+    }
+
+    /** `503 google_auth_unavailable` is the one challenge failure worth trying again. */
+    @Test
+    fun anUnconfiguredServerMakesTheChallengeRetryable() = runBlocking {
+        respond = {
+            send(it, 503, """{"error":"google_auth_unavailable","message":"not configured"}""")
+        }
+
+        val result = SyncServerClient().createGoogleChallenge(baseUrl)
+
+        val failed = result as ServerResult.Failed
+        assertEquals(ConnectFailure.GoogleUnavailable, failed.reason)
+        assertTrue(failed.retryable)
+    }
+
+    @Test
+    fun signingInWithGoogleSendsTheContractsBodyAndReturnsTheToken() = runBlocking {
+        respond = {
+            send(
+                it,
+                200,
+                """
+                {
+                  "accountId": "a62c615f-5a73-47bb-b704-ad49cf527ec2",
+                  "deviceId": "7af9be36-8f89-4b31-bc78-3ef246837469",
+                  "token": "vive_c29tZS1leGFtcGxlLWRldmljZS10b2tlbg",
+                  "tokenExpiresAt": "2026-11-28T12:00:00Z",
+                  "createdAccount": true
+                }
+                """.trimIndent(),
+            )
+        }
+
+        val result = SyncServerClient().signInWithGoogle(
+            serverBaseUrl = baseUrl,
+            challengeId = "0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01",
+            idToken = "header.payload.signature",
+            idempotencyKey = "4f2a1c88-0e3d-4c1b-8b4a-77c9f0e5d612",
+            device = GoogleDeviceDetails(
+                installationId = "9b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+                name = "  Pixel Tablet  ",
+                platform = "Android 16",
+                appVersion = "1.1.1",
+                locale = "en-US",
+            ),
+        )
+
+        assertEquals("/v1/auth/google", requestPath)
+        val sent = Json.parseToJsonElement(requestBody!!).jsonObject
+        assertEquals("header.payload.signature", sent["idToken"]!!.jsonPrimitive.content)
+        val device = sent["device"]!!.jsonObject
+        assertEquals("9b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d", device["installationId"]!!.jsonPrimitive.content)
+        assertEquals("Pixel Tablet", device["name"]!!.jsonPrimitive.content)
+        // Absent optional details are omitted rather than sent as explicit nulls: the schema marks
+        // them optional, not nullable.
+        assertFalse(device.containsKey("model"))
+
+        val authenticated = result as GoogleAuthentication.Authenticated
+        assertEquals("vive_c29tZS1leGFtcGxlLWRldmljZS10b2tlbg", authenticated.token)
+        assertTrue(authenticated.createdAccount)
+    }
+
+    /**
+     * The one response that is not an outcome: it is the contract naming the next request. Reading
+     * it as a failure would send the user back to a button that will do exactly this again.
+     */
+    @Test
+    fun anExistingPasswordAccountAsksForLinkingRatherThanFailing() = runBlocking {
+        respond = {
+            send(
+                it,
+                409,
+                """{"error":"account_link_required","message":"verify the existing account"}""",
+            )
+        }
+
+        val result = SyncServerClient().signInWithGoogle(
+            serverBaseUrl = baseUrl,
+            challengeId = "0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01",
+            idToken = "header.payload.signature",
+            idempotencyKey = "4f2a1c88-0e3d-4c1b-8b4a-77c9f0e5d612",
+            device = googleDevice(),
+        )
+
+        assertEquals(GoogleAuthentication.LinkRequired, result)
+    }
+
+    /** The other 409 on the same route, which is a failure and must not be read as the first. */
+    @Test
+    fun anIdentityHeldByAnotherAccountIsAFailure() = runBlocking {
+        respond = {
+            send(it, 409, """{"error":"identity_conflict","message":"linked elsewhere"}""")
+        }
+
+        val result = SyncServerClient().signInWithGoogle(
+            serverBaseUrl = baseUrl,
+            challengeId = "0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01",
+            idToken = "header.payload.signature",
+            idempotencyKey = "4f2a1c88-0e3d-4c1b-8b4a-77c9f0e5d612",
+            device = googleDevice(),
+        )
+
+        assertEquals(
+            GoogleAuthentication.Rejected(ConnectFailure.IdentityConflict),
+            result,
+        )
+    }
+
+    @Test
+    fun anExpiredChallengeIsItsOwnFailure() = runBlocking {
+        respond = {
+            send(it, 400, """{"error":"invalid_challenge","message":"expired"}""")
+        }
+
+        val result = SyncServerClient().signInWithGoogle(
+            serverBaseUrl = baseUrl,
+            challengeId = "0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01",
+            idToken = "header.payload.signature",
+            idempotencyKey = "4f2a1c88-0e3d-4c1b-8b4a-77c9f0e5d612",
+            device = googleDevice(),
+        )
+
+        assertEquals(GoogleAuthentication.Rejected(ConnectFailure.InvalidChallenge), result)
+    }
+
+    /**
+     * The trap `failureFor` documents, on this route: `HttpURLConnection` eats a 401's body on the
+     * JVM while looking for a challenge it can answer, so the code is routinely unavailable and the
+     * status has to carry the meaning. On sign-in a 401 is the ID token; on the link route it is far
+     * more likely the password, and telling somebody to retype a correct password is the failure
+     * this distinction exists to prevent.
+     */
+    @Test
+    fun aBodilessUnauthorizedMeansTheTokenOnSignInAndThePasswordOnLinking() = runBlocking {
+        respond = { sendEmpty(it, 401) }
+
+        val signIn = SyncServerClient().signInWithGoogle(
+            serverBaseUrl = baseUrl,
+            challengeId = "0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01",
+            idToken = "header.payload.signature",
+            idempotencyKey = "4f2a1c88-0e3d-4c1b-8b4a-77c9f0e5d612",
+            device = googleDevice(),
+        )
+        val link = SyncServerClient().linkGoogleIdentity(
+            serverBaseUrl = baseUrl,
+            challengeId = "0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01",
+            idToken = "header.payload.signature",
+            idempotencyKey = "5a3b2d99-1f4e-4d2c-9c5b-88daf1e6c723",
+            device = googleDevice(),
+            email = "owner@example.com",
+            password = "correct horse",
+        )
+
+        assertEquals(GoogleAuthentication.Rejected(ConnectFailure.InvalidGoogleToken), signIn)
+        assertEquals(GoogleAuthentication.Rejected(ConnectFailure.InvalidCredentials), link)
+    }
+
+    @Test
+    fun linkingSendsTheSameChallengeAndTokenPlusTheAccountsCredentials() = runBlocking {
+        respond = {
+            send(
+                it,
+                200,
+                """
+                {
+                  "accountId": "a62c615f-5a73-47bb-b704-ad49cf527ec2",
+                  "deviceId": "7af9be36-8f89-4b31-bc78-3ef246837469",
+                  "token": "vive_c29tZS1leGFtcGxlLWRldmljZS10b2tlbg",
+                  "tokenExpiresAt": "2026-11-28T12:00:00Z",
+                  "createdAccount": false
+                }
+                """.trimIndent(),
+            )
+        }
+
+        val result = SyncServerClient().linkGoogleIdentity(
+            serverBaseUrl = baseUrl,
+            challengeId = "0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01",
+            idToken = "header.payload.signature",
+            idempotencyKey = "5a3b2d99-1f4e-4d2c-9c5b-88daf1e6c723",
+            device = googleDevice(),
+            email = "  Owner@Example.com  ",
+            password = " correct horse ",
+        )
+
+        assertEquals("/v1/auth/google/link", requestPath)
+        val sent = Json.parseToJsonElement(requestBody!!).jsonObject
+        assertEquals("0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01", sent["challengeId"]!!.jsonPrimitive.content)
+        assertEquals("header.payload.signature", sent["idToken"]!!.jsonPrimitive.content)
+        assertEquals("Owner@Example.com", sent["email"]!!.jsonPrimitive.content)
+        // Never trimmed: whitespace in a password is part of it.
+        assertEquals(" correct horse ", sent["password"]!!.jsonPrimitive.content)
+        assertFalse((result as GoogleAuthentication.Authenticated).createdAccount)
+    }
+
+    /** An over-long detail is clipped here rather than costing a 400 at the end of a sign-in. */
+    @Test
+    fun overLongDeviceDetailsAreClippedToTheContractsLimits() = runBlocking {
+        respond = { send(it, 503, """{"error":"google_auth_unavailable"}""") }
+
+        SyncServerClient().signInWithGoogle(
+            serverBaseUrl = baseUrl,
+            challengeId = "0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01",
+            idToken = "header.payload.signature",
+            idempotencyKey = "4f2a1c88-0e3d-4c1b-8b4a-77c9f0e5d612",
+            device = googleDevice().copy(name = "n".repeat(200), model = "m".repeat(200)),
+        )
+
+        val device = Json.parseToJsonElement(requestBody!!).jsonObject["device"]!!.jsonObject
+        assertEquals(128, device["name"]!!.jsonPrimitive.content.length)
+        assertEquals(128, device["model"]!!.jsonPrimitive.content.length)
+    }
+
+    /** A stripped ROM reporting no model must not produce the empty name the contract refuses. */
+    @Test
+    fun aBlankDeviceNameFallsBackToTheProductName() = runBlocking {
+        respond = { send(it, 503, """{"error":"google_auth_unavailable"}""") }
+
+        SyncServerClient().signInWithGoogle(
+            serverBaseUrl = baseUrl,
+            challengeId = "0d1f6b4c-1b6f-4a3f-9c2e-3a5f7b8c9d01",
+            idToken = "header.payload.signature",
+            idempotencyKey = "4f2a1c88-0e3d-4c1b-8b4a-77c9f0e5d612",
+            device = googleDevice().copy(name = "   "),
+        )
+
+        val device = Json.parseToJsonElement(requestBody!!).jsonObject["device"]!!.jsonObject
+        assertEquals("ViveNotes", device["name"]!!.jsonPrimitive.content)
+    }
+
+    private fun googleDevice(): GoogleDeviceDetails = GoogleDeviceDetails(
+        installationId = "9b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+        name = "Pixel Tablet",
+        platform = "Android 16",
+    )
+
     private fun sendEmpty(exchange: HttpExchange, status: Int) {
         exchange.sendResponseHeaders(status, -1)
         exchange.close()

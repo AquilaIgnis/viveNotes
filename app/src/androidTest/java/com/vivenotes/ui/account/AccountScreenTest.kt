@@ -17,7 +17,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.R
 import com.vivenotes.data.sync.ConnectFailure
 import com.vivenotes.data.sync.PermanentSyncFailure
-import com.vivenotes.data.sync.SelfHostConnection
+import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncRunResult
 import com.vivenotes.data.sync.SyncStatus
 import com.vivenotes.data.sync.SyncSummary
@@ -35,7 +35,7 @@ class AccountScreenTest {
      * Driven rather than replaced: the connection state is an input to the screen, so the suite
      * moves it the way the app will and sets content once. See `PageViewTest` for the pattern.
      */
-    private var connection by mutableStateOf<SelfHostConnection>(SelfHostConnection.Idle)
+    private var connection by mutableStateOf<ServerConnection>(ServerConnection.Idle)
 
     private val connectCalls = mutableListOf<Triple<String, String, String>>()
     private var disconnects = 0
@@ -45,27 +45,130 @@ class AccountScreenTest {
     private var syncing by mutableStateOf(false)
     private var syncStatus by mutableStateOf(SyncStatus())
 
+    private var googleAvailable by mutableStateOf(true)
+    private var signingInWithGoogle by mutableStateOf(false)
+    private var googleFailure by mutableStateOf<ConnectFailure?>(null)
+    private var googleSignIns = 0
+    private var linkRequired by mutableStateOf(false)
+    private var linking by mutableStateOf(false)
+    private val linkCalls = mutableListOf<Pair<String, String>>()
+    private var linkCancels = 0
+    private var accountCreated by mutableStateOf(false)
+
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
+    /** The default offer, and the only button on the card until the disclosure is opened. */
     @Test
-    fun hostedAccountActionsAreAvailable() {
-        var login = false
-        var signUp = false
-        compose.setContent {
-            ViveNotesTheme {
-                AccountScreen(
-                    onBack = {},
-                    onLogIn = { login = true },
-                    onSignUp = { signUp = true },
-                )
-            }
-        }
+    fun googleSignInIsTheDefaultAction() {
+        setScreen()
 
-        compose.onNodeWithTag(AccountTags.LOGIN).performClick()
-        compose.onNodeWithTag(AccountTags.SIGN_UP).performClick()
+        compose.onNodeWithTag(AccountTags.GOOGLE).assertIsDisplayed().performClick()
 
-        assertTrue(login)
-        assertTrue(signUp)
+        assertEquals(1, googleSignIns)
+    }
+
+    /**
+     * One button for both, so the screen must not claim otherwise. The explainer is what tells
+     * somebody with no account that pressing it will make them one.
+     */
+    @Test
+    fun googleButtonSaysItBothSignsInAndRegisters() {
+        setScreen()
+
+        compose.onNodeWithText(context.getString(R.string.account_google_explainer))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun googleButtonShowsProgressAndDisablesItselfWhileSigningIn() {
+        setScreen()
+        compose.onNodeWithTag(AccountTags.GOOGLE_PROGRESS).assertDoesNotExist()
+
+        signingInWithGoogle = true
+
+        compose.onNodeWithTag(AccountTags.GOOGLE_PROGRESS).assertIsDisplayed()
+        compose.onNodeWithTag(AccountTags.GOOGLE).assertIsNotEnabled()
+    }
+
+    /**
+     * A build with no Web client id shows the button disabled and says why, rather than letting the
+     * press fail inside Credential Manager with an error that reads like the user's Google account
+     * is at fault.
+     */
+    @Test
+    fun googleSignInIsDisabledAndExplainedWhenTheBuildHasNoClientId() {
+        setScreen()
+        googleAvailable = false
+
+        compose.onNodeWithTag(AccountTags.GOOGLE).assertIsNotEnabled()
+        compose.onNodeWithText(context.getString(R.string.account_google_unconfigured))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun googleFailureIsExplainedUnderItsOwnButton() {
+        setScreen()
+        googleFailure = ConnectFailure.NoGoogleAccount
+
+        compose.onNodeWithTag(AccountTags.GOOGLE_STATUS)
+            .assertTextContains(context.getString(R.string.account_error_no_google_account))
+    }
+
+    /**
+     * `409 account_link_required` has one resolution in the contract and this dialog is it. The
+     * screen must not offer it before the server has asked for it — showing it unprompted would ask
+     * for a password nothing is going to check.
+     */
+    @Test
+    fun linkDialogAppearsOnlyWhenTheServerAsksForIt() {
+        setScreen()
+        compose.onNodeWithTag(AccountTags.LINK_DIALOG).assertDoesNotExist()
+
+        linkRequired = true
+
+        compose.onNodeWithTag(AccountTags.LINK_DIALOG).assertIsDisplayed()
+        compose.onNodeWithTag(AccountTags.LINK_CONFIRM).assertIsNotEnabled()
+    }
+
+    @Test
+    fun linkDialogSendsTheEmailAndPasswordItWasGiven() {
+        setScreen()
+        linkRequired = true
+
+        compose.onNodeWithTag(AccountTags.LINK_EMAIL).performTextInput("owner@example.com")
+        compose.onNodeWithTag(AccountTags.LINK_PASSWORD).performTextInput("correct horse")
+        compose.onNodeWithTag(AccountTags.LINK_CONFIRM).performClick()
+
+        assertEquals(listOf("owner@example.com" to "correct horse"), linkCalls)
+    }
+
+    /**
+     * Cancelling is a real operation rather than just closing a dialog: `SyncAccounts` is holding a
+     * Google ID token for as long as the link is pending, and only this drops it.
+     */
+    @Test
+    fun cancellingTheLinkReportsItRatherThanOnlyClosing() {
+        setScreen()
+        linkRequired = true
+
+        compose.onNodeWithTag(AccountTags.LINK_CANCEL).performClick()
+
+        assertEquals(1, linkCancels)
+        assertTrue(linkCalls.isEmpty())
+    }
+
+    /**
+     * The one thing the single button cannot show any other way. Only the server knows whether it
+     * found the account or made it, and it says so once.
+     */
+    @Test
+    fun creatingAnAccountIsAnnouncedInsteadOfMerelyConnected() {
+        setScreen()
+        connection = ServerConnection.Connected("https://cloud.vivenotes.net", "Pixel Tablet")
+        accountCreated = true
+
+        compose.onNodeWithTag(AccountTags.CONNECT_STATUS)
+            .assertTextContains(context.getString(R.string.account_connected_created))
     }
 
     @Test
@@ -138,7 +241,7 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.SELF_HOST).performClick()
         compose.onNodeWithTag(AccountTags.CONNECT_PROGRESS).assertDoesNotExist()
 
-        connection = SelfHostConnection.Connecting
+        connection = ServerConnection.Connecting
 
         compose.onNodeWithTag(AccountTags.CONNECT_PROGRESS).assertIsDisplayed()
         // Pressing again would register a second device on the server, not retry the first.
@@ -151,12 +254,12 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.SELF_HOST).performClick()
         compose.onNodeWithTag(AccountTags.CONNECT_STATUS).assertDoesNotExist()
 
-        connection = SelfHostConnection.Failed(ConnectFailure.InvalidCredentials)
+        connection = ServerConnection.Failed(ConnectFailure.InvalidCredentials)
 
         compose.onNodeWithTag(AccountTags.CONNECT_STATUS)
             .assertTextContains(context.getString(R.string.account_error_credentials))
 
-        connection = SelfHostConnection.Failed(ConnectFailure.Unreachable)
+        connection = ServerConnection.Failed(ConnectFailure.Unreachable)
 
         compose.onNodeWithTag(AccountTags.CONNECT_STATUS)
             .assertTextContains(context.getString(R.string.account_error_unreachable))
@@ -171,7 +274,7 @@ class AccountScreenTest {
         setScreen()
         compose.onNodeWithTag(AccountTags.SELF_HOST).performClick()
 
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
 
         compose.onNodeWithTag(AccountTags.CONNECTED).assertIsDisplayed()
         compose.onNodeWithTag(AccountTags.CONNECT_STATUS)
@@ -190,7 +293,7 @@ class AccountScreenTest {
     fun connectedNamesTheServerAndTheDevice() {
         setScreen()
 
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
 
         compose.onNodeWithText("http://10.0.2.2:5444").assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.account_connected_device, "Pixel Tablet"))
@@ -200,7 +303,7 @@ class AccountScreenTest {
     /** Arriving already connected must show it, not hide it behind anything. */
     @Test
     fun anExistingConnectionIsShownOnArrival() {
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
         setScreen()
 
         compose.onNodeWithTag(AccountTags.CONNECTED).assertIsDisplayed()
@@ -209,7 +312,7 @@ class AccountScreenTest {
     @Test
     fun disconnectAsksFirstAndCanBeBackedOutOf() {
         setScreen()
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
 
         compose.onNodeWithTag(AccountTags.DISCONNECT).performScrollTo().performClick()
 
@@ -235,7 +338,7 @@ class AccountScreenTest {
     @Test
     fun aFailedRevokeOffersTheLocalOnlyWayOut() {
         setScreen()
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
 
         compose.onNodeWithTag(AccountTags.DISCONNECT_ANYWAY).assertDoesNotExist()
 
@@ -256,7 +359,7 @@ class AccountScreenTest {
     @Test
     fun syncNowShowsProgressAndThenASummary() {
         setScreen()
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
 
         compose.onNodeWithTag(AccountTags.SYNC).performScrollTo().performClick()
         assertEquals(1, syncs)
@@ -285,7 +388,7 @@ class AccountScreenTest {
     @Test
     fun aFailedBackgroundRunIsOnScreenWithoutAnybodyPressingSync() {
         setScreen()
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
 
         syncStatus = SyncStatus(failure = SyncRunResult.Retryable(ConnectFailure.Unreachable))
 
@@ -305,7 +408,7 @@ class AccountScreenTest {
     @Test
     fun anUnreachableServerIsMarkedWithCloudOff() {
         setScreen()
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
 
         syncStatus = SyncStatus(failure = SyncRunResult.Retryable(ConnectFailure.Unreachable))
 
@@ -319,7 +422,7 @@ class AccountScreenTest {
     @Test
     fun aFailureThatIsNotTheConnectionCarriesNoCloudOff() {
         setScreen()
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
 
         syncStatus = SyncStatus(
             failure = SyncRunResult.Failed(PermanentSyncFailure.UnsupportedKind),
@@ -330,17 +433,17 @@ class AccountScreenTest {
     }
 
     /**
-     * Connecting is an invitation, and there is nothing left to invite. Leaving Log in and Sign up on
-     * a screen that is already connected offers a second account to an app that holds one.
+     * Connecting is an invitation, and there is nothing left to invite. Leaving Sign in with Google
+     * and the self-host disclosure on a screen that is already connected offers a second account to
+     * an app that holds one.
      */
     @Test
     fun connectedHidesEveryWayToConnectAgain() {
         setScreen()
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
 
         compose.onNodeWithTag(AccountTags.CONNECTED).assertIsDisplayed()
-        compose.onNodeWithTag(AccountTags.LOGIN).assertDoesNotExist()
-        compose.onNodeWithTag(AccountTags.SIGN_UP).assertDoesNotExist()
+        compose.onNodeWithTag(AccountTags.GOOGLE).assertDoesNotExist()
         compose.onNodeWithTag(AccountTags.SELF_HOST).assertDoesNotExist()
     }
 
@@ -358,12 +461,12 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.PASSWORD).performTextInput("correct horse")
         compose.onNodeWithTag(AccountTags.CONNECT).assertIsEnabled()
 
-        connection = SelfHostConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
         // Asserted, not just assigned: without a sync point here the two writes coalesce into one
         // recomposition that only ever sees Idle, and the effect that drops the password never runs.
         compose.onNodeWithTag(AccountTags.CONNECTED).assertIsDisplayed()
 
-        connection = SelfHostConnection.Idle
+        connection = ServerConnection.Idle
 
         compose.onNodeWithTag(AccountTags.CONNECT).assertIsNotEnabled()
     }
@@ -373,6 +476,15 @@ class AccountScreenTest {
             ViveNotesTheme {
                 AccountScreen(
                     onBack = {},
+                    googleAvailable = googleAvailable,
+                    signingInWithGoogle = signingInWithGoogle,
+                    onSignInWithGoogle = { googleSignIns++ },
+                    googleFailure = googleFailure,
+                    linkRequired = linkRequired,
+                    linking = linking,
+                    onLinkAccount = { email, password -> linkCalls += email to password },
+                    onCancelLink = { linkCancels++ },
+                    accountCreated = accountCreated,
                     connection = connection,
                     onConnect = { url, email, password ->
                         connectCalls += Triple(url, email, password)

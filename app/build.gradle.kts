@@ -1,4 +1,5 @@
 import java.io.File
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -74,6 +75,28 @@ private val releaseAbis: List<String> =
         ?.filter(String::isNotEmpty)
         ?: if (testRelease) allAbis else listOf("arm64-v8a")
 
+/**
+ * Deployment values that are not the same on every machine, read from `local.properties`.
+ *
+ * `local.properties` is tracked here — it already carries `sdk.dir` — so these are defaults with a
+ * committed value, not secrets. Neither of them is one: a Google **Web** OAuth client id is a public
+ * identifier that ships inside every APK by design, and a server address is a server address. The
+ * only thing that must never appear here is a client *secret*, and ID-token verification does not
+ * use one (viveCServer `deploy/env.example`).
+ *
+ * A `-P` on the command line outranks the file, so a one-off build can point at another server
+ * without editing anything: `./gradlew assembleDebug -Pvive.cloudBaseUrl=http://192.168.1.20:5444`.
+ */
+private val localProperties: Properties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+
+private fun localSetting(name: String, fallback: String): String =
+    (project.findProperty(name) as String?)?.takeIf(String::isNotBlank)
+        ?: localProperties.getProperty(name)?.takeIf(String::isNotBlank)
+        ?: fallback
+
 android {
     namespace = "com.vivenotes"
     // 37, because Compose 1.12 refuses to be compiled against anything older — see the material3
@@ -102,6 +125,21 @@ android {
         // The physical-device suite runs for roughly twenty minutes. Its test-only runner keeps
         // the display awake so Compose hosts are not hidden by the lock screen halfway through.
         testInstrumentationRunner = "com.vivenotes.ViveNotesTestRunner"
+
+        /*
+         * The Google **Web** OAuth client id handed to Credential Manager as `serverClientId`, and
+         * the audience `VIVE_GOOGLE_CLIENT_IDS` must accept on the server — the two are one string
+         * and a mismatch is rejected at the audience check before any signature work.
+         *
+         * Empty is a supported state, not a broken one: `CloudAccountScreen` disables Sign in with
+         * Google and says why, rather than letting Credential Manager fail with a provider error
+         * that reads like the user's Google account is at fault.
+         */
+        buildConfigField(
+            "String",
+            "GOOGLE_WEB_CLIENT_ID",
+            "\"${localSetting("vive.googleWebClientId", "")}\"",
+        )
 
         ndk {
             // androidx.ink ships libink.so per ABI at roughly 1.2MB each, ONNX Runtime's is 27-33MB,
@@ -133,6 +171,17 @@ android {
              * The debug app is `com.vivenotes.debug`; release keeps the bare `com.vivenotes` that
              * an installed copy already carries, so a release build upgrades that copy in place.
              */
+            /*
+             * The managed cloud API, which in a debug build is whatever is running on the developer's
+             * own machine. `10.0.2.2` is the standard emulator alias for the host's loopback; a
+             * physical tablet cannot use it and needs the machine's LAN address instead, which is
+             * what the `-P` override and the `local.properties` key exist for.
+             */
+            buildConfigField(
+                "String",
+                "CLOUD_BASE_URL",
+                "\"${localSetting("vive.cloudBaseUrl", "http://10.0.2.2:5444")}\"",
+            )
             applicationIdSuffix = ".debug"
             // `AboutDialog` reads the version off the installed package, so this is what tells the
             // two apart from inside the app. The launcher tells them apart by `app_name`, which
@@ -140,6 +189,14 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
+            // The managed deployment. https, and not only as good practice: this is the one build
+            // that reaches a server across the public internet, and the device token it carries
+            // cannot be reissued.
+            buildConfigField(
+                "String",
+                "CLOUD_BASE_URL",
+                "\"${localSetting("vive.cloudBaseUrl", "https://cloud.vivenotes.net")}\"",
+            )
             // AGP 9.2 still uses the legacy switches; AGP 9.3+ can replace these with
             // `optimization { enable = true }`. Rules in src/main/keepRules are merged by AGP.
             isMinifyEnabled = true
@@ -229,6 +286,14 @@ dependencies {
     // "went to background" event and does not cost a flush.
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.datastore.preferences)
+
+    // Sign in with Google. `credentials` is the API, `credentials-play-services-auth` is the
+    // provider that actually answers on a device with Play services, and `googleid` supplies the
+    // request option and the typed credential. All three are required: without the provider the
+    // request returns NoCredentialException on every device.
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.google.identity.googleid)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

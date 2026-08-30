@@ -1,6 +1,7 @@
 package com.vivenotes.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -80,7 +81,8 @@ import com.vivenotes.data.StylusButtonMap
 import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
-import com.vivenotes.data.sync.SelfHostConnection
+import com.vivenotes.data.sync.CloudSignInResult
+import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncAccounts
 import com.vivenotes.data.sync.DisconnectResult
 import com.vivenotes.data.sync.SyncRunResult
@@ -207,13 +209,29 @@ fun NotesApp(
     // the server cannot reissue it, so a scope that dies with the screen would turn a stray Back
     // press into a device registered on the server that nothing here can authenticate as.
     val connectScope = rememberCoroutineScope()
-    var selfHostConnection by remember { mutableStateOf<SelfHostConnection>(SelfHostConnection.Idle) }
+    var selfHostConnection by remember { mutableStateOf<ServerConnection>(ServerConnection.Idle) }
     // Only this screen's button, so the spinner belongs to the press that started it. The clock's
     // own runs report through `syncStatus` instead: at the debug interval a shared flag would put a
     // spinner on the button every five seconds without anyone having asked for one.
     var syncing by remember { mutableStateOf(false) }
     var disconnecting by remember { mutableStateOf(false) }
     var disconnectFailure by remember { mutableStateOf<ConnectFailure?>(null) }
+
+    // The Google route's own in-flight and failure state, kept apart from the self-host route's for
+    // the reason the screen keeps its messages apart: the two fail independently, and one button's
+    // spinner has no business appearing under the other.
+    var signingInWithGoogle by remember { mutableStateOf(false) }
+    var googleFailure by remember { mutableStateOf<ConnectFailure?>(null) }
+    var linkRequired by remember { mutableStateOf(false) }
+    var linking by remember { mutableStateOf(false) }
+    // Session-only, deliberately. It answers "what did that button just do", which is news exactly
+    // once; persisting it would have a tablet still announcing a new account weeks later.
+    var accountCreated by remember { mutableStateOf(false) }
+
+    // Credential Manager shows UI, so it needs the Activity rather than the application context —
+    // there is no window to put a sheet in otherwise. Null in a preview or a test host with no
+    // Activity, which is why the sign-in handler checks before launching.
+    val activity = LocalActivity.current
 
     // A registration already on disk is shown as the connected state, so leaving the screen and
     // coming back does not read as never having connected. This attempt wins while there is one:
@@ -226,7 +244,7 @@ fun NotesApp(
     // saying why the form came back.
     LaunchedEffect(syncStatus.failure) {
         if (syncStatus.failure == SyncRunResult.Revoked) {
-            selfHostConnection = SelfHostConnection.Failed(ConnectFailure.Revoked)
+            selfHostConnection = ServerConnection.Failed(ConnectFailure.Revoked)
         }
     }
 
@@ -236,15 +254,15 @@ fun NotesApp(
     // every later request identically. Only a `Failed` verdict is taken; anything else leaves the
     // stored account to speak for itself, so being offline cannot look like being revoked.
     LaunchedEffect(accountOpen) {
-        if (accountOpen && selfHostConnection == SelfHostConnection.Idle) {
+        if (accountOpen && selfHostConnection == ServerConnection.Idle) {
             val checked = syncAccounts.refresh()
-            if (checked is SelfHostConnection.Failed) selfHostConnection = checked
+            if (checked is ServerConnection.Failed) selfHostConnection = checked
         }
     }
     val displayedConnection = when (val attempt = selfHostConnection) {
-        SelfHostConnection.Idle -> storedAccount
-            ?.let { SelfHostConnection.Connected(it.serverUrl, it.deviceName) }
-            ?: SelfHostConnection.Idle
+        ServerConnection.Idle -> storedAccount
+            ?.let { ServerConnection.Connected(it.serverUrl, it.deviceName) }
+            ?: ServerConnection.Idle
 
         else -> attempt
     }
@@ -376,10 +394,83 @@ fun NotesApp(
         ) {
             AccountScreen(
                 onBack = closeAccount,
+                googleAvailable = syncAccounts.googleSignInAvailable,
+                signingInWithGoogle = signingInWithGoogle,
+                onSignInWithGoogle = {
+                    if (!signingInWithGoogle && activity != null) {
+                        signingInWithGoogle = true
+                        googleFailure = null
+                        // The whole flow — challenge, sheet, sign-in, token write — runs in the
+                        // scope above this destination, exactly as `onConnect` does: it ends in a
+                        // device token that is issued once, so a Back press must not cancel it.
+                        connectScope.launch {
+                            when (val result = syncAccounts.signInWithGoogle(activity)) {
+                                is CloudSignInResult.Connected -> {
+                                    accountCreated = result.createdAccount
+                                    selfHostConnection = ServerConnection.Connected(
+                                        result.serverUrl,
+                                        result.deviceName,
+                                    )
+                                }
+
+                                CloudSignInResult.LinkRequired -> linkRequired = true
+
+                                // The person closed the sheet. Nothing to say about it.
+                                CloudSignInResult.Dismissed -> Unit
+
+                                is CloudSignInResult.Failed -> googleFailure = result.reason
+                            }
+                            signingInWithGoogle = false
+                        }
+                    }
+                },
+                googleFailure = googleFailure,
+                linkRequired = linkRequired,
+                linking = linking,
+                onLinkAccount = { email, password ->
+                    if (!linking) {
+                        linking = true
+                        googleFailure = null
+                        connectScope.launch {
+                            when (val result = syncAccounts.linkGoogleAccount(email, password)) {
+                                is CloudSignInResult.Connected -> {
+                                    accountCreated = result.createdAccount
+                                    linkRequired = false
+                                    selfHostConnection = ServerConnection.Connected(
+                                        result.serverUrl,
+                                        result.deviceName,
+                                    )
+                                }
+
+                                // Neither can arise from the link endpoint; `SyncAccounts` maps its
+                                // own impossible answer to a failure. Leaving the dialog open is the
+                                // safe reading of a result that should not exist.
+                                CloudSignInResult.LinkRequired,
+                                CloudSignInResult.Dismissed,
+                                -> Unit
+
+                                // The dialog stays up with its message: a wrong password is usually
+                                // one character, and closing it would cost a whole new sign-in.
+                                is CloudSignInResult.Failed -> googleFailure = result.reason
+                            }
+                            linking = false
+                        }
+                    }
+                },
+                onCancelLink = {
+                    if (!linking) {
+                        linkRequired = false
+                        googleFailure = null
+                        // Not just closing the dialog: this drops the Google ID token that the
+                        // pending link is holding in memory.
+                        syncAccounts.cancelGoogleLink()
+                    }
+                },
+                accountCreated = accountCreated,
                 connection = displayedConnection,
                 onConnect = { serverUrl, email, password ->
                     disconnectFailure = null
-                    selfHostConnection = SelfHostConnection.Connecting
+                    selfHostConnection = ServerConnection.Connecting
                     connectScope.launch {
                         selfHostConnection = syncAccounts.connect(serverUrl, email, password)
                     }
@@ -409,7 +500,9 @@ fun NotesApp(
                                     // Back to Idle rather than to a "disconnected" result: with the
                                     // stored account gone the empty form is the screen saying so.
                                     // `disconnect` clears the sync status for the same reason.
-                                    selfHostConnection = SelfHostConnection.Idle
+                                    selfHostConnection = ServerConnection.Idle
+                                    accountCreated = false
+                                    googleFailure = null
                                 }
                                 is DisconnectResult.Failed -> {
                                     disconnectFailure = result.reason
@@ -430,7 +523,9 @@ fun NotesApp(
                             syncAccounts.forgetConnection()
                             disconnectFailure = null
                             // As above: with the stored account gone, the empty form says so.
-                            selfHostConnection = SelfHostConnection.Idle
+                            selfHostConnection = ServerConnection.Idle
+                            accountCreated = false
+                            googleFailure = null
                             disconnecting = false
                         }
                     }

@@ -31,6 +31,9 @@ material3 = "1.5.0-alpha25"
 # stability track, and a floor is a minimum, not a pin.
 composeCore = "1.12.0-rc01"
 coreKtx = "1.10.1"
+# Credential Manager, for Sign in with Google. 1.6.0 is the current stable line; the
+# play-services-auth adapter must move with it, since the two are released as one artifact set.
+credentials = "1.6.0"
 datastore = "1.1.1"
 # 3.7 is the floor for anything above API 35, and it is the *third* version tried. Espresso reflects
 # on `InputManager.getInstance`, which the platform removed: 3.5.1 and 3.6.1 both fail every Compose
@@ -38,6 +41,9 @@ datastore = "1.1.1"
 # 36 image rather than read from release notes. `junitVersion` and the runner move with it, because
 # androidx.test ships the three as one line.
 espressoCore = "3.7.0"
+# `GetSignInWithGoogleOption` and `GoogleIdTokenCredential`. Versioned independently of
+# androidx.credentials and published only to Google's maven, not Maven Central.
+googleid = "1.2.0"
 ink = "1.1.0-alpha06"
 junit = "4.13.2"
 junitVersion = "1.3.0"
@@ -61,6 +67,8 @@ androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling", version.ref = "composeCore" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview", version.ref = "composeCore" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
+androidx-credentials-play-services-auth = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-ink-authoring = { group = "androidx.ink", name = "ink-authoring", version.ref = "ink" }
@@ -78,6 +86,7 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+google-identity-googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version = "1.9.0" }
 kotlinx-serialization-cbor = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-cbor", version.ref = "kotlinxSerialization" }
