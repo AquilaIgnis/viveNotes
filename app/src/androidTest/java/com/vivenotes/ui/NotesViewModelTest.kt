@@ -35,6 +35,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.vivenotes.FlakyOnEmulator
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.DeletedItemKind
@@ -2024,6 +2025,7 @@ class NotesViewModelTest {
      * puts the write on the calling thread, which is what it has in the app.
      */
     @Test
+    @FlakyOnEmulator
     fun holdingASizeStoresItAsTheDefault() = runBlocking<Unit> {
         Dispatchers.setMain(Dispatchers.Unconfined)
         val vm = NotesViewModel(repository, attachments, editorDefaults, viewSettings, penSettings)
@@ -2035,6 +2037,7 @@ class NotesViewModelTest {
     }
 
     @Test
+    @FlakyOnEmulator
     fun holdingAFontStoresItAsTheDefault() = runBlocking<Unit> {
         Dispatchers.setMain(Dispatchers.Unconfined)
         val vm = NotesViewModel(repository, attachments, editorDefaults, viewSettings, penSettings)

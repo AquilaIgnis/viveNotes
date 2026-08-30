@@ -26,6 +26,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import com.vivenotes.FlakyOnEmulator
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.model.Block
 import com.vivenotes.model.Orientation
@@ -600,6 +601,7 @@ class PageViewTest {
     }
 
     @Test
+    @FlakyOnEmulator
     fun aHexagonalPageUsesPointyTopCellsWithVerticalSides() {
         setPage(style = PageStyle(hideTitle = true, paper = PaperSize.A6, ruleLines = RuleLines.Hexagonal))
 

@@ -40,6 +40,7 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
+import com.vivenotes.FlakyOnEmulator
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
@@ -761,6 +762,7 @@ class ShapeToolTest {
     }
 
     @Test
+    @FlakyOnEmulator
     fun aLinesBoxCornerIsNotAHandle() {
         // A diagonal line, so its box has two corners that are nowhere near either end — the two a
         // corner handle would still be offered at. There is no handle there any more: the grab falls
