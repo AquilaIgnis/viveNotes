@@ -768,12 +768,16 @@ class ShapeToolTest {
         setPage(line(40f, 40f, 160f, 160f), selected = "line")
         val boxCorner = at(160f, 40f)
 
+        // The first sample clears the touch slop, and the travel a move applies is measured from
+        // there rather than from the down — `aMoveIsOneEditNoMatterHowManyFramesItTakes` pins that,
+        // and it is what stops a shape jumping the slop the moment it starts moving. So the drag
+        // begins at (160, 80) and the line is carried the 40dp after it.
         drag(boxCorner, listOf(at(160f, 80f), at(160f, 120f)))
 
         val dragged = onPage.single()
         assertEquals("a corner handle scaled the line", 120f, dragged.width, 1f)
         assertEquals("a corner handle scaled the line", 120f, dragged.height, 1f)
-        assertEquals("the line was not carried by the drag", 120f, dragged.y, 1f)
+        assertEquals("the line was not carried by the drag", 80f, dragged.y, 1f)
         assertEquals(0, resizeCalls)
         assertEquals(1, moveCalls)
     }
