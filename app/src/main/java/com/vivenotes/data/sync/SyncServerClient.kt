@@ -127,6 +127,16 @@ data class PullChangesPage(
     val changes: List<JsonObject>,
     val cursor: Long,
     val hasMore: Boolean,
+    /**
+     * Ids the account erased for good, in the same `(since, cursor]` window as [changes] and
+     * usually empty. A purge is not a change and never appears among them: there is no version to
+     * reconcile and no stored row left to describe, only an id that is retired.
+     *
+     * Raw objects for the reason [changes] are raw — what a purge *means* is
+     * `HierarchySync.applyPurge`'s to decide, and this layer's job is to hand it over whole. Storing
+     * [cursor] is one promise covering both arrays, so both are applied before it moves.
+     */
+    val purges: List<JsonObject> = emptyList(),
 )
 
 data class AppliedServerChange(val kind: String, val id: String, val version: Long)
@@ -438,7 +448,7 @@ class SyncServerClient(
         ) {
             is RawServerResult.Response -> decodeAuthenticated(raw) { payload ->
                 val decoded = syncJson.decodeFromString(PullChangesResponse.serializer(), payload)
-                PullChangesPage(decoded.changes, decoded.cursor, decoded.hasMore)
+                PullChangesPage(decoded.changes, decoded.cursor, decoded.hasMore, decoded.purges)
             }
             RawServerResult.InvalidAddress -> invalidAddress()
             RawServerResult.Unreachable -> unreachable()
@@ -940,6 +950,16 @@ private data class PullChangesResponse(
     val changes: List<JsonObject>,
     val cursor: Long,
     @SerialName("hasMore") val hasMore: Boolean,
+    /**
+     * The one defaulted field on this response, against the rule [syncJson] states.
+     *
+     * The contract marks it required, and a server that answers without it is one deployed before
+     * permanent deletion existed — an ordinary state of affairs for an app and a server that ship
+     * separately. Refusing the whole response would turn "this device cannot be told about purges"
+     * into "this device cannot synchronise", which is strictly the worse of the two, and the empty
+     * list is what such a server means: nothing has ever been erased for good.
+     */
+    val purges: List<JsonObject> = emptyList(),
 )
 
 @Serializable

@@ -386,6 +386,23 @@ class HierarchySync(
                 )
             }
 
+            // The other half of the response: ids the account erased for good in the same window,
+            // which is the only way a device that is not pushing ever hears about one. Read out
+            // here, beside the changes, because both are applied under the one cursor below and a
+            // window applied by halves is a window this device would never be asked for again.
+            val purged = try {
+                page.purges.map { purge ->
+                    purge.requiredString("kind") to purge.requiredString("id")
+                }
+            } catch (malformed: IllegalArgumentException) {
+                return PhaseResult.Stop(
+                    SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+                )
+            }
+            if (purged.isNotEmpty()) {
+                Log.i(TAG, "Pull carried ${purged.size} purge(s) the account erased for good")
+            }
+
             // A kind this build does not know stops the run, and stops it *before* the cursor moves.
             //
             // `parseRemoteChange` returns null for an unrecognised kind, and dropping those rows
@@ -443,17 +460,25 @@ class HierarchySync(
             }
             carried = orphans
 
+            val discardedPictures = mutableListOf<String>()
             db.withTransaction {
                 sync.setApplyingRemote(true)
                 applicable.forEach { change -> applyPulledChange(change) }
+                invalidateInkText(remoteInkPages)
+                applyPictureCounts()
+                // Last, and after both passes above. A purge is the account's final word on an id,
+                // so anything this same window wrote under one of these notebooks is written first
+                // and taken away here rather than the other way round — and `invalidateInkText`
+                // *inserts* a row keyed by page, which a page this had already deleted would refuse.
+                purged.forEach { (kind, id) -> discardedPictures += applyPurge(kind, id) }
                 // Only when nothing is being held. The cursor is a promise that everything below it
                 // has been applied, so advancing it past a row still waiting for its parent would
                 // lose that row for good — the next pull starts above it.
-                invalidateInkText(remoteInkPages)
-                applyPictureCounts()
                 if (orphans.isEmpty()) sync.setCursor(page.cursor)
                 sync.setApplyingRemote(false)
             }
+            // Once the transaction has committed, for the reason the push phase discards there.
+            if (discardedPictures.isNotEmpty()) blobs.discard(discardedPictures)
             // Per page of the delta rather than at the end of the run: a first reconcile can carry
             // tens of thousands of strokes, and a canvas that shows them as they land beats one that
             // stays empty until the whole corpus has been written.
@@ -537,6 +562,63 @@ class HierarchySync(
         sync.deleteOutbox(remote.kind.wire, remote.id)
     }
 
+    /**
+     * Applies one purge: the account erased this entity for good, so this device drops it and
+     * everything beneath it and stops offering any of it to the server.
+     *
+     * Two routes carry the same news. The `purges` array of a pull is the ordinary one; a `purged`
+     * rejection is what a device sees when its own push got there before that pull did, and it is
+     * the one that matters, because a device holding queued work under an erased notebook is
+     * otherwise refused for ever — every push, every run, with nothing it can do about it.
+     *
+     * Applying it is not negotiable and nothing is asked. The id is retired on the server: it will
+     * not store anything under it again, so there is no version to reconcile, nothing to merge, and
+     * no later moment at which this could be reconsidered. Whatever this device holds under the id
+     * and never uploaded goes with it — the operator erased the notebook knowing what was in it.
+     *
+     * **A hard delete, never a tombstone.** A tombstone is a change, so it would be queued and
+     * pushed, and the server refuses one naming a purged id exactly as it refuses an edit. There is
+     * nothing left to be told and nobody left to tell.
+     *
+     * Returns the digests nothing on this device still reaches, for the caller to discard once the
+     * enclosing transaction has committed. Must run inside a transaction with `applyingRemote` set:
+     * every delete below would otherwise fire the outbox triggers and queue a push of the deletion.
+     */
+    private suspend fun applyPurge(kind: String, id: String): List<String> {
+        if (kind != SyncKind.Notebook.wire) {
+            // Only `notebook` is erased this way today, and only a notebook's subtree is something
+            // this build knows how to take apart. A kind a later server purges still gets the half
+            // that is always right — the queued work goes, so the push stops repeating a verdict
+            // this build cannot act on — and says so, rather than silently doing nothing.
+            Log.w(TAG, "Purge names \"$kind\", which this build cannot cascade; dropping only its queued work")
+            sync.deleteOutbox(kind, id)
+            sync.deleteEntityState(kind, id)
+            return emptyList()
+        }
+
+        // Read before the delete, and from the documents rather than from `refCount`, for the
+        // reasons [picturesReachedOnlyBy] gives. A notebook that is already gone from this device —
+        // a purge pulled twice, or one for a notebook this device never held — answers with no
+        // pages, no pictures and a delete that removes nothing, which is the whole of what it should
+        // do: the bookkeeping below is then the only thing left to clear.
+        val pageIds = pages.allInNotebook(id).map { it.id }
+        val orphaned = if (pageIds.isEmpty()) emptyList() else picturesReachedOnlyBy(pageIds)
+
+        // Sections, pages, bodies, revisions, ink and the derived text all cascade from here. Only
+        // the pictures do not, because a picture belongs to no one notebook.
+        notebooks.hardDelete(id)
+        orphaned.chunked(SQLITE_BIND_CHUNK).forEach { attachments.deleteByIds(it) }
+
+        // The two tables that hold ids rather than rows, so neither goes with the cascade. Queued
+        // work naming a notebook that no longer exists is what the next push would fail on, and a
+        // state row for one is a claim about a version of something that cannot exist again.
+        sync.pruneOrphanedOutbox()
+        sync.pruneOrphanedEntityStates()
+
+        Log.i(TAG, "Notebook $id was erased for good by the account; removed it and its ${pageIds.size} page(s)")
+        return orphaned
+    }
+
     private suspend fun pushOutbox(account: SyncAccount): PhaseResult {
         var pushed = 0
         var conflicts = 0
@@ -600,6 +682,9 @@ class HierarchySync(
             // transaction held open across a network transfer would block every writer on the
             // device for the length of it.
             val missingBlobs = mutableListOf<PendingChange>()
+            // What this response says the account erased for good, applied after the loop below.
+            val purged = mutableListOf<Pair<String, String>>()
+            val discardedPictures = mutableListOf<String>()
             db.withTransaction {
                 sync.setApplyingRemote(true)
                 response.applied.forEach { applied ->
@@ -624,18 +709,42 @@ class HierarchySync(
                         // correct, it is the server that is missing the bytes it names, so the next
                         // batch re-sends exactly these fields once they are up.
                         "missing_blob" -> missingBlobs += sent
+                        // The account erased this entity for good, and unlike every rejection above
+                        // it this one is not about the change: the entity may be perfectly valid and
+                        // its version right. The id is retired, so re-sending it — as an edit, or as
+                        // the tombstone a local delete would queue — earns the same answer for ever.
+                        // Not a failure, then. Standing still here *is* the failure this clears.
+                        "purged" -> purged += rejected.kind to rejected.id
                         "too_large" -> permanent = PermanentSyncFailure.ChangeTooLarge
                         "malformed" -> permanent = PermanentSyncFailure.MalformedChange
+                        // A reason no build this old has a branch for, which is what a server newer
+                        // than this app looks like. The whole run stops rather than the entity being
+                        // dropped: an unrecognised verdict is one this device cannot honour, and
+                        // pretending otherwise is how a rejection becomes silent data loss.
                         else -> permanent = PermanentSyncFailure.InvalidServerResponse
                     }
                 }
                 invalidateInkText(remoteInkPages)
                 applyPictureCounts()
+                // After the whole loop, and after both passes above.
+                //
+                // After the loop, because a child of a purged notebook is rejected `missing_parent`
+                // in the same response — the server cascaded its parent away — and `enqueueParent`
+                // cannot know that the parent it is queueing is the very thing being erased. Purging
+                // last, with the queue pruned as its final act, leaves nothing behind whichever
+                // order the server listed the two in.
+                //
+                // After the passes, because both reach rows by page id and `invalidateInkText`
+                // *inserts* one, which a page this had already deleted would refuse.
+                purged.forEach { (kind, id) -> discardedPictures += applyPurge(kind, id) }
                 metadata.delete(PENDING_BATCH_KEY)
                 sync.setApplyingRemote(false)
             }
             // A conflict the server won writes its row over this device's, ink included.
             publishRemoteInk()
+            // Once the transaction has committed, so a rollback can never leave a surviving row
+            // pointing at bytes that are gone — the ordering [AttachmentBlobSync.discard] documents.
+            if (discardedPictures.isNotEmpty()) blobs.discard(discardedPictures)
 
             permanent?.let { return PhaseResult.Stop(SyncRunResult.Failed(it)) }
 
@@ -1823,6 +1932,10 @@ class HierarchySync(
      *  - **Only the evicted kinds are applied.** Notebooks, sections and pages were never evicted
      *    and are kept current by ordinary sync, so writing a replayed copy of one would undo a
      *    rename made since. Their entity states are left alone for the same reason.
+     *  - **Purges are left to the ordinary pull.** Reading the log from zero shows every purge the
+     *    account has ever recorded, including the ones this device applied long ago. This replay
+     *    commits no cursor and so speaks for no window; the run that does commit one is the run
+     *    that applies them.
      *  - **`applyingRemote` is set.** Every write here is an insert, and inserts fire the outbox
      *    triggers: without it this device would immediately queue a push of everything it has just
      *    finished downloading.

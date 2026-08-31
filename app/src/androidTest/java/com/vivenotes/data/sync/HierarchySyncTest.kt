@@ -608,6 +608,87 @@ class HierarchySyncTest {
         assertEquals(0L, db.syncDao().state()!!.cursor)
     }
 
+    // --- permanent deletion -----------------------------------------------------------------------
+
+    @Test
+    fun aPushRejectedAsPurgedDropsTheNotebookInsteadOfFailingTheRun() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        hierarchy.run(account())
+        assertTrue("everything must be on the server first", db.syncDao().outbox(512).isEmpty())
+
+        // Queued work on both sides of the tree, so the response carries the notebook's own
+        // `purged` beside a `missing_parent` for a child whose parent the purge took away.
+        now += 1_000
+        repository.renameNotebook(notebookId, "Renamed while offline")
+        repository.renamePage(pageId, "Edited while offline")
+
+        // The operator presses Permanently delete after this run has pulled and before it pushes —
+        // the one window where a device meets the news as a rejection rather than as a `purges`
+        // entry, and the shape the tablet that found this was stuck in.
+        server.beforeFirstPush = { server.purgeNotebook(notebookId) }
+
+        val result = hierarchy.run(account())
+
+        assertTrue("a purge is news, not an unreadable server: $result", result is SyncRunResult.Succeeded)
+        assertNull(db.notebookDao().byId(notebookId))
+        assertTrue(db.sectionDao().allInNotebook(notebookId).isEmpty())
+        assertNull(db.pageDao().byId(pageId))
+
+        // Nothing queued, so the next run has nothing to be refused for. Leaving one entry here is
+        // the whole bug: the id is retired, so every later push earns exactly this rejection again.
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+        assertNull(db.syncDao().entityState("notebook", notebookId))
+        assertNull(db.syncDao().entityState("page", pageId))
+    }
+
+    @Test
+    fun aPulledPurgeTakesTheNotebookOffADeviceThatIsNotPushing() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(notebookChange("n", "Remote", changedAt))
+        server.seed(sectionChange("s", "n", "Remote section", changedAt))
+        server.seed(pageChange("p", "s", "Remote page", changedAt))
+        hierarchy.run(account())
+        assertNotNull(db.notebookDao().byId("n"))
+
+        server.purgeNotebook("n")
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertNull("the account erased it, so it does not survive here", db.notebookDao().byId("n"))
+        assertTrue(db.sectionDao().allInNotebook("n").isEmpty())
+        assertNull(db.pageDao().byId("p"))
+
+        // A hard delete and never a tombstone: a tombstone is a change, so it would be queued,
+        // pushed, and refused `purged` for as long as the device ran.
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+        assertTrue("nothing was offered back to the server", server.pushes.isEmpty())
+
+        // The cursor moves over the purge like anything else in the window it was reported in.
+        assertEquals(4L, db.syncDao().state()!!.cursor)
+        assertEquals(0, result.summary.pushed)
+    }
+
+    @Test
+    fun aPurgeTakesThePicturesNothingElseOnTheDeviceStillShows() = runBlocking {
+        val bytes = "a photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        val pageId = seedPageWithPicture(digest)
+        val notebookId = db.sectionDao().byId(db.pageDao().byId(pageId)!!.sectionId)!!.notebookId
+        hierarchy.run(account())
+        assertTrue("everything must be on the server first", db.syncDao().outbox(512).isEmpty())
+
+        server.purgeNotebook(notebookId)
+        hierarchy.run(account())
+
+        assertNull(db.notebookDao().byId(notebookId))
+        // The picture hangs from no notebook, so nothing cascades it away: the last page that
+        // showed it is what makes it unreachable, and the row and the bytes go together.
+        assertNull("the row must go with the last page that showed it", db.attachmentDao().byId(digest))
+        assertFalse("and so must the bytes", pictures.fileFor(digest).exists())
+    }
+
     // --- attachments (S5) -----------------------------------------------------------------------
 
     @Test
@@ -1202,6 +1283,12 @@ class HierarchySyncTest {
         var failNextPush: ServerResult.Failed? = null
         private var cursor = 0L
 
+        /** Gravestones, in the shape `GET /v1/changes` reports them — see [purgeNotebook]. */
+        private val purges = mutableListOf<JsonObject>()
+
+        /** Notebook ids erased for good. Retired: nothing may ever be stored under one again. */
+        private val purgedNotebooks = mutableSetOf<String>()
+
         /** The account's blobs, by digest — the `blobs` table and the file behind each row. */
         val blobs = linkedMapOf<String, ByteArray>()
 
@@ -1233,6 +1320,59 @@ class HierarchySyncTest {
 
         fun current(kind: String, id: String): JsonObject? = rows[kind to id]
 
+        /**
+         * Erases a notebook the way the administration panel's permanent delete does.
+         *
+         * The rows go and their entries in the change log go with them — there is no row left to
+         * describe any of them, which is the whole reason a purge cannot be a change — and one
+         * gravestone is recorded in their place. Only the notebook id is retired: its children are
+         * refused afterwards because their parent is missing, not because they are named here, and
+         * a client that met the two rejections in the other order would be a client that had never
+         * been tested against the order the server actually answers in.
+         */
+        fun purgeNotebook(id: String) {
+            cursor++
+            val doomed = subtreeOf(id)
+            rows.keys.removeAll(doomed)
+            log.removeAll { (kindOf(it) to idOf(it)) in doomed }
+            purgedNotebooks += id
+            purges += JsonObject(
+                linkedMapOf(
+                    "kind" to JsonPrimitive("notebook"),
+                    "id" to JsonPrimitive(id),
+                    "seq" to JsonPrimitive(cursor),
+                    "purgedAt" to JsonPrimitive(1_755_300_000_000L),
+                ),
+            )
+        }
+
+        /** The notebook and everything the server's foreign keys take with it. */
+        private fun subtreeOf(notebookId: String): Set<Pair<String, String>> {
+            val sections = rows.values
+                .filter { kindOf(it) == "section" && parentIdOf(it) == notebookId }
+                .map(::idOf)
+                .toSet()
+            val pages = rows.values
+                .filter { kindOf(it) == "page" && parentIdOf(it) in sections }
+                .map(::idOf)
+                .toSet()
+            return buildSet {
+                add("notebook" to notebookId)
+                sections.forEach { add("section" to it) }
+                pages.forEach { add("page" to it) }
+                rows.values
+                    .filter { kindOf(it) !in setOf("notebook", "section", "page") }
+                    .filter { parentIdOf(it) in pages }
+                    .forEach { add(kindOf(it) to idOf(it)) }
+            }
+        }
+
+        /** Purges in `(since, upperBound]` — bounded by the response's own cursor, as both arrays are. */
+        private fun purgesIn(since: Long, upperBound: Long): List<JsonObject> = purges.filter {
+            val seq = it.getValue("seq").jsonPrimitive.long
+            seq > since && seq <= upperBound
+        }
+
         override suspend fun getCursor(serverBaseUrl: String, token: String) =
             ServerResult.Success(cursor)
 
@@ -1247,14 +1387,18 @@ class HierarchySyncTest {
         ): ServerResult<PullChangesPage> {
             val remaining = log.filter { it.getValue("seq").jsonPrimitive.long > since }
             if (remaining.size <= pageLimit) {
-                return ServerResult.Success(PullChangesPage(remaining, cursor, hasMore = false))
+                return ServerResult.Success(
+                    PullChangesPage(remaining, cursor, hasMore = false, purges = purgesIn(since, cursor)),
+                )
             }
             val page = remaining.take(pageLimit)
+            val pageCursor = page.last().getValue("seq").jsonPrimitive.long
             return ServerResult.Success(
                 PullChangesPage(
                     changes = page,
-                    cursor = page.last().getValue("seq").jsonPrimitive.long,
+                    cursor = pageCursor,
                     hasMore = true,
+                    purges = purgesIn(since, pageCursor),
                 ),
             )
         }
@@ -1278,6 +1422,8 @@ class HierarchySyncTest {
             val applied = mutableListOf<AppliedServerChange>()
             val rejected = mutableListOf<RejectedServerChange>()
             val accepted = mutableListOf<Pair<JsonObject, Long>>()
+            // Ids this batch has taken, so a child may find a parent arriving beside it.
+            val acceptedKeys = mutableSetOf<Pair<String, String>>()
             changes.forEach { incoming ->
                 val key = kindOf(incoming) to idOf(incoming)
                 val current = rows[key]
@@ -1285,7 +1431,18 @@ class HierarchySyncTest {
                 val baseVersion = incoming.getValue("baseVersion").jsonPrimitive.long
                 val unheld = digestsRequiredBy(incoming)
                     .filter { it !in blobs || it in lostBlobs }
-                if (unheld.isNotEmpty()) {
+                val parent = parentOf(incoming)
+                if (parent != null && parent !in rows && parent !in acceptedKeys) {
+                    // The server holds no orphan, which is what makes a purged notebook take its
+                    // whole subtree's pushes down with it: the parent it names is simply not there.
+                    rejected += RejectedServerChange(
+                        key.first,
+                        key.second,
+                        "missing_parent",
+                        "${parent.first} \"${parent.second}\" has not been uploaded to this account",
+                        null,
+                    )
+                } else if (unheld.isNotEmpty()) {
                     // The invariant the whole phase exists to keep: a live row never points at
                     // bytes the server cannot serve, so it refuses to store one that would.
                     rejected += RejectedServerChange(
@@ -1293,6 +1450,17 @@ class HierarchySyncTest {
                         key.second,
                         "missing_blob",
                         unheld.joinToString(),
+                        null,
+                    )
+                } else if (key.first == "notebook" && key.second in purgedNotebooks) {
+                    // Before the version check, and deliberately: the row is gone, so a stale
+                    // baseVersion has no current state to send back and the client's answer to that
+                    // would be to push at zero, creating the notebook the account just erased.
+                    rejected += RejectedServerChange(
+                        key.first,
+                        key.second,
+                        "purged",
+                        "this account permanently deleted this entity; delete your copy of it",
                         null,
                     )
                 } else if (baseVersion != currentVersion) {
@@ -1305,6 +1473,7 @@ class HierarchySyncTest {
                     )
                 } else {
                     accepted += incoming to (currentVersion + 1)
+                    acceptedKeys += key
                 }
             }
 
@@ -1370,6 +1539,15 @@ class HierarchySyncTest {
             return ServerResult.Success(true)
         }
 
+        /** The row a change may not be stored without, as the server's foreign keys define it. */
+        private fun parentOf(change: JsonObject): Pair<String, String>? = when (kindOf(change)) {
+            "section" -> "notebook" to parentIdOf(change)!!
+            "page" -> "section" to parentIdOf(change)!!
+            "pageContent", "inkStroke", "inkErase", "inkMove" -> "page" to parentIdOf(change)!!
+            // A picture belongs to no one page, so there is nothing it can be an orphan of.
+            else -> null
+        }
+
         private fun digestsRequiredBy(change: JsonObject): List<String> = when (kindOf(change)) {
             "attachment" -> listOf(idOf(change))
             "pageContent" -> (change["blobRefs"] as? JsonArray)
@@ -1385,6 +1563,10 @@ private fun sha256(bytes: ByteArray): String =
         .joinToString("") { byte -> "%02x".format(byte) }
 
 private fun kindOf(change: JsonObject): String = change.getValue("kind").jsonPrimitive.content
+
+/** Whichever of the three parent fields this kind carries, or null for a root. */
+private fun parentIdOf(change: JsonObject): String? =
+    (change["notebookId"] ?: change["sectionId"] ?: change["pageId"])?.jsonPrimitive?.content
 private fun idOf(change: JsonObject): String = change.getValue("id").jsonPrimitive.content
 
 private fun notebookChange(id: String, name: String, updatedAt: Long, extra: String? = null): JsonObject =

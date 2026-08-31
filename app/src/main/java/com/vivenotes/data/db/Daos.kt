@@ -61,6 +61,32 @@ interface SyncDao {
     @Query("SELECT entityId FROM sync_entity_states WHERE kind = :kind AND entityId IN (:entityIds)")
     suspend fun knownEntityIds(kind: String, entityIds: List<String>): List<String>
 
+    /**
+     * Drops the "the server holds this at version N" rows of entities that no longer exist here.
+     *
+     * The twin of [pruneOrphanedOutbox], and written from the same place: a purge takes a notebook
+     * and its subtree away outright, and neither table is joined to the rows it names, so neither
+     * goes with the cascade.
+     *
+     * Blanket rather than scoped to the ids being purged, which is safe because an orphaned state
+     * row can only belong to a row removed *outright*. A tombstone keeps its row, and
+     * [DeletionPurgeDao] refuses to collect one the outbox still holds; the other way to make one is
+     * `HierarchySync.evictToCloud`, whose contents are re-stated row by row when the notebook is
+     * brought back.
+     */
+    @Query(
+        "DELETE FROM sync_entity_states WHERE " +
+            "(kind = 'notebook' AND entityId NOT IN (SELECT id FROM notebooks)) OR " +
+            "(kind = 'section' AND entityId NOT IN (SELECT id FROM sections)) OR " +
+            "(kind = 'page' AND entityId NOT IN (SELECT id FROM pages)) OR " +
+            "(kind = 'pageContent' AND entityId NOT IN (SELECT pageId FROM page_content)) OR " +
+            "(kind = 'inkStroke' AND entityId NOT IN (SELECT id FROM ink_strokes)) OR " +
+            "(kind = 'inkErase' AND entityId NOT IN (SELECT id FROM ink_erases)) OR " +
+            "(kind = 'inkMove' AND entityId NOT IN (SELECT id FROM ink_moves)) OR " +
+            "(kind = 'attachment' AND entityId NOT IN (SELECT id FROM attachments))",
+    )
+    suspend fun pruneOrphanedEntityStates()
+
     @Query("DELETE FROM sync_outbox")
     suspend fun clearOutbox()
 
@@ -491,9 +517,12 @@ interface NotebookDao {
      * Removes a notebook outright and, by cascade, its sections, pages and their content.
      *
      * Deliberately not a tombstone. A tombstone is how a row that other devices have *seen* is
-     * deleted, because they have to learn that it went; this is for a notebook no server and no
-     * other device has ever held — the seeded starter that [com.vivenotes.data.sync.HierarchySync]
-     * discards when this installation turns out to be joining an account that already has a tree.
+     * deleted, because they have to learn that it went, and there are two ways for that to be the
+     * wrong shape. One is a notebook no server and no other device has ever held — the seeded
+     * starter that [com.vivenotes.data.sync.HierarchySync] discards when this installation turns
+     * out to be joining an account that already has a tree. The other is a notebook the account
+     * erased for good: the server retired the id, so it refuses a tombstone naming it exactly as it
+     * refuses an edit, and there is no longer anybody to tell.
      */
     @Query("DELETE FROM notebooks WHERE id = :id")
     suspend fun hardDelete(id: String)
@@ -889,12 +918,13 @@ interface AttachmentDao {
     suspend fun deleteIfUnreferenced(id: String)
 
     /**
-     * Removes rows regardless of `refCount`, for `HierarchySync.evictToCloud`.
+     * Removes rows regardless of `refCount`, for `HierarchySync.evictToCloud` and the purge beside
+     * it.
      *
      * Unconditional on purpose. `refCount` is maintained by the paths that write documents, and a
      * pulled picture is documented as arriving at zero, so it cannot be the authority on what is
-     * still reachable. The eviction works that out from the documents themselves and hands the
-     * answer here. `attachment_text` goes with each row by foreign key.
+     * still reachable. Both callers work that out from the documents themselves and hand the answer
+     * here. `attachment_text` goes with each row by foreign key.
      */
     @Query("DELETE FROM attachments WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
