@@ -863,6 +863,38 @@ fun deleteNotebookGlyph(neutral: Color, warn: Color): ImageVector =
         addPath(BinBars, fill = SolidColor(warn))
     }
 
+/**
+ * `picture_as_pdf`, split where the symbol already splits itself.
+ *
+ * The two cards are one neutral path and the three letters are one accented path, and the split is
+ * free: in Google's own export the letters are separate closed subpaths sitting inside the front
+ * card's hole, rather than being carved out of it the way `book`'s bookmark is. So this is the
+ * symbol verbatim in two colours, with the letters — the only part that says *which* file this
+ * makes — taking the accent.
+ *
+ * The letters keep their original chained relative movetos and must therefore stay in one string
+ * and in this order: the D starts `m120 120` from where the P's last subpath began, and the F the
+ * same from the D's. Splitting them into three paths would move two of the three letters.
+ */
+private val PdfCards = addPathNodes(
+    "M320-240q-33 0-56.5-23.5T240-320v-480q0-33 23.5-56.5T320-880h480q33 0 56.5 23.5T880-800v480q0 " +
+        "33-23.5 56.5T800-240H320Zm0-80h480v-480H320v480Z" +
+        "M160-80q-33 0-56.5-23.5T80-160v-560h80v560h560v80H160Z",
+)
+
+private val PdfLetters = addPathNodes(
+    "M360-460h40v-80h40q17 0 28.5-11.5T480-580v-40q0-17-11.5-28.5T440-660h-80v200Zm40-120v-40h40v40h" +
+        "-40Zm120 120h80q17 0 28.5-11.5T640-500v-120q0-17-11.5-28.5T600-660h-80v200Zm40-40v-120h40v" +
+        "120h-40Zm120 40h40v-80h40v-40h-40v-40h40v-40h-80v200Z",
+)
+
+/** Export PDF — the letters accented, because they are the whole of what the command produces. */
+fun exportPdfGlyph(neutral: Color, accent: Color): ImageVector =
+    materialGlyph("ExportPdf") {
+        addPath(PdfCards, fill = SolidColor(neutral))
+        addPath(PdfLetters, fill = SolidColor(accent))
+    }
+
 /** Export Notebook — the bookmark accented, answering Import's accented arrow beside it. */
 fun exportNotebookGlyph(neutral: Color, accent: Color): ImageVector =
     materialGlyph("ExportNotebook") {

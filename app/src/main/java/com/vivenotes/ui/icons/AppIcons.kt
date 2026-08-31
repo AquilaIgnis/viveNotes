@@ -33,6 +33,7 @@ class AppIcons(neutral: Color, accent: Color, warn: Color, create: Color) {
 
     // The File and Settings commands. Material Symbols with their meaning-carrying subpath lifted
     // into a second colour rather than glyphs drawn here — see the header in `RibbonGlyphs.kt`.
+    val exportPdf = exportPdfGlyph(neutral, accent)
     val versionHistory = versionHistoryGlyph(neutral, accent)
     val deletedItems = deletedItemsGlyph(neutral, create)
     val exportNotebook = exportNotebookGlyph(neutral, accent)

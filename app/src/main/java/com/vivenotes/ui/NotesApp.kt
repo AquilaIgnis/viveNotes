@@ -96,10 +96,12 @@ import com.vivenotes.model.PageStyle
 import com.vivenotes.model.search.ContentHit
 import com.vivenotes.math.FormulaToolsState
 import com.vivenotes.math.MathEngine
+import com.vivenotes.pdf.PdfExporter
 import com.vivenotes.richtext.VideoThumbnails
 import com.vivenotes.ui.editor.DrawActions
 import com.vivenotes.ui.editor.AiActions
 import com.vivenotes.ui.editor.EditorPane
+import com.vivenotes.ui.editor.ExportPdfDialog
 import com.vivenotes.ui.editor.FileActions
 import com.vivenotes.ui.editor.LocalVideoThumbnails
 import com.vivenotes.ui.editor.Ribbon
@@ -181,6 +183,7 @@ fun NotesApp(
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
     syncAccounts: SyncAccounts,
+    pdfExporter: PdfExporter,
 ) {
     // The app owns its small back stack, following Navigation 3's state model without taking on a
     // navigation dependency for two local destinations. Keeping the workspace composed preserves
@@ -313,6 +316,7 @@ fun NotesApp(
                     aiModelStore = aiModelStore,
                     recognitionEngine = recognitionEngine,
                     mathEngine = mathEngine,
+                    pdfExporter = pdfExporter,
                     onOpenAccount = {
                         if (backStack.lastOrNull() != AppDestination.Account) {
                             backStack.add(AppDestination.Account)
@@ -472,6 +476,7 @@ private fun NotesWorkspace(
     aiModelStore: AiModelStore,
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
+    pdfExporter: PdfExporter,
     onOpenAccount: () -> Unit,
     onOpenClosedNotebooks: () -> Unit,
     accountConnected: Boolean,
@@ -552,6 +557,8 @@ private fun NotesWorkspace(
     // Hoisted into the view model, because a stylus button can change it — see `ui/StylusButtons.kt`.
     val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
+    /** Export as PDF takes the screen while it is open — `ui/editor/ExportPdfDialog.kt`. */
+    var exportPdfOpen by remember { mutableStateOf(false) }
     var pendingSectionDelete by remember { mutableStateOf<SectionEntity?>(null) }
     /** Null until the count has been read, which is what the dialog's vaguer wording covers. */
     var pendingSectionContents by remember { mutableStateOf<SectionContents?>(null) }
@@ -738,6 +745,7 @@ private fun NotesWorkspace(
                 openPane = ToolPane.VersionHistory
                 viewModel.loadVersionHistory()
             },
+            exportPdf = { exportPdfOpen = true },
             openDeletedItems = {
                 openPane = ToolPane.DeletedItems
             },
@@ -1068,6 +1076,20 @@ private fun NotesWorkspace(
                 }
             }
         }
+    }
+
+    if (exportPdfOpen) {
+        val currentSection = state.tree
+            .flatMap { it.liveSections }
+            .firstOrNull { it.id == state.selectedSectionId }
+        ExportPdfDialog(
+            exporter = pdfExporter,
+            pageId = state.selectedPageId,
+            sectionId = state.selectedSectionId,
+            pageTitle = state.title,
+            sectionName = currentSection?.name.orEmpty(),
+            onDismiss = { exportPdfOpen = false },
+        )
     }
 
     pendingDialog?.let { dialog ->

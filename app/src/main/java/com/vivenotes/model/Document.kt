@@ -151,9 +151,10 @@ data class PaperDimensions(val widthInches: Float, val heightInches: Float) {
 /**
  * Page margins for printing and export, in inches.
  *
- * Stored with the page because they describe the sheet, not the reader. Nothing consumes them yet —
- * there is no print or PDF path (feature J3) — so the Paper Size panel draws them as guides on the
- * page while it is open, which is the only honest way to show what a setting is doing.
+ * Stored with the page because they describe the sheet, not the reader. Export PDF reads them —
+ * `memory/pdfExportPlan.md` PD3, where the *printable area* rather than the sheet is what the
+ * infinite canvas is cut into — and the Paper Size panel also draws them as guides on the page while
+ * it is open, which is the only honest way to show what a setting is doing while it is being set.
  */
 @Serializable
 data class PrintMargins(

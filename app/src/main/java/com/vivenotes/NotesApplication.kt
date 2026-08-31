@@ -16,6 +16,7 @@ import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.VideoThumbnailStore
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.pdf.PdfExporter
 import com.vivenotes.data.sync.ForegroundSyncScheduler
 import com.vivenotes.data.sync.SyncAccounts
 import com.vivenotes.data.sync.HierarchySyncWorker
@@ -57,6 +58,14 @@ class NotesApplication : Application() {
     val notebookTransfers: NotebookTransferManager by lazy {
         NotebookTransferManager(this, database, attachments)
     }
+
+    /**
+     * Export as PDF — `memory/pdfExportPlan.md`.
+     *
+     * Lazy like the rest, and it earns it more than most: touching this builds a text measurer and a
+     * renderer, and an install whose owner never exports never pays for either.
+     */
+    val pdfExporter: PdfExporter by lazy { PdfExporter(this, repository, attachments) }
     val editorDefaults: EditorDefaultsStore by lazy { EditorDefaultsStore(this) }
     val viewSettings: ViewSettingsStore by lazy { ViewSettingsStore(this) }
     val penSettings: PenSettingsStore by lazy { PenSettingsStore(this) }

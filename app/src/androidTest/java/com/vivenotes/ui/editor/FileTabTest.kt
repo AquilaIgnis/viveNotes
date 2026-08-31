@@ -15,6 +15,27 @@ class FileTabTest {
     @get:Rule
     val compose = createComposeRule()
 
+    /** First on the tab, and it needs a page: there is nothing to lay onto paper without one. */
+    @Test
+    fun exportPdfOpensForAnOpenPage() {
+        var opened = false
+        setTab(pageOpen = true, exportPdf = { opened = true })
+
+        compose.onNodeWithTag(FileTags.EXPORT_PDF).performClick()
+
+        assertTrue(opened)
+    }
+
+    @Test
+    fun exportPdfIsInertWithoutAnOpenPage() {
+        var opened = false
+        setTab(pageOpen = false, exportPdf = { opened = true })
+
+        compose.onNodeWithTag(FileTags.EXPORT_PDF).performTouchInput { click() }
+
+        assertFalse(opened)
+    }
+
     @Test
     fun versionHistoryOpensForAnOpenPage() {
         var opened = false
@@ -138,6 +159,7 @@ class FileTabTest {
         pageOpen: Boolean,
         notebookOpen: Boolean = pageOpen,
         history: () -> Unit = {},
+        exportPdf: () -> Unit = {},
         export: () -> Unit = {},
         import: () -> Unit = {},
         delete: () -> Unit = {},
@@ -150,6 +172,7 @@ class FileTabTest {
                 FileTab(
                     actions = FileActions(
                         openVersionHistory = history,
+                        exportPdf = exportPdf,
                         exportNotebook = export,
                         importNotebook = import,
                         deleteNotebook = delete,

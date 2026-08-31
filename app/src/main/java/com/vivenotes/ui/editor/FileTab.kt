@@ -12,6 +12,7 @@ import com.vivenotes.ui.ScrollingRow
 @Immutable
 data class FileActions(
     val openVersionHistory: () -> Unit,
+    val exportPdf: () -> Unit = {},
     val exportNotebook: () -> Unit = {},
     val importNotebook: () -> Unit = {},
     val deleteNotebook: () -> Unit = {},
@@ -21,6 +22,7 @@ data class FileActions(
 )
 
 internal object FileTags {
+    const val EXPORT_PDF = "file-export-pdf"
     const val VERSION_HISTORY = "file-version-history"
     const val DELETED_ITEMS = "file-deleted-items"
     const val EXPORT_NOTEBOOK = "file-export-notebook"
@@ -40,6 +42,20 @@ internal fun FileTab(
     ScrollingRow(
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
     ) {
+        // First on the tab, and behind its own divider: everything after it is about the notebook
+        // as a filing system — its history, its shelves, its archive — and this one is about getting
+        // what is on the page *out* of the app. It is also the only command here a reader of a page
+        // wants rather than its owner, which is why it is the one the eye reaches first.
+        Box(Modifier.testTag(FileTags.EXPORT_PDF)) {
+            RibbonCommand(
+                label = "Export PDF",
+                onClick = actions.exportPdf,
+                enabled = pageOpen,
+                icon = { active -> TwoToneIcon({ it.exportPdf }, active) },
+            )
+        }
+        Divider()
+
         Box(Modifier.testTag(FileTags.VERSION_HISTORY)) {
             RibbonCommand(
                 label = "Version History",

@@ -238,6 +238,18 @@ class NotesRepository(
     /** Every live page of a notebook, in reading order. Metadata only — no document bodies. */
     suspend fun pagesInNotebook(notebookId: String): List<PageEntity> = pages.inNotebook(notebookId)
 
+    /**
+     * A section's live pages in reading order, read once.
+     *
+     * The flow's answer as a value, for a caller that is not a screen: exporting a section to PDF
+     * walks the membership it had when the export began, and re-planning halfway through because
+     * somebody added a page on another device would be worse than finishing the job asked for.
+     */
+    suspend fun pagesInSection(sectionId: String): List<PageEntity> = pages.inSection(sectionId)
+
+    /** One page's metadata — its title and its created stamp — without its body. */
+    suspend fun pageById(id: String): PageEntity? = pages.byId(id)
+
     /** A notebook's live sections, so a result can say which one it came from. */
     suspend fun sectionsInNotebook(notebookId: String): List<SectionEntity> =
         sections.inNotebook(notebookId)
