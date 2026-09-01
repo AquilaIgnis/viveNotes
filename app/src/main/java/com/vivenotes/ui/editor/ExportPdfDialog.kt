@@ -485,9 +485,24 @@ private fun ExportPdfOptions(
     }
 }
 
-/** Every named size except the two that mean "ask the page" — see the call site. */
-private val EXPORT_PAPER_SIZES =
-    PaperSize.entries.filter { it != PaperSize.Auto && it != PaperSize.Custom }
+/**
+ * The sizes an export can be cut to.
+ *
+ * Auto and Custom are left out because they mean "ask the page" rather than naming a sheet — see
+ * the call site. The JIS B sheets and Billfold are left out because no printer this export is
+ * aimed at is loaded with them; a page written on one still exports, through the size its own
+ * View tab gives it or through a sheet chosen here.
+ */
+private val EXPORT_PAPER_SIZES = PaperSize.entries.filter {
+    it !in setOf(
+        PaperSize.Auto,
+        PaperSize.Custom,
+        PaperSize.B4,
+        PaperSize.B5,
+        PaperSize.B6,
+        PaperSize.Billfold,
+    )
+}
 
 private const val PDF_MIME = "application/pdf"
 

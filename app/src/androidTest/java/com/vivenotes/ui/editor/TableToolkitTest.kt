@@ -29,6 +29,8 @@ import com.vivenotes.model.Outline
 import com.vivenotes.model.newTable
 import com.vivenotes.richtext.EditorStyle
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import com.vivenotes.ui.panel.TablePanelTags
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
@@ -268,19 +270,44 @@ class TableToolkitTest {
     // -----------------------------------------------------------------------------------------
 
     /**
-     * Sent through the instrumentation rather than through a Compose node, deliberately.
+     * Sent to the window that holds the caret, and not through a Compose node.
      *
-     * A cell is a real `EditText` (AD6) and it is the *window's* focused view, so a key press that
-     * matters is one that arrives the way the hardware sends it. Dispatching into the Compose node
-     * tree instead would prove that Compose can be made to route a key, which is not the claim.
+     * A cell is a real `EditText` (AD6) and it is the *window's* focused view, so what has to be
+     * proved is that a key arriving at the window reaches that editor and walks the grid.
+     * Dispatching into the Compose node tree instead would prove that Compose can be made to route
+     * a key, which is not the claim; this enters at `Activity.dispatchKeyEvent`, above every line
+     * of the app's own key handling and below nothing that belongs to it.
+     *
+     * **It used to go through `Instrumentation.sendKeySync`, which is one hop too high.** That
+     * hands the event to the system input router and lets the router pick a window, and the pick is
+     * not always this one: on a loaded device — a full release suite, or the moment after an
+     * install — [focusCell] leaves an editor holding view focus while the key lands somewhere else
+     * entirely. `onKeyDown` is then never called and the caret sits where it started, which reads
+     * exactly like Tab being ignored. All three Tab cases failed that way in one run and passed
+     * individually in the next; probes in `onKeyDown` and `moveCaret` showed that on a failing run
+     * neither ever fired, so nothing about the grid was being tested at all. `DrawTabTest`'s
+     * `tapOutsidePopup` addresses its own window for the same reason.
+     *
+     * The `check` is the other half: a key this test believes it sent and the app never saw is the
+     * failure that took a release run to notice, and it should name itself.
      */
     private fun pressTab(shift: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val meta = if (shift) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
-        listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP).forEach { action ->
+        instrumentation.runOnMainSync {
+            val activity = ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(Stage.RESUMED)
+                .single()
             val now = SystemClock.uptimeMillis()
-            instrumentation.sendKeySync(
-                KeyEvent(now, now, action, KeyEvent.KEYCODE_TAB, 0, meta),
+            check(
+                activity.dispatchKeyEvent(
+                    KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_TAB, 0, meta),
+                ),
+            ) { "Tab reached the window and nothing in it took the key" }
+            // Not checked: Tab's whole meaning is on the way down, and the editor leaves the release
+            // to `TextView`, which has no reason to claim it.
+            activity.dispatchKeyEvent(
+                KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_TAB, 0, meta),
             )
         }
         compose.waitForIdle()
