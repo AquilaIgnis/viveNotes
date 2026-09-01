@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -50,10 +51,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -62,8 +67,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.data.sync.ConnectFailure
+import com.vivenotes.data.sync.MIN_ACCOUNT_PASSWORD
 import com.vivenotes.data.sync.PermanentSyncFailure
-import com.vivenotes.data.sync.SelfHostConnection
+import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncRunResult
 import com.vivenotes.data.sync.SyncStatus
 import com.vivenotes.data.sync.SyncSummary
@@ -75,11 +81,37 @@ internal object AccountTags {
     const val BACK = "account-back"
     const val LOGIN = "account-login"
     const val SIGN_UP = "account-sign-up"
+    const val GOOGLE = "account-google"
+
+    /** On the spinner inside the Google button, so a test can tell waiting from idle. */
+    const val GOOGLE_PROGRESS = "account-google-progress"
+    const val GOOGLE_STATUS = "account-google-status"
     const val SELF_HOST = "account-self-host"
+
+    /** The password-account link dialog, raised only by `409 account_link_required`. */
+    const val LINK_DIALOG = "account-link-dialog"
+    const val LINK_EMAIL = "account-link-email"
+    const val LINK_PASSWORD = "account-link-password"
+    const val LINK_CONFIRM = "account-link-confirm"
+    const val LINK_CANCEL = "account-link-cancel"
     const val SERVER_URL = "account-server-url"
     const val EMAIL = "account-email"
     const val PASSWORD = "account-password"
     const val CONNECT = "account-connect"
+
+    /**
+     * The managed account's own fields, distinct from the self-host form's.
+     *
+     * Two panels that are never open together could share tags, but only until one of them is
+     * mid-exit-animation while the other opens — at which point a test would find two nodes and
+     * fail somewhere unrelated to what it was checking.
+     */
+    const val CLOUD_EMAIL = "account-cloud-email"
+    const val CLOUD_PASSWORD = "account-cloud-password"
+    const val CLOUD_CONFIRM = "account-cloud-confirm"
+    const val CLOUD_SUBMIT = "account-cloud-submit"
+    const val CLOUD_PROGRESS = "account-cloud-progress"
+    const val CLOUD_STATUS = "account-cloud-status"
 
     /** On the spinner *inside* the button, so a test can tell waiting from idle. */
     const val CONNECT_PROGRESS = "account-connect-progress"
@@ -99,11 +131,22 @@ internal object AccountTags {
 }
 
 /**
- * Account entry point for hosted and self-hosted sync.
+ * Account entry point for managed and self-hosted sync.
  *
- * Hosted `Log in` and `Sign up` deliberately remain callbacks: there is no hosted service, so this
- * screen does not invent an API contract for one. **Self host is real** — it registers this device
- * against `POST /v1/devices` (`viveCServer/docs/openapi.yaml`).
+ * Three routes to one place, in descending order of how many people want them.
+ *
+ * **Sign in with Google sits on top and is the default**: one button, because `POST /v1/auth/google`
+ * is one endpoint that logs in or registers as the account turns out to need, so the screen never
+ * asks somebody to declare which they are. Below it, **Log in and Sign up** are the same managed
+ * account reached with an email and a password — and neither asks for a server address, because
+ * there is one managed deployment and [com.vivenotes.BuildConfig.CLOUD_BASE_URL] already names it.
+ *
+ * **Self host is the third and is a different server**, run by whoever is using it, so it is the one
+ * route that has an address to type. Keeping that field out of Log in and Sign up is the whole point
+ * of the separation: a managed account is not something a person should have to know a hostname for.
+ *
+ * All three end in the same place — a base URL and a device token — so [connection] describes all of
+ * them and the connected panel is written once (`viveCServer/docs/openapi.yaml`).
  *
  * Presentational, including the connect flow: [connection] comes in and [onConnect] goes out, so the
  * request lives in a scope that outlives this screen. That matters more here than it looks. The
@@ -119,9 +162,33 @@ internal object AccountTags {
 @Composable
 fun AccountScreen(
     onBack: () -> Unit,
-    onLogIn: () -> Unit = {},
-    onSignUp: () -> Unit = {},
-    connection: SelfHostConnection = SelfHostConnection.Idle,
+    /** False when the build carries no Google Web client id: the button is shown disabled, not hidden. */
+    googleAvailable: Boolean = true,
+    signingInWithGoogle: Boolean = false,
+    onSignInWithGoogle: () -> Unit = {},
+    /**
+     * The last Google attempt's failure, or null. Separate from [connection] because the two routes
+     * fail independently and a message under the wrong button is a message about the wrong thing.
+     */
+    googleFailure: ConnectFailure? = null,
+    /** Raised by `409 account_link_required`, which has exactly one resolution — see [onLinkAccount]. */
+    linkRequired: Boolean = false,
+    linking: Boolean = false,
+    onLinkAccount: (email: String, password: String) -> Unit = { _, _ -> },
+    onCancelLink: () -> Unit = {},
+    /** True for the session in which Google sign-in created the account, rather than found it. */
+    accountCreated: Boolean = false,
+    connection: ServerConnection = ServerConnection.Idle,
+    /**
+     * Sign in to the **managed** account with an email and password — `POST /v1/devices` against the
+     * deployment this build was compiled for. No server address, because there is nothing to choose.
+     */
+    onLogIn: (email: String, password: String) -> Unit = { _, _ -> },
+    /**
+     * Create the managed account, then connect — `POST /v1/accounts` followed by `POST /v1/devices`.
+     */
+    onSignUp: (email: String, password: String) -> Unit = { _, _ -> },
+    /** The self-hosted route, which is a different server and keeps its address field. */
     onConnect: (serverUrl: String, email: String, password: String) -> Unit = { _, _, _ -> },
     /** Whether *this screen's* Sync now is in flight — the button's own spinner, not the clock's. */
     syncing: Boolean = false,
@@ -145,14 +212,40 @@ fun AccountScreen(
     // Passwords should not be written into saved-instance state or retained after leaving the flow.
     var password by remember { mutableStateOf("") }
     var confirmDisconnect by remember { mutableStateOf(false) }
+
+    // The managed account's panel: whether it is open, and which of the two buttons opened it.
+    // Saved, because a configuration change in the middle of filling it must not silently turn
+    // Sign up back into Log in.
+    var cloudExpanded by rememberSaveable { mutableStateOf(false) }
+    var cloudSignUp by rememberSaveable { mutableStateOf(false) }
+    var cloudEmail by rememberSaveable { mutableStateOf("") }
+    // Composition-only, like the self-host form's password and for the same reason.
+    var cloudPassword by remember { mutableStateOf("") }
+    var cloudConfirmPassword by remember { mutableStateOf("") }
     val spatialMotion = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
     val effectsMotion = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
 
     // The spinner replaces the button's label, so without this the button loses its accessible name
     // for as long as the request runs. Read here because a semantics lambda is not composable.
     val connectingLabel = stringResource(R.string.account_connecting)
+    val creatingLabel = stringResource(R.string.account_creating)
 
-    val connected = connection as? SelfHostConnection.Connected
+    // Pressing the button that is already showing folds the panel away again; pressing the other
+    // one switches modes without closing. Self host closes, because the two are alternatives.
+    fun openCloudPanel(signUp: Boolean) {
+        if (cloudExpanded && cloudSignUp == signUp) {
+            cloudExpanded = false
+        } else {
+            cloudExpanded = true
+            cloudSignUp = signUp
+            selfHostExpanded = false
+            // The confirmation belongs to signing up. Left behind from a previous pass it could
+            // silently satisfy a check the person did not make this time.
+            cloudConfirmPassword = ""
+        }
+    }
+
+    val connected = connection as? ServerConnection.Connected
 
     // Once the token exists the password has no further use, so it stops being held. Deliberately
     // not done on failure: a wrong password is usually a typo in one character, and clearing the
@@ -165,6 +258,8 @@ fun AccountScreen(
     LaunchedEffect(connected != null) {
         if (connected != null) {
             password = ""
+            cloudPassword = ""
+            cloudConfirmPassword = ""
             selfHostExpanded = true
         }
     }
@@ -237,6 +332,7 @@ fun AccountScreen(
                         ) {
                             ConnectedPanel(
                                 connected = connected,
+                                accountCreated = accountCreated,
                                 syncStatus = syncStatus,
                                 syncing = syncing,
                                 onSync = onSync,
@@ -262,12 +358,55 @@ fun AccountScreen(
                     )
 
                     Spacer(Modifier.height(28.dp))
+                    GoogleSignInButton(
+                        enabled = googleAvailable && !signingInWithGoogle,
+                        signingIn = signingInWithGoogle,
+                        onClick = onSignInWithGoogle,
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(
+                            if (googleAvailable) {
+                                R.string.account_google_explainer
+                            } else {
+                                // A build with no Web client id says so here rather than letting the
+                                // button fail with a provider error that reads like the person's
+                                // Google account is at fault.
+                                R.string.account_google_unconfigured
+                            },
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+
+                    // Suppressed while the link dialog is up, because that dialog shows the same
+                    // failure with wording of its own. Two copies of one message is one of them
+                    // being read out twice by a screen reader.
+                    if (googleFailure != null && !linkRequired) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(failureMessage(googleFailure)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.testTag(AccountTags.GOOGLE_STATUS),
+                        )
+                    }
+
+                    // The email-and-password way into the **managed** account, unchanged in shape
+                    // from before Google was added. Neither of these asks for a server address:
+                    // there is one managed deployment and the build already knows it. Typing a host
+                    // belongs to Self host below, which is a different server and a different
+                    // project.
+                    Spacer(Modifier.height(24.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Button(
-                            onClick = onLogIn,
+                            onClick = { openCloudPanel(signUp = false) },
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag(AccountTags.LOGIN),
@@ -275,7 +414,7 @@ fun AccountScreen(
                             Text(stringResource(R.string.account_log_in))
                         }
                         OutlinedButton(
-                            onClick = onSignUp,
+                            onClick = { openCloudPanel(signUp = true) },
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag(AccountTags.SIGN_UP),
@@ -284,9 +423,153 @@ fun AccountScreen(
                         }
                     }
 
+                    AnimatedVisibility(
+                        visible = cloudExpanded,
+                        enter = expandVertically(animationSpec = spatialMotion) +
+                            fadeIn(animationSpec = effectsMotion),
+                        exit = shrinkVertically(animationSpec = spatialMotion) +
+                            fadeOut(animationSpec = effectsMotion),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            OutlinedTextField(
+                                value = cloudEmail,
+                                onValueChange = { cloudEmail = it },
+                                label = { Text(stringResource(R.string.account_email)) },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Email,
+                                    imeAction = ImeAction.Next,
+                                ),
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(AccountTags.CLOUD_EMAIL),
+                            )
+                            OutlinedTextField(
+                                value = cloudPassword,
+                                onValueChange = { cloudPassword = it },
+                                label = { Text(stringResource(R.string.account_password)) },
+                                // Only while signing up: the minimum is a rule about a *new*
+                                // password, and showing it beside an existing one would read as a
+                                // claim about the password the person already has.
+                                supportingText = if (cloudSignUp) {
+                                    { Text(stringResource(R.string.account_password_minimum)) }
+                                } else {
+                                    null
+                                },
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Password,
+                                    imeAction = ImeAction.Done,
+                                ),
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(AccountTags.CLOUD_PASSWORD),
+                            )
+
+                            // Signing up only. A mistyped password here cannot be recovered — the
+                            // server stores an Argon2id hash and there is no reset flow in this
+                            // contract — so the second field is the one chance to catch the typo
+                            // before it becomes an account nobody can get into. Logging in needs no
+                            // such thing: a wrong password there is simply refused.
+                            val mismatch = cloudSignUp &&
+                                cloudConfirmPassword.isNotEmpty() &&
+                                cloudConfirmPassword != cloudPassword
+                            if (cloudSignUp) {
+                                OutlinedTextField(
+                                    value = cloudConfirmPassword,
+                                    onValueChange = { cloudConfirmPassword = it },
+                                    label = {
+                                        Text(stringResource(R.string.account_confirm_password))
+                                    },
+                                    isError = mismatch,
+                                    // Only once something has been typed: an empty second field is
+                                    // unfinished, not wrong, and colouring it red the moment the
+                                    // first one is filled scolds somebody who is still going.
+                                    supportingText = if (mismatch) {
+                                        { Text(stringResource(R.string.account_password_mismatch)) }
+                                    } else {
+                                        null
+                                    },
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Password,
+                                        imeAction = ImeAction.Done,
+                                    ),
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag(AccountTags.CLOUD_CONFIRM),
+                                )
+                            }
+
+                            val busy = connection is ServerConnection.Connecting
+                            Button(
+                                onClick = {
+                                    if (cloudSignUp) {
+                                        onSignUp(cloudEmail, cloudPassword)
+                                    } else {
+                                        onLogIn(cloudEmail, cloudPassword)
+                                    }
+                                },
+                                // Signing up adds the contract's eight-character minimum, refused
+                                // here rather than by the server: a shorter password has exactly one
+                                // possible answer, and a round trip to hear it is a wasted one.
+                                enabled = !busy &&
+                                    cloudEmail.isNotBlank() &&
+                                    if (cloudSignUp) {
+                                        cloudPassword.length >= MIN_ACCOUNT_PASSWORD &&
+                                            cloudConfirmPassword == cloudPassword
+                                    } else {
+                                        cloudPassword.isNotEmpty()
+                                    },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(AccountTags.CLOUD_SUBMIT),
+                            ) {
+                                if (busy) {
+                                    LoadingIndicator(
+                                        Modifier
+                                            .size(18.dp)
+                                            .testTag(AccountTags.CLOUD_PROGRESS)
+                                            .semantics {
+                                                contentDescription = if (cloudSignUp) {
+                                                    creatingLabel
+                                                } else {
+                                                    connectingLabel
+                                                }
+                                            },
+                                    )
+                                } else {
+                                    Text(
+                                        stringResource(
+                                            if (cloudSignUp) {
+                                                R.string.account_create
+                                            } else {
+                                                R.string.account_log_in
+                                            },
+                                        ),
+                                    )
+                                }
+                            }
+
+                            ConnectionStatus(connection, AccountTags.CLOUD_STATUS)
+                        }
+                    }
+
                     Spacer(Modifier.height(12.dp))
                     TextButton(
-                        onClick = { selfHostExpanded = !selfHostExpanded },
+                        onClick = {
+                            selfHostExpanded = !selfHostExpanded
+                            // The two panels are alternatives, so opening one closes the other. Both
+                            // open at once would show two email fields and two submit buttons.
+                            if (selfHostExpanded) cloudExpanded = false
+                        },
                         modifier = Modifier.testTag(AccountTags.SELF_HOST),
                     ) {
                         Text(stringResource(R.string.account_self_host))
@@ -352,7 +635,7 @@ fun AccountScreen(
                                     .testTag(AccountTags.PASSWORD),
                             )
 
-                            val connecting = connection is SelfHostConnection.Connecting
+                            val connecting = connection is ServerConnection.Connecting
                             Button(
                                 onClick = { onConnect(serverUrl, email, password) },
                                 // Blank fields are refused here rather than by the server: all three
@@ -381,12 +664,117 @@ fun AccountScreen(
                                 }
                             }
 
-                            ConnectionStatus(connection)
+                            ConnectionStatus(connection, AccountTags.CONNECT_STATUS)
                         }
                     }
                 }
             }
         }
+    }
+
+    // `409 account_link_required` has exactly one resolution in the contract, and this is it: the
+    // Google email already belongs to a password account, and creating a second account would split
+    // one person's notes across two. So the dialog is not a choice — it is the next request.
+    //
+    // The email is typed rather than filled in from the ID token. Those claims are unverified until
+    // the server has checked Google's signature, and it re-derives the address from the verified
+    // token to compare against this one anyway; asking costs one field and keeps an unverified
+    // string from ever being shown back as a fact.
+    if (linkRequired) {
+        var linkEmail by remember { mutableStateOf("") }
+        // Composition-only, like the connect form's password, and for the same reason.
+        var linkPassword by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = onCancelLink,
+            title = { Text(stringResource(R.string.account_link_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(R.string.account_link_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    OutlinedTextField(
+                        value = linkEmail,
+                        onValueChange = { linkEmail = it },
+                        label = { Text(stringResource(R.string.account_link_email)) },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next,
+                        ),
+                        singleLine = true,
+                        enabled = !linking,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(AccountTags.LINK_EMAIL),
+                    )
+                    OutlinedTextField(
+                        value = linkPassword,
+                        onValueChange = { linkPassword = it },
+                        label = { Text(stringResource(R.string.account_link_password)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done,
+                        ),
+                        singleLine = true,
+                        enabled = !linking,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(AccountTags.LINK_PASSWORD),
+                    )
+                    if (googleFailure != null) {
+                        // The failure of the *link* attempt, shown in the dialog that caused it
+                        // rather than behind it — the dialog stays open so the password can be
+                        // corrected without starting a second sign-in.
+                        Text(
+                            text = stringResource(
+                                // A 401 here has two causes, not the one the general message names:
+                                // the password, or an email that is not the Google address just
+                                // used. The server cannot say which, so the sentence covers both.
+                                if (googleFailure == ConnectFailure.InvalidCredentials) {
+                                    R.string.account_error_link_credentials
+                                } else {
+                                    failureMessage(googleFailure)
+                                },
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                val linkingLabel = stringResource(R.string.account_linking)
+                TextButton(
+                    onClick = { onLinkAccount(linkEmail, linkPassword) },
+                    enabled = !linking && linkEmail.isNotBlank() && linkPassword.isNotEmpty(),
+                    modifier = Modifier.testTag(AccountTags.LINK_CONFIRM),
+                ) {
+                    if (linking) {
+                        // Same treatment as Connect and the Google button: the spinner replaces the
+                        // label, so it carries the name the label was providing.
+                        LoadingIndicator(
+                            Modifier
+                                .size(18.dp)
+                                .semantics { contentDescription = linkingLabel },
+                        )
+                    } else {
+                        Text(stringResource(R.string.account_link_confirm))
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onCancelLink,
+                    enabled = !linking,
+                    modifier = Modifier.testTag(AccountTags.LINK_CANCEL),
+                ) {
+                    Text(stringResource(R.string.account_link_cancel))
+                }
+            },
+            modifier = Modifier.testTag(AccountTags.LINK_DIALOG),
+        )
     }
 
     // Confirmed rather than immediate: the token cannot be reissued, so a stray tap costs a
@@ -420,6 +808,64 @@ fun AccountScreen(
 }
 
 /**
+ * Sign in with Google, drawn as the screen's primary action.
+ *
+ * A **neutral** container rather than the scheme's `primary`, and that is Google's requirement
+ * rather than a taste call: the four-colour G is a brand mark that may not be recoloured and is
+ * specified against a light or dark neutral, not against an app's accent. `surfaceContainerHighest`
+ * with `onSurface` is the M3 token pair that lands closest in both themes, so the button stays part
+ * of this app's surface language while the mark keeps its own colours.
+ *
+ * It is the most prominent control on the card because it is the only one: the second route is a
+ * text link below. Full width for the same reason the connect button is — this card is capped at
+ * 560dp, and a centred half-width button inside it reads as one of two things when there is one.
+ *
+ * The spinner replaces the whole label, so the button carries an explicit content description for
+ * as long as it is up; without it the control loses its accessible name mid-request.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun GoogleSignInButton(
+    enabled: Boolean,
+    signingIn: Boolean,
+    onClick: () -> Unit,
+) {
+    val signingInLabel = stringResource(R.string.account_google_signing_in)
+
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(AccountTags.GOOGLE),
+    ) {
+        if (signingIn) {
+            LoadingIndicator(
+                Modifier
+                    .size(18.dp)
+                    .testTag(AccountTags.GOOGLE_PROGRESS)
+                    .semantics { contentDescription = signingInLabel },
+            )
+        } else {
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_google_g),
+                contentDescription = null,
+                // Untinted: the mark carries its own four colours and tinting it would flatten it
+                // to one. This is the same reason `AboutDialog` draws `ic_github` unrecoloured.
+                tint = Color.Unspecified,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(stringResource(R.string.account_google_sign_in))
+        }
+    }
+}
+
+/**
  * What the disclosure shows once this installation holds a device token.
  *
  * Green, from [com.vivenotes.ui.theme.IconAccents] rather than from the colour scheme, because the
@@ -435,7 +881,9 @@ fun AccountScreen(
 @Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private fun ConnectedPanel(
-    connected: SelfHostConnection.Connected,
+    connected: ServerConnection.Connected,
+    /** Only the sign-in that created the account says so, and only for that session. */
+    accountCreated: Boolean,
     syncStatus: SyncStatus,
     syncing: Boolean,
     onSync: () -> Unit,
@@ -475,7 +923,16 @@ private fun ConnectedPanel(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.account_connected_title),
+                    // "Account created" is the one thing the single Google button cannot show any
+                    // other way: the server is the only party that knows whether it found the
+                    // account or made it, and it says so once, in the response.
+                    text = stringResource(
+                        if (accountCreated) {
+                            R.string.account_connected_created
+                        } else {
+                            R.string.account_connected_title
+                        },
+                    ),
                     style = MaterialTheme.typography.titleSmall,
                     color = accents.green,
                     modifier = Modifier.testTag(AccountTags.CONNECT_STATUS),
@@ -693,18 +1150,18 @@ private const val CONNECTED_PLATE_ALPHA = 0.14f
  * they get the error colour and a sentence naming what to change.
  */
 @Composable
-private fun ConnectionStatus(connection: SelfHostConnection) {
+private fun ConnectionStatus(connection: ServerConnection, testTag: String) {
     when (connection) {
-        is SelfHostConnection.Failed -> Text(
+        is ServerConnection.Failed -> Text(
             text = stringResource(failureMessage(connection.reason)),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.testTag(AccountTags.CONNECT_STATUS),
+            modifier = Modifier.testTag(testTag),
         )
 
-        is SelfHostConnection.Connected,
-        SelfHostConnection.Idle,
-        SelfHostConnection.Connecting,
+        is ServerConnection.Connected,
+        ServerConnection.Idle,
+        ServerConnection.Connecting,
         -> Unit
     }
 }
@@ -726,4 +1183,15 @@ private fun failureMessage(reason: ConnectFailure): Int = when (reason) {
     ConnectFailure.NotAViveServer -> R.string.account_error_not_vive
     ConnectFailure.NotStored -> R.string.account_error_not_stored
     ConnectFailure.Revoked -> R.string.account_error_revoked
+    ConnectFailure.InvalidChallenge -> R.string.account_error_challenge
+    ConnectFailure.InvalidGoogleToken -> R.string.account_error_google_token
+    ConnectFailure.GoogleUnavailable -> R.string.account_error_google_unavailable
+    ConnectFailure.IdentityConflict -> R.string.account_error_identity_conflict
+    ConnectFailure.IdempotencyConflict -> R.string.account_error_idempotency
+    ConnectFailure.AccountUnavailable -> R.string.account_error_account_unavailable
+    ConnectFailure.NoGoogleAccount -> R.string.account_error_no_google_account
+    ConnectFailure.GoogleNotConfigured -> R.string.account_error_google_unconfigured
+    ConnectFailure.SignupClosed -> R.string.account_error_signup_closed
+    ConnectFailure.EmailTaken -> R.string.account_error_email_taken
+    ConnectFailure.AccountCreatedNotRegistered -> R.string.account_error_created_not_registered
 }

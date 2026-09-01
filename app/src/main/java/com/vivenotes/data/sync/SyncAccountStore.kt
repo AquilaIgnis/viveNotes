@@ -7,9 +7,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.util.UUID
 
 private val Context.syncPreferences: DataStore<Preferences> by preferencesDataStore("sync")
 
@@ -63,6 +65,35 @@ class SyncAccountStore(context: Context) {
         prefs[ACCOUNT]?.let(::decode)
     }
 
+    /**
+     * This app installation's stable id, minted on first use and kept for the life of the install.
+     *
+     * **Deliberately outside [SyncAccount] and deliberately untouched by [clear].** It is what the
+     * Google routes send as `device.installationId`, and the server uses it to recognise a returning
+     * installation: signing out and back in then rotates the one device row instead of adding a
+     * second. Tie it to the account record and every disconnect would mint a new identity, which is
+     * exactly the growing list of unprunable "Pixel Tablet" rows the suffix in
+     * [defaultDeviceName] exists to make readable.
+     *
+     * Not `ANDROID_ID`, which that suffix does use: this value is sent to a server and stored
+     * against an account, so it is a random UUID that says nothing about the hardware and can be
+     * reset by clearing app data. `ANDROID_ID` is hashed to four characters before it is used as a
+     * *label*, which is a different job with a different risk.
+     *
+     * The read-then-write is safe against two callers because DataStore serialises `edit`
+     * transactions: the second one sees the first one's value and returns it rather than replacing it.
+     */
+    suspend fun installationId(): String {
+        store.data.map { it[INSTALLATION_ID] }.first()?.let { return it }
+
+        var assigned = ""
+        store.edit { prefs ->
+            assigned = prefs[INSTALLATION_ID]
+                ?: UUID.randomUUID().toString().also { prefs[INSTALLATION_ID] = it }
+        }
+        return assigned
+    }
+
     suspend fun setAccount(account: SyncAccount) {
         store.edit { it[ACCOUNT] = syncAccountJson.encodeToString(SyncAccount.serializer(), account) }
     }
@@ -86,6 +117,9 @@ class SyncAccountStore(context: Context) {
 
     private companion object {
         val ACCOUNT = stringPreferencesKey("account")
+
+        /** Separate from [ACCOUNT] so that forgetting a registration does not forget the install. */
+        val INSTALLATION_ID = stringPreferencesKey("installationId")
     }
 }
 

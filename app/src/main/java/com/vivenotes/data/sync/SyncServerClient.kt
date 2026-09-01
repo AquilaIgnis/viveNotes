@@ -60,6 +60,96 @@ enum class ConnectFailure {
     NotStored,
 
     /**
+     * `403 signup_closed` — this deployment does not accept registrations over HTTP.
+     *
+     * The **default** on viveCServer (`SignupModeClosed`), not an error state: a self-hosted server
+     * reachable from the internet with open registration is a service somebody else's users end up
+     * on. So the message says to ask the operator rather than suggesting anything is broken.
+     */
+    SignupClosed,
+
+    /**
+     * `409 email_taken`.
+     *
+     * Also what a *retried* creation says after the account was made and the device registration
+     * that followed it failed, which is why the message names signing in rather than only stating
+     * the conflict.
+     */
+    EmailTaken,
+
+    /**
+     * The account was created and then this device could not be registered on it.
+     *
+     * Its own outcome because it is the one failure that leaves something behind on the server:
+     * pressing Create account again would say `email_taken`, and the actual instruction — the
+     * account exists, sign in with it — is not what any of the transport failures would say.
+     */
+    AccountCreatedNotRegistered,
+
+    /**
+     * `400 invalid_challenge` — the single-use nonce was expired, already spent, or never issued.
+     *
+     * Almost always time: `VIVE_GOOGLE_CHALLENGE_TTL` defaults to five minutes, and a sheet left
+     * open on a locked tablet outlives it. Nothing is wrong with the account or the address, so the
+     * message says to try again rather than to change something.
+     */
+    InvalidChallenge,
+
+    /**
+     * `401 invalid_google_token` — Google's signature, audience, expiry, verified email or nonce did
+     * not satisfy the server.
+     *
+     * In practice on a working install this is one thing: `GOOGLE_WEB_CLIENT_ID` is not one of the
+     * server's `VIVE_GOOGLE_CLIENT_IDS`, so the audience check refuses the token before any
+     * signature work. It is a deployment mismatch and the message says so, because telling the user
+     * to try another Google account would send them to fix the one thing that is fine.
+     */
+    InvalidGoogleToken,
+
+    /**
+     * `503 google_auth_unavailable` — the server has no Google verifier configured, or could not
+     * reach Google's certificate endpoint.
+     *
+     * Retryable, unlike [InvalidGoogleToken]: the same request may well succeed later.
+     */
+    GoogleUnavailable,
+
+    /**
+     * `409 identity_conflict` — this Google identity is already linked to a different account.
+     *
+     * There is no client-side resolution. Linking it here would move an identity off an account
+     * this installation cannot prove it owns, so the contract refuses and so does this.
+     */
+    IdentityConflict,
+
+    /**
+     * `409 idempotency_conflict` — the key was reused for different request content.
+     *
+     * A bug rather than a user error, and named separately so it reads as one in a log: the key is
+     * generated per logical attempt and preserved only across retries of the *same* body.
+     */
+    IdempotencyConflict,
+
+    /** `403 account_unavailable` — the account exists but is not active. */
+    AccountUnavailable,
+
+    /**
+     * Credential Manager returned no usable credential: no Google account on the device, or the
+     * user dismissed the sheet.
+     *
+     * Not a server outcome at all — nothing was sent. It is in this enum because it ends the same
+     * flow, and folding it into a network failure would tell somebody who simply changed their mind
+     * that their server is unreachable.
+     */
+    NoGoogleAccount,
+
+    /**
+     * Sign in with Google cannot run on this build or this device: [BuildConfig.GOOGLE_WEB_CLIENT_ID]
+     * is empty, or no credential provider answered (a device with no Play services).
+     */
+    GoogleNotConfigured,
+
+    /**
      * `401 unauthenticated` — "unknown or revoked token". The device was revoked on the server, or
      * the account was rebuilt underneath it.
      *
@@ -87,6 +177,20 @@ sealed interface TokenCheck {
     data class Unknown(val reason: ConnectFailure) : TokenCheck
 }
 
+/**
+ * The outcome of `POST /v1/accounts`.
+ *
+ * Creating the account is only half of joining a server: it mints no credential, so it is always
+ * followed by `POST /v1/devices` for the token. See [SyncAccounts.register], which is the only
+ * caller and exists so that no one can do half of it.
+ */
+sealed interface AccountCreation {
+
+    data class Created(val accountId: String) : AccountCreation
+
+    data class Rejected(val reason: ConnectFailure) : AccountCreation
+}
+
 /** The outcome of `POST /v1/devices`. */
 sealed interface DeviceRegistration {
 
@@ -102,6 +206,47 @@ sealed interface DeviceRegistration {
     ) : DeviceRegistration
 
     data class Rejected(val reason: ConnectFailure) : DeviceRegistration
+}
+
+/**
+ * A single-use nonce from `POST /v1/auth/google/challenges`, requested immediately before the
+ * Credential Manager sheet opens.
+ *
+ * [challengeId] identifies it to the server; [nonce] is handed to Google unchanged and comes back
+ * inside the signed ID token, which is what ties one particular sheet to one particular request.
+ * The server stores only the nonce's SHA-256, so this value exists here and nowhere else.
+ */
+data class GoogleChallenge(val challengeId: String, val nonce: String)
+
+/** The outcome of `POST /v1/auth/google` and `POST /v1/auth/google/link`. */
+sealed interface GoogleAuthentication {
+
+    /**
+     * [token] is the only copy that will ever exist, exactly as with [DeviceRegistration.Registered].
+     *
+     * [createdAccount] is true only when this request created the account, which is the one thing
+     * separating "registered" from "logged in" — the contract has a single endpoint for both, on
+     * purpose, so the client never has to ask which one the person meant.
+     */
+    data class Authenticated(
+        val deviceId: String,
+        val accountId: String,
+        val token: String,
+        val createdAccount: Boolean,
+    ) : GoogleAuthentication
+
+    /**
+     * `409 account_link_required`: the verified Google email already belongs to a password account
+     * that has not been linked.
+     *
+     * **Not a failure, and it must not be retried as a sign-in.** The contract is explicit that the
+     * client must not create a second account: it asks for that account's password and submits the
+     * *same* ID token and the *same, still unconsumed* challenge to `POST /v1/auth/google/link`. So
+     * the caller keeps both, which is why this carries neither — [SyncAccounts] already holds them.
+     */
+    data object LinkRequired : GoogleAuthentication
+
+    data class Rejected(val reason: ConnectFailure) : GoogleAuthentication
 }
 
 /** One authenticated API operation, without turning transport failures into exceptions for callers. */
@@ -359,6 +504,207 @@ class SyncServerClient(
             DeviceRegistration.Rejected(ConnectFailure.Unreachable)
         } finally {
             connection.disconnect()
+        }
+    }
+
+    /**
+     * `POST /v1/accounts` — creates an account from an email address and a password.
+     *
+     * **Deployment-gated**, and closed by default: a server that has not opted in answers
+     * `403 signup_closed`, which is a configuration statement rather than a fault. The endpoint
+     * returns no credential of any kind, only an id, so the caller must follow it with
+     * [registerDevice] to get a token.
+     *
+     * [serverBaseUrl] must already have been through [normaliseServerAddress].
+     */
+    suspend fun createAccount(
+        serverBaseUrl: String,
+        email: String,
+        password: String,
+    ): AccountCreation {
+        val body = syncJson.encodeToString(
+            CreateAccountRequest.serializer(),
+            // Trimmed on this side too, because the server trims and lowercases before storing: a
+            // trailing space from autofill would otherwise create an account whose address does not
+            // read back the way it was typed. The password is never trimmed.
+            CreateAccountRequest(email = email.trim(), password = password),
+        ).encodeToByteArray()
+
+        return when (val raw = unauthenticatedRequest(serverBaseUrl, "/v1/accounts", "POST", body)) {
+            RawServerResult.InvalidAddress -> AccountCreation.Rejected(ConnectFailure.InvalidAddress)
+            RawServerResult.Unreachable -> AccountCreation.Rejected(ConnectFailure.Unreachable)
+            is RawServerResult.Response -> if (raw.status in 200..299) {
+                val created = runCatching {
+                    syncJson.decodeFromString(CreateAccountResponse.serializer(), raw.payload)
+                }.getOrNull()
+                    ?: return AccountCreation.Rejected(ConnectFailure.NotAViveServer)
+                AccountCreation.Created(created.accountId)
+            } else {
+                AccountCreation.Rejected(accountFailureFor(raw.status, raw.payload))
+            }
+        }
+    }
+
+    /**
+     * Asks for the single-use nonce that ties one Credential Manager sheet to one sign-in.
+     *
+     * Called immediately before the sheet opens, never cached: the challenge is spent by the
+     * sign-in that uses it and expires on the server after `VIVE_GOOGLE_CHALLENGE_TTL` (five
+     * minutes by default). A nonce reused across two attempts is a nonce that is not doing its job.
+     *
+     * The server keeps only the nonce's SHA-256, so the plaintext returned here exists in this
+     * process and nowhere else, and losing it means asking for another one — which costs nothing.
+     */
+    suspend fun createGoogleChallenge(serverBaseUrl: String): ServerResult<GoogleChallenge> =
+        when (val raw = unauthenticatedRequest(serverBaseUrl, "/v1/auth/google/challenges", "POST")) {
+            RawServerResult.InvalidAddress -> invalidAddress()
+            RawServerResult.Unreachable -> unreachable()
+            is RawServerResult.Response -> if (raw.status in 200..299) {
+                val decoded = runCatching {
+                    syncJson.decodeFromString(GoogleChallengeResponse.serializer(), raw.payload)
+                }.getOrNull()
+                if (decoded == null) {
+                    ServerResult.Failed(ConnectFailure.NotAViveServer, retryable = false)
+                } else {
+                    ServerResult.Success(GoogleChallenge(decoded.challengeId, decoded.nonce))
+                }
+            } else {
+                val reason = googleFailureFor(raw.status, raw.payload, ConnectFailure.InvalidGoogleToken)
+                ServerResult.Failed(reason, retryable = reason == ConnectFailure.GoogleUnavailable)
+            }
+        }
+
+    /**
+     * `POST /v1/auth/google` — verifies Google's ID token and enrolls this installation.
+     *
+     * One endpoint for both logging in and registering, which is why the account screen offers one
+     * button rather than two: the server finds the account by `(issuer, sub)` or creates it, and
+     * says which it did in [GoogleAuthentication.Authenticated.createdAccount]. Returning users are
+     * never identified by email, so changing a Google account's email does not strand its notes.
+     *
+     * [idempotencyKey] is a new random UUID per logical attempt and must be **reused unchanged if
+     * the HTTP response is lost**, because an exact retry returns the same account, device and
+     * token rather than minting a second device. That is the one thing this endpoint has that
+     * `POST /v1/devices` does not — see [registerDevice], where a retry really does create a second
+     * row. Using the same key with different content is `409 idempotency_conflict`.
+     */
+    suspend fun signInWithGoogle(
+        serverBaseUrl: String,
+        challengeId: String,
+        idToken: String,
+        idempotencyKey: String,
+        device: GoogleDeviceDetails,
+    ): GoogleAuthentication {
+        val body = syncJson.encodeToString(
+            GoogleSignInRequest.serializer(),
+            GoogleSignInRequest(
+                challengeId = challengeId,
+                idToken = idToken,
+                idempotencyKey = idempotencyKey,
+                device = device.trimmed(),
+            ),
+        ).encodeToByteArray()
+
+        return googleAuthentication(
+            raw = unauthenticatedRequest(serverBaseUrl, "/v1/auth/google", "POST", body),
+            bodilessUnauthorized = ConnectFailure.InvalidGoogleToken,
+        )
+    }
+
+    /**
+     * `POST /v1/auth/google/link` — the only resolution to [GoogleAuthentication.LinkRequired].
+     *
+     * Takes the **same** [challengeId] and [idToken] as the sign-in that was refused: that challenge
+     * is deliberately left unconsumed by a `409 account_link_required`, so this proves the same
+     * Google session rather than opening a second sheet whose token could be for another account.
+     * [idempotencyKey] is a *new* one, because the request content differs and reusing the sign-in
+     * key would be `409 idempotency_conflict` rather than a retry.
+     *
+     * The password is the existing password account's, verified fresh by the server before the
+     * Google subject is linked. It is never stored — see [SyncAccountStore].
+     */
+    suspend fun linkGoogleIdentity(
+        serverBaseUrl: String,
+        challengeId: String,
+        idToken: String,
+        idempotencyKey: String,
+        device: GoogleDeviceDetails,
+        email: String,
+        password: String,
+    ): GoogleAuthentication {
+        val body = syncJson.encodeToString(
+            GoogleLinkRequest.serializer(),
+            GoogleLinkRequest(
+                challengeId = challengeId,
+                idToken = idToken,
+                idempotencyKey = idempotencyKey,
+                device = device.trimmed(),
+                // Trimmed like `POST /v1/devices`, and for the same reason: the server normalises
+                // before lookup, so a space from autofill must not read as the wrong account. The
+                // password is never trimmed — whitespace in it is part of it.
+                email = email.trim(),
+                password = password,
+            ),
+        ).encodeToByteArray()
+
+        return googleAuthentication(
+            raw = unauthenticatedRequest(serverBaseUrl, "/v1/auth/google/link", "POST", body),
+            bodilessUnauthorized = ConnectFailure.InvalidCredentials,
+        )
+    }
+
+    /**
+     * Clips [GoogleDeviceDetails] to the contract's limits before it is sent, so an over-long field
+     * is a shorter label rather than `400 invalid_request` at the end of a sign-in the person has
+     * already completed.
+     *
+     * The name gets the same blank fallback as [registerDevice]: a stripped ROM that reports no
+     * model would otherwise produce an empty `name`, which the contract refuses. An extension inside
+     * this class rather than a method on the data class, because the caps live in its companion.
+     */
+    private fun GoogleDeviceDetails.trimmed(): GoogleDeviceDetails = copy(
+        name = name.trim().take(MAX_DEVICE_NAME).ifBlank { FALLBACK_DEVICE_NAME },
+        platform = platform.trim().take(MAX_PLATFORM),
+        appVersion = appVersion?.trim()?.take(MAX_DEVICE_DETAIL),
+        appBuild = appBuild?.trim()?.take(MAX_DEVICE_DETAIL),
+        osVersion = osVersion?.trim()?.take(MAX_DEVICE_DETAIL),
+        model = model?.trim()?.take(MAX_DEVICE_DETAIL),
+        architecture = architecture?.trim()?.take(MAX_DEVICE_DETAIL),
+        locale = locale?.trim()?.take(MAX_DEVICE_DETAIL),
+    )
+
+    /** The half of the two Google endpoints that is identical: they share a response schema. */
+    private fun googleAuthentication(
+        raw: RawServerResult,
+        bodilessUnauthorized: ConnectFailure,
+    ): GoogleAuthentication = when (raw) {
+        RawServerResult.InvalidAddress -> GoogleAuthentication.Rejected(ConnectFailure.InvalidAddress)
+        RawServerResult.Unreachable -> GoogleAuthentication.Rejected(ConnectFailure.Unreachable)
+        is RawServerResult.Response -> when {
+            raw.status in 200..299 -> {
+                val decoded = runCatching {
+                    syncJson.decodeFromString(GoogleAuthenticationResponse.serializer(), raw.payload)
+                }.getOrNull()
+                if (decoded == null) {
+                    GoogleAuthentication.Rejected(ConnectFailure.NotAViveServer)
+                } else {
+                    GoogleAuthentication.Authenticated(
+                        deviceId = decoded.deviceId,
+                        accountId = decoded.accountId,
+                        token = decoded.token,
+                        createdAccount = decoded.createdAccount,
+                    )
+                }
+            }
+
+            // Read before the failure mapping, because it is not a failure: it is the contract
+            // telling the client which of the two endpoints to use next.
+            raw.status == 409 && errorCode(raw.payload) == "account_link_required" ->
+                GoogleAuthentication.LinkRequired
+
+            else -> GoogleAuthentication.Rejected(
+                googleFailureFor(raw.status, raw.payload, bodilessUnauthorized),
+            )
         }
     }
 
@@ -730,6 +1076,61 @@ class SyncServerClient(
         }
     }
 
+    /**
+     * The same request machinery as [authenticatedRequest] without a bearer credential, for the
+     * three `security: []` endpoints that exist precisely because this installation has no token yet.
+     *
+     * Redirects are refused rather than followed for the reason [registerDevice] gives: a redirect
+     * can cross origins, and these bodies carry a Google ID token and — on the link route — an
+     * account password.
+     */
+    private suspend fun unauthenticatedRequest(
+        serverBaseUrl: String,
+        path: String,
+        method: String,
+        body: ByteArray? = null,
+    ): RawServerResult = withContext(Dispatchers.IO) {
+        val url = try {
+            URL("$serverBaseUrl$path")
+        } catch (malformed: java.net.MalformedURLException) {
+            return@withContext RawServerResult.InvalidAddress
+        }
+        val connection = try {
+            openConnection(url)
+        } catch (unreachable: IOException) {
+            return@withContext RawServerResult.Unreachable
+        }
+
+        try {
+            connection.requestMethod = method
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            // Generous for the same reason as registration: the link route verifies a password with
+            // Argon2id before answering, and Google token verification may fetch Google's
+            // certificates. A tight timeout here reads as "server down" on a working server.
+            connection.readTimeout = READ_TIMEOUT_MS
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Accept", "application/json")
+            if (body != null) {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.setFixedLengthStreamingMode(body.size)
+                connection.outputStream.use { it.write(body) }
+            }
+
+            val status = connection.responseCode
+            RawServerResult.Response(
+                status = status,
+                payload = readBounded(
+                    if (status in 200..299) connection.inputStream else connection.errorStream,
+                ),
+            )
+        } catch (failed: IOException) {
+            RawServerResult.Unreachable
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private suspend fun authenticatedRequest(
         serverBaseUrl: String,
         path: String,
@@ -813,11 +1214,7 @@ class SyncServerClient(
      * device. Reading the status is what makes the two agree.
      */
     private fun failureFor(status: Int, payload: String): ConnectFailure {
-        val error = runCatching {
-            syncJson.decodeFromString(ErrorResponse.serializer(), payload)
-        }.getOrNull()?.error
-
-        return when (error) {
+        return when (val error = errorCode(payload)) {
             "invalid_credentials", "unauthenticated" -> ConnectFailure.InvalidCredentials
             "invalid_request" -> ConnectFailure.InvalidRequest
             "payload_too_large" -> ConnectFailure.PayloadTooLarge
@@ -826,6 +1223,67 @@ class SyncServerClient(
             // later is a server-side problem from here, not a reason to claim the address is wrong.
             else -> ConnectFailure.ServerError
         }
+    }
+
+    /** The `error` code of a viveCServer error body, or null when the body is absent or not one. */
+    private fun errorCode(payload: String): String? = runCatching {
+        syncJson.decodeFromString(ErrorResponse.serializer(), payload)
+    }.getOrNull()?.error
+
+    /**
+     * [failureFor] for `POST /v1/accounts`, whose two documented refusals are statuses no other
+     * endpoint in this client uses for anything.
+     *
+     * The bodiless fallback matters here as much as it does on a 401: a 403 anywhere else in this
+     * contract is bad credentials, and a 409 anywhere else is not a thing at all, so without these
+     * two lines a closed signup would read as a wrong password and a taken address as "not a
+     * ViveNotes server".
+     */
+    private fun accountFailureFor(status: Int, payload: String): ConnectFailure =
+        when (errorCode(payload)) {
+            "signup_closed" -> ConnectFailure.SignupClosed
+            "email_taken" -> ConnectFailure.EmailTaken
+            null -> when (status) {
+                403 -> ConnectFailure.SignupClosed
+                409 -> ConnectFailure.EmailTaken
+                else -> failureForStatus(status)
+            }
+            // invalid_request — a malformed address or a password under eight characters — plus
+            // payload_too_large, internal, and anything newer.
+            else -> failureFor(status, payload)
+        }
+
+    /**
+     * [failureFor] for the Google routes, whose error codes are their own and whose 401 is not the
+     * device endpoint's 401.
+     *
+     * [bodilessUnauthorized] is what a 401 with no readable body means *on this route*, and it
+     * differs: on `POST /v1/auth/google` a 401 is always the ID token, while on the link route it is
+     * far more likely the password. The parameter exists because the body is routinely unavailable —
+     * `HttpURLConnection` eats a 401's body on the JVM while looking for a challenge, which is the
+     * same trap [failureFor] documents. Guessing "invalid password" at a token problem would send
+     * somebody to retype a password that was never wrong.
+     */
+    private fun googleFailureFor(
+        status: Int,
+        payload: String,
+        bodilessUnauthorized: ConnectFailure,
+    ): ConnectFailure = when (errorCode(payload)) {
+        "invalid_challenge" -> ConnectFailure.InvalidChallenge
+        "invalid_google_token" -> ConnectFailure.InvalidGoogleToken
+        "google_auth_unavailable" -> ConnectFailure.GoogleUnavailable
+        "identity_conflict" -> ConnectFailure.IdentityConflict
+        "idempotency_conflict" -> ConnectFailure.IdempotencyConflict
+        "account_unavailable" -> ConnectFailure.AccountUnavailable
+        null -> when {
+            status == 401 -> bodilessUnauthorized
+            // 503 on these routes is `google_auth_unavailable`, which is retryable, rather than the
+            // flat server error a bodiless 5xx means elsewhere.
+            status == 503 -> ConnectFailure.GoogleUnavailable
+            else -> failureForStatus(status)
+        }
+        // Shared codes — invalid_request, payload_too_large, internal — and anything newer.
+        else -> failureFor(status, payload)
     }
 
     /**
@@ -893,6 +1351,17 @@ class SyncServerClient(
     }
 }
 
+/**
+ * The shortest password `POST /v1/accounts` accepts — `auth.MinPasswordChars` on the server and
+ * `minLength` in the contract.
+ *
+ * Checked on this side as well so that Create account is simply disabled rather than sending a
+ * request whose only possible answer is `400 invalid_request`. Counted in Kotlin chars against the
+ * server's bytes, which can never be the more permissive of the two: UTF-8 gives every char at
+ * least one byte.
+ */
+internal const val MIN_ACCOUNT_PASSWORD = 8
+
 /** Contract cap shared with [HierarchySync], which splits its durable outbox before transport. */
 internal const val MAX_SYNC_PUSH_BYTES = 4 * 1024 * 1024
 
@@ -926,6 +1395,83 @@ private sealed interface RawServerResult {
     data object InvalidAddress : RawServerResult
     data object Unreachable : RawServerResult
 }
+
+/**
+ * What the server's device list is told about this installation, on the Google routes.
+ *
+ * Richer than `POST /v1/devices` takes, and the extra fields are the point: a device list whose
+ * rows all read "Pixel Tablet" cannot say which row to revoke. [installationId] is the one that
+ * matters most — a stable UUID that survives signing out and back in, so signing in twice rotates
+ * one device row instead of growing a second (see [SyncAccountStore.installationId]).
+ *
+ * Optional fields are nullable with a null default, which `syncJson` omits from the body entirely
+ * rather than sending explicit nulls: the schema marks them optional, not nullable.
+ */
+@Serializable
+data class GoogleDeviceDetails(
+    val installationId: String,
+    val name: String,
+    val platform: String,
+    val appVersion: String? = null,
+    val appBuild: String? = null,
+    val osVersion: String? = null,
+    val model: String? = null,
+    val architecture: String? = null,
+    val locale: String? = null,
+)
+
+/** Every optional `GoogleDeviceDetails` field shares one cap in the contract. */
+private const val MAX_DEVICE_DETAIL = 128
+
+@Serializable
+private data class GoogleChallengeResponse(
+    val challengeId: String,
+    val nonce: String,
+    val expiresAt: String,
+)
+
+@Serializable
+private data class GoogleSignInRequest(
+    val challengeId: String,
+    val idToken: String,
+    val idempotencyKey: String,
+    val device: GoogleDeviceDetails,
+)
+
+/**
+ * The contract composes this from `GoogleSignInRequest` with `allOf`; on this side it is written
+ * out, because a Kotlin data class cannot inherit one and the four shared fields are cheaper to
+ * repeat than a class hierarchy is to read.
+ */
+@Serializable
+private data class GoogleLinkRequest(
+    val challengeId: String,
+    val idToken: String,
+    val idempotencyKey: String,
+    val device: GoogleDeviceDetails,
+    val email: String,
+    val password: String,
+)
+
+@Serializable
+private data class GoogleAuthenticationResponse(
+    val accountId: String,
+    val deviceId: String,
+    val token: String,
+    val tokenExpiresAt: String,
+    val createdAccount: Boolean,
+)
+
+@Serializable
+private data class CreateAccountRequest(
+    val email: String,
+    val password: String,
+)
+
+@Serializable
+private data class CreateAccountResponse(
+    @SerialName("accountId") val accountId: String,
+)
 
 @Serializable
 private data class RegisterDeviceRequest(
