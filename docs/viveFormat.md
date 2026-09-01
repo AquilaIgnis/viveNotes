@@ -102,4 +102,8 @@ copy". The whole archive is copied and validated in a private cache directory fi
 allowlist, size and count limits, checksums, read-only SQLite open, schema allowlist, `quick_check`,
 `foreign_key_check`, document and ink decoding, attachment set equality — and only a fully validated
 bundle reaches the single Room transaction that writes to the live database. Stable ids mean
-reimporting the same file is idempotent. See `memory/notebookTransfer.md` for the full semantics.
+reimporting the same file is idempotent — with one exception: if the sync account has *permanently
+deleted* `sourceNotebookId`, the server retires that id for good, so the import is moved to a fresh
+notebook id and the device records where it went. Reimports stay idempotent through that record, but
+the notebook no longer has the id the bundle names. See `memory/notebookTransfer.md` for the full
+semantics.

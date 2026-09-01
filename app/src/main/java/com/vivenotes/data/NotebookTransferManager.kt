@@ -12,6 +12,7 @@ import com.vivenotes.data.db.InkEraseTargetEntity
 import com.vivenotes.data.db.InkMoveEntity
 import com.vivenotes.data.db.InkMoveTargetEntity
 import com.vivenotes.data.db.InkStrokeEntity
+import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
@@ -588,7 +589,14 @@ class NotebookTransferManager(
     }
 
     private suspend fun install(bundle: ValidatedBundle): NotebookImportResult {
-        val data = bundle.data
+        // Where this device keeps the archive's notebook, which is the id the archive names unless
+        // the account permanently deleted it and `HierarchySync.remapPurgedImport` had to move the
+        // import out from under it. Resolved before anything is read, so every collision below is
+        // asked about the notebook this file is actually an update of.
+        val data = bundle.data.installedUnder(
+            db.localMetadataDao().value(NotesRepository.importRemapKey(bundle.data.notebook.id))
+                ?: bundle.data.notebook.id,
+        )
         val notebookId = data.notebook.id
         val existingRows = auditLiveCollisions(data)
         val existingNotebook = existingRows.notebook
@@ -677,6 +685,25 @@ class NotebookTransferManager(
                     )
                 }
                 db.localMetadataDao().delete(NotesRepository.REPLACEABLE_STARTER_KEY)
+
+                // Marks these bytes as an explicit restore of a notebook the server has never
+                // taken. The account may have permanently deleted this very id — the archive keeps
+                // the notebook's stable id, so an import is the one ordinary way to hold a notebook
+                // under an id the server has retired, and the push that follows is refused
+                // `purged`. `HierarchySync` reads this marker to tell that apart from the account
+                // erasing a notebook this device merely still had, and moves the import to a fresh
+                // id instead of deleting it. Cleared by the first push the server accepts.
+                //
+                // Not written when the server already holds this notebook, and any stale marker is
+                // cleared: an id the account has stored is one Permanently delete must still be able
+                // to reach, whatever a re-import of an old file happens to be doing at the time.
+                if (db.syncDao().entityState(SYNC_KIND_NOTEBOOK, notebookId) == null) {
+                    db.localMetadataDao().put(
+                        LocalMetadataEntity(NotesRepository.importedNotebookKey(notebookId), "$importedAt"),
+                    )
+                } else {
+                    db.localMetadataDao().delete(NotesRepository.importedNotebookKey(notebookId))
+                }
 
                 val sectionDao = db.sectionDao()
                 val importedSectionIds = data.sections.mapTo(hashSetOf()) { it.id }
@@ -1162,6 +1189,9 @@ class NotebookTransferManager(
             "application/zip",
         )
 
+        /** `HierarchySync.SyncKind.Notebook.wire`, which is private to it. */
+        private const val SYNC_KIND_NOTEBOOK = "notebook"
+
         private const val DIRECTORY = "notebook_transfers"
         private const val MANIFEST_ENTRY = "manifest.json"
         private const val DATABASE_ENTRY = "notebook.sqlite"
@@ -1299,6 +1329,25 @@ private data class BundleData(
     val moveTargets: List<InkMoveTargetEntity>,
     val attachments: List<AttachmentEntity>,
 )
+
+/**
+ * The same bundle as it will be stored, when the archive's notebook id is not the one this device
+ * keeps it under.
+ *
+ * Only the notebook id moves, for the reason `HierarchySync.remapPurgedImport` moves only that one:
+ * `notebookId` is a column on `sections` alone, and every id below a section is one the account
+ * never retired. Sections carry it, so they are rewritten with it; nothing else in the bundle names
+ * a notebook at all.
+ */
+private fun BundleData.installedUnder(notebookId: String): BundleData =
+    if (notebookId == notebook.id) {
+        this
+    } else {
+        copy(
+            notebook = notebook.copy(id = notebookId),
+            sections = sections.map { it.copy(notebookId = notebookId) },
+        )
+    }
 
 private data class ValidatedBundle(
     val manifest: NotebookBundleManifest,

@@ -19,6 +19,20 @@ interface LocalMetadataDao {
 
     @Query("DELETE FROM local_metadata WHERE `key` = :key")
     suspend fun delete(key: String)
+
+    /**
+     * Repoints every value in one key family from one id to another.
+     *
+     * `HierarchySync.remapPurgedImport` alone, to keep the import remap map transitive: a notebook
+     * that is moved, permanently deleted again and re-imported is moved a second time, and the
+     * archive id recorded against the first replacement has to follow rather than be left naming a
+     * notebook that no longer exists.
+     */
+    @Query(
+        "UPDATE local_metadata SET value = :newValue " +
+            "WHERE `key` LIKE :keyPrefix || '%' AND value = :oldValue",
+    )
+    suspend fun repointValues(keyPrefix: String, oldValue: String, newValue: String)
 }
 
 /** Durable hierarchy-sync bookkeeping. Network DTO mapping stays in `data/sync`. */
@@ -543,6 +557,19 @@ interface SectionDao {
     @Query("UPDATE sections SET name = :name, updatedAt = :now WHERE id = :id")
     suspend fun rename(id: String, name: String, now: Long)
 
+    /**
+     * Moves a whole notebook's sections to another notebook id.
+     *
+     * Only `HierarchySync.remapPurgedImport` calls this, and only to carry an imported notebook out
+     * from under an id the account retired. Everything below a section is reached by `sectionId` or
+     * `pageId`, so this one column is the entire subtree: no page, body, revision or ink row moves.
+     *
+     * Must run before the old notebook row is deleted — `sections.notebookId` is `ON DELETE
+     * CASCADE`, so dropping it first would take the sections with it.
+     */
+    @Query("UPDATE sections SET notebookId = :newNotebookId WHERE notebookId = :oldNotebookId")
+    suspend fun repointNotebook(oldNotebookId: String, newNotebookId: String)
+
     @Query("UPDATE sections SET deletedAt = :now, updatedAt = :now WHERE id = :id")
     suspend fun softDelete(id: String, now: Long)
 
@@ -1015,11 +1042,8 @@ interface InkTextDao {
 interface InkEraseDao {
 
     /**
-     * Removes these pages' rows outright, for `NotebookCloudArchive`.
-     *
-     * Not a tombstone. A tombstone asks the server to forget them, and moving a notebook to the
-     * cloud asks it to be the one thing that remembers. Erase and move targets go with their
-     * operation by foreign key.
+     * Removes these pages' rows outright, for `NotebookCloudArchive` — not a tombstone, for the
+     * reason [InkStrokeDao.deleteForPages] sets out.
      */
     @Query("DELETE FROM ink_erases WHERE pageId IN (:pageIds)")
     suspend fun deleteForPages(pageIds: List<String>)
@@ -1083,11 +1107,8 @@ interface InkEraseDao {
 interface InkMoveDao {
 
     /**
-     * Removes these pages' rows outright, for `NotebookCloudArchive`.
-     *
-     * Not a tombstone. A tombstone asks the server to forget them, and moving a notebook to the
-     * cloud asks it to be the one thing that remembers. Erase and move targets go with their
-     * operation by foreign key.
+     * Removes these pages' rows outright, for `NotebookCloudArchive` — not a tombstone, for the
+     * reason [InkStrokeDao.deleteForPages] sets out.
      */
     @Query("DELETE FROM ink_moves WHERE pageId IN (:pageIds)")
     suspend fun deleteForPages(pageIds: List<String>)

@@ -4,14 +4,6 @@ import com.vivenotes.model.Outline.Table
 
 /**
  * Everything the Table Class's toolkit does to a grid — `memory/diagram.md`, `memory/tablePlan.md` TA6.
- *
- * Pure functions on the document model, with no Android in sight, for the reason `ShapeSegment`'s
- * geometry is: this is the half of the feature that can be *tested on this host* (R10), and it is the
- * half where a mistake is silent — a row removed from `rows` but not from the block map is a table
- * that looks right and has lost its text.
- *
- * Every one of them returns a table with [Table.withRecomputedWidth] already applied where the
- * columns changed, so a caller can never leave [Outline.width] disagreeing with the grid.
  */
 
 /**

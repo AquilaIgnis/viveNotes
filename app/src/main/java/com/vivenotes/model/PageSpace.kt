@@ -89,8 +89,7 @@ data class SpaceCut(
      * when nothing moves.
      */
     fun limitedTo(nearestMovedEdge: Float?): SpaceCut {
-        // Opening space has no limit — the canvas grows downward and to the right without bound,
-        // which is what makes it a canvas rather than a sheet.
+        // Opening space has no limit — the canvas grows downward and to the right without bound
         if (amount >= 0f || nearestMovedEdge == null) return this
         return copy(amount = amount.coerceAtLeast(at - nearestMovedEdge))
     }

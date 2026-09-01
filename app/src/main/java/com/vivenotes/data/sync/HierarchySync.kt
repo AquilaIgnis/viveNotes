@@ -24,6 +24,7 @@ import com.vivenotes.data.db.SyncStateEntity
 import com.vivenotes.model.DocumentCodecs
 import com.vivenotes.model.Outline
 import com.vivenotes.model.migrated
+import com.vivenotes.model.newId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -470,7 +471,7 @@ class HierarchySync(
                 // so anything this same window wrote under one of these notebooks is written first
                 // and taken away here rather than the other way round — and `invalidateInkText`
                 // *inserts* a row keyed by page, which a page this had already deleted would refuse.
-                purged.forEach { (kind, id) -> discardedPictures += applyPurge(kind, id) }
+                purged.forEach { (kind, id) -> discardedPictures += applyPurgeOrRemap(kind, id) }
                 // Only when nothing is being held. The cursor is a promise that everything below it
                 // has been applied, so advancing it past a row still waiting for its parent would
                 // lose that row for good — the next pull starts above it.
@@ -619,6 +620,97 @@ class HierarchySync(
         return orphaned
     }
 
+    /**
+     * Routes one purge verdict to the only two things it can honestly mean.
+     *
+     * A `purged` verdict says the id is retired, never how this device came to be holding something
+     * under it, and the two ways are opposites:
+     *
+     *  - **This device still had the notebook.** The account erased it and this copy is a straggler,
+     *    so it goes — [applyPurge], unchanged. Anything else would make Permanently delete undoable
+     *    by whichever device happened to be offline when it was pressed, which is the failure
+     *    `syncengine/engine.go` refuses a resurrecting push to prevent.
+     *  - **Someone imported a `.vive` archive of it since.** A bundle carries the notebook's stable
+     *    id, so importing one the account erased re-creates precisely the retired id and the push
+     *    that follows is refused for ever. The bytes are not a straggler — they were chosen, from a
+     *    file, after the erasure — and the id is the only thing wrong with them.
+     *
+     * [NotebookTransferManager] marks the second case at import and the first accepted push clears
+     * the mark, so the window in which a purge is answered by [remapPurgedImport] is exactly the
+     * window in which the notebook has never been on the server.
+     */
+    private suspend fun applyPurgeOrRemap(kind: String, id: String): List<String> {
+        if (kind == SyncKind.Notebook.wire &&
+            metadata.value(NotesRepository.importedNotebookKey(id)) != null &&
+            remapPurgedImport(id)
+        ) {
+            return emptyList()
+        }
+        return applyPurge(kind, id)
+    }
+
+    /**
+     * Carries a freshly imported notebook out from under an id the account retired.
+     *
+     * Only the notebook id moves. `purges` is keyed by entity id and the schema is explicit that
+     * only `notebook` is ever written to it, so every section, page, body, revision and stroke below
+     * is a perfectly acceptable id that was refused `missing_parent` for one reason: its parent was
+     * gone. Give them a parent the server will take and they push as they are. `notebookId` lives on
+     * `sections` alone, which is why the whole subtree moves in one `UPDATE`.
+     *
+     * Order is forced by the schema: insert the new row, repoint the sections, and only then drop
+     * the old one — `sections.notebookId` is `ON DELETE CASCADE`, so deleting first would take the
+     * subtree with it.
+     *
+     * The mark travels to the new id rather than being dropped, so this is idempotent: if the answer
+     * to the retry were somehow `purged` again, the notebook moves again instead of being erased.
+     *
+     * Returns false when the notebook is already gone — a purge pulled twice, or one naming a
+     * notebook this device never held — leaving [applyPurge]'s bookkeeping to run as it would have.
+     */
+    private suspend fun remapPurgedImport(id: String): Boolean {
+        val notebook = notebooks.byId(id) ?: return false
+        val replacementId = newId()
+
+        notebooks.upsert(notebook.copy(id = replacementId))
+        sections.repointNotebook(id, replacementId)
+        notebooks.hardDelete(id)
+
+        // The retired id stops being offered: its queued change and its version claim both go. The
+        // replacement is queued explicitly because this runs with `applyingRemote` set, which is
+        // what suppresses the outbox triggers that would otherwise have noticed the insert above.
+        sync.deleteOutbox(SyncKind.Notebook.wire, id)
+        sync.deleteEntityState(SyncKind.Notebook.wire, id)
+        sync.enqueueIfAbsent(SyncKind.Notebook.wire, replacementId)
+        // Queued work naming the retired id — including the `missing_parent` re-queue this same
+        // response provoked, which cannot know the parent it asked for is the thing being retired.
+        sync.pruneOrphanedOutbox()
+        sync.pruneOrphanedEntityStates()
+
+        metadata.delete(NotesRepository.importedNotebookKey(id))
+        metadata.put(
+            LocalMetadataEntity(
+                NotesRepository.importedNotebookKey(replacementId),
+                "${System.currentTimeMillis()}",
+            ),
+        )
+
+        // Where the archive's notebook went, so re-importing the same file updates this copy rather
+        // than installing a second one — [NotebookTransferManager] reads it before it decides what
+        // the bundle collides with. Repointed first and recorded second, which is what makes the map
+        // transitive: a notebook moved, purged again and re-imported is moved twice, and the archive
+        // id recorded against the first replacement has to end up naming the second.
+        metadata.repointValues(NotesRepository.IMPORT_REMAP_KEY_PREFIX, id, replacementId)
+        metadata.put(LocalMetadataEntity(NotesRepository.importRemapKey(id), replacementId))
+
+        Log.i(
+            TAG,
+            "Notebook $id was erased for good by the account, but was imported since; " +
+                "moved the imported copy to $replacementId and queued it",
+        )
+        return true
+    }
+
     private suspend fun pushOutbox(account: SyncAccount): PhaseResult {
         var pushed = 0
         var conflicts = 0
@@ -691,6 +783,13 @@ class HierarchySync(
                     val sent = sentByKey.getValue(applied.kind to applied.id)
                     sync.putEntityState(sent.asAcceptedState(applied.version))
                     sync.deleteOutboxGeneration(sent.kind, sent.id, sent.generation)
+                    // The account now holds these bytes, so an import of them is no longer the only
+                    // copy and its marker has done its job. Clearing it here is what keeps
+                    // [remapPurgedImport] narrow: a notebook that ever synced is erased by a later
+                    // purge like any other, rather than coming back under a new id years on.
+                    if (applied.kind == SyncKind.Notebook.wire) {
+                        metadata.delete(NotesRepository.importedNotebookKey(applied.id))
+                    }
                     pushed++
                 }
                 response.rejected.forEach { rejected ->
@@ -736,7 +835,7 @@ class HierarchySync(
                 //
                 // After the passes, because both reach rows by page id and `invalidateInkText`
                 // *inserts* one, which a page this had already deleted would refuse.
-                purged.forEach { (kind, id) -> discardedPictures += applyPurge(kind, id) }
+                purged.forEach { (kind, id) -> discardedPictures += applyPurgeOrRemap(kind, id) }
                 metadata.delete(PENDING_BATCH_KEY)
                 sync.setApplyingRemote(false)
             }

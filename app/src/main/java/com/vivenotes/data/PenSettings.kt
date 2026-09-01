@@ -259,7 +259,6 @@ data class PenPreset(
     val colorArgb: Int = 0xFF000000.toInt(),
     /** True only while this pen is using the automatic high-contrast starter colour. */
     val colorFollowsTheme: Boolean = false,
-    //defaults
     val thickness: Float = 1.5f,
     val pressure: Int = 3,
     val stabilization: Int = 1,

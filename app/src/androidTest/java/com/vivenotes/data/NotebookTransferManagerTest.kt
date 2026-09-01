@@ -11,6 +11,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.data.db.AttachmentEntity
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.StrokeColor
+import com.vivenotes.data.db.LocalMetadataEntity
+import com.vivenotes.data.db.SyncEntityStateEntity
 import com.vivenotes.data.db.SyncStateEntity
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.model.Block
@@ -28,6 +30,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -185,6 +189,83 @@ class NotebookTransferManagerTest {
         assertEquals(1, db.notebookDao().count())
         assertEquals(null, restored.deletedAt)
         assertTrue("restore did not supersede the deletion timestamp", restored.updatedAt > deletionTime)
+    }
+
+    @Test
+    fun animportMarksTheNotebookUntilTheServerHasTakenIt() = runBlocking {
+        // The mark `HierarchySync.applyPurgeOrRemap` reads. A bundle carries the notebook's stable
+        // id, so an import is the one ordinary way to come to hold a notebook under an id the
+        // account permanently deleted; without this the push behind the import is refused `purged`
+        // and the notebook is erased seconds after it appears.
+        val notebookId = repository.createNotebook("Field Notes")
+        repository.createSection(notebookId, "Observations")
+        val bundle = ByteArrayOutputStream().also { transfers.exportNotebook(notebookId, it) }
+            .toByteArray()
+        db.localMetadataDao().delete(NotesRepository.importedNotebookKey(notebookId))
+
+        transfers.importNotebook(ByteArrayInputStream(bundle))
+
+        assertEquals(
+            "$now",
+            db.localMetadataDao().value(NotesRepository.importedNotebookKey(notebookId)),
+        )
+    }
+
+    @Test
+    fun aReImportUpdatesTheNotebookAPurgeMovedRatherThanInstallingASecondCopy() = runBlocking {
+        val archiveNotebookId = repository.createNotebook("Field Notes")
+        val sectionId = repository.createSection(archiveNotebookId, "Observations")
+        val pageId = repository.createPage(sectionId, "Heron")
+        val bundle = ByteArrayOutputStream().also { transfers.exportNotebook(archiveNotebookId, it) }
+            .toByteArray()
+
+        // The state `HierarchySync.remapPurgedImport` leaves once the account has permanently
+        // deleted the id this archive names: the same rows under a fresh notebook id, and a note of
+        // where they went. The archive can never name that notebook again on its own.
+        val movedId = "01a0039f-1bbc-7979-ad06-000000000001"
+        db.notebookDao().upsert(db.notebookDao().byId(archiveNotebookId)!!.copy(id = movedId))
+        db.sectionDao().repointNotebook(archiveNotebookId, movedId)
+        db.notebookDao().hardDelete(archiveNotebookId)
+        db.localMetadataDao().put(
+            LocalMetadataEntity(NotesRepository.importRemapKey(archiveNotebookId), movedId),
+        )
+
+        now += 1
+        val result = transfers.importNotebook(ByteArrayInputStream(bundle))
+
+        assertEquals("the file must update its copy, not add one", 1, db.notebookDao().count())
+        assertEquals(movedId, result.notebookId)
+        assertFalse("it is an update of the moved notebook", result.created)
+        assertNull("the retired id must not come back", db.notebookDao().byId(archiveNotebookId))
+
+        // The subtree is the archive's own ids under the moved parent, which is what makes this an
+        // update rather than a copy: nothing below a section was ever retired.
+        assertEquals(listOf(sectionId), db.sectionDao().allInNotebook(movedId).map { it.id })
+        assertEquals(movedId, db.sectionDao().byId(sectionId)!!.notebookId)
+        assertNotNull(db.pageDao().byId(pageId))
+    }
+
+    @Test
+    fun aNotebookTheServerAlreadyHoldsIsNotMarkedAsAnUnsentImport() = runBlocking {
+        // The marker means "the server has never taken this", and a re-import of an old file must
+        // not claim otherwise: an id the account has stored is one Permanently delete has to reach.
+        val notebookId = repository.createNotebook("Field Notes")
+        repository.createSection(notebookId, "Observations")
+        val bundle = ByteArrayOutputStream().also { transfers.exportNotebook(notebookId, it) }
+            .toByteArray()
+        db.syncDao().putEntityState(
+            SyncEntityStateEntity("notebook", notebookId, 7L, "{}"),
+        )
+        db.localMetadataDao().put(
+            LocalMetadataEntity(NotesRepository.importedNotebookKey(notebookId), "stale"),
+        )
+
+        transfers.importNotebook(ByteArrayInputStream(bundle))
+
+        assertNull(
+            "a stale marker must go with the import that found it",
+            db.localMetadataDao().value(NotesRepository.importedNotebookKey(notebookId)),
+        )
     }
 
     @Test

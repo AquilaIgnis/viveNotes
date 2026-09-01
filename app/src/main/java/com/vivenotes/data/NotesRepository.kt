@@ -1139,6 +1139,36 @@ class NotesRepository(
         const val REPLACEABLE_STARTER_KEY = "replaceableStarterNotebookId"
 
         /**
+         * Prefix of the `local_metadata` key marking a notebook this device installed from a
+         * `.vive` archive and has not yet pushed successfully.
+         *
+         * One key per notebook rather than one key holding a list: the rows are written and cleared
+         * from different transactions — an import writes one, a push acknowledgement clears one —
+         * and a shared list would make those two race for the whole set.
+         *
+         * Read by `HierarchySync` alone, to tell the two causes of a `purged` verdict apart. See
+         * `HierarchySync.remapPurgedImport`.
+         */
+        const val IMPORTED_NOTEBOOK_KEY_PREFIX = "importedNotebook:"
+
+        fun importedNotebookKey(notebookId: String): String =
+            IMPORTED_NOTEBOOK_KEY_PREFIX + notebookId
+
+        /**
+         * Prefix of the `local_metadata` key recording where an archive's notebook ended up on this
+         * device, when it could not keep the id the archive names.
+         *
+         * Written only by `HierarchySync.remapPurgedImport`, and permanent: the account retired the
+         * archive's id, so every later import of that same file has to be told which notebook it is
+         * an update of. Without it a `.vive` file whose notebook was moved would install a second
+         * copy every time it was opened.
+         */
+        const val IMPORT_REMAP_KEY_PREFIX = "importRemap:"
+
+        fun importRemapKey(archiveNotebookId: String): String =
+            IMPORT_REMAP_KEY_PREFIX + archiveNotebookId
+
+        /**
          * `HierarchySync.PENDING_BATCH_KEY`, repeated rather than imported — see
          * [NotesRepository.serverKnowsOf]. The two are asserted equal by the flush suite.
          */

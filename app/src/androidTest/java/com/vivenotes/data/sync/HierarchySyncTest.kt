@@ -670,6 +670,154 @@ class HierarchySyncTest {
     }
 
     @Test
+    fun aPushRefusedAsPurgedMovesAnImportedNotebookToANewIdInsteadOfErasingIt() = runBlocking {
+        // A `.vive` archive carries the notebook's stable id, so importing one the account erased
+        // re-creates precisely the retired id. Demo.vive did this on 2026-08-31: it imported, showed
+        // on the panel, and vanished when the push behind it was refused 512 times over.
+        val notebookId = repository.createNotebook("Demo")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        markImported(notebookId)
+
+        // The rejection route rather than the pulled one: this device is already above the purge in
+        // the log, so the only way it hears about the id is by offering it.
+        server.beforeFirstPush = { server.purgeNotebook(notebookId) }
+
+        val result = hierarchy.run(account())
+        assertTrue("a purge is news, not an unreadable server: $result", result is SyncRunResult.Succeeded)
+
+        // The retired id is honoured — nothing is offered under it again — but the bytes stay.
+        assertNull(db.notebookDao().byId(notebookId))
+        val movedId = db.sectionDao().byId(sectionId)!!.notebookId
+        assertTrue("the replacement must not be the id the account retired", movedId != notebookId)
+        val moved = db.notebookDao().byId(movedId)!!
+        assertEquals("Demo", moved.name)
+
+        // Only the notebook id moved. Everything below a section is reached by section or page id,
+        // so the subtree is the same rows under a new parent, not a copy of them.
+        assertEquals(listOf(sectionId), db.sectionDao().allInNotebook(movedId).map { it.id })
+        assertNotNull(db.pageDao().byId(pageId))
+
+        // Nothing is left offering the retired id, which is what stops every later push earning
+        // this same verdict for ever.
+        assertTrue(db.syncDao().outbox(512).none { it.entityId == notebookId })
+        assertNull(db.syncDao().entityState("notebook", notebookId))
+
+        // The retry is not a later run: the push phase batches until the outbox is empty, so the
+        // notebook it just moved goes up behind the rejection that moved it, and the subtree that
+        // was refused `missing_parent` goes with it now that its parent is one the server accepts.
+        assertTrue("the whole import must have landed", db.syncDao().outbox(512).isEmpty())
+        assertNotNull(db.syncDao().entityState("notebook", movedId))
+        assertNotNull(db.syncDao().entityState("section", sectionId))
+        assertNotNull(db.syncDao().entityState("page", pageId))
+
+        // Where it went, so re-importing the same `.vive` file updates this copy instead of
+        // installing another one — the archive can never name the retired id again.
+        assertEquals(
+            movedId,
+            db.localMetadataDao().value(NotesRepository.importRemapKey(notebookId)),
+        )
+
+        // And a second run is quiet, rather than finding something still to argue about.
+        val settled = hierarchy.run(account()) as SyncRunResult.Succeeded
+        assertEquals(0, settled.summary.pushed)
+        assertNotNull(db.notebookDao().byId(movedId))
+    }
+
+    @Test
+    fun aPulledPurgeAlsoMovesAnImportedNotebookRatherThanErasingIt() = runBlocking {
+        // The same news arriving the ordinary way: another device pressed Permanently delete, and
+        // this one had imported an archive of that notebook before the pull carrying it ran.
+        server.seed(notebookChange("n", "Demo", System.currentTimeMillis()))
+        server.seed(sectionChange("s", "n", "Section", System.currentTimeMillis()))
+        hierarchy.run(account())
+        assertNotNull(db.notebookDao().byId("n"))
+        markImported("n")
+
+        server.purgeNotebook("n")
+        hierarchy.run(account())
+
+        assertNull(db.notebookDao().byId("n"))
+        val movedId = db.sectionDao().byId("s")!!.notebookId
+        assertTrue(movedId != "n")
+        assertEquals("Demo", db.notebookDao().byId(movedId)!!.name)
+        assertEquals(listOf("s"), db.sectionDao().allInNotebook(movedId).map { it.id })
+
+        // The cursor moved over the purge: the id was honoured, it is the bytes that stayed. It is
+        // past the gravestone at 3 rather than on it, because the push that follows the pull puts
+        // the moved notebook on the server and this device then reads back its own accepted writes.
+        assertTrue("the purge must not be met twice", db.syncDao().state()!!.cursor >= 3L)
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+        assertNotNull(db.syncDao().entityState("notebook", movedId))
+    }
+
+    @Test
+    fun aSecondPurgeOfTheSameArchiveMovesTheRemapWithIt() = runBlocking {
+        // Moved, permanently deleted again, and imported again: the archive id must end up naming
+        // the second replacement. Left on the first it would point at a notebook that is gone, and
+        // the next import of the file would install a copy beside the one it meant to update.
+        val notebookId = repository.createNotebook("Demo")
+        val sectionId = repository.createSection(notebookId, "Section")
+        markImported(notebookId)
+        server.beforeFirstPush = { server.purgeNotebook(notebookId) }
+        hierarchy.run(account())
+
+        val firstMove = db.sectionDao().byId(sectionId)!!.notebookId
+        assertEquals(firstMove, db.localMetadataDao().value(NotesRepository.importRemapKey(notebookId)))
+
+        // The account erases the replacement too, and the file is imported over it once more. The
+        // edit is what gives the run something to offer: a device with an empty outbox makes no
+        // push, so it would never meet the rejection this is about.
+        now += 1_000
+        markImported(firstMove)
+        repository.renameNotebook(firstMove, "Demo, imported again")
+        server.beforeFirstPush = { server.purgeNotebook(firstMove) }
+        hierarchy.run(account())
+
+        val secondMove = db.sectionDao().byId(sectionId)!!.notebookId
+        assertTrue("the notebook must have moved again", secondMove != firstMove)
+        assertEquals(
+            "the archive id must follow the notebook, not stop at the first move",
+            secondMove,
+            db.localMetadataDao().value(NotesRepository.importRemapKey(notebookId)),
+        )
+        assertNotNull(db.notebookDao().byId(secondMove))
+    }
+
+    @Test
+    fun aPurgeStillErasesAnImportedNotebookOnceTheServerHasTakenIt() = runBlocking {
+        // The scope of the exemption, and the reason it is an exemption rather than the rule. Once
+        // an import has been accepted it is an ordinary notebook on the account, so Permanently
+        // delete has to reach it — otherwise whichever device happened to be holding an import
+        // marker would be the one device able to undo an erasure.
+        val notebookId = repository.createNotebook("Demo")
+        val sectionId = repository.createSection(notebookId, "Section")
+        repository.createPage(sectionId, "Page")
+        markImported(notebookId)
+
+        hierarchy.run(account())
+        assertTrue("everything must be on the server first", db.syncDao().outbox(512).isEmpty())
+        assertNull(
+            "an accepted push retires the marker",
+            db.localMetadataDao().value(NotesRepository.importedNotebookKey(notebookId)),
+        )
+
+        server.purgeNotebook(notebookId)
+        hierarchy.run(account())
+
+        assertNull(db.notebookDao().byId(notebookId))
+        assertNull("nothing may come back under a new id", db.sectionDao().byId(sectionId))
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    /** What `NotebookTransferManager.install` writes for a notebook it installed from an archive. */
+    private suspend fun markImported(notebookId: String) {
+        db.localMetadataDao().put(
+            LocalMetadataEntity(NotesRepository.importedNotebookKey(notebookId), "$now"),
+        )
+    }
+
+    @Test
     fun aPurgeTakesThePicturesNothingElseOnTheDeviceStillShows() = runBlocking {
         val bytes = "a photograph".toByteArray()
         val digest = sha256(bytes)
