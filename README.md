@@ -91,6 +91,13 @@ and all AI features run entirely on-device.
 
 # Dev
 
+## Build and install release
+
+```bash
+./gradlew installRelease
+
+```
+
 ## Run all tests on Release ( arm and R8)
 
 ```bash

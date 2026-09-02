@@ -90,9 +90,9 @@ private val releaseKeystore: File? =
 private val signedRelease: Boolean = releaseKeystore != null && !testRelease
 
 /** Single source of truth for `versionName` and for the [releaseArtifactName] built from it. */
-private val appVersionName = "1.2.0"
+private val appVersionName = "1.2.1"
 
-/** `vivenotes-1.2.0.apk` / `.aab`, the names a signed release is published under. */
+/** `vivenotes-1.2.1.apk` / `.aab`, the names a signed release is published under. */
 private val releaseArtifactName = "vivenotes-$appVersionName"
 
 /**
@@ -130,7 +130,7 @@ android {
         applicationId = "com.vivenotes"
         minSdk = 35
         targetSdk = 36
-        versionCode = 4
+        versionCode = 5
         versionName = appVersionName
 
         testInstrumentationRunner = "com.vivenotes.ViveNotesTestRunner"
