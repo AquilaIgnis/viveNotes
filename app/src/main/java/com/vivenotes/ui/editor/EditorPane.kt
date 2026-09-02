@@ -384,6 +384,11 @@ fun EditorPane(
     onDeleteInkSelection: (InkLassoSelection) -> Unit = {},
     /** Puts the whole selection on the shared clipboard — every kind it holds, in one call. */
     onCopySelection: (CanvasSelection) -> Unit = {},
+    /**
+     * Locks or unlocks the whole selection — `memory/diagram.md`. Locking groups what it holds;
+     * unlocking ungroups it again, because the group *is* the lock (`Outline.lockGroup`).
+     */
+    onSetSelectionLocked: (CanvasSelection, Boolean) -> Unit = { _, _ -> },
     hasClipboard: Boolean = false,
     onPaste: (InkPoint) -> Unit = {},
     onRecolorInkSelection: (Set<String>, Int) -> Unit = { _, _ -> },
@@ -527,6 +532,7 @@ fun EditorPane(
             val measured = heights[table.id]?.let { with(density) { it.toDp().value } }
             TableBounds(
                 id = table.id,
+                lockGroup = table.lockGroup,
                 bounds = InkBounds(
                     left = table.x,
                     top = table.y,
@@ -539,7 +545,13 @@ fun EditorPane(
 
     // Re-read against the page whenever any kind changes, so a deleted or undone object takes its
     // handles with it instead of leaving a rectangle over nothing.
-    LaunchedEffect(strokes, shapes, tableBounds, equations, images) {
+    //
+    // Keyed on the selection as well, because `reconcile` is also what widens a hold to a whole
+    // group — an ink `groupId`, and now a locked group. A tap lands naming one object, and without
+    // this key nothing would re-read it until the *page* next changed, so the other members of a
+    // locked pair would be left out of the rectangle they are part of. Idempotent, so the write of
+    // an equal selection ends the loop rather than restarting the effect.
+    LaunchedEffect(selection, strokes, shapes, tableBounds, equations, images) {
         selection = selection?.reconcile(strokes, shapes, tableBounds, equations, images)
     }
 
@@ -1511,6 +1523,12 @@ fun EditorPane(
                             onRecolorEquations(held.equationIds, color)
                         }
                     },
+                    // Absent over anything holding ink: a stroke is not an outline and has no lock
+                    // to set, and a bar over a mixed loop must not offer an action half of what it
+                    // holds would ignore. `isLocked` is all-or-nothing by the lasso's own rule, so
+                    // there is no third state for the button to be in.
+                    locked = if (held.inkIds.isEmpty()) held.isLocked else null,
+                    onToggleLock = { onSetSelectionLocked(held, !held.isLocked) },
                     // The kind-specific half. Only a selection of one kind has one: over a mixed
                     // loop there is nothing both halves agree on, so the bar shows its base alone.
                     extras = {
@@ -1690,6 +1708,10 @@ fun EditorPane(
                         // Unreachable with no swatch, and passed rather than defaulted so that
                         // deleting the colour button never silently deletes a behaviour with it.
                         onRecolor = {},
+                        // A text container declines the object-selection model whole (TD1) and keeps
+                        // its own grip and edges, so there is nothing here for a lock to hold still.
+                        locked = null,
+                        onToggleLock = {},
                         extras = { SelectAllAction { onCommand(FormatCommand.SelectAll) } },
                     )
                 }

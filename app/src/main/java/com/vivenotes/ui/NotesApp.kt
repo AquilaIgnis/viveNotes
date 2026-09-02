@@ -1695,6 +1695,7 @@ private fun PageEditor(
         onResizeSelection = viewModel::resizeInk,
         onDeleteInkSelection = viewModel::deleteInkSelection,
         onCopySelection = viewModel::copySelection,
+        onSetSelectionLocked = viewModel::setSelectionLocked,
         onPaste = viewModel::pasteObjects,
         onRecolorInkSelection = viewModel::recolorInk,
         onGroupInkSelection = viewModel::groupInk,

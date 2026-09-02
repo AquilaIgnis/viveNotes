@@ -164,6 +164,9 @@ class InkOverlayTest {
                             },
                             onCopy = {},
                             onRecolor = { recolorArgb = it },
+                            // The bar without its lock: these cases are about the kind's own half of it.
+                            locked = null,
+                            onToggleLock = {},
                             extras = {
                                 if (held.isInkOnly && held.inkIds.size > 1) {
                                     GroupAction(isOneGroup = false, onGroup = {}, onUngroup = {})

@@ -93,6 +93,9 @@ class MathActionTest {
                         onDelete = {},
                         onCopy = {},
                         onRecolor = {},
+                        // The bar without its lock: these cases are about the kind's own half of it.
+                        locked = null,
+                        onToggleLock = {},
                         extras = {
                             RecognitionAction(
                                 formulaAvailable = formulaAvailable,

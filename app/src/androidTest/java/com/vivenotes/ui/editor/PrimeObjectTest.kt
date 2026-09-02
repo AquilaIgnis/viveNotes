@@ -6,13 +6,17 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.down
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.moveTo
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.up
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.MutableSharedFlow
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -52,6 +56,9 @@ class PrimeObjectTest {
     private val textArmed = mutableStateOf(false)
     private val commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 4)
     private var created: Pair<Float, Float>? = null
+
+    /** The travel a shape drag reported, and null when the drag moved nothing. */
+    private var moved: Pair<Float, Float>? = null
     private lateinit var density: Density
 
     private fun setPage(
@@ -63,6 +70,7 @@ class PrimeObjectTest {
         this.outlines.value = outlines
         this.textArmed.value = textArmed
         created = null
+        moved = null
         compose.setContent {
             density = LocalDensity.current
             ViveNotesTheme {
@@ -93,6 +101,19 @@ class PrimeObjectTest {
                     onSetOutlineMinHeight = { _, _ -> },
                     onOutlineBlurred = {},
                     shapes = this@PrimeObjectTest.shapes.value,
+                    onMoveShape = { _, dx, dy -> moved = dx to dy },
+                    // The ViewModel's edit in one line: the group *is* the lock, so a lock stamps
+                    // one id on what is held and an unlock clears it — `setSelectionLocked`.
+                    onSetSelectionLocked = { held, locked ->
+                        this@PrimeObjectTest.shapes.value =
+                            this@PrimeObjectTest.shapes.value.map { shape ->
+                                if (shape.id in held.shapeIds) {
+                                    shape.copy(lockGroup = if (locked) "group" else null)
+                                } else {
+                                    shape
+                                }
+                            }
+                    },
                     onCanvasMeasured = { _, _ -> },
                     showPrintMargins = false,
                 )
@@ -115,6 +136,25 @@ class PrimeObjectTest {
         val offset = with(density) { Offset(xDp.dp.toPx(), yDp.dp.toPx()) }
         val layer = compose.onNodeWithTag(SHAPE_LAYER_TAG)
         layer.performTouchInput { down(offset) }
+        compose.waitForIdle()
+        layer.performTouchInput { up() }
+        compose.waitForIdle()
+    }
+
+    /**
+     * Drags from one page point to another, on the same layer [tapPage] taps.
+     *
+     * Three injections rather than a `swipe`: the handler decides what it is holding on the down,
+     * previews on the move and commits on the up, so a gesture the test can reason about has to be
+     * driven through the same three stages.
+     */
+    private fun dragPage(fromX: Float, fromY: Float, toX: Float, toY: Float) {
+        val from = with(density) { Offset(fromX.dp.toPx(), fromY.dp.toPx()) }
+        val to = with(density) { Offset(toX.dp.toPx(), toY.dp.toPx()) }
+        val layer = compose.onNodeWithTag(SHAPE_LAYER_TAG)
+        layer.performTouchInput { down(from) }
+        compose.waitForIdle()
+        layer.performTouchInput { moveTo(to) }
         compose.waitForIdle()
         layer.performTouchInput { up() }
         compose.waitForIdle()
@@ -272,5 +312,56 @@ class PrimeObjectTest {
 
         compose.onNodeWithTag(OutlineTags.MOVE).assertIsDisplayed()
         compose.onNodeWithTag(OBJECT_THICKNESS_TAG).assertDoesNotExist()
+    }
+
+    /**
+     * The control for the two below, and worth its own case: without it, a lock that did nothing at
+     * all would pass every assertion a locked object makes.
+     */
+    @Test
+    fun anUnlockedObjectMoves() {
+        setPage(listOf(square(left = 60f, top = 60f, side = 120f)))
+
+        tapPage(120f, 60f)
+        dragPage(120f, 60f, 160f, 100f)
+
+        assertNotNull("the drag reported no travel, so nothing below proves anything", moved)
+    }
+
+    /**
+     * `memory/diagram.md`: *"Locked objects : cannot be re-sized or moved from current position"*.
+     *
+     * One button that draws the state it is in, which is the user's own instruction on the diagram —
+     * so the assertion is that the description changed, not that a second button appeared.
+     */
+    @Test
+    fun lockingAnObjectStopsItBeingDragged() {
+        setPage(listOf(square(left = 60f, top = 60f, side = 120f)))
+
+        tapPage(120f, 60f)
+        compose.onNodeWithContentDescription("Lock selection").assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_LOCK_TAG).performClick()
+
+        // Still held, and the bar with it: a locked object keeps its selection, or the unlock button
+        // would be unreachable.
+        compose.onNodeWithContentDescription("Unlock selection").assertIsDisplayed()
+
+        dragPage(120f, 60f, 160f, 100f)
+
+        assertNull("a locked shape was dragged", moved)
+    }
+
+    @Test
+    fun unlockingLetsItMoveAgain() {
+        setPage(listOf(square(left = 60f, top = 60f, side = 120f)))
+
+        tapPage(120f, 60f)
+        compose.onNodeWithTag(OBJECT_LOCK_TAG).performClick()
+        compose.onNodeWithTag(OBJECT_LOCK_TAG).performClick()
+
+        compose.onNodeWithContentDescription("Lock selection").assertIsDisplayed()
+        dragPage(120f, 60f, 160f, 100f)
+
+        assertNotNull("the object stayed pinned after it was unlocked", moved)
     }
 }

@@ -200,7 +200,10 @@ internal fun ShapeLayer(
                     }
                     // A handle wins over the body: they sit on the boundary or just outside it, so
                     // every one of them is also inside the move target.
-                    val handle = selected?.handleNear(startX, startY)
+                    // No handles on a locked object — `memory/diagram.md`. Absent rather than
+                    // present and dead, the rule the toolkit follows, and the chrome that draws them
+                    // is gated on the same field.
+                    val handle = selected?.takeIf { it.lockGroup == null }?.handleNear(startX, startY)
 
                     // An arm tab sits a little beyond the tip it belongs to, so the finger is never
                     // on the tip it is about to move. Holding that distance for the gesture keeps the
@@ -299,7 +302,11 @@ internal fun ShapeLayer(
                                 currentOnSelect.value(CanvasSelection.ofShape(target))
                             }
                         }
-                        if (dragging) {
+                        // **A locked object refuses the transform, not the touch.** The press
+                        // still selects it — that is the only way to reach the bar the unlock button
+                        // is on — and the drag simply does nothing, rather than falling through to
+                        // the canvas and drawing a lasso over the thing under the finger.
+                        if (dragging && target.lockGroup == null) {
                             when (handle) {
                                 // Measured against the shape as it was when the drag began, and only
                                 // drawn: nothing is written until the finger lifts. See [ShapeResize].
@@ -610,8 +617,11 @@ private fun DrawScope.drawSelection(
     // a different place, because it is the same *kind* of grab — take this point and put it
     // somewhere — rather than four on a box, half of which have no side to pull on and none of which
     // can turn the line.
+    // A locked line takes the box as well, though it has no box of its own: its whole chrome is
+    // the two end handles, and dropping those without putting something in their place would leave a
+    // selected shape with nothing drawn on it at all.
     val ends = shape.ends()
-    val points = if (ends.isEmpty()) {
+    val points = if (ends.isEmpty() || shape.lockGroup != null) {
         drawRect(
             color = accent,
             topLeft = Offset(left, top),
@@ -627,6 +637,11 @@ private fun DrawScope.drawSelection(
     } else {
         ends.map { end -> (end.x * scale) to (end.y * scale) }
     }
+
+    // **Locked: the rectangle stays, the grabs go** — `memory/diagram.md`. What is held still has to
+    // be visible, or the bar would float over nothing; what must not be there is a handle that
+    // cannot be dragged, which is the rule the toolkit follows for an action a kind cannot perform.
+    if (shape.lockGroup != null) return
 
     val radius = HANDLE_RADIUS.toPx()
     points.forEach { (x, y) ->

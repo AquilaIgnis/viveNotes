@@ -186,6 +186,13 @@ internal fun TableContainer(
     /** What each row actually measured to, which is what the rules are drawn from. */
     val rowHeights = remember(table.id) { mutableStateMapOf<Int, Int>() }
 
+    /**
+     * Selected *and* free to move — `memory/diagram.md`. A locked table keeps its selection, its bar
+     * and its row and column gutters; what it loses is the grip and the scale handle, because an
+     * affordance that cannot act is worse than an absent one.
+     */
+    val grabbable = selected && table.lockGroup == null
+
     val scaling = scale
     val live = when {
         scaling != null -> table.scaledAbout(table.x, table.y, scaling.x, scaling.y)
@@ -213,9 +220,9 @@ internal fun TableContainer(
                 Box(
                     modifier = Modifier
                         .size(TABLE_GUTTER)
-                        .then(if (selected) Modifier.testTag(TableTags.MOVE) else Modifier)
+                        .then(if (grabbable) Modifier.testTag(TableTags.MOVE) else Modifier)
                         .then(
-                            if (!selected) {
+                            if (!grabbable) {
                                 Modifier
                             } else {
                                 Modifier
@@ -266,8 +273,12 @@ internal fun TableContainer(
                                 index = index,
                                 accent = accent,
                                 held = (held as? TableAxis.Column)?.index == index,
+                                // **The gutters stay, the widths do not.** A locked table keeps
+                                // its row and column handles, because the *tap* on one is how a row
+                                // or a column is held and how the bar's Insert and Delete reach it —
+                                // and neither of those is a resize. The drag is, so it stops here.
                                 onDrag = { dx ->
-                                    onColumnWidth(index, current.columns[index] + dx)
+                                    if (grabbable) onColumnWidth(index, current.columns[index] + dx)
                                 },
                                 onTap = {
                                     val already = (held as? TableAxis.Column)?.index == index
@@ -298,7 +309,8 @@ internal fun TableContainer(
                                         val base = measured
                                             ?.let { with(density) { it.toDp().value } }
                                             ?: current.rows[index].minHeight
-                                        onRowMinHeight(index, base + dy)
+                                        // A row's floor is a resize — see [ColumnHandle]'s call.
+                                        if (grabbable) onRowMinHeight(index, base + dy)
                                     },
                                     onTap = {
                                         val already = (held as? TableAxis.Row)?.index == index
@@ -353,35 +365,37 @@ internal fun TableContainer(
                 height = gridHeight,
             )
 
-            // **One scale handle, at the bottom right** — TA4, and what
-            // `memory/references/table-tooltip1.jpeg` shows. A table's top and left edges carry the
-            // row and column gutters, so a handle at either of those corners would sit within a
-            // finger's width of a handle that does something else entirely. The gesture is the
-            // shape's own: drag to scale, anchored at the opposite corner.
-            Box(
-                Modifier
-                    .offset(
-                        x = TABLE_GUTTER + live.width.dp - HANDLE_RADIUS,
-                        y = TABLE_GUTTER + gridHeight - HANDLE_RADIUS,
-                    )
-                    .size(HANDLE_RADIUS * 2)
-                    .testTag(TableTags.RESIZE)
-                    .clip(RoundedCornerShape(50))
-                    .background(handleFill)
-                    .drawBehind {
-                        drawCircle(accent, size.minDimension / 2f, style = Stroke(width = 1.5.dp.toPx()))
-                    }
-                    .pointerInputScale(
-                        widthDp = { current.width },
-                        heightDp = { gridHeight.value },
-                        onScale = { x, y -> scale = Offset(x, y) },
-                        onEnd = {
-                            scale?.let { onResize(it.x, it.y) }
-                            scale = null
-                        },
-                        density = density.density,
-                    ),
-            )
+            if (grabbable) {
+                // **One scale handle, at the bottom right** — TA4, and what
+                // `memory/references/table-tooltip1.jpeg` shows. A table's top and left edges carry the
+                // row and column gutters, so a handle at either of those corners would sit within a
+                // finger's width of a handle that does something else entirely. The gesture is the
+                // shape's own: drag to scale, anchored at the opposite corner.
+                Box(
+                    Modifier
+                        .offset(
+                            x = TABLE_GUTTER + live.width.dp - HANDLE_RADIUS,
+                            y = TABLE_GUTTER + gridHeight - HANDLE_RADIUS,
+                        )
+                        .size(HANDLE_RADIUS * 2)
+                        .testTag(TableTags.RESIZE)
+                        .clip(RoundedCornerShape(50))
+                        .background(handleFill)
+                        .drawBehind {
+                            drawCircle(accent, size.minDimension / 2f, style = Stroke(width = 1.5.dp.toPx()))
+                        }
+                        .pointerInputScale(
+                            widthDp = { current.width },
+                            heightDp = { gridHeight.value },
+                            onScale = { x, y -> scale = Offset(x, y) },
+                            onEnd = {
+                                scale?.let { onResize(it.x, it.y) }
+                                scale = null
+                            },
+                            density = density.density,
+                        ),
+                )
+            }
         }
     }
 }

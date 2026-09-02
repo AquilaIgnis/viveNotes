@@ -1331,7 +1331,10 @@ private fun drawLasso(
     // (SD12). It used to get the generic rectangle and four corners here, which is the same shape
     // `ShapeLayer` had stopped drawing — one affordance that changed depending on which tool had
     // selected it, and four handles that pointed at a resize the kind does not have.
-    val line = selection.lineShape(shapes)
+    // A locked line takes the rectangle instead of its two end handles. Its whole chrome is those
+    // handles, so dropping them on their own would leave a selected shape with nothing drawn on it.
+    val locked = selection?.isLocked == true
+    val line = if (locked) null else selection.lineShape(shapes)
     if (line != null) {
         val drawn = line.withLassoPreview(gesture)
         val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1368,14 +1371,19 @@ private fun drawLasso(
         val right = bounds.right + padding
         val bottom = bounds.bottom + padding
         canvas.drawRect(left, top, right, bottom, selectionPaint)
-        listOf(
-            left to top,
-            right to top,
-            right to bottom,
-            left to bottom,
-        ).forEach { (x, y) ->
-            canvas.drawCircle(x, y, handleRadius, handleFill)
-            canvas.drawCircle(x, y, handleRadius, selectionPaint)
+        // **The rectangle stays, the corners go** — a locked selection cannot be scaled, and the
+        // rule the whole app follows is that an affordance which cannot act is absent rather than
+        // present and dead. The same gate the object layers apply to their own handles.
+        if (!locked) {
+            listOf(
+                left to top,
+                right to top,
+                right to bottom,
+                left to bottom,
+            ).forEach { (x, y) ->
+                canvas.drawCircle(x, y, handleRadius, handleFill)
+                canvas.drawCircle(x, y, handleRadius, selectionPaint)
+            }
         }
     }
     canvas.restoreToCount(checkpoint)
@@ -1992,7 +2000,15 @@ private const val GUIDE_FALLBACK_SPAN = 2000f
  * keeping its own idea of how far the finger has travelled.
  */
 internal class LassoGesture {
-    private enum class Mode { Idle, Drawing, Moving, Resizing, LineEnd }
+    /**
+     * [Held] is a press on a **locked** selection: ours, and inert.
+     *
+     * Not [Idle], which would hand the rest of the gesture back and let the scroll containers pan
+     * the page out from under a finger that was trying to drag an object; and not [Drawing], which
+     * would clear the selection and lasso over the very thing under the finger. A locked object
+     * refuses the transform, not the touch — `memory/diagram.md`.
+     */
+    private enum class Mode { Idle, Drawing, Moving, Resizing, LineEnd, Held }
     private enum class Corner { TopLeft, TopRight, BottomRight, BottomLeft }
 
     private var mode by mutableStateOf(Mode.Idle)
@@ -2126,8 +2142,20 @@ internal class LassoGesture {
                 // One line held alone has ends where everything else has corners, and never both —
                 // SD12, and the same question `ShapeLayer.handleNear` asks of a tapped one.
                 val line = selection.lineShape(shapes)
-                val grabbedEnd = line?.endNear(point.x, point.y, SelectionChrome.HANDLE_REACH.value)
-                val corner = if (line == null) selection?.bounds?.cornerNear(point) else null
+                // Locked: no handle answers, because none is drawn. Both grabs are refused here
+                // rather than at the point of applying them, so the gesture never enters a mode
+                // whose whole job is to preview an edit that will not happen.
+                val locked = selection?.isLocked == true
+                val grabbedEnd = if (locked) {
+                    null
+                } else {
+                    line?.endNear(point.x, point.y, SelectionChrome.HANDLE_REACH.value)
+                }
+                val corner = if (line == null && !locked) {
+                    selection?.bounds?.cornerNear(point)
+                } else {
+                    null
+                }
                 startBounds = selection?.bounds
                 if (line != null && grabbedEnd != null) {
                     mode = Mode.LineEnd
@@ -2147,7 +2175,7 @@ internal class LassoGesture {
                     selection != null &&
                     selection.bounds.holdsBody(point, if (line != null) TAP_REACH else 0f)
                 ) {
-                    mode = Mode.Moving
+                    mode = if (locked) Mode.Held else Mode.Moving
                     start = point
                     preview = InkPoint(0f, 0f)
                 } else {
@@ -2175,7 +2203,7 @@ internal class LassoGesture {
                     }
                     Mode.Resizing -> updateResize(event.pagePoint(index, toPage))
                     Mode.LineEnd -> updateLineEnd(event.pagePoint(index, toPage))
-                    Mode.Idle -> Unit
+                    Mode.Held, Mode.Idle -> Unit
                 }
                 true
             }
@@ -2291,7 +2319,9 @@ internal class LassoGesture {
                             onSelect(selection?.copy(bounds = moved.pageBounds()))
                         }
                     }
-                    Mode.Idle -> Unit
+                    // A press on something locked: the selection it landed on is already the
+                    // one on screen, so the lift has nothing to report.
+                    Mode.Held, Mode.Idle -> Unit
                 }
                 mode = Mode.Idle
                 pointerId = -1

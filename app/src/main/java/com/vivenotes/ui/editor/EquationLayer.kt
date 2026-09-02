@@ -167,7 +167,10 @@ internal fun EquationLayer(
                     }
                     // A handle wins over the body: they sit on the boundary, so each is also inside
                     // the move target.
-                    val handle = selected?.handleNear(startX, startY)
+                    // No handles on a locked object — `memory/diagram.md`. Absent rather than
+                    // present and dead, the rule the toolkit follows, and the chrome that draws them
+                    // is gated on the same field.
+                    val handle = selected?.takeIf { it.lockGroup == null }?.handleNear(startX, startY)
 
                     val target = when {
                         handle != null -> selected
@@ -213,7 +216,11 @@ internal fun EquationLayer(
                                 currentOnSelect.value(CanvasSelection.ofEquation(target))
                             }
                         }
-                        if (dragging) {
+                        // **A locked object refuses the transform, not the touch.** The press
+                        // still selects it — that is the only way to reach the bar the unlock button
+                        // is on — and the drag simply does nothing, rather than falling through to
+                        // the canvas and drawing a lasso over the thing under the finger.
+                        if (dragging && target.lockGroup == null) {
                             if (handle != null) {
                                 target.scaleFor(
                                     handle.corner,
@@ -416,6 +423,11 @@ private fun DrawScope.drawEquationSelection(
             ),
         ),
     )
+
+    // **Locked: the rectangle stays, the grabs go** — `memory/diagram.md`. What is held still has to
+    // be visible, or the bar would float over nothing; what must not be there is a handle that
+    // cannot be dragged, which is the rule the toolkit follows for an action a kind cannot perform.
+    if (equation.lockGroup != null) return
 
     val radius = SelectionChrome.HANDLE_RADIUS.toPx()
     listOf(left to top, right to top, right to bottom, left to bottom).forEach { (x, y) ->

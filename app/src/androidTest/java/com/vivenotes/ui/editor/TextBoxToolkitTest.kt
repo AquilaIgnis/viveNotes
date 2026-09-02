@@ -133,6 +133,9 @@ class TextBoxToolkitTest {
                         onDelete = { deleted = true },
                         onCopy = { copied = true },
                         onRecolor = {},
+                        // The bar without its lock: these cases are about the kind's own half of it.
+                        locked = null,
+                        onToggleLock = {},
                         extras = { SelectAllAction { commanded = FormatCommand.SelectAll } },
                     )
                 }

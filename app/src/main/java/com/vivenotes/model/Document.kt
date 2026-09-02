@@ -235,6 +235,29 @@ sealed interface Outline {
     val y: Float
     val width: Float
 
+    /**
+     * The locked group this object belongs to, or null when it is unlocked — `memory/diagram.md`.
+     *
+     * **One nullable field says both things, because the user's rule makes them one fact.** Locking
+     * a selection groups it and unlocking ungroups it again, so an object is grouped exactly while
+     * it is locked: a `locked` flag beside a `groupId` would be two fields that can only ever
+     * disagree by being wrong. Locking a lone object stamps a group of one.
+     *
+     * What locked means is move and resize, and nothing else — an object that cannot be dragged or
+     * scaled, and which a lasso passes over unless the loop caught nothing but locked objects. Copy,
+     * recolour and delete are untouched: lock means "stays put", not "protected".
+     *
+     * Costs an unlocked page nothing on disk. [DocumentJson] does not encode defaults, so a null
+     * writes no key, and a build that predates this ignores the key when it finds one.
+     *
+     * Null forever on [Text] and [Ink]. Text containers decline the object-selection model whole
+     * (`memory/textBoxPlan.md` TD1) and keep their own grip and edges; ink is not an outline at all —
+     * its rows live in `ink_strokes`, where locking would have meant taking the database off its
+     * version-1 baseline. The field is on the interface because the selection code reads it without
+     * caring which kind it holds.
+     */
+    val lockGroup: String?
+
     @Serializable
     @SerialName("text")
     data class Text(
@@ -248,6 +271,7 @@ sealed interface Outline {
          */
         val minHeight: Float = 0f,
         val blocks: List<Block>,
+        override val lockGroup: String? = null,
     ) : Outline {
         companion object {
             const val DEFAULT_WIDTH = 720f
@@ -282,6 +306,7 @@ sealed interface Outline {
         override val width: Float = Text.DEFAULT_WIDTH,
         val attachmentId: String,
         val height: Float,
+        override val lockGroup: String? = null,
     ) : Outline {
 
         fun translated(dx: Float, dy: Float): Image = copy(x = x + dx, y = y + dy)
@@ -361,6 +386,7 @@ sealed interface Outline {
         val borderWidth: Float = 2f,
         val lineType: LineType = LineType.Solid,
         val fillArgb: Int? = null,
+        override val lockGroup: String? = null,
     ) : Outline {
 
         /** Recomputed after any segment moves, so the stored bounds never drift from the geometry. */
@@ -452,6 +478,7 @@ sealed interface Outline {
         val height: Float = DEFAULT_HEIGHT,
         val latex: String = "",
         val colorArgb: Int? = null,
+        override val lockGroup: String? = null,
     ) : Outline {
 
         fun translated(dx: Float, dy: Float): Equation = copy(x = x + dx, y = y + dy)
@@ -548,6 +575,7 @@ sealed interface Outline {
          * Defaulted false so every table written before this existed decodes as what it was.
          */
         val inkOnly: Boolean = false,
+        override val lockGroup: String? = null,
     ) : Outline {
 
         val columnCount: Int get() = columns.size
@@ -676,6 +704,7 @@ sealed interface Outline {
         override val y: Float = 0f,
         override val width: Float = Text.DEFAULT_WIDTH,
         val height: Float = 0f,
+        override val lockGroup: String? = null,
     ) : Outline
 }
 

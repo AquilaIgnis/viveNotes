@@ -481,6 +481,9 @@ class TableToolkitTest {
                         onDelete = {},
                         onCopy = {},
                         onRecolor = {},
+                        // The bar without its lock: these cases are about the kind's own half of it.
+                        locked = null,
+                        onToggleLock = {},
                         extras = {
                             TableRowAction(
                                 canDelete = table.rowCount > 1,
@@ -540,6 +543,9 @@ class TableToolkitTest {
                         onDelete = {},
                         onCopy = {},
                         onRecolor = {},
+                        // The bar without its lock: these cases are about the kind's own half of it.
+                        locked = null,
+                        onToggleLock = {},
                         extras = {
                             HeldRowActions(
                                 canDelete = true,
@@ -575,6 +581,9 @@ class TableToolkitTest {
                         onDelete = {},
                         onCopy = {},
                         onRecolor = {},
+                        // The bar without its lock: these cases are about the kind's own half of it.
+                        locked = null,
+                        onToggleLock = {},
                         extras = {
                             HeldColumnActions(
                                 canDelete = false,

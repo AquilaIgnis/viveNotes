@@ -131,6 +131,9 @@ class EquationObjectTest {
                     onDelete = {},
                     onCopy = {},
                     onRecolor = {},
+                    // The bar without its lock: these cases are about the kind's own half of it.
+                    locked = null,
+                    onToggleLock = {},
                     extras = {
                         EquationEditAction(latex = "x^2", onEdit = { edited = it })
                     },
@@ -158,6 +161,9 @@ class EquationObjectTest {
                     onDelete = {},
                     onCopy = {},
                     onRecolor = {},
+                    // The bar without its lock: these cases are about the kind's own half of it.
+                    locked = null,
+                    onToggleLock = {},
                     extras = { EquationEditAction(latex = null, onEdit = {}) },
                 )
             }

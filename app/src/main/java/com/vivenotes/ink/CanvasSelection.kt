@@ -38,11 +38,35 @@ data class CanvasSelection(
     val imageIds: Set<String> = emptySet(),
     /** Live ink projections, including pieces that share a row id after a partial erase. */
     val projections: Set<InkProjectionKey> = emptySet(),
+    /**
+     * The locked groups held, and empty when nothing held is locked — `memory/diagram.md`.
+     *
+     * A set rather than a flag because a locked group is the unit: [reconcile] widens the selection
+     * to every member of every group named here, which is what makes touching one of them hold all
+     * of it — the same thing it already does for an ink `groupId`.
+     *
+     * **Non-empty means everything held is locked**, and that is an invariant rather than a
+     * coincidence: [selectWithLasso] drops locked objects from a loop that caught anything unlocked,
+     * so a selection is either free of locked objects or made of nothing else. [isLocked] is what
+     * the gestures and the toolkit read, and it can only be all-or-nothing because of that rule.
+     *
+     * More than one group, because a loop can close around two of them. Unlocking clears all of
+     * them, which is the same gesture the bar offers over one.
+     */
+    val lockGroups: Set<String> = emptySet(),
     val bounds: InkBounds,
 ) {
     val isEmpty: Boolean
         get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isEmpty() &&
             equationIds.isEmpty() && imageIds.isEmpty()
+
+    /**
+     * Whether what is held is locked, and so refuses to be moved or resized — `memory/diagram.md`.
+     *
+     * Read by every gesture that would transform the selection and by the toolkit's lock button. Not
+     * read by copy, recolour or delete: locked means "stays put", not "protected".
+     */
+    val isLocked: Boolean get() = lockGroups.isNotEmpty()
 
     /** True when only one kind is held, which is what decides the per-kind half of the toolkit. */
     val isInkOnly: Boolean get() = inkIds.isNotEmpty() && othersEmpty(inkIds)
@@ -138,20 +162,53 @@ data class CanvasSelection(
         } else {
             strokes.filter { it.projectionKey in projections || it.groupId != null && it.groupId in groups }
         }
+        // A locked group is one object, so holding any member holds all of it — the same widening
+        // ink gets from `groupId` just above, and the reason this runs on a *fresh* selection too:
+        // a tap on one picture of a locked pair, or a loop that closed around half of one, arrives
+        // here naming only what it touched. Re-read rather than carried, so unlocking a group frees
+        // the selection on the same pass that clears the field.
+        val heldLocks = (
+            liveShapes.mapNotNull(Outline.Shape::lockGroup) +
+                liveTables.mapNotNull(TableBounds::lockGroup) +
+                liveEquations.mapNotNull(Outline.Equation::lockGroup) +
+                liveImages.mapNotNull(Outline.Image::lockGroup)
+            ).toSet()
+        val keptShapes = if (heldLocks.isEmpty()) {
+            liveShapes
+        } else {
+            shapes.filter { it.id in shapeIds || it.lockGroup.belongsTo(heldLocks) }
+        }
+        val keptTables = if (heldLocks.isEmpty()) {
+            liveTables
+        } else {
+            tables.filter { it.id in tableIds || it.lockGroup.belongsTo(heldLocks) }
+        }
+        val keptEquations = if (heldLocks.isEmpty()) {
+            liveEquations
+        } else {
+            equations.filter { it.id in equationIds || it.lockGroup.belongsTo(heldLocks) }
+        }
+        val keptImages = if (heldLocks.isEmpty()) {
+            liveImages
+        } else {
+            images.filter { it.id in imageIds || it.lockGroup.belongsTo(heldLocks) }
+        }
+
         val measured = expandedInk.mapNotNull(PageStroke::pageBounds) +
-            liveShapes.map(Outline.Shape::pageBounds) +
-            liveTables.map(TableBounds::bounds) +
-            liveEquations.map(Outline.Equation::pageBounds) +
-            liveImages.map(Outline.Image::pageBounds)
+            keptShapes.map(Outline.Shape::pageBounds) +
+            keptTables.map(TableBounds::bounds) +
+            keptEquations.map(Outline.Equation::pageBounds) +
+            keptImages.map(Outline.Image::pageBounds)
         val union = measured.unionBounds() ?: return null
 
         return copy(
             inkIds = expandedInk.map(PageStroke::id).toSet(),
-            shapeIds = liveShapes.map(Outline.Shape::id).toSet(),
-            tableIds = liveTables.map(TableBounds::id).toSet(),
-            equationIds = liveEquations.map(Outline.Equation::id).toSet(),
-            imageIds = liveImages.map(Outline.Image::id).toSet(),
+            shapeIds = keptShapes.map(Outline.Shape::id).toSet(),
+            tableIds = keptTables.map(TableBounds::id).toSet(),
+            equationIds = keptEquations.map(Outline.Equation::id).toSet(),
+            imageIds = keptImages.map(Outline.Image::id).toSet(),
             projections = expandedInk.map(PageStroke::projectionKey).toSet(),
+            lockGroups = heldLocks,
             bounds = union,
         )
     }
@@ -160,24 +217,28 @@ data class CanvasSelection(
         /** One tapped shape. The whole of a tap selection: no loop, no ink. */
         fun ofShape(shape: Outline.Shape): CanvasSelection = CanvasSelection(
             shapeIds = setOf(shape.id),
+            lockGroups = setOfNotNull(shape.lockGroup),
             bounds = shape.pageBounds(),
         )
 
         /** One table, selected by putting a caret in any of its cells — `memory/tablePlan.md` TA11. */
         fun ofTable(table: TableBounds): CanvasSelection = CanvasSelection(
             tableIds = setOf(table.id),
+            lockGroups = setOfNotNull(table.lockGroup),
             bounds = table.bounds,
         )
 
         /** One tapped equation, measured from the box the document already knows. */
         fun ofEquation(equation: Outline.Equation): CanvasSelection = CanvasSelection(
             equationIds = setOf(equation.id),
+            lockGroups = setOfNotNull(equation.lockGroup),
             bounds = equation.pageBounds(),
         )
 
         /** One tapped picture, measured from its frame rather than from its pixels. */
         fun ofImage(image: Outline.Image): CanvasSelection = CanvasSelection(
             imageIds = setOf(image.id),
+            lockGroups = setOfNotNull(image.lockGroup),
             bounds = image.pageBounds(),
         )
     }
@@ -238,7 +299,18 @@ fun CanvasSelection?.isInkAndLines(shapes: List<Outline.Shape>): Boolean {
  *
  * Bounds are in page units, like everything else here.
  */
-data class TableBounds(val id: String, val bounds: InkBounds)
+data class TableBounds(
+    val id: String,
+    val bounds: InkBounds,
+    /** The table's `Outline.Table.lockGroup`, carried because the lasso never sees the outline. */
+    val lockGroup: String? = null,
+)
+
+/**
+ * Membership of a locked group, written once because four kinds ask it the same way — and because a
+ * nullable id cannot be handed to `Set<String>.contains` without saying so somewhere.
+ */
+internal fun String?.belongsTo(groups: Set<String>): Boolean = this != null && this in groups
 
 /**
  * The shared prime object clipboard's contents — `memory/diagram.md`.
@@ -308,26 +380,53 @@ internal fun selectWithLasso(
     // A picture is a rectangle too, and is caught by its frame rather than by what is in it: a
     // photograph of a circle is still a photograph, and half-circling one leaves it alone.
     val caughtImages = images.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
-    if (ink == null && caughtShapes.isEmpty() && caughtTables.isEmpty() &&
-        caughtEquations.isEmpty() && caughtImages.isEmpty()
+    // **The loop passes over what is locked** — `memory/diagram.md` — *unless locked is all it
+    // caught*, which is how a locked group is picked up again to be unlocked. Applied to the catch
+    // rather than to the hit test, so the rule is stated once for every kind instead of inside each
+    // kind's containment test, and so the "unless" can be answered at all: whether a locked object
+    // is dropped depends on what *else* the loop took, which no per-object test can know.
+    //
+    // Ink settles the question by being present. It has no lock of its own — its rows are not
+    // outlines — so a loop that caught ink has caught something unlocked by definition.
+    val caughtUnlocked = ink != null ||
+        caughtShapes.any { it.lockGroup == null } ||
+        caughtTables.any { it.lockGroup == null } ||
+        caughtEquations.any { it.lockGroup == null } ||
+        caughtImages.any { it.lockGroup == null }
+    val heldShapes = if (caughtUnlocked) caughtShapes.filter { it.lockGroup == null } else caughtShapes
+    val heldTables = if (caughtUnlocked) caughtTables.filter { it.lockGroup == null } else caughtTables
+    val heldEquations =
+        if (caughtUnlocked) caughtEquations.filter { it.lockGroup == null } else caughtEquations
+    val heldImages = if (caughtUnlocked) caughtImages.filter { it.lockGroup == null } else caughtImages
+
+    if (ink == null && heldShapes.isEmpty() && heldTables.isEmpty() &&
+        heldEquations.isEmpty() && heldImages.isEmpty()
     ) {
         return null
     }
 
     val measured = (ink?.let { listOf(it.bounds) } ?: emptyList()) +
-        caughtShapes.map(Outline.Shape::pageBounds) +
-        caughtTables.map(TableBounds::bounds) +
-        caughtEquations.map(Outline.Equation::pageBounds) +
-        caughtImages.map(Outline.Image::pageBounds)
+        heldShapes.map(Outline.Shape::pageBounds) +
+        heldTables.map(TableBounds::bounds) +
+        heldEquations.map(Outline.Equation::pageBounds) +
+        heldImages.map(Outline.Image::pageBounds)
     val union = measured.unionBounds() ?: return null
     return CanvasSelection(
         path = path,
         inkIds = ink?.targetIds.orEmpty(),
-        shapeIds = caughtShapes.map(Outline.Shape::id).toSet(),
-        tableIds = caughtTables.map(TableBounds::id).toSet(),
-        equationIds = caughtEquations.map(Outline.Equation::id).toSet(),
-        imageIds = caughtImages.map(Outline.Image::id).toSet(),
+        shapeIds = heldShapes.map(Outline.Shape::id).toSet(),
+        tableIds = heldTables.map(TableBounds::id).toSet(),
+        equationIds = heldEquations.map(Outline.Equation::id).toSet(),
+        imageIds = heldImages.map(Outline.Image::id).toSet(),
         projections = ink?.projections.orEmpty(),
+        // Whatever survived the rule above is either all unlocked or all locked, so this is empty or
+        // it is the groups the loop closed around. `reconcile` widens it to whole groups.
+        lockGroups = (
+            heldShapes.mapNotNull(Outline.Shape::lockGroup) +
+                heldTables.mapNotNull(TableBounds::lockGroup) +
+                heldEquations.mapNotNull(Outline.Equation::lockGroup) +
+                heldImages.mapNotNull(Outline.Image::lockGroup)
+            ).toSet(),
         bounds = union,
     )
 }

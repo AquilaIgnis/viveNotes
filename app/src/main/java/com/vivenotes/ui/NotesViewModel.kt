@@ -91,6 +91,7 @@ import com.vivenotes.ink.InkLassoSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
 import com.vivenotes.ink.PageStroke
+import com.vivenotes.ink.belongsTo
 import com.vivenotes.ink.eraseObjects
 import com.vivenotes.ink.keepingProjectionsOf
 import com.vivenotes.ink.moveSelected
@@ -3248,6 +3249,61 @@ class NotesViewModel(
     }
 
     /**
+     * Locks or unlocks everything the selection holds — `memory/diagram.md`.
+     *
+     * **Locking mints one group id and writes it to every object held, which is what groups them.**
+     * `Outline.lockGroup` is the group, so there is no second field to keep in step and no way to be
+     * locked without being grouped; unlocking clears it and ungroups them again, which is the rule
+     * the user stated. A lone object locks into a group of one.
+     *
+     * Reaches past what is held to every member of the groups it names, so an unlock can never leave
+     * half a group locked — the selection is normally the whole group already (`reconcile` widens it),
+     * and this is what makes that a convenience rather than something correctness rests on.
+     *
+     * **Ink is not touched.** A stroke is not an outline and has no lock: locking it would have meant
+     * taking the database off its version-1 baseline for a column, and the bar declines to offer the
+     * button over ink at all rather than offering one that does half of what it says.
+     *
+     * Four calls rather than one, because history is per kind — the same shape [deleteShapes] and the
+     * recolour path already have, and the reason locking two kinds at once is two steps of Undo.
+     */
+    fun setSelectionLocked(selection: CanvasSelection, locked: Boolean) {
+        val group = if (locked) newId() else null
+        val groups = selection.lockGroups
+        val state = _uiState.value
+
+        val shapeIds = selection.shapeIds +
+            state.shapes.filter { it.lockGroup.belongsTo(groups) }.map(Outline.Shape::id)
+        val tableIds = selection.tableIds +
+            state.tables.filter { it.lockGroup.belongsTo(groups) }.map(Outline.Table::id)
+        val equationIds = selection.equationIds +
+            state.equations.filter { it.lockGroup.belongsTo(groups) }.map(Outline.Equation::id)
+        val imageIds = selection.imageIds +
+            state.images.filter { it.lockGroup.belongsTo(groups) }.map(Outline.Image::id)
+
+        if (shapeIds.isNotEmpty()) {
+            editShapes { shapes ->
+                shapes.map { if (it.id in shapeIds) it.copy(lockGroup = group) else it }
+            }
+        }
+        if (tableIds.isNotEmpty()) {
+            editTables { tables ->
+                tables.map { if (it.id in tableIds) it.copy(lockGroup = group) else it }
+            }
+        }
+        if (equationIds.isNotEmpty()) {
+            editEquations { equations ->
+                equations.map { if (it.id in equationIds) it.copy(lockGroup = group) else it }
+            }
+        }
+        if (imageIds.isNotEmpty()) {
+            editImages { images ->
+                images.map { if (it.id in imageIds) it.copy(lockGroup = group) else it }
+            }
+        }
+    }
+
+    /**
      * Puts the selection on the shared clipboard, whatever it holds. The page does not change.
      *
      * Copy *is* copy: it does not drop a duplicate on the page, because the diagram pairs it with
@@ -3347,8 +3403,11 @@ class NotesViewModel(
         if (sourceTables.isNotEmpty()) {
             // Fresh ids all the way down — table, rows and cells. Two tables sharing a cell id would
             // share the block map entry behind it, so typing in one would appear in the other.
+            // Unlocked, like every pasted copy: a paste puts an object where you asked for it,
+            // and one that arrived immovable would have to be found and unlocked before it could be
+            // put anywhere else. The lock stays on the original, which is where it was set.
             val pastedTables = sourceTables.map { source ->
-                source.withNewIds().copy(x = source.x + dx, y = source.y + dy)
+                source.withNewIds().copy(x = source.x + dx, y = source.y + dy, lockGroup = null)
             }
             editTables(pastedTables.flatMap { it.contentCellIds() }.toSet()) { tables ->
                 pastedTables.forEach { table ->
@@ -3365,6 +3424,7 @@ class NotesViewModel(
             val pastedShapes = sourceShapes.map { source ->
                 source.translated(dx, dy).copy(
                     id = newId(),
+                    lockGroup = null,
                     segments = source.segments
                         .map { it.copy(id = newId()) }
                         .map { it.translated(dx, dy) },
@@ -3375,7 +3435,7 @@ class NotesViewModel(
 
         if (sourceEquations.isNotEmpty()) {
             val pastedEquations = sourceEquations.map { source ->
-                source.translated(dx, dy).copy(id = newId())
+                source.translated(dx, dy).copy(id = newId(), lockGroup = null)
             }
             editEquations { it + pastedEquations }
         }

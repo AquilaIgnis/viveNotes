@@ -56,6 +56,7 @@ import kotlin.math.roundToInt
 internal const val OBJECT_TOOLTIP_TAG = "object-tooltip"
 internal const val OBJECT_COLOR_TAG = "object-tooltip-color"
 internal const val OBJECT_COPY_TAG = "object-tooltip-copy"
+internal const val OBJECT_LOCK_TAG = "object-tooltip-lock"
 internal const val OBJECT_GROUP_TAG = "object-tooltip-group"
 internal const val OBJECT_DELETE_TAG = "object-tooltip-delete"
 internal const val OBJECT_THICKNESS_TAG = "object-tooltip-thickness"
@@ -138,6 +139,20 @@ internal fun ObjectTooltip(
     onDelete: () -> Unit,
     onCopy: () -> Unit,
     onRecolor: (Int) -> Unit,
+    /**
+     * Whether what is held is locked, or **null for a kind that cannot lock** — the same absence the
+     * [swatch] makes for a kind with no colour, and for the same reason.
+     *
+     * Null over ink, which has no lock to set: locking is a field on an outline, and a stroke is not
+     * one. Null over a text container too, which declines the object-selection model whole
+     * (`memory/textBoxPlan.md` TD1) and keeps its own grip and edges.
+     *
+     * **One button, not two** — the user's instruction on the diagram. A Lock beside an Unlock is
+     * two controls of which one is always wrong for what is in front of you; this draws the state it
+     * is showing and toggles it, the way every other stateful control on the bar behaves.
+     */
+    locked: Boolean?,
+    onToggleLock: () -> Unit,
     /** The kind-specific half of the toolkit. Empty for a selection holding more than one kind. */
     extras: @Composable RowScope.() -> Unit = {},
 ) {
@@ -224,6 +239,24 @@ internal fun ObjectTooltip(
                     contentDescription = "Copy selected ink",
                     modifier = Modifier.size(18.dp),
                 )
+            }
+
+            // Base, not an extra: `memory/diagram.md` puts Lock/Unlock in the toolkit every object
+            // shares, beside colour, copy and delete. It sits before [extras] so the three base
+            // actions stay together and a kind's own half stays in one run before Delete.
+            if (locked != null) {
+                IconButton(
+                    onClick = onToggleLock,
+                    modifier = Modifier.size(32.dp).testTag(OBJECT_LOCK_TAG),
+                ) {
+                    Icon(
+                        if (locked) MaterialSymbols.Lock else MaterialSymbols.LockOpen,
+                        // The action, not the state — what this tap will do is what a screen reader
+                        // has to announce before it is tapped.
+                        contentDescription = if (locked) "Unlock selection" else "Lock selection",
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
 
             extras()
