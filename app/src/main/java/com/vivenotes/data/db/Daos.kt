@@ -730,6 +730,18 @@ interface PageContentDao {
      */
     @Query("SELECT * FROM page_content WHERE docJson LIKE '%attachmentId%'")
     suspend fun picturePlacingBodies(): List<PageContentEntity>
+
+    /**
+     * Every stored body that could carry a shape or table border, on [picturePlacingBodies]' terms:
+     * the field name belongs to those two outlines and to nothing else, and both codecs write field
+     * names as text. `AutomaticInkRepair` is the only caller, and the guard is what keeps its one
+     * pass proportional to the pages that have a border on them rather than to every page.
+     *
+     * A border written before the flag existed has no such key, which is correct: those already
+     * decode to null and are what the repair is putting the others back to.
+     */
+    @Query("SELECT * FROM page_content WHERE docJson LIKE '%borderFollowsTheme%'")
+    suspend fun borderCarryingBodies(): List<PageContentEntity>
 }
 
 @Dao
@@ -893,6 +905,19 @@ interface InkStrokeDao {
 
     @Query("UPDATE ink_strokes SET groupId = :groupId WHERE id = :id")
     suspend fun setGroup(id: String, groupId: String?)
+
+    /**
+     * Forgets the intent behind a stroke recorded as deliberately pure white or black, so that it
+     * follows the canvas again — `AutomaticInkRepair`, which explains why, and is the only caller.
+     *
+     * The two colours are bound rather than written into the SQL so that they are the same two
+     * constants [com.vivenotes.data.automaticColorOr] infers from, and cannot drift from them.
+     */
+    @Query(
+        "UPDATE ink_strokes SET colorFollowsTheme = NULL " +
+            "WHERE colorFollowsTheme = 0 AND colorArgb IN (:light, :dark)",
+    )
+    suspend fun clearChosenAutomaticInk(light: Int, dark: Int): Int
 
     /**
      * The next draw-order value for a page — the allocator for [InkStrokeEntity.seq].

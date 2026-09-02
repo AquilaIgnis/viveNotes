@@ -62,6 +62,20 @@ class AutomaticColorTest {
     }
 
     /**
+     * The picker's half of the rule: which swatch *is* automatic on this canvas.
+     *
+     * Pairs with the resolution above, and the two must agree — a tap on the colour automatic is
+     * already producing is what `PenPanel` records as automatic rather than as a choice, so if this
+     * ever named a colour [automaticColorOr] would not resolve to, picking it would pin ink to a
+     * canvas again.
+     */
+    @Test
+    fun automaticInkIsTheColorTheAutomaticPenIsShowing() {
+        assertEquals(AUTOMATIC_LIGHT, automaticInkFor(isDark = true))
+        assertEquals(AUTOMATIC_DARK, automaticInkFor(isDark = false))
+    }
+
+    /**
      * Alpha is part of the match, so a translucent highlight that happens to be white-ish is not
      * mistaken for automatic ink and repainted opaque over the writing it marks.
      */

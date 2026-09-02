@@ -48,10 +48,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.automaticInkFor
 import com.vivenotes.model.ink.ShapeKind
 import com.vivenotes.model.ink.ShapeTracing
 import com.vivenotes.model.ink.trace
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.theme.LocalCanvasColors
 import kotlin.math.abs
 import kotlin.math.sign
 
@@ -136,11 +138,17 @@ fun ColumnScope.ShapePanelContent(
         color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.padding(vertical = 2.dp),
     )
+    val automaticBorder = automaticInkFor(LocalCanvasColors.current.isDark)
     ColorSwatches(
         palette = palette,
         current = shape.borderColorArgb,
-        // A tap is an explicit choice, so it must survive a later theme change.
-        onPick = { onChange(shape.copy(borderColorArgb = it, colorFollowsTheme = false)) },
+        // A tap is an explicit choice, so it must survive a later theme change — except on the
+        // swatch automatic is already showing, which is `PenPanel`'s exception for the same reason:
+        // a shape drawn in "the current ink" must not be pinned to white by the canvas it was drawn
+        // on. A straight line held out of a stroke inherits this flag, so the two have to agree.
+        onPick = {
+            onChange(shape.copy(borderColorArgb = it, colorFollowsTheme = it == automaticBorder))
+        },
         onAddColor = onAddColor,
         colorTag = ShapePanelTags::color,
         customTag = ShapePanelTags.CUSTOM_COLOR,

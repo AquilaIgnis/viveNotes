@@ -43,6 +43,7 @@ import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerKind
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
+import com.vivenotes.data.automaticInkFor
 import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.data.withColorInFront
 import com.vivenotes.ui.panel.PenPanelContent
@@ -53,7 +54,10 @@ import com.vivenotes.ui.panel.EraserPanelTags
 import com.vivenotes.ui.panel.HighlighterPanelContent
 import com.vivenotes.ui.panel.HighlighterPanelTags
 import com.vivenotes.ui.panel.RulerPanelTags
+import androidx.compose.runtime.CompositionLocalProvider
+import com.vivenotes.ui.theme.LocalCanvasColors
 import com.vivenotes.ui.theme.ViveNotesTheme
+import com.vivenotes.ui.theme.canvasColorsFor
 
 /**
  * The Draw tab's three pens are identical by design, so nothing on screen distinguishes them but
@@ -120,23 +124,31 @@ class DrawTabTest {
         }
     }
 
-    /** The pane with a live palette behind it, so a colour added on the wheel lands in the row. */
-    private fun setPanel(pen: PenPreset = PenPreset.starting(0)) {
+    /**
+     * The pane with a live palette behind it, so a colour added on the wheel lands in the row.
+     *
+     * [canvasDark] is pinned rather than inherited from the device's theme: which swatch counts as
+     * the automatic one is a property of the canvas being drawn on, so a test of that rule would
+     * otherwise pass or fail depending on how the emulator happens to be set.
+     */
+    private fun setPanel(pen: PenPreset = PenPreset.starting(0), canvasDark: Boolean = true) {
         val current = mutableStateOf(pen)
         val row = mutableStateOf(PEN_COLORS)
         palette = row
         compose.setContent {
             ViveNotesTheme {
-                Column {
-                    PenPanelContent(
-                        pen = current.value,
-                        palette = row.value,
-                        onChange = {
-                            current.value = it
-                            changed = it
-                        },
-                        onAddColor = { row.value = row.value.withColorInFront(it) },
-                    )
+                CompositionLocalProvider(LocalCanvasColors provides canvasColorsFor(canvasDark)) {
+                    Column {
+                        PenPanelContent(
+                            pen = current.value,
+                            palette = row.value,
+                            onChange = {
+                                current.value = it
+                                changed = it
+                            },
+                            onAddColor = { row.value = row.value.withColorInFront(it) },
+                        )
+                    }
                 }
             }
         }
@@ -521,6 +533,39 @@ class DrawTabTest {
         val green = 0xFF00C853.toInt()
         compose.onNodeWithTag(PenPanelTags.color(green)).performClick()
         assertEquals(pen.copy(colorArgb = green, colorFollowsTheme = false), changed)
+    }
+
+    /**
+     * Tapping the swatch the automatic pen is *already showing* leaves the pen automatic.
+     *
+     * The bug this pins: on a dark canvas the automatic pen's colour is the white swatch, so a tap
+     * on it — to come back to ordinary ink after writing in blue — recorded the pen as deliberately
+     * white, and every stroke drawn afterwards with it. Deliberate white is kept when the canvas
+     * flips, and a PDF sheet is always light, so the notebook exported blank. Nobody picks ink they
+     * cannot see; picking the colour automatic is already producing cannot have meant that.
+     */
+    @Test
+    fun pickingWhiteOnADarkCanvasKeepsThePenAutomatic() {
+        setPanel(PenPreset.starting(0).forCanvasTheme(isDark = true), canvasDark = true)
+        compose.onNodeWithTag(PenPanelTags.color(automaticInkFor(isDark = true))).performClick()
+        assertEquals(true, changed?.colorFollowsTheme)
+    }
+
+    /** The same rule the other way up, so it is the canvas that decides and not the colour white. */
+    @Test
+    fun pickingBlackOnALightCanvasKeepsThePenAutomatic() {
+        setPanel(PenPreset.starting(0).forCanvasTheme(isDark = false), canvasDark = false)
+        compose.onNodeWithTag(PenPanelTags.color(automaticInkFor(isDark = false))).performClick()
+        assertEquals(true, changed?.colorFollowsTheme)
+    }
+
+    /** And the other half: the opposite end of the same pair is a choice, on either canvas. */
+    @Test
+    fun pickingTheColorAutomaticIsNotShowingIsStillAChoice() {
+        val dark = true
+        setPanel(PenPreset.starting(0).forCanvasTheme(dark), dark)
+        compose.onNodeWithTag(PenPanelTags.color(automaticInkFor(isDark = false))).performClick()
+        assertEquals(false, changed?.colorFollowsTheme)
     }
 
     @Test

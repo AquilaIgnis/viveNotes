@@ -47,6 +47,8 @@ import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.automaticInkFor
+import com.vivenotes.ui.theme.LocalCanvasColors
 
 /** Test tags for the parts of the pane that show state without showing text. */
 object PenPanelTags {
@@ -189,11 +191,19 @@ fun ColumnScope.PenPanelContent(
                 .alpha(INERT_ALPHA),
         )
     }
+    // Which swatch the automatic pen is currently *being*. Read from the canvas rather than from
+    // the pen, because a pen that has already lost the flag has to be able to get it back.
+    val automaticInk = automaticInkFor(LocalCanvasColors.current.isDark)
     ColorSwatches(
         palette = palette,
         current = pen.colorArgb,
-        // A tap is an explicit choice. It must stay black or white across future theme changes.
-        onPick = { onChange(pen.copy(colorArgb = it, colorFollowsTheme = false)) },
+        // A tap is an explicit choice and must survive a later theme change — with one exception,
+        // which is the swatch the automatic pen is already showing as current. On a dark canvas
+        // that swatch is white, so tapping it to get back to ordinary ink used to mean "white
+        // forever", and every stroke drawn afterwards was recorded as deliberately white: invisible
+        // the moment the page reached white paper, which is what a PDF export always is. Picking
+        // the colour automatic is already producing cannot have meant that.
+        onPick = { onChange(pen.copy(colorArgb = it, colorFollowsTheme = it == automaticInk)) },
         onAddColor = onAddColor,
     )
     Spacer(Modifier.height(6.dp))

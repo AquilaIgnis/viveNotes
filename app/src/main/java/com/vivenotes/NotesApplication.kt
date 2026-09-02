@@ -1,10 +1,12 @@
 package com.vivenotes
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.OnnxInkRecognitionEngine
 import com.vivenotes.data.AttachmentStore
+import com.vivenotes.data.AutomaticInkRepair
 import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.DeletionPurgeWorker
 import com.vivenotes.data.EditorDefaultsStore
@@ -26,6 +28,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /**
  * Manual dependency container.
@@ -115,5 +118,34 @@ class NotesApplication : Application() {
         // Registered here rather than from the Activity: the clock belongs to the process, and this
         // owner reports the first Activity's start, so nothing is missed by being early.
         ProcessLifecycleOwner.get().lifecycle.addObserver(foregroundSync)
+        repairAutomaticInk()
+    }
+
+    /**
+     * Hands back the ink recorded as deliberately white or black — [AutomaticInkRepair], once.
+     *
+     * On [appScope] rather than as a `Worker` because the marks are wrong on screen and in every
+     * export until it has run, and because it must not be deferred past the first thing the owner
+     * does with the app. It opens the database off the main thread, which a cold start wanted
+     * anyway.
+     *
+     * A failure is logged rather than thrown: no marker is written, so the next launch tries the
+     * same pass again, and a repair that could not run is not a reason to refuse to start.
+     */
+    private fun repairAutomaticInk() {
+        appScope.launch {
+            runCatching { AutomaticInkRepair(database).runIfNeeded() }.fold(
+                onSuccess = { result ->
+                    if (!result.isEmpty) {
+                        Log.i(TAG, "Repaired ${result.strokes} strokes on ${result.pages} pages")
+                    }
+                },
+                onFailure = { Log.w(TAG, "Automatic ink repair will be retried", it) },
+            )
+        }
+    }
+
+    private companion object {
+        const val TAG = "AutomaticInkRepair"
     }
 }

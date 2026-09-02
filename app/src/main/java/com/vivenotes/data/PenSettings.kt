@@ -347,6 +347,16 @@ const val AUTOMATIC_LIGHT: Int = 0xFFFFFFFF.toInt()
 /** And on a light one. */
 const val AUTOMATIC_DARK: Int = 0xFF000000.toInt()
 
+/**
+ * The colour an automatic pen or shape border is showing on this canvas.
+ *
+ * The mirror of [automaticColorOr], and the half a *picker* needs: that one asks whether a mark was
+ * automatic, this asks whether a colour is the one automatic would have produced. Tapping it is
+ * therefore not the same act as tapping any other swatch — see `PenPanel`, which is where the
+ * distinction is made and why.
+ */
+fun automaticInkFor(isDark: Boolean): Int = if (isDark) AUTOMATIC_LIGHT else AUTOMATIC_DARK
+
 val PEN_COLORS: List<Int> = listOf(
     0xFFFFFFFF, 0xFF000000, 0xFFE53935, 0xFF00BCD4, 0xFF00C853,
     0xFFFFD600, 0xFFFF9100, 0xFF9C27B0, 0xFF2962FF,
