@@ -28,3 +28,5 @@ app/src/debug/assets/ai/dev/*.onnx
 
 #jsc
 .env
+*.jks
+android-release.jks

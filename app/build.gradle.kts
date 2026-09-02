@@ -1,3 +1,4 @@
+import com.android.build.api.artifact.SingleArtifact
 import java.io.File
 import java.util.Properties
 
@@ -56,6 +57,64 @@ private fun localSetting(name: String, fallback: String): String =
         ?: localProperties.getProperty(name)?.takeIf(String::isNotBlank)
         ?: fallback
 
+
+ // The upload key's four values, read from a **gitignored** `.env` at the repo root.
+private val dotenv: Properties = Properties().apply {
+    val file = rootProject.file(".env")
+    if (file.exists()) file.inputStream().use(::load)
+}
+
+private fun secret(name: String): String? =
+    (project.findProperty(name) as String?)?.takeIf(String::isNotBlank)
+        ?: dotenv.getProperty(name)?.takeIf(String::isNotBlank)
+        ?: System.getenv(name)?.takeIf(String::isNotBlank)
+
+
+// The keystore to sign `release` with, or null when there is nothing to sign with
+private val releaseKeystore: File? =
+    secret("VIVE_KEYSTORE")?.let { path ->
+        rootProject.file(path).also { file ->
+            // Set-but-wrong is a typo, not a machine without a key: say so instead of quietly
+            // handing back an unsigned APK an hour before an upload.
+            require(file.exists()) {
+                "VIVE_KEYSTORE is set to \"$path\" (${file.absolutePath}), which does not exist."
+            }
+        }
+    }
+
+/**
+ * Whether the release variant carries the upload key. False under [testRelease], which signs with
+ * the debug key on purpose: that variant exists to put instrumented tests through R8, and it is
+ * installed on tablets and emulators all day.
+ */
+private val signedRelease: Boolean = releaseKeystore != null && !testRelease
+
+/** Single source of truth for `versionName` and for the [releaseArtifactName] built from it. */
+private val appVersionName = "1.2.0"
+
+/** `vivenotes-1.2.0.apk` / `.aab`, the names a signed release is published under. */
+private val releaseArtifactName = "vivenotes-$appVersionName"
+
+/**
+ * Renames the AAB, which — unlike the APK — has no `outputFileName` to set. AGP builds the bundle's
+ * name as `<archivesName>-<variant>.aab` and offers no hook on that half, so the rename is an
+ * artifact *transform*: [SingleArtifact.BUNDLE] goes in, the same bytes come out under the name
+ * `withName` gives, and the transformed file becomes the bundle. A `Copy` task would have left a
+ * second, staler AAB of the same size beside it.
+ */
+abstract class NameBundleTask : DefaultTask() {
+    @get:InputFile
+    abstract val bundle: RegularFileProperty
+
+    @get:OutputFile
+    abstract val renamed: RegularFileProperty
+
+    @TaskAction
+    fun rename() {
+        bundle.get().asFile.copyTo(renamed.get().asFile, overwrite = true)
+    }
+}
+
 android {
     namespace = "com.vivenotes"
     // 37, because Compose 1.12 refuses to be compiled against anything older — see the material3
@@ -72,7 +131,7 @@ android {
         minSdk = 35
         targetSdk = 36
         versionCode = 4
-        versionName = "1.2.0"
+        versionName = appVersionName
 
         testInstrumentationRunner = "com.vivenotes.ViveNotesTestRunner"
 
@@ -99,6 +158,21 @@ android {
     // Instrumented tests are built against `debug` unless [testRelease] says otherwise.
     if (testRelease) {
         testBuildType = "release"
+    }
+
+    // Created only when [signedRelease]; `findByName("release")` below is null otherwise.
+    signingConfigs {
+        val keystore = releaseKeystore
+        if (signedRelease && keystore != null) {
+            create("release") {
+                storeFile = keystore
+                storePassword = secret("VIVE_KEYSTORE_PASSWORD")
+                keyAlias = secret("VIVE_KEY_ALIAS")
+                // A key generated with `-destkeypass` left off shares the store's password, which
+                // is what `keytool -genkeypair` does when you press enter at the second prompt.
+                keyPassword = secret("VIVE_KEY_PASSWORD") ?: secret("VIVE_KEYSTORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -132,8 +206,11 @@ android {
             // Applies to the androidTest APK's own R8 run, which only happens under [testRelease];
             // inert otherwise, since a debug test APK is not minified.
             testProguardFiles("proguard-rules-androidTest.pro")
+            // Null when neither branch applies, which leaves the variant unsigned.
+            signingConfig =
+                if (testRelease) signingConfigs.getByName("debug")
+                else signingConfigs.findByName("release")
             if (testRelease) {
-                signingConfig = signingConfigs.getByName("debug")
                 // Test infrastructure the app APK has to retain for the test APK to resolve it.
                 proguardFiles("proguard-rules-testRelease.pro")
             }
@@ -153,12 +230,26 @@ android {
     }
 }
 
- //Drops whatever [releaseAbis] leaves out of the release APK.
 androidComponents {
     onVariants(selector().withBuildType("release")) { variant ->
+        //Drops whatever [releaseAbis] leaves out of the release APK.
         variant.packaging.jniLibs.excludes.addAll(
             (allAbis - releaseAbis.toSet()).map { abi -> "lib/$abi/**" }
         )
+
+        // Only a signed build is publishable, so only a signed build gets the published name. An
+        // unsigned or debug-signed release keeps AGP's `app-release-unsigned.apk` /
+        // `app-release.apk`, which is the one thing about those files worth reading at a glance.
+        if (signedRelease) {
+            variant.outputs.forEach { output ->
+                output.outputFileName.set("$releaseArtifactName.apk")
+            }
+            variant.artifacts
+                .use(tasks.register<NameBundleTask>("nameBundleForRelease"))
+                .wiredWithFiles(NameBundleTask::bundle, NameBundleTask::renamed)
+                .withName("$releaseArtifactName.aab")
+                .toTransform(SingleArtifact.BUNDLE)
+        }
     }
 }
 

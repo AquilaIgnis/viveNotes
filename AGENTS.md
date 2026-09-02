@@ -24,6 +24,24 @@ Before planning, diagnosing, or modifying this project:
     `$HOME/.codex/skills/android-cli/SKILL.md` or `$HOME/.claude/skills/android-cli/SKILL.md`
     before performing those operations.
 
+# Release signing
+
+The upload key's four values are read from a gitignored `.env` at the repo root; `.env.example`
+documents the names. `app/build.gradle.kts` resolves each one from `-P`, then `.env`, then the
+environment, so CI signs with no file on disk.
+
+- Never put a password — or any other secret — in `local.properties` or `gradle.properties`. Both
+  are tracked. That is the whole reason `.env` exists.
+- Keep the keystore itself outside the working tree. `.gitignore` covers `.env`, not a stray `.jks`.
+- No `.env` is a supported state: `release` then builds unsigned, under AGP's own
+  `app-release-unsigned.apk` name. A `VIVE_KEYSTORE` pointing at a missing file is a configuration
+  error, not a fallback to unsigned.
+- A signed release is published as `vivenotes-<versionName>.apk` / `.aab` in the usual
+  `app/build/outputs/` locations. Bump `appVersionName` in `app/build.gradle.kts`; `versionName` and
+  both artifact names follow it.
+- `-PtestRelease` keeps debug signing and AGP's default filenames on purpose — that variant exists
+  to run instrumented tests through R8 and is installed on devices constantly. Leave it that way.
+
 # UI design language
 
 Use Material 3 Expressive as the default design language for all new and modified UI.
