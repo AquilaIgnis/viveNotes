@@ -65,6 +65,9 @@ class RecognitionPanelTest {
     fun copyPublishesPlainTextToTheAndroidSystemClipboard() {
         lateinit var context: Context
         val latex = "\\int_0^1 x^2\\,dx"
+        var clipboardHadPrimaryClip = false
+        var copiedLabel: CharSequence? = null
+        var copiedText: CharSequence? = null
         compose.setContent {
             context = LocalContext.current
             ViveNotesTheme {
@@ -75,7 +78,17 @@ class RecognitionPanelTest {
                             value = latex,
                         ),
                         onValueChange = {},
-                        onCopy = { copyRecognizedText(context, "Recognized LaTeX", it) },
+                        onCopy = {
+                            copyRecognizedText(context, "Recognized LaTeX", it)
+                            val clipboard = context.getSystemService(ClipboardManager::class.java)
+                            // Snapshot synchronously: emulator host-clipboard sharing may replace
+                            // the global clip as soon as this callback yields back to Compose.
+                            clipboardHadPrimaryClip = clipboard.hasPrimaryClip()
+                            copiedLabel = clipboard.primaryClipDescription?.label
+                            copiedText = clipboard.primaryClip
+                                ?.getItemAt(0)
+                                ?.coerceToText(context)
+                        },
                     )
                 }
             }
@@ -86,9 +99,9 @@ class RecognitionPanelTest {
 
         compose.runOnIdle {
             val clipboard = context.getSystemService(ClipboardManager::class.java)
-            assertTrue(clipboard.hasPrimaryClip())
-            assertEquals("Recognized LaTeX", clipboard.primaryClipDescription?.label)
-            assertEquals(latex, clipboard.primaryClip?.getItemAt(0)?.coerceToText(context)?.toString())
+            assertTrue(clipboardHadPrimaryClip)
+            assertEquals("Recognized LaTeX", copiedLabel)
+            assertEquals(latex, copiedText?.toString())
             clipboard.clearPrimaryClip()
         }
     }

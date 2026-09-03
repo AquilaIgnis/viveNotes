@@ -620,16 +620,31 @@ internal fun List<PageStroke>.regroup(groups: Map<String, String?>): List<PageSt
     if (stroke.id in groups) stroke.copy(groupId = groups[stroke.id]) else stroke
 }
 
-/** Makes a self-contained translated copy, baking the live page offset into its input coordinates. */
+/**
+ * Makes a self-contained translated copy, baking the live page transform into its input coordinates.
+ *
+ * A decoded [Stroke] is not guaranteed to satisfy [MutableStrokeInputBatch]'s stricter append
+ * contract. AndroidX's storage format lossily delta-encodes elapsed time: two valid stationary
+ * samples at 55 and 56 ms were observed decoding as two identical x-y-55 triplets. The immutable
+ * stroke still renders, so that defect stays dormant until paste rebuilds its inputs here and the
+ * mutable batch rejects the second triplet. A sufficiently small composed transform can collapse
+ * positions in the same way. This immutable-to-mutable boundary therefore drops duplicate
+ * x-y-time triplets after applying the transform; they carry no additional geometry.
+ */
 internal fun PageStroke.translatedCopy(dx: Float, dy: Float): Stroke {
     val moved = MutableStrokeInputBatch()
     val source = stroke.inputs
+    val seen = HashSet<InputTripletKey>(source.size)
     repeat(source.size) { index ->
         val input = source[index]
+        val x = input.x * scaleX + offsetX + dx
+        val y = input.y * scaleY + offsetY + dy
+        val key = InputTripletKey(x.inputKeyBits(), y.inputKeyBits(), input.elapsedTimeMillis)
+        if (!seen.add(key)) return@repeat
         moved.add(
             type = input.toolType,
-            x = input.x * scaleX + offsetX + dx,
-            y = input.y * scaleY + offsetY + dy,
+            x = x,
+            y = y,
             elapsedTimeMillis = input.elapsedTimeMillis,
             strokeUnitLengthCm = input.strokeUnitLengthCm,
             pressure = input.pressure,
@@ -640,6 +655,11 @@ internal fun PageStroke.translatedCopy(dx: Float, dy: Float): Stroke {
     moved.setNoiseSeed(source.getNoiseSeed())
     return Stroke(stroke.brush, moved.toImmutable())
 }
+
+private data class InputTripletKey(val xBits: Int, val yBits: Int, val elapsedTimeMillis: Long)
+
+/** AndroidX Ink compares positions numerically, so canonicalise the two bit patterns for zero. */
+private fun Float.inputKeyBits(): Int = if (this == 0f) 0 else toRawBits()
 
 /** Applies the exact live projection set captured when the gesture began. */
 internal fun List<PageStroke>.moveSelected(move: InkLassoMove): List<PageStroke> = map { stroke ->
