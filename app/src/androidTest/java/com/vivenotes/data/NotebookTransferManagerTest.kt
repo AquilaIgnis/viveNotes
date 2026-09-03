@@ -9,12 +9,16 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.data.db.AttachmentEntity
+import com.vivenotes.data.db.InkEraseEntity
+import com.vivenotes.data.db.InkEraseTargetEntity
+import com.vivenotes.data.db.InkMoveTargetEntity
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.SyncEntityStateEntity
 import com.vivenotes.data.db.SyncStateEntity
 import com.vivenotes.ink.InkCodec
+import com.vivenotes.ink.InkPoint
 import com.vivenotes.model.Block
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
@@ -454,6 +458,74 @@ class NotebookTransferManagerTest {
             assertTrue(
                 "the authoritative import kept a destination-only page live",
                 destinationDb.pageDao().byId(destinationOnlyPage)!!.deletedAt != null,
+            )
+        } finally {
+            destinationDb.close()
+        }
+    }
+
+    @Test
+    fun exportThenImportPreservesTargetsWhoseStrokeWasPurged() = runBlocking {
+        val notebookId = repository.createNotebook("Field Notes")
+        val sectionId = repository.createSection(notebookId, "Observations")
+        val pageId = repository.createPage(sectionId, "Heron")
+        val pen = PenPreset(colorArgb = 0xFF112233.toInt(), colorFollowsTheme = false)
+        val inputs = MutableStrokeInputBatch().apply {
+            add(InputToolType.UNKNOWN, 10f, 20f, 0L)
+            add(InputToolType.UNKNOWN, 30f, 40f, 10L)
+        }.toImmutable()
+        val stroke = InkCodec.encode(Stroke(InkCodec.brushFor(pen), inputs), pageId, 0, pen, now)
+        db.inkStrokeDao().insert(stroke)
+
+        val erase = InkEraseEntity(
+            id = "01a06591-0000-7000-8000-000000000001",
+            pageId = pageId,
+            sizeDp = 12f,
+            points = stroke.points,
+            enc = stroke.enc,
+            createdAt = now + 1,
+        )
+        val move = InkCodec.encodeMove(
+            path = listOf(InkPoint(5f, 5f), InkPoint(35f, 5f), InkPoint(35f, 45f)),
+            pageId = pageId,
+            dx = 4f,
+            dy = 6f,
+            now = now + 2,
+        ).copy(id = "01a06591-0000-7000-8000-000000000002")
+        db.inkEraseDao().insert(erase)
+        db.inkEraseDao().insertTargets(listOf(InkEraseTargetEntity(erase.id, stroke.id)))
+        db.inkMoveDao().insert(move)
+        db.inkMoveDao().insertTargets(listOf(InkMoveTargetEntity(move.id, stroke.id)))
+
+        db.inkStrokeDao().softDelete(listOf(stroke.id), now)
+        now += NotesRepository.DELETION_RETENTION_MILLIS
+        assertEquals(1, repository.purgeExpiredDeletions(now).inkStrokes)
+        assertTrue(db.inkStrokeDao().byIds(listOf(stroke.id)).isEmpty())
+
+        val bundle = ByteArrayOutputStream()
+            .also { transfers.exportNotebook(notebookId, it) }
+            .toByteArray()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val destinationDb = openDatabase("purged-target-destination.db")
+        try {
+            val destinationTransfers = NotebookTransferManager(
+                context,
+                destinationDb,
+                AttachmentStore(context, destinationDb),
+                transferRoot = File(root, "purged-target-transfers"),
+                clock = { now },
+            )
+
+            destinationTransfers.importNotebook(ByteArrayInputStream(bundle))
+
+            assertTrue(destinationDb.inkStrokeDao().byIds(listOf(stroke.id)).isEmpty())
+            assertEquals(
+                listOf(InkEraseTargetEntity(erase.id, stroke.id)),
+                destinationDb.inkEraseDao().targetsForErases(listOf(erase.id)),
+            )
+            assertEquals(
+                listOf(InkMoveTargetEntity(move.id, stroke.id)),
+                destinationDb.inkMoveDao().targetsForMoves(listOf(move.id)),
             )
         } finally {
             destinationDb.close()

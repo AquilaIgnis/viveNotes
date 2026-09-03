@@ -536,15 +536,30 @@ class NotebookTransferManager(
             val erasesById = erases.associateBy { it.id }
             val movesById = moves.associateBy { it.id }
             if (eraseTargets.any { target ->
+                    !validId(target.eraseId) || !validId(target.strokeId) ||
+                        target.eraseId !in erasesById
+                }
+            ) fail("The notebook contains invalid erase targets.")
+            if (eraseTargets.any { target ->
                     val erase = erasesById[target.eraseId]
                     val stroke = strokesById[target.strokeId]
-                    erase == null || stroke == null || erase.pageId != stroke.pageId
+                    // A missing stroke is an inert, valid target. Stroke tombstones are physically
+                    // collected after seven days without rewriting the immutable erase operation
+                    // that named them; sync accepts the same state when the operation and stroke
+                    // arrive in different delta pages. Only a stored stroke can cross a page.
+                    stroke != null && erase?.pageId != stroke.pageId
                 }
             ) fail("An erase target crosses a page boundary.")
             if (moveTargets.any { target ->
+                    !validId(target.moveId) || !validId(target.strokeId) ||
+                        target.moveId !in movesById
+                }
+            ) fail("The notebook contains invalid move targets.")
+            if (moveTargets.any { target ->
                     val move = movesById[target.moveId]
                     val stroke = strokesById[target.strokeId]
-                    move == null || stroke == null || move.pageId != stroke.pageId
+                    // See the erase-target rule above: missing target strokes are valid and inert.
+                    stroke != null && move?.pageId != stroke.pageId
                 }
             ) fail("A move target crosses a page boundary.")
 
