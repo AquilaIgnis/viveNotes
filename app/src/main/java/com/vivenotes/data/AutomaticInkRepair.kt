@@ -62,7 +62,7 @@ data class InkRepairResult(val strokes: Int, val pages: Int) {
 }
 
 /**
- * Gives back the marks that were recorded as deliberately white or black — once per installation.
+ * Gives back the marks that were recorded as deliberately white or black — once per repair version.
  *
  * **Why the flag has to be cleared rather than read around.** `false` is a statement about intent,
  * and the renderers are right to obey it; the bug was upstream, in a picker that could not tell
@@ -73,7 +73,10 @@ data class InkRepairResult(val strokes: Int, val pages: Int) {
  * `null` means to [automaticColorOr] and how every mark drawn before the flag existed is already
  * read.
  *
- * One-shot, recorded in `local_metadata`. Not a Room migration: the schema is unchanged, and a
+ * One-shot, recorded in `local_metadata`. Version 2 deliberately repeats version 1's pass: version
+ * 1 repaired the rows but missed the saved pen preset, so that preset could create more bad rows
+ * after its marker was written and before [AutomaticPenPresetsMigration] shipped. Not a Room
+ * migration: the schema is unchanged, and a
  * repair that has to run inside the transaction Room opens for a version bump cannot be retried
  * when a page body fails to decode. A failed pass writes no marker and is simply tried again on the
  * next launch.
@@ -112,8 +115,8 @@ class AutomaticInkRepair(private val database: NotesDatabase) {
     }
 
     private companion object {
-        /** Versioned, so a later repair of a different kind is a new key rather than a re-run. */
-        const val KEY = "repair.chosenAutomaticInk.1"
+        /** Version 2 closes the saved-preset window described in the class KDoc. */
+        const val KEY = "repair.chosenAutomaticInk.2"
         const val MARKER = "done"
     }
 }

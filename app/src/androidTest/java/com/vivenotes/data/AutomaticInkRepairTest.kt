@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.data.db.InkStrokeEntity
+import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
@@ -123,6 +124,25 @@ class AutomaticInkRepairTest {
             false,
             db.inkStrokeDao().byIds(listOf("deliberate")).single().colorFollowsTheme,
         )
+    }
+
+    /**
+     * Version 1 could finish and then the unrepaired saved pen could create another white stroke.
+     * Version 2 must cross that old marker once, after which its own marker keeps the pass one-shot.
+     */
+    @Test
+    fun aCompletedVersionOneRepairDoesNotHideNewlyBrokenInk() = runBlocking {
+        val pageId = newPage()
+        db.localMetadataDao().put(
+            LocalMetadataEntity("repair.chosenAutomaticInk.1", "done"),
+        )
+        db.inkStrokeDao().insert(
+            stroke("after-v1", pageId, seq = 0, colorArgb = AUTOMATIC_LIGHT, followsTheme = false),
+        )
+
+        assertEquals(1, repair.runIfNeeded().strokes)
+        assertNull(db.inkStrokeDao().byIds(listOf("after-v1")).single().colorFollowsTheme)
+        assertEquals(true, repair.runIfNeeded().isEmpty)
     }
 
     private suspend fun newPage(): String {

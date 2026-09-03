@@ -1,5 +1,6 @@
 package com.vivenotes.pdf
 
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
@@ -14,6 +15,7 @@ import com.vivenotes.data.InkPageLoader
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.PageLoad
 import com.vivenotes.data.PenPreset
+import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.model.Block
@@ -206,6 +208,50 @@ class PdfExportTest {
         assertTrue("the preview drew nothing but its background", marked)
     }
 
+    /**
+     * Automatic ink captured on a dark canvas has white in its brush, but white is not its intent.
+     * The flag must make the PDF renderer resolve it against its light paper and paint it black.
+     */
+    @Test
+    fun automaticWhiteInkFromADarkCanvasExportsBlack() = runBlocking {
+        val automaticPage = repository.createPage(sectionId, "Automatic ink")
+        repository.saveDoc(automaticPage, PageDoc(style = PageStyle(hideTitle = true)))
+        // Wide enough to leave fully covered pixels when the 160-dp page is rasterized at PDF's
+        // 72 points per inch; the default 1.5 dp pen is intentionally sub-pixel at this scale.
+        val darkCanvasPen = PenPreset.starting(0)
+            .copy(thickness = 8f)
+            .forCanvasTheme(isDark = true)
+        repository.addStroke(
+            inkAt(
+                id = "automatic-white",
+                x = 40f,
+                y = 80f,
+                targetPageId = automaticPage,
+                pen = darkCanvasPen,
+            ),
+        )
+
+        val plan = exporter.plan(
+            PdfExportRequest(automaticPage, sectionId, PdfExportOptions()),
+        )
+        write(plan)
+
+        openPdf { renderer ->
+            renderer.openPage(0).use { page ->
+                val rendered = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+                rendered.eraseColor(Color.WHITE)
+                page.render(rendered, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                val containsBlackInk = (0 until rendered.width).any { x ->
+                    (0 until rendered.height).any { y ->
+                        val pixel = rendered.getPixel(x, y)
+                        Color.red(pixel) < 64 && Color.green(pixel) < 64 && Color.blue(pixel) < 64
+                    }
+                }
+                assertTrue("automatic white ink disappeared on PDF paper", containsBlackInk)
+            }
+        }
+    }
+
     // --- helpers -------------------------------------------------------------------------------
 
     private suspend fun write(plan: PdfExportPlan): Int =
@@ -226,18 +272,24 @@ class PdfExportTest {
         blocks = listOf(Block(id = newId(), runs = listOf(Run(text)))),
     )
 
-    private fun inkAt(id: String, x: Float, y: Float) = InkCodec.encode(
+    private fun inkAt(
+        id: String,
+        x: Float,
+        y: Float,
+        targetPageId: String = pageId,
+        pen: PenPreset = PEN,
+    ) = InkCodec.encode(
         stroke = Stroke(
-            brush = InkCodec.brushFor(PEN),
+            brush = InkCodec.brushFor(pen),
             inputs = MutableStrokeInputBatch().apply {
                 add(InputToolType.UNKNOWN, x, y, 0L)
                 add(InputToolType.UNKNOWN, x + 40f, y + 30f, 8L)
                 add(InputToolType.UNKNOWN, x + 80f, y, 16L)
             }.toImmutable(),
         ),
-        pageId = pageId,
+        pageId = targetPageId,
         seq = 0,
-        pen = PEN,
+        pen = pen,
         now = 1L,
     ).copy(id = id)
 

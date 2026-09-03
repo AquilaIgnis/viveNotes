@@ -1,6 +1,7 @@
 package com.vivenotes.data
 
 import android.content.Context
+import androidx.datastore.core.DataMigration
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -17,7 +18,16 @@ import com.vivenotes.model.ink.ShapeKind
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
-private val Context.penPreferences: DataStore<Preferences> by preferencesDataStore("pens")
+private val Context.penPreferences: DataStore<Preferences> by preferencesDataStore(
+    name = "pens",
+    // Runs before the first preference value is emitted, so a barrel-button press cannot select the
+    // stale explicit-white Pen 1 while an asynchronous repair is still catching up.
+    produceMigrations = { listOf(AutomaticPenPresetsMigration) },
+)
+
+private fun penPreferenceKey(index: Int) = stringPreferencesKey("pen_$index")
+
+private val automaticPenPresetsMigrated = booleanPreferencesKey("automatic_pen_presets_migrated_v1")
 
 /**
  * Pen types from `memory/references/pen-tooltip.jpeg`.
@@ -679,7 +689,7 @@ class PenSettingsStore(context: Context) {
     }.getOrNull()
 
     private companion object {
-        fun key(index: Int) = stringPreferencesKey("pen_$index")
+        fun key(index: Int) = penPreferenceKey(index)
 
         val DRAW_WITH_FINGER = booleanPreferencesKey("draw_with_finger")
         val STYLUS_BUTTONS = stringPreferencesKey("stylus_buttons")
@@ -710,4 +720,51 @@ internal val penSettingsJson: Json = Json {
     encodeDefaults = true
     ignoreUnknownKeys = true
     coerceInputValues = true
+}
+
+/**
+ * Repairs the saved tools left behind by the old automatic-colour picker.
+ *
+ * The picker used to resolve an automatic pen to white on a dark canvas, then persist that same
+ * white as a deliberate colour when its swatch was tapped. The database repair in
+ * [AutomaticInkRepair] corrected strokes already on the page, but not these DataStore presets. A
+ * stylus binding that later selected such a pen therefore kept creating *new* deliberate-white
+ * strokes, which correctly stayed white when exported onto PDF paper.
+ *
+ * This is a DataStore migration instead of a rule in `decodePen`: it must reinterpret the bad state
+ * once and then get out of the way. After the marker is written, intentionally choosing pure black
+ * or white remains possible. Records from before `colorFollowsTheme` existed are also left alone;
+ * [PenSettingsStore.decodePen] already has the narrower legacy rule for those.
+ */
+internal object AutomaticPenPresetsMigration : DataMigration<Preferences> {
+
+    override suspend fun shouldMigrate(currentData: Preferences): Boolean =
+        currentData[automaticPenPresetsMigrated] != true
+
+    override suspend fun migrate(currentData: Preferences): Preferences {
+        val repaired = currentData.toMutablePreferences()
+        repeat(PenPreset.COUNT) { index ->
+            val key = penPreferenceKey(index)
+            val stored = currentData[key] ?: return@repeat
+            val parsed = runCatching { penSettingsJson.parseToJsonElement(stored).jsonObject }
+                .getOrNull()
+                ?: return@repeat
+            // Only the broken picker wrote the explicit flag. An absent flag is a genuinely legacy
+            // preset whose intent is handled by decodePen, not evidence that this bug created it.
+            if (!parsed.containsKey("colorFollowsTheme")) return@repeat
+            val preset = runCatching {
+                penSettingsJson.decodeFromString(PenPreset.serializer(), stored)
+            }.getOrNull() ?: return@repeat
+            if (isChosenAutomaticInk(preset.colorArgb, preset.colorFollowsTheme)) {
+                repaired[key] = penSettingsJson.encodeToString(
+                    PenPreset.serializer(),
+                    preset.copy(colorFollowsTheme = true),
+                )
+            }
+        }
+        repaired[automaticPenPresetsMigrated] = true
+        return repaired
+    }
+
+    override suspend fun cleanUp() = Unit
 }
