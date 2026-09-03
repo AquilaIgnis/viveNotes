@@ -15,7 +15,10 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.R
+import com.vivenotes.data.billing.ManagedSubscriptionState
 import com.vivenotes.data.sync.ConnectFailure
+import com.vivenotes.data.sync.ManagedSubscriptionStatus
+import com.vivenotes.data.sync.PaidSubscriptionState
 import com.vivenotes.data.sync.PermanentSyncFailure
 import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncRunResult
@@ -56,6 +59,10 @@ class AccountScreenTest {
     private val linkCalls = mutableListOf<Pair<String, String>>()
     private var linkCancels = 0
     private var accountCreated by mutableStateOf(false)
+    private var managedSubscription by mutableStateOf(ManagedSubscriptionState())
+    private var subscriptions = 0
+    private var managedSubscriptions = 0
+    private val couponCodes = mutableListOf<String>()
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
@@ -452,6 +459,92 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.SELF_HOST).assertDoesNotExist()
     }
 
+    @Test
+    fun selfHostedConnectionNeverShowsManagedBilling() {
+        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        setScreen()
+
+        compose.onNodeWithTag(AccountTags.CONNECTED).assertIsDisplayed()
+        compose.onNodeWithTag(AccountTags.SUBSCRIPTION).assertDoesNotExist()
+    }
+
+    @Test
+    fun managedPlanShowsPlayPriceAndStartsThePurchaseFlow() {
+        connection = ServerConnection.Connected("https://cloud.vivenotes.net", "Pixel Tablet")
+        managedSubscription = ManagedSubscriptionState(
+            visible = true,
+            formattedPrice = "\$4.99",
+            productAvailable = true,
+        )
+        setScreen()
+
+        compose.onNodeWithText(
+            context.getString(R.string.account_subscription_price, "\$4.99"),
+        ).performScrollTo().assertIsDisplayed()
+        val planWidth = compose.onNodeWithTag(AccountTags.SUBSCRIPTION)
+            .fetchSemanticsNode().boundsInRoot.width
+        val purchase = compose.onNodeWithTag(AccountTags.SUBSCRIBE)
+        purchase.performScrollTo()
+        compose.onNodeWithTag(AccountTags.GOOGLE_PLAY_MARK, useUnmergedTree = true)
+            .assertIsDisplayed()
+        assertTrue(purchase.fetchSemanticsNode().boundsInRoot.width < planWidth)
+        purchase.performClick()
+
+        assertEquals(1, subscriptions)
+    }
+
+    @Test
+    fun ownedPlayPlanIsManagedInPlayAndCouponDoesNotReplaceIt() {
+        connection = ServerConnection.Connected("https://cloud.vivenotes.net", "Pixel Tablet")
+        managedSubscription = ManagedSubscriptionState(
+            visible = true,
+            status = ManagedSubscriptionStatus(
+                active = true,
+                validUntil = "2026-12-03T12:00:00Z",
+                paidState = PaidSubscriptionState.Active,
+                paidValidUntil = "2026-10-03T12:00:00Z",
+                promotionalValidUntil = "2026-12-03T12:00:00Z",
+                autoRenewing = true,
+                productId = "vivenotes_storage_monthly",
+            ),
+            formattedPrice = "\$4.99",
+            productAvailable = true,
+            playPurchaseOwned = true,
+        )
+        setScreen()
+
+        compose.onNodeWithTag(AccountTags.SUBSCRIBE).assertDoesNotExist()
+        compose.onNodeWithTag(AccountTags.MANAGE_SUBSCRIPTION)
+            .performScrollTo()
+            .performClick()
+        assertEquals(1, managedSubscriptions)
+        compose.onNodeWithTag(AccountTags.COUPON)
+            .performScrollTo()
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun couponFieldSubmitsTheTypedCode() {
+        connection = ServerConnection.Connected("https://cloud.vivenotes.net", "Pixel Tablet")
+        managedSubscription = ManagedSubscriptionState(visible = true)
+        setScreen()
+
+        compose.onNodeWithTag(AccountTags.COUPON).performScrollTo().performTextInput("FREE-MONTH")
+        val planWidth = compose.onNodeWithTag(AccountTags.SUBSCRIPTION)
+            .fetchSemanticsNode().boundsInRoot.width
+        val couponWidth = compose.onNodeWithTag(AccountTags.COUPON)
+            .fetchSemanticsNode().boundsInRoot.width
+        val redeem = compose.onNodeWithTag(AccountTags.REDEEM_COUPON)
+        redeem.performScrollTo()
+        val redeemWidth = redeem.fetchSemanticsNode().boundsInRoot.width
+
+        assertTrue(couponWidth < planWidth)
+        assertTrue(redeemWidth < couponWidth)
+        redeem.performClick()
+
+        assertEquals(listOf("FREE-MONTH"), couponCodes)
+    }
+
     /**
      * Asserted through the button rather than by reading the password field, whose semantics carry
      * the masked text: back on the empty form, Connect has an empty required field again. The point
@@ -702,6 +795,10 @@ class AccountScreenTest {
                     onCancelLink = { linkCancels++ },
                     accountCreated = accountCreated,
                     connection = connection,
+                    managedSubscription = managedSubscription,
+                    onSubscribe = { subscriptions++ },
+                    onManageSubscription = { managedSubscriptions++ },
+                    onRedeemCoupon = { couponCodes += it },
                     onConnect = { url, email, password ->
                         connectCalls += Triple(url, email, password)
                     },

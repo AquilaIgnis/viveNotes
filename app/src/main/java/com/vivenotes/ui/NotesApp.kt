@@ -1,5 +1,7 @@
 package com.vivenotes.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -82,6 +84,7 @@ import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.data.sync.CloudSignInResult
+import com.vivenotes.data.billing.ManagedSubscriptionController
 import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncAccounts
 import com.vivenotes.data.sync.DisconnectResult
@@ -111,6 +114,7 @@ import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.R
+import com.vivenotes.BuildConfig
 import com.vivenotes.data.sync.CloudArchiveResult
 import com.vivenotes.ui.account.AccountScreen
 import com.vivenotes.ui.closed.ClosedNotebooksScreen
@@ -185,6 +189,7 @@ fun NotesApp(
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
     syncAccounts: SyncAccounts,
+    managedSubscription: ManagedSubscriptionController,
     pdfExporter: PdfExporter,
 ) {
     // The app owns its small back stack, following Navigation 3's state model without taking on a
@@ -241,6 +246,13 @@ fun NotesApp(
     // its result — including a failure — is news, and the stored account is only the background.
     val storedAccount by syncAccounts.account.collectAsStateWithLifecycle(initialValue = null)
     val syncStatus by syncAccounts.status.collectAsStateWithLifecycle()
+    val subscriptionState by managedSubscription.state.collectAsStateWithLifecycle()
+
+    // ProductDetails are deliberately ephemeral. Re-query when Account opens so the purchase
+    // action uses a current offer and localized price rather than a cached Play object.
+    LaunchedEffect(accountOpen) {
+        if (accountOpen) managedSubscription.refresh()
+    }
 
     // A revocation found by the clock rather than by the button still has to reach the screen. The
     // token is already gone by the time this runs — `synchronize` drops it — so this is only about
@@ -472,6 +484,23 @@ fun NotesApp(
                 },
                 accountCreated = accountCreated,
                 connection = displayedConnection,
+                managedSubscription = subscriptionState,
+                onSubscribe = {
+                    if (activity != null) managedSubscription.purchase(activity)
+                },
+                onManageSubscription = {
+                    context.startActivity(
+                        Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse(
+                                "https://play.google.com/store/account/subscriptions" +
+                                    "?sku=${BuildConfig.CLOUD_STORAGE_SUBSCRIPTION_ID}" +
+                                    "&package=${BuildConfig.APPLICATION_ID}",
+                            ),
+                        ),
+                    )
+                },
+                onRedeemCoupon = managedSubscription::redeemCoupon,
                 onConnect = { serverUrl, email, password ->
                     disconnectFailure = null
                     selfHostConnection = ServerConnection.Connecting

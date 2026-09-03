@@ -22,6 +22,7 @@ import com.vivenotes.pdf.PdfExporter
 import com.vivenotes.data.sync.ForegroundSyncScheduler
 import com.vivenotes.data.sync.SyncAccounts
 import com.vivenotes.data.sync.HierarchySyncWorker
+import com.vivenotes.data.billing.ManagedSubscriptionController
 import com.vivenotes.richtext.FontRegistry
 import com.vivenotes.math.SympyMathEngine
 import kotlinx.coroutines.CoroutineScope
@@ -100,6 +101,11 @@ class NotesApplication : Application() {
      */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
+    /** Managed Play purchase + server entitlement lifecycle — `memory/billingPlan.md`. */
+    val managedSubscription: ManagedSubscriptionController by lazy {
+        ManagedSubscriptionController(this, syncAccounts, appScope)
+    }
+
     /** SD6's sync cadence. See [ForegroundSyncScheduler] for why WorkManager cannot be it. */
     private val foregroundSync: ForegroundSyncScheduler by lazy {
         ForegroundSyncScheduler(
@@ -118,6 +124,9 @@ class NotesApplication : Application() {
         // Registered here rather than from the Activity: the clock belongs to the process, and this
         // owner reports the first Activity's start, so nothing is missed by being early.
         ProcessLifecycleOwner.get().lifecycle.addObserver(foregroundSync)
+        // Start collecting the managed-account flow at process launch so a completed/pending Play
+        // purchase is reconciled even when the Account destination has not been opened yet.
+        managedSubscription
         repairAutomaticInk()
     }
 

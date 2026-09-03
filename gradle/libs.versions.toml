@@ -44,6 +44,10 @@ espressoCore = "3.7.0"
 # `GetSignInWithGoogleOption` and `GoogleIdTokenCredential`. Versioned independently of
 # androidx.credentials and published only to Google's maven, not Maven Central.
 googleid = "1.2.0"
+# Google Play Billing for the managed cloud-storage subscription. This is intentionally separate
+# from Sign in with Google: identity and payment are different Play services with different
+# credentials and lifecycles. 9.1.0 is the current stable line as of 2026-09-03.
+playBilling = "9.1.0"
 ink = "1.1.0-alpha06"
 junit = "4.13.2"
 junitVersion = "1.3.0"
@@ -87,6 +91,7 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 google-identity-googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
+google-play-billing = { group = "com.android.billingclient", name = "billing", version.ref = "playBilling" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version = "1.9.0" }
 kotlinx-serialization-cbor = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-cbor", version.ref = "kotlinxSerialization" }

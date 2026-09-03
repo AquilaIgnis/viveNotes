@@ -267,6 +267,64 @@ sealed interface ServerResult<out T> {
     ) : ServerResult<Nothing>
 }
 
+/** The provider-authoritative state of the managed account's Google Play subscription. */
+enum class PaidSubscriptionState {
+    Pending,
+    Active,
+    Grace,
+    Paused,
+    OnHold,
+    Canceled,
+    Expired,
+    PendingCanceled,
+    Unknown,
+}
+
+/**
+ * Subscription access as the managed server sees it.
+ *
+ * [paidValidUntil] and [promotionalValidUntil] deliberately remain separate. A coupon is not a
+ * Play discount and does not pause or defer auto-renewal; effective access lasts until the later
+ * boundary, while the two source fields let the UI say why.
+ */
+data class ManagedSubscriptionStatus(
+    val active: Boolean,
+    val validUntil: String?,
+    val paidState: PaidSubscriptionState?,
+    val paidValidUntil: String?,
+    val promotionalValidUntil: String?,
+    val autoRenewing: Boolean,
+    val productId: String?,
+)
+
+data class CouponGrant(
+    val code: String,
+    val monthsGranted: Int,
+    val validUntil: String,
+)
+
+/** Stable client-side meanings of the managed subscription endpoints' refusal codes. */
+enum class SubscriptionFailure {
+    NotConnected,
+    NotManaged,
+    InvalidCoupon,
+    CouponExpired,
+    CouponAlreadyRedeemed,
+    InvalidPurchase,
+    PurchaseAlreadyClaimed,
+    BillingUnavailable,
+    InvalidRequest,
+    Unreachable,
+    ServerError,
+    NotAViveServer,
+}
+
+sealed interface SubscriptionResult<out T> {
+    data class Success<T>(val value: T) : SubscriptionResult<T>
+    data object Unauthorized : SubscriptionResult<Nothing>
+    data class Failed(val reason: SubscriptionFailure) : SubscriptionResult<Nothing>
+}
+
 /** One complete `GET /v1/changes` response page. */
 data class PullChangesPage(
     val changes: List<JsonObject>,
@@ -425,6 +483,75 @@ class SyncServerClient(
         url.openConnection() as HttpURLConnection
     },
 ) : SyncTransport {
+
+    /** Reads paid and promotional entitlement sources for one authenticated managed account. */
+    suspend fun getSubscription(
+        serverBaseUrl: String,
+        token: String,
+    ): SubscriptionResult<ManagedSubscriptionStatus> = subscriptionRequest(
+        authenticatedRequest(serverBaseUrl, "/v1/subscription", token),
+    ) { payload ->
+        syncJson.decodeFromString(SubscriptionResponse.serializer(), payload).toDomain()
+    }
+
+    /**
+     * Redeems a server-issued promotion. It advances only promotional time on the server; any Play
+     * subscription keeps renewing independently.
+     */
+    suspend fun redeemCoupon(
+        serverBaseUrl: String,
+        token: String,
+        code: String,
+    ): SubscriptionResult<CouponGrant> {
+        val body = syncJson.encodeToString(
+            RedeemCouponRequest.serializer(),
+            RedeemCouponRequest(code.trim()),
+        ).encodeToByteArray()
+        return subscriptionRequest(
+            authenticatedRequest(
+                serverBaseUrl = serverBaseUrl,
+                path = "/v1/coupons/redeem",
+                token = token,
+                method = "POST",
+                body = body,
+            ),
+        ) { payload ->
+            syncJson.decodeFromString(RedeemCouponResponse.serializer(), payload).let {
+                CouponGrant(it.code, it.monthsGranted, it.validUntil)
+            }
+        }
+    }
+
+    /**
+     * Hands a completed Play purchase to the trusted backend. The APK never grants or acknowledges
+     * it: the response arrives only after Google verification, durable entitlement, and server-side
+     * acknowledgement have completed.
+     */
+    suspend fun confirmGooglePlaySubscription(
+        serverBaseUrl: String,
+        token: String,
+        purchaseToken: String,
+        productId: String,
+    ): SubscriptionResult<ManagedSubscriptionStatus> {
+        val body = syncJson.encodeToString(
+            ConfirmGooglePlaySubscriptionRequest.serializer(),
+            ConfirmGooglePlaySubscriptionRequest(
+                purchaseToken = purchaseToken,
+                productId = productId,
+            ),
+        ).encodeToByteArray()
+        return subscriptionRequest(
+            authenticatedRequest(
+                serverBaseUrl = serverBaseUrl,
+                path = "/v1/billing/google-play/subscriptions",
+                token = token,
+                method = "POST",
+                body = body,
+            ),
+        ) { payload ->
+            syncJson.decodeFromString(SubscriptionResponse.serializer(), payload).toDomain()
+        }
+    }
 
     /**
      * Exchanges account credentials for a device token — the one endpoint that takes a password, and
@@ -1196,6 +1323,45 @@ class SyncServerClient(
         )
     }
 
+    /** The three managed subscription operations share transport and error-code semantics. */
+    private inline fun <T> subscriptionRequest(
+        raw: RawServerResult,
+        decodeSuccess: (String) -> T,
+    ): SubscriptionResult<T> = when (raw) {
+        RawServerResult.InvalidAddress ->
+            SubscriptionResult.Failed(SubscriptionFailure.NotAViveServer)
+        RawServerResult.Unreachable ->
+            SubscriptionResult.Failed(SubscriptionFailure.Unreachable)
+        is RawServerResult.Response -> when {
+            raw.status == 401 -> SubscriptionResult.Unauthorized
+            raw.status in 200..299 -> runCatching { decodeSuccess(raw.payload) }.fold(
+                onSuccess = { SubscriptionResult.Success(it) },
+                onFailure = {
+                    SubscriptionResult.Failed(SubscriptionFailure.NotAViveServer)
+                },
+            )
+            else -> SubscriptionResult.Failed(
+                when (errorCode(raw.payload)) {
+                    "invalid_coupon" -> SubscriptionFailure.InvalidCoupon
+                    "coupon_expired" -> SubscriptionFailure.CouponExpired
+                    "coupon_already_redeemed" -> SubscriptionFailure.CouponAlreadyRedeemed
+                    "invalid_purchase" -> SubscriptionFailure.InvalidPurchase
+                    "purchase_already_claimed" -> SubscriptionFailure.PurchaseAlreadyClaimed
+                    "billing_unavailable" -> SubscriptionFailure.BillingUnavailable
+                    "invalid_request" -> SubscriptionFailure.InvalidRequest
+                    null -> when {
+                        raw.status == 404 -> SubscriptionFailure.InvalidCoupon
+                        raw.status == 409 -> SubscriptionFailure.PurchaseAlreadyClaimed
+                        raw.status == 410 -> SubscriptionFailure.CouponExpired
+                        raw.status >= 500 -> SubscriptionFailure.ServerError
+                        else -> SubscriptionFailure.NotAViveServer
+                    }
+                    else -> SubscriptionFailure.ServerError
+                },
+            )
+        }
+    }
+
     private fun <T> invalidAddress(): ServerResult<T> =
         ServerResult.Failed(ConnectFailure.InvalidAddress, retryable = false)
 
@@ -1487,6 +1653,56 @@ private data class RegisterDeviceResponse(
     @SerialName("accountId") val accountId: String,
     val token: String,
 )
+
+@Serializable
+private data class RedeemCouponRequest(val code: String)
+
+@Serializable
+private data class RedeemCouponResponse(
+    val code: String,
+    val monthsGranted: Int,
+    val redeemedAt: String,
+    val validUntil: String,
+)
+
+@Serializable
+private data class ConfirmGooglePlaySubscriptionRequest(
+    val purchaseToken: String,
+    val productId: String,
+)
+
+@Serializable
+private data class SubscriptionResponse(
+    val state: String,
+    val validUntil: String? = null,
+    val paidState: String? = null,
+    val paidValidUntil: String? = null,
+    val promotionalValidUntil: String? = null,
+    val autoRenewing: Boolean = false,
+    val productId: String? = null,
+) {
+    fun toDomain(): ManagedSubscriptionStatus = ManagedSubscriptionStatus(
+        active = state == "active",
+        validUntil = validUntil,
+        paidState = paidState?.let(::paidSubscriptionState),
+        paidValidUntil = paidValidUntil,
+        promotionalValidUntil = promotionalValidUntil,
+        autoRenewing = autoRenewing,
+        productId = productId,
+    )
+}
+
+private fun paidSubscriptionState(value: String): PaidSubscriptionState = when (value) {
+    "pending" -> PaidSubscriptionState.Pending
+    "active" -> PaidSubscriptionState.Active
+    "grace" -> PaidSubscriptionState.Grace
+    "paused" -> PaidSubscriptionState.Paused
+    "on_hold" -> PaidSubscriptionState.OnHold
+    "canceled" -> PaidSubscriptionState.Canceled
+    "expired" -> PaidSubscriptionState.Expired
+    "pending_canceled" -> PaidSubscriptionState.PendingCanceled
+    else -> PaidSubscriptionState.Unknown
+}
 
 @Serializable
 private data class CursorResponse(val cursor: Long)

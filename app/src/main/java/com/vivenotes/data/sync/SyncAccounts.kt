@@ -225,6 +225,85 @@ class SyncAccounts(
     /** False when this build has no Google Web client id; the screen says so rather than failing. */
     val googleSignInAvailable: Boolean get() = google.configured
 
+    /** Billing and coupons exist only on the one managed deployment compiled into this build. */
+    fun isManagedAccount(account: SyncAccount?): Boolean =
+        account != null && account.serverUrl == cloudServerUrl
+
+    /** Reads the server-authoritative union of paid Play and promotional coupon access. */
+    suspend fun managedSubscription(
+        expectedAccountId: String? = null,
+    ): SubscriptionResult<ManagedSubscriptionStatus> {
+        val account = store.account.first()
+            ?: return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
+        if (expectedAccountId != null && account.accountId != expectedAccountId) {
+            return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
+        }
+        if (!isManagedAccount(account)) {
+            return SubscriptionResult.Failed(SubscriptionFailure.NotManaged)
+        }
+        return handleSubscriptionResult(
+            account,
+            client.getSubscription(account.serverUrl, account.token),
+        )
+    }
+
+    /** Redeems an existing managed-server coupon without touching the Play subscription. */
+    suspend fun redeemManagedCoupon(
+        code: String,
+        expectedAccountId: String? = null,
+    ): SubscriptionResult<CouponGrant> {
+        val account = store.account.first()
+            ?: return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
+        if (expectedAccountId != null && account.accountId != expectedAccountId) {
+            return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
+        }
+        if (!isManagedAccount(account)) {
+            return SubscriptionResult.Failed(SubscriptionFailure.NotManaged)
+        }
+        return handleSubscriptionResult(
+            account,
+            client.redeemCoupon(account.serverUrl, account.token, code),
+        )
+    }
+
+    /** Sends a Play token to the managed backend; local code never grants the entitlement. */
+    suspend fun confirmGooglePlaySubscription(
+        purchaseToken: String,
+        productId: String,
+        expectedAccountId: String? = null,
+    ): SubscriptionResult<ManagedSubscriptionStatus> {
+        val account = store.account.first()
+            ?: return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
+        if (expectedAccountId != null && account.accountId != expectedAccountId) {
+            return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
+        }
+        if (!isManagedAccount(account)) {
+            return SubscriptionResult.Failed(SubscriptionFailure.NotManaged)
+        }
+        return handleSubscriptionResult(
+            account,
+            client.confirmGooglePlaySubscription(
+                serverBaseUrl = account.serverUrl,
+                token = account.token,
+                purchaseToken = purchaseToken,
+                productId = productId,
+            ),
+        )
+    }
+
+    /**
+     * An entitlement request authenticates with the same revocable device token as sync. Treat its
+     * explicit 401 identically: retain nothing that can only fail, while every transport/5xx result
+     * leaves the once-issued credential alone.
+     */
+    private suspend fun <T> handleSubscriptionResult(
+        account: SyncAccount,
+        result: SubscriptionResult<T>,
+    ): SubscriptionResult<T> {
+        if (result == SubscriptionResult.Unauthorized) forget(account)
+        return result
+    }
+
     /**
      * The half-finished Google sign-in that `409 account_link_required` leaves behind.
      *

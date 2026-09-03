@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
                     app.recognitionEngine,
                     app.mathEngine,
                     app.syncAccounts,
+                    app.managedSubscription,
                     app.pdfExporter,
                 )
             }

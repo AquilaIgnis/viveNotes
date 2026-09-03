@@ -857,6 +857,148 @@ class SyncServerClientTest {
         assertEquals("ViveNotes", device["name"]!!.jsonPrimitive.content)
     }
 
+    @Test
+    fun managedSubscriptionDecodesPaidAndPromotionalSources() = runBlocking {
+        respond = {
+            send(
+                it,
+                200,
+                """
+                {
+                  "state":"active",
+                  "validUntil":"2026-12-03T12:00:00Z",
+                  "promotionalValidUntil":"2026-12-03T12:00:00Z",
+                  "paidValidUntil":"2026-10-03T12:00:00Z",
+                  "paidState":"active",
+                  "autoRenewing":true,
+                  "productId":"vivenotes_storage_monthly"
+                }
+                """.trimIndent(),
+            )
+        }
+
+        val result = SyncServerClient().getSubscription(baseUrl, "vive_abc")
+
+        assertEquals("GET", requestMethod)
+        assertEquals("/v1/subscription", requestPath)
+        assertEquals("Bearer vive_abc", authorization)
+        assertEquals(
+            SubscriptionResult.Success(
+                ManagedSubscriptionStatus(
+                    active = true,
+                    validUntil = "2026-12-03T12:00:00Z",
+                    paidState = PaidSubscriptionState.Active,
+                    paidValidUntil = "2026-10-03T12:00:00Z",
+                    promotionalValidUntil = "2026-12-03T12:00:00Z",
+                    autoRenewing = true,
+                    productId = "vivenotes_storage_monthly",
+                ),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun redeemingCouponTrimsTheCodeAndUsesTheAuthenticatedContract() = runBlocking {
+        respond = {
+            send(
+                it,
+                200,
+                """{
+                  "code":"FREE-MONTH",
+                  "monthsGranted":1,
+                  "redeemedAt":"2026-09-03T12:00:00Z",
+                  "validUntil":"2026-10-03T12:00:00Z"
+                }""",
+            )
+        }
+
+        val result = SyncServerClient().redeemCoupon(baseUrl, "vive_abc", " free-month ")
+
+        assertEquals("POST", requestMethod)
+        assertEquals("/v1/coupons/redeem", requestPath)
+        assertEquals("Bearer vive_abc", authorization)
+        assertEquals(
+            "free-month",
+            Json.parseToJsonElement(requestBody.orEmpty()).jsonObject["code"]!!.jsonPrimitive.content,
+        )
+        assertEquals(
+            SubscriptionResult.Success(
+                CouponGrant("FREE-MONTH", 1, "2026-10-03T12:00:00Z"),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun completedPlayPurchaseSendsOnlyTheOpaqueTokenAndProduct() = runBlocking {
+        respond = {
+            send(it, 200, """{"state":"active","autoRenewing":true}""")
+        }
+
+        val result = SyncServerClient().confirmGooglePlaySubscription(
+            serverBaseUrl = baseUrl,
+            token = "vive_abc",
+            purchaseToken = "opaque-play-token",
+            productId = "vivenotes_storage_monthly",
+        )
+
+        assertEquals("POST", requestMethod)
+        assertEquals("/v1/billing/google-play/subscriptions", requestPath)
+        assertEquals("Bearer vive_abc", authorization)
+        val sent = Json.parseToJsonElement(requestBody.orEmpty()).jsonObject
+        assertEquals("opaque-play-token", sent["purchaseToken"]!!.jsonPrimitive.content)
+        assertEquals("vivenotes_storage_monthly", sent["productId"]!!.jsonPrimitive.content)
+        assertEquals(
+            SubscriptionResult.Success(
+                ManagedSubscriptionStatus(
+                    active = true,
+                    validUntil = null,
+                    paidState = null,
+                    paidValidUntil = null,
+                    promotionalValidUntil = null,
+                    autoRenewing = true,
+                    productId = null,
+                ),
+            ),
+            result,
+        )
+    }
+
+    @Test
+    fun subscriptionErrorsKeepCouponAndPurchaseFailuresDistinct() = runBlocking {
+        val failures = listOf(
+            404 to ("invalid_coupon" to SubscriptionFailure.InvalidCoupon),
+            410 to ("coupon_expired" to SubscriptionFailure.CouponExpired),
+            409 to ("coupon_already_redeemed" to SubscriptionFailure.CouponAlreadyRedeemed),
+            400 to ("invalid_purchase" to SubscriptionFailure.InvalidPurchase),
+            409 to ("purchase_already_claimed" to SubscriptionFailure.PurchaseAlreadyClaimed),
+            503 to ("billing_unavailable" to SubscriptionFailure.BillingUnavailable),
+        )
+        for ((status, expectation) in failures) {
+            val (code, expected) = expectation
+            respond = { send(it, status, """{"error":"$code","message":"refused"}""") }
+
+            assertEquals(
+                SubscriptionResult.Failed(expected),
+                SyncServerClient().redeemCoupon(baseUrl, "vive_abc", "ABC"),
+            )
+        }
+    }
+
+    @Test
+    fun subscriptionUnauthorizedIsTheOnlyTransportAnswerThatRevokesTheSession() = runBlocking {
+        respond = {
+            it.responseHeaders.add("WWW-Authenticate", "Bearer")
+            send(it, 401, """{"error":"unauthenticated"}""")
+        }
+
+        assertEquals(
+            SubscriptionResult.Unauthorized,
+            SyncServerClient().getSubscription(baseUrl, "vive_dead"),
+        )
+    }
+
     private fun googleDevice(): GoogleDeviceDetails = GoogleDeviceDetails(
         installationId = "9b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
         name = "Pixel Tablet",

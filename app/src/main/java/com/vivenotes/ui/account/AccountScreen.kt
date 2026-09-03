@@ -8,9 +8,12 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,11 +34,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -60,6 +63,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
@@ -73,8 +77,14 @@ import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncRunResult
 import com.vivenotes.data.sync.SyncStatus
 import com.vivenotes.data.sync.SyncSummary
+import com.vivenotes.data.billing.ManagedSubscriptionFailure
+import com.vivenotes.data.billing.ManagedSubscriptionState
+import com.vivenotes.data.sync.PaidSubscriptionState
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.theme.LocalIconAccents
+import java.time.Instant
+import java.util.Date
+import java.text.DateFormat
 
 internal object AccountTags {
     const val SCREEN = "account-screen"
@@ -117,6 +127,13 @@ internal object AccountTags {
     const val CONNECT_PROGRESS = "account-connect-progress"
     const val CONNECT_STATUS = "account-connect-status"
     const val CONNECTED = "account-connected"
+    const val SUBSCRIPTION = "account-subscription"
+    const val SUBSCRIBE = "account-subscribe"
+    const val MANAGE_SUBSCRIPTION = "account-manage-subscription"
+    const val GOOGLE_PLAY_MARK = "account-google-play-mark"
+    const val COUPON = "account-coupon"
+    const val REDEEM_COUPON = "account-redeem-coupon"
+    const val SUBSCRIPTION_STATUS = "account-subscription-status"
     const val SYNC = "account-sync"
     const val SYNC_PROGRESS = "account-sync-progress"
     const val SYNC_STATUS = "account-sync-status"
@@ -179,6 +196,11 @@ fun AccountScreen(
     /** True for the session in which Google sign-in created the account, rather than found it. */
     accountCreated: Boolean = false,
     connection: ServerConnection = ServerConnection.Idle,
+    /** Managed-only billing state. Invisible for disconnected and self-hosted registrations. */
+    managedSubscription: ManagedSubscriptionState = ManagedSubscriptionState(),
+    onSubscribe: () -> Unit = {},
+    onManageSubscription: () -> Unit = {},
+    onRedeemCoupon: (String) -> Unit = {},
     /**
      * Sign in to the **managed** account with an email and password — `POST /v1/devices` against the
      * deployment this build was compiled for. No server address, because there is nothing to choose.
@@ -340,6 +362,10 @@ fun AccountScreen(
                                 disconnectFailure = disconnectFailure,
                                 onDisconnect = { confirmDisconnect = true },
                                 onForceDisconnect = onForceDisconnect,
+                                managedSubscription = managedSubscription,
+                                onSubscribe = onSubscribe,
+                                onManageSubscription = onManageSubscription,
+                                onRedeemCoupon = onRedeemCoupon,
                             )
                         }
                         return@Column
@@ -407,14 +433,38 @@ fun AccountScreen(
                     ) {
                         Button(
                             onClick = { openCloudPanel(signUp = false) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (cloudExpanded && !cloudSignUp) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                },
+                                contentColor = if (cloudExpanded && !cloudSignUp) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                },
+                            ),
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag(AccountTags.LOGIN),
                         ) {
                             Text(stringResource(R.string.account_log_in))
                         }
-                        OutlinedButton(
+                        Button(
                             onClick = { openCloudPanel(signUp = true) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (cloudExpanded && cloudSignUp) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                },
+                                contentColor = if (cloudExpanded && cloudSignUp) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                },
+                            ),
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag(AccountTags.SIGN_UP),
@@ -563,16 +613,32 @@ fun AccountScreen(
                     }
 
                     Spacer(Modifier.height(12.dp))
-                    TextButton(
+                    FilledTonalButton(
                         onClick = {
                             selfHostExpanded = !selfHostExpanded
                             // The two panels are alternatives, so opening one closes the other. Both
                             // open at once would show two email fields and two submit buttons.
                             if (selfHostExpanded) cloudExpanded = false
                         },
-                        modifier = Modifier.testTag(AccountTags.SELF_HOST),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(AccountTags.SELF_HOST),
                     ) {
                         Text(stringResource(R.string.account_self_host))
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            imageVector = if (selfHostExpanded) {
+                                MaterialSymbols.ExpandLess
+                            } else {
+                                MaterialSymbols.ExpandMore
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
                     }
 
                     AnimatedVisibility(
@@ -891,6 +957,10 @@ private fun ConnectedPanel(
     disconnectFailure: ConnectFailure?,
     onDisconnect: () -> Unit,
     onForceDisconnect: () -> Unit,
+    managedSubscription: ManagedSubscriptionState,
+    onSubscribe: () -> Unit,
+    onManageSubscription: () -> Unit,
+    onRedeemCoupon: (String) -> Unit,
 ) {
     val accents = LocalIconAccents.current
     val connectedSyncingDescription = stringResource(R.string.account_syncing)
@@ -953,6 +1023,15 @@ private fun ConnectedPanel(
         }
     }
 
+    if (managedSubscription.visible) {
+        ManagedSubscriptionPanel(
+            state = managedSubscription,
+            onSubscribe = onSubscribe,
+            onManageSubscription = onManageSubscription,
+            onRedeemCoupon = onRedeemCoupon,
+        )
+    }
+
     Button(
         onClick = onSync,
         enabled = !syncing && !disconnecting,
@@ -976,9 +1055,13 @@ private fun ConnectedPanel(
 
     SyncStatusLine(syncStatus)
 
-    OutlinedButton(
+    FilledTonalButton(
         onClick = onDisconnect,
         enabled = !syncing && !disconnecting,
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .testTag(AccountTags.DISCONNECT),
@@ -1010,19 +1093,343 @@ private fun ConnectedPanel(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        TextButton(
+        FilledTonalButton(
             onClick = onForceDisconnect,
             enabled = !disconnecting,
+            colors = ButtonDefaults.filledTonalButtonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(AccountTags.DISCONNECT_ANYWAY),
         ) {
-            Text(
-                text = stringResource(R.string.account_disconnect_anyway),
-                color = MaterialTheme.colorScheme.error,
-            )
+            Text(stringResource(R.string.account_disconnect_anyway))
         }
     }
+}
+
+/** Managed-service plan and promotion controls; never composed for a self-hosted registration. */
+@Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun ManagedSubscriptionPanel(
+    state: ManagedSubscriptionState,
+    onSubscribe: () -> Unit,
+    onManageSubscription: () -> Unit,
+    onRedeemCoupon: (String) -> Unit,
+) {
+    var coupon by rememberSaveable { mutableStateOf("") }
+    val checkingDescription = stringResource(R.string.account_subscription_checking)
+    val buyingDescription = stringResource(R.string.account_subscription_buying)
+    val panelShape = MaterialTheme.shapes.large
+
+    Surface(
+        shape = panelShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f),
+                shape = panelShape,
+            )
+            .testTag(AccountTags.SUBSCRIPTION),
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.account_subscription_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                if (state.loading) {
+                    LoadingIndicator(
+                        Modifier
+                            .size(20.dp)
+                            .semantics { contentDescription = checkingDescription },
+                    )
+                }
+            }
+
+            val status = state.status
+            Text(
+                text = if (status?.active == true && status.validUntil != null) {
+                    stringResource(
+                        R.string.account_subscription_active,
+                        formattedSubscriptionDate(status.validUntil),
+                    )
+                } else {
+                    stringResource(R.string.account_subscription_inactive)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (status?.active == true) {
+                    LocalIconAccents.current.green
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.testTag(AccountTags.SUBSCRIPTION_STATUS),
+            )
+
+            status?.paidState?.let { paidState ->
+                val paidText = when (paidState) {
+                    PaidSubscriptionState.Active -> if (status.autoRenewing) {
+                        stringResource(R.string.account_subscription_paid_renews)
+                    } else {
+                        status.paidValidUntil?.let {
+                            stringResource(
+                                R.string.account_subscription_paid_canceled,
+                                formattedSubscriptionDate(it),
+                            )
+                        }
+                    }
+                    PaidSubscriptionState.Grace ->
+                        stringResource(R.string.account_subscription_paid_grace)
+                    PaidSubscriptionState.OnHold ->
+                        stringResource(R.string.account_subscription_paid_on_hold)
+                    PaidSubscriptionState.Paused ->
+                        stringResource(R.string.account_subscription_paid_paused)
+                    PaidSubscriptionState.Canceled -> status.paidValidUntil?.let {
+                        stringResource(
+                            R.string.account_subscription_paid_canceled,
+                            formattedSubscriptionDate(it),
+                        )
+                    }
+                    PaidSubscriptionState.Expired,
+                    PaidSubscriptionState.PendingCanceled,
+                    -> stringResource(R.string.account_subscription_paid_expired)
+                    PaidSubscriptionState.Pending,
+                    PaidSubscriptionState.Unknown,
+                    -> null
+                }
+                if (paidText != null) {
+                    Text(
+                        text = paidText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            status?.promotionalValidUntil?.let { promotionalUntil ->
+                Text(
+                    text = stringResource(
+                        R.string.account_subscription_promotion,
+                        formattedSubscriptionDate(promotionalUntil),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Text(
+                text = state.formattedPrice?.let {
+                    stringResource(R.string.account_subscription_price, it)
+                } ?: stringResource(R.string.account_subscription_monthly),
+                style = MaterialTheme.typography.titleSmall,
+            )
+
+            if (state.playPurchaseOwned) {
+                GooglePlayActionButton(
+                    label = stringResource(R.string.account_subscription_manage),
+                    onClick = onManageSubscription,
+                    enabled = !state.purchasing,
+                    modifier = Modifier.testTag(AccountTags.MANAGE_SUBSCRIPTION),
+                )
+            } else {
+                GooglePlayActionButton(
+                    label = stringResource(R.string.account_subscription_subscribe),
+                    onClick = onSubscribe,
+                    enabled = state.productAvailable && !state.purchasePending &&
+                        !state.purchasing && !state.loading,
+                    loading = state.purchasing,
+                    loadingDescription = buyingDescription,
+                    modifier = Modifier.testTag(AccountTags.SUBSCRIBE),
+                )
+            }
+
+            if (state.purchasePending) {
+                Text(
+                    text = stringResource(R.string.account_subscription_pending),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+            }
+            if (state.purchaseConfirmed) {
+                Text(
+                    text = stringResource(R.string.account_subscription_confirmed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalIconAccents.current.green,
+                )
+            }
+
+            Spacer(Modifier.height(2.dp))
+            CouponRedemptionControls(
+                coupon = coupon,
+                onCouponChange = { coupon = it },
+                redeeming = state.redeemingCoupon,
+                onRedeem = { onRedeemCoupon(coupon) },
+            )
+
+            state.couponGrant?.let { grant ->
+                Text(
+                    text = stringResource(
+                        R.string.account_subscription_coupon_applied,
+                        grant.monthsGranted,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalIconAccents.current.green,
+                )
+            }
+            state.failure?.let { failure ->
+                Text(
+                    text = stringResource(subscriptionFailureMessage(failure)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A compact payment pill inspired by the supplied Google Pay reference, but labelled for the
+ * service this action actually opens: Google Play Billing. The full-colour Google mark is kept
+ * untinted on a neutral surface, with Azure reserved for the outline that ties it back to the app.
+ */
+@Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun GooglePlayActionButton(
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    loading: Boolean = false,
+    loadingDescription: String = label,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (enabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant
+            },
+        ),
+        modifier = modifier.widthIn(min = 220.dp, max = 280.dp),
+    ) {
+        if (loading) {
+            LoadingIndicator(
+                Modifier
+                    .size(18.dp)
+                    .semantics { contentDescription = loadingDescription },
+            )
+        } else {
+            Icon(
+                imageVector = ImageVector.vectorResource(R.drawable.ic_google_g),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier
+                    .size(20.dp)
+                    .testTag(AccountTags.GOOGLE_PLAY_MARK),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(label)
+        }
+    }
+}
+
+/** Compact side-by-side controls where space permits; narrow phones retain a usable stacked form. */
+@Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun CouponRedemptionControls(
+    coupon: String,
+    onCouponChange: (String) -> Unit,
+    redeeming: Boolean,
+    onRedeem: () -> Unit,
+) {
+    val redeemingDescription = stringResource(R.string.account_subscription_coupon_redeeming)
+
+    @Composable
+    fun CouponField(modifier: Modifier) {
+        OutlinedTextField(
+            value = coupon,
+            onValueChange = onCouponChange,
+            label = { Text(stringResource(R.string.account_subscription_coupon_label)) },
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Characters,
+                keyboardType = KeyboardType.Ascii,
+                imeAction = ImeAction.Done,
+            ),
+            singleLine = true,
+            modifier = modifier.testTag(AccountTags.COUPON),
+        )
+    }
+
+    @Composable
+    fun RedeemButton(modifier: Modifier) {
+        Button(
+            onClick = onRedeem,
+            enabled = coupon.isNotBlank() && !redeeming,
+            modifier = modifier.testTag(AccountTags.REDEEM_COUPON),
+        ) {
+            if (redeeming) {
+                LoadingIndicator(
+                    Modifier
+                        .size(18.dp)
+                        .semantics { contentDescription = redeemingDescription },
+                )
+            } else {
+                Text(stringResource(R.string.account_subscription_coupon_redeem))
+            }
+        }
+    }
+
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth >= 360.dp) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CouponField(Modifier.width(240.dp))
+                RedeemButton(Modifier.widthIn(min = 104.dp))
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                CouponField(Modifier.fillMaxWidth())
+                RedeemButton(Modifier.align(Alignment.End))
+            }
+        }
+    }
+}
+
+private fun formattedSubscriptionDate(value: String): String = runCatching {
+    DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date.from(Instant.parse(value)))
+}.getOrDefault(value)
+
+@StringRes
+private fun subscriptionFailureMessage(failure: ManagedSubscriptionFailure): Int = when (failure) {
+    ManagedSubscriptionFailure.PlayUnavailable -> R.string.account_subscription_error_play_unavailable
+    ManagedSubscriptionFailure.PlayNetwork -> R.string.account_subscription_error_play_network
+    ManagedSubscriptionFailure.ProductUnavailable -> R.string.account_subscription_error_product
+    ManagedSubscriptionFailure.PlayConfiguration -> R.string.account_subscription_error_configuration
+    ManagedSubscriptionFailure.InvalidCoupon -> R.string.account_subscription_error_coupon
+    ManagedSubscriptionFailure.CouponExpired -> R.string.account_subscription_error_coupon_expired
+    ManagedSubscriptionFailure.CouponAlreadyRedeemed -> R.string.account_subscription_error_coupon_used
+    ManagedSubscriptionFailure.InvalidPurchase -> R.string.account_subscription_error_purchase
+    ManagedSubscriptionFailure.PurchaseAlreadyClaimed -> R.string.account_subscription_error_purchase_owner
+    ManagedSubscriptionFailure.ServerBillingUnavailable -> R.string.account_subscription_error_server_billing
+    ManagedSubscriptionFailure.InvalidRequest -> R.string.account_subscription_error_request
+    ManagedSubscriptionFailure.ServerUnreachable -> R.string.account_subscription_error_server_unreachable
+    ManagedSubscriptionFailure.ServerError -> R.string.account_subscription_error_server
 }
 
 /**

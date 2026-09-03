@@ -149,6 +149,13 @@ android {
             "GOOGLE_WEB_CLIENT_ID",
             "\"${localSetting("vive.googleWebClientId", "")}\"",
         )
+        // Stable Play Console product id. Price and billing period live in the activated base plan;
+        // the app reads their localized presentation from ProductDetails and never hardcodes $4.99.
+        buildConfigField(
+            "String",
+            "CLOUD_STORAGE_SUBSCRIPTION_ID",
+            "\"${localSetting("vive.cloudStorageSubscriptionId", "vivenotes_storage_monthly")}\"",
+        )
 
         ndk {
             abiFilters += allAbis
@@ -289,6 +296,11 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.google.identity.googleid)
+
+    // Managed cloud storage is a digital service, so Play-distributed builds use Google Play
+    // Billing rather than Google Pay. Purchase tokens are verified and acknowledged by the managed
+    // backend before access is granted; this dependency only owns the Play Store UI and discovery.
+    implementation(libs.google.play.billing)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
