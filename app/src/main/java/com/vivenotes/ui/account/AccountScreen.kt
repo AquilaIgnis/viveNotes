@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -390,22 +391,18 @@ fun AccountScreen(
                         onClick = onSignInWithGoogle,
                     )
 
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = stringResource(
-                            if (googleAvailable) {
-                                R.string.account_google_explainer
-                            } else {
-                                // A build with no Web client id says so here rather than letting the
-                                // button fail with a provider error that reads like the person's
-                                // Google account is at fault.
-                                R.string.account_google_unconfigured
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                    )
+                    if (!googleAvailable) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            // A build with no Web client id says so here rather than letting the
+                            // button fail with a provider error that reads like the person's
+                            // Google account is at fault.
+                            text = stringResource(R.string.account_google_unconfigured),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
 
                     // Suppressed while the link dialog is up, because that dialog shows the same
                     // failure with wording of its own. Two copies of one message is one of them
@@ -905,8 +902,13 @@ private fun GoogleSignInButton(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
+        contentPadding = ButtonDefaults.contentPaddingFor(
+            buttonHeight = ButtonDefaults.MediumContainerHeight,
+            hasStartIcon = true,
+        ),
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = ButtonDefaults.MediumContainerHeight)
             .testTag(AccountTags.GOOGLE),
     ) {
         if (signingIn) {
@@ -923,7 +925,7 @@ private fun GoogleSignInButton(
                 // Untinted: the mark carries its own four colours and tinting it would flatten it
                 // to one. This is the same reason `AboutDialog` draws `ic_github` unrecoloured.
                 tint = Color.Unspecified,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(24.dp),
             )
             Spacer(Modifier.width(12.dp))
             Text(stringResource(R.string.account_google_sign_in))

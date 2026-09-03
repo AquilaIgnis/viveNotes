@@ -9,7 +9,6 @@
     <string name="account_self_host">Self host</string>
     <string name="account_google_sign_in">Continue with Google</string>
     <string name="account_google_signing_in">Signing in with Google</string>
-    <string name="account_google_explainer">One button signs you in or creates your account.</string>
     <string name="account_google_unconfigured">Sign in with Google is not available in this build.</string>
     <string name="account_link_title">Finish connecting this account</string>
     <string name="account_link_body">An account already uses this email address. Enter its password once and your Google sign-in will be linked to it from now on.</string>

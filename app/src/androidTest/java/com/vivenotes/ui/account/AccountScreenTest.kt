@@ -76,16 +76,12 @@ class AccountScreenTest {
         assertEquals(1, googleSignIns)
     }
 
-    /**
-     * One button for both, so the screen must not claim otherwise. The explainer is what tells
-     * somebody with no account that pressing it will make them one.
-     */
     @Test
-    fun googleButtonSaysItBothSignsInAndRegisters() {
+    fun googleButtonHasNoSignInOrRegistrationExplainer() {
         setScreen()
 
-        compose.onNodeWithText(context.getString(R.string.account_google_explainer))
-            .assertIsDisplayed()
+        compose.onNodeWithText("One button signs you in or creates your account.")
+            .assertDoesNotExist()
     }
 
     @Test

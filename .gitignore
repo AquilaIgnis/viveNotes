@@ -16,7 +16,7 @@ memory
 *.db-shm
 *.db-wal
 *.vive
-myTrash/
+mytrash/
 
 #python
 .venv
