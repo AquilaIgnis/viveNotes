@@ -203,7 +203,7 @@ android {
             buildConfigField(
                 "String",
                 "CLOUD_BASE_URL",
-                "\"${localSetting("vive.cloudBaseUrl", "https://cloud.vivenotes.net")}\"",
+                "\"${localSetting("vive.cloudBaseUrl", "https://sync.vivenotes.net")}\"",
             )
             // AGP 9.2 still uses the legacy switches; AGP 9.3+ can replace these with
             // `optimization { enable = true }`. Rules in src/main/keepRules are merged by AGP.

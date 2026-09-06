@@ -90,6 +90,7 @@ class SyncServerClientTest {
             password = " correct horse ",
             deviceName = "Pixel Tablet",
             platform = "Android 16",
+            installationId = "9b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
         )
 
         assertEquals("POST", requestMethod)
@@ -100,6 +101,10 @@ class SyncServerClientTest {
         // Not trimmed: leading and trailing spaces are part of a password, and silently removing
         // them would authenticate against something the user did not type.
         assertEquals(" correct horse ", sent.getValue("password").jsonPrimitive.content)
+        assertEquals(
+            "9b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d",
+            sent.getValue("installationId").jsonPrimitive.content,
+        )
         assertEquals("Pixel Tablet", sent.getValue("name").jsonPrimitive.content)
         assertEquals("Android 16", sent.getValue("platform").jsonPrimitive.content)
 

@@ -211,7 +211,7 @@ class SyncAccounts(
 
     /**
      * The managed deployment this build talks to — `http://10.0.2.2:5444` in debug,
-     * `https://cloud.vivenotes.net` in release, either overridable from `local.properties`.
+     * `https://sync.vivenotes.net` in release, either overridable from `local.properties`.
      *
      * Put through [normaliseServerAddress] like a typed address, so a trailing slash or a capital in
      * the host cannot produce two spellings of one server between a debug override and the default.
@@ -323,11 +323,10 @@ class SyncAccounts(
     /**
      * Registers this device and stores the token it gets back.
      *
-     * Repeating this against the same server registers a *second* device rather than refreshing the
-     * first: `POST /v1/devices` mints a new row every time, by design, so the previous token stays
-     * valid and its device stays in the server's list until somebody revokes it. That is the
-     * server's contract, not something to paper over here — but it is the reason this must not be
-     * called speculatively or retried automatically.
+     * This installation's stable UUID lets a current managed server refresh the existing device
+     * row and rotate its token instead of adding another registered client. Older community servers
+     * ignore that forward-compatible field and retain their original append-only behavior, so this
+     * still must not be called speculatively or retried automatically.
      *
      * The caller is expected to run this in a scope that outlives the account screen. Cancelling
      * mid-flight cannot un-register the device, so a cancelled call is how an orphan row is created.
@@ -347,6 +346,7 @@ class SyncAccounts(
                 password = password,
                 deviceName = deviceName,
                 platform = platform,
+                installationId = store.installationId(serverUrl),
             )
         ) {
             is DeviceRegistration.Registered -> when (
@@ -402,6 +402,7 @@ class SyncAccounts(
                 password = password,
                 deviceName = deviceName,
                 platform = platform,
+                installationId = store.installationId(serverUrl),
             )
         ) {
             is DeviceRegistration.Registered -> when (
@@ -428,8 +429,8 @@ class SyncAccounts(
      * is the point: a managed account is not something a person should have to know a hostname for,
      * and the app already knows the one hostname there is.
      *
-     * Carries [connect]'s warning unchanged — `POST /v1/devices` mints a new device row every time,
-     * so this must not be called speculatively or retried automatically.
+     * Carries [connect]'s warning unchanged: the request rotates this installation's credential,
+     * so it must not be called speculatively or retried automatically.
      */
     suspend fun logInToCloud(email: String, password: String): ServerConnection =
         connect(cloudServerUrl, email, password)
@@ -472,7 +473,7 @@ class SyncAccounts(
             is GoogleIdToken.Rejected -> return CloudSignInResult.Failed(credential.reason)
         }
 
-        val device = googleDeviceDetails()
+        val device = googleDeviceDetails(serverUrl)
         val authentication = client.signInWithGoogle(
             serverBaseUrl = serverUrl,
             challengeId = challenge.challengeId,
@@ -634,8 +635,8 @@ class SyncAccounts(
      * installation id is the part that does real work: it is stable across signing out and back in,
      * so a second sign-in rotates this device row instead of adding another one.
      */
-    private suspend fun googleDeviceDetails(): GoogleDeviceDetails = GoogleDeviceDetails(
-        installationId = store.installationId(),
+    private suspend fun googleDeviceDetails(serverUrl: String): GoogleDeviceDetails = GoogleDeviceDetails(
+        installationId = store.installationId(serverUrl),
         name = deviceName,
         platform = platform,
         appVersion = BuildConfig.VERSION_NAME,
@@ -653,8 +654,9 @@ class SyncAccounts(
      * installation finds out only by being told `401 unauthenticated` — "unknown or revoked token".
      * Holding that token afterwards is worse than holding nothing, because every later request fails
      * identically and the app goes on claiming to be connected. So a revoked token is deleted, which
-     * puts the account screen back on its sign-in form; registering again mints a new device, and
-     * the revoked one stays in the server's history.
+     * puts the account screen back on its sign-in form. A managed sign-in rotates and reactivates
+     * this installation's row; an older community server can instead append a new device and retain
+     * the revoked one as history.
      *
      * **Only an explicit 401 clears the store.** Offline, DNS failure, a 5xx from a proxy: all leave
      * the registration exactly where it was. The token cannot be reissued, so anything less than the

@@ -169,7 +169,7 @@ class AccountScreenTest {
     @Test
     fun creatingAnAccountIsAnnouncedInsteadOfMerelyConnected() {
         setScreen()
-        connection = ServerConnection.Connected("https://cloud.vivenotes.net", "Pixel Tablet")
+        connection = ServerConnection.Connected("https://sync.vivenotes.net", "Pixel Tablet")
         accountCreated = true
 
         compose.onNodeWithTag(AccountTags.CONNECT_STATUS)
@@ -466,7 +466,7 @@ class AccountScreenTest {
 
     @Test
     fun managedPlanShowsPlayPriceAndStartsThePurchaseFlow() {
-        connection = ServerConnection.Connected("https://cloud.vivenotes.net", "Pixel Tablet")
+        connection = ServerConnection.Connected("https://sync.vivenotes.net", "Pixel Tablet")
         managedSubscription = ManagedSubscriptionState(
             visible = true,
             formattedPrice = "\$4.99",
@@ -491,7 +491,7 @@ class AccountScreenTest {
 
     @Test
     fun ownedPlayPlanIsManagedInPlayAndCouponDoesNotReplaceIt() {
-        connection = ServerConnection.Connected("https://cloud.vivenotes.net", "Pixel Tablet")
+        connection = ServerConnection.Connected("https://sync.vivenotes.net", "Pixel Tablet")
         managedSubscription = ManagedSubscriptionState(
             visible = true,
             status = ManagedSubscriptionStatus(
@@ -521,7 +521,7 @@ class AccountScreenTest {
 
     @Test
     fun couponFieldSubmitsTheTypedCode() {
-        connection = ServerConnection.Connected("https://cloud.vivenotes.net", "Pixel Tablet")
+        connection = ServerConnection.Connected("https://sync.vivenotes.net", "Pixel Tablet")
         managedSubscription = ManagedSubscriptionState(visible = true)
         setScreen()
 

@@ -565,6 +565,7 @@ class SyncServerClient(
         password: String,
         deviceName: String,
         platform: String,
+        installationId: String? = null,
     ): DeviceRegistration = withContext(Dispatchers.IO) {
         val body = syncJson.encodeToString(
             RegisterDeviceRequest.serializer(),
@@ -574,6 +575,7 @@ class SyncServerClient(
                 // The password is never trimmed - whitespace in it is part of it.
                 email = email.trim(),
                 password = password,
+                installationId = installationId,
                 name = deviceName.trim().take(MAX_DEVICE_NAME).ifBlank { FALLBACK_DEVICE_NAME },
                 platform = platform.take(MAX_PLATFORM),
             ),
@@ -711,9 +713,10 @@ class SyncServerClient(
      *
      * [idempotencyKey] is a new random UUID per logical attempt and must be **reused unchanged if
      * the HTTP response is lost**, because an exact retry returns the same account, device and
-     * token rather than minting a second device. That is the one thing this endpoint has that
-     * `POST /v1/devices` does not — see [registerDevice], where a retry really does create a second
-     * row. Using the same key with different content is `409 idempotency_conflict`.
+     * token rather than minting a second device. Unlike `POST /v1/devices`, it also returns the
+     * exact original response for a lost-response retry; password reauthentication rotates the
+     * credential again on the same row. Using the same key with different content is
+     * `409 idempotency_conflict`.
      */
     suspend fun signInWithGoogle(
         serverBaseUrl: String,
@@ -1643,6 +1646,7 @@ private data class CreateAccountResponse(
 private data class RegisterDeviceRequest(
     val email: String,
     val password: String,
+    val installationId: String? = null,
     val name: String,
     val platform: String,
 )

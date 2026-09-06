@@ -1,6 +1,8 @@
 package com.vivenotes.data.sync
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.provider.Settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -11,6 +13,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.nio.ByteBuffer
+import java.security.MessageDigest
 import java.util.UUID
 
 private val Context.syncPreferences: DataStore<Preferences> by preferencesDataStore("sync")
@@ -32,9 +36,9 @@ data class SyncAccount(
     val accountId: String,
     val deviceId: String,
     /**
-     * The bearer credential, held because the server cannot reissue it — only its SHA-256 is
-     * stored. Losing this row means registering a new device and leaving an orphan on the server,
-     * which is why it is written in the same `edit` as everything else here.
+     * The bearer credential, held because the server cannot reproduce it — only its SHA-256 is
+     * stored. Losing this row requires authenticating for a replacement and can leave an unusable
+     * credential behind, which is why it is written in the same `edit` as everything else here.
      */
     val token: String,
     /** What the server will show for this device, kept so the UI can name it without a round trip. */
@@ -58,7 +62,8 @@ data class SyncAccount(
  */
 class SyncAccountStore(context: Context) {
 
-    private val store = context.applicationContext.syncPreferences
+    private val appContext = context.applicationContext
+    private val store = appContext.syncPreferences
 
     /** Null until this installation has been connected to a server. */
     val account: Flow<SyncAccount?> = store.data.map { prefs ->
@@ -66,30 +71,38 @@ class SyncAccountStore(context: Context) {
     }
 
     /**
-     * This app installation's stable id, minted on first use and kept for the life of the install.
+     * This device's stable, server-scoped app id, assigned on first use and retained locally.
      *
      * **Deliberately outside [SyncAccount] and deliberately untouched by [clear].** It is what the
      * Google routes send as `device.installationId`, and the server uses it to recognise a returning
      * installation: signing out and back in then rotates the one device row instead of adding a
      * second. Tie it to the account record and every disconnect would mint a new identity, which is
-     * exactly the growing list of unprunable "Pixel Tablet" rows the suffix in
-     * [defaultDeviceName] exists to make readable.
+     * exactly the growing list of unprunable "Pixel Tablet" rows the device-name suffix exists to
+     * make readable.
      *
-     * Not `ANDROID_ID`, which that suffix does use: this value is sent to a server and stored
-     * against an account, so it is a random UUID that says nothing about the hardware and can be
-     * reset by clearing app data. `ANDROID_ID` is hashed to four characters before it is used as a
-     * *label*, which is a different job with a different risk.
+     * New installations derive the UUID from `ANDROID_ID` plus [serverBaseUrl]. That Android value
+     * is scoped by Android to this signing key, user, and device; hashing it with the server origin
+     * means neither the raw value nor a cross-server identifier leaves the app. Unlike the previous
+     * random UUID, the result survives reinstalling or clearing app data on the same tablet—the
+     * failure mode that otherwise produced several active rows carrying the same device suffix.
+     * Existing stored random UUIDs are retained, avoiding a one-time duplicate on upgrade.
      *
      * The read-then-write is safe against two callers because DataStore serialises `edit`
      * transactions: the second one sees the first one's value and returns it rather than replacing it.
      */
-    suspend fun installationId(): String {
+    @SuppressLint("HardwareIds")
+    suspend fun installationId(serverBaseUrl: String): String {
         store.data.map { it[INSTALLATION_ID] }.first()?.let { return it }
 
+        val androidId = Settings.Secure
+            .getString(appContext.contentResolver, Settings.Secure.ANDROID_ID)
+            ?.takeIf { it.isNotBlank() }
+        val candidate = androidId?.let { serverScopedInstallationId(it, serverBaseUrl) }
+            ?: UUID.randomUUID().toString()
         var assigned = ""
         store.edit { prefs ->
             assigned = prefs[INSTALLATION_ID]
-                ?: UUID.randomUUID().toString().also { prefs[INSTALLATION_ID] = it }
+                ?: candidate.also { prefs[INSTALLATION_ID] = it }
         }
         return assigned
     }
@@ -99,9 +112,9 @@ class SyncAccountStore(context: Context) {
     }
 
     /**
-     * Forgets the registration locally. It does **not** revoke the device on the server — that is a
-     * request this app cannot make once the token is gone, so revocation belongs on the device list
-     * or the admin dashboard.
+     * Forgets the registration locally. It does **not** revoke the current token on the server —
+     * that is a request this app cannot make once the token is gone, so revocation belongs on the
+     * device list or the admin dashboard.
      */
     suspend fun clear() {
         store.edit { it.remove(ACCOUNT) }
@@ -124,3 +137,14 @@ class SyncAccountStore(context: Context) {
 }
 
 private val syncAccountJson: Json = Json { ignoreUnknownKeys = true }
+
+/** A UUIDv8-shaped, one-way identifier that cannot be correlated between two server origins. */
+internal fun serverScopedInstallationId(androidId: String, serverBaseUrl: String): String {
+    val bytes = MessageDigest.getInstance("SHA-256")
+        .digest("viveNotes-installation\u0000$serverBaseUrl\u0000$androidId".encodeToByteArray())
+        .copyOf(16)
+    bytes[6] = ((bytes[6].toInt() and 0x0f) or 0x80).toByte()
+    bytes[8] = ((bytes[8].toInt() and 0x3f) or 0x80).toByte()
+    val buffer = ByteBuffer.wrap(bytes)
+    return UUID(buffer.long, buffer.long).toString()
+}
