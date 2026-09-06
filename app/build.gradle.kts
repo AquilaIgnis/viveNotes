@@ -220,6 +220,14 @@ android {
             if (testRelease) {
                 // Test infrastructure the app APK has to retain for the test APK to resolve it.
                 proguardFiles("proguard-rules-testRelease.pro")
+                // `com.vivenotes.testrelease`, so this debug-signed APK never tries to upgrade an
+                // installed *signed* release of the same id. That install fails with
+                // INSTALL_FAILED_UPDATE_INCOMPATIBLE, and AGP reports it as "Could not load test
+                // results from ...TEST-<device>-_app-.xml" — the real reason is only in the daemon
+                // log. A separate id also keeps a test run from uninstalling the shipping app, and
+                // takes its notes with it.
+                applicationIdSuffix = ".testrelease"
+                versionNameSuffix = "-testrelease"
             }
         }
     }

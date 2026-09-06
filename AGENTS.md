@@ -41,6 +41,10 @@ environment, so CI signs with no file on disk.
   both artifact names follow it.
 - `-PtestRelease` keeps debug signing and AGP's default filenames on purpose — that variant exists
   to run instrumented tests through R8 and is installed on devices constantly. Leave it that way.
+  It installs as `com.vivenotes.testrelease`, beside the shipping app rather than over it: a
+  debug-signed APK cannot upgrade a signed `com.vivenotes`, and AGP hides that install failure
+  behind "Could not load test results from ...". So `am instrument` against this variant names
+  `com.vivenotes.testrelease.test`, and a run no longer uninstalls the real app.
 
 # UI design language
 

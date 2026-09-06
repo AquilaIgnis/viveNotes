@@ -100,6 +100,9 @@ and all AI features run entirely on-device.
 
 ## Run all tests on Release ( arm and R8)
 
+Installs as `com.vivenotes.testrelease`, so it neither collides with nor uninstalls a signed
+`com.vivenotes`.
+
 ```bash
 ./gradlew connectedAndroidTest -PtestRelease
 ```
