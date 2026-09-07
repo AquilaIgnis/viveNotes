@@ -9,6 +9,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -16,9 +17,9 @@ import kotlinx.coroutines.launch
 /**
  * Event-driven foreground synchronisation.
  *
- * [localChanges] is Room's durable outbox and [remoteChanges] is the server's authenticated event
- * stream. Both are hints, not state: [HierarchySync] still reads the outbox and the server cursor as
- * the authorities, which makes coalescing safe and makes reconnect catch-up identical to startup.
+ * [localChanges] is Room's durable outbox. Collecting [remoteChanges] holds the authenticated
+ * server stream, whose payloads are applied upstream; they do not wake a second HTTP pull.
+ * [remoteReady] prevents local pushes from racing the stream's initial backlog.
  *
  * A conflated channel is the important bit. Ten strokes committed while a run is in flight ask for
  * one more run, not ten; the outbox generation and batch idempotency keep the exact work durable.
@@ -32,6 +33,7 @@ class ForegroundSyncScheduler(
     private val registered: Flow<Boolean>,
     private val localChanges: Flow<Boolean>,
     private val remoteChanges: Flow<Unit>,
+    private val remoteReady: Flow<Boolean>,
     private val hasPendingChanges: suspend () -> Boolean,
     private val sync: suspend () -> Unit,
     private val requestBackgroundCatchUp: () -> Unit = {},
@@ -56,12 +58,21 @@ class ForegroundSyncScheduler(
                 coroutineScope {
                     val wakeups = Channel<Unit>(Channel.CONFLATED)
                     launch {
-                        localChanges.distinctUntilChanged().collect { pending ->
-                            if (pending) wakeups.trySend(Unit)
-                        }
+                        combine(
+                            localChanges.distinctUntilChanged(),
+                            remoteReady.distinctUntilChanged(),
+                        ) { pending, ready -> pending && ready }
+                            .distinctUntilChanged()
+                            .collect { canPush ->
+                                if (canPush) wakeups.trySend(Unit)
+                            }
                     }
                     launch {
-                        remoteChanges.collect { wakeups.trySend(Unit) }
+                        // Delivery and Room apply happen inside this cold flow. Its values are only
+                        // proof of progress; asking HierarchySync to pull again would recreate the
+                        // redundant request this stream replaced.
+                        remoteChanges.collect {
+                        }
                     }
 
                     for (ignored in wakeups) runSync()

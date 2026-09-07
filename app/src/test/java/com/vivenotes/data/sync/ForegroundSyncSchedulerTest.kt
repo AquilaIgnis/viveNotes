@@ -52,29 +52,36 @@ class ForegroundSyncSchedulerTest {
     }
 
     @Test
-    fun `remote notifications wake sync and bursts are conflated`() = runTest {
+    fun `remote pages are consumed without starting a second sync request`() = runTest {
         var syncs = 0
         val remote = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
-        val scheduler = scheduler(
-            remoteChanges = remote,
-            sync = {
-                syncs++
-                // Hold the collector long enough for a burst to arrive behind this run.
-                kotlinx.coroutines.delay(1_000)
-            },
-        )
+        val scheduler = scheduler(remoteChanges = remote, sync = { syncs++ })
         scheduler.start()
         runCurrent()
 
         remote.emit(Unit)
-        runCurrent()
         repeat(5) { remote.emit(Unit) }
         runCurrent()
-        assertEquals(1, syncs)
 
-        advanceTimeBy(1_000)
+        assertEquals(0, syncs)
+    }
+
+    @Test
+    fun `a pending outbox waits for the initial server backlog`() = runTest {
+        var syncs = 0
+        val ready = MutableStateFlow(false)
+        val scheduler = scheduler(
+            localChanges = MutableStateFlow(true),
+            remoteReady = ready,
+            sync = { syncs++ },
+        )
+        scheduler.start()
         runCurrent()
-        assertEquals(2, syncs)
+        assertEquals(0, syncs)
+
+        ready.value = true
+        runCurrent()
+        assertEquals(1, syncs)
     }
 
     @Test
@@ -138,14 +145,14 @@ class ForegroundSyncSchedulerTest {
     @Test
     fun `starting twice does not duplicate listeners`() = runTest {
         var syncs = 0
-        val remote = MutableSharedFlow<Unit>()
-        val scheduler = scheduler(remoteChanges = remote, sync = { syncs++ })
+        val pending = MutableStateFlow(false)
+        val scheduler = scheduler(localChanges = pending, sync = { syncs++ })
 
         scheduler.start()
         runCurrent()
         scheduler.start()
         runCurrent()
-        remote.emit(Unit)
+        pending.value = true
         runCurrent()
 
         assertEquals(1, syncs)
@@ -155,6 +162,7 @@ class ForegroundSyncSchedulerTest {
         registered: MutableStateFlow<Boolean> = MutableStateFlow(true),
         localChanges: MutableStateFlow<Boolean> = MutableStateFlow(false),
         remoteChanges: MutableSharedFlow<Unit> = MutableSharedFlow(),
+        remoteReady: MutableStateFlow<Boolean> = MutableStateFlow(true),
         hasPendingChanges: suspend () -> Boolean = { false },
         sync: suspend () -> Unit,
         requestBackgroundCatchUp: () -> Unit = {},
@@ -163,6 +171,7 @@ class ForegroundSyncSchedulerTest {
         registered = registered,
         localChanges = localChanges,
         remoteChanges = remoteChanges,
+        remoteReady = remoteReady,
         hasPendingChanges = hasPendingChanges,
         sync = sync,
         requestBackgroundCatchUp = requestBackgroundCatchUp,

@@ -159,6 +159,10 @@ class HierarchySync(
      */
     private val pictureRecounts = mutableListOf<PictureRecount>()
 
+    /** Orphans carried between bounded pages on the currently open server-pushed stream. */
+    private var streamCarried: List<RemoteChange> = emptyList()
+    private var streamAccountId: String? = null
+
     /**
      * Whether a download pass left something behind — a partition mid-transfer, a token that had
      * just been revoked.
@@ -174,6 +178,113 @@ class HierarchySync(
         activateLocked(accountId)
     }
 
+    /** Starts one streamed catch-up and returns the last cursor already committed in Room. */
+    suspend fun beginChangeStream(accountId: String): Long = mutex.withLock {
+        activateLocked(accountId)
+        streamAccountId = accountId
+        streamCarried = emptyList()
+        sync.state()?.cursor ?: error("sync state disappeared after activation")
+    }
+
+    /**
+     * Applies one authoritative page delivered in the SSE connection itself.
+     *
+     * This is intentionally the same reconciliation path as an ordinary pull: the stream changes
+     * delivery, not conflict handling, cursor transactions, purge semantics, or attachment rules.
+     */
+    suspend fun applyStreamPage(account: SyncAccount, page: PullChangesPage): SyncRunResult =
+        mutex.withLock {
+            try {
+                activateLocked(account.accountId)
+                if (streamAccountId != account.accountId) {
+                    streamAccountId = account.accountId
+                    streamCarried = emptyList()
+                }
+
+                when (val applied = applyIncomingPage(page, streamCarried)) {
+                    is IncomingPageResult.Stopped ->
+                        SyncRunResult.Failed(applied.reason)
+
+                    is IncomingPageResult.Applied -> {
+                        streamCarried = applied.carried
+                        if (!page.hasMore && streamCarried.isNotEmpty()) {
+                            return@withLock SyncRunResult.Failed(
+                                PermanentSyncFailure.InvalidServerResponse,
+                            )
+                        }
+
+                        var pictures = 0
+                        if (!page.hasMore) {
+                            markCaughtUp(account.accountId)
+                            dropStarterSupersededByAccount()
+                            // Download only after the stream reaches a stable cursor. A pageContent
+                            // can precede its attachment metadata in an older delta, and scanning
+                            // after every page would repeat the same presence work.
+                            if (applied.count > 0 || downloadsOutstanding) {
+                                val downloads = blobs.downloadMissing(account)
+                                pictures += downloads.downloaded
+                                downloadsOutstanding = downloads.workRemains
+                            }
+                        }
+                        SyncRunResult.Succeeded(
+                            SyncSummary(
+                                pulled = applied.count,
+                                pushed = 0,
+                                conflictsResolved = 0,
+                                pictures = pictures,
+                            ),
+                        )
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (badLocalState: Exception) {
+                Log.e(TAG, "Hierarchy sync could not apply a streamed change", badLocalState)
+                SyncRunResult.Failed(PermanentSyncFailure.LocalData)
+            } finally {
+                publishRemoteInk()
+            }
+        }
+
+    /**
+     * Drains local work without first asking the server whether anything changed.
+     *
+     * Foreground callers use this only after the server stream delivered its initial catch-up. A
+     * push response is enough to acknowledge the exact outbox generations and record their server
+     * versions; concurrent remote commits arrive through that already-open stream.
+     */
+    suspend fun pushPending(account: SyncAccount): SyncRunResult = mutex.withLock {
+        try {
+            activateLocked(account.accountId)
+            if (!hasCaughtUp(account.accountId)) {
+                return@withLock SyncRunResult.Succeeded(SyncSummary(0, 0, 0, 0))
+            }
+
+            undeliverableBlobs.clear()
+            repairedBlobs.clear()
+            dropStarterSupersededByAccount()
+            when (val pushed = pushOutbox(account)) {
+                is PhaseResult.Done -> SyncRunResult.Succeeded(
+                    SyncSummary(0, pushed.count, 0, 0),
+                )
+                is PhaseResult.ConflictDone -> {
+                    enforceCloudOnly()
+                    SyncRunResult.Succeeded(
+                        SyncSummary(0, pushed.count, pushed.conflicts, pushed.pictures),
+                    )
+                }
+                is PhaseResult.Stop -> pushed.result
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (badLocalState: Exception) {
+            Log.e(TAG, "Hierarchy sync could not push a local change", badLocalState)
+            SyncRunResult.Failed(PermanentSyncFailure.LocalData)
+        } finally {
+            publishRemoteInk()
+        }
+    }
+
     /** Clears account-specific versions and queued work after the credential is intentionally gone. */
     suspend fun deactivate(accountId: String) = mutex.withLock {
         db.withTransaction {
@@ -185,6 +296,8 @@ class HierarchySync(
             sync.clearEntityStates()
             metadata.delete(PENDING_BATCH_KEY)
             metadata.delete(CAUGHT_UP_KEY)
+            streamAccountId = null
+            streamCarried = emptyList()
         }
     }
 
@@ -363,6 +476,66 @@ class HierarchySync(
             metadata.delete(NotesRepository.REPLACEABLE_STARTER_KEY)
             sync.setApplyingRemote(false)
         }
+    }
+
+    /** Applies one bounded pull-shaped page, whether HTTP pull or the live stream delivered it. */
+    private suspend fun applyIncomingPage(
+        page: PullChangesPage,
+        carried: List<RemoteChange>,
+    ): IncomingPageResult {
+        val parsed = try {
+            page.changes.mapNotNull(::parseRemoteChange)
+        } catch (_: IllegalArgumentException) {
+            return IncomingPageResult.Stopped(PermanentSyncFailure.InvalidServerResponse)
+        }
+        val purged = try {
+            page.purges.map { purge ->
+                purge.requiredString("kind") to purge.requiredString("id")
+            }
+        } catch (_: IllegalArgumentException) {
+            return IncomingPageResult.Stopped(PermanentSyncFailure.InvalidServerResponse)
+        }
+        if (parsed.size != page.changes.size) {
+            Log.e(
+                TAG,
+                "Pull carried ${page.changes.size - parsed.size} change(s) of a kind this " +
+                    "build cannot store; the cursor stays put until this device is upgraded",
+            )
+            return IncomingPageResult.Stopped(PermanentSyncFailure.UnsupportedKind)
+        }
+        if (page.hasMore && page.changes.isEmpty()) {
+            return IncomingPageResult.Stopped(PermanentSyncFailure.InvalidServerResponse)
+        }
+
+        // Parent depth outranks sequence order locally. Rows whose parents are in a later bounded
+        // page stay in [carried] and the cursor does not move until they can be placed.
+        val ordered = (carried + parsed).sortedBy { change -> change.kind.rank }
+        val applicable = mutableListOf<RemoteChange>()
+        val orphans = mutableListOf<RemoteChange>()
+        val applying = HashSet<String>()
+        for (change in ordered) {
+            if (parentIsAvailable(change, applying)) {
+                applicable += change
+                applying += change.kind.wire + ":" + change.id
+            } else {
+                orphans += change
+            }
+        }
+
+        val discardedPictures = mutableListOf<String>()
+        db.withTransaction {
+            sync.setApplyingRemote(true)
+            applicable.forEach { change -> applyPulledChange(change) }
+            invalidateInkText(remoteInkPages)
+            applyPictureCounts()
+            purged.forEach { (kind, id) -> discardedPictures += applyPurgeOrRemap(kind, id) }
+            if (orphans.isEmpty()) sync.setCursor(page.cursor)
+            sync.setApplyingRemote(false)
+        }
+        if (discardedPictures.isNotEmpty()) blobs.discard(discardedPictures)
+        publishRemoteInk()
+
+        return IncomingPageResult.Applied(applicable.size, orphans)
     }
 
     private suspend fun pullIfNeeded(account: SyncAccount): PhaseResult {
@@ -1074,7 +1247,10 @@ class HierarchySync(
                 base["name"] = JsonPrimitive(row.name)
                 base["colorArgb"] = JsonPrimitive(row.colorArgb)
                 base["sortIndex"] = JsonPrimitive(row.sortIndex)
-                base["expanded"] = JsonPrimitive(row.expanded)
+                // Rail disclosure is device-local. Older contracts require the field, so preserve
+                // the server's compatibility value (or seed true for a new row) without letting a
+                // tap on this device alter another device's rail.
+                base.putIfAbsent("expanded", JsonPrimitive(true))
                 base["createdAt"] = JsonPrimitive(row.createdAt)
                 // The shelf, and whether the bytes are still here. Both written **always**, as
                 // `JsonNull` when null, rather than omitted: `base` starts from the retained
@@ -1321,7 +1497,9 @@ class HierarchySync(
                     name = change.raw.requiredString("name"),
                     colorArgb = change.raw.requiredInt("colorArgb"),
                     sortIndex = change.raw.requiredInt("sortIndex"),
-                    expanded = change.raw.requiredBoolean("expanded"),
+                    // Expansion is navigation state, not account content. Preserve this device's
+                    // choice when a remote notebook row is applied; a new notebook starts open.
+                    expanded = notebooks.byId(change.id)?.expanded ?: true,
                     createdAt = change.raw.requiredLong("createdAt"),
                     updatedAt = displayUpdatedAt,
                     deletedAt = change.deletedAt,
@@ -1785,6 +1963,15 @@ class HierarchySync(
             val pictures: Int = 0,
         ) : PhaseResult
         data class Stop(val result: SyncRunResult) : PhaseResult
+    }
+
+    private sealed interface IncomingPageResult {
+        data class Applied(
+            val count: Int,
+            val carried: List<RemoteChange>,
+        ) : IncomingPageResult
+
+        data class Stopped(val reason: PermanentSyncFailure) : IncomingPageResult
     }
 
     /** What making the server hold this batch's pictures did to the batch. */

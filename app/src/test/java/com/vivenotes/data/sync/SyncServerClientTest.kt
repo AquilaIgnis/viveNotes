@@ -287,17 +287,29 @@ class SyncServerClientTest {
             exchange.responseHeaders.add("Content-Type", "text/event-stream")
             exchange.sendResponseHeaders(200, 0)
             exchange.responseBody.use { body ->
-                body.write("event: ready\ndata: {}\n\n".encodeToByteArray())
-                body.write("event: changes\ndata: {}\n\n".encodeToByteArray())
+                body.write(
+                    "event: ready\ndata: {\"changes\":[],\"purges\":[],\"cursor\":41,\"hasMore\":false}\n\n"
+                        .encodeToByteArray(),
+                )
+                body.write(
+                    ("event: changes\ndata: {\"changes\":[{\"kind\":\"notebook\"}]," +
+                        "\"purges\":[],\"cursor\":42,\"hasMore\":false}\n\n")
+                        .encodeToByteArray(),
+                )
                 body.flush()
             }
         }
 
-        val events = SyncServerClient().watchChanges(baseUrl, "vive_abc").take(2).toList()
+        val events = SyncServerClient().watchChanges(baseUrl, "vive_abc", since = 40).take(2).toList()
 
-        assertEquals(listOf(ChangeStreamEvent.Ready, ChangeStreamEvent.ChangesAvailable), events)
+        assertEquals(2, events.size)
+        assertEquals(41L, (events[0] as ChangeStreamEvent.Ready).page.cursor)
+        val changes = (events[1] as ChangeStreamEvent.Changes).page
+        assertEquals(42L, changes.cursor)
+        assertEquals("notebook", changes.changes.single()["kind"]?.jsonPrimitive?.content)
         assertEquals("GET", requestMethod)
         assertEquals("/v1/changes/watch", requestPath)
+        assertEquals("since=40", requestQuery)
         assertEquals("Bearer vive_abc", authorization)
     }
 
@@ -310,7 +322,7 @@ class SyncServerClientTest {
 
         assertEquals(
             ChangeStreamEvent.Unauthorized,
-            SyncServerClient().watchChanges(baseUrl, "vive_dead").first(),
+            SyncServerClient().watchChanges(baseUrl, "vive_dead", since = 0).first(),
         )
     }
 
@@ -320,15 +332,20 @@ class SyncServerClientTest {
             exchange.responseHeaders.add("Content-Type", "text/event-stream")
             exchange.sendResponseHeaders(200, 0)
             exchange.responseBody.use { body ->
-                body.write("event: ready\ndata: {}\n\nevent: revoked\ndata: {}\n\n".encodeToByteArray())
+                body.write(
+                    ("event: ready\n" +
+                        "data: {\"changes\":[],\"purges\":[],\"cursor\":0,\"hasMore\":false}\n\n" +
+                        "event: revoked\ndata: {}\n\n").encodeToByteArray(),
+                )
                 body.flush()
             }
         }
 
-        assertEquals(
-            listOf(ChangeStreamEvent.Ready, ChangeStreamEvent.Unauthorized),
-            SyncServerClient().watchChanges(baseUrl, "vive_revoked").take(2).toList(),
-        )
+        val events = SyncServerClient().watchChanges(baseUrl, "vive_revoked", since = 0)
+            .take(2)
+            .toList()
+        assertTrue(events[0] is ChangeStreamEvent.Ready)
+        assertEquals(ChangeStreamEvent.Unauthorized, events[1])
     }
 
     @Test

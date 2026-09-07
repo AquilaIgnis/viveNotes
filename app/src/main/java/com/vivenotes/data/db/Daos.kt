@@ -487,6 +487,7 @@ interface NotebookDao {
     @Query("UPDATE notebooks SET name = :name, updatedAt = :now WHERE id = :id")
     suspend fun rename(id: String, name: String, now: Long)
 
+    /** Device-local rail disclosure. The repository suppresses sync around this update. */
     @Query("UPDATE notebooks SET expanded = :expanded WHERE id = :id")
     suspend fun setExpanded(id: String, expanded: Boolean)
 

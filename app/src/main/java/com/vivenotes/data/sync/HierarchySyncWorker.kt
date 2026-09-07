@@ -13,7 +13,7 @@ import androidx.work.workDataOf
 import com.vivenotes.NotesApplication
 import kotlinx.coroutines.CancellationException
 
-/** Persistent, connected-network drain for the hierarchy outbox and pull cursor. */
+/** Persistent, connected-network fallback for work handed off while the app backgrounds. */
 class HierarchySyncWorker(
     appContext: Context,
     workerParameters: WorkerParameters,
@@ -54,18 +54,17 @@ class HierarchySyncWorker(
             .build()
 
         /**
-         * One startup catch-up, with explicit removal of the timer installed by older APKs.
+         * Removes the timer installed by older APKs.
          *
-         * Unique periodic work survives application upgrades. Merely stopping its creation would
-         * leave every existing installation polling forever, so cancellation is part of the
-         * migration to the event stream.
+         * The foreground stream now delivers its own reconnect backlog, so launch does not enqueue
+         * a second catch-up request. Existing one-time work is left intact because it represents a
+         * real background handoff whose outbox may still need retrying.
          */
         fun schedule(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(LEGACY_PERIODIC_WORK)
-            requestNow(context)
         }
 
-        /** Coalesces app startup, Connect, and future local-write hints into one outbox drain. */
+        /** Coalesces background/process-death handoffs into one durable fallback run. */
         fun requestNow(context: Context) {
             WorkManager.getInstance(context).enqueueUniqueWork(
                 IMMEDIATE_WORK,

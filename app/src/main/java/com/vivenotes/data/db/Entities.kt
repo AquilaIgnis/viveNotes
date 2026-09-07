@@ -64,7 +64,7 @@ data class SyncOutboxEntity(
     val kind: String,
     val entityId: String,
     val generation: Long,
-    /** Wall-clock time of the local mutation, including order/expansion writes that do not alter UI `updatedAt`. */
+    /** Wall-clock time of the local mutation, including order writes that do not alter UI `updatedAt`. */
     val changedAt: Long,
 )
 
@@ -94,8 +94,8 @@ data class NotebookEntity(
      * Not a second kind of tombstone: nothing under here is deleted, purged or hidden from search,
      * and [deletedAt] stays null. It is a shelf — see `memory/closedNotebooksPlan.md`.
      *
-     * Synced, like [expanded] and for the same reason: it lives on the entity, so it travels with
-     * it. The server carries it as an unrecognised property of `NotebookFields`, which
+     * Synced because shelving is account-wide. The server carries it as an unrecognised property
+     * of `NotebookFields`, which
      * `additionalProperties: true` permits and the client's retained `serverJson` preserves.
      */
     val closedAt: Long? = null,

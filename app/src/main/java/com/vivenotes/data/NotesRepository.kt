@@ -357,8 +357,19 @@ class NotesRepository(
         notebooks.rename(id, name, clock())
     }
 
-    suspend fun setNotebookExpanded(id: String, expanded: Boolean) =
+    /**
+     * Stores rail disclosure locally without presenting it to sync as notebook content.
+     *
+     * The sync triggers deliberately cover every ordinary entity update, so this tiny UI write has
+     * to identify itself as a local-only apply. Otherwise tapping a notebook header creates an
+     * outbox row and therefore a network push despite changing no note. The transaction makes the
+     * suppression flag and the write indivisible; Room serializes it with remote applies.
+     */
+    suspend fun setNotebookExpanded(id: String, expanded: Boolean) = db.withTransaction {
+        sync.setApplyingRemote(true)
         notebooks.setExpanded(id, expanded)
+        sync.setApplyingRemote(false)
+    }
 
     /**
      * Tombstones a notebook, or flushes it if it never held anything.

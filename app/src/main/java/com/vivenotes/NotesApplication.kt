@@ -113,8 +113,9 @@ class NotesApplication : Application() {
             registered = syncAccounts.account.map { it != null },
             localChanges = syncAccounts.pendingChanges,
             remoteChanges = syncAccounts.remoteChanges,
+            remoteReady = syncAccounts.streamReady,
             hasPendingChanges = syncAccounts::hasPendingChanges,
-            sync = { syncAccounts.synchronize() },
+            sync = { syncAccounts.pushPending() },
             requestBackgroundCatchUp = { HierarchySyncWorker.requestNow(this) },
         )
     }

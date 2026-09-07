@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
@@ -28,6 +27,9 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.UUID
+
+/** Internal control flow used to cancel a socket after a streamed page cannot be committed. */
+private class StopRemoteDelivery : RuntimeException()
 
 /**
  * Where this installation stands with **a** server, managed or self-hosted.
@@ -225,17 +227,25 @@ class SyncAccounts(
     /** A fresh database read for the foreground-to-WorkManager lifecycle handoff. */
     suspend fun hasPendingChanges(): Boolean = hierarchy?.hasPendingChanges() == true
 
+    /** True only after the live stream's initial authoritative delta is committed locally. */
+    private val _streamReady = MutableStateFlow(false)
+    val streamReady: StateFlow<Boolean> = _streamReady.asStateFlow()
+
     /**
-     * Event-driven requests to run the ordinary sync protocol.
+     * Server-driven authoritative change delivery.
      *
-     * A successful stream connection emits `ready`, which is intentionally a wakeup: subscribing
-     * first and then catching up closes the only race where a write could land between those two
-     * operations. If the connection breaks, a bounded exponential reconnect replaces the old
-     * fixed cursor polling. While healthy and idle this flow sends and receives nothing.
+     * Collecting this flow holds the SSE connection. Its events already contain and apply the
+     * pull-shaped pages; emissions are lifecycle observations, not prompts to make another request.
+     * [streamReady] gates local pushes until the initial backlog is committed, closing the
+     * catch-up/push race without a cursor poll.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val remoteChanges: Flow<Unit> = account.flatMapLatest { activeAccount ->
-        if (activeAccount == null) emptyFlow() else remoteChangeWakeups(activeAccount)
+        if (activeAccount == null) {
+            flow { _streamReady.value = false }
+        } else {
+            remoteChangeDelivery(activeAccount)
+        }
     }
 
     /**
@@ -349,59 +359,113 @@ class SyncAccounts(
     /** How synchronisation is going. See [SyncStatus] for why this is not persisted. */
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
 
-    private fun remoteChangeWakeups(activeAccount: SyncAccount): Flow<Unit> = flow {
+    private fun remoteChangeDelivery(activeAccount: SyncAccount): Flow<Unit> = flow {
         var reconnectDelayMillis = INITIAL_STREAM_RECONNECT_MILLIS
-
-        while (currentCoroutineContext().isActive) {
-            var terminal: ChangeStreamEvent? = null
-            try {
-                client.watchChanges(activeAccount.serverUrl, activeAccount.token).collect { event ->
-                    when (event) {
-                        ChangeStreamEvent.Ready -> {
-                            reconnectDelayMillis = INITIAL_STREAM_RECONNECT_MILLIS
-                            emit(Unit)
-                        }
-                        ChangeStreamEvent.ChangesAvailable -> emit(Unit)
-                        ChangeStreamEvent.Unauthorized,
-                        is ChangeStreamEvent.Failed,
-                        -> terminal = event
-                    }
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: IOException) {
-                terminal = ChangeStreamEvent.Failed(ConnectFailure.Unreachable, retryable = true)
-            }
-
-            when (val ended = terminal) {
-                ChangeStreamEvent.Unauthorized -> {
-                    // Clearing the account cancels this flatMapLatest child. Finish the security
-                    // transition atomically with respect to that cancellation, including turning
-                    // off the database's outbox triggers for the revoked account.
-                    withContext(NonCancellable) {
-                        store.clear()
-                        hierarchy?.deactivate(activeAccount.accountId)
-                        _status.update { it.copy(failure = SyncRunResult.Revoked) }
+        try {
+            while (currentCoroutineContext().isActive) {
+                _streamReady.value = false
+                var terminal: ChangeStreamEvent? = null
+                val since = try {
+                    hierarchy?.beginChangeStream(activeAccount.accountId) ?: 0L
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    _status.update {
+                        it.copy(failure = SyncRunResult.Failed(PermanentSyncFailure.LocalData))
                     }
                     return@flow
                 }
-                is ChangeStreamEvent.Failed -> {
-                    _status.update { it.copy(failure = SyncRunResult.Retryable(ended.reason)) }
-                    if (!ended.retryable) return@flow
+                try {
+                    client.watchChanges(activeAccount.serverUrl, activeAccount.token, since)
+                        .collect { event ->
+                            when (event) {
+                                is ChangeStreamEvent.Ready -> {
+                                    reconnectDelayMillis = INITIAL_STREAM_RECONNECT_MILLIS
+                                    val result = applyStreamPage(activeAccount, event.page)
+                                    if (result !is SyncRunResult.Succeeded) {
+                                        throw StopRemoteDelivery()
+                                    }
+                                    if (!event.page.hasMore) {
+                                        _streamReady.value = true
+                                    }
+                                    emit(Unit)
+                                }
+                                is ChangeStreamEvent.Changes -> {
+                                    if (event.page.hasMore) _streamReady.value = false
+                                    val result = applyStreamPage(activeAccount, event.page)
+                                    if (result !is SyncRunResult.Succeeded) {
+                                        throw StopRemoteDelivery()
+                                    }
+                                    if (!event.page.hasMore) {
+                                        _streamReady.value = true
+                                    }
+                                    emit(Unit)
+                                }
+                                ChangeStreamEvent.Unauthorized,
+                                is ChangeStreamEvent.Failed,
+                                -> terminal = event
+                            }
+                        }
+                } catch (_: StopRemoteDelivery) {
+                    return@flow
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: IOException) {
+                    terminal = ChangeStreamEvent.Failed(
+                        ConnectFailure.Unreachable,
+                        retryable = true,
+                    )
                 }
-                // A conforming client stream always reports why it ended. Treat an unexpected
-                // completion as a dropped connection rather than spinning without delay.
-                null -> _status.update {
-                    it.copy(failure = SyncRunResult.Retryable(ConnectFailure.Unreachable))
-                }
-                ChangeStreamEvent.Ready,
-                ChangeStreamEvent.ChangesAvailable,
-                -> error("a non-terminal change-stream event ended the stream")
-            }
 
-            delay(reconnectDelayMillis)
-            reconnectDelayMillis = (reconnectDelayMillis * 2).coerceAtMost(MAX_STREAM_RECONNECT_MILLIS)
+                when (val ended = terminal) {
+                    ChangeStreamEvent.Unauthorized -> {
+                        // Clearing the account cancels this flatMapLatest child. Finish the security
+                        // transition atomically with respect to that cancellation, including turning
+                        // off the database's outbox triggers for the revoked account.
+                        withContext(NonCancellable) {
+                            store.clear()
+                            hierarchy?.deactivate(activeAccount.accountId)
+                            _status.update { it.copy(failure = SyncRunResult.Revoked) }
+                        }
+                        return@flow
+                    }
+                    is ChangeStreamEvent.Failed -> {
+                        _streamReady.value = false
+                        _status.update { it.copy(failure = SyncRunResult.Retryable(ended.reason)) }
+                        if (!ended.retryable) return@flow
+                    }
+                    // A conforming client stream always reports why it ended. Treat an unexpected
+                    // completion as a dropped connection rather than spinning without delay.
+                    null -> _status.update {
+                        it.copy(failure = SyncRunResult.Retryable(ConnectFailure.Unreachable))
+                    }
+                    is ChangeStreamEvent.Ready,
+                    is ChangeStreamEvent.Changes,
+                    -> error("a non-terminal change-stream event ended the stream")
+                }
+
+                delay(reconnectDelayMillis)
+                reconnectDelayMillis = (reconnectDelayMillis * 2)
+                    .coerceAtMost(MAX_STREAM_RECONNECT_MILLIS)
+            }
+        } finally {
+            _streamReady.value = false
         }
+    }
+
+    private suspend fun applyStreamPage(
+        account: SyncAccount,
+        page: PullChangesPage,
+    ): SyncRunResult {
+        _status.update { it.copy(running = true) }
+        val result = try {
+            hierarchy?.applyStreamPage(account, page)
+                ?: SyncRunResult.Failed(PermanentSyncFailure.LocalData)
+        } finally {
+            _status.update { it.copy(running = false) }
+        }
+        recordResult(result)
+        return result
     }
 
     /**
@@ -707,7 +771,6 @@ class SyncAccounts(
         } catch (_: Exception) {
             // The token is already durable. The scheduled worker retries local activation.
         }
-        HierarchySyncWorker.requestNow(appContext)
         return null
     }
 
@@ -854,6 +917,34 @@ class SyncAccounts(
             _status.update { it.copy(running = false) }
         }
 
+        recordResult(result)
+
+        if (result == SyncRunResult.Revoked) {
+            store.clear()
+            hierarchy?.deactivate(account.accountId)
+        }
+        return result
+    }
+
+    /** Pushes foreground local work after the live stream has delivered its initial backlog. */
+    suspend fun pushPending(): SyncRunResult? {
+        val account = store.account.first() ?: return null
+        _status.update { it.copy(running = true) }
+        val result = try {
+            hierarchy?.pushPending(account)
+                ?: SyncRunResult.Failed(PermanentSyncFailure.LocalData)
+        } finally {
+            _status.update { it.copy(running = false) }
+        }
+        recordResult(result)
+        if (result == SyncRunResult.Revoked) {
+            store.clear()
+            hierarchy?.deactivate(account.accountId)
+        }
+        return result
+    }
+
+    private fun recordResult(result: SyncRunResult) {
         _status.update { current ->
             when (result) {
                 is SyncRunResult.Succeeded -> current.copy(
@@ -866,12 +957,6 @@ class SyncAccounts(
                 else -> current.copy(failure = result)
             }
         }
-
-        if (result == SyncRunResult.Revoked) {
-            store.clear()
-            hierarchy?.deactivate(account.accountId)
-        }
-        return result
     }
 
     /**

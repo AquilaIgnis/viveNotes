@@ -277,11 +277,11 @@ sealed interface ServerResult<out T> {
 /** One lifecycle event from the authenticated remote-change stream. */
 sealed interface ChangeStreamEvent {
 
-    /** The server installed the subscription; a cursor catch-up now closes the connection race. */
-    data object Ready : ChangeStreamEvent
+    /** The subscription is installed and [page] is the first authoritative catch-up page. */
+    data class Ready(val page: PullChangesPage) : ChangeStreamEvent
 
-    /** Another device, or the server's administration surface, committed account content. */
-    data object ChangesAvailable : ChangeStreamEvent
+    /** Authoritative content committed after the stream's preceding page. */
+    data class Changes(val page: PullChangesPage) : ChangeStreamEvent
 
     /** The server explicitly rejected this installation's stored bearer token. */
     data object Unauthorized : ChangeStreamEvent
@@ -915,21 +915,31 @@ class SyncServerClient(
         }
 
     /**
-     * Watches for account writes without polling the cursor.
+     * Receives account writes without polling the cursor or requesting a delta afterwards.
      *
-     * The stream is deliberately a hint-only side channel. [ChangeStreamEvent.Ready] causes the
-     * caller to run the ordinary cursor protocol after the server has installed the subscription,
-     * closing the catch-up/watch race. Every later [ChangeStreamEvent.ChangesAvailable] does the
-     * same; no document bytes or cursor authority live in this connection.
+     * [since] is the last cursor Room committed. The server installs the subscription first, then
+     * sends the catch-up delta in [ChangeStreamEvent.Ready] and any remaining/live pages in
+     * [ChangeStreamEvent.Changes]. Those pages have the same shape and authority as
+     * `GET /v1/changes`; SSE is now the delivery channel rather than a prompt to make another GET.
      *
      * `callbackFlow` is doing lifecycle work here, not adapting a callback API. A blocking
      * `HttpURLConnection` read does not observe coroutine cancellation by itself, so [awaitClose]
      * disconnects it from the cancelling thread. That lets backgrounding the app close the socket
      * immediately even though an idle server intentionally sends no heartbeats.
      */
-    fun watchChanges(serverBaseUrl: String, token: String): Flow<ChangeStreamEvent> = callbackFlow {
+    fun watchChanges(
+        serverBaseUrl: String,
+        token: String,
+        since: Long,
+    ): Flow<ChangeStreamEvent> = callbackFlow {
+        if (since < 0) {
+            trySend(ChangeStreamEvent.Failed(ConnectFailure.InvalidRequest, retryable = false))
+            close()
+            awaitClose { }
+            return@callbackFlow
+        }
         val url = try {
-            URL("$serverBaseUrl/v1/changes/watch")
+            URL("$serverBaseUrl/v1/changes/watch?since=$since")
         } catch (malformed: java.net.MalformedURLException) {
             trySend(ChangeStreamEvent.Failed(ConnectFailure.InvalidAddress, retryable = false))
             close()
@@ -993,25 +1003,45 @@ class SyncServerClient(
 
                 BufferedInputStream(connection.inputStream).use { input ->
                     var eventName: String? = null
+                    val dataLines = mutableListOf<String>()
                     while (isActive) {
                         val line = readEventStreamLine(input) ?: break
                         when {
                             line.isEmpty() -> {
+                                val payload = dataLines.joinToString("\n")
                                 when (eventName) {
-                                    "ready" -> trySend(ChangeStreamEvent.Ready)
-                                    "changes" -> trySend(ChangeStreamEvent.ChangesAvailable)
+                                    "ready", "changes" -> {
+                                        val page = try {
+                                            decodePullChangesPage(payload)
+                                        } catch (_: Exception) {
+                                            send(
+                                                ChangeStreamEvent.Failed(
+                                                    ConnectFailure.NotAViveServer,
+                                                    retryable = false,
+                                                ),
+                                            )
+                                            close()
+                                            return@launch
+                                        }
+                                        send(
+                                            if (eventName == "ready") ChangeStreamEvent.Ready(page)
+                                            else ChangeStreamEvent.Changes(page),
+                                        )
+                                    }
                                     "revoked" -> {
-                                        trySend(ChangeStreamEvent.Unauthorized)
+                                        send(ChangeStreamEvent.Unauthorized)
                                         close()
                                         return@launch
                                     }
                                 }
                                 eventName = null
+                                dataLines.clear()
                             }
                             line.startsWith("event:") ->
                                 eventName = line.substringAfter(':').trimStart()
-                            // Comments, data, ids, retry hints, and future fields are ignored. The
-                            // event name is the entire contract this hint channel needs.
+                            line.startsWith("data:") ->
+                                dataLines += line.substringAfter(':').removePrefix(" ")
+                            // Comments, ids, retry hints, and future fields are ignored.
                         }
                     }
                 }
@@ -1037,7 +1067,12 @@ class SyncServerClient(
         }
     }
 
-    /** The cheap launch/reconnect catch-up check described by `GET /v1/cursor`. */
+    private fun decodePullChangesPage(payload: String): PullChangesPage {
+        val decoded = syncJson.decodeFromString(PullChangesResponse.serializer(), payload)
+        return PullChangesPage(decoded.changes, decoded.cursor, decoded.hasMore, decoded.purges)
+    }
+
+    /** Compatibility/manual catch-up check; the foreground stream now carries its own delta. */
     override suspend fun getCursor(serverBaseUrl: String, token: String): ServerResult<Long> =
         when (
             val raw = authenticatedRequest(
@@ -1072,8 +1107,7 @@ class SyncServerClient(
             )
         ) {
             is RawServerResult.Response -> decodeAuthenticated(raw) { payload ->
-                val decoded = syncJson.decodeFromString(PullChangesResponse.serializer(), payload)
-                PullChangesPage(decoded.changes, decoded.cursor, decoded.hasMore, decoded.purges)
+                decodePullChangesPage(payload)
             }
             RawServerResult.InvalidAddress -> invalidAddress()
             RawServerResult.Unreachable -> unreachable()

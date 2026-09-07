@@ -91,6 +91,70 @@ class HierarchySyncTest {
     }
 
     @Test
+    fun changingRailExpansionIsLocalAndCreatesNoSyncWork() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        hierarchy.run(account())
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+
+        repository.setNotebookExpanded(notebookId, false)
+
+        assertFalse(db.notebookDao().byId(notebookId)!!.expanded)
+        assertTrue("navigation must not create an outbox row", db.syncDao().outbox(512).isEmpty())
+
+        // A later remote content update must preserve this device's disclosure choice.
+        val remote = server.current("notebook", notebookId)!!.toMutableMap().apply {
+            this["name"] = JsonPrimitive("Renamed elsewhere")
+            this["expanded"] = JsonPrimitive(true)
+            this["updatedAt"] = JsonPrimitive(now + 1)
+        }.let(::JsonObject)
+        server.seed(remote)
+        hierarchy.run(account())
+
+        assertEquals("Renamed elsewhere", db.notebookDao().byId(notebookId)!!.name)
+        assertFalse(db.notebookDao().byId(notebookId)!!.expanded)
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    @Test
+    fun foregroundLocalPushDoesNotAskForRemoteUpdatesFirst() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        hierarchy.run(account())
+        server.cursorReads = 0
+        server.pullReads = 0
+        server.pushes.clear()
+
+        repository.renameNotebook(notebookId, "Actually changed")
+        val result = hierarchy.pushPending(account()) as SyncRunResult.Succeeded
+
+        assertEquals(1, result.summary.pushed)
+        assertEquals(0, server.cursorReads)
+        assertEquals(0, server.pullReads)
+        assertEquals(1, server.pushes.size)
+    }
+
+    @Test
+    fun streamedDeltaIsCommittedDirectlyWithoutAnotherTransportRead() = runBlocking {
+        server.seed(
+            notebookChange("remote-n", "From server", now),
+            sectionChange("remote-s", "remote-n", "Section", now),
+            pageChange("remote-p", "remote-s", "Page", now),
+        )
+        val since = hierarchy.beginChangeStream(account().accountId)
+        val page = (server.pullChanges("", "", since, 512) as ServerResult.Success<PullChangesPage>).value
+        server.pullReads = 0
+        server.cursorReads = 0
+
+        val result = hierarchy.applyStreamPage(account(), page) as SyncRunResult.Succeeded
+
+        assertEquals(3, result.summary.pulled)
+        assertEquals("From server", db.notebookDao().byId("remote-n")!!.name)
+        assertEquals(page.cursor, db.syncDao().state()!!.cursor)
+        assertEquals(0, server.cursorReads)
+        assertEquals(0, server.pullReads)
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    @Test
     fun pulledRowsStayLocalAndUnknownFieldsSurviveTheNextPush() = runBlocking {
         val changedAt = System.currentTimeMillis()
         server.seed(
@@ -1430,6 +1494,8 @@ class HierarchySyncTest {
         /** Consumed by the next push, so a test can leave a serialized batch stranded on disk. */
         var failNextPush: ServerResult.Failed? = null
         private var cursor = 0L
+        var cursorReads = 0
+        var pullReads = 0
 
         /** Gravestones, in the shape `GET /v1/changes` reports them — see [purgeNotebook]. */
         private val purges = mutableListOf<JsonObject>()
@@ -1521,8 +1587,10 @@ class HierarchySyncTest {
             seq > since && seq <= upperBound
         }
 
-        override suspend fun getCursor(serverBaseUrl: String, token: String) =
-            ServerResult.Success(cursor)
+        override suspend fun getCursor(serverBaseUrl: String, token: String): ServerResult<Long> {
+            cursorReads++
+            return ServerResult.Success(cursor)
+        }
 
         /** Rows per pull, so a test can put a parent and its child in different pages. */
         var pageLimit: Int = Int.MAX_VALUE
@@ -1533,6 +1601,7 @@ class HierarchySyncTest {
             since: Long,
             limit: Int,
         ): ServerResult<PullChangesPage> {
+            pullReads++
             val remaining = log.filter { it.getValue("seq").jsonPrimitive.long > since }
             if (remaining.size <= pageLimit) {
                 return ServerResult.Success(
