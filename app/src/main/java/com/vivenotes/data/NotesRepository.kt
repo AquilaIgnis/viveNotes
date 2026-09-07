@@ -25,6 +25,7 @@ import com.vivenotes.data.db.PageEntity
 import com.vivenotes.data.db.PageRevisionEntity
 import com.vivenotes.data.db.PageRevisionSummary
 import com.vivenotes.data.db.SectionEntity
+import com.vivenotes.data.db.deferredNotebookContentKey
 import com.vivenotes.model.DocumentCodecs
 import com.vivenotes.model.PageDoc
 import com.vivenotes.model.isBlank
@@ -573,7 +574,7 @@ class NotesRepository(
      */
     suspend fun notebookIsBlank(id: String): Boolean {
         val notebook = notebooks.byId(id) ?: return false
-        if (!notebook.holdsItsOwnContents) return false
+        if (!notebook.holdsItsOwnContents()) return false
         return pagesAreBlank(pages.allInNotebook(id))
     }
 
@@ -581,7 +582,7 @@ class NotesRepository(
     suspend fun sectionIsBlank(id: String): Boolean {
         val section = sections.byId(id) ?: return false
         val notebook = notebooks.byId(section.notebookId) ?: return false
-        if (!notebook.holdsItsOwnContents) return false
+        if (!notebook.holdsItsOwnContents()) return false
         return pagesAreBlank(pages.allInSection(id))
     }
 
@@ -590,12 +591,13 @@ class NotesRepository(
         val page = pages.byId(id) ?: return false
         val section = sections.byId(page.sectionId) ?: return false
         val notebook = notebooks.byId(section.notebookId) ?: return false
-        if (!notebook.holdsItsOwnContents) return false
+        if (!notebook.holdsItsOwnContents()) return false
         return pagesAreBlank(listOf(page))
     }
 
-    private val NotebookEntity.holdsItsOwnContents: Boolean
-        get() = closedAt == null && cloudOnlyAt == null
+    private suspend fun NotebookEntity.holdsItsOwnContents(): Boolean =
+        closedAt == null && cloudOnlyAt == null &&
+            localMetadata.value(deferredNotebookContentKey(id)) == null
 
     /**
      * Whether every one of these pages is empty of everything worth keeping.

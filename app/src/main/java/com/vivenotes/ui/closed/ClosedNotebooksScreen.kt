@@ -110,8 +110,8 @@ fun ClosedNotebooksScreen(
 ) {
     BackHandler(onBack = onBack)
 
-    val onDevice = notebooks.filter { it.notebook.cloudOnlyAt == null }
-    val inCloud = notebooks.filter { it.notebook.cloudOnlyAt != null }
+    val onDevice = notebooks.filter { it.contentOnDevice }
+    val inCloud = notebooks.filterNot { it.contentOnDevice }
 
     Scaffold(
         modifier = modifier
@@ -266,6 +266,8 @@ private fun SectionHeading(text: String, tag: String, supporting: String? = null
  * because it is what the shelf is usually opened to do. A cloud row carries one icon button
  * instead: there is exactly one thing to do with a notebook that is not here, a download arrow says
  * it without a label, and an icon button is the only shape a progress ring can be drawn around.
+ * "In cloud" is device-relative here: it includes both an account-wide cloud-only notebook and a
+ * closed notebook this installation deliberately has not downloaded.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -279,7 +281,7 @@ private fun ClosedNotebookRow(
     onBringBack: (String) -> Unit,
 ) {
     val notebook = entry.notebook
-    val inCloud = notebook.cloudOnlyAt != null
+    val inCloud = !entry.contentOnDevice
     Card(
         modifier = Modifier
             .fillMaxWidth()

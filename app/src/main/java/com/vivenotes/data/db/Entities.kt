@@ -17,6 +17,20 @@ data class LocalMetadataEntity(
 )
 
 /**
+ * Prefix for the installation-local marker saying a notebook's hierarchy is present but its
+ * payload was deliberately not downloaded.
+ *
+ * This cannot live on [NotebookEntity]: every field on that row except `expanded` is overlaid into
+ * the sync snapshot, and a device-local availability choice must never turn into account state.
+ * Keeping the key beside [LocalMetadataEntity] also lets Room queries use the same compile-time
+ * constant as the sync engine that writes it.
+ */
+const val DEFERRED_NOTEBOOK_CONTENT_KEY_PREFIX = "deferredNotebookContent:"
+
+fun deferredNotebookContentKey(notebookId: String): String =
+    DEFERRED_NOTEBOOK_CONTENT_KEY_PREFIX + notebookId
+
+/**
  * The one server account whose hierarchy this database currently mirrors.
  *
  * There is deliberately one row rather than one row per account: the app has one local notebook

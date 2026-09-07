@@ -107,6 +107,22 @@ class ClosedNotebooksScreenTest {
         assertEquals(listOf("elsewhere"), broughtBack)
     }
 
+    @Test
+    fun aClosedNotebookDeferredByThisDeviceOffersTheSameDownloadAction() {
+        notebooks = listOf(
+            closed("deferred", cloudOnly = false, contentOnDevice = false),
+        )
+        connected = true
+        setScreen()
+
+        compose.onNodeWithTag(ClosedNotebooksTags.IN_CLOUD_HEADING).assertIsDisplayed()
+        compose.onNodeWithTag(ClosedNotebooksTags.ON_DEVICE_HEADING).assertDoesNotExist()
+        compose.onNodeWithTag(ClosedNotebooksTags.open("deferred")).assertDoesNotExist()
+        compose.onNodeWithTag(ClosedNotebooksTags.bringBack("deferred")).performClick()
+
+        assertEquals(listOf("deferred"), broughtBack)
+    }
+
     /**
      * Without a server there is nowhere to move a notebook to and nowhere to fetch one from, and a
      * button that looked live and did nothing would be the worse answer.
@@ -217,7 +233,11 @@ class ClosedNotebooksScreenTest {
         assertNull(message)
     }
 
-    private fun closed(id: String, cloudOnly: Boolean) = ClosedNotebook(
+    private fun closed(
+        id: String,
+        cloudOnly: Boolean,
+        contentOnDevice: Boolean = !cloudOnly,
+    ) = ClosedNotebook(
         notebook = NotebookEntity(
             id = id,
             name = "Notebook $id",
@@ -230,5 +250,6 @@ class ClosedNotebooksScreenTest {
         ),
         sectionCount = 2,
         pageCount = 7,
+        contentOnDevice = contentOnDevice,
     )
 }

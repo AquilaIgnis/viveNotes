@@ -21,6 +21,7 @@ import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.data.db.SyncEntityStateEntity
 import com.vivenotes.data.db.SyncOutboxEntity
 import com.vivenotes.data.db.SyncStateEntity
+import com.vivenotes.data.db.deferredNotebookContentKey
 import com.vivenotes.model.DocumentCodecs
 import com.vivenotes.model.Outline
 import com.vivenotes.model.migrated
@@ -217,10 +218,11 @@ class HierarchySync(
                         if (!page.hasMore) {
                             markCaughtUp(account.accountId)
                             dropStarterSupersededByAccount()
+                            val attachmentsReady = materializeReferencedRemoteAttachments()
                             // Download only after the stream reaches a stable cursor. A pageContent
                             // can precede its attachment metadata in an older delta, and scanning
                             // after every page would repeat the same presence work.
-                            if (applied.count > 0 || downloadsOutstanding) {
+                            if (applied.count > 0 || attachmentsReady > 0 || downloadsOutstanding) {
                                 val downloads = blobs.downloadMissing(account)
                                 pictures += downloads.downloaded
                                 downloadsOutstanding = downloads.workRemains
@@ -368,7 +370,17 @@ class HierarchySync(
             // Skipped entirely on an idle run, which SD6 requires to cost one `GET /v1/cursor` and
             // nothing else: with nothing pulled, nothing pushed and no gap left by an earlier pass,
             // there is nothing new to be missing.
-            if (pulled > 0 || pushed > 0 || conflicts > 0 || downloadsOutstanding) {
+            val attachmentsReady = if (
+                pulled > 0 || pushed > 0 || conflicts > 0 || downloadsOutstanding
+            ) {
+                materializeReferencedRemoteAttachments()
+            } else {
+                0
+            }
+            if (
+                pulled > 0 || pushed > 0 || conflicts > 0 ||
+                attachmentsReady > 0 || downloadsOutstanding
+            ) {
                 val downloads = blobs.downloadMissing(account)
                 pictures += downloads.downloaded
                 downloadsOutstanding = downloads.workRemains
@@ -742,8 +754,34 @@ class HierarchySync(
         // after another device deleted an outline, giving the old body a later updatedAt and
         // resurrecting it. Discarding the dirty whole row loses a simultaneous offline edit, which
         // is the deliberate interim trade-off until outline-keyed three-way merge can preserve both.
-        applyRemoteRow(remote)
+        // An attachment has no notebook parent on the wire. Keep its authoritative JSON in the
+        // entity-state table above and materialize the row only after the complete delta tells us
+        // that a locally retained body actually uses it. The same gate drops page payload and ink
+        // for a notebook this installation first discovered after it had already been closed.
+        if (remote.kind != SyncKind.Attachment && !belongsToDeferredNotebook(remote)) {
+            applyRemoteRow(remote)
+        }
         sync.deleteOutbox(remote.kind.wire, remote.id)
+    }
+
+    /** Whether this payload belongs to a notebook whose bytes this installation did not request. */
+    private suspend fun belongsToDeferredNotebook(change: RemoteChange): Boolean {
+        val pageId = when (change.kind) {
+            SyncKind.PageContent,
+            SyncKind.InkStroke,
+            SyncKind.InkErase,
+            SyncKind.InkMove,
+            -> change.raw.requiredString("pageId")
+
+            SyncKind.Notebook,
+            SyncKind.Section,
+            SyncKind.Page,
+            SyncKind.Attachment,
+            -> return false
+        }
+        val sectionId = pages.byId(pageId)?.sectionId ?: return false
+        val notebookId = sections.byId(sectionId)?.notebookId ?: return false
+        return metadata.value(deferredNotebookContentKey(notebookId)) != null
     }
 
     /**
@@ -791,6 +829,7 @@ class HierarchySync(
         // Sections, pages, bodies, revisions, ink and the derived text all cascade from here. Only
         // the pictures do not, because a picture belongs to no one notebook.
         notebooks.hardDelete(id)
+        metadata.delete(deferredNotebookContentKey(id))
         orphaned.chunked(SQLITE_BIND_CHUNK).forEach { attachments.deleteByIds(it) }
 
         // The two tables that hold ids rather than rows, so neither goes with the cascade. Queued
@@ -1491,24 +1530,46 @@ class HierarchySync(
             -> Unit
         }
         when (change.kind) {
-            SyncKind.Notebook -> notebooks.upsert(
-                NotebookEntity(
-                    id = change.id,
-                    name = change.raw.requiredString("name"),
-                    colorArgb = change.raw.requiredInt("colorArgb"),
-                    sortIndex = change.raw.requiredInt("sortIndex"),
-                    // Expansion is navigation state, not account content. Preserve this device's
-                    // choice when a remote notebook row is applied; a new notebook starts open.
-                    expanded = notebooks.byId(change.id)?.expanded ?: true,
-                    createdAt = change.raw.requiredLong("createdAt"),
-                    updatedAt = displayUpdatedAt,
-                    deletedAt = change.deletedAt,
-                    // Optional, not required: a row last written by a build without the shelf
-                    // carries neither, and absent is exactly what "open, and on this device" means.
-                    closedAt = change.raw.optionalLong("closedAt"),
-                    cloudOnlyAt = change.raw.optionalLong("cloudOnlyAt"),
-                ),
-            )
+            SyncKind.Notebook -> {
+                val previous = notebooks.byId(change.id)
+                val closedAt = change.raw.optionalLong("closedAt")
+                val cloudOnlyAt = change.raw.optionalLong("cloudOnlyAt")
+
+                // Closing never evicts a notebook already held here. Only a notebook first
+                // discovered in the already-closed state gets an installation-local marker that
+                // defers its payload. The marker is outside the notebook row so it cannot leak into
+                // the next sync snapshot as account state.
+                if (previous == null && change.deletedAt == null &&
+                    (closedAt != null || cloudOnlyAt != null)
+                ) {
+                    metadata.put(
+                        LocalMetadataEntity(
+                            deferredNotebookContentKey(change.id),
+                            "$displayUpdatedAt",
+                        ),
+                    )
+                }
+
+                notebooks.upsert(
+                    NotebookEntity(
+                        id = change.id,
+                        name = change.raw.requiredString("name"),
+                        colorArgb = change.raw.requiredInt("colorArgb"),
+                        sortIndex = change.raw.requiredInt("sortIndex"),
+                        // Expansion is navigation state, not account content. Preserve this
+                        // device's choice when a remote notebook row is applied; a new one starts
+                        // open.
+                        expanded = previous?.expanded ?: true,
+                        createdAt = change.raw.requiredLong("createdAt"),
+                        updatedAt = displayUpdatedAt,
+                        deletedAt = change.deletedAt,
+                        // Optional, not required: a row last written by a build without the shelf
+                        // carries neither, and absent is exactly what "open" means.
+                        closedAt = closedAt,
+                        cloudOnlyAt = cloudOnlyAt,
+                    ),
+                )
+            }
             SyncKind.Section -> sections.upsert(
                 SectionEntity(
                     id = change.id,
@@ -1644,19 +1705,67 @@ class HierarchySync(
              * becomes a release of one reference and not a delete.
              */
             SyncKind.Attachment -> if (change.deletedAt == null) {
-                attachments.insert(
-                    AttachmentEntity(
-                        id = change.id,
-                        mimeType = change.raw.requiredString("mimeType"),
-                        pixelWidth = change.raw.requiredInt("pixelWidth"),
-                        pixelHeight = change.raw.requiredInt("pixelHeight"),
-                        byteCount = change.raw.requiredLong("byteCount"),
-                        refCount = 0,
-                        createdAt = change.raw.requiredLong("createdAt"),
-                    ),
-                )
+                attachments.insert(attachmentEntity(change, refCount = 0))
             }
         }
+    }
+
+    private fun attachmentEntity(change: RemoteChange, refCount: Int) = AttachmentEntity(
+        id = change.id,
+        mimeType = change.raw.requiredString("mimeType"),
+        pixelWidth = change.raw.requiredInt("pixelWidth"),
+        pixelHeight = change.raw.requiredInt("pixelHeight"),
+        byteCount = change.raw.requiredLong("byteCount"),
+        refCount = refCount,
+        createdAt = change.raw.requiredLong("createdAt"),
+    )
+
+    /**
+     * Materializes cached remote picture metadata only when a body kept on this device names it.
+     *
+     * Attachments have no notebook parent in the protocol. Waiting until the delta is stable is the
+     * only point where the retained documents can distinguish a picture belonging to an open
+     * notebook from one belonging only to deferred closed notebooks. The authoritative JSON lives
+     * in `sync_entity_states` meanwhile, which also makes a process death between pages harmless.
+     *
+     * Returns the number of inserted rows so the caller knows the byte downloader has new work even
+     * if this process resumed on an otherwise empty final page.
+     */
+    private suspend fun materializeReferencedRemoteAttachments(): Int {
+        val referenceCounts = linkedMapOf<String, Int>()
+        contents.picturePlacingBodies().forEach { body ->
+            pictureIdsIn(body.docJson, body.format).forEach { id ->
+                referenceCounts[id] = referenceCounts.getOrDefault(id, 0) + 1
+            }
+        }
+        if (referenceCounts.isEmpty()) return 0
+
+        val present = referenceCounts.keys.chunked(SQLITE_BIND_CHUNK)
+            .flatMap { ids -> attachments.byIds(ids) }
+            .mapTo(hashSetOf()) { row -> row.id }
+        val missing = referenceCounts.keys - present
+        if (missing.isEmpty()) return 0
+
+        var inserted = 0
+        db.withTransaction {
+            sync.setApplyingRemote(true)
+            missing.forEach { id ->
+                val state = sync.entityState(SyncKind.Attachment.wire, id)
+                    ?: return@forEach
+                val remote = parseRemoteChange(decodeObject(state.serverJson))
+                    ?.takeIf { it.kind == SyncKind.Attachment && it.deletedAt == null }
+                    ?: return@forEach
+                if (
+                    attachments.insert(
+                        attachmentEntity(remote, referenceCounts.getValue(id)),
+                    ) != -1L
+                ) {
+                    inserted++
+                }
+            }
+            sync.setApplyingRemote(false)
+        }
+        return inserted
     }
 
     /** One pulled body, with the one it replaced, waiting to be counted — [applyPictureCounts]. */
@@ -2121,23 +2230,34 @@ class HierarchySync(
         val evicted = try {
             db.withTransaction {
                 val pageIds = pages.allInNotebook(notebook.id).map { it.id }
-                if (pageIds.isEmpty()) return@withTransaction emptyList()
-                val orphaned = picturesReachedOnlyBy(pageIds)
-                // Chunked below SQLite's bind limit, which a notebook of a few thousand pages would
-                // otherwise cross — and the failure mode of not chunking is an exception on
-                // somebody's largest notebook only.
-                pageIds.chunked(SQLITE_BIND_CHUNK).forEach { chunk ->
-                    contents.deleteForPages(chunk)
-                    revisions.deleteForPages(chunk)
-                    inkStrokes.deleteForPages(chunk)
-                    inkErases.deleteForPages(chunk)
-                    inkMoves.deleteForPages(chunk)
-                    // Derived from ink that has just gone, and rebuilt from the strokes when they
-                    // come back. Its picture twin, `attachment_text`, needs no line here: it
-                    // cascades from the `attachments` row below.
-                    inkText.deleteForPages(chunk)
+                val orphaned = if (pageIds.isEmpty()) {
+                    emptyList()
+                } else {
+                    picturesReachedOnlyBy(pageIds)
                 }
-                orphaned.chunked(SQLITE_BIND_CHUNK).forEach { attachments.deleteByIds(it) }
+                if (pageIds.isNotEmpty()) {
+                    // Chunked below SQLite's bind limit, which a notebook of a few thousand pages
+                    // would otherwise cross — and the failure mode of not chunking is an exception
+                    // on somebody's largest notebook only.
+                    pageIds.chunked(SQLITE_BIND_CHUNK).forEach { chunk ->
+                        contents.deleteForPages(chunk)
+                        revisions.deleteForPages(chunk)
+                        inkStrokes.deleteForPages(chunk)
+                        inkErases.deleteForPages(chunk)
+                        inkMoves.deleteForPages(chunk)
+                        // Derived from ink that has just gone, and rebuilt from the strokes when
+                        // they come back. Its picture twin, `attachment_text`, needs no line here:
+                        // it cascades from the `attachments` row below.
+                        inkText.deleteForPages(chunk)
+                    }
+                    orphaned.chunked(SQLITE_BIND_CHUNK).forEach { attachments.deleteByIds(it) }
+                }
+                metadata.put(
+                    LocalMetadataEntity(
+                        deferredNotebookContentKey(notebook.id),
+                        "${System.currentTimeMillis()}",
+                    ),
+                )
                 sync.pruneOrphanedOutbox()
                 orphaned
             }
@@ -2212,7 +2332,11 @@ class HierarchySync(
     }.getOrDefault(emptyList())
 
     /**
-     * Downloads a cloud-only notebook's contents again and puts it back on this device.
+     * Downloads a notebook whose contents are absent here and puts it back on this device.
+     *
+     * That includes both an account-wide `cloudOnlyAt` move and a closed notebook this installation
+     * deliberately deferred when it first discovered it. The replay is identical; only the reason
+     * the local payload is absent differs.
      *
      * There is no per-notebook read in the contract — `GET /v1/changes` takes `since` and `limit`
      * and nothing else — so this replays the account from zero and keeps only what belongs to the
@@ -2248,7 +2372,10 @@ class HierarchySync(
         val notebook = notebooks.byId(notebookId)
             ?: return@withLock CloudArchiveResult.UnknownNotebook
         if (notebook.deletedAt != null) return@withLock CloudArchiveResult.UnknownNotebook
-        if (notebook.cloudOnlyAt == null) return@withLock CloudArchiveResult.AlreadyDone
+        val deferredLocally = metadata.value(deferredNotebookContentKey(notebookId)) != null
+        if (notebook.cloudOnlyAt == null && !deferredLocally) {
+            return@withLock CloudArchiveResult.AlreadyDone
+        }
         if (sync.state() == null) return@withLock CloudArchiveResult.NoAccount
 
         val wanted = pages.allInNotebook(notebookId).map { it.id }.toSet()
@@ -2368,6 +2495,7 @@ class HierarchySync(
         db.withTransaction {
             notebooks.setCloudOnly(notebookId, null, now)
             notebooks.setClosed(notebookId, null, now)
+            metadata.delete(deferredNotebookContentKey(notebookId))
         }
 
         val downloads = blobs.downloadMissing(account)

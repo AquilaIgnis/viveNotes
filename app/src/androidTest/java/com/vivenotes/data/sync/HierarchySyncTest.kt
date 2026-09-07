@@ -14,6 +14,8 @@ import com.vivenotes.data.db.InkStrokeEntity
 import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
+import com.vivenotes.data.db.deferredNotebookContentKey
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonArray
@@ -1117,6 +1119,113 @@ class HierarchySyncTest {
 
         val reopened = server.current("notebook", notebookId)!!
         assertTrue("closedAt must be cleared, not dropped", reopened.getValue("closedAt") is JsonNull)
+    }
+
+    @Test
+    fun aFreshDevicePullsOnlyOpenNotebookPayloadAndCanDownloadAClosedOneLater() = runBlocking {
+        // The actual clean-install shape: starter packaging exists before Account can be opened.
+        val starterId = repository.createNotebook("My Notebook")
+        repository.createSection(starterId, "Getting Started")
+        db.localMetadataDao().put(
+            LocalMetadataEntity(NotesRepository.REPLACEABLE_STARTER_KEY, starterId),
+        )
+
+        val openBytes = "open photograph".toByteArray()
+        val closedBytes = "closed photograph".toByteArray()
+        val openDigest = sha256(openBytes)
+        val closedDigest = sha256(closedBytes)
+        server.blobs[openDigest] = openBytes
+        server.blobs[closedDigest] = closedBytes
+
+        val closedNotebook = notebookChange("closed-n", "Closed", now).toMutableMap().apply {
+            this["closedAt"] = JsonPrimitive(now)
+            this["cloudOnlyAt"] = JsonNull
+        }.let(::JsonObject)
+        server.seed(
+            closedNotebook,
+            notebookChange("open-n", "Open", now),
+            sectionChange("closed-s", "closed-n", "Closed section", now),
+            sectionChange("open-s", "open-n", "Open section", now),
+            pageChange("closed-p", "closed-s", "Closed page", now),
+            pageChange("open-p", "open-s", "Open page", now),
+            pageContentChange(
+                "closed-p",
+                JsonDocumentCodec.encodeToString(docWithPicture(closedDigest)),
+                now,
+            ),
+            pageContentChange(
+                "open-p",
+                JsonDocumentCodec.encodeToString(docWithPicture(openDigest)),
+                now,
+            ),
+            inkStrokeChange("closed-stroke", "closed-p", drawOrder = 0, updatedAt = now),
+            attachmentChange(closedDigest, closedBytes.size.toLong(), now),
+            attachmentChange(openDigest, openBytes.size.toLong(), now),
+        )
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        // The hierarchy is the shelf index, so names and counts arrive for both notebooks.
+        assertNull("the untouched starter must still be replaced", db.notebookDao().byId(starterId))
+        assertNotNull(db.notebookDao().byId("closed-n"))
+        assertNotNull(db.sectionDao().byId("closed-s"))
+        assertNotNull(db.pageDao().byId("closed-p"))
+
+        // Only the open notebook's payload and bytes are materialized by default.
+        assertNull(db.pageContentDao().byId("closed-p"))
+        assertEquals(0, db.inkStrokeDao().countForPages(listOf("closed-p")))
+        assertNull(db.attachmentDao().byId(closedDigest))
+        assertFalse(pictures.fileFor(closedDigest).exists())
+        assertNotNull(db.pageContentDao().byId("open-p"))
+        assertNotNull(db.attachmentDao().byId(openDigest))
+        assertArrayEquals(openBytes, pictures.fileFor(openDigest).readBytes())
+        assertEquals(listOf("GET $openDigest"), server.blobCalls)
+
+        val shelfEntry = repository.observeClosedNotebooks().first().single()
+        assertFalse(shelfEntry.contentOnDevice)
+        assertEquals(1, shelfEntry.sectionCount)
+        assertEquals(1, shelfEntry.pageCount)
+        assertNotNull(db.localMetadataDao().value(deferredNotebookContentKey("closed-n")))
+        assertFalse("missing local payload must never look disposable", repository.notebookIsBlank("closed-n"))
+
+        // The Closed Notebooks download action uses the existing replay even though this notebook
+        // was merely closed on its original device, not explicitly moved to cloud-only storage.
+        assertEquals(
+            CloudArchiveResult.BroughtBack,
+            hierarchy.restoreFromCloud(account(), "closed-n"),
+        )
+        assertNotNull(db.pageContentDao().byId("closed-p"))
+        assertEquals(1, db.inkStrokeDao().countForPages(listOf("closed-p")))
+        assertNotNull(db.attachmentDao().byId(closedDigest))
+        assertArrayEquals(closedBytes, pictures.fileFor(closedDigest).readBytes())
+        assertNull(db.localMetadataDao().value(deferredNotebookContentKey("closed-n")))
+        assertNull(db.notebookDao().byId("closed-n")!!.closedAt)
+    }
+
+    @Test
+    fun aNotebookAlreadyOnThisDeviceKeepsItsPayloadWhenTheFirstPullFindsItClosed() = runBlocking {
+        val notebookId = repository.createNotebook("Local")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        repository.saveDoc(pageId, PageDoc(outlines = listOf(Outline.Text.empty())))
+        repository.closeNotebook(notebookId)
+
+        val closedNotebook = notebookChange(notebookId, "Local", now).toMutableMap().apply {
+            this["closedAt"] = JsonPrimitive(now)
+            this["cloudOnlyAt"] = JsonNull
+        }.let(::JsonObject)
+        server.seed(
+            closedNotebook,
+            sectionChange(sectionId, notebookId, "Section", now),
+            pageChange(pageId, sectionId, "Page", now),
+            pageContentChange(pageId, JsonDocumentCodec.encodeToString(PageDoc()), now),
+        )
+
+        hierarchy.run(account())
+
+        assertNotNull(db.pageContentDao().byId(pageId))
+        assertNull(db.localMetadataDao().value(deferredNotebookContentKey(notebookId)))
+        assertTrue(repository.observeClosedNotebooks().first().single().contentOnDevice)
     }
 
     @Test

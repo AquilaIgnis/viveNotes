@@ -82,11 +82,12 @@ interface SyncDao {
      * and its subtree away outright, and neither table is joined to the rows it names, so neither
      * goes with the cascade.
      *
-     * Blanket rather than scoped to the ids being purged, which is safe because an orphaned state
-     * row can only belong to a row removed *outright*. A tombstone keeps its row, and
-     * [DeletionPurgeDao] refuses to collect one the outbox still holds; the other way to make one is
-     * `HierarchySync.evictToCloud`, whose contents are re-stated row by row when the notebook is
-     * brought back.
+     * Blanket rather than scoped to the ids being purged, except for attachments. A remote
+     * attachment's state is also the durable metadata cache used when its row was intentionally not
+     * materialized because every page that named it belonged to a deferred notebook. Keeping that
+     * state lets a later open-page change materialize the picture without replaying the account.
+     * Other orphaned states can only belong to rows removed *outright*. A tombstone keeps its row,
+     * and [DeletionPurgeDao] refuses to collect one the outbox still holds.
      */
     @Query(
         "DELETE FROM sync_entity_states WHERE " +
@@ -96,8 +97,7 @@ interface SyncDao {
             "(kind = 'pageContent' AND entityId NOT IN (SELECT pageId FROM page_content)) OR " +
             "(kind = 'inkStroke' AND entityId NOT IN (SELECT id FROM ink_strokes)) OR " +
             "(kind = 'inkErase' AND entityId NOT IN (SELECT id FROM ink_erases)) OR " +
-            "(kind = 'inkMove' AND entityId NOT IN (SELECT id FROM ink_moves)) OR " +
-            "(kind = 'attachment' AND entityId NOT IN (SELECT id FROM attachments))",
+            "(kind = 'inkMove' AND entityId NOT IN (SELECT id FROM ink_moves))",
     )
     suspend fun pruneOrphanedEntityStates()
 
@@ -419,13 +419,16 @@ interface DeletionPurgeDao {
  * One row of the closed-notebook shelf: the notebook, and what it holds.
  *
  * `@Embedded` rather than a flat copy of every column so the screen keeps working on
- * [NotebookEntity] — including [NotebookEntity.cloudOnlyAt], which is what decides whether this row
- * is listed as being on the device or in the cloud.
+ * [NotebookEntity]. [contentOnDevice] combines the account-wide `cloudOnlyAt` flag with this
+ * installation's deferred-download marker; a fresh device must not claim it holds a merely closed
+ * notebook just because another device still does.
  */
 data class ClosedNotebook(
     @androidx.room.Embedded val notebook: NotebookEntity,
     val sectionCount: Int,
     val pageCount: Int,
+    /** Whether this installation currently holds the page bodies, ink, and picture metadata. */
+    val contentOnDevice: Boolean,
 )
 
 @Dao
@@ -434,13 +437,17 @@ interface NotebookDao {
     /**
      * The rail's tree: live, open notebooks.
      *
-     * `closedAt IS NULL` is the whole of what closing a notebook does to the workspace. It is not a
-     * tombstone — the rows stay, search still reads them, the purge never sees them — so this is the
-     * only place the distinction has to be made. `memory/closedNotebooksPlan.md`.
+     * `closedAt` is account shelf state. The local marker is the second gate: if another device
+     * reopens a notebook whose payload this installation deferred, it must not appear in the rail
+     * with empty pages before its replay has restored those bytes. `memory/closedNotebooksPlan.md`.
      */
     @Transaction
     @Query(
-        "SELECT * FROM notebooks WHERE deletedAt IS NULL AND closedAt IS NULL ORDER BY sortIndex",
+        "SELECT n.* FROM notebooks n " +
+            "WHERE n.deletedAt IS NULL AND n.closedAt IS NULL AND n.cloudOnlyAt IS NULL " +
+            "AND NOT EXISTS (SELECT 1 FROM local_metadata m " +
+            "WHERE m.`key` = '" + DEFERRED_NOTEBOOK_CONTENT_KEY_PREFIX + "' || n.id) " +
+            "ORDER BY n.sortIndex",
     )
     fun observeTree(): Flow<List<NotebookWithSections>>
 
@@ -463,10 +470,19 @@ interface NotebookDao {
             (SELECT COUNT(*) FROM pages p
              JOIN sections s2 ON s2.id = p.sectionId
              WHERE s2.notebookId = n.id AND s2.deletedAt IS NULL AND p.deletedAt IS NULL)
-                AS pageCount
+                AS pageCount,
+            CASE WHEN n.cloudOnlyAt IS NULL AND NOT EXISTS (
+                SELECT 1 FROM local_metadata m
+                WHERE m.`key` = 'deferredNotebookContent:' || n.id
+            ) THEN 1 ELSE 0 END AS contentOnDevice
         FROM notebooks n
-        WHERE n.deletedAt IS NULL AND n.closedAt IS NOT NULL
-        ORDER BY n.closedAt DESC
+        WHERE n.deletedAt IS NULL AND (
+            n.closedAt IS NOT NULL OR n.cloudOnlyAt IS NOT NULL OR EXISTS (
+                SELECT 1 FROM local_metadata m
+                WHERE m.`key` = 'deferredNotebookContent:' || n.id
+            )
+        )
+        ORDER BY COALESCE(n.closedAt, n.cloudOnlyAt, n.updatedAt) DESC
         """,
     )
     fun observeClosed(): Flow<List<ClosedNotebook>>

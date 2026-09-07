@@ -984,7 +984,7 @@ class SyncAccounts(
         return moved
     }
 
-    /** Downloads a cloud-only notebook again and puts it back on the rail. */
+    /** Downloads a notebook absent from this device, then puts it back on the rail. */
     suspend fun bringNotebookBack(notebookId: String): CloudArchiveResult {
         val hierarchy = this.hierarchy ?: return CloudArchiveResult.NoAccount
         val account = store.account.first() ?: return CloudArchiveResult.NoAccount
