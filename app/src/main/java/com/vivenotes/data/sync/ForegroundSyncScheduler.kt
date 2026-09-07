@@ -3,82 +3,89 @@ package com.vivenotes.data.sync
 import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import com.vivenotes.BuildConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
- * The sync clock: one run every [intervalMillis] for as long as the app is in the foreground
- * (`viveCServer/memory/syncPlan.md` SD6).
+ * Event-driven foreground synchronisation.
  *
- * **WorkManager cannot be this clock**, which is the whole reason this class exists.
- * `PeriodicWorkRequest` has a hard 15-minute floor, and the floor is the optimistic case: the job
- * carries a `CONNECTED` network constraint and a standby bucket, so a tablet sitting idle can go far
- * longer than that without a run — long enough that a change made on a second device looks like it
- * never arrived. [HierarchySyncWorker] therefore stays what SD6 asks it to be, opportunistic
- * background catch-up, and the cadence a user actually feels is this in-process loop.
+ * [localChanges] is Room's durable outbox and [remoteChanges] is the server's authenticated event
+ * stream. Both are hints, not state: [HierarchySync] still reads the outbox and the server cursor as
+ * the authorities, which makes coalescing safe and makes reconnect catch-up identical to startup.
  *
- * Deliberately decoupled from autosave. Autosave debounces at 400 ms; sync flushes on its own
- * interval and neither waits on the other, so a minute of typing is one outbox row and one document
- * on the wire rather than one request per keystroke burst.
+ * A conflated channel is the important bit. Ten strokes committed while a run is in flight ask for
+ * one more run, not ten; the outbox generation and batch idempotency keep the exact work durable.
  *
- * The seams are lambdas rather than a [SyncAccounts] so the clock can be tested on the JVM with
- * virtual time, against a counter, with no Context and no server.
+ * The seams are flows and lambdas rather than a [SyncAccounts] so this can be tested on the JVM
+ * without Room, a lifecycle process, or a server.
  */
 class ForegroundSyncScheduler(
     private val scope: CoroutineScope,
-    /** Whether a registration exists. False parks the clock; it does not slow it down. */
+    /** Whether a registration exists. False closes the stream and parks both collectors. */
     private val registered: Flow<Boolean>,
+    private val localChanges: Flow<Boolean>,
+    private val remoteChanges: Flow<Unit>,
+    private val hasPendingChanges: suspend () -> Boolean,
     private val sync: suspend () -> Unit,
     private val requestBackgroundCatchUp: () -> Unit = {},
-    private val intervalMillis: Long = DEFAULT_INTERVAL_MILLIS,
 ) : DefaultLifecycleObserver {
 
-    private var ticker: Job? = null
+    private var collector: Job? = null
 
     override fun onStart(owner: LifecycleOwner) = start()
 
     override fun onStop(owner: LifecycleOwner) = stop()
 
     /**
-     * Starts ticking. Re-entrant: a second call while the clock is already running is ignored rather
-     * than starting a second loop, because two loops would double the poll rate for good.
+     * Starts listening. Re-entrant: a second call while already running is ignored rather than
+     * opening a second server stream and duplicating every local wakeup.
      */
     fun start() {
-        if (ticker?.isActive == true) return
-        ticker = scope.launch {
-            while (isActive) {
-                // A poll with no server to poll is not worth a wakeup. This suspends rather than
-                // spinning, and resumes the instant Connect stores a registration.
-                registered.first { it }
-                runSync()
-                delay(intervalMillis)
+        if (collector?.isActive == true) return
+        collector = scope.launch {
+            registered.distinctUntilChanged().collectLatest { isRegistered ->
+                if (!isRegistered) return@collectLatest
+
+                coroutineScope {
+                    val wakeups = Channel<Unit>(Channel.CONFLATED)
+                    launch {
+                        localChanges.distinctUntilChanged().collect { pending ->
+                            if (pending) wakeups.trySend(Unit)
+                        }
+                    }
+                    launch {
+                        remoteChanges.collect { wakeups.trySend(Unit) }
+                    }
+
+                    for (ignored in wakeups) runSync()
+                }
             }
         }
     }
 
     /**
-     * Stops ticking and flushes once more.
+     * Stops listening and hands off only when local work is actually waiting.
      *
-     * The flush is mandatory (SD6): without it, closing the app strands up to a full interval of
-     * work until the next launch. It runs on the application scope, not on the cancelled ticker, and
-     * cancelling that ticker mid-run costs nothing — [HierarchySync] serialises runs on a mutex and
-     * keeps its outgoing batch on disk under one `batchId`, so the flush resumes the same logical
-     * request instead of repeating its effects.
+     * The point-in-time query runs after the collectors are cancelled so an invalidation racing the
+     * lifecycle transition cannot be missed. An empty outbox means no final cursor request and no
+     * WorkManager job. With work, the direct flush handles the ordinary case and WorkManager is the
+     * process-death backstop.
      */
     fun stop() {
-        ticker?.cancel()
-        ticker = null
-        scope.launch { runSync() }
-        // If the process dies before that flush finishes, WorkManager is what is left holding the
-        // outbox. This is the one thing the periodic job is for.
-        requestBackgroundCatchUp()
+        collector?.cancel()
+        collector = null
+        scope.launch {
+            if (!hasPendingChanges()) return@launch
+            requestBackgroundCatchUp()
+            runSync()
+        }
     }
 
     private suspend fun runSync() {
@@ -87,23 +94,14 @@ class ForegroundSyncScheduler(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
-            // One bad tick must not end the clock. Transport and protocol failures are already
-            // results rather than exceptions, so reaching here means local storage failed — which
-            // the next tick retries, exactly as the worker's `Result.retry()` would.
-            Log.w(TAG, "Foreground sync tick failed", failure)
+            // One bad wakeup must not end both listeners. Transport and protocol failures are
+            // already results rather than exceptions, so reaching here means local storage failed;
+            // the next outbox event, reconnect, or worker retry gets another chance.
+            Log.w(TAG, "Foreground event sync failed", failure)
         }
     }
 
-    companion object {
-        private const val TAG = "HierarchySync"
-
-        /**
-         * 60 s, and 5 s in debug builds — SD6's two stated values.
-         *
-         * `BuildConfig.DEBUG` is a compile-time constant, so the release APK contains only the 60 s
-         * one. The debug value is what makes a two-device test legible: a change made on one tablet
-         * shows up on the other while both are still on screen.
-         */
-        val DEFAULT_INTERVAL_MILLIS: Long = if (BuildConfig.DEBUG) 5_000L else 60_000L
+    private companion object {
+        const val TAG = "HierarchySync"
     }
 }

@@ -137,6 +137,16 @@ interface SyncDao {
     @Query("SELECT COUNT(*) FROM sync_outbox")
     suspend fun outboxSize(): Int
 
+    /**
+     * The local half of event-driven sync.
+     *
+     * Room invalidates this query when a trigger inserts, updates, or removes an outbox row. The
+     * foreground sync coordinator only acts on the transition to a non-empty outbox, so a burst of
+     * pen strokes or autosaves becomes one drain rather than one network request per row.
+     */
+    @Query("SELECT COUNT(*) FROM sync_outbox")
+    fun observeOutboxSize(): Flow<Int>
+
     @Query(
         "DELETE FROM sync_outbox WHERE kind = :kind AND entityId = :entityId " +
             "AND generation = :generation",

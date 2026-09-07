@@ -4,17 +4,14 @@ import android.content.Context
 import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
-import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.vivenotes.NotesApplication
 import kotlinx.coroutines.CancellationException
-import java.util.concurrent.TimeUnit
 
 /** Persistent, connected-network drain for the hierarchy outbox and pull cursor. */
 class HierarchySyncWorker(
@@ -49,23 +46,23 @@ class HierarchySyncWorker(
     companion object {
         private const val TAG = "HierarchySync"
         private const val IMMEDIATE_WORK = "hierarchy-sync-now"
-        private const val PERIODIC_WORK = "hierarchy-sync-periodic"
+        private const val LEGACY_PERIODIC_WORK = "hierarchy-sync-periodic"
         private const val FAILURE_REASON = "failureReason"
 
         private val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        /** Startup catch-up plus the server contract's low-cost periodic cursor poll. */
+        /**
+         * One startup catch-up, with explicit removal of the timer installed by older APKs.
+         *
+         * Unique periodic work survives application upgrades. Merely stopping its creation would
+         * leave every existing installation polling forever, so cancellation is part of the
+         * migration to the event stream.
+         */
         fun schedule(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(LEGACY_PERIODIC_WORK)
             requestNow(context)
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                PERIODIC_WORK,
-                ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<HierarchySyncWorker>(15, TimeUnit.MINUTES)
-                    .setConstraints(constraints)
-                    .build(),
-            )
         }
 
         /** Coalesces app startup, Connect, and future local-write hints into one outbox drain. */

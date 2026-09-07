@@ -2,6 +2,9 @@ package com.vivenotes.data.sync
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -276,6 +279,56 @@ class SyncServerClientTest {
         assertEquals("GET", requestMethod)
         assertEquals("/v1/cursor", requestPath)
         assertEquals("Bearer vive_abc", authorization)
+    }
+
+    @Test
+    fun changeStreamUsesBearerAuthAndDecodesReadyAndChangeEvents() = runBlocking {
+        respond = { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { body ->
+                body.write("event: ready\ndata: {}\n\n".encodeToByteArray())
+                body.write("event: changes\ndata: {}\n\n".encodeToByteArray())
+                body.flush()
+            }
+        }
+
+        val events = SyncServerClient().watchChanges(baseUrl, "vive_abc").take(2).toList()
+
+        assertEquals(listOf(ChangeStreamEvent.Ready, ChangeStreamEvent.ChangesAvailable), events)
+        assertEquals("GET", requestMethod)
+        assertEquals("/v1/changes/watch", requestPath)
+        assertEquals("Bearer vive_abc", authorization)
+    }
+
+    @Test
+    fun changeStreamTreatsAnExplicit401AsRevocation() = runBlocking {
+        respond = {
+            it.responseHeaders.add("WWW-Authenticate", "Bearer")
+            send(it, 401, """{"error":"unauthenticated"}""")
+        }
+
+        assertEquals(
+            ChangeStreamEvent.Unauthorized,
+            SyncServerClient().watchChanges(baseUrl, "vive_dead").first(),
+        )
+    }
+
+    @Test
+    fun changeStreamCanRevokeAnAlreadyAuthenticatedConnection() = runBlocking {
+        respond = { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { body ->
+                body.write("event: ready\ndata: {}\n\nevent: revoked\ndata: {}\n\n".encodeToByteArray())
+                body.flush()
+            }
+        }
+
+        assertEquals(
+            listOf(ChangeStreamEvent.Ready, ChangeStreamEvent.Unauthorized),
+            SyncServerClient().watchChanges(baseUrl, "vive_revoked").take(2).toList(),
+        )
     }
 
     @Test

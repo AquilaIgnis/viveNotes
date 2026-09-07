@@ -26,6 +26,9 @@ import com.vivenotes.model.Outline
 import com.vivenotes.model.migrated
 import com.vivenotes.model.newId
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
@@ -120,6 +123,14 @@ class HierarchySync(
     private val inkText = db.inkTextDao()
     private val attachments = db.attachmentDao()
     private val mutex = Mutex()
+
+    /** True exactly while this installation has local rows the server has not accepted. */
+    val pendingChanges: Flow<Boolean> = sync.observeOutboxSize()
+        .map { it > 0 }
+        .distinctUntilChanged()
+
+    /** A point-in-time check for the lifecycle handoff that runs after the foreground collector stops. */
+    suspend fun hasPendingChanges(): Boolean = sync.outboxSize() > 0
 
     /**
      * Pages this run has written remote ink into, held until the transaction carrying them commits.
@@ -218,11 +229,10 @@ class HierarchySync(
             // The push cursor is explicitly not a pull cursor. Pull this device's accepted writes
             // and anything another device committed concurrently before reporting convergence.
             //
-            // Only when the push phase actually moved something, though. SD6 requires an idle run to
-            // cost one `GET /v1/cursor` and nothing else, and idle is the common case now that a
-            // clock ticks whether or not there is anything to send: with an empty outbox there are
-            // no accepted writes to consume and no window below a push response's cursor to close,
-            // and the first pull already left this device where the server is.
+            // Only when the push phase actually moved something, though. A catch-up with an empty
+            // outbox costs one `GET /v1/cursor` and nothing else: there are no accepted writes to
+            // consume and no window below a push response's cursor to close, and the first pull
+            // already left this device where the server is.
             if (pushed > 0 || conflicts > 0) {
                 when (val finalPull = pullIfNeeded(account)) {
                     is PhaseResult.Done -> pulled += finalPull.count
@@ -312,7 +322,7 @@ class HierarchySync(
      * Written outside the pull's transaction deliberately: the cheapest and most common way to be
      * caught up is `PhaseResult.Done(0)` — the cursor already matched — and that path has no
      * transaction to join. A crash between the two costs one repeated marker write on the next run.
-     * The read first is so a device that syncs every 60 s does not write a row every 60 s.
+     * The read first avoids rewriting the marker on every reconnect and local outbox drain.
      */
     private suspend fun markCaughtUp(accountId: String) {
         if (metadata.value(CAUGHT_UP_KEY) == accountId) return

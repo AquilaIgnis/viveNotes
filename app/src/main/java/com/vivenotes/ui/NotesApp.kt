@@ -218,9 +218,9 @@ fun NotesApp(
     // press into a device registered on the server that nothing here can authenticate as.
     val connectScope = rememberCoroutineScope()
     var selfHostConnection by remember { mutableStateOf<ServerConnection>(ServerConnection.Idle) }
-    // Only this screen's button, so the spinner belongs to the press that started it. The clock's
-    // own runs report through `syncStatus` instead: at the debug interval a shared flag would put a
-    // spinner on the button every five seconds without anyone having asked for one.
+    // Only this screen's button, so the spinner belongs to the press that started it. Automatic
+    // outbox and remote-event runs report through `syncStatus` instead; a shared flag would put a
+    // spinner on the button whenever another device wrote something without anyone pressing it.
     var syncing by remember { mutableStateOf(false) }
     var disconnecting by remember { mutableStateOf(false) }
     var disconnectFailure by remember { mutableStateOf<ConnectFailure?>(null) }
@@ -254,9 +254,9 @@ fun NotesApp(
         if (accountOpen) managedSubscription.refresh()
     }
 
-    // A revocation found by the clock rather than by the button still has to reach the screen. The
-    // token is already gone by the time this runs — `synchronize` drops it — so this is only about
-    // saying why the form came back.
+    // A revocation delivered by the stream or an automatic run still has to reach the screen. The
+    // token is already gone by the time this runs, so this is only about saying why the form came
+    // back.
     LaunchedEffect(syncStatus.failure) {
         if (syncStatus.failure == SyncRunResult.Revoked) {
             selfHostConnection = ServerConnection.Failed(ConnectFailure.Revoked)

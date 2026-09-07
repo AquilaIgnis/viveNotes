@@ -66,8 +66,8 @@ data class BlobDownloads(val downloaded: Int, val workRemains: Boolean)
  *    is `sync_entity_states`: an `attachment` row the server accepted, or one this device pulled,
  *    proves the bytes are there, because the server refuses the row otherwise and never sweeps a
  *    blob while a live row names it. This set only saves the round trip *within* a process.
- *  - [deferred] stops a picture the server does not have from being asked for every 60 s for the
- *    rest of the installation's life. Forgotten when the process restarts, which is the cheapest
+ *  - [deferred] stops a picture the server does not have from being asked for on every later event
+ *    for the rest of the process. Forgotten when the process restarts, which is the cheapest
  *    retry policy that cannot spin: a repair is a launch away rather than a request away.
  */
 class AttachmentBlobSync(
@@ -152,8 +152,8 @@ class AttachmentBlobSync(
      *
      * The first transport failure ends the pass rather than trying the rest. They are all going to
      * the same server: a tablet that has lost its wifi with two hundred pictures outstanding would
-     * otherwise spend two hundred connect timeouts finding that out, on a clock that ticks every
-     * 60 s. A 404 or a digest that does not match is about *that* picture and only defers it.
+     * otherwise spend two hundred connect timeouts finding that out on one wakeup. A 404 or a
+     * digest that does not match is about *that* picture and only defers it.
      */
     suspend fun downloadMissing(account: SyncAccount): BlobDownloads {
         var downloaded = 0

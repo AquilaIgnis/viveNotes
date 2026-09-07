@@ -8,12 +8,22 @@ import com.vivenotes.BuildConfig
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.db.NotesDatabase
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.Locale
@@ -87,14 +97,14 @@ sealed interface DisconnectResult {
 /**
  * How synchronisation is going, for any screen that wants to say so.
  *
- * Every run reports here — the foreground clock, the WorkManager catch-up and the Sync now button
- * alike — because the ones a person never asked for are exactly the ones that need somewhere to be
- * seen. Before this existed, a device whose sync had been failing for forty minutes looked identical
- * to one with nothing to do, and the only way to find out was to open Account and press a button.
+ * Every run reports here — event-driven foreground work, WorkManager catch-up and the Sync now
+ * button alike — because the ones a person never asked for are exactly the ones that need somewhere
+ * to be seen. Before this existed, a failed automatic run looked identical to one with nothing to
+ * do, and the only way to find out was to open Account and press a button.
  *
- * Deliberately in memory and not persisted. The alternative is a row written every interval — five
- * seconds apart in debug builds — to answer a question that the first run after launch answers
- * anyway, and it does so within a second of the app coming to the foreground.
+ * Deliberately in memory and not persisted. The first stream connection runs a catch-up immediately,
+ * and every later local or remote event refreshes this value without turning status into database
+ * churn of its own.
  */
 data class SyncStatus(
     /** True for the length of a run, whoever started it. */
@@ -200,14 +210,33 @@ class SyncAccounts(
     /**
      * Pages the server has written ink into, by generation — `memory/inkSyncPlan.md` IS5.
      *
-     * Held here because this is the one object both clocks run through: the foreground scheduler and
-     * WorkManager's catch-up both call [synchronize] on this instance, in this process, so an open
-     * canvas hears about a pulled stroke whichever of them pulled it.
+     * Held here because this is the one object both coordinators run through: the foreground event
+     * scheduler and WorkManager catch-up both call [synchronize] on this instance, in this process,
+     * so an open canvas hears about a pulled stroke whichever of them pulled it.
      */
     val remoteInk: StateFlow<Map<String, Long>> = remoteInkSignal.pages
 
     /** Null until connected. Survives launches; cleared by [disconnect] or [forgetConnection]. */
     val account: Flow<SyncAccount?> = store.account
+
+    /** Whether Room currently holds a local mutation that the active account has not accepted. */
+    val pendingChanges: Flow<Boolean> = hierarchy?.pendingChanges ?: flowOf(false)
+
+    /** A fresh database read for the foreground-to-WorkManager lifecycle handoff. */
+    suspend fun hasPendingChanges(): Boolean = hierarchy?.hasPendingChanges() == true
+
+    /**
+     * Event-driven requests to run the ordinary sync protocol.
+     *
+     * A successful stream connection emits `ready`, which is intentionally a wakeup: subscribing
+     * first and then catching up closes the only race where a write could land between those two
+     * operations. If the connection breaks, a bounded exponential reconnect replaces the old
+     * fixed cursor polling. While healthy and idle this flow sends and receives nothing.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val remoteChanges: Flow<Unit> = account.flatMapLatest { activeAccount ->
+        if (activeAccount == null) emptyFlow() else remoteChangeWakeups(activeAccount)
+    }
 
     /**
      * The managed deployment this build talks to — `http://10.0.2.2:5444` in debug,
@@ -319,6 +348,61 @@ class SyncAccounts(
 
     /** How synchronisation is going. See [SyncStatus] for why this is not persisted. */
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
+
+    private fun remoteChangeWakeups(activeAccount: SyncAccount): Flow<Unit> = flow {
+        var reconnectDelayMillis = INITIAL_STREAM_RECONNECT_MILLIS
+
+        while (currentCoroutineContext().isActive) {
+            var terminal: ChangeStreamEvent? = null
+            try {
+                client.watchChanges(activeAccount.serverUrl, activeAccount.token).collect { event ->
+                    when (event) {
+                        ChangeStreamEvent.Ready -> {
+                            reconnectDelayMillis = INITIAL_STREAM_RECONNECT_MILLIS
+                            emit(Unit)
+                        }
+                        ChangeStreamEvent.ChangesAvailable -> emit(Unit)
+                        ChangeStreamEvent.Unauthorized,
+                        is ChangeStreamEvent.Failed,
+                        -> terminal = event
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: IOException) {
+                terminal = ChangeStreamEvent.Failed(ConnectFailure.Unreachable, retryable = true)
+            }
+
+            when (val ended = terminal) {
+                ChangeStreamEvent.Unauthorized -> {
+                    // Clearing the account cancels this flatMapLatest child. Finish the security
+                    // transition atomically with respect to that cancellation, including turning
+                    // off the database's outbox triggers for the revoked account.
+                    withContext(NonCancellable) {
+                        store.clear()
+                        hierarchy?.deactivate(activeAccount.accountId)
+                        _status.update { it.copy(failure = SyncRunResult.Revoked) }
+                    }
+                    return@flow
+                }
+                is ChangeStreamEvent.Failed -> {
+                    _status.update { it.copy(failure = SyncRunResult.Retryable(ended.reason)) }
+                    if (!ended.retryable) return@flow
+                }
+                // A conforming client stream always reports why it ended. Treat an unexpected
+                // completion as a dropped connection rather than spinning without delay.
+                null -> _status.update {
+                    it.copy(failure = SyncRunResult.Retryable(ConnectFailure.Unreachable))
+                }
+                ChangeStreamEvent.Ready,
+                ChangeStreamEvent.ChangesAvailable,
+                -> error("a non-terminal change-stream event ended the stream")
+            }
+
+            delay(reconnectDelayMillis)
+            reconnectDelayMillis = (reconnectDelayMillis * 2).coerceAtMost(MAX_STREAM_RECONNECT_MILLIS)
+        }
+    }
 
     /**
      * Registers this device and stores the token it gets back.
@@ -765,7 +849,7 @@ class SyncAccounts(
         val result = try {
             hierarchy?.run(account) ?: SyncRunResult.Failed(PermanentSyncFailure.LocalData)
         } finally {
-            // In a `finally` because the foreground clock cancels its run when the app goes to the
+            // In a `finally` because the foreground listener cancels its run when the app goes to the
             // background, and a status left saying "running" would outlive the run that set it.
             _status.update { it.copy(running = false) }
         }
@@ -888,3 +972,6 @@ private fun installationSuffix(context: Context): String? {
 
 /** Display-only on the server, so the release string is more useful than the API level. */
 private fun defaultPlatform(): String = "Android ${Build.VERSION.RELEASE.orEmpty()}".trim()
+
+private const val INITIAL_STREAM_RECONNECT_MILLIS = 1_000L
+private const val MAX_STREAM_RECONNECT_MILLIS = 30_000L

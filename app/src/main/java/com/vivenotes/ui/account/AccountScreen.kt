@@ -1437,13 +1437,13 @@ private fun subscriptionFailureMessage(failure: ManagedSubscriptionFailure): Int
 /**
  * The one line that says whether sync is actually working.
  *
- * It reports the clock's runs, not just the button's, which is the whole point: a tablet syncs every
- * interval whether or not anyone is watching, and the failure worth catching is the one nobody asked
- * for. A failure wins over the timestamp because it is the news; the timestamp survives underneath it
- * in [SyncStatus] and is what a later reading of this line falls back to once the trouble clears.
+ * It reports automatic outbox and remote-event runs, not just the button's, which is the whole
+ * point: the failure worth catching is the one nobody asked for. A failure wins over the timestamp
+ * because it is the news; the timestamp survives underneath it in [SyncStatus] and is what a later
+ * reading of this line falls back to once the trouble clears.
  *
- * Nothing announces a run in progress. At the debug interval that would be a line flickering between
- * two states every five seconds, and the button beside it already spins when a person asks for one.
+ * Nothing announces an automatic run in progress; the button beside it already spins when a person
+ * asks for one.
  */
 @Composable
 private fun SyncStatusLine(status: SyncStatus) {
@@ -1484,9 +1484,9 @@ private fun SyncStatusLine(status: SyncStatus) {
 /**
  * "Synced just now", and what that run moved when it moved anything.
  *
- * The counts are appended only when they are not both zero. Every interval reporting "Pulled 0 ·
- * Pushed 0" is a line that trains its reader to stop looking at it, and "nothing to do" is already
- * what a bare timestamp means.
+ * The counts are appended only when they are not both zero. Repeatedly reporting "Pulled 0 · Pushed
+ * 0" is a line that trains its reader to stop looking at it, and "nothing to do" is already what a
+ * bare timestamp means.
  *
  * Pictures are counted separately and shown only when a run carried any, because they are the one
  * thing that makes a sync take noticeably long — a page of photographs is megabytes where a page of

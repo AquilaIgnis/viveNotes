@@ -1,11 +1,17 @@
 package com.vivenotes.data.sync
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -16,6 +22,7 @@ import java.net.URLEncoder
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Why connecting to a server failed, in the terms the person who typed the address can act on.
@@ -265,6 +272,25 @@ sealed interface ServerResult<out T> {
         val reason: ConnectFailure,
         val retryable: Boolean,
     ) : ServerResult<Nothing>
+}
+
+/** One lifecycle event from the authenticated remote-change stream. */
+sealed interface ChangeStreamEvent {
+
+    /** The server installed the subscription; a cursor catch-up now closes the connection race. */
+    data object Ready : ChangeStreamEvent
+
+    /** Another device, or the server's administration surface, committed account content. */
+    data object ChangesAvailable : ChangeStreamEvent
+
+    /** The server explicitly rejected this installation's stored bearer token. */
+    data object Unauthorized : ChangeStreamEvent
+
+    /** The stream could not be opened or ended unexpectedly. */
+    data class Failed(
+        val reason: ConnectFailure,
+        val retryable: Boolean,
+    ) : ChangeStreamEvent
 }
 
 /** The provider-authoritative state of the managed account's Google Play subscription. */
@@ -888,7 +914,130 @@ class SyncServerClient(
             }
         }
 
-    /** The cheap idle poll described by `GET /v1/cursor`. */
+    /**
+     * Watches for account writes without polling the cursor.
+     *
+     * The stream is deliberately a hint-only side channel. [ChangeStreamEvent.Ready] causes the
+     * caller to run the ordinary cursor protocol after the server has installed the subscription,
+     * closing the catch-up/watch race. Every later [ChangeStreamEvent.ChangesAvailable] does the
+     * same; no document bytes or cursor authority live in this connection.
+     *
+     * `callbackFlow` is doing lifecycle work here, not adapting a callback API. A blocking
+     * `HttpURLConnection` read does not observe coroutine cancellation by itself, so [awaitClose]
+     * disconnects it from the cancelling thread. That lets backgrounding the app close the socket
+     * immediately even though an idle server intentionally sends no heartbeats.
+     */
+    fun watchChanges(serverBaseUrl: String, token: String): Flow<ChangeStreamEvent> = callbackFlow {
+        val url = try {
+            URL("$serverBaseUrl/v1/changes/watch")
+        } catch (malformed: java.net.MalformedURLException) {
+            trySend(ChangeStreamEvent.Failed(ConnectFailure.InvalidAddress, retryable = false))
+            close()
+            awaitClose { }
+            return@callbackFlow
+        }
+
+        val activeConnection = AtomicReference<HttpURLConnection?>()
+        val reader = launch(Dispatchers.IO) {
+            val connection = try {
+                openConnection(url)
+            } catch (unreachable: IOException) {
+                if (isActive) {
+                    trySend(ChangeStreamEvent.Failed(ConnectFailure.Unreachable, retryable = true))
+                    close()
+                }
+                return@launch
+            }
+            activeConnection.set(connection)
+            if (!isActive) {
+                activeConnection.compareAndSet(connection, null)
+                connection.disconnect()
+                return@launch
+            }
+
+            try {
+                connection.requestMethod = "GET"
+                connection.connectTimeout = CONNECT_TIMEOUT_MS
+                // Infinite by design. The server says nothing when nothing changed; cancellation
+                // interrupts this through disconnect() in awaitClose rather than through a timer.
+                connection.readTimeout = 0
+                connection.instanceFollowRedirects = false
+                connection.setRequestProperty("Accept", CHANGE_STREAM_CONTENT_TYPE)
+                connection.setRequestProperty("Cache-Control", "no-cache")
+                connection.setRequestProperty("Authorization", "Bearer $token")
+
+                val status = connection.responseCode
+                if (status == 401) {
+                    trySend(ChangeStreamEvent.Unauthorized)
+                    close()
+                    return@launch
+                }
+                if (status !in 200..299) {
+                    val payload = readBounded(connection.errorStream)
+                    trySend(
+                        ChangeStreamEvent.Failed(
+                            reason = failureFor(status, payload),
+                            retryable = status >= 500,
+                        ),
+                    )
+                    close()
+                    return@launch
+                }
+                if (!connection.contentType.orEmpty().substringBefore(';').trim()
+                        .equals(CHANGE_STREAM_CONTENT_TYPE, ignoreCase = true)
+                ) {
+                    trySend(ChangeStreamEvent.Failed(ConnectFailure.NotAViveServer, retryable = false))
+                    close()
+                    return@launch
+                }
+
+                BufferedInputStream(connection.inputStream).use { input ->
+                    var eventName: String? = null
+                    while (isActive) {
+                        val line = readEventStreamLine(input) ?: break
+                        when {
+                            line.isEmpty() -> {
+                                when (eventName) {
+                                    "ready" -> trySend(ChangeStreamEvent.Ready)
+                                    "changes" -> trySend(ChangeStreamEvent.ChangesAvailable)
+                                    "revoked" -> {
+                                        trySend(ChangeStreamEvent.Unauthorized)
+                                        close()
+                                        return@launch
+                                    }
+                                }
+                                eventName = null
+                            }
+                            line.startsWith("event:") ->
+                                eventName = line.substringAfter(':').trimStart()
+                            // Comments, data, ids, retry hints, and future fields are ignored. The
+                            // event name is the entire contract this hint channel needs.
+                        }
+                    }
+                }
+
+                if (isActive) {
+                    trySend(ChangeStreamEvent.Failed(ConnectFailure.Unreachable, retryable = true))
+                    close()
+                }
+            } catch (failed: IOException) {
+                if (isActive) {
+                    trySend(ChangeStreamEvent.Failed(ConnectFailure.Unreachable, retryable = true))
+                    close()
+                }
+            } finally {
+                activeConnection.compareAndSet(connection, null)
+                connection.disconnect()
+            }
+        }
+
+        awaitClose {
+            activeConnection.getAndSet(null)?.disconnect()
+            reader.cancel()
+        }
+    }
+
+    /** The cheap launch/reconnect catch-up check described by `GET /v1/cursor`. */
     override suspend fun getCursor(serverBaseUrl: String, token: String): ServerResult<Long> =
         when (
             val raw = authenticatedRequest(
@@ -1493,6 +1642,24 @@ class SyncServerClient(
         }
     }
 
+    /** A bounded UTF-8 line reader for the tiny, attacker-controlled event stream. */
+    private fun readEventStreamLine(input: InputStream): String? {
+        val bytes = ByteArray(MAX_EVENT_STREAM_LINE_BYTES)
+        var length = 0
+        while (true) {
+            val next = input.read()
+            if (next < 0) {
+                if (length == 0) return null
+                break
+            }
+            if (next == '\n'.code) break
+            if (next == '\r'.code) continue
+            if (length == bytes.size) throw IOException("change stream line is too large")
+            bytes[length++] = next.toByte()
+        }
+        return String(bytes, 0, length, Charsets.UTF_8)
+    }
+
     private companion object {
         const val CONNECT_TIMEOUT_MS = 10_000
         /** One page of a file at a time, on both byte routes. */
@@ -1500,6 +1667,8 @@ class SyncServerClient(
         const val READ_TIMEOUT_MS = 30_000
         const val MAX_RESPONSE_BYTES = 64 * 1024
         const val MAX_API_RESPONSE_BYTES = 10 * 1024 * 1024
+        const val MAX_EVENT_STREAM_LINE_BYTES = 4 * 1024
+        const val CHANGE_STREAM_CONTENT_TYPE = "text/event-stream"
         const val MAX_PUSH_CHANGES = 512
         const val MAX_PULL_LIMIT = 2048
 

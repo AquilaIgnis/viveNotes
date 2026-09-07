@@ -106,11 +106,14 @@ class NotesApplication : Application() {
         ManagedSubscriptionController(this, syncAccounts, appScope)
     }
 
-    /** SD6's sync cadence. See [ForegroundSyncScheduler] for why WorkManager cannot be it. */
+    /** Local outbox and remote change events while the process is visible. */
     private val foregroundSync: ForegroundSyncScheduler by lazy {
         ForegroundSyncScheduler(
             scope = appScope,
             registered = syncAccounts.account.map { it != null },
+            localChanges = syncAccounts.pendingChanges,
+            remoteChanges = syncAccounts.remoteChanges,
+            hasPendingChanges = syncAccounts::hasPendingChanges,
             sync = { syncAccounts.synchronize() },
             requestBackgroundCatchUp = { HierarchySyncWorker.requestNow(this) },
         )
@@ -121,8 +124,8 @@ class NotesApplication : Application() {
         FontRegistry.init(this)
         DeletionPurgeWorker.schedule(this)
         HierarchySyncWorker.schedule(this)
-        // Registered here rather than from the Activity: the clock belongs to the process, and this
-        // owner reports the first Activity's start, so nothing is missed by being early.
+        // Registered here rather than from the Activity: the stream belongs to the process, and
+        // this owner reports the first Activity's start, so every screen shares one connection.
         ProcessLifecycleOwner.get().lifecycle.addObserver(foregroundSync)
         // Start collecting the managed-account flow at process launch so a completed/pending Play
         // purchase is reconciled even when the Account destination has not been opened yet.
