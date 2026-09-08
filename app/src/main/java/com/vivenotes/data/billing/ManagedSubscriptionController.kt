@@ -189,7 +189,7 @@ class ManagedSubscriptionController internal constructor(
         }
     }
 
-    /** Re-query both Play and the managed backend; safe to call whenever Account opens. */
+    /** Re-query both Play and the managed backend after an explicit billing action. */
     fun refresh() {
         val account = currentAccount ?: return
         scope.launch { refreshInternal(account) }

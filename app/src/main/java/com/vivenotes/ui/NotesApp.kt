@@ -246,13 +246,9 @@ fun NotesApp(
     // its result — including a failure — is news, and the stored account is only the background.
     val storedAccount by syncAccounts.account.collectAsStateWithLifecycle(initialValue = null)
     val syncStatus by syncAccounts.status.collectAsStateWithLifecycle()
+    // Application-scoped and refreshed when the process/account starts. Account navigation only
+    // observes this cache; purchase and coupon actions update it through their explicit flows.
     val subscriptionState by managedSubscription.state.collectAsStateWithLifecycle()
-
-    // ProductDetails are deliberately ephemeral. Re-query when Account opens so the purchase
-    // action uses a current offer and localized price rather than a cached Play object.
-    LaunchedEffect(accountOpen) {
-        if (accountOpen) managedSubscription.refresh()
-    }
 
     // A revocation delivered by the stream or an automatic run still has to reach the screen. The
     // token is already gone by the time this runs, so this is only about saying why the form came
@@ -263,17 +259,6 @@ fun NotesApp(
         }
     }
 
-    // Revocation is one-sided: the operator removes this device from the dashboard and nothing tells
-    // the app. Opening Account is when it is worth asking, because it is the only screen where the
-    // answer changes what is shown — and a revoked token is dropped there rather than kept to fail
-    // every later request identically. Only a `Failed` verdict is taken; anything else leaves the
-    // stored account to speak for itself, so being offline cannot look like being revoked.
-    LaunchedEffect(accountOpen) {
-        if (accountOpen && selfHostConnection == ServerConnection.Idle) {
-            val checked = syncAccounts.refresh()
-            if (checked is ServerConnection.Failed) selfHostConnection = checked
-        }
-    }
     val displayedConnection = when (val attempt = selfHostConnection) {
         ServerConnection.Idle -> storedAccount
             ?.let { ServerConnection.Connected(it.serverUrl, it.deviceName) }
