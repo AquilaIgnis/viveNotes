@@ -19,13 +19,13 @@ import com.vivenotes.BuildConfig
 sealed interface GoogleIdToken {
 
     /**
-     * A signed ID token, straight from Credential Manager and not inspected here.
+     * A signed ID token and its email claim, straight from Credential Manager.
      *
-     * Deliberately not parsed on this side. The token's claims mean nothing until Google's signature
-     * over them has been checked, and the only party that does that is the server — reading an email
-     * out of it here to show in the UI would be displaying an unverified string as a fact.
+     * [email] remains untrusted while this result is in memory. [SyncAccounts] persists and displays
+     * it only after the managed server accepts this exact token, having verified its signature,
+     * audience, nonce, expiry, and verified-email claim.
      */
-    data class Received(val idToken: String) : GoogleIdToken
+    data class Received(val idToken: String, val email: String?) : GoogleIdToken
 
     /**
      * The person closed the sheet.
@@ -118,7 +118,11 @@ class GoogleIdentityProvider(
         if (!isGoogleIdToken) return GoogleIdToken.Rejected(ConnectFailure.GoogleNotConfigured)
 
         return try {
-            GoogleIdToken.Received(GoogleIdTokenCredential.createFrom(credential.data).idToken)
+            val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
+            GoogleIdToken.Received(
+                idToken = googleCredential.idToken,
+                email = googleCredential.email,
+            )
         } catch (malformed: GoogleIdTokenParsingException) {
             GoogleIdToken.Rejected(ConnectFailure.GoogleNotConfigured)
         }

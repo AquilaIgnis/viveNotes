@@ -56,6 +56,13 @@ class SyncStatusTest {
     }
 
     @Test
+    fun `membership required is not cloud off`() {
+        assertFalse(
+            after(SyncRunResult.Failed(PermanentSyncFailure.MembershipRequired)).serverUnreachable,
+        )
+    }
+
+    @Test
     fun `a working sync is not cloud off`() {
         assertFalse(SyncStatus().serverUnreachable)
         assertFalse(

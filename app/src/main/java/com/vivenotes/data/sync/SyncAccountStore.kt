@@ -11,6 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.nio.ByteBuffer
@@ -18,6 +19,16 @@ import java.security.MessageDigest
 import java.util.UUID
 
 private val Context.syncPreferences: DataStore<Preferences> by preferencesDataStore("sync")
+
+/** The identity provider used to establish this installation's current device credential. */
+@Serializable
+enum class AccountAuthProvider {
+    @SerialName("password")
+    Password,
+
+    @SerialName("google")
+    Google,
+}
 
 /**
  * This installation's registration with one self-hosted server.
@@ -43,6 +54,10 @@ data class SyncAccount(
     val token: String,
     /** What the server will show for this device, kept so the UI can name it without a round trip. */
     val deviceName: String,
+    /** Login identity shown on Account. Optional so credentials stored by older builds still load. */
+    val email: String? = null,
+    /** Provider used for the current login. Optional for the same upgrade reason as [email]. */
+    val authProvider: AccountAuthProvider? = null,
 )
 
 /**
@@ -56,8 +71,8 @@ data class SyncAccount(
  * other device, or the admin dashboard, kills it. Revisit if ViveNotes ever holds something that
  * cannot be revoked.
  *
- * One JSON blob rather than five keys, for the reason [com.vivenotes.data.PenSettingsStore] uses
- * one per pen: these five values are only ever read and written together, and a half-written
+ * One JSON blob rather than separate keys, for the reason [com.vivenotes.data.PenSettingsStore] uses
+ * one per pen: these values are only ever read and written together, and a half-written
  * registration is a credential that cannot work.
  */
 class SyncAccountStore(context: Context) {

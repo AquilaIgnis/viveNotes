@@ -232,10 +232,11 @@ class AttachmentBlobSync(
     private suspend fun knownPresent(digest: String): Boolean =
         digest in serverHolds || sync.entityState(ATTACHMENT_KIND, digest) != null
 
-    private fun ServerResult.Failed.asSyncResult(): SyncRunResult = if (retryable) {
-        SyncRunResult.Retryable(reason)
-    } else {
-        SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse)
+    private fun ServerResult.Failed.asSyncResult(): SyncRunResult = when {
+        reason == ConnectFailure.MembershipRequired ->
+            SyncRunResult.Failed(PermanentSyncFailure.MembershipRequired)
+        retryable -> SyncRunResult.Retryable(reason)
+        else -> SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse)
     }
 
     private companion object {

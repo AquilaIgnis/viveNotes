@@ -62,6 +62,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -71,8 +72,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
+import com.vivenotes.data.sync.AccountAuthProvider
 import com.vivenotes.data.sync.ConnectFailure
+import com.vivenotes.data.sync.AccountDeletionFailure
 import com.vivenotes.data.sync.MIN_ACCOUNT_PASSWORD
+import com.vivenotes.data.sync.PasswordResetFailure
 import com.vivenotes.data.sync.PermanentSyncFailure
 import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncRunResult
@@ -123,11 +127,21 @@ internal object AccountTags {
     const val CLOUD_SUBMIT = "account-cloud-submit"
     const val CLOUD_PROGRESS = "account-cloud-progress"
     const val CLOUD_STATUS = "account-cloud-status"
+    const val FORGOT_PASSWORD = "account-forgot-password"
+    const val RESET_EMAIL = "account-reset-email"
+    const val RESET_REQUEST = "account-reset-request"
+    const val RESET_CODE = "account-reset-code"
+    const val RESET_PASSWORD = "account-reset-password"
+    const val RESET_CONFIRM_PASSWORD = "account-reset-confirm-password"
+    const val RESET_COMPLETE = "account-reset-complete"
+    const val RESET_STATUS = "account-reset-status"
 
     /** On the spinner *inside* the button, so a test can tell waiting from idle. */
     const val CONNECT_PROGRESS = "account-connect-progress"
     const val CONNECT_STATUS = "account-connect-status"
     const val CONNECTED = "account-connected"
+    const val CONNECTED_IDENTITY = "account-connected-identity"
+    const val CONNECTED_PROVIDER = "account-connected-provider"
     const val SUBSCRIPTION = "account-subscription"
     const val SUBSCRIBE = "account-subscribe"
     const val MANAGE_SUBSCRIPTION = "account-manage-subscription"
@@ -146,7 +160,24 @@ internal object AccountTags {
 
     /** The local-only way out, shown only once a revoke has failed. */
     const val DISCONNECT_ANYWAY = "account-disconnect-anyway"
+    const val DELETE_ACCOUNT = "account-delete"
+    const val DELETE_DIALOG = "account-delete-dialog"
+    const val DELETE_EMAIL = "account-delete-email"
+    const val DELETE_CONFIRM = "account-delete-confirm"
 }
+
+data class PasswordResetUiState(
+    val requestingCode: Boolean = false,
+    val codeRequested: Boolean = false,
+    val changingPassword: Boolean = false,
+    val completed: Boolean = false,
+    val failure: PasswordResetFailure? = null,
+)
+
+data class AccountDeletionUiState(
+    val requesting: Boolean = false,
+    val failure: AccountDeletionFailure? = null,
+)
 
 /**
  * Account entry point for managed and self-hosted sync.
@@ -207,6 +238,13 @@ fun AccountScreen(
      * deployment this build was compiled for. No server address, because there is nothing to choose.
      */
     onLogIn: (email: String, password: String) -> Unit = { _, _ -> },
+    /** Password recovery appears only after two rejected managed-password attempts. */
+    failedPasswordLogins: Int = 0,
+    passwordResetState: PasswordResetUiState = PasswordResetUiState(),
+    onRequestPasswordReset: (email: String) -> Unit = {},
+    onCompletePasswordReset: (email: String, code: String, password: String) -> Unit =
+        { _, _, _ -> },
+    onPasswordResetClosed: () -> Unit = {},
     /**
      * Create the managed account, then connect — `POST /v1/accounts` followed by `POST /v1/devices`.
      */
@@ -225,16 +263,20 @@ fun AccountScreen(
      * Offered only after [onDisconnect] has failed.
      */
     onForceDisconnect: () -> Unit = {},
+    accountDeletionState: AccountDeletionUiState = AccountDeletionUiState(),
+    onRequestAccountDeletion: (email: String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    BackHandler(onBack = onBack)
-
     var selfHostExpanded by rememberSaveable { mutableStateOf(false) }
     var serverUrl by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     // Passwords should not be written into saved-instance state or retained after leaving the flow.
     var password by remember { mutableStateOf("") }
     var confirmDisconnect by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var deleteEmail by remember { mutableStateOf("") }
+    var passwordResetOpen by rememberSaveable { mutableStateOf(false) }
+    var passwordResetEmail by rememberSaveable { mutableStateOf("") }
 
     // The managed account's panel: whether it is open, and which of the two buttons opened it.
     // Saved, because a configuration change in the middle of filling it must not silently turn
@@ -248,10 +290,31 @@ fun AccountScreen(
     val spatialMotion = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
     val effectsMotion = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
 
+    fun closePasswordReset() {
+        passwordResetOpen = false
+        onPasswordResetClosed()
+    }
+
+    BackHandler {
+        if (passwordResetOpen) closePasswordReset() else onBack()
+    }
+
     // The spinner replaces the button's label, so without this the button loses its accessible name
     // for as long as the request runs. Read here because a semantics lambda is not composable.
     val connectingLabel = stringResource(R.string.account_connecting)
     val creatingLabel = stringResource(R.string.account_creating)
+
+    if (passwordResetOpen) {
+        PasswordResetScreen(
+            initialEmail = passwordResetEmail,
+            state = passwordResetState,
+            onRequestCode = onRequestPasswordReset,
+            onComplete = onCompletePasswordReset,
+            onBack = ::closePasswordReset,
+            modifier = modifier,
+        )
+        return
+    }
 
     // Pressing the button that is already showing folds the panel away again; pressing the other
     // one switches modes without closing. Self host closes, because the two are alternatives.
@@ -284,6 +347,11 @@ fun AccountScreen(
             cloudPassword = ""
             cloudConfirmPassword = ""
             selfHostExpanded = true
+        } else {
+            // A successful deletion request clears the stored registration above this screen. The
+            // confirmation must disappear with it rather than floating over the sign-in form.
+            confirmDelete = false
+            deleteEmail = ""
         }
     }
 
@@ -367,6 +435,7 @@ fun AccountScreen(
                                 onSubscribe = onSubscribe,
                                 onManageSubscription = onManageSubscription,
                                 onRedeemCoupon = onRedeemCoupon,
+                                onDeleteAccount = { confirmDelete = true },
                             )
                         }
                         return@Column
@@ -606,6 +675,20 @@ fun AccountScreen(
                             }
 
                             ConnectionStatus(connection, AccountTags.CLOUD_STATUS)
+
+                            if (!cloudSignUp && failedPasswordLogins >= 2) {
+                                TextButton(
+                                    onClick = {
+                                        passwordResetEmail = cloudEmail.trim()
+                                        passwordResetOpen = true
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.CenterHorizontally)
+                                        .testTag(AccountTags.FORGOT_PASSWORD),
+                                ) {
+                                    Text(stringResource(R.string.account_forgot_password))
+                                }
+                            }
                         }
                     }
 
@@ -868,6 +951,318 @@ fun AccountScreen(
             },
         )
     }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!accountDeletionState.requesting) {
+                    confirmDelete = false
+                    deleteEmail = ""
+                }
+            },
+            title = { Text(stringResource(R.string.account_delete_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.account_delete_body))
+                    Text(
+                        text = stringResource(R.string.account_delete_irreversible),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    OutlinedTextField(
+                        value = deleteEmail,
+                        onValueChange = { deleteEmail = it },
+                        label = { Text(stringResource(R.string.account_delete_email)) },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Done,
+                        ),
+                        singleLine = true,
+                        enabled = !accountDeletionState.requesting,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(AccountTags.DELETE_EMAIL),
+                    )
+                    accountDeletionState.failure?.let { failure ->
+                        Text(
+                            text = stringResource(accountDeletionFailureMessage(failure)),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                val deletingLabel = stringResource(R.string.account_delete_requesting)
+                val expectedEmail = connected?.email
+                val identityMatches = deleteEmail.isNotBlank() &&
+                    (
+                        expectedEmail == null ||
+                            deleteEmail.trim().equals(expectedEmail, ignoreCase = true)
+                        )
+                TextButton(
+                    onClick = { onRequestAccountDeletion(deleteEmail) },
+                    enabled = identityMatches && !accountDeletionState.requesting,
+                    modifier = Modifier.testTag(AccountTags.DELETE_CONFIRM),
+                ) {
+                    if (accountDeletionState.requesting) {
+                        LoadingIndicator(
+                            Modifier
+                                .size(18.dp)
+                                .semantics { contentDescription = deletingLabel },
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.account_delete_confirm),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        deleteEmail = ""
+                    },
+                    enabled = !accountDeletionState.requesting,
+                ) {
+                    Text(stringResource(R.string.account_delete_cancel))
+                }
+            },
+            modifier = Modifier.testTag(AccountTags.DELETE_DIALOG),
+        )
+    }
+}
+
+/**
+ * The managed password-recovery destination.
+ *
+ * The server deliberately gives the same first response for every email, so this screen never
+ * claims an account exists. Its second step mirrors the atomic contract: the server validates the
+ * eight-digit code and installs the new password in the same request.
+ */
+@Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun PasswordResetScreen(
+    initialEmail: String,
+    state: PasswordResetUiState,
+    onRequestCode: (String) -> Unit,
+    onComplete: (email: String, code: String, password: String) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var email by rememberSaveable { mutableStateOf(initialEmail) }
+    var code by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    val requestingLabel = stringResource(R.string.account_reset_sending)
+    val changingLabel = stringResource(R.string.account_reset_changing)
+
+    Scaffold(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag(AccountTags.SCREEN),
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.account_reset_title)) },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.testTag(AccountTags.BACK),
+                    ) {
+                        Icon(
+                            imageVector = MaterialSymbols.ArrowBack,
+                            contentDescription = stringResource(R.string.navigate_back),
+                        )
+                    }
+                },
+            )
+        },
+    ) { contentPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(contentPadding)
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 24.dp),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Card(
+                modifier = Modifier
+                    .widthIn(max = 560.dp)
+                    .fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (state.completed) {
+                        Text(
+                            text = stringResource(R.string.account_reset_complete_title),
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
+                        Text(
+                            text = stringResource(R.string.account_reset_complete_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.testTag(AccountTags.RESET_STATUS),
+                        )
+                        Button(
+                            onClick = onBack,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.account_reset_back_to_login))
+                        }
+                    } else if (!state.codeRequested) {
+                        Text(
+                            text = stringResource(R.string.account_reset_email_heading),
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
+                        Text(
+                            text = stringResource(R.string.account_reset_email_body),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = email,
+                            onValueChange = { email = it },
+                            label = { Text(stringResource(R.string.account_email)) },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Email,
+                                imeAction = ImeAction.Done,
+                            ),
+                            singleLine = true,
+                            enabled = !state.requestingCode,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(AccountTags.RESET_EMAIL),
+                        )
+                        Button(
+                            onClick = { onRequestCode(email) },
+                            enabled = email.isNotBlank() && !state.requestingCode,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(AccountTags.RESET_REQUEST),
+                        ) {
+                            if (state.requestingCode) {
+                                LoadingIndicator(
+                                    Modifier
+                                        .size(18.dp)
+                                        .semantics { contentDescription = requestingLabel },
+                                )
+                            } else {
+                                Text(stringResource(R.string.account_reset_send_code))
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(R.string.account_reset_code_heading),
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
+                        Text(
+                            text = stringResource(R.string.account_reset_code_body, email.trim()),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedTextField(
+                            value = code,
+                            onValueChange = { typed ->
+                                code = typed.filter(Char::isDigit).take(RESET_CODE_LENGTH)
+                            },
+                            label = { Text(stringResource(R.string.account_reset_code)) },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.NumberPassword,
+                                imeAction = ImeAction.Next,
+                            ),
+                            singleLine = true,
+                            enabled = !state.changingPassword,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(AccountTags.RESET_CODE),
+                        )
+                        OutlinedTextField(
+                            value = newPassword,
+                            onValueChange = { newPassword = it },
+                            label = { Text(stringResource(R.string.account_reset_new_password)) },
+                            supportingText = {
+                                Text(stringResource(R.string.account_password_minimum))
+                            },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Next,
+                            ),
+                            singleLine = true,
+                            enabled = !state.changingPassword,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(AccountTags.RESET_PASSWORD),
+                        )
+                        val passwordsMismatch = confirmPassword.isNotEmpty() &&
+                            confirmPassword != newPassword
+                        OutlinedTextField(
+                            value = confirmPassword,
+                            onValueChange = { confirmPassword = it },
+                            label = {
+                                Text(stringResource(R.string.account_confirm_password))
+                            },
+                            isError = passwordsMismatch,
+                            supportingText = if (passwordsMismatch) {
+                                { Text(stringResource(R.string.account_password_mismatch)) }
+                            } else {
+                                null
+                            },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
+                            singleLine = true,
+                            enabled = !state.changingPassword,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(AccountTags.RESET_CONFIRM_PASSWORD),
+                        )
+                        Button(
+                            onClick = { onComplete(email, code, newPassword) },
+                            enabled = !state.changingPassword &&
+                                code.length == RESET_CODE_LENGTH &&
+                                newPassword.length >= MIN_ACCOUNT_PASSWORD &&
+                                confirmPassword == newPassword,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag(AccountTags.RESET_COMPLETE),
+                        ) {
+                            if (state.changingPassword) {
+                                LoadingIndicator(
+                                    Modifier
+                                        .size(18.dp)
+                                        .semantics { contentDescription = changingLabel },
+                                )
+                            } else {
+                                Text(stringResource(R.string.account_reset_change_password))
+                            }
+                        }
+                    }
+
+                    state.failure?.let { failure ->
+                        Text(
+                            text = stringResource(passwordResetFailureMessage(failure)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.testTag(AccountTags.RESET_STATUS),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -963,6 +1358,7 @@ private fun ConnectedPanel(
     onSubscribe: () -> Unit,
     onManageSubscription: () -> Unit,
     onRedeemCoupon: (String) -> Unit,
+    onDeleteAccount: () -> Unit,
 ) {
     val accents = LocalIconAccents.current
     val connectedSyncingDescription = stringResource(R.string.account_syncing)
@@ -1014,20 +1410,57 @@ private fun ConnectedPanel(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Text(
-                    // The device name is what the person will look for in the server's list when
-                    // they revoke it there, so it is worth showing rather than implying.
-                    text = stringResource(R.string.account_connected_device, connected.deviceName),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                connected.email?.let { email ->
+                    val google = connected.authProvider == AccountAuthProvider.Google
+                    val provider = stringResource(
+                        if (google) {
+                            R.string.account_provider_google
+                        } else {
+                            R.string.account_provider_password
+                        },
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.testTag(AccountTags.CONNECTED_IDENTITY),
+                    ) {
+                        Icon(
+                            imageVector = if (google) {
+                                ImageVector.vectorResource(R.drawable.ic_google_g)
+                            } else {
+                                MaterialSymbols.Lock
+                            },
+                            contentDescription = provider,
+                            tint = if (google) Color.Unspecified else accents.green,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .testTag(AccountTags.CONNECTED_PROVIDER),
+                        )
+                        Column {
+                            Text(
+                                text = email,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = provider,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 
+    val membershipRequired = syncStatus.failure ==
+        SyncRunResult.Failed(PermanentSyncFailure.MembershipRequired)
+
     if (managedSubscription.visible) {
         ManagedSubscriptionPanel(
             state = managedSubscription,
+            membershipRequired = membershipRequired,
             onSubscribe = onSubscribe,
             onManageSubscription = onManageSubscription,
             onRedeemCoupon = onRedeemCoupon,
@@ -1109,6 +1542,21 @@ private fun ConnectedPanel(
             Text(stringResource(R.string.account_disconnect_anyway))
         }
     }
+
+    if (managedSubscription.visible) {
+        TextButton(
+            onClick = onDeleteAccount,
+            modifier = Modifier
+                .widthIn(min = 120.dp)
+                .testTag(AccountTags.DELETE_ACCOUNT),
+        ) {
+            Text(
+                text = stringResource(R.string.account_delete_action),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
 }
 
 /** Managed-service plan and promotion controls; never composed for a self-hosted registration. */
@@ -1116,6 +1564,7 @@ private fun ConnectedPanel(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private fun ManagedSubscriptionPanel(
     state: ManagedSubscriptionState,
+    membershipRequired: Boolean,
     onSubscribe: () -> Unit,
     onManageSubscription: () -> Unit,
     onRedeemCoupon: (String) -> Unit,
@@ -1248,6 +1697,7 @@ private fun ManagedSubscriptionPanel(
                         !state.purchasing && !state.loading,
                     loading = state.purchasing,
                     loadingDescription = buyingDescription,
+                    emphasized = membershipRequired,
                     modifier = Modifier.testTag(AccountTags.SUBSCRIBE),
                 )
             }
@@ -1310,23 +1760,51 @@ private fun GooglePlayActionButton(
     modifier: Modifier = Modifier,
     loading: Boolean = false,
     loadingDescription: String = label,
+    emphasized: Boolean = false,
 ) {
+    val requiredDescription = stringResource(R.string.account_subscription_required_state)
     Button(
         onClick = onClick,
         enabled = enabled,
         colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
+            containerColor = if (emphasized) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+            contentColor = if (emphasized) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            disabledContainerColor = if (emphasized) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+            disabledContentColor = if (emphasized) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            },
         ),
         border = BorderStroke(
-            width = 1.dp,
+            width = if (emphasized) 2.dp else 1.dp,
             color = if (enabled) {
                 MaterialTheme.colorScheme.primary
             } else {
                 MaterialTheme.colorScheme.outlineVariant
             },
         ),
-        modifier = modifier.widthIn(min = 220.dp, max = 280.dp),
+        modifier = modifier
+            .widthIn(min = 220.dp, max = 280.dp)
+            .then(
+                if (emphasized) {
+                    Modifier.semantics { stateDescription = requiredDescription }
+                } else {
+                    Modifier
+                },
+            ),
     ) {
         if (loading) {
             LoadingIndicator(
@@ -1538,6 +2016,7 @@ private fun syncFailureText(failure: SyncRunResult): String = when (failure) {
 @StringRes
 private fun syncFailureMessage(reason: PermanentSyncFailure): Int = when (reason) {
     PermanentSyncFailure.InvalidServerResponse -> R.string.account_sync_error_response
+    PermanentSyncFailure.MembershipRequired -> R.string.account_sync_membership_required
     PermanentSyncFailure.LocalData -> R.string.account_sync_error_local
     PermanentSyncFailure.ChangeTooLarge -> R.string.account_sync_error_large
     PermanentSyncFailure.MalformedChange -> R.string.account_sync_error_malformed
@@ -1545,6 +2024,29 @@ private fun syncFailureMessage(reason: PermanentSyncFailure): Int = when (reason
     // Not "an error" so much as "you are behind": the cursor is deliberately parked so the changes
     // this build cannot store stay on the server rather than being skipped past.
     PermanentSyncFailure.UnsupportedKind -> R.string.account_sync_error_unsupported
+}
+
+@StringRes
+private fun passwordResetFailureMessage(reason: PasswordResetFailure): Int = when (reason) {
+    PasswordResetFailure.InvalidRequest -> R.string.account_reset_error_request
+    PasswordResetFailure.InvalidCode -> R.string.account_reset_error_code
+    PasswordResetFailure.Unavailable -> R.string.account_reset_error_unavailable
+    PasswordResetFailure.PayloadTooLarge -> R.string.account_reset_error_too_large
+    PasswordResetFailure.Unreachable -> R.string.account_reset_error_unreachable
+    PasswordResetFailure.ServerError -> R.string.account_reset_error_server
+    PasswordResetFailure.NotAViveServer -> R.string.account_reset_error_not_vive
+}
+
+@StringRes
+private fun accountDeletionFailureMessage(reason: AccountDeletionFailure): Int = when (reason) {
+    AccountDeletionFailure.NotConnected -> R.string.account_delete_error_not_connected
+    AccountDeletionFailure.NotManaged -> R.string.account_delete_error_not_managed
+    AccountDeletionFailure.InvalidRequest -> R.string.account_delete_error_request
+    AccountDeletionFailure.Unavailable -> R.string.account_delete_error_unavailable
+    AccountDeletionFailure.Unreachable -> R.string.account_delete_error_unreachable
+    AccountDeletionFailure.ServerError -> R.string.account_delete_error_server
+    AccountDeletionFailure.NotAViveServer -> R.string.account_delete_error_not_vive
+    AccountDeletionFailure.Revoked -> R.string.account_delete_error_revoked
 }
 
 /** Enough tint to read as a state, not enough to compete with the card it sits on. */
@@ -1589,6 +2091,7 @@ private fun failureMessage(reason: ConnectFailure): Int = when (reason) {
     ConnectFailure.InvalidRequest -> R.string.account_error_request
     ConnectFailure.PayloadTooLarge -> R.string.account_error_too_large
     ConnectFailure.ServerError -> R.string.account_error_server
+    ConnectFailure.MembershipRequired -> R.string.account_sync_membership_required
     ConnectFailure.NotAViveServer -> R.string.account_error_not_vive
     ConnectFailure.NotStored -> R.string.account_error_not_stored
     ConnectFailure.Revoked -> R.string.account_error_revoked
@@ -1604,3 +2107,5 @@ private fun failureMessage(reason: ConnectFailure): Int = when (reason) {
     ConnectFailure.EmailTaken -> R.string.account_error_email_taken
     ConnectFailure.AccountCreatedNotRegistered -> R.string.account_error_created_not_registered
 }
+
+private const val RESET_CODE_LENGTH = 8

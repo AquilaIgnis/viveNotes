@@ -3,20 +3,27 @@ package com.vivenotes.ui.account
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.R
 import com.vivenotes.data.billing.ManagedSubscriptionState
 import com.vivenotes.data.sync.ConnectFailure
+import com.vivenotes.data.sync.AccountDeletionFailure
+import com.vivenotes.data.sync.AccountAuthProvider
 import com.vivenotes.data.sync.ManagedSubscriptionStatus
 import com.vivenotes.data.sync.PaidSubscriptionState
 import com.vivenotes.data.sync.PermanentSyncFailure
@@ -63,6 +70,13 @@ class AccountScreenTest {
     private var subscriptions = 0
     private var managedSubscriptions = 0
     private val couponCodes = mutableListOf<String>()
+    private var failedPasswordLogins by mutableStateOf(0)
+    private var passwordResetState by mutableStateOf(PasswordResetUiState())
+    private val passwordResetRequests = mutableListOf<String>()
+    private val passwordResetCompletions = mutableListOf<Triple<String, String, String>>()
+    private var passwordResetCloses = 0
+    private var accountDeletionState by mutableStateOf(AccountDeletionUiState())
+    private val accountDeletionRequests = mutableListOf<String>()
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
@@ -295,16 +309,42 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.CONNECT).assertDoesNotExist()
     }
 
-    /** Both facts are on screen because both are needed to find the device on the server. */
+    /** The connected card names the account and the provider used, not this device's registration. */
     @Test
-    fun connectedNamesTheServerAndTheDevice() {
+    fun connectedGoogleAccountShowsItsEmailAndGoogleIdentity() {
         setScreen()
 
-        connection = ServerConnection.Connected("http://10.0.2.2:5444", "Pixel Tablet")
+        connection = ServerConnection.Connected(
+            serverUrl = "https://sync.vivenotes.net",
+            deviceName = "Pixel Tablet",
+            email = "owner@example.com",
+            authProvider = AccountAuthProvider.Google,
+        )
 
-        compose.onNodeWithText("http://10.0.2.2:5444").assertIsDisplayed()
-        compose.onNodeWithText(context.getString(R.string.account_connected_device, "Pixel Tablet"))
+        compose.onNodeWithText("https://sync.vivenotes.net").assertIsDisplayed()
+        compose.onNodeWithText("owner@example.com").assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.account_provider_google))
             .assertIsDisplayed()
+        compose.onNodeWithTag(AccountTags.CONNECTED_PROVIDER)
+            .assertContentDescriptionEquals(context.getString(R.string.account_provider_google))
+        compose.onNodeWithText("Registered as Pixel Tablet").assertDoesNotExist()
+    }
+
+    @Test
+    fun connectedPasswordAccountDistinguishesItsProvider() {
+        connection = ServerConnection.Connected(
+            serverUrl = "https://sync.vivenotes.net",
+            deviceName = "Pixel Tablet",
+            email = "owner@example.com",
+            authProvider = AccountAuthProvider.Password,
+        )
+        setScreen()
+
+        compose.onNodeWithText("owner@example.com").assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.account_provider_password))
+            .assertIsDisplayed()
+        compose.onNodeWithTag(AccountTags.CONNECTED_PROVIDER)
+            .assertContentDescriptionEquals(context.getString(R.string.account_provider_password))
     }
 
     /** Arriving already connected must show it, not hide it behind anything. */
@@ -490,6 +530,30 @@ class AccountScreenTest {
     }
 
     @Test
+    fun membershipRequiredExplainsThePurchaseAndEmphasizesSubscribe() {
+        connection = ServerConnection.Connected("https://sync.vivenotes.net", "Pixel Tablet")
+        managedSubscription = ManagedSubscriptionState(
+            visible = true,
+            formattedPrice = "\$4.99",
+            productAvailable = true,
+        )
+        syncStatus = SyncStatus(
+            failure = SyncRunResult.Failed(PermanentSyncFailure.MembershipRequired),
+        )
+        setScreen()
+
+        compose.onNodeWithTag(AccountTags.SYNC_STATUS).performScrollTo().assertTextContains(
+            context.getString(R.string.account_sync_membership_required),
+        )
+        compose.onNodeWithTag(AccountTags.SUBSCRIBE).assert(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.StateDescription,
+                context.getString(R.string.account_subscription_required_state),
+            ),
+        )
+    }
+
+    @Test
     fun ownedPlayPlanIsManagedInPlayAndCouponDoesNotReplaceIt() {
         connection = ServerConnection.Connected("https://sync.vivenotes.net", "Pixel Tablet")
         managedSubscription = ManagedSubscriptionState(
@@ -592,6 +656,88 @@ class AccountScreenTest {
         assertEquals(listOf("owner@example.com" to "correct horse"), logInCalls)
         // The two are not interchangeable: signing up would create an account first.
         assertTrue(signUpCalls.isEmpty())
+    }
+
+    @Test
+    fun forgotPasswordAppearsOnlyAfterTwoRejectedLogins() {
+        setScreen()
+        compose.onNodeWithTag(AccountTags.LOGIN).performClick()
+
+        failedPasswordLogins = 1
+        compose.onNodeWithTag(AccountTags.FORGOT_PASSWORD).assertDoesNotExist()
+
+        failedPasswordLogins = 2
+        compose.onNodeWithTag(AccountTags.FORGOT_PASSWORD).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun passwordRecoverySendsEmailThenCodeAndNewPassword() {
+        setScreen()
+        compose.onNodeWithTag(AccountTags.LOGIN).performClick()
+        compose.onNodeWithTag(AccountTags.CLOUD_EMAIL).performTextInput("owner@example.com")
+        failedPasswordLogins = 2
+        compose.onNodeWithTag(AccountTags.FORGOT_PASSWORD).performScrollTo().performClick()
+
+        compose.onNodeWithTag(AccountTags.RESET_EMAIL)
+            .assertTextContains("owner@example.com")
+        compose.onNodeWithTag(AccountTags.RESET_REQUEST).performClick()
+        assertEquals(listOf("owner@example.com"), passwordResetRequests)
+
+        passwordResetState = PasswordResetUiState(codeRequested = true)
+        compose.onNodeWithTag(AccountTags.RESET_CODE).performTextInput("01234567")
+        compose.onNodeWithTag(AccountTags.RESET_PASSWORD).performTextInput("new password")
+        compose.onNodeWithTag(AccountTags.RESET_CONFIRM_PASSWORD)
+            .performScrollTo()
+            .performTextInput("new password")
+        compose.onNodeWithTag(AccountTags.RESET_COMPLETE).performScrollTo().performClick()
+
+        assertEquals(
+            listOf(Triple("owner@example.com", "01234567", "new password")),
+            passwordResetCompletions,
+        )
+    }
+
+    @Test
+    fun managedAccountDeletionRequiresTypedEmailAndUsesDangerConfirmation() {
+        connection = ServerConnection.Connected(
+            serverUrl = "https://sync.vivenotes.net",
+            deviceName = "Pixel Tablet",
+            email = "owner@example.com",
+            authProvider = AccountAuthProvider.Password,
+        )
+        managedSubscription = ManagedSubscriptionState(visible = true)
+        setScreen()
+
+        compose.onNodeWithTag(AccountTags.DELETE_ACCOUNT).performScrollTo().performClick()
+        compose.onNodeWithTag(AccountTags.DELETE_DIALOG).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.account_delete_irreversible))
+            .assertIsDisplayed()
+        compose.onNodeWithText("Enter the account email to confirm.").assertDoesNotExist()
+        compose.onNodeWithTag(AccountTags.DELETE_CONFIRM).assertIsNotEnabled()
+
+        compose.onNodeWithTag(AccountTags.DELETE_EMAIL).performTextInput("someone@example.com")
+        compose.onNodeWithTag(AccountTags.DELETE_CONFIRM).assertIsNotEnabled()
+        compose.onNodeWithTag(AccountTags.DELETE_EMAIL).performTextClearance()
+        compose.onNodeWithTag(AccountTags.DELETE_EMAIL).performTextInput("owner@example.com")
+        compose.onNodeWithTag(AccountTags.DELETE_CONFIRM).performClick()
+
+        assertEquals(listOf("owner@example.com"), accountDeletionRequests)
+    }
+
+    @Test
+    fun anUnavailableDeletionRouteKeepsTheConfirmationOpen() {
+        connection = ServerConnection.Connected("https://sync.vivenotes.net", "Pixel Tablet")
+        managedSubscription = ManagedSubscriptionState(visible = true)
+        setScreen()
+        compose.onNodeWithTag(AccountTags.DELETE_ACCOUNT).performScrollTo().performClick()
+
+        accountDeletionState = AccountDeletionUiState(
+            failure = AccountDeletionFailure.Unavailable,
+        )
+
+        compose.onNodeWithTag(AccountTags.DELETE_DIALOG).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.account_delete_error_unavailable))
+            .assertIsDisplayed()
     }
 
     @Test
@@ -799,6 +945,13 @@ class AccountScreenTest {
                         connectCalls += Triple(url, email, password)
                     },
                     onLogIn = { email, password -> logInCalls += email to password },
+                    failedPasswordLogins = failedPasswordLogins,
+                    passwordResetState = passwordResetState,
+                    onRequestPasswordReset = { passwordResetRequests += it },
+                    onCompletePasswordReset = { email, code, password ->
+                        passwordResetCompletions += Triple(email, code, password)
+                    },
+                    onPasswordResetClosed = { passwordResetCloses++ },
                     onSignUp = { email, password -> signUpCalls += email to password },
                     syncing = syncing,
                     syncStatus = syncStatus,
@@ -806,6 +959,8 @@ class AccountScreenTest {
                     disconnectFailure = disconnectFailure,
                     onDisconnect = { disconnects++ },
                     onForceDisconnect = { forceDisconnects++ },
+                    accountDeletionState = accountDeletionState,
+                    onRequestAccountDeletion = { accountDeletionRequests += it },
                 )
             }
         }

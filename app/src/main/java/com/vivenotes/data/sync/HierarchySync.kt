@@ -70,6 +70,9 @@ data class SyncSummary(
 enum class PermanentSyncFailure {
     InvalidServerResponse,
 
+    /** The managed server requires an active paid, promotional, or staff membership for sync. */
+    MembershipRequired,
+
     /**
      * The server holds a change of a kind this build cannot store, so the cursor cannot advance past
      * it without losing it. Only an upgrade clears this.
@@ -2092,10 +2095,11 @@ class HierarchySync(
         data class Stop(val result: SyncRunResult) : BlobPhase
     }
 
-    private fun ServerResult.Failed.asSyncResult(): SyncRunResult = if (retryable) {
-        SyncRunResult.Retryable(reason)
-    } else {
-        SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse)
+    private fun ServerResult.Failed.asSyncResult(): SyncRunResult = when {
+        reason == ConnectFailure.MembershipRequired ->
+            SyncRunResult.Failed(PermanentSyncFailure.MembershipRequired)
+        retryable -> SyncRunResult.Retryable(reason)
+        else -> SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse)
     }
 
     private fun decodeObject(encoded: String): JsonObject =

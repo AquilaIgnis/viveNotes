@@ -50,7 +50,12 @@ sealed interface ServerConnection {
 
     data object Connecting : ServerConnection
 
-    data class Connected(val serverUrl: String, val deviceName: String) : ServerConnection
+    data class Connected(
+        val serverUrl: String,
+        val deviceName: String,
+        val email: String? = null,
+        val authProvider: AccountAuthProvider? = null,
+    ) : ServerConnection
 
     data class Failed(val reason: ConnectFailure) : ServerConnection
 }
@@ -73,6 +78,7 @@ sealed interface CloudSignInResult {
         val serverUrl: String,
         val deviceName: String,
         val createdAccount: Boolean,
+        val email: String? = null,
     ) : CloudSignInResult
 
     /**
@@ -145,6 +151,7 @@ data class SyncStatus(
             ConnectFailure.InvalidRequest,
             ConnectFailure.PayloadTooLarge,
             ConnectFailure.ServerError,
+            ConnectFailure.MembershipRequired,
             ConnectFailure.NotStored,
             ConnectFailure.Revoked,
             ConnectFailure.SignupClosed,
@@ -431,7 +438,15 @@ class SyncAccounts(
                     }
                     is ChangeStreamEvent.Failed -> {
                         _streamReady.value = false
-                        _status.update { it.copy(failure = SyncRunResult.Retryable(ended.reason)) }
+                        _status.update {
+                            it.copy(
+                                failure = if (ended.reason == ConnectFailure.MembershipRequired) {
+                                    SyncRunResult.Failed(PermanentSyncFailure.MembershipRequired)
+                                } else {
+                                    SyncRunResult.Retryable(ended.reason)
+                                },
+                            )
+                        }
                         if (!ended.retryable) return@flow
                     }
                     // A conforming client stream always reports why it ended. Treat an unexpected
@@ -503,9 +518,16 @@ class SyncAccounts(
                     accountId = registration.accountId,
                     deviceId = registration.deviceId,
                     token = registration.token,
+                    email = email,
+                    authProvider = AccountAuthProvider.Password,
                 )
             ) {
-                null -> ServerConnection.Connected(serverUrl, deviceName)
+                null -> ServerConnection.Connected(
+                    serverUrl = serverUrl,
+                    deviceName = deviceName,
+                    email = email.normalizedAccountEmail(),
+                    authProvider = AccountAuthProvider.Password,
+                )
                 else -> ServerConnection.Failed(unstored)
             }
 
@@ -559,9 +581,16 @@ class SyncAccounts(
                     accountId = registration.accountId,
                     deviceId = registration.deviceId,
                     token = registration.token,
+                    email = email,
+                    authProvider = AccountAuthProvider.Password,
                 )
             ) {
-                null -> ServerConnection.Connected(serverUrl, deviceName)
+                null -> ServerConnection.Connected(
+                    serverUrl = serverUrl,
+                    deviceName = deviceName,
+                    email = email.normalizedAccountEmail(),
+                    authProvider = AccountAuthProvider.Password,
+                )
                 else -> ServerConnection.Failed(unstored)
             }
 
@@ -586,6 +615,55 @@ class SyncAccounts(
     /** [register] against the managed deployment: create the account, then connect this device. */
     suspend fun signUpForCloud(email: String, password: String): ServerConnection =
         register(cloudServerUrl, email, password)
+
+    /** Starts the managed server's public, non-enumerating password-recovery flow. */
+    suspend fun requestCloudPasswordReset(email: String): PasswordResetResult =
+        client.requestPasswordReset(cloudServerUrl, email)
+
+    /** Submits the emailed code and replacement password as the contract's one atomic operation. */
+    suspend fun completeCloudPasswordReset(
+        email: String,
+        code: String,
+        password: String,
+    ): PasswordResetResult = client.completePasswordReset(
+        serverBaseUrl = cloudServerUrl,
+        email = email,
+        code = code,
+        password = password,
+    )
+
+    /**
+     * Requests irreversible deletion from the managed service and forgets this installation only
+     * after the server accepts responsibility for it.
+     *
+     * The server route is deliberately future-facing: until it is added to OpenAPI it answers 404,
+     * which remains an on-screen failure with the bearer credential intact. Logging out first would
+     * destroy the only credential that could retry a request the server never received.
+     */
+    suspend fun requestManagedAccountDeletion(email: String): AccountDeletionResult {
+        val account = store.account.first()
+            ?: return AccountDeletionResult.Failed(AccountDeletionFailure.NotConnected)
+        if (!isManagedAccount(account)) {
+            return AccountDeletionResult.Failed(AccountDeletionFailure.NotManaged)
+        }
+
+        return when (
+            val result = client.requestAccountDeletion(
+                serverBaseUrl = account.serverUrl,
+                token = account.token,
+                email = email,
+            )
+        ) {
+            AccountDeletionResult.Requested -> {
+                forget(account)
+                AccountDeletionResult.Requested
+            }
+            is AccountDeletionResult.Failed -> {
+                if (result.reason == AccountDeletionFailure.Revoked) forget(account)
+                result
+            }
+        }
+    }
 
     /**
      * Signs in to the managed deployment with Google, creating the account if there is not one yet.
@@ -615,8 +693,10 @@ class SyncAccounts(
             is ServerResult.Failed -> return CloudSignInResult.Failed(requested.reason)
         }
 
-        val idToken = when (val credential = google.requestIdToken(activityContext, challenge.nonce)) {
-            is GoogleIdToken.Received -> credential.idToken
+        val googleCredential = when (
+            val credential = google.requestIdToken(activityContext, challenge.nonce)
+        ) {
+            is GoogleIdToken.Received -> credential
             GoogleIdToken.Dismissed -> return CloudSignInResult.Dismissed
             is GoogleIdToken.Rejected -> return CloudSignInResult.Failed(credential.reason)
         }
@@ -625,7 +705,7 @@ class SyncAccounts(
         val authentication = client.signInWithGoogle(
             serverBaseUrl = serverUrl,
             challengeId = challenge.challengeId,
-            idToken = idToken,
+            idToken = googleCredential.idToken,
             // New per logical attempt. It is not reused across retries here because there is no
             // retry here: a lost response leaves the person pressing the button again, which is a
             // new attempt with a new challenge and therefore a new key.
@@ -634,7 +714,11 @@ class SyncAccounts(
         )
 
         return when (authentication) {
-            is GoogleAuthentication.Authenticated -> adoptGoogle(serverUrl, authentication)
+            is GoogleAuthentication.Authenticated -> adoptGoogle(
+                serverUrl = serverUrl,
+                authentication = authentication,
+                email = googleCredential.email,
+            )
 
             is GoogleAuthentication.LinkRequired -> {
                 // The challenge is deliberately still unspent, so the link request can prove the
@@ -642,7 +726,8 @@ class SyncAccounts(
                 pendingLink = PendingGoogleLink(
                     serverUrl = serverUrl,
                     challengeId = challenge.challengeId,
-                    idToken = idToken,
+                    idToken = googleCredential.idToken,
+                    email = googleCredential.email,
                     device = device,
                 )
                 CloudSignInResult.LinkRequired
@@ -682,7 +767,11 @@ class SyncAccounts(
         return when (authentication) {
             is GoogleAuthentication.Authenticated -> {
                 pendingLink = null
-                adoptGoogle(pending.serverUrl, authentication)
+                adoptGoogle(
+                    serverUrl = pending.serverUrl,
+                    authentication = authentication,
+                    email = pending.email,
+                )
             }
 
             // The link endpoint answering "link required" would mean the server changed its mind
@@ -713,18 +802,22 @@ class SyncAccounts(
     private suspend fun adoptGoogle(
         serverUrl: String,
         authentication: GoogleAuthentication.Authenticated,
+        email: String?,
     ): CloudSignInResult = when (
         val unstored = adopt(
             serverUrl = serverUrl,
             accountId = authentication.accountId,
             deviceId = authentication.deviceId,
             token = authentication.token,
+            email = email,
+            authProvider = AccountAuthProvider.Google,
         )
     ) {
         null -> CloudSignInResult.Connected(
             serverUrl = serverUrl,
             deviceName = deviceName,
             createdAccount = authentication.createdAccount,
+            email = email?.normalizedAccountEmail(),
         )
 
         else -> CloudSignInResult.Failed(unstored)
@@ -745,6 +838,8 @@ class SyncAccounts(
         accountId: String,
         deviceId: String,
         token: String,
+        email: String?,
+        authProvider: AccountAuthProvider,
     ): ConnectFailure? {
         try {
             store.setAccount(
@@ -754,6 +849,8 @@ class SyncAccounts(
                     deviceId = deviceId,
                     token = token,
                     deviceName = deviceName,
+                    email = email?.normalizedAccountEmail(),
+                    authProvider = authProvider,
                 ),
             )
         } catch (unwritable: IOException) {
@@ -816,7 +913,7 @@ class SyncAccounts(
         val account = store.account.first() ?: return null
 
         return when (client.checkToken(account.serverUrl, account.token)) {
-            TokenCheck.Valid -> ServerConnection.Connected(account.serverUrl, account.deviceName)
+            TokenCheck.Valid -> account.toConnection()
 
             TokenCheck.Revoked -> {
                 forget(account)
@@ -826,7 +923,7 @@ class SyncAccounts(
             // Unreachable, or a server-side error. Nothing was learned, so nothing changes: the
             // stored registration still stands and the screen goes on showing it as connected.
             is TokenCheck.Unknown ->
-                ServerConnection.Connected(account.serverUrl, account.deviceName)
+                account.toConnection()
         }
     }
 
@@ -1007,7 +1104,17 @@ private data class PendingGoogleLink(
     val serverUrl: String,
     val challengeId: String,
     val idToken: String,
+    val email: String?,
     val device: GoogleDeviceDetails,
+)
+
+private fun String.normalizedAccountEmail(): String = trim().lowercase(Locale.ROOT)
+
+private fun SyncAccount.toConnection(): ServerConnection.Connected = ServerConnection.Connected(
+    serverUrl = serverUrl,
+    deviceName = deviceName,
+    email = email,
+    authProvider = authProvider,
 )
 
 /**

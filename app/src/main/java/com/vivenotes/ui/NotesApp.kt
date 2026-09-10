@@ -84,6 +84,9 @@ import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.data.sync.CloudSignInResult
+import com.vivenotes.data.sync.AccountDeletionResult
+import com.vivenotes.data.sync.AccountAuthProvider
+import com.vivenotes.data.sync.PasswordResetResult
 import com.vivenotes.data.billing.ManagedSubscriptionController
 import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncAccounts
@@ -117,6 +120,8 @@ import com.vivenotes.R
 import com.vivenotes.BuildConfig
 import com.vivenotes.data.sync.CloudArchiveResult
 import com.vivenotes.ui.account.AccountScreen
+import com.vivenotes.ui.account.AccountDeletionUiState
+import com.vivenotes.ui.account.PasswordResetUiState
 import com.vivenotes.ui.closed.ClosedNotebooksScreen
 import com.vivenotes.ui.panel.AiModelsPanelContent
 import com.vivenotes.ui.panel.ContentPanelContent
@@ -235,6 +240,12 @@ fun NotesApp(
     // Session-only, deliberately. It answers "what did that button just do", which is news exactly
     // once; persisting it would have a tablet still announcing a new account weeks later.
     var accountCreated by remember { mutableStateOf(false) }
+    var failedPasswordLogins by remember { mutableStateOf(0) }
+    var passwordResetState by remember { mutableStateOf(PasswordResetUiState()) }
+    // A public reset request may finish after Account has been closed. Its result must not revive a
+    // flow the person already left or replace the state of a newer request.
+    var passwordResetGeneration by remember { mutableStateOf(0L) }
+    var accountDeletionState by remember { mutableStateOf(AccountDeletionUiState()) }
 
     // Credential Manager shows UI, so it needs the Activity rather than the application context —
     // there is no window to put a sheet in otherwise. Null in a preview or a test host with no
@@ -261,7 +272,14 @@ fun NotesApp(
 
     val displayedConnection = when (val attempt = selfHostConnection) {
         ServerConnection.Idle -> storedAccount
-            ?.let { ServerConnection.Connected(it.serverUrl, it.deviceName) }
+            ?.let {
+                ServerConnection.Connected(
+                    serverUrl = it.serverUrl,
+                    deviceName = it.deviceName,
+                    email = it.email,
+                    authProvider = it.authProvider,
+                )
+            }
             ?: ServerConnection.Idle
 
         else -> attempt
@@ -269,6 +287,10 @@ fun NotesApp(
     val closeAccount = {
         if (backStack.lastOrNull() == AppDestination.Account) {
             backStack.removeLast()
+            failedPasswordLogins = 0
+            passwordResetGeneration++
+            passwordResetState = PasswordResetUiState()
+            accountDeletionState = AccountDeletionUiState()
         }
     }
     val closeShelf = {
@@ -409,8 +431,10 @@ fun NotesApp(
                                 is CloudSignInResult.Connected -> {
                                     accountCreated = result.createdAccount
                                     selfHostConnection = ServerConnection.Connected(
-                                        result.serverUrl,
-                                        result.deviceName,
+                                        serverUrl = result.serverUrl,
+                                        deviceName = result.deviceName,
+                                        email = result.email,
+                                        authProvider = AccountAuthProvider.Google,
                                     )
                                 }
 
@@ -438,8 +462,10 @@ fun NotesApp(
                                     accountCreated = result.createdAccount
                                     linkRequired = false
                                     selfHostConnection = ServerConnection.Connected(
-                                        result.serverUrl,
-                                        result.deviceName,
+                                        serverUrl = result.serverUrl,
+                                        deviceName = result.deviceName,
+                                        email = result.email,
+                                        authProvider = AccountAuthProvider.Google,
                                     )
                                 }
 
@@ -501,8 +527,73 @@ fun NotesApp(
                     disconnectFailure = null
                     selfHostConnection = ServerConnection.Connecting
                     connectScope.launch {
-                        selfHostConnection = syncAccounts.logInToCloud(email, password)
+                        val result = syncAccounts.logInToCloud(email, password)
+                        if (
+                            result == ServerConnection.Failed(ConnectFailure.InvalidCredentials)
+                        ) {
+                            failedPasswordLogins++
+                        } else if (result is ServerConnection.Connected) {
+                            failedPasswordLogins = 0
+                        }
+                        selfHostConnection = result
                     }
+                },
+                failedPasswordLogins = failedPasswordLogins,
+                passwordResetState = passwordResetState,
+                onRequestPasswordReset = { email ->
+                    if (!passwordResetState.requestingCode) {
+                        val generation = passwordResetGeneration + 1
+                        passwordResetGeneration = generation
+                        passwordResetState = PasswordResetUiState(requestingCode = true)
+                        connectScope.launch {
+                            val nextState = when (
+                                val result = syncAccounts.requestCloudPasswordReset(email)
+                            ) {
+                                PasswordResetResult.Accepted ->
+                                    PasswordResetUiState(codeRequested = true)
+                                is PasswordResetResult.Failed ->
+                                    PasswordResetUiState(failure = result.reason)
+                            }
+                            if (passwordResetGeneration == generation) {
+                                passwordResetState = nextState
+                            }
+                        }
+                    }
+                },
+                onCompletePasswordReset = { email, code, newPassword ->
+                    if (!passwordResetState.changingPassword) {
+                        val generation = passwordResetGeneration + 1
+                        passwordResetGeneration = generation
+                        passwordResetState = passwordResetState.copy(
+                            changingPassword = true,
+                            failure = null,
+                        )
+                        connectScope.launch {
+                            val nextState = when (
+                                val result = syncAccounts.completeCloudPasswordReset(
+                                    email,
+                                    code,
+                                    newPassword,
+                                )
+                            ) {
+                                PasswordResetResult.Accepted -> {
+                                    failedPasswordLogins = 0
+                                    PasswordResetUiState(codeRequested = true, completed = true)
+                                }
+                                is PasswordResetResult.Failed -> PasswordResetUiState(
+                                    codeRequested = true,
+                                    failure = result.reason,
+                                )
+                            }
+                            if (passwordResetGeneration == generation) {
+                                passwordResetState = nextState
+                            }
+                        }
+                    }
+                },
+                onPasswordResetClosed = {
+                    passwordResetGeneration++
+                    passwordResetState = PasswordResetUiState()
                 },
                 onSignUp = { email, password ->
                     disconnectFailure = null
@@ -563,6 +654,27 @@ fun NotesApp(
                             accountCreated = false
                             googleFailure = null
                             disconnecting = false
+                        }
+                    }
+                },
+                accountDeletionState = accountDeletionState,
+                onRequestAccountDeletion = { email ->
+                    if (!accountDeletionState.requesting) {
+                        accountDeletionState = AccountDeletionUiState(requesting = true)
+                        connectScope.launch {
+                            when (val result = syncAccounts.requestManagedAccountDeletion(email)) {
+                                AccountDeletionResult.Requested -> {
+                                    selfHostConnection = ServerConnection.Idle
+                                    accountCreated = false
+                                    googleFailure = null
+                                    accountDeletionState = AccountDeletionUiState()
+                                }
+                                is AccountDeletionResult.Failed -> {
+                                    accountDeletionState = AccountDeletionUiState(
+                                        failure = result.reason,
+                                    )
+                                }
+                            }
                         }
                     }
                 },

@@ -198,6 +198,110 @@ class SyncServerClientTest {
         )
     }
 
+    @Test
+    fun membershipRequiredIsKeptDistinctFromAnUnreadableServer() = runBlocking {
+        respond = {
+            send(
+                it,
+                402,
+                """{"error":"membership_required","message":"an active premium membership is required for sync and attachments"}""",
+            )
+        }
+
+        assertEquals(
+            ServerResult.Failed(ConnectFailure.MembershipRequired, retryable = false),
+            SyncServerClient().getCursor(baseUrl, "vive_abc"),
+        )
+    }
+
+    @Test
+    fun passwordResetRequestMatchesThePublicContract() = runBlocking {
+        respond = {
+            send(
+                it,
+                202,
+                """{"message":"if that email is registered, recovery instructions will be sent"}""",
+            )
+        }
+
+        assertEquals(
+            PasswordResetResult.Accepted,
+            SyncServerClient().requestPasswordReset(baseUrl, "  owner@example.com  "),
+        )
+        assertEquals("POST", requestMethod)
+        assertEquals("/v1/auth/password/reset-requests", requestPath)
+        assertEquals(
+            "owner@example.com",
+            Json.parseToJsonElement(requestBody.orEmpty()).jsonObject
+                .getValue("email").jsonPrimitive.content,
+        )
+        assertEquals(null, authorization)
+    }
+
+    @Test
+    fun completingPasswordResetSendsCodeAndNewPasswordTogether() = runBlocking {
+        respond = { sendEmpty(it, 204) }
+
+        assertEquals(
+            PasswordResetResult.Accepted,
+            SyncServerClient().completePasswordReset(
+                baseUrl,
+                "owner@example.com",
+                "01234567",
+                " new password ",
+            ),
+        )
+        assertEquals("POST", requestMethod)
+        assertEquals("/v1/auth/password/resets", requestPath)
+        val sent = Json.parseToJsonElement(requestBody.orEmpty()).jsonObject
+        assertEquals("owner@example.com", sent.getValue("email").jsonPrimitive.content)
+        assertEquals("01234567", sent.getValue("code").jsonPrimitive.content)
+        assertEquals(" new password ", sent.getValue("password").jsonPrimitive.content)
+    }
+
+    @Test
+    fun invalidPasswordResetCodeHasItsOwnFailure() = runBlocking {
+        respond = {
+            send(
+                it,
+                400,
+                """{"error":"invalid_password_reset","message":"reset code is invalid or expired"}""",
+            )
+        }
+
+        assertEquals(
+            PasswordResetResult.Failed(PasswordResetFailure.InvalidCode),
+            SyncServerClient().completePasswordReset(
+                baseUrl,
+                "owner@example.com",
+                "00000000",
+                "new password",
+            ),
+        )
+    }
+
+    @Test
+    fun accountDeletionRequestIsAuthenticatedAndDoesNotTreatMissingRouteAsSuccess() = runBlocking {
+        respond = { send(it, 404, "") }
+
+        assertEquals(
+            AccountDeletionResult.Failed(AccountDeletionFailure.Unavailable),
+            SyncServerClient().requestAccountDeletion(
+                baseUrl,
+                "vive_abc",
+                " owner@example.com ",
+            ),
+        )
+        assertEquals("POST", requestMethod)
+        assertEquals("/v1/account-deletion-requests", requestPath)
+        assertEquals("Bearer vive_abc", authorization)
+        assertEquals(
+            "owner@example.com",
+            Json.parseToJsonElement(requestBody.orEmpty()).jsonObject
+                .getValue("email").jsonPrimitive.content,
+        )
+    }
+
     /**
      * A 201 whose body has no token is not a success. Storing the registration anyway would leave
      * the app believing it is connected while holding a credential it can never authenticate with.

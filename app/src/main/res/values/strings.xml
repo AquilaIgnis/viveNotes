@@ -31,7 +31,8 @@
     <string name="account_password_mismatch">Those passwords do not match.</string>
     <string name="account_connecting">Connecting to the server</string>
     <string name="account_connected_title">Connected</string>
-    <string name="account_connected_device">Registered as %1$s</string>
+    <string name="account_provider_google">Google</string>
+    <string name="account_provider_password">Email and password</string>
     <string name="account_subscription_title">Cloud storage</string>
     <string name="account_subscription_checking">Checking your storage plan</string>
     <string name="account_subscription_active">Storage access is active through %1$s.</string>
@@ -67,6 +68,7 @@
     <string name="account_subscription_error_request">The subscription request was not accepted. Try again.</string>
     <string name="account_subscription_error_server_unreachable">The cloud server could not be reached. Your Play purchase is safe and will be restored when it reconnects.</string>
     <string name="account_subscription_error_server">The cloud server could not update the subscription. Try again.</string>
+    <string name="account_subscription_required_state">Subscription required for sync</string>
     <string name="account_sync_now">Sync now</string>
     <string name="account_syncing">Syncing notebooks</string>
     <string name="account_sync_up_to_date">Up to date</string>
@@ -83,6 +85,7 @@
     <string name="account_sync_never">Not synced yet</string>
     <string name="account_sync_will_retry">%1$s Syncing will retry by itself.</string>
     <string name="account_sync_error_response">The server returned sync data this version cannot read.</string>
+    <string name="account_sync_membership_required">Purchase a subscription to sync.</string>
     <string name="account_sync_error_local">The local sync queue could not be read. The notes themselves are still stored locally.</string>
     <string name="account_sync_error_large">One local hierarchy change is larger than the server accepts.</string>
     <string name="account_sync_error_malformed">The server rejected one local hierarchy change as malformed.</string>
@@ -130,6 +133,46 @@
     <string name="account_error_google_unconfigured">Sign in with Google is not set up in this build. Use your own server instead.</string>
     <string name="account_error_link_credentials">That password does not match, or the email is not the Google address you just used.</string>
     <string name="account_error_not_stored">This device registered with the server, but its token could not be saved, so it cannot be used. Free some storage and connect again — the unused device can be removed from the server\'s dashboard.</string>
+
+    <string name="account_forgot_password">Forgot password?</string>
+    <string name="account_reset_title">Reset password</string>
+    <string name="account_reset_email_heading">Find your account</string>
+    <string name="account_reset_email_body">Enter your account email. If it is registered, we’ll send an 8-digit recovery code.</string>
+    <string name="account_reset_send_code">Send recovery code</string>
+    <string name="account_reset_sending">Sending recovery code</string>
+    <string name="account_reset_code_heading">Enter your recovery code</string>
+    <string name="account_reset_code_body">Enter the code sent for %1$s, then choose a new password.</string>
+    <string name="account_reset_code">8-digit code</string>
+    <string name="account_reset_new_password">New password</string>
+    <string name="account_reset_change_password">Change password</string>
+    <string name="account_reset_changing">Changing password</string>
+    <string name="account_reset_complete_title">Password changed</string>
+    <string name="account_reset_complete_body">Your new password is ready. Return to Log in and use it on this device.</string>
+    <string name="account_reset_back_to_login">Back to Log in</string>
+    <string name="account_reset_error_request">Check the email and password details, then try again.</string>
+    <string name="account_reset_error_code">That recovery code is invalid or expired. Request a new code and try again.</string>
+    <string name="account_reset_error_unavailable">Password recovery is temporarily unavailable. Try again later.</string>
+    <string name="account_reset_error_too_large">Those recovery details are longer than the server accepts.</string>
+    <string name="account_reset_error_unreachable">The cloud server could not be reached. Check the connection and try again.</string>
+    <string name="account_reset_error_server">The cloud server could not reset the password. Try again.</string>
+    <string name="account_reset_error_not_vive">The cloud service returned an unexpected password-recovery response.</string>
+
+    <string name="account_delete_action">Delete account</string>
+    <string name="account_delete_title">Delete your account?</string>
+    <string name="account_delete_body">This will delete your ViveNotes account and all cloud data associated with it.</string>
+    <string name="account_delete_irreversible">This cannot be undone.</string>
+    <string name="account_delete_email">Email</string>
+    <string name="account_delete_confirm">Delete my account and all data</string>
+    <string name="account_delete_cancel">Keep my account</string>
+    <string name="account_delete_requesting">Requesting account deletion</string>
+    <string name="account_delete_error_not_connected">This device is no longer connected to an account.</string>
+    <string name="account_delete_error_not_managed">Account deletion is available only for ViveNotes cloud accounts.</string>
+    <string name="account_delete_error_request">The server did not accept that account email.</string>
+    <string name="account_delete_error_unavailable">Account deletion is not available on the server yet.</string>
+    <string name="account_delete_error_unreachable">The cloud server could not be reached. Your account was not deleted.</string>
+    <string name="account_delete_error_server">The cloud server could not accept the deletion request. Your account was not deleted.</string>
+    <string name="account_delete_error_not_vive">The cloud service returned an unexpected account-deletion response.</string>
+    <string name="account_delete_error_revoked">This device’s session has expired. Sign in again before requesting deletion.</string>
     <!--
         The closed-notebook shelf. "Closed" rather than "archived": nothing here has been put away
         for keeping, and the notebook is one press from being back where it was.

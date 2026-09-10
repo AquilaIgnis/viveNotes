@@ -1586,6 +1586,22 @@ class HierarchySyncTest {
         )
     }
 
+    @Test
+    fun membershipRequiredIsNotReportedAsUnreadableServerData() = runBlocking {
+        repository.createNotebook("Waiting for a plan")
+        server.failNextPush = ServerResult.Failed(
+            ConnectFailure.MembershipRequired,
+            retryable = false,
+        )
+
+        val result = hierarchy.run(account())
+
+        assertEquals(
+            SyncRunResult.Failed(PermanentSyncFailure.MembershipRequired),
+            result,
+        )
+    }
+
     private fun account() = SyncAccount(
         serverUrl = "http://unused",
         accountId = "account",

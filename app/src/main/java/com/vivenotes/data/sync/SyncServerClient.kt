@@ -51,6 +51,9 @@ enum class ConnectFailure {
     /** `500 internal`, or any error code this build does not know. */
     ServerError,
 
+    /** `402 membership_required` — sync is available after the managed plan is activated. */
+    MembershipRequired,
+
     /**
      * Something answered and it was not viveCServer: a proxy error page, a different service on
      * that port, a captive portal. Worth distinguishing from [Unreachable] because the fix is
@@ -349,6 +352,45 @@ sealed interface SubscriptionResult<out T> {
     data class Success<T>(val value: T) : SubscriptionResult<T>
     data object Unauthorized : SubscriptionResult<Nothing>
     data class Failed(val reason: SubscriptionFailure) : SubscriptionResult<Nothing>
+}
+
+/** Stable meanings of the public password-recovery endpoints. */
+enum class PasswordResetFailure {
+    InvalidRequest,
+    InvalidCode,
+    Unavailable,
+    PayloadTooLarge,
+    Unreachable,
+    ServerError,
+    NotAViveServer,
+}
+
+sealed interface PasswordResetResult {
+    data object Accepted : PasswordResetResult
+    data class Failed(val reason: PasswordResetFailure) : PasswordResetResult
+}
+
+/**
+ * Client-side shape of the future managed account-deletion request.
+ *
+ * The managed OpenAPI contract does not expose the operation yet. Keeping its unavailable answer
+ * distinct prevents the Account screen from claiming an irreversible request succeeded against a
+ * server that has not implemented it.
+ */
+enum class AccountDeletionFailure {
+    NotConnected,
+    NotManaged,
+    InvalidRequest,
+    Unavailable,
+    Unreachable,
+    ServerError,
+    NotAViveServer,
+    Revoked,
+}
+
+sealed interface AccountDeletionResult {
+    data object Requested : AccountDeletionResult
+    data class Failed(val reason: AccountDeletionFailure) : AccountDeletionResult
 }
 
 /** One complete `GET /v1/changes` response page. */
@@ -696,6 +738,117 @@ class SyncServerClient(
                 AccountCreation.Created(created.accountId)
             } else {
                 AccountCreation.Rejected(accountFailureFor(raw.status, raw.payload))
+            }
+        }
+    }
+
+    /** Requests the contract's deliberately non-enumerating password-recovery email. */
+    suspend fun requestPasswordReset(
+        serverBaseUrl: String,
+        email: String,
+    ): PasswordResetResult {
+        val body = syncJson.encodeToString(
+            PasswordResetRequest.serializer(),
+            PasswordResetRequest(email = email.trim()),
+        ).encodeToByteArray()
+        return when (
+            val raw = unauthenticatedRequest(
+                serverBaseUrl,
+                "/v1/auth/password/reset-requests",
+                "POST",
+                body,
+            )
+        ) {
+            RawServerResult.InvalidAddress ->
+                PasswordResetResult.Failed(PasswordResetFailure.NotAViveServer)
+            RawServerResult.Unreachable ->
+                PasswordResetResult.Failed(PasswordResetFailure.Unreachable)
+            is RawServerResult.Response -> when {
+                raw.status == 202 -> {
+                    val response = runCatching {
+                        syncJson.decodeFromString(
+                            PasswordResetRequestResponse.serializer(),
+                            raw.payload,
+                        )
+                    }.getOrNull()
+                    if (response?.message == PASSWORD_RESET_PUBLIC_MESSAGE) {
+                        PasswordResetResult.Accepted
+                    } else {
+                        PasswordResetResult.Failed(PasswordResetFailure.NotAViveServer)
+                    }
+                }
+                else -> PasswordResetResult.Failed(passwordResetFailureFor(raw.status, raw.payload))
+            }
+        }
+    }
+
+    /** Validates the single-use code and replaces the password in the server's one atomic step. */
+    suspend fun completePasswordReset(
+        serverBaseUrl: String,
+        email: String,
+        code: String,
+        password: String,
+    ): PasswordResetResult {
+        val body = syncJson.encodeToString(
+            CompletePasswordResetRequest.serializer(),
+            CompletePasswordResetRequest(
+                email = email.trim(),
+                code = code,
+                password = password,
+            ),
+        ).encodeToByteArray()
+        return when (
+            val raw = unauthenticatedRequest(
+                serverBaseUrl,
+                "/v1/auth/password/resets",
+                "POST",
+                body,
+            )
+        ) {
+            RawServerResult.InvalidAddress ->
+                PasswordResetResult.Failed(PasswordResetFailure.NotAViveServer)
+            RawServerResult.Unreachable ->
+                PasswordResetResult.Failed(PasswordResetFailure.Unreachable)
+            is RawServerResult.Response -> if (raw.status == 204) {
+                PasswordResetResult.Accepted
+            } else {
+                PasswordResetResult.Failed(passwordResetFailureFor(raw.status, raw.payload))
+            }
+        }
+    }
+
+    /**
+     * Sends the future managed deletion request. The server contract intentionally lands later;
+     * until then a 404 is [AccountDeletionFailure.Unavailable], never a local logout.
+     */
+    suspend fun requestAccountDeletion(
+        serverBaseUrl: String,
+        token: String,
+        email: String,
+    ): AccountDeletionResult {
+        val body = syncJson.encodeToString(
+            AccountDeletionRequest.serializer(),
+            AccountDeletionRequest(email = email.trim()),
+        ).encodeToByteArray()
+        return when (
+            val raw = authenticatedRequest(
+                serverBaseUrl = serverBaseUrl,
+                path = "/v1/account-deletion-requests",
+                token = token,
+                method = "POST",
+                body = body,
+            )
+        ) {
+            RawServerResult.InvalidAddress ->
+                AccountDeletionResult.Failed(AccountDeletionFailure.NotAViveServer)
+            RawServerResult.Unreachable ->
+                AccountDeletionResult.Failed(AccountDeletionFailure.Unreachable)
+            is RawServerResult.Response -> when {
+                raw.status == 202 || raw.status == 204 -> AccountDeletionResult.Requested
+                raw.status == 401 -> AccountDeletionResult.Failed(AccountDeletionFailure.Revoked)
+                else -> AccountDeletionResult.Failed(
+                    accountDeletionFailureFor(raw.status, raw.payload),
+                )
             }
         }
     }
@@ -1570,12 +1723,43 @@ class SyncServerClient(
             "invalid_credentials", "unauthenticated" -> ConnectFailure.InvalidCredentials
             "invalid_request" -> ConnectFailure.InvalidRequest
             "payload_too_large" -> ConnectFailure.PayloadTooLarge
+            "membership_required" -> ConnectFailure.MembershipRequired
             null -> failureForStatus(status)
             // "internal", and anything this build has not heard of. A code added to the contract
             // later is a server-side problem from here, not a reason to claim the address is wrong.
             else -> ConnectFailure.ServerError
         }
     }
+
+    private fun passwordResetFailureFor(status: Int, payload: String): PasswordResetFailure =
+        when (errorCode(payload)) {
+            "invalid_password_reset" -> PasswordResetFailure.InvalidCode
+            "password_reset_unavailable" -> PasswordResetFailure.Unavailable
+            "invalid_request" -> PasswordResetFailure.InvalidRequest
+            "payload_too_large" -> PasswordResetFailure.PayloadTooLarge
+            "internal" -> PasswordResetFailure.ServerError
+            null -> when {
+                status == 400 -> PasswordResetFailure.InvalidRequest
+                status == 413 -> PasswordResetFailure.PayloadTooLarge
+                status == 503 -> PasswordResetFailure.Unavailable
+                status >= 500 -> PasswordResetFailure.ServerError
+                else -> PasswordResetFailure.NotAViveServer
+            }
+            else -> PasswordResetFailure.ServerError
+        }
+
+    private fun accountDeletionFailureFor(status: Int, payload: String): AccountDeletionFailure =
+        when (errorCode(payload)) {
+            "invalid_request" -> AccountDeletionFailure.InvalidRequest
+            "internal" -> AccountDeletionFailure.ServerError
+            null -> when {
+                status == 404 || status == 405 -> AccountDeletionFailure.Unavailable
+                status == 400 -> AccountDeletionFailure.InvalidRequest
+                status >= 500 -> AccountDeletionFailure.ServerError
+                else -> AccountDeletionFailure.NotAViveServer
+            }
+            else -> AccountDeletionFailure.ServerError
+        }
 
     /** The `error` code of a viveCServer error body, or null when the body is absent or not one. */
     private fun errorCode(payload: String): String? = runCatching {
@@ -1649,6 +1833,7 @@ class SyncServerClient(
         status == 400 -> ConnectFailure.InvalidRequest
         status == 401 || status == 403 -> ConnectFailure.InvalidCredentials
         status == 413 -> ConnectFailure.PayloadTooLarge
+        status == 402 -> ConnectFailure.MembershipRequired
         status >= 500 -> ConnectFailure.ServerError
         else -> ConnectFailure.NotAViveServer
     }
@@ -1846,6 +2031,22 @@ private data class CreateAccountResponse(
 )
 
 @Serializable
+private data class PasswordResetRequest(val email: String)
+
+@Serializable
+private data class PasswordResetRequestResponse(val message: String)
+
+@Serializable
+private data class CompletePasswordResetRequest(
+    val email: String,
+    val code: String,
+    val password: String,
+)
+
+@Serializable
+private data class AccountDeletionRequest(val email: String)
+
+@Serializable
 private data class RegisterDeviceRequest(
     val email: String,
     val password: String,
@@ -1981,3 +2182,6 @@ private val syncJson: Json = Json { ignoreUnknownKeys = true }
  * `://` further along is not a scheme.
  */
 private val SCHEME_PREFIX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
+
+private const val PASSWORD_RESET_PUBLIC_MESSAGE =
+    "if that email is registered, recovery instructions will be sent"
