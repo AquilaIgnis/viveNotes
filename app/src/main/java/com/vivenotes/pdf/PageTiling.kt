@@ -2,6 +2,7 @@ package com.vivenotes.pdf
 
 import com.vivenotes.ink.InkBounds
 import kotlin.math.ceil
+import kotlin.math.floor
 
 /** What an item on the page is, for the one decision that depends on it — see [PdfItemKind.Title]. */
 enum class PdfItemKind {
@@ -75,6 +76,9 @@ object PageTiling {
      * to the right**, which is the order written twice on the reference drawing. A tile nothing
      * overlaps is not emitted, because a canvas is mostly empty and the alternative is a dozen
      * blank sheets between two diagrams.
+     *
+     * The grid is measured off where the content **ended up**, not off where it started: the fit
+     * breaks a page (see [Fitting]), and the sheet a break moves content onto has to exist.
      */
     fun plan(
         items: List<PdfItem>,
@@ -92,8 +96,15 @@ object PageTiling {
         val content = items.contentBounds()
             ?: return PdfPagePlan(listOf(PdfTile(0, 0, InkBounds(0f, 0f, tileWidth, tileHeight))), emptyMap())
 
-        val columns = tileCount(content.right - content.left, tileWidth)
-        val rows = tileCount(content.bottom - content.top, tileHeight)
+        val shifts = if (fit) Fitting(items, content, tileWidth, tileHeight).run() else emptyMap()
+
+        val placed = items.map { item ->
+            val shift = shifts[item.id] ?: return@map item.bounds
+            item.bounds.translated(shift.dx, shift.dy)
+        }
+
+        val columns = tileCount(placed.maxOf(InkBounds::right) - content.left, tileWidth)
+        val rows = tileCount(placed.maxOf(InkBounds::bottom) - content.top, tileHeight)
 
         fun tileAt(column: Int, row: Int) = InkBounds(
             left = content.left + column * tileWidth,
@@ -101,22 +112,6 @@ object PageTiling {
             right = content.left + (column + 1) * tileWidth,
             bottom = content.top + (row + 1) * tileHeight,
         )
-
-        val shifts = if (!fit) {
-            emptyMap()
-        } else {
-            buildMap {
-                items.forEach { item ->
-                    val shift = item.fittedInto(content, tileWidth, tileHeight, columns, rows, ::tileAt)
-                    if (shift != PdfShift.NONE) put(item.id, shift)
-                }
-            }
-        }
-
-        val placed = items.map { item ->
-            val shift = shifts[item.id] ?: return@map item.bounds
-            item.bounds.translated(shift.dx, shift.dy)
-        }
 
         val tiles = buildList {
             for (column in 0 until columns) {
@@ -132,46 +127,145 @@ object PageTiling {
     }
 
     /**
-     * The least translation that puts the whole of [this] inside the tile its corner is in, or
-     * [PdfShift.NONE] when it is already there or cannot be helped.
+     * PD5's fit: what a box hanging over a sheet edge does about it.
      *
-     * Only ever left and up: the corner is inside the tile by construction, so the only edges that
-     * can hang over are the right and the bottom. An item **wider or taller than a tile** is left
-     * exactly where it is — there is nowhere to put a drawing bigger than the paper, and shrinking
-     * it would be redrawing the user's work rather than laying it out.
+     * The reference drawing shows a pull — the box slides back inside the tile its corner is in, by
+     * exactly its overhang and no more, and lands beside what was already there. That is still the
+     * first thing tried, and on an airy canvas it is the right answer: it keeps the box on the sheet
+     * its neighbours are on, and costs no paper.
+     *
+     * **But a page of writing has nothing to slide back into.** Pulling a paragraph up by its
+     * overhang puts it on top of the two lines above it, which is what a reader of the first version
+     * of this saw at the foot of every full page. So when the pulled-back box would land on
+     * something, the item does the other thing instead: it **starts on the next sheet**, at the top
+     * of the strip below (or the left of the strip across), and *what follows it in that strip comes
+     * with it* — the carry below. That is a page break, and it is the only version of this that does
+     * not simply move the overlap somewhere else: closing the gap up behind the thing that moved
+     * would put the next paragraph where this one used to be, on top of the one after it.
+     *
+     * Two axes, one procedure, run twice — across the columns first so that an item's column is
+     * settled before the columns are walked down. An item **larger than a tile** is left exactly
+     * where it is and cut: there is nowhere to put a drawing bigger than the paper, and shrinking it
+     * would be redrawing the user's work rather than laying it out. So is the title band, which is
+     * not content placed on the canvas but the top of the page.
+     *
+     * Nothing here is written to the document — it is a view of one export, and it dies with it.
      */
-    private fun PdfItem.fittedInto(
-        content: InkBounds,
-        tileWidth: Float,
-        tileHeight: Float,
-        columns: Int,
-        rows: Int,
-        tileAt: (Int, Int) -> InkBounds,
-    ): PdfShift {
-        if (kind == PdfItemKind.Title) return PdfShift.NONE
-        if (bounds.right - bounds.left > tileWidth) return PdfShift.NONE
-        if (bounds.bottom - bounds.top > tileHeight) return PdfShift.NONE
+    private class Fitting(
+        private val items: List<PdfItem>,
+        private val content: InkBounds,
+        private val tileWidth: Float,
+        private val tileHeight: Float,
+    ) {
+        private val moved = mutableMapOf<String, PdfShift>()
 
-        val column = ((bounds.left - content.left) / tileWidth).toInt().coerceIn(0, columns - 1)
-        val row = ((bounds.top - content.top) / tileHeight).toInt().coerceIn(0, rows - 1)
-        val tile = tileAt(column, row)
-        // Written out rather than as `-maxOf(0f, overhang)`, which yields **negative zero** on the
-        // axis that does not move. It translates identically and reads identically, and it is not
-        // equal to `0f` under `Float.equals` — so a `PdfShift` carrying one silently stops matching
-        // [PdfShift.NONE] and every comparison downstream of it becomes a coin toss.
-        val overRight = bounds.right - tile.right
-        val overBottom = bounds.bottom - tile.bottom
-        val dx = if (overRight > 0f) -overRight else 0f
-        val dy = if (overBottom > 0f) -overBottom else 0f
-        return if (dx == 0f && dy == 0f) PdfShift.NONE else PdfShift(dx, dy)
+        private val across = Axis(content.left, tileWidth, InkBounds::left, InkBounds::right) {
+            PdfShift(it, 0f)
+        }
+        private val down = Axis(content.top, tileHeight, InkBounds::top, InkBounds::bottom) {
+            PdfShift(0f, it)
+        }
+
+        fun run(): Map<String, PdfShift> {
+            val movable = items.filter { it.kind != PdfItemKind.Title }
+            flow(movable, along = across, strips = down)
+            flow(movable, along = down, strips = across)
+            return moved.filterValues { it != PdfShift.NONE }
+        }
+
+        /**
+         * One pass: each strip of the grid walked in order, carrying every page break forward.
+         *
+         * [strips] is the axis the grid is divided on for this pass — the rows when going across,
+         * the columns when going down — because a break belongs to one strip of the page and must
+         * not move the strip beside it, which is a different sheet entirely.
+         */
+        private fun flow(movable: List<PdfItem>, along: Axis, strips: Axis) {
+            movable
+                .groupBy { strips.stripOf(strips.near(placed(it))) }
+                .toSortedMap()
+                .forEach { (_, strip) ->
+                    var carry = 0f
+                    strip
+                        .sortedWith(compareBy({ along.near(it.bounds) }, PdfItem::id))
+                        .forEach { item -> carry = place(item, carry, along) }
+                }
+        }
+
+        /**
+         * One item's turn on one axis, and the carry the rest of the strip inherits from it.
+         *
+         * The carry is applied before anything is measured, so the decision is made about where the
+         * item actually is now rather than where the document put it.
+         */
+        private fun place(item: PdfItem, carry: Float, axis: Axis): Float {
+            if (carry != 0f) move(item, axis.shift(carry))
+            if (item.bounds.width > tileWidth || item.bounds.height > tileHeight) return carry
+
+            val box = placed(item)
+            val strip = axis.stripOf(axis.near(box))
+            val edge = axis.origin + (strip + 1) * axis.size
+            val over = axis.far(box) - edge
+            if (over <= 0f) return carry
+
+            val pulled = box.translated(axis.shift(-over))
+            if (isClear(pulled, item)) {
+                move(item, axis.shift(-over))
+                return carry
+            }
+            // The grid's own guard, honoured here rather than only when it is drawn: a break past
+            // the last strip would put the item on a sheet that is never emitted, and content that
+            // silently is not in the file is the worst failure this has.
+            if (strip + 1 >= MAX_TILES_PER_AXIS) return carry
+
+            val onward = edge - axis.near(box)
+            move(item, axis.shift(onward))
+            return carry + onward
+        }
+
+        /** Whether [candidate] can be put down without landing on anything already placed. */
+        private fun isClear(candidate: InkBounds, moving: PdfItem): Boolean =
+            items.none { it.id != moving.id && candidate.overlaps(placed(it)) }
+
+        private fun placed(item: PdfItem): InkBounds {
+            val shift = moved[item.id] ?: return item.bounds
+            return item.bounds.translated(shift.dx, shift.dy)
+        }
+
+        private fun move(item: PdfItem, by: PdfShift) {
+            val shift = moved[item.id] ?: PdfShift.NONE
+            moved[item.id] = PdfShift(shift.dx + by.dx, shift.dy + by.dy)
+        }
+
+        /**
+         * One axis of the grid, so the fit above is written once and run twice.
+         *
+         * [shift] builds the whole `PdfShift` rather than letting the caller assemble one out of a
+         * distance and a zero, because that zero has to be a **literal** `0f`. Arithmetic such as
+         * `-maxOf(0f, overhang)` yields *negative* zero on the axis that does not move; it
+         * translates identically and reads identically, and it is not equal to `0f` under
+         * `Float.equals` — so a shift carrying one silently stops matching [PdfShift.NONE] and
+         * every comparison downstream of it becomes a coin toss.
+         */
+        private class Axis(
+            val origin: Float,
+            val size: Float,
+            val near: (InkBounds) -> Float,
+            val far: (InkBounds) -> Float,
+            val shift: (Float) -> PdfShift,
+        ) {
+            /** Which strip of the grid a coordinate falls in, counted from the content's corner. */
+            fun stripOf(at: Float): Int = floor((at - origin) / size).toInt().coerceAtLeast(0)
+        }
     }
 
     /**
      * How many tiles an extent needs, never fewer than one.
      *
      * Capped at [MAX_TILES_PER_AXIS], which is a guard rather than a limit anybody will meet: a
-     * hundred A4 tiles is 116 feet of paper on one axis, and the only way to ask for more is a
-     * coordinate that should not exist.
+     * hundred A4 tiles is 116 feet of paper on one axis, and asking for more takes a coordinate
+     * that should not exist. [Fitting] honours the same cap rather than breaking a page past it,
+     * so the guard can never be the thing that drops content off the end of the grid.
      */
     private fun tileCount(extent: Float, tile: Float): Int =
         ceil(extent / tile).toInt().coerceIn(1, MAX_TILES_PER_AXIS)
@@ -194,6 +288,8 @@ fun List<PdfItem>.contentBounds(): InkBounds? {
     }
     return InkBounds(left, top, right, bottom)
 }
+
+private fun InkBounds.translated(shift: PdfShift): InkBounds = translated(shift.dx, shift.dy)
 
 /** Shares area, rather than merely touching: an edge exactly on a tile boundary is not on the tile. */
 internal fun InkBounds.overlaps(other: InkBounds): Boolean =

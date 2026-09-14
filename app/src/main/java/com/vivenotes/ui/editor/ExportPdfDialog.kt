@@ -58,6 +58,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.vivenotes.model.Orientation
 import com.vivenotes.model.PaperSize
+import com.vivenotes.model.PrintMargins
 import com.vivenotes.pdf.PdfExportOptions
 import com.vivenotes.pdf.PdfExportPlan
 import com.vivenotes.pdf.PdfExportRequest
@@ -65,6 +66,7 @@ import com.vivenotes.pdf.PdfExportScope
 import com.vivenotes.pdf.PdfExporter
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.PanelChoice
+import com.vivenotes.ui.panel.PanelMeasure
 import com.vivenotes.ui.panel.PanelRow
 import com.vivenotes.ui.panel.PanelSection
 import com.vivenotes.ui.panel.PanelSetting
@@ -455,6 +457,18 @@ private fun ExportPdfOptions(
                     options = Orientation.entries,
                     label = { it.name },
                     onPick = { onChange(options.copy(orientation = it)) },
+                )
+            }
+            // One field for all four sides. The page can be given a different margin per side in the
+            // Paper Size pane, and an export that opens on such a page shows the widest of them —
+            // but four fields here would be four fields nobody came to this window to fill in, and
+            // the question being asked is how much of the sheet the printer cannot reach.
+            PanelRow("Margins") {
+                PanelMeasure(
+                    field = "Margins",
+                    value = options.margins.widestInches,
+                    onCommit = { onChange(options.copy(margins = PrintMargins.uniform(it))) },
+                    range = PdfExportOptions.MARGIN_RANGE,
                 )
             }
         }

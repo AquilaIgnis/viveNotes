@@ -163,9 +163,27 @@ data class PrintMargins(
     val leftInches: Float = DEFAULT_INCHES,
     val rightInches: Float = DEFAULT_INCHES,
 ) {
+    /**
+     * The one number a single margin control shows for all four sides: the widest of them.
+     *
+     * The widest rather than an average, because the number is offered as *the* margin and the
+     * printable area it promises has to be one every side can keep.
+     */
+    val widestInches: Float get() = maxOf(topInches, bottomInches, leftInches, rightInches)
+
     companion object {
-        const val DEFAULT_INCHES = 1f
+        /**
+         * A quarter of an inch.
+         *
+         * Narrow on purpose: this is a notes app, the page is written edge to edge, and an inch of
+         * white all round threw away a fifth of every exported sheet. Printers that cannot reach
+         * this far will clip it, which is the writer's call to make in the Paper Size pane.
+         */
+        const val DEFAULT_INCHES = 0.25f
         const val MAX_INCHES = 4f
+
+        /** The same margin on every side — what one control sets. */
+        fun uniform(inches: Float): PrintMargins = PrintMargins(inches, inches, inches, inches)
     }
 }
 

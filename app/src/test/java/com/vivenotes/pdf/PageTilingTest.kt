@@ -118,6 +118,69 @@ class PageTilingTest {
     }
 
     /**
+     * The correction of 2026-09-13, off the Computer architecture notebook: on a written page the
+     * room above is not empty, and pulling a paragraph back into it printed it on top of the two
+     * lines already there. So a box that cannot be pulled back **starts on the next sheet** instead.
+     */
+    @Test
+    fun anItemThatCannotBePulledBackStartsOnTheNextSheet() {
+        val plan = plan(
+            listOf(
+                item("origin", 0f, 0f),
+                item("above", 0f, 800f, width = 400f, height = 150f),
+                item("straddles", 0f, 960f, width = 400f, height = 150f),
+            ),
+        )
+        assertEquals(PdfShift(0f, 40f), plan.shiftFor("straddles"))
+        assertEquals(PdfShift.NONE, plan.shiftFor("above"))
+    }
+
+    /**
+     * And the rest of the column comes down with it. Without this the break would only move the
+     * overlap: the next paragraph would keep the place the broken one had just left, and the one
+     * after that would land on it.
+     */
+    @Test
+    fun whatFollowsABrokenItemComesDownWithIt() {
+        val plan = plan(
+            listOf(
+                item("origin", 0f, 0f),
+                item("above", 0f, 800f, width = 400f, height = 150f),
+                item("straddles", 0f, 960f, width = 400f, height = 150f),
+                item("after", 0f, 1200f, width = 400f, height = 100f),
+            ),
+        )
+        assertEquals(PdfShift(0f, 40f), plan.shiftFor("straddles"))
+        assertEquals(PdfShift(0f, 40f), plan.shiftFor("after"))
+    }
+
+    /** The same thing across the page: a box that cannot go left starts the next column. */
+    @Test
+    fun anItemThatCannotBePulledBackStartsInTheNextColumn() {
+        val plan = plan(
+            listOf(
+                item("origin", 0f, 0f),
+                item("beside", 800f, 0f, width = 150f, height = 400f),
+                item("straddles", 960f, 0f, width = 150f, height = 400f),
+            ),
+        )
+        assertEquals(PdfShift(40f, 0f), plan.shiftFor("straddles"))
+    }
+
+    /** The band is an obstacle even though it never moves: nothing may be pulled back onto it. */
+    @Test
+    fun nothingIsPulledBackOntoTheTitleBand() {
+        val plan = plan(
+            listOf(
+                item("title", 0f, 0f, width = 920f, height = 100f, kind = PdfItemKind.Title),
+                item("straddles", 950f, 0f, width = 100f, height = 90f),
+            ),
+        )
+        assertEquals(PdfShift(50f, 0f), plan.shiftFor("straddles"))
+        assertEquals(PdfShift.NONE, plan.shiftFor("title"))
+    }
+
+    /**
      * Nothing to put it on. A drawing wider than the paper spans sheets whatever anybody does, and
      * shrinking it would be redrawing the user's work rather than laying it out.
      */
@@ -146,9 +209,9 @@ class PageTilingTest {
         assertTrue(plan(items, fit = false).shifts.isEmpty())
     }
 
-    /** Pulling content inward can empty a tile; it can never need a new one. */
+    /** Pulling content inward empties the tile it came out of. */
     @Test
-    fun theFitCanEmptyATileAndNeverAddsOne() {
+    fun pullingAnItemBackCanEmptyATile() {
         val withoutFit = plan(
             listOf(item("origin", 0f, 0f), item("straddles", 950f, 300f, width = 100f)),
             fit = false,
@@ -156,6 +219,27 @@ class PageTilingTest {
         val withFit = plan(listOf(item("origin", 0f, 0f), item("straddles", 950f, 300f, width = 100f)))
         assertEquals(listOf(0 to 0, 1 to 0), withoutFit.tiles.map { it.column to it.row })
         assertEquals(listOf(0 to 0), withFit.tiles.map { it.column to it.row })
+    }
+
+    /**
+     * And a break can need one. The grid is therefore measured off where the content *ended up* —
+     * measured off where it started, the sheet the last item was carried onto is never emitted and
+     * the writing on it is simply not in the file.
+     */
+    @Test
+    fun aPageBreakAddsTheSheetItNeeds() {
+        val items = listOf(
+            item("origin", 0f, 0f),
+            item("above", 0f, 800f, width = 400f, height = 150f),
+            item("straddles", 0f, 960f, width = 400f, height = 150f),
+            item("above-again", 0f, 1750f, width = 400f, height = 150f),
+            item("straddles-again", 0f, 1910f, width = 400f, height = 80f),
+        )
+        assertEquals(listOf(0 to 0, 0 to 1), plan(items, fit = false).tiles.map { it.column to it.row })
+        assertEquals(
+            listOf(0 to 0, 0 to 1, 0 to 2),
+            plan(items).tiles.map { it.column to it.row },
+        )
     }
 
     // --- the content box -----------------------------------------------------------------------

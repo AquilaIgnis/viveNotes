@@ -24,6 +24,7 @@ import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PaperSize
+import com.vivenotes.model.PrintMargins
 import com.vivenotes.model.Run
 import com.vivenotes.model.newId
 import java.io.File
@@ -117,6 +118,37 @@ class PdfExportTest {
         val tiles = plan.pages.single().plan.tiles
         assertEquals(listOf(0 to 0, 0 to 1, 1 to 0), tiles.map { it.column to it.row })
         assertEquals(3, write(plan))
+    }
+
+    /**
+     * The margin is the export's to set — PD1 — and it is not a border: the canvas is cut *inside*
+     * it, so the same two blocks of writing are one sheet at a quarter of an inch and two at one
+     * inch. The page itself is untouched either way.
+     */
+    @Test
+    fun theExportsOwnMarginDecidesHowMuchOfTheCanvasASheetHolds() = runBlocking {
+        repository.saveDoc(
+            pageId,
+            PageDoc(
+                outlines = listOf(
+                    textOutline("at the top", x = 0f, y = 120f),
+                    textOutline("most of a page down", x = 0f, y = 1700f),
+                ),
+            ),
+        )
+
+        val narrow = exporter.plan(
+            PdfExportRequest(pageId, sectionId, PdfExportOptions(margins = PrintMargins.uniform(0.25f))),
+        )
+        val wide = exporter.plan(
+            PdfExportRequest(pageId, sectionId, PdfExportOptions(margins = PrintMargins.uniform(1f))),
+        )
+
+        assertEquals(1, narrow.sheetCount)
+        assertEquals(2, wide.sheetCount)
+        // The sheet is A4 in both: it is the printable area inside it that moved.
+        assertEquals(595, narrow.paper.widthPoints)
+        assertEquals(595, wide.paper.widthPoints)
     }
 
     /** A section is its pages in order, concatenated. */

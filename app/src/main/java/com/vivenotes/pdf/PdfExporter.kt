@@ -33,17 +33,34 @@ enum class PdfExportScope { Page, Section }
  * Everything the dialog can change — `memory/pdfExportPlan.md` PD1.
  *
  * [fitContent] defaults on, which is the option the reference drawing is mostly about: content that
- * straddles a page boundary is pulled back onto one page rather than cut in half. [includeRuling]
- * defaults on because the ruling lives in the document, not in preferences — a page written on
- * squared paper *is* squared paper — and one tap says otherwise.
+ * straddles a page boundary is kept whole rather than cut in half. [includeRuling] defaults on
+ * because the ruling lives in the document, not in preferences — a page written on squared paper
+ * *is* squared paper — and one tap says otherwise.
+ *
+ * [margins] open on the page's own and can then be set here, because the margin is the one paper
+ * setting whose right value is a property of the *printer* rather than of the document: the same
+ * page goes out edge to edge to a PDF a reader scrolls, and inset for a printer with a hard margin.
+ * The cuts are made inside them, so widening them is not a border — it is less page per sheet.
  */
 data class PdfExportOptions(
     val scope: PdfExportScope = PdfExportScope.Page,
     val paper: PaperSize = PaperSize.A4,
     val orientation: Orientation = Orientation.Portrait,
+    val margins: PrintMargins = PrintMargins(),
     val fitContent: Boolean = true,
     val includeRuling: Boolean = true,
-)
+) {
+    companion object {
+        /**
+         * What the dialog offers: nothing at all, up to an inch.
+         *
+         * Narrower than [PrintMargins.MAX_INCHES], which has to reach four so that the Paper Size
+         * pane can describe an oddly bound page. Nobody prints a note with a four-inch margin, and
+         * a field that will accept one is a field that will accept a typo.
+         */
+        val MARGIN_RANGE: ClosedFloatingPointRange<Float> = 0f..1f
+    }
+}
 
 /** What the export covers, resolved to page ids before anything is measured. */
 data class PdfExportRequest(
@@ -126,6 +143,14 @@ class PdfExporter(
         PdfExportOptions(
             paper = if (style.paper == PaperSize.Auto) PaperSize.A4 else style.paper,
             orientation = style.orientation,
+            // Coerced into the dialog's own range, so a page bound with a four-inch margin does not
+            // open the field already holding a number it refuses.
+            margins = PrintMargins(
+                topInches = style.margins.topInches.coerceIn(PdfExportOptions.MARGIN_RANGE),
+                bottomInches = style.margins.bottomInches.coerceIn(PdfExportOptions.MARGIN_RANGE),
+                leftInches = style.margins.leftInches.coerceIn(PdfExportOptions.MARGIN_RANGE),
+                rightInches = style.margins.rightInches.coerceIn(PdfExportOptions.MARGIN_RANGE),
+            ),
         )
     }
 
@@ -353,16 +378,16 @@ class PdfExporter(
     /**
      * The sheet the export goes onto.
      *
-     * Margins come from the *document*, never from the dialog: they are the band the writer already
-     * sees drawn while the Paper Size pane is open, and this is the first thing in the app that has
-     * ever consumed them. A section takes its first page's, because one export is one stack of
-     * paper and a stack whose printable area changed halfway down is not one.
+     * Margins are the dialog's, having opened on the page's own — the band the writer already sees
+     * drawn while the Paper Size pane is open. One export is one stack of paper either way: a
+     * section takes its first page's, because a stack whose printable area changed halfway down is
+     * not one stack.
      */
     private fun paperFor(options: PdfExportOptions, style: PageStyle?): PdfPaper = PdfPaper.of(
         size = options.paper,
         orientation = options.orientation,
         custom = style?.customPaper,
-        margins = style?.margins ?: PrintMargins(),
+        margins = options.margins,
     )
 
     private companion object {
