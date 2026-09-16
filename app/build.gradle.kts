@@ -39,13 +39,12 @@ private val releaseAbis: List<String> =
  * Deployment values that are not the same on every machine, read from `local.properties`.
  *
  * `local.properties` is tracked here — it already carries `sdk.dir` — so these are defaults with a
- * committed value, not secrets. Neither of them is one: a Google **Web** OAuth client id is a public
- * identifier that ships inside every APK by design, and a server address is a server address. The
- * only thing that must never appear here is a client *secret*, and ID-token verification does not
- * use one (viveCServer `deploy/env.example`).
+ * committed value, not secrets. A Google Web OAuth client id is a public identifier that ships
+ * inside every APK by design, and a server address is a server address; ID-token verification uses
+ * no client secret, so none belongs here.
  *
- * A `-P` on the command line outranks the file, so a one-off build can point at another server
- * without editing anything: `./gradlew assembleDebug -Pvive.cloudBaseUrl=http://192.168.1.20:5444`.
+ * A `-P` on the command line outranks the file:
+ * `./gradlew assembleDebug -Pvive.cloudBaseUrl=http://192.168.1.20:5444`.
  */
 private val localProperties: Properties = Properties().apply {
     val file = rootProject.file("local.properties")
@@ -290,7 +289,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-    // ProcessLifecycleOwner, for the foreground sync cadence (memory/syncPlan.md SD6). Counting
+    // ProcessLifecycleOwner, for the foreground sync cadence. Counting
     // started Activities would avoid the dependency and get configuration changes wrong: this owner
     // already debounces the teardown and rebuild of the only Activity, so a rotation is not a
     // "went to background" event and does not cost a flush.

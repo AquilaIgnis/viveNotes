@@ -386,7 +386,7 @@ class NotesRepositoryTest {
         // Undone here, or pulled already tombstoned from a device that undid it there. Either way the
         // row is not replayed and its time still has to be cleared: the operation can come back — an
         // undo is redoable, and the other device may push the redo — and two operations numbered the
-        // same are two devices rendering one page differently. `memory/inkSyncPlan.md` §1.
+        // same are two devices rendering one page differently.
         repository.setPartialEraseActive("erase-a", active = false)
 
         assertTrue(repository.partialErasesFor(pageId).isEmpty())

@@ -39,8 +39,7 @@ data class ContentSearchResults(
  * A query's results, plus the pictures the notebook turned out to contain.
  *
  * The two travel together because the search is the only thing that decodes every page — asking it
- * what pictures it saw costs nothing, and asking anything else would mean decoding them twice
- * (`memory/imageOcrPlan.md` IO6).
+ * what pictures it saw costs nothing, and asking anything else would mean decoding them twice.
  */
 data class ContentSearchOutcome(
     val results: ContentSearchResults,
@@ -51,25 +50,23 @@ data class ContentSearchOutcome(
 )
 
 /**
- * The Content panel's corpus, held in memory and rebuilt a page at a time — `memory/searchPlan.md` CS7.
+ * The Content panel's corpus, held in memory and rebuilt a page at a time.
  *
- * **No FTS table and no schema change.** `page_fts` is designed (A7, `memory/plan.md` §7) and not built;
- * this is what a notebook-sized search costs without it: one cheap query for the page rows, a decode
- * of only those whose `updatedAt` has moved since they were last seen, and matching in memory. The
- * first query on a notebook pays to decode it once; later ones pay for what changed. When the FTS
- * table does arrive it replaces the two steps below and leaves the matcher untouched.
+ * No FTS table and no schema change. `page_fts` is designed and not built; this is what a
+ * notebook-sized search costs without it: one cheap query for the page rows, a decode of only those
+ * whose `updatedAt` has moved since they were last seen, and matching in memory. When the FTS table
+ * arrives it replaces the two steps below and leaves the matcher untouched.
  *
  * The stamp is the page row's, not the content row's, because reading page rows is what this does
  * anyway — and both halves of what is indexed move it: `saveDoc` through `updatePreview`, and a
  * rename directly.
  *
- * **The open page is never read from here.** Its last keystrokes are up to 400ms from being written,
- * so the caller passes its live units in and this indexes every *other* page (CS8).
+ * The open page is never read from here: its last keystrokes are up to 400ms from being written, so
+ * the caller passes its live units in and this indexes every other page.
  *
- * **Pictures are the one thing not cached with the page.** Their text is produced in the background
- * long after the document was decoded, so what is cached is where each picture *sits*
- * ([Entry.images]) and the words are joined on at query time. That is what lets results grow into an
- * open panel as reading finishes, with no invalidation protocol between the indexer and this cache.
+ * Pictures are the one thing not cached with the page. Their text is produced in the background
+ * long after the document was decoded, so what is cached is where each picture sits ([Entry.images])
+ * and the words are joined on at query time.
  */
 class ContentSearchIndex(private val repository: NotesRepository) {
 

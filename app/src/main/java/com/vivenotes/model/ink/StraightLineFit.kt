@@ -21,20 +21,17 @@ data class StraightLine(
 )
 
 /**
- * Decides whether a freehand trace was somebody drawing a straight line — `memory/inkPlan.md` §5.2,
- * scoped down to the one candidate the feature ships with.
+ * Decides whether a freehand trace was somebody drawing a straight line.
  *
- * §5.2 describes a classifier over line, ellipse and polygon. This is only its `Line` branch, and
- * that is the whole feature by request: *hold for straight line*, not hold for shape. The rejected
- * kinds are not stubbed here — a classifier with two dead branches invites someone to fill them in
- * without re-reading the thresholds, and the interaction is different anyway (a snapped circle needs
- * a live resize before the pen lifts, which a line does not).
+ * The line is the only candidate the feature ships with: hold for straight line, not hold for shape.
+ * The rejected kinds are not stubbed here — a classifier with dead branches invites someone to fill
+ * them in without re-reading the thresholds, and the interaction differs anyway, since a snapped
+ * circle needs a live resize before the pen lifts and a line does not.
  *
- * **Refusal is the safe answer and the common one.** A wrong snap destroys a mark the user made; a
- * refusal costs them nothing but the second they spent holding still. Every threshold below is
- * therefore set in the direction of keeping the freehand stroke, which is also why there are three
- * independent tests rather than one score — each catches a different way of not being a line, and a
- * single blended residual lets a bad trace pass by being only slightly bad in three ways at once.
+ * Refusal is the safe answer and the common one: a wrong snap destroys a mark the user made, while a
+ * refusal costs them the second they spent holding still. Every threshold below leans towards
+ * keeping the freehand stroke, which is also why there are three independent tests rather than one
+ * score — a single blended residual lets a bad trace pass by being slightly bad in three ways.
  */
 object StraightLineFit {
 
@@ -49,14 +46,13 @@ object StraightLineFit {
     /**
      * How far the trace may stray sideways from the straight line between its ends.
      *
-     * Proportional to that line's length, with a floor: 3.5% of a 200 dp rule is 7 dp, which is
-     * about what an unsupported hand produces at speed, while 3.5% of a 30 dp one is a third of a
-     * millimetre and would refuse every line that short. The floor is what makes the short case
-     * possible at all.
+     * Proportional to that line's length, with a floor: 3.5% of a 200 dp rule is 7 dp, about what an
+     * unsupported hand produces at speed, while 3.5% of a 30 dp one is a third of a millimetre. The
+     * floor is what makes the short case possible at all.
      *
-     * Measured as the **maximum** perpendicular distance rather than the RMS §5.2 proposes. RMS
-     * averages a single bad excursion away — an L drawn in one stroke is mostly straight, and its
-     * one corner is exactly what must not be averaged out.
+     * The maximum perpendicular distance rather than the RMS: RMS averages a single bad excursion
+     * away, and an L drawn in one stroke is mostly straight with one corner that must not be
+     * averaged out.
      */
     const val SIDEWAYS_FRACTION = 0.035f
     const val MIN_SIDEWAYS_DP = 3f
@@ -64,15 +60,13 @@ object StraightLineFit {
     /**
      * How far the trace may travel backwards along its own direction before it stops being one line.
      *
-     * This is the test that catches doubling back, and it is separate from the sideways one because
-     * a trace drawn right and then straight back left has a perpendicular error of nearly zero — it
-     * fits the line perfectly and is not one. Also proportional with a floor, and for the same
-     * reason: a fixed value is either useless on a long line or fatal on a short one.
+     * This catches doubling back, and is separate from the sideways test because a trace drawn right
+     * and then straight back left has a perpendicular error of nearly zero. Also proportional with a
+     * floor: a fixed value is either useless on a long line or fatal on a short one.
      *
-     * *Rejected:* comparing arc length to chord length, which is the obvious version of this test.
-     * It cannot distinguish doubling back from digitiser noise: per-sample jitter inflates arc
-     * length without moving the pen anywhere, so the threshold that tolerates a noisy device also
-     * tolerates a trace that went back on itself.
+     * Rejected: comparing arc length to chord length. It cannot distinguish doubling back from
+     * digitiser noise, so the threshold that tolerates a noisy device also tolerates a trace that
+     * went back on itself.
      */
     const val BACKTRACK_FRACTION = 0.06f
     const val MIN_BACKTRACK_DP = 4f
@@ -90,16 +84,14 @@ object StraightLineFit {
     /**
      * The straight line [points] is, or null to keep the freehand stroke.
      *
-     * [points] is interleaved x/y in page units, oldest first — the same layout
-     * [ShapeTrace] and [seedSegments] speak, so nothing between the pen and the document
-     * has to convert between point representations.
+     * [points] is interleaved x/y in page units, oldest first — the layout [ShapeTrace] and
+     * [seedSegments] speak, so nothing between the pen and the document has to convert.
      *
-     * The ends of the result are the ends of the trace, not the ends of a best-fit axis through it.
-     * Total least squares would place the line slightly better against a bowed trace, but a bowed
-     * trace is one this refuses anyway; against a trace it accepts the two agree to within the
-     * tolerance above, and *where the pen started and where it is now* is the answer the user can
-     * predict. Only [AXIS_SNAP_DEGREES] moves an end, and it pivots about the start so the line
-     * keeps the length it was drawn at.
+     * The ends of the result are the ends of the trace, not of a best-fit axis through it. Total
+     * least squares would place the line slightly better against a bowed trace, but a bowed trace is
+     * refused anyway, and "where the pen started and where it is now" is the answer the user can
+     * predict. Only [AXIS_SNAP_DEGREES] moves an end, pivoting about the start so the line keeps the
+     * length it was drawn at.
      */
     fun of(points: FloatArray): StraightLine? {
         if (points.size < 4 || points.size % 2 != 0) return null

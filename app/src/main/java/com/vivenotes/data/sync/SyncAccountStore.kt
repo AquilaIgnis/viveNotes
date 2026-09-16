@@ -63,17 +63,15 @@ data class SyncAccount(
 /**
  * Persists the device token across launches.
  *
- * **Plain DataStore in app-private storage, not an encrypted store**, and that is a decision rather
- * than an oversight. `EncryptedSharedPreferences` is deprecated in androidx.security and its
- * replacement is not settled; what it bought on a device with file-based encryption and a lock
- * screen was protection against another app reading the file, which app-private storage already
- * gives. The credential's real defence is that it is revocable: `DELETE /v1/devices/{id}` from any
- * other device, or the admin dashboard, kills it. Revisit if ViveNotes ever holds something that
+ * Plain DataStore in app-private storage rather than an encrypted store, and that is a decision:
+ * `EncryptedSharedPreferences` is deprecated in androidx.security and its replacement is not
+ * settled, and what it bought on a device with file-based encryption and a lock screen was
+ * protection against another app reading the file, which app-private storage already gives. The
+ * credential's real defence is that it is revocable. Revisit if ViveNotes ever holds something that
  * cannot be revoked.
  *
- * One JSON blob rather than separate keys, for the reason [com.vivenotes.data.PenSettingsStore] uses
- * one per pen: these values are only ever read and written together, and a half-written
- * registration is a credential that cannot work.
+ * One JSON blob rather than separate keys: these values are only ever read and written together,
+ * and a half-written registration is a credential that cannot work.
  */
 class SyncAccountStore(context: Context) {
 
@@ -88,22 +86,19 @@ class SyncAccountStore(context: Context) {
     /**
      * This device's stable, server-scoped app id, assigned on first use and retained locally.
      *
-     * **Deliberately outside [SyncAccount] and deliberately untouched by [clear].** It is what the
-     * Google routes send as `device.installationId`, and the server uses it to recognise a returning
-     * installation: signing out and back in then rotates the one device row instead of adding a
-     * second. Tie it to the account record and every disconnect would mint a new identity, which is
-     * exactly the growing list of unprunable "Pixel Tablet" rows the device-name suffix exists to
-     * make readable.
+     * Deliberately outside [SyncAccount] and untouched by [clear]. It is what the Google routes send
+     * as `device.installationId`, and the server uses it to recognise a returning installation, so
+     * signing out and back in rotates one device row instead of adding a second. Tying it to the
+     * account record would mint a new identity on every disconnect.
      *
-     * New installations derive the UUID from `ANDROID_ID` plus [serverBaseUrl]. That Android value
-     * is scoped by Android to this signing key, user, and device; hashing it with the server origin
-     * means neither the raw value nor a cross-server identifier leaves the app. Unlike the previous
-     * random UUID, the result survives reinstalling or clearing app data on the same tablet—the
-     * failure mode that otherwise produced several active rows carrying the same device suffix.
-     * Existing stored random UUIDs are retained, avoiding a one-time duplicate on upgrade.
+     * New installations derive the UUID from `ANDROID_ID` plus [serverBaseUrl]. Android scopes that
+     * value to this signing key, user and device; hashing it with the server origin means neither
+     * the raw value nor a cross-server identifier leaves the app. Unlike the previous random UUID it
+     * survives reinstalling or clearing app data on the same tablet. Existing stored random UUIDs
+     * are retained, so an upgrade produces no duplicate.
      *
      * The read-then-write is safe against two callers because DataStore serialises `edit`
-     * transactions: the second one sees the first one's value and returns it rather than replacing it.
+     * transactions: the second sees the first's value and returns it.
      */
     @SuppressLint("HardwareIds")
     suspend fun installationId(serverBaseUrl: String): String {

@@ -8,7 +8,7 @@ import com.vivenotes.ai.InkTextRegion
 import com.vivenotes.ink.InkBounds
 
 /**
- * What a hit was found in — `memory/searchPlan.md` CS3.
+ * What a hit was found in.
  *
  * Ink, equations, shapes and pictures are absent on purpose rather than merely unimplemented: the
  * plan's table says why for each, and adding one means deciding what its snippet reads like and what
@@ -21,11 +21,11 @@ enum class ContentKind {
     /** A block of a text container — a text box. */
     Text,
 
-    /** A block of one table cell — the "grid of text fields" of `memory/tablePlan.md` TA15. */
+    /** A block of one table cell — the "grid of text fields" of */
     Cell,
 
     /**
-     * One line PP-OCRv5 read inside a picture — `memory/imageOcrPlan.md` IO5.
+     * One line PP-OCRv5 read inside a picture.
      *
      * The only kind whose text nobody typed. That is why it is weighted below the others and why
      * opening one selects the picture rather than pretending to put a caret in it.
@@ -37,13 +37,13 @@ enum class ContentKind {
 }
 
 /**
- * One searchable block, and everything needed to go back to it — CS4.
+ * One searchable block, and everything needed to go back to it.
  *
  * A block rather than a page, so a result is a real line of the note and the caret can land on the
  * word that matched.
  *
  * [blockStart] is this block's offset inside its box's *editor* text, which is what makes
- * `blockStart + span.start` an argument `setSelection` understands (CS5). Zero for a title, which
+ * `blockStart + span.start` an argument `setSelection` understands. Zero for a title, which
  * is a field of its own with nothing before it.
  */
 data class ContentUnit(
@@ -72,7 +72,7 @@ data class ContentHit(
     val score: Int,
     val spans: List<MatchSpan>,
 ) {
-    /** The match in editor coordinates — the pair the reveal selects (CS5, CS9). */
+    /** The match in editor coordinates — the pair the reveal selects. */
     val editorStart: Int get() = unit.blockStart + spans.first().start
     val editorEnd: Int get() = unit.blockStart + spans.last().end
 }
@@ -85,7 +85,7 @@ data class ContentSnippet(val text: String, val spans: List<MatchSpan>)
  *
  * The open page does not come through here — its units are built from live editor state instead, so
  * that search can find what was typed a moment ago rather than what was last written 400ms behind it
- * (CS8). Both routes share [blockUnits], which is where the offsets are computed, so the two can not
+ * Both routes share [blockUnits], which is where the offsets are computed, so the two can not
  * drift apart.
  */
 fun PageDoc.contentUnits(pageId: String, sectionId: String, title: String): List<ContentUnit> {
@@ -102,7 +102,7 @@ fun PageDoc.contentUnits(pageId: String, sectionId: String, title: String): List
             )
             is Outline.Table -> outline.rows.forEach { row ->
                 row.cells.forEach { cell ->
-                    // An ink table's cells hold no blocks at all (TA15), so this contributes nothing
+                    // An ink table's cells hold no blocks at all, so this contributes nothing
                     // for one without needing to ask whether it is one.
                     units += blockUnits(
                         pageId = pageId,
@@ -136,7 +136,7 @@ fun titleUnit(pageId: String, sectionId: String, title: String): ContentUnit? =
  * One unit per non-blank block, each stamped with where it begins in the box's editor text.
  *
  * The offsets follow `SpannableCodec.render` exactly: blocks are concatenated in order with a single
- * newline between them, and an equation run contributes one character (CS5). Blank blocks are skipped
+ * newline between them, and an equation run contributes one character. Blank blocks are skipped
  * as results but still counted in the running offset — they are the empty lines of the note, and
  * dropping their length would push every later match off by one per blank line.
  */
@@ -170,7 +170,7 @@ fun blockUnits(
 }
 
 /**
- * Where one picture sits on one page — `memory/imageOcrPlan.md` IO5.
+ * Where one picture sits on one page.
  *
  * Held instead of units because the *text* of a picture arrives later than the page does: indexing
  * runs in the background, so the placements are cached with the decoded document and the words are
@@ -246,7 +246,7 @@ fun inkUnits(pageId: String, sectionId: String, regions: List<InkTextRegion>): L
     }
 
 /**
- * Ranks [units] against [query] — CS6.
+ * Ranks [units] against [query].
  *
  * The matcher decides whether a block matches and how well; this adds the one piece of context it
  * cannot see, which is what kind of field the block was in. A title carries a page's subject, so a

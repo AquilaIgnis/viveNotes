@@ -18,21 +18,18 @@ data class TextMatch(val score: Int, val spans: List<MatchSpan>) {
 }
 
 /**
- * Typo-tolerant matching of a query against one block of text — `memory/searchPlan.md` CS6.
+ * Typo-tolerant matching of a query against one block of text.
  *
- * **Every term must match.** A query is split on whitespace and each term scored independently, so
- * adding a word narrows the search rather than widening it. That is the behaviour anyone expects from
- * a search box, and it is the opposite of what an OR would do.
+ * Every term must match. A query is split on whitespace and each term scored independently, so
+ * adding a word narrows the search rather than widening it.
  *
  * Each term takes the best of three, in descending order of confidence: a substring, a word whose
- * *prefix* is within a typo budget of the term, or a subsequence inside a single word. The one rule
- * worth stating is the one that is absent — **free subsequence across the whole block is not used.**
- * It is the classic fuzzy-finder rule, and on prose it matches almost everything: `abc` would find
- * any line containing an a, later a b and later a c, which is most lines. Bounding it to one word
- * keeps `cntr` → `container` and drops the noise.
+ * prefix is within a typo budget of the term, or a subsequence inside a single word. The rule worth
+ * stating is the absent one — free subsequence across the whole block is not used. It is the classic
+ * fuzzy-finder rule and on prose it matches almost everything: `abc` would find any line containing
+ * an a, later a b and later a c. Bounding it to one word keeps `cntr` → `container`.
  *
- * Pure Kotlin with no Android types, so this is testable on the JVM — which, with the emulator broken
- * (R10), is the difference between a tested matcher and an unverified one.
+ * Pure Kotlin with no Android types, so this is testable on the JVM.
  */
 object FuzzyMatcher {
 
@@ -238,7 +235,7 @@ object FuzzyMatcher {
 
     private val WHITESPACE = Regex("\\s+")
 
-    // The three tiers of CS6, far enough apart that no combination of bonuses lets a lower tier
+    // The three tiers, far enough apart that no combination of bonuses lets a lower tier
     // outrank a higher one.
     private const val SUBSTRING = 100
     private const val TYPO = 60

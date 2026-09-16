@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * A line end held to the page — `memory/inkPlan.md` §5.4 SD12.
+ * A line end held to the page.
  *
  * The seam this exists for is narrow and easy to miss: the layers clamp where the *finger* is, and
  * the snap then turns the line about its far end, which can take the result somewhere the finger was

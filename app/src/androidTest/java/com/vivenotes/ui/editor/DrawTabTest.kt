@@ -398,7 +398,7 @@ class DrawTabTest {
     // --- the ruler -------------------------------------------------------------------------------
 
     /**
-     * A ruler is not a tool — `memory/rulerPlan.md` RD1. It is something you draw *against*, so it
+     * A ruler is not a tool. It is something you draw *against*, so it
      * must not disarm the pen you were going to draw along it with.
      */
     @Test
@@ -411,7 +411,7 @@ class DrawTabTest {
         assertTrue("laying down a ruler changed the armed tool", selected == null)
     }
 
-    /** Its tap has to be able to mean *away*, or the ruler could never be put down — RD7. */
+    /** Its tap has to be able to mean *away*, or the ruler could never be put down. */
     @Test
     fun tappingTheRulerWhileItIsOutPutsItAwayRatherThanOpeningSettings() {
         setTab(rulerOut = true)

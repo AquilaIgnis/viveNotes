@@ -209,16 +209,14 @@ object SpannableCodec {
     /**
      * Strips [mark] from the range, matching by kind so any size replaces any other size.
      *
-     * Both sides are erased before comparing. Erasing only the argument compared a span's real
-     * value against a zeroed one, which never matched — so setting a second size left the first
-     * span in place underneath it. The text drew in the newer size while the older span was still
-     * there to be read back, which is how a 20pt selection came to report itself as 12.
+     * Both sides are erased before comparing. Erasing only the argument compared a span's real value
+     * against a zeroed one, which never matched, so setting a second size left the first span in
+     * place underneath it — the text drew in the newer size while the older span was still there to
+     * be read back.
      *
-     * A script mark is two spans and only one of them is a [Mark]: the baseline shift, plus the
-     * [ScriptSizeSpan] that shrinks it. Matching on [markOf] alone therefore took the shift and left
-     * the reduction — invisible to everything that reads marks back, so no round-trip test could see
-     * it, and compounded by the next apply. Four taps of the button left five of them and text at
-     * under a quarter size, which is the "stacking rather than toggling" this pairing prevents.
+     * A script mark is two spans and only one is a [Mark]: the baseline shift, plus the
+     * [ScriptSizeSpan] that shrinks it. Matching on [markOf] alone took the shift and left the
+     * reduction, invisible to everything that reads marks back and compounded by the next apply.
      */
     fun removeMark(text: Spannable, mark: Mark, start: Int, end: Int) {
         val kind = mark.erased()

@@ -18,7 +18,7 @@ data class ImageTextLine(
     val corners: List<TextDetection.Point>,
 )
 
-/** Everything read out of one picture — `memory/imageOcrPlan.md` IO4. */
+/** Everything read out of one picture. */
 data class ImageTextResult(
     val lines: List<ImageTextLine>,
     val meanConfidence: Float,
@@ -69,11 +69,9 @@ internal fun preprocessDetection(image: Bitmap, limit: Int = DETECTION_LIMIT): D
  * `setPolyToPoly` with four points is a full perspective transform, which is what a photographed
  * page needs: its lines are not merely rotated, they are foreshortened.
  *
- * **The quad's long side becomes the strip's width**, so a line written down the page is read along
- * its own axis rather than squeezed across it. Which *end* of that axis comes first cannot be known
- * without an orientation classifier, so it is fixed rather than guessed: the corner after the
- * top-left leads. For the English dictionary this app bundles, sideways text is a curiosity and
- * upside-down text is not worth a second model.
+ * The quad's long side becomes the strip's width, so a line written down the page is read along its
+ * own axis. Which end of that axis comes first cannot be known without an orientation classifier,
+ * so it is fixed rather than guessed: the corner after the top-left leads.
  */
 internal fun cropQuad(image: Bitmap, quad: TextDetection.Quad, height: Int = CROP_HEIGHT): Bitmap? {
     val longSide = max(quad.width, quad.height)

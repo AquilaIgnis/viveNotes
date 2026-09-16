@@ -24,18 +24,16 @@ import java.security.MessageDigest
  * Where imported pictures live.
  *
  * Bytes go to `filesDir/attachments/<sha256>`; what is known about them goes to the `attachments`
- * table. `AttachmentEntity` argues for that split. This class owns the other half of the decision —
- * **what gets stored in the first place.**
+ * table. This class owns the other half of the decision: what gets stored in the first place.
  *
- * **Every import is re-encoded, and that is the point.** A phone camera produces something like
- * 4000 × 3000; a page shows it about 700 dp wide. Storing the original would keep ten times the bytes
- * to draw the same picture, and — the part that actually hurts — every decode of it would allocate
- * the full bitmap: 4000 × 3000 at 4 bytes a pixel is **48 MB of native memory for one photograph**,
- * against a couple of hundred kilobytes re-encoded. A page with a handful of those does not run out
- * of disk, it runs out of process.
+ * Every import is re-encoded. A phone camera produces something like 4000 × 3000 and a page shows
+ * it about 700 dp wide, so storing the original would keep ten times the bytes and — the part that
+ * hurts — every decode would allocate the full bitmap: 48 MB of native memory for one photograph,
+ * against a couple of hundred kilobytes re-encoded. A page with a handful of those runs out of
+ * process rather than out of disk.
  *
- * So [MAX_DIMENSION] is a memory budget written as a length, and the re-encode is where an image
- * feature is made affordable. It is applied once, at the door, rather than at every draw.
+ * So [MAX_DIMENSION] is a memory budget written as a length, applied once at the door rather than
+ * at every draw.
  */
 class AttachmentStore(
     private val context: Context,
@@ -51,14 +49,13 @@ class AttachmentStore(
      * Bumped whenever bytes appear that were not here before — today, a picture another device drew
      * on a page this one is already showing.
      *
-     * **A page open when its picture arrives has to be told.** `ImageLayer` caches a failed decode
-     * exactly like a successful one, deliberately, so that a broken picture is not re-read on every
-     * recomposition; before sync that was safe, because the only way a file appeared afterwards was
-     * an import that rewrote the page under it. A pulled document changes that: the frame lands
-     * seconds before the bytes it points at, and without this the reader sees a broken plate until
-     * they navigate away and back. The ink twin of this is `data/sync/RemoteInkSignal.kt`, and it is
-     * a counter rather than a set of ids for the same reason `StateFlow` was chosen there — a
-     * collector that misses an intermediate value still sees that *something* landed, and the only
+     * `ImageLayer` caches a failed decode exactly like a successful one, deliberately, so a broken
+     * picture is not re-read on every recomposition. A pulled document makes that unsafe: the frame
+     * lands seconds before the bytes it points at, and without this the reader sees a broken plate
+     * until they navigate away and back.
+     *
+     * A counter rather than a set of ids, for the reason `data/sync/RemoteInkSignal.kt` is one: a
+     * collector that misses an intermediate value still sees that something landed, and the only
      * thing anyone does with it is retry the reads that failed.
      */
     override val arrivals: StateFlow<Long> = _arrivals.asStateFlow()
@@ -235,19 +232,16 @@ class AttachmentStore(
         /**
          * Re-encoded rather than stored as received, so [MAX_DIMENSION] is what reaches the disk.
          *
-         * **WebP rather than JPEG, and the alpha channel is the reason.** JPEG has none, so every
-         * imported PNG came back with its transparent regions filled — a logo or a cropped sticker
-         * arrived on the page sitting in a black box. Lossy WebP carries alpha (stored losslessly
-         * beside the lossy colour) and is smaller than JPEG at the same quality besides, so the fix
-         * for the transparency bug also shrinks what a sync will one day have to carry.
+         * WebP rather than JPEG, because JPEG has no alpha channel: every imported PNG came back
+         * with its transparent regions filled, so a logo or a cropped sticker arrived on the page in
+         * a black box. Lossy WebP carries alpha and is smaller than JPEG at the same quality.
          *
          * Lossy for both cases rather than branching on [Bitmap.hasAlpha]: that flag reports the
-         * bitmap's *config*, not whether any pixel is actually transparent, so a photograph that
+         * bitmap's config, not whether any pixel is actually transparent, so a photograph that
          * happened to arrive as RGBA would be stored lossless at many times the size.
          *
-         * **Only new imports are affected.** Nothing decodes by extension — files are named by hash
-         * with no suffix and `ImageDecoder` sniffs the container — so the JPEGs already on disk stay
-         * readable, and [AttachmentEntity.mimeType] records per row which is which.
+         * Only new imports are affected. Nothing decodes by extension — files are named by hash
+         * and `ImageDecoder` sniffs the container — so the JPEGs already on disk stay readable.
          */
         private const val MIME_TYPE = "image/webp"
 

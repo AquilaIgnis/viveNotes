@@ -31,14 +31,13 @@ internal object SettingsTags {
  * The Settings tab.
  *
  * Integrated — local model installation, and later the recognition commands — lives here rather than
- * on a tab of its own. Which models are installed is a property of *this device*, the same kind of
- * answer as the rest of this tab will hold; it is not something you do to a page, which is what
- * every other tab is for. About is the same kind of answer about the app itself.
+ * on a tab of its own: which models are installed is a property of this device, not something you do
+ * to a page, which is what every other tab is for. About is the same kind of answer about the app.
  *
  * Link Previews is on this tab for the same test and not because it is a display option. What the
- * switch really governs is whether pasting a YouTube link makes this device fetch from Google's
- * image host — the app's only request to somewhere its owner did not configure — so it is a fact
- * about the device, and it belongs beside the other two rather than under View.
+ * switch governs is whether pasting a YouTube link makes this device fetch from Google's image host
+ * — the app's only request to somewhere its owner did not configure — so it is a fact about the
+ * device.
  */
 @Composable
 internal fun SettingsTab(

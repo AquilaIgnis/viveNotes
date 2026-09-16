@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The two ends of a line, and what a handle on one of them may do — `memory/inkPlan.md` §5.4 SD12.
+ * The two ends of a line, and what a handle on one of them may do.
  *
  * Geometry, so it belongs here rather than on a device. The failures it guards are the two that make
  * an endpoint handle worth having at all: an end that cannot leave its own axis is a corner handle
@@ -67,7 +67,7 @@ class ShapeEndTest {
 
     @Test
     fun `a shape with a box offers no ends at all`() {
-        // The gate is the kind. A rectangle's ends are its corners, and those are AD7's handles.
+        // The gate is the kind. A rectangle's ends are its corners, which are the resize handles.
         listOf(ShapeKind.Rectangle, ShapeKind.Ellipse, ShapeKind.L).forEach { kind ->
             assertTrue("$kind offered ends", seeded(kind, 0f, 0f, 80f, 40f).ends().isEmpty())
         }

@@ -64,7 +64,7 @@ class NotesApplication : Application() {
     }
 
     /**
-     * Export as PDF — `memory/pdfExportPlan.md`.
+     * Export as PDF.
      *
      * Lazy like the rest, and it earns it more than most: touching this builds a text measurer and a
      * renderer, and an install whose owner never exports never pays for either.
@@ -75,12 +75,12 @@ class NotesApplication : Application() {
     val penSettings: PenSettingsStore by lazy { PenSettingsStore(this) }
     val aiModels: AiModelStore by lazy { AiModelStore(this) }
 
-    /** Registering this installation with a self-hosted server — `memory/accountPlan.md`. */
+    /** Registering this installation with a self-hosted server. */
     val syncAccounts: SyncAccounts by lazy { SyncAccounts(this, database = database, attachments = attachments) }
     val recognitionEngine: OnnxInkRecognitionEngine by lazy { OnnxInkRecognitionEngine(aiModels) }
 
     /**
-     * Reads pictures for the Content panel — `memory/imageOcrPlan.md`.
+     * Reads pictures for the Content panel.
      *
      * Lazy like everything else here, which matters more for this one: touching it opens ONNX
      * Runtime, and an install whose owner never searches should never pay for that.
@@ -101,7 +101,7 @@ class NotesApplication : Application() {
      */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** Managed Play purchase + server entitlement lifecycle — `memory/billingPlan.md`. */
+    /** Managed Play purchase + server entitlement lifecycle. */
     val managedSubscription: ManagedSubscriptionController by lazy {
         ManagedSubscriptionController(this, syncAccounts, appScope)
     }

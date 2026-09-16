@@ -23,7 +23,7 @@ import com.vivenotes.ink.Ruler
 import com.vivenotes.ui.theme.ViveNotesTheme
 
 /**
- * The ruler's own gesture, composed alone — `memory/rulerPlan.md` RD4.
+ * The ruler's own gesture, composed alone.
  *
  * Written because driving this through the running app proved worthless: the dial travels with the
  * ruler, so every check needed a fresh screenshot to aim at, and a tap that misses lands on the page

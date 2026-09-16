@@ -36,24 +36,22 @@ private const val DIVISIONS = 10
 private const val DP_PER_CM = PageStyle.DP_PER_INCH / 2.54f
 
 /**
- * Moves and turns the ruler — `memory/rulerPlan.md` RD4 and RD6.
+ * Moves and turns the ruler.
  *
- * **One finger on it slides it; two twist it.** That is how every drawing app does this and it is
- * what the object affords: you hold a ruler, you do not operate a handle bolted to its end.
+ * One finger on it slides it; two twist it. That is what the object affords: you hold a ruler, you
+ * do not operate a handle bolted to its end.
  *
- * The reason this can coexist with pinch-to-zoom is ordering, not cleverness. This detector is
- * mounted *before* [detectPinchZoom] on the same ancestor node, so on the `Initial` pass it is asked
- * first; if the gesture began on the ruler it consumes, and the pinch stands down. A gesture that
- * began anywhere else is never touched, and the page zooms exactly as it did.
+ * It can coexist with pinch-to-zoom because of ordering: this detector is mounted before
+ * [detectPinchZoom] on the same ancestor node, so on the `Initial` pass it is asked first. If the
+ * gesture began on the ruler it consumes and the pinch stands down; a gesture that began anywhere
+ * else is never touched.
  *
- * **However many fingers are on it, they are one hand** — RD4b. Everything below is measured
- * against the *centroid* of whatever is currently down, and the centroid is re-seeded rather than
- * carried whenever the set of pointers changes. Both halves matter: no single finger can be
- * nominated as the one that carries the ruler, because `changes` is ordered by pointer index and
- * the moment the hand adds or lifts one the "first" pressed pointer becomes a different finger — a
- * delta taken from it is then the span of the hand rather than the distance it moved, and the ruler
- * jumps an inch sideways. Repeated every time a finger settles, drifts off, or lands a frame late,
- * that is the flicker that made a second finger unusable while one worked.
+ * However many fingers are on it, they are one hand. Everything below is measured against the
+ * centroid of whatever is currently down, and the centroid is re-seeded rather than carried whenever
+ * the set of pointers changes. No single finger can be nominated as the one that carries the ruler,
+ * because `changes` is ordered by pointer index and the moment the hand adds or lifts one the
+ * "first" pressed pointer becomes a different finger — a delta taken from it is then the span of the
+ * hand rather than the distance it moved.
  *
  * [rulerAt] is read per gesture rather than captured, because the ruler moves as the gesture runs.
  */
@@ -154,12 +152,11 @@ internal data class RulerPaint(val body: Int, val edge: Int, val mark: Int)
  *
  * Through the page → view matrix, like the lasso and the eraser cursor, so it sits where it was put
  * on the page. Line weights are divided back out by the matrix's scale so the edge stays a hair
- * thick at 400% instead of becoming a bar.
+ * thick at 400%.
  *
  * The graduations are a real inch apart, which is true rather than decorative: the page is laid out
- * at [PageStyle.DP_PER_INCH] and the ruler is placed in those units (RD3). They run *in* from each
- * long edge with the numerals down the middle, which is the arrangement a ruler actually has — the
- * first version marched them in from both sides until they nearly met, and it read as a table.
+ * at [PageStyle.DP_PER_INCH] and the ruler is placed in those units. They run in from each long edge
+ * with the numerals down the middle, which is the arrangement a ruler actually has.
  */
 internal fun drawRuler(
     canvas: android.graphics.Canvas,
@@ -220,15 +217,15 @@ internal fun drawRuler(
 }
 
 /**
- * The straightedge, drawn to `memory/references/ruler.png`.
+ * The straightedge, drawn to the reference plate.
  *
- * Measured off that image rather than invented: a **centimetre** scale with millimetre graduations
- * (10 fine ticks to the unit, at 140.5px to a unit in a 2914px-wide plate — 62.7dp, and a centimetre
- * is 62.99dp on a page laid out at 160dp to the inch). The tick hierarchy is deliberately shallow —
- * 12.6%, 15.7% and 17.5% of the band — because that density with that little contrast is what makes
- * a scale read as a scale instead of as a row of dividers.
+ * Measured off that image rather than invented: a centimetre scale with millimetre graduations
+ * (10 fine ticks to the unit, at 140.5px to a unit in a 2914px-wide plate — 62.7dp, against 62.99dp
+ * for a centimetre on a page laid out at 160dp to the inch). The tick hierarchy is deliberately
+ * shallow — 12.6%, 15.7% and 17.5% of the band — because that density with that little contrast is
+ * what makes a scale read as a scale instead of as a row of dividers.
  *
- * Numbers count **outward from 0 at the middle**, on both edges, and the underside's are upside down:
+ * Numbers count outward from 0 at the middle, on both edges, and the underside's are upside down:
  * the ruler is a physical thing and its far edge faces the other way.
  */
 private fun drawStraight(
@@ -280,14 +277,13 @@ private fun drawStraight(
 /**
  * The degree readout — the circle in the reference plate.
  *
- * The ring of ticks turns with the ruler, which is what makes it a gauge rather than a badge; the
- * number inside is counter-rotated so it stays the right way up at any angle. Tapping it steps the
- * ruler round an eighth of a turn — see [Ruler.turnedToNextEighth].
+ * The ring of ticks turns with the ruler, which makes it a gauge rather than a badge; the number
+ * inside is counter-rotated so it stays the right way up at any angle. Tapping it steps the ruler
+ * round an eighth of a turn — see [Ruler.turnedToNextEighth].
  *
  * Both rulers carry one. On the semicircle it says something different from the numbers around the
- * arc, and the difference is worth holding on to: **the arc measures what you draw, the dial
- * measures the protractor itself.** Drawn at the origin — the caller translates to
- * [Ruler.dialCenter].
+ * arc: the arc measures what you draw, the dial measures the protractor itself. Drawn at the origin
+ * — the caller translates to [Ruler.dialCenter].
  */
 private fun drawDial(
     canvas: android.graphics.Canvas,

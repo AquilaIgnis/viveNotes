@@ -56,13 +56,11 @@ data class SyncSummary(
     val pushed: Int,
     val conflictsResolved: Int,
     /**
-     * Attachment *bytes* moved, in either direction — S5's other half.
+     * Attachment bytes moved, in either direction.
      *
-     * One number rather than two because a picture is the unit a reader cares about and the
-     * direction is not: what the count answers is "why did that run take a minute", and both
-     * answers are "it was carrying photographs". The change counts above never include them; a
-     * picture's metadata row is one `pulled`/`pushed` like any other entity, and its megabytes go
-     * up and down a route of their own.
+     * One number rather than two, because what the count answers is "why did that run take a
+     * minute" and both answers are "it was carrying photographs". The change counts above never
+     * include them: a picture's metadata row is one `pulled`/`pushed` like any other entity.
      */
     val pictures: Int = 0,
 )
@@ -102,10 +100,10 @@ sealed interface SyncRunResult {
 class HierarchySync(
     private val db: NotesDatabase,
     private val client: SyncTransport = SyncServerClient(),
-    /** Where remotely applied ink is announced, so an open canvas can absorb it — IS5. */
+    /** Where remotely applied ink is announced, so an open canvas can absorb it. */
     private val remoteInk: RemoteInkSignal = RemoteInkSignal(),
     /**
-     * Attachment bytes, which never travel through the change protocol — S5.
+     * Attachment bytes, which never travel through the change protocol.
      *
      * Required rather than optional: a build that synced documents without their pictures would
      * push pages the server refuses (`missing_blob`) and pull pages it cannot draw, and both look
@@ -144,12 +142,11 @@ class HierarchySync(
     private val remoteInkPages = mutableSetOf<String>()
 
     /**
-     * Digests this run has given up on delivering, and everything that names one must stop naming
-     * it — see [undeliverable].
+     * Digests this run has given up on delivering; everything naming one must stop — see
+     * [undeliverable].
      *
-     * Cleared at the start of every run because "this device cannot produce those bytes" is a fact
-     * about a moment: an import, a `.vive` restore or a download from another device puts the file
-     * back, and the next run should try again rather than carry a verdict from an hour ago.
+     * Cleared at the start of every run: an import, a `.vive` restore or a download from another
+     * device puts the file back, so the next run should try again.
      */
     private val undeliverableBlobs = mutableSetOf<String>()
 
@@ -158,8 +155,7 @@ class HierarchySync(
 
     /**
      * Bodies written by this transaction whose pictures have still to be counted. A plain list for
-     * the reason [remoteInkPages] is a plain set: a run is serialized and nothing outside one ever
-     * touches it.
+     * the reason [remoteInkPages] is a plain set.
      */
     private val pictureRecounts = mutableListOf<PictureRecount>()
 
@@ -364,15 +360,12 @@ class HierarchySync(
             // the pull would destroy it; by here those bytes have gone up.
             enforceCloudOnly()
 
-            // **Last, after this device's own writes have gone out.** A first sync of a
-            // photographed notebook is tens of megabytes of pictures, and putting them ahead of the
-            // push would hold a page somebody just typed behind the pictures on a page nobody has
-            // opened. Nothing else in a run waits on bytes, and a picture that does not arrive this
-            // minute arrives the next.
+            // Last, after this device's own writes have gone out. A first sync of a photographed
+            // notebook is tens of megabytes, and putting them ahead of the push would hold a page
+            // somebody just typed behind pictures on a page nobody has opened.
             //
-            // Skipped entirely on an idle run, which SD6 requires to cost one `GET /v1/cursor` and
-            // nothing else: with nothing pulled, nothing pushed and no gap left by an earlier pass,
-            // there is nothing new to be missing.
+            // Skipped entirely on an idle run, which must cost one `GET /v1/cursor` and nothing
+            // else: with nothing pulled or pushed there is nothing new to be missing.
             val attachmentsReady = if (
                 pulled > 0 || pushed > 0 || conflicts > 0 || downloadsOutstanding
             ) {
@@ -393,11 +386,11 @@ class HierarchySync(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (badLocalState: Exception) {
-            // Logged, not just classified. [PermanentSyncFailure.LocalData] tells the screen that
-            // this run cannot succeed by being retried, and tells whoever has to fix it nothing at
-            // all — and this is the one failure whose cause is a stack trace rather than a status
-            // code. A run that fails here also leaves the cursor where it was, so a silent version
-            // of this is a device that re-pulls the same delta for ever with nothing to show for it.
+            // Logged, not just classified. [PermanentSyncFailure.LocalData] tells the screen this
+            // run cannot succeed by being retried and tells whoever has to fix it nothing at all,
+            // and this is the one failure whose cause is a stack trace rather than a status code.
+            // A run failing here also leaves the cursor where it was, so a silent version of this
+            // re-pulls the same delta for ever.
             Log.e(TAG, "Hierarchy sync could not apply a change locally", badLocalState)
             SyncRunResult.Failed(PermanentSyncFailure.LocalData)
         } finally {
@@ -461,22 +454,18 @@ class HierarchySync(
      * Throws away this installation's seeded starter notebook once the first pull shows it is
      * joining an account that already has a tree.
      *
-     * Gating [com.vivenotes.data.NotesRepository.seedIfEmpty] is not enough on its own, because the
-     * order that actually happens is the other way round: a clean install seeds "My Notebook" on its
-     * first launch so the app does not open on a void, and only *then* can its owner open Account
-     * and connect — the UI offers no earlier moment. Activation enqueues that starter like any other
-     * offline row, pushes it, and the account grows one more identical "My Notebook" for every
-     * device that ever joins. Three of them is how this was found.
+     * Gating [com.vivenotes.data.NotesRepository.seedIfEmpty] is not enough, because the order that
+     * happens is the other way round: a clean install seeds "My Notebook" on first launch so the app
+     * does not open on a void, and only then can its owner connect. Activation enqueues that starter
+     * like any other offline row and the account grows one more "My Notebook" per device that joins.
      *
-     * The starter is not a contribution, it is packaging, and `REPLACEABLE_STARTER_KEY` is what says
-     * so: it is written when the starter is seeded and cleared by the first content mutation of any
-     * kind, so its presence means nothing under here has ever been touched. Rows are removed outright
-     * rather than tombstoned because no server has ever seen them — there is nothing for anyone to
-     * learn — and the queued push is pruned in the same transaction.
+     * `REPLACEABLE_STARTER_KEY` is written when the starter is seeded and cleared by the first
+     * content mutation of any kind, so its presence means nothing under it has ever been touched.
+     * Rows are removed outright rather than tombstoned because no server has seen them, and the
+     * queued push is pruned in the same transaction.
      *
-     * Runs after the pull and before the push, which is the only window where "the account has a
-     * tree of its own" is a fact rather than a guess. An account that really is empty keeps its
-     * starter and uploads it, exactly as the first device did.
+     * Runs after the pull and before the push — the only window where "the account has a tree of its
+     * own" is a fact rather than a guess. A genuinely empty account keeps its starter and uploads it.
      */
     private suspend fun dropStarterSupersededByAccount() {
         val starterId = metadata.value(NotesRepository.REPLACEABLE_STARTER_KEY) ?: return
@@ -602,19 +591,16 @@ class HierarchySync(
                 Log.i(TAG, "Pull carried ${purged.size} purge(s) the account erased for good")
             }
 
-            // A kind this build does not know stops the run, and stops it *before* the cursor moves.
+            // A kind this build does not know stops the run, and stops it before the cursor moves.
             //
             // `parseRemoteChange` returns null for an unrecognised kind, and dropping those rows
-            // while committing the cursor is silent, permanent data loss: the cursor is a promise
-            // that everything below it has been applied, so the next pull starts above rows this
-            // device skipped and never asks for them again. Found on 2026-08-17 for real — a tablet
-            // still running the build before ink pulled a delta carrying 67 strokes, advanced past
-            // them, and reported itself caught up while a page it shows was missing every stroke
-            // another device had drawn on it.
+            // while committing the cursor is silent, permanent data loss: the cursor promises that
+            // everything below it has been applied, so the next pull starts above the skipped rows
+            // and never asks for them again. Seen for real — a tablet on a pre-ink build pulled a
+            // delta carrying 67 strokes, advanced past them, and reported itself caught up.
             //
             // Refusing to advance turns that into a device that stops syncing until it is upgraded,
-            // which is the honest failure: recoverable by installing a newer build, where losing the
-            // rows is not recoverable by anything.
+            // which is recoverable where losing the rows is not.
             if (parsed.size != page.changes.size) {
                 Log.e(
                     TAG,
@@ -626,16 +612,14 @@ class HierarchySync(
 
             // Parents before children, which the stream order does not give.
             //
-            // The server orders a delta by `(change_seq, kind_rank, id)`, so a notebook precedes its
-            // sections *within one sequence value* — but a row's `change_seq` is the seq of its last
-            // write, not of its creation. Rename a notebook after its sections were created and the
-            // notebook moves to a higher seq than its own children, so a client pulling from below
-            // both receives the sections first and Room refuses them: `SQLiteConstraintException:
-            // FOREIGN KEY constraint failed`. That aborts the transaction, the cursor is not
-            // committed, and the device re-pulls the same delta for ever.
+            // The server orders a delta by `(change_seq, kind_rank, id)`, but a row's `change_seq`
+            // is the seq of its last write, not of its creation. Rename a notebook after its
+            // sections were created and it moves above its own children, so a client pulling from
+            // below both receives the sections first and Room refuses them with a FOREIGN KEY
+            // failure — aborting the transaction, leaving the cursor uncommitted, and re-pulling the
+            // same delta for ever.
             //
-            // A stable sort by kind is enough for a two-level hierarchy and keeps the server's
-            // ordering inside each kind.
+            // A stable sort by kind is enough for a two-level hierarchy.
             val ordered = (carried + parsed).sortedBy { change -> change.kind.rank }
 
             // Sorting cannot help when a parent lands in a *later page* than its child, which needs
@@ -756,11 +740,12 @@ class HierarchySync(
         // Device wall clocks cannot answer causality: a stale editor can autosave an old document
         // after another device deleted an outline, giving the old body a later updatedAt and
         // resurrecting it. Discarding the dirty whole row loses a simultaneous offline edit, which
-        // is the deliberate interim trade-off until outline-keyed three-way merge can preserve both.
-        // An attachment has no notebook parent on the wire. Keep its authoritative JSON in the
-        // entity-state table above and materialize the row only after the complete delta tells us
-        // that a locally retained body actually uses it. The same gate drops page payload and ink
-        // for a notebook this installation first discovered after it had already been closed.
+        // is the interim trade-off until outline-keyed three-way merge can preserve both.
+        //
+        // An attachment has no notebook parent on the wire: its authoritative JSON stays in the
+        // entity-state table above and the row is materialized only once the complete delta shows a
+        // retained body uses it. The same gate drops page payload and ink for a notebook this
+        // installation first discovered after it had already been closed.
         if (remote.kind != SyncKind.Attachment && !belongsToDeferredNotebook(remote)) {
             applyRemoteRow(remote)
         }
@@ -792,22 +777,19 @@ class HierarchySync(
      * everything beneath it and stops offering any of it to the server.
      *
      * Two routes carry the same news. The `purges` array of a pull is the ordinary one; a `purged`
-     * rejection is what a device sees when its own push got there before that pull did, and it is
-     * the one that matters, because a device holding queued work under an erased notebook is
-     * otherwise refused for ever — every push, every run, with nothing it can do about it.
+     * rejection is what a device sees when its own push got there first, and it is the one that
+     * matters, because a device holding queued work under an erased notebook is otherwise refused
+     * for ever.
      *
-     * Applying it is not negotiable and nothing is asked. The id is retired on the server: it will
-     * not store anything under it again, so there is no version to reconcile, nothing to merge, and
-     * no later moment at which this could be reconsidered. Whatever this device holds under the id
-     * and never uploaded goes with it — the operator erased the notebook knowing what was in it.
+     * Nothing is asked. The id is retired on the server, so there is no version to reconcile and no
+     * later moment to reconsider; whatever this device holds under it and never uploaded goes too.
      *
-     * **A hard delete, never a tombstone.** A tombstone is a change, so it would be queued and
-     * pushed, and the server refuses one naming a purged id exactly as it refuses an edit. There is
-     * nothing left to be told and nobody left to tell.
+     * A hard delete, never a tombstone: a tombstone is a change, so it would be queued and pushed,
+     * and the server refuses one naming a purged id exactly as it refuses an edit.
      *
      * Returns the digests nothing on this device still reaches, for the caller to discard once the
-     * enclosing transaction has committed. Must run inside a transaction with `applyingRemote` set:
-     * every delete below would otherwise fire the outbox triggers and queue a push of the deletion.
+     * enclosing transaction has committed. Must run inside a transaction with `applyingRemote` set,
+     * or every delete below would queue a push of itself.
      */
     private suspend fun applyPurge(kind: String, id: String): List<String> {
         if (kind != SyncKind.Notebook.wire) {
@@ -822,10 +804,9 @@ class HierarchySync(
         }
 
         // Read before the delete, and from the documents rather than from `refCount`, for the
-        // reasons [picturesReachedOnlyBy] gives. A notebook that is already gone from this device —
-        // a purge pulled twice, or one for a notebook this device never held — answers with no
-        // pages, no pictures and a delete that removes nothing, which is the whole of what it should
-        // do: the bookkeeping below is then the only thing left to clear.
+        // reasons [picturesReachedOnlyBy] gives. A notebook already gone from this device answers
+        // with no pages, no pictures and a delete that removes nothing, leaving only the
+        // bookkeeping below to clear.
         val pageIds = pages.allInNotebook(id).map { it.id }
         val orphaned = if (pageIds.isEmpty()) emptyList() else picturesReachedOnlyBy(pageIds)
 
@@ -848,21 +829,18 @@ class HierarchySync(
     /**
      * Routes one purge verdict to the only two things it can honestly mean.
      *
-     * A `purged` verdict says the id is retired, never how this device came to be holding something
-     * under it, and the two ways are opposites:
+     * A `purged` verdict says the id is retired, never how this device came to hold something under
+     * it, and the two ways are opposites:
      *
-     *  - **This device still had the notebook.** The account erased it and this copy is a straggler,
-     *    so it goes — [applyPurge], unchanged. Anything else would make Permanently delete undoable
-     *    by whichever device happened to be offline when it was pressed, which is the failure
-     *    `syncengine/engine.go` refuses a resurrecting push to prevent.
-     *  - **Someone imported a `.vive` archive of it since.** A bundle carries the notebook's stable
-     *    id, so importing one the account erased re-creates precisely the retired id and the push
-     *    that follows is refused for ever. The bytes are not a straggler — they were chosen, from a
-     *    file, after the erasure — and the id is the only thing wrong with them.
+     *  - This device still had the notebook. The account erased it and this copy is a straggler, so
+     *    it goes — [applyPurge], unchanged.
+     *  - Someone imported a `.vive` archive of it since. A bundle carries the notebook's stable id,
+     *    so importing one the account erased re-creates the retired id and every push is refused for
+     *    ever. Those bytes were chosen from a file after the erasure; the id is all that is wrong.
      *
      * [NotebookTransferManager] marks the second case at import and the first accepted push clears
-     * the mark, so the window in which a purge is answered by [remapPurgedImport] is exactly the
-     * window in which the notebook has never been on the server.
+     * the mark, so [remapPurgedImport] answers a purge only while the notebook has never been on
+     * the server.
      */
     private suspend fun applyPurgeOrRemap(kind: String, id: String): List<String> {
         if (kind == SyncKind.Notebook.wire &&
@@ -877,21 +855,17 @@ class HierarchySync(
     /**
      * Carries a freshly imported notebook out from under an id the account retired.
      *
-     * Only the notebook id moves. `purges` is keyed by entity id and the schema is explicit that
-     * only `notebook` is ever written to it, so every section, page, body, revision and stroke below
-     * is a perfectly acceptable id that was refused `missing_parent` for one reason: its parent was
-     * gone. Give them a parent the server will take and they push as they are. `notebookId` lives on
-     * `sections` alone, which is why the whole subtree moves in one `UPDATE`.
+     * Only the notebook id moves. `purges` is keyed by entity id and only `notebook` is ever written
+     * to it, so every section, page, body, revision and stroke below was refused `missing_parent`
+     * for one reason: its parent was gone. `notebookId` lives on `sections` alone, so the whole
+     * subtree moves in one `UPDATE`.
      *
-     * Order is forced by the schema: insert the new row, repoint the sections, and only then drop
-     * the old one — `sections.notebookId` is `ON DELETE CASCADE`, so deleting first would take the
-     * subtree with it.
+     * Order is forced by the schema: insert the new row, repoint the sections, then drop the old one
+     * — `sections.notebookId` is `ON DELETE CASCADE`, so deleting first would take the subtree.
      *
-     * The mark travels to the new id rather than being dropped, so this is idempotent: if the answer
-     * to the retry were somehow `purged` again, the notebook moves again instead of being erased.
+     * The mark travels to the new id rather than being dropped, so this is idempotent.
      *
-     * Returns false when the notebook is already gone — a purge pulled twice, or one naming a
-     * notebook this device never held — leaving [applyPurge]'s bookkeeping to run as it would have.
+     * Returns false when the notebook is already gone, leaving [applyPurge]'s bookkeeping to run.
      */
     private suspend fun remapPurgedImport(id: String): Boolean {
         val notebook = notebooks.byId(id) ?: return false
@@ -921,8 +895,7 @@ class HierarchySync(
         )
 
         // Where the archive's notebook went, so re-importing the same file updates this copy rather
-        // than installing a second one — [NotebookTransferManager] reads it before it decides what
-        // the bundle collides with. Repointed first and recorded second, which is what makes the map
+        // than installing a second one. Repointed first and recorded second, which makes the map
         // transitive: a notebook moved, purged again and re-imported is moved twice, and the archive
         // id recorded against the first replacement has to end up naming the second.
         metadata.repointValues(NotesRepository.IMPORT_REMAP_KEY_PREFIX, id, replacementId)
@@ -1033,11 +1006,10 @@ class HierarchySync(
                         // correct, it is the server that is missing the bytes it names, so the next
                         // batch re-sends exactly these fields once they are up.
                         "missing_blob" -> missingBlobs += sent
-                        // The account erased this entity for good, and unlike every rejection above
-                        // it this one is not about the change: the entity may be perfectly valid and
-                        // its version right. The id is retired, so re-sending it — as an edit, or as
-                        // the tombstone a local delete would queue — earns the same answer for ever.
-                        // Not a failure, then. Standing still here *is* the failure this clears.
+                        // The account erased this entity for good. Unlike every rejection above,
+                        // this one is not about the change: the entity may be perfectly valid. The
+                        // id is retired, so re-sending it — as an edit or as a tombstone — earns the
+                        // same answer for ever. Standing still here is the failure this clears.
                         "purged" -> purged += rejected.kind to rejected.id
                         "too_large" -> permanent = PermanentSyncFailure.ChangeTooLarge
                         "malformed" -> permanent = PermanentSyncFailure.MalformedChange
@@ -1159,15 +1131,14 @@ class HierarchySync(
     /**
      * Stops naming a digest this device cannot deliver, everywhere it is named.
      *
-     * The alternative is a wedged account, and it is worth being explicit about the trade: a page
-     * that keeps a picture nobody can supply would be rejected on every push for ever, and it is
-     * pushed in the same batches as everything else the user writes — so one broken picture would
-     * stop notebooks, sections and text from syncing at all. Dropping the reference costs a picture
-     * that is *already* broken on this device the ability to be repaired from here; another device
+     * The alternative is a wedged account: a page keeping a picture nobody can supply is rejected on
+     * every push for ever, and it rides the same batches as everything else the user writes, so one
+     * broken picture would stop notebooks, sections and text from syncing at all. Dropping the
+     * reference costs an already-broken picture the ability to be repaired from here; another device
      * that still has the bytes uploads them and the reference comes back with its page.
      *
-     * An `attachment` row is removed from the outbox outright rather than left dirty, because its
-     * id is the digest: there is no version of that row the server would take.
+     * An `attachment` row is removed from the outbox outright rather than left dirty, because its id
+     * is the digest: there is no version of that row the server would take.
      */
     private suspend fun markUndeliverable(digest: String) {
         if (!undeliverableBlobs.add(digest)) return
@@ -1231,12 +1202,10 @@ class HierarchySync(
         // exact compact JSON shape SyncServerClient writes is measured instead and the batch ends
         // before the row that would cross 4 MiB.
         //
-        // **Accumulated, because encoding the candidate batch per row is quadratic.** That is what it
-        // used to do, and on a first upload — where every batch is a full 512 rows — it encoded
-        // ~131,000 rows to admit 512, which `InkSyncCostTest` measured as 12.5 ms per stroke, most of
-        // the run. The sum is exact rather than an estimate: the envelope is
-        // `{"batchId":"…","changes":[…]}`, so its length is the empty envelope plus each element's
-        // own length plus one comma between elements, and UTF-8 concatenates without interacting.
+        // Accumulated, because encoding the candidate batch per row is quadratic: on a first upload
+        // that encoded ~131,000 rows to admit 512. The sum is exact rather than an estimate — the
+        // envelope is `{"batchId":"…","changes":[…]}`, so its length is the empty envelope plus each
+        // element's length plus one comma between elements.
         var encodedSize = encodedPushSize(batchId, emptyList())
         for (row in rows) {
             val change = snapshot(row)
@@ -1294,15 +1263,14 @@ class HierarchySync(
                 // tap on this device alter another device's rail.
                 base.putIfAbsent("expanded", JsonPrimitive(true))
                 base["createdAt"] = JsonPrimitive(row.createdAt)
-                // The shelf, and whether the bytes are still here. Both written **always**, as
+                // The shelf, and whether the bytes are still here. Both written always, as
                 // `JsonNull` when null, rather than omitted: `base` starts from the retained
                 // `serverJson`, so an omitted key leaves the previous value standing and reopening a
-                // notebook — or bringing one back from the cloud — would never propagate.
+                // notebook would never propagate.
                 //
                 // The server carries them as unrecognised properties of `NotebookFields`, which
-                // `additionalProperties: true` allows. That same retention is why a build without
-                // the shelf pushing a rename does not reopen the notebook everywhere: it sends back
-                // the value it never parsed. `memory/closedNotebooksPlan.md`.
+                // `additionalProperties: true` allows. That retention is also why a build without the
+                // shelf pushing a rename does not reopen the notebook everywhere.
                 base["closedAt"] = row.closedAt?.let(::JsonPrimitive) ?: JsonNull
                 base["cloudOnlyAt"] = row.cloudOnlyAt?.let(::JsonPrimitive) ?: JsonNull
                 null
@@ -1340,12 +1308,10 @@ class HierarchySync(
                 base["docSha256"] = JsonPrimitive(Base64.getEncoder().encodeToString(digest))
                 base["format"] = JsonPrimitive(row.format)
                 base["enc"] = JsonPrimitive(PLAIN_ENCODING)
-                // SD7: the server cannot read the document, so this is the only way it can know
-                // which pictures the page still shows — and therefore the only way it can ever free
-                // one. Every push replaces the whole set, so removing a picture from a page is
-                // enough to release it. Always written, never inherited from the stored server row:
-                // a stale set left over from a previous push would keep bytes alive that this page
-                // no longer draws.
+                // The server cannot read the document, so this is the only way it can know which
+                // pictures the page still shows, and therefore the only way it can free one. Every
+                // push replaces the whole set. Always written, never inherited from the stored
+                // server row: a stale set would keep bytes alive this page no longer draws.
                 base[BLOB_REFS] = JsonArray(
                     pictureIdsIn(row.docJson, row.format)
                         .asSequence()
@@ -1438,7 +1404,7 @@ class HierarchySync(
                 // measured as when they were written.
                 base["byteCount"] = JsonPrimitive(row.byteCount)
                 base["createdAt"] = JsonPrimitive(row.createdAt)
-                // `refCount` is deliberately absent — SD7.
+                // `refCount` is deliberately absent: it is this device's own count.
                 null
             }
         }
@@ -1465,10 +1431,9 @@ class HierarchySync(
      * The envelope for a kind that stores no `updatedAt` of its own.
      *
      * The protocol requires the field and the server keeps it, but under plain OCC it is display
-     * metadata that nothing here reads back — convergence is the server's version and nothing else.
-     * A real column on the ink tables would have to be maintained by every erase, restore, recolour
-     * and regroup for a value with no reader, so it is synthesised from what the row does carry.
-     * `viveCServer/memory/syncPlan.md` §10 item 8 is answered "no, and here is why".
+     * metadata nothing here reads back. A real column on the ink tables would have to be maintained
+     * by every erase, restore, recolour and regroup for a value with no reader, so it is synthesised
+     * from what the row does carry.
      */
     private fun MutableMap<String, kotlinx.serialization.json.JsonElement>.putInkEnvelope(
         deletedAt: Long?,
@@ -1483,26 +1448,16 @@ class HierarchySync(
         Base64.getEncoder().encodeToString(points)
 
     /**
-     * Hands the pages this device just had ink written into to whoever is showing one.
-     *
-     * **After the transaction, never inside it.** The canvas answers this by reading the page back,
-     * so announcing a row that is still uncommitted would have it rebuild from the state before the
-     * write. Draining as it publishes is what keeps a rolled-back transaction from announcing rows
-     * that were never written — and an announcement that turns out to be empty costs one rebuild
-     * that finds Room exactly as the canvas already has it.
-     */
-    /**
      * Throws away what this device had read out of the pages remote ink just landed on.
      *
-     * `ink_text` is a cache of the handwriting on a page, keyed by a generation that every *local*
-     * ink write bumps through [com.vivenotes.data.NotesRepository]. Rows written here bypass that —
-     * they go to the DAOs directly, deliberately, so the outbox triggers can be suppressed — so
-     * without this a page whose ink arrived from another device would keep answering content search
-     * with the handwriting it held before. Derived data, so dropping it costs a re-read and nothing
-     * else; the bump is what discards a recognition pass already in flight against the old ink.
+     * `ink_text` caches the handwriting on a page, keyed by a generation every local ink write bumps
+     * through [com.vivenotes.data.NotesRepository]. Rows written here bypass that — they go to the
+     * DAOs directly so the outbox triggers can be suppressed — so without this a page whose ink
+     * arrived from another device would keep answering content search with its old handwriting. The
+     * bump also discards a recognition pass already in flight against that ink.
      *
      * Inside the transaction that wrote the ink: a cache surviving a rolled-back apply would be
-     * describing rows that are still there.
+     * describing rows that are no longer there.
      */
     private suspend fun invalidateInkText(pageIds: Collection<String>) {
         if (pageIds.isEmpty()) return
@@ -1510,6 +1465,13 @@ class HierarchySync(
         pageIds.forEach { inkText.bumpGeneration(it) }
     }
 
+    /**
+     * Hands the pages this device just had ink written into to whoever is showing one.
+     *
+     * After the transaction, never inside it: the canvas answers by reading the page back, so
+     * announcing an uncommitted row would have it rebuild from the state before the write. Draining
+     * as it publishes keeps a rolled-back transaction from announcing rows that were never written.
+     */
     private fun publishRemoteInk() {
         if (remoteInkPages.isEmpty()) return
         val pages = remoteInkPages.toList()
@@ -1693,19 +1655,15 @@ class HierarchySync(
              * afterwards by the download pass, which finds this row by looking for one whose file
              * is not there.
              *
-             * **Inserted, never upserted, and `refCount` is why.** Every synced field describes the
-             * bytes the id is the hash of and cannot have changed — but `refCount` is this device's
-             * own count of the outlines pointing at the picture, deliberately outside the protocol
-             * (`viveCServer/memory/syncPlan.md` SD7), and an upsert carrying the pulled row's zero
-             * would overwrite it. `AttachmentDao.insert` ignores a conflict, so a row already here
-             * keeps the count this device computed.
+             * Inserted, never upserted, because `refCount` is this device's own count of the
+             * outlines pointing at the picture and is deliberately outside the protocol: an upsert
+             * carrying the pulled row's zero would overwrite it. `AttachmentDao.insert` ignores a
+             * conflict, so a row already here keeps the count this device computed.
              *
-             * **A tombstone is applied by doing nothing.** No build produces one — nothing calls
-             * `AttachmentStore.release`, so a picture is never removed from this database — but one
-             * from a future build would mean "the device that sent it has no outline pointing here
-             * any more", which says nothing about this device: deleting the row would take away a
-             * picture a page open on this screen is still drawing. When local sweeping exists, this
-             * becomes a release of one reference and not a delete.
+             * A tombstone is applied by doing nothing. No build produces one, but one from a future
+             * build would mean "the device that sent it has no outline pointing here any more",
+             * which says nothing about this device. When local sweeping exists this becomes a
+             * release of one reference rather than a delete.
              */
             SyncKind.Attachment -> if (change.deletedAt == null) {
                 attachments.insert(attachmentEntity(change, refCount = 0))
@@ -1780,20 +1738,17 @@ class HierarchySync(
     /**
      * Moves this device's picture reference counts to match documents it did not write.
      *
-     * The same bookkeeping `NotebookTransferManager` does when a `.vive` bundle replaces a body,
-     * and for the same reason: `refCount` is a local count of the outlines pointing at a picture,
-     * so a document that arrives from outside changes it without any of the editor's code running.
-     * It never sweeps anything — `AttachmentDao.release` floors at zero and the file is left alone —
-     * because a count is not a licence to delete on a device where the page that dropped the picture
-     * may be undone a second later.
+     * The same bookkeeping `NotebookTransferManager` does when a `.vive` bundle replaces a body:
+     * `refCount` is a local count of the outlines pointing at a picture, so a document arriving from
+     * outside changes it without any of the editor's code running. It never sweeps anything, because
+     * a count is not a licence to delete on a device where the page that dropped the picture may be
+     * undone a second later.
      *
-     * **Drained at the end of the transaction, not as each body is applied**, because `attachment`
-     * is the *last* kind in apply order and `retain` is an `UPDATE`: a picture arriving with the
-     * page that shows it would otherwise be counted before its row existed, and the update would
-     * match nothing. The residual case is a metadata row that lands in a *later* delta page than the
-     * body placing it, which starts at zero and stays there — accepted, because nothing acts on the
-     * count yet (`NotesViewModel.deleteImages` explains why nothing sweeps) and the alternative is
-     * holding a body back for a row that is not its parent.
+     * Drained at the end of the transaction rather than per body, because `attachment` is the last
+     * kind in apply order and `retain` is an `UPDATE`: a picture arriving with the page that shows
+     * it would otherwise be counted before its row existed. A metadata row landing in a later delta
+     * page than the body placing it starts at zero and stays there — accepted, because nothing acts
+     * on the count yet.
      */
     private suspend fun applyPictureCounts() {
         if (pictureRecounts.isEmpty()) return
@@ -1818,20 +1773,17 @@ class HierarchySync(
     /**
      * The attachments a stored document places, in the order it places them.
      *
-     * **The document is the only record of which pictures a page shows**, which is the whole reason
-     * `blobRefs` exists: the server cannot read `docJson`, so it cannot know what to keep, and this
-     * is the extraction SD7 puts on the client.
+     * The document is the only record of which pictures a page shows, which is why `blobRefs`
+     * exists: the server cannot read `docJson`, so it cannot know what to keep.
      *
-     * Guarded by a substring test before the decode. A body is decoded twice per pulled row here —
-     * the one being replaced and the one replacing it — and the overwhelming majority of pages have
-     * no picture on them at all, so paying a full parse per page of a first sync to discover that
-     * would be the most expensive thing in the pull. `attachmentId` is a field name of
-     * [Outline.Image] and of nothing else, and it survives both codecs, which write field names as
-     * text. A page whose *text* happens to contain the word costs one wasted decode.
+     * Guarded by a substring test before the decode. A body is decoded twice per pulled row — the
+     * one being replaced and the one replacing it — and most pages have no picture at all, so a full
+     * parse per page of a first sync would be the most expensive thing in the pull. `attachmentId`
+     * is a field name of [Outline.Image] and of nothing else, and survives both codecs. A page whose
+     * text happens to contain the word costs one wasted decode.
      *
      * An undecodable body yields nothing rather than throwing: the editor already refuses to write
-     * to a page it cannot read and says so, and a document nobody can decode cannot be shown to
-     * reference anything.
+     * to a page it cannot read.
      */
     private fun pictureIdsIn(docJson: String, format: String): List<String> {
         if (!docJson.contains(IMAGE_FIELD_HINT)) return emptyList()
@@ -2039,9 +1991,9 @@ class HierarchySync(
     }
 
     /**
-     * [rank] is depth in the hierarchy, and matches the `kind_rank` the server orders a delta by
-     * (`viveCServer/internal/store/synctables.go`). Applying in this order is what keeps a child
-     * from reaching Room before the row its foreign key points at.
+     * [rank] is depth in the hierarchy, and matches the `kind_rank` the server orders a delta by.
+     * Applying in this order keeps a child from reaching Room before the row its foreign key points
+     * at.
      */
     private enum class SyncKind(val wire: String, val rank: Int) {
         Notebook("notebook", 0),
@@ -2185,39 +2137,34 @@ class HierarchySync(
 
     // --- moving a notebook to the cloud, and bringing it back ---------------------------------
     //
-    // `memory/closedNotebooksPlan.md`. Both live in this class rather than in one of their own for a
-    // reason that is not negotiable: they have to be serialized against ordinary runs by the same
-    // [mutex]. A replay writing rows while a tick applies a delta, or an eviction deleting rows a
-    // push is part-way through snapshotting, is a corrupt account rather than a slow one.
+    // Both live in this class rather than one of their own because they have to be serialized
+    // against ordinary runs by the same [mutex]. A replay writing rows while a tick applies a delta,
+    // or an eviction deleting rows a push is part-way through snapshotting, is a corrupt account.
 
     /**
      * Removes a notebook's contents from this device, leaving them on the server.
      *
-     * The whole safety argument is the first check: **the outbox must be empty**. The server accepts
-     * a `pageContent` only when it already holds the pictures it names — `missing_blob` is the
-     * refusal — so an empty outbox is the server saying, in its own words, that it has every byte
-     * this device could offer it. Nothing is deleted before it has said so. It is deliberately the
-     * whole outbox rather than the rows under this notebook: a queued `attachment` names no
-     * notebook, because its id is a digest and one picture can appear anywhere.
+     * The whole safety argument is the first check: the outbox must be empty. The server accepts a
+     * `pageContent` only when it already holds the pictures it names, so an empty outbox is the
+     * server saying it has every byte this device could offer it. Deliberately the whole outbox
+     * rather than the rows under this notebook: a queued `attachment` names no notebook, since its
+     * id is a digest.
      *
      * What goes: `page_content`, `page_revisions`, the three ink tables, the derived handwriting
      * cache, and the `attachments` rows and files nothing else on this device reaches. What stays:
-     * the notebook, its sections and its pages. That is not squeamishness about a few hundred bytes
-     * a row — [parentIsAvailable] holds back a pulled row whose parent is missing, and
-     * [pullIfNeeded] will not advance the cursor while anything is held. A `sections` row deleted
-     * here would meet the next `page` change another device makes for it and stop this device
-     * syncing at all, for every notebook, silently. The payload is effectively all of the bytes.
+     * the notebook, its sections and its pages — [parentIsAvailable] holds back a pulled row whose
+     * parent is missing and [pullIfNeeded] will not advance the cursor while anything is held, so a
+     * deleted `sections` row would stop this device syncing at all, silently. The payload is
+     * effectively all of the bytes anyway.
      *
-     * No trigger suppression and no tombstones. The sync triggers are `AFTER INSERT` and
-     * `AFTER UPDATE`, so a delete queues nothing; and a tombstone is how a client asks the server to
-     * forget a row, which is the exact opposite of what this asks of it. What the deletes *do*
-     * require is [SyncDao.pruneOrphanedOutbox] in the same transaction — [snapshot] answers a queued
-     * row whose table row has gone with "dirty pageContent disappeared", and fails every push from
-     * then on.
+     * No trigger suppression and no tombstones: the sync triggers are `AFTER INSERT`/`AFTER UPDATE`,
+     * so a delete queues nothing, and a tombstone asks the server to forget a row, which is the
+     * opposite of what this asks. The deletes do require [SyncDao.pruneOrphanedOutbox] in the same
+     * transaction, or [snapshot] fails every push with "dirty pageContent disappeared".
      *
-     * The shelf columns are written in a **second** transaction, with the triggers live so the other
-     * devices learn. Second, because the eviction has to be free to fail without leaving a notebook
-     * claiming its bytes are somewhere they are not.
+     * The shelf columns are written in a second transaction, with the triggers live so the other
+     * devices learn. Second, so the eviction is free to fail without leaving a notebook claiming its
+     * bytes are somewhere they are not.
      */
     suspend fun evictToCloud(notebookId: String): CloudArchiveResult = mutex.withLock {
         val notebook = notebooks.byId(notebookId)
@@ -2291,24 +2238,20 @@ class HierarchySync(
     /**
      * The digests this notebook places that nothing left on the device still reaches.
      *
-     * Computed from the documents, not from `refCount`, which cannot answer it: a pulled picture is
-     * documented as arriving with a count of zero and the ones already in Room were never
-     * backfilled. A wrong count here deletes the file behind a picture another notebook still draws.
+     * Computed from the documents, not from `refCount`, which cannot answer it: a pulled picture
+     * arrives with a count of zero and the ones already in Room were never backfilled. A wrong count
+     * here deletes the file behind a picture another notebook still draws.
      *
-     * **Only *current* bodies are consulted on the surviving side**, and that is a deliberate,
-     * bounded inexactness rather than an oversight. A `page_revisions` payload is gzipped, so the
-     * substring test cannot see into it and answering exactly would mean inflating up to
-     * [NotesRepository.MAX_REVISIONS_PER_PAGE] documents for every page on the device — hundreds of
-     * megabytes of blobs read to answer a question about a handful of digests. What that costs is
-     * narrow and self-healing: a saved version of a page in *another* notebook, showing the
-     * byte-identical picture that its current body no longer shows, renders it missing until this
-     * notebook is brought back — at which point the same digest is downloaded to the same file name
-     * and the old version draws again. The evicted notebook's own revisions are read, because they
-     * are being deleted in the same breath and their pictures would otherwise be stranded.
+     * Only current bodies are consulted on the surviving side — a bounded inexactness. A
+     * `page_revisions` payload is gzipped, so answering exactly would mean inflating up to
+     * [NotesRepository.MAX_REVISIONS_PER_PAGE] documents for every page on the device. What it costs
+     * is self-healing: a saved version of a page in another notebook showing the same picture renders
+     * it missing until this notebook is brought back, at which point the same digest lands at the
+     * same file name. The evicted notebook's own revisions are read, since they are being deleted in
+     * the same breath.
      *
-     * The surviving-side scan is one pass, guarded by the substring test in [pictureIdsIn]: the
-     * overwhelming majority of pages have no picture on them at all. It runs for a press somebody
-     * made and on no sync path.
+     * The surviving-side scan is one pass, guarded by the substring test in [pictureIdsIn], and runs
+     * only for a press somebody made.
      */
     private suspend fun picturesReachedOnlyBy(pageIds: List<String>): List<String> {
         val leaving = buildSet {
@@ -2338,36 +2281,29 @@ class HierarchySync(
     /**
      * Downloads a notebook whose contents are absent here and puts it back on this device.
      *
-     * That includes both an account-wide `cloudOnlyAt` move and a closed notebook this installation
-     * deliberately deferred when it first discovered it. The replay is identical; only the reason
-     * the local payload is absent differs.
+     * Covers both an account-wide `cloudOnlyAt` move and a closed notebook this installation
+     * deferred when it first discovered it; only the reason the payload is absent differs.
      *
      * There is no per-notebook read in the contract — `GET /v1/changes` takes `since` and `limit`
      * and nothing else — so this replays the account from zero and keeps only what belongs to the
-     * notebook. The cost is worth stating plainly: it reads the account's whole current state to
-     * extract one notebook. It is a deliberate, once-in-a-while, user-pressed action, and it works
-     * against the server that is deployed today. The fix is an optional `notebookId` on that
-     * operation, which is a server change and is therefore not assumed here.
+     * notebook. It therefore reads the account's whole current state to extract one notebook, which
+     * is acceptable for a once-in-a-while user-pressed action against the server deployed today.
      *
-     * Three things make this a replay rather than a pull:
+     * Four things make this a replay rather than a pull:
      *
-     *  - **The cursor never moves.** These rows all sit at or below it. This device already promised
-     *    it had accounted for them, and it had — it accounted for them by deciding not to keep them.
-     *  - **Only the evicted kinds are applied.** Notebooks, sections and pages were never evicted
-     *    and are kept current by ordinary sync, so writing a replayed copy of one would undo a
-     *    rename made since. Their entity states are left alone for the same reason.
-     *  - **Purges are left to the ordinary pull.** Reading the log from zero shows every purge the
-     *    account has ever recorded, including the ones this device applied long ago. This replay
-     *    commits no cursor and so speaks for no window; the run that does commit one is the run
-     *    that applies them.
-     *  - **`applyingRemote` is set.** Every write here is an insert, and inserts fire the outbox
-     *    triggers: without it this device would immediately queue a push of everything it has just
-     *    finished downloading.
+     *  - The cursor never moves. These rows all sit at or below it, and this device accounted for
+     *    them by deciding not to keep them.
+     *  - Only the evicted kinds are applied. Notebooks, sections and pages were never evicted and
+     *    are kept current by ordinary sync, so a replayed copy would undo a rename made since.
+     *  - Purges are left to the ordinary pull. Reading from zero shows every purge the account ever
+     *    recorded; this replay commits no cursor and so speaks for no window.
+     *  - `applyingRemote` is set. Every write here is an insert, and inserts fire the outbox
+     *    triggers, so without it this device would queue a push of what it just downloaded.
      *
      * An `attachment` has no parent and the protocol cannot say which notebook it belongs to, so
      * those rows are buffered through the replay and then narrowed to the digests the restored
-     * documents actually name. Applying the rest would be worse than wasteful: a row whose file is
-     * absent *is* a pending download, so it would schedule bytes for notebooks still in the cloud.
+     * documents name. A row whose file is absent is a pending download, so applying the rest would
+     * schedule bytes for notebooks still in the cloud.
      */
     suspend fun restoreFromCloud(
         account: SyncAccount,

@@ -29,18 +29,17 @@ import com.vivenotes.ui.panel.ShapePanelContent
 internal const val SHAPE_BUTTON_TAG = "insert-shape"
 
 /**
- * Insert Shape — `memory/inkPlan.md` §5.4.
+ * Insert Shape.
  *
- * Lives in its own file because it is composed by **two** tabs. It belongs on Draw, beside the
- * things that make marks; and on Insert, because that is where someone goes looking to put a shape
- * on a page. Neither is the "real" home, so neither owns it.
+ * Lives in its own file because it is composed by two tabs: Draw, beside the things that make marks,
+ * and Insert, because that is where someone goes looking to put a shape on a page. Neither is the
+ * real home, so neither owns it.
  *
  * The interaction is the pen tray's: a tap arms the tool, and holding — or tapping the tool already
- * in hand — opens its settings. Consistent with [PenButton] and the eraser, and for the same reason
- * given there: a gesture nobody discovers is a gesture nobody uses.
+ * in hand — opens its settings.
  *
  * Icon-only, matching the Equation button beside it on Insert. The glyph is an ordinary monochrome
- * Material Symbol, so it is tinted normally — the sixteen shapes themselves are drawn by
+ * Material Symbol, so it is tinted normally; the sixteen shapes themselves are drawn by
  * `ShapePanelContent` from the geometry, not from icon assets.
  */
 @OptIn(ExperimentalFoundationApi::class)

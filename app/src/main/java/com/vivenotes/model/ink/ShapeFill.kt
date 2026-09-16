@@ -3,28 +3,22 @@ package com.vivenotes.model.ink
 import com.vivenotes.model.Outline
 
 /**
- * The region a fill colour paints, or empty for a shape with no inside — `memory/inkPlan.md` §5.4 SD7.
+ * The region a fill colour paints, or empty for a shape with no inside.
  *
- * **Not the same thing as the border.** A cube's twelve edges are what it is *stroked* along; what it
- * *covers* is one hexagon, and painting the edges as a path would fill three faces in three
- * overlapping passes, or nothing at all, depending on the winding rule. [ShapeTracing.fill] made the
- * same distinction for a freshly traced shape; this makes it for a shape on the page, which by then
- * may have been resized or had its arms dragged.
+ * Not the same thing as the border. A cube's twelve edges are what it is stroked along; what it
+ * covers is one hexagon, and painting the edges as a path would fill three faces in three
+ * overlapping passes, or nothing at all, depending on the winding rule.
  *
- * Two cases, and the split is the difference between a flat outline and a wireframe:
+ * Two cases, which is the difference between a flat outline and a wireframe:
  *
- * - **A closed run of segments is its own region.** Rectangles, ellipses, polygons: whatever the
- *   contour encloses. Read off the geometry, so a shape that has been edited fills what it now looks
- *   like rather than what it was seeded as.
- * - **A solid fills its silhouette**, which is the convex hull of its vertices — exact for all six of
- *   them, because every one is a convex body seen head on, and unlike re-tracing at the current
- *   bounds it cannot drift: a cube stretched unevenly has a depth its own points still agree on,
- *   while a fresh trace of the same box would compute a different one and leave the fill standing off
- *   the edges.
+ * - A closed run of segments is its own region — rectangles, ellipses, polygons. Read off the
+ *   geometry, so an edited shape fills what it now looks like rather than what it was seeded as.
+ * - A solid fills its silhouette, the convex hull of its vertices. Exact for all six of them, and
+ *   unlike re-tracing at the current bounds it cannot drift: a cube stretched unevenly has a depth
+ *   its own points still agree on.
  *
- * Everything else — a line, an arrow, an L, an L dragged out into a cross — reports nothing, which is
- * what makes [canFill] false and takes Fill out of the toolkit for it. An open figure has no inside,
- * and closing one on the user's behalf invents geometry they did not draw.
+ * Everything else — a line, an arrow, an L, an L dragged out into a cross — reports nothing, which
+ * makes [canFill] false and takes Fill out of the toolkit for it.
  */
 fun Outline.Shape.fillRegion(): List<FloatArray> = if (kind.isSolid) {
     listOfNotNull(convexHull(segments.flatMap { it.polyline().asPoints() }))

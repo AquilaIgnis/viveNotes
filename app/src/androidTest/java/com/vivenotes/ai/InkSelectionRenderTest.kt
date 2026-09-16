@@ -24,16 +24,13 @@ import org.junit.runner.RunWith
 /**
  * What recognition is actually handed, end to end from a selection.
  *
- * The failure this guards is not a wrong reading, it is an *empty* one: the renderer filters its
- * strokes by `projectionKey in selection.projections`, so if anything upstream hands the page a
- * different [Stroke] instance than the one the selection was captured against, the filter matches
- * nothing, the bitmap stays white, and the model dutifully reads a blank page. Nothing throws and
- * nothing looks wrong on screen — the panel simply comes back with nothing on ink that is plainly
- * there.
+ * The failure this guards is not a wrong reading but an empty one: the renderer filters strokes by
+ * `projectionKey in selection.projections`, so if anything upstream hands the page a different
+ * [Stroke] instance than the selection was captured against, the filter matches nothing, the bitmap
+ * stays white, and the model reads a blank page. Nothing throws.
  *
- * So this asserts the whole path in the arrangement the app uses it in: the ink is *painted* for the
- * canvas, the selection is built from the stored strokes, and the renderer is given the stored
- * strokes — the split that [CanvasInkPainter] exists to keep straight.
+ * So this asserts the whole path in the arrangement the app uses: the ink is painted for the canvas,
+ * the selection is built from the stored strokes, and the renderer is given the stored strokes.
  */
 @RunWith(AndroidJUnit4::class)
 class InkSelectionRenderTest {

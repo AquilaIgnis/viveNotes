@@ -47,22 +47,17 @@ private const val DONATE_URL = "https://buymeacoffee.com/acidburn"
 /**
  * What this app is, which build of it this is, and where to find or support it.
  *
- * **A dialog rather than a [com.vivenotes.ui.panel.ToolPane].** Everything in the right-docked panes
- * is something you keep open while working on the page beside it — history, paper size, search. This
- * is read once and dismissed, and it is about the *app* rather than about the page, so it takes the
- * screen for a moment instead of taking a third of it for the rest of the session.
+ * A dialog rather than a [com.vivenotes.ui.panel.ToolPane]: everything in the right-docked panes is
+ * something you keep open while working on the page beside it, while this is read once and
+ * dismissed, and it is about the app rather than about the page.
  *
- * **The launcher icon is the header**, at the size a store listing would show it, because that is the
- * one image a user already associates with this app. It replaces `AlertDialog`'s `icon` and `title`
- * slots rather than sitting above them — a Material icon *and* the app's own would be two logos in a
- * row, and the wordmark under the icon reads as one thing.
+ * The launcher icon is the header, at the size a store listing would show it, and it replaces
+ * `AlertDialog`'s `icon` and `title` slots rather than sitting above them — a Material icon and the
+ * app's own would be two logos in a row.
  *
- * **The two actions are the same pill at different weights.** Source is tonal in the scheme's greys
- * and the donation is filled in the app's orange — `tertiary`, the same colour the math actions wear,
- * so the loudest thing in this window is still a colour the app already uses. Each address is printed
- * under its button:
- * a tap that opens a browser is the happy path, but a device without one should still leave the user
- * something they can read and type out somewhere else.
+ * The two actions are the same pill at different weights: Source is tonal in the scheme's greys and
+ * the donation is filled in `tertiary`. Each address is printed under its button, so a device with
+ * no browser still leaves the user something they can read and type out somewhere else.
  */
 @Composable
 internal fun AboutDialog(onDismiss: () -> Unit) {
@@ -178,15 +173,14 @@ private fun Address(url: String) {
  * `Version 1.0`, read off the installed package rather than out of `BuildConfig`.
  *
  * `buildFeatures.buildConfig` is off in this module, and turning it on to print one string would
- * generate a class for the whole build for the sake of a dialog. The package manager already knows,
- * and what it reports is the build that is actually installed.
+ * generate a class for the whole build. The package manager already knows, and what it reports is
+ * the build that is actually installed.
  *
- * The name only: `versionCode` was shown beside it in brackets for a while and says nothing to a
- * reader while it is still 1. If releases ever start bumping it, that is when it earns its place
- * back — a bug report against "1.0" is ambiguous once four builds have been called that.
+ * The name only: `versionCode` was shown beside it for a while and says nothing to a reader while it
+ * is still 1.
  *
- * Read through the *application* context: under instrumentation the activity belongs to the test
- * APK, and the version this has to show is the app's.
+ * Read through the application context: under instrumentation the activity belongs to the test APK,
+ * and the version this has to show is the app's.
  */
 @Composable
 private fun rememberAppVersion(): String {

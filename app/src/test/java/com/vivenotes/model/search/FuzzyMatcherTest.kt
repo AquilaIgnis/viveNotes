@@ -7,10 +7,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The matcher's three tiers and their ranking — `memory/searchPlan.md` CS6.
+ * The matcher's three tiers and their ranking.
  *
  * This is where the feature is actually verified: the panel, the index and the reveal all need a
- * device, and this does not (R10). What is pinned here is the behaviour a user would notice — that a
+ * device, and this does not. What is pinned here is the behaviour a user would notice — that a
  * typo still finds the word, that a second term narrows rather than widens, and that the obvious
  * match outranks the clever one.
  */

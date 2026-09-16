@@ -24,8 +24,8 @@ data class FormulaRecognitionResult(val latex: String)
 /**
  * The app's single recognition boundary — every model it owns is reached through here.
  *
- * Named for the lasso workflow it was built for; it now also serves background picture indexing
- * (`memory/imageOcrPlan.md`). One boundary rather than two because the implementation owns the ONNX
+ * Named for the lasso workflow it was built for; it now also serves background picture indexing.
+ * One boundary rather than two, because the implementation owns the ONNX
  * sessions, and two owners would mean two copies of the same graph competing for the same cores.
  */
 interface InkRecognitionEngine {
@@ -82,23 +82,22 @@ class OnnxInkRecognitionEngine(
         }
 
     /**
-     * Detection followed by line-by-line recognition — `memory/imageOcrPlan.md` IO4, IO7.
+     * Detection followed by line-by-line recognition.
      *
-     * **One line per `run`, not a batch.** The recognizer takes a fixed-width tensor, so a batch has
-     * to be padded to its widest member, and a picture mixes a 46-pixel crop with a 940-pixel one.
+     * One line per `run`, not a batch. The recognizer takes a fixed-width tensor, so a batch has to
+     * be padded to its widest member, and a picture mixes a 46-pixel crop with a 940-pixel one.
      * Measured over real crops in `simulations/image-ocr/bench.py`, six-wide batches are 30% slower
-     * than one at a time and sixteen-wide are 2.2× slower. Running singly is also what lets the one
-     * mutex above serialize every model this class owns.
+     * than one at a time and sixteen-wide are 2.2× slower.
      *
-     * The whole call holds the lock, which is deliberate: a picture is background work, and letting
-     * it interleave with a lasso recognition would only make the interactive one wait in the middle
-     * rather than at the start.
+     * The whole call holds the lock: a picture is background work, and letting it interleave with a
+     * lasso recognition would only make the interactive one wait in the middle rather than at the
+     * start.
      */
     override suspend fun recognizeImageText(image: Bitmap): ImageTextResult =
         withContext(inferenceDispatcher) {
             val scope = this
             // Outside the lock: decoding and normalizing a picture is the half of this that can
-            // overlap another picture's inference, and IO7 is built on it doing so.
+            // overlap another picture's inference, and background indexing is built on it doing so.
             val input = preprocessDetection(image)
             mutex.withLock {
                 val detector = session(ModelKind.Detect)
@@ -178,7 +177,7 @@ class OnnxInkRecognitionEngine(
     /**
      * The session for [kind], opening it if this is the first ask.
      *
-     * **Detection and recognition stay resident together; FormulaNet stays exclusive** — IO8. The
+     * **Detection and recognition stay resident together; FormulaNet stays exclusive**. The
      * original rule was one session at a time, which cannot survive a detect-then-recognize pipeline
      * without rebuilding both graphs for every picture. The two OCR graphs are 12 MB between them
      * and are kept; FormulaNet is 231 MB and is the reason a rule existed at all, so it still evicts
@@ -257,16 +256,15 @@ internal data class TextTensor(val values: FloatArray, val width: Int)
 /**
  * PP-OCRv5 line resize, BGR channel order, `[-1, 1]` normalization and zero padding.
  *
- * **The rows are copied one at a time because the two buffers have different strides**, and getting
- * that wrong is silent. The resized bitmap is [resizedWidth] wide; the tensor is [width] wide, which
- * is at least [TEXT_BASE_WIDTH_FOR_PREPROCESS], so any line with an aspect ratio below about 6.7:1
- * is padded. Walking the pixel array with a single running index — as this did until 2026-08-13 —
- * writes row *r* at offset `r * resizedWidth` into a plane whose rows start every `width`, which
- * shears the image diagonally by a few pixels per row and turns a legible line into noise.
+ * The rows are copied one at a time because the two buffers have different strides, and getting
+ * that wrong is silent. The resized bitmap is [resizedWidth] wide; the tensor is [width] wide, so
+ * any line with an aspect ratio below about 6.7:1 is padded. Walking the pixel array with a single
+ * running index writes row r at offset `r * resizedWidth` into a plane whose rows start every
+ * `width`, which shears the image diagonally and turns a legible line into noise.
  *
- * It was found by reading a picture: of three lines drawn on one bitmap, only the one whose crop
- * happened to be wider than 320 came back, and it came back perfectly. The other two were sheared.
- * Every narrow lasso selection had the same thing done to it since recognition shipped.
+ * Found by reading a picture: of three lines on one bitmap, only the one whose crop happened to be
+ * wider than 320 came back. Every narrow lasso selection had the same thing done to it since
+ * recognition shipped.
  *
  * The padding stays zero, which is mid-grey once `[-1, 1]` normalization is undone, and is what
  * PaddleOCR pads with after its own normalization.

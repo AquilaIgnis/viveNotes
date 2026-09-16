@@ -111,25 +111,21 @@ private val LightColors = lightColorScheme(
 )
 
 /**
- * Accents for the two-tone icons, sampled from the ribbon in `memory/references/`.
+ * Accents for the two-tone icons, sampled from the reference ribbon.
  *
- * These are deliberately *not* part of the [androidx.compose.material3.ColorScheme]. An accent
- * here marks what a glyph means — blue for emphasis, green for create, gold for tag — so it
- * belongs to the icon, not to the theme. Tying them to `primary` would have turned the green "+"
- * purple the moment the app theme changed, and azure the moment it changed again, which is not what
- * the reference does: its ribbon accents stay put while the brand colour appears only on primary
- * actions like Add Page.
+ * Deliberately not part of the [androidx.compose.material3.ColorScheme]. An accent here marks what a
+ * glyph means — blue for emphasis, green for create, gold for tag — so it belongs to the icon, not
+ * to the theme. Tying them to `primary` would turn the green "+" purple the moment the app theme
+ * changed.
  *
- * **That rule now costs something worth knowing about.** With the brand colour azure, [blue] and
- * `primary` are neighbours rather than opposites, so a glyph's "this is emphasis" blue and the
- * shell's "this is the app" blue no longer separate on hue alone. They still separate on *place* —
- * an accent is inside an icon, the brand colour is chrome around it — and the sampled blue is what
- * `memory/references/generalUI.png` actually shows. Left alone deliberately; if the two ever read as
- * one thing, the fix is to move this blue, never to point it at the scheme.
+ * That rule costs something worth knowing about. With the brand colour azure, [blue] and `primary`
+ * are neighbours rather than opposites, so a glyph's "this is emphasis" blue and the shell's "this
+ * is the app" blue no longer separate on hue alone. They still separate on place — an accent is
+ * inside an icon, the brand colour is chrome around it. If the two ever read as one thing, the fix
+ * is to move this blue, never to point it at the scheme.
  *
- * They are still theme-*aware*, because a colour picked to read against the dark ribbon does not
- * survive a white surface — the sampled `#3B9ADC` manages only about 2.5:1 on the light theme's
- * background.
+ * They are still theme-aware, because a colour picked to read against the dark ribbon does not
+ * survive a white surface: the sampled `#3B9ADC` manages only about 2.5:1 on the light background.
  */
 @Immutable
 data class IconAccents(
@@ -214,26 +210,23 @@ private val AppTypography = Typography(
 )
 
 /**
- * **M3 Expressive, applied at the root** — `memory/expressivePlan.md` EX1–EX3.
+ * M3 Expressive, applied at the root.
  *
  * [MaterialExpressiveTheme] rather than `MaterialTheme` is nearly the whole of the adoption. Most of
- * expressive is not a component you call: this flips the CompositionLocal that the ordinary components
- * read to choose expressive shape, size and motion, so `Slider`, `Switch`, `Button`,
- * `OutlinedTextField`, `DropdownMenu` and `AlertDialog` all change with no call-site edit. The handful
- * of places where a *different* component is the expressive answer — wavy progress, the loading
- * indicators, the Hardware pane's toggle row — are listed in that plan.
+ * expressive is not a component you call: this flips the CompositionLocal that the ordinary
+ * components read to choose expressive shape, size and motion, so `Slider`, `Switch`, `Button`,
+ * `OutlinedTextField`, `DropdownMenu` and `AlertDialog` all change with no call-site edit.
  *
  * Calling expressive components under a plain `MaterialTheme` would be the half-measure: their
  * geometry without their motion, which is the part that makes them read as expressive at all.
  *
- * **The colour schemes stay hand-written (EX2).** `expressiveLightColorScheme()` is deliberately not
- * used: the azure ramp below is sampled and contrast-checked — `#0063C6` on light precisely because
- * the base fails 4.5:1 for text — and [IconAccents] is sampled against these surfaces and nothing
- * else. Expressive here means shape, motion and component choice; colour is ours.
+ * The colour schemes stay hand-written. `expressiveLightColorScheme()` is deliberately not used: the
+ * azure ramp below is sampled and contrast-checked — `#0063C6` on light precisely because the base
+ * fails 4.5:1 for text — and [IconAccents] is sampled against these surfaces and nothing else.
  *
- * [MotionScheme.expressive] is named explicitly rather than left to default (EX3), so a deliberate
- * decision does not look accidental. Its spatial specs are springs, so chrome overshoots slightly and
- * settles; nothing on the ink path uses Material animation, which keeps that away from the stylus.
+ * [MotionScheme.expressive] is named explicitly rather than left to default. Its spatial specs are
+ * springs, so chrome overshoots slightly and settles; nothing on the ink path uses Material
+ * animation, which keeps that away from the stylus.
  */
 @Composable
 fun ViveNotesTheme(
@@ -265,7 +258,7 @@ fun ViveNotesTheme(
             colorScheme = colors,
             motionScheme = MotionScheme.expressive(),
             // Shapes left null on purpose: the expressive defaults are the point of the switch.
-            // Typography is not — see [AppTypography], and EX10.
+            // Typography is not — see [AppTypography].
             typography = AppTypography,
             content = content,
         )

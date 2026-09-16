@@ -16,15 +16,12 @@ import org.junit.runner.RunWith
 /**
  * The stylus's first barrel button, dispatched through the real activity.
  *
- * **Why the key is delivered by hand.** `adb shell input keyevent 522` does not work: the shell's
- * injector does not know `KEYCODE_STYLUS_BUTTON_PRIMARY` and delivers keycode 0 instead — verified
- * on this emulator, where an ordinary keycode in the same breath arrived intact. Nor does the
- * emulator have a stylus to press. So the press is handed to `onKeyDown` directly, which exercises
- * everything this app owns: the activity's dispatch, `handleStylusButton`, the tool change and the
- * tab that follows it.
+ * The key is delivered by hand because `adb shell input keyevent 522` does not work: the shell's
+ * injector does not know `KEYCODE_STYLUS_BUTTON_PRIMARY` and delivers keycode 0 instead, and the
+ * emulator has no stylus. The press goes to `onKeyDown` directly, which exercises everything this
+ * app owns: the activity's dispatch, `handleStylusButton`, the tool change and the tab after it.
  *
- * What it cannot prove is the platform's half — that a real pen's button arrives as this keycode.
- * That is Android 14+ documented behaviour and `minSdk` is 35, but it wants a stylus to confirm.
+ * What it cannot prove is that a real pen's button arrives as this keycode.
  */
 @RunWith(AndroidJUnit4::class)
 class StylusButtonDispatchTest {
@@ -89,7 +86,7 @@ class StylusButtonDispatchTest {
     }
 
     /**
-     * A press bound to nothing is **not consumed, at either end** — `memory/stylusPlan.md` SB5.
+     * A press bound to nothing is **not consumed, at either end**.
      *
      * Three clicks is unbound by default, and the failure this guards is the tempting one: claiming
      * every stylus keycode at key-down while acting only on the bound ones at up. That would leave an
@@ -135,7 +132,7 @@ class StylusButtonDispatchTest {
     }
 
     private companion object {
-        /** `PEN_THREE_CLICK` on the Lenovo pen — `docs/stylusCodes.md`. */
+        /** `PEN_THREE_CLICK` on the Lenovo pen. */
         const val VENDOR_THREE_CLICK = 602
     }
 }

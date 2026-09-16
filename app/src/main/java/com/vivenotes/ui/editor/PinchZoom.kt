@@ -25,20 +25,18 @@ internal data class PinchStep(val zoom: Float, val dx: Float, val dy: Float)
 /**
  * Resolves one pinch sample into a zoom and a scroll.
  *
- * All of it is in **view pixels**, which is what makes it this short: `scroll + focus` is the content
+ * All of it is in view pixels, which is what makes it this short: `scroll + focus` is the content
  * pixel under the fingers, and changing the zoom by a factor multiplies every content pixel
- * coordinate by that same factor. No density and no page units are involved — the conversion those
- * would need is exactly the step this avoids.
+ * coordinate by that factor. No density and no page units are involved.
  *
- * [focus] is the centroid *before* this sample and [pan] is how far it has moved since, so the
- * fingers now sit at `focus + pan`. Splitting them is what lets one expression hold both halves of a
- * pinch: the content point at `scroll + focus` has to end up under `focus + pan`.
+ * [focus] is the centroid before this sample and [pan] is how far it has moved since, so the fingers
+ * now sit at `focus + pan`. Splitting them lets one expression hold both halves of a pinch: the
+ * content point at `scroll + focus` has to end up under `focus + pan`.
  *
  * Clamping to the zoom range happens here rather than at the caller, so a pinch that runs past 400%
- * stops scaling *and* stops scrolling, instead of continuing to chase a zoom it will not get.
+ * stops scaling and stops scrolling.
  *
- * Pure arithmetic with no Android in it, so it is checked by a JVM unit test — which matters here
- * because the gesture that feeds it can only be exercised on a device (R10).
+ * Pure arithmetic with no Android in it, so it is checked by a JVM unit test.
  */
 internal fun pinchStep(
     zoom: Float,
@@ -60,20 +58,18 @@ internal fun pinchStep(
 /**
  * Two fingers on the page: pinch to zoom, and move them together to pan.
  *
- * **Why this is a hand-written detector on the [PointerEventPass.Initial] pass**, rather than
+ * A hand-written detector on the [PointerEventPass.Initial] pass rather than
  * `detectTransformGestures`:
  *
- * - *Initial*, because it has to win. The page is a stack of gesture handlers that each own the whole
- *   pointer — the scroll containers, the canvas tap that opens a text container, and the ink
- *   overlay's own dispatcher — and a sibling of a hit node never sees the event at all. Only an
- *   ancestor is guaranteed to be asked, and only the Initial pass reaches it *before* its children.
- *   Consuming there is what tells all of them to let go, which they already know how to do: every
- *   gesture in `InkOverlay` abandons itself on a second contact.
- * - *Two pointers, not one.* `detectTransformGestures` pans with a single finger, which is the page's
+ * - Initial, because it has to win. The page is a stack of gesture handlers that each own the whole
+ *   pointer, and a sibling of a hit node never sees the event at all. Only an ancestor is guaranteed
+ *   to be asked, and only the Initial pass reaches it before its children. Consuming there tells all
+ *   of them to let go, which they already know how to do.
+ * - Two pointers, not one. `detectTransformGestures` pans with a single finger, which is the page's
  *   own scroll and the ink overlay's pan — it would take both.
  *
  * [onEnd] fires once per pinch that actually happened, and is where the zoom gets written down: the
- * live steps are transient state, so a gesture is one preference write rather than sixty.
+ * live steps are transient, so a gesture is one preference write rather than sixty.
  */
 internal suspend fun PointerInputScope.detectPinchZoom(
     onPinch: (focus: Offset, pan: Offset, zoomChange: Float) -> Unit,

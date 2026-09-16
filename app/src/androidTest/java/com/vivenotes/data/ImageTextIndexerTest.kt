@@ -29,9 +29,9 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * The three promises of `memory/imageOcrPlan.md` that only a database can keep: a picture is read
- * **once** however many times it is placed (IO2), a reading dies with its picture (IO3), and a
- * picture that cannot be read is not retried forever (IO6).
+ * The three promises that only a database can keep: a picture is read
+ * **once** however many times it is placed, a reading dies with its picture, and a
+ * picture that cannot be read is not retried forever.
  *
  * The recognizer is a fake. What is under test is the schedule and the storage, and running the real
  * ONNX graphs here would make a correctness test into a slow accuracy test that measures neither
@@ -172,7 +172,7 @@ class ImageTextIndexerTest {
         indexer.awaitIdle()
         assertTrue(repository.imageTextFor(listOf(id)).containsKey(id))
 
-        // `import` claims one reference; releasing it sweeps the row and the file — IO3.
+        // `import` claims one reference; releasing it sweeps the row and the file.
         attachments.release(id)
 
         assertNull(attachments.metadata(id))

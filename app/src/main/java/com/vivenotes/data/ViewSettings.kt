@@ -36,15 +36,12 @@ data class ViewSettings(
      * Whether a pasted video link is drawn as its thumbnail — `richtext/VideoEmbedSpan.kt`.
      *
      * Here rather than in [EditorDefaults] because it is not about how the user likes to write; it
-     * decides how this device *presents* something already written, which is the line this class is
-     * drawn along. That it never syncs is the point twice over: turning previews off is a statement
-     * about one device's network, and pushing that choice onto another device would be answering a
-     * question nobody asked there.
+     * decides how this device presents something already written. That it never syncs is the point:
+     * turning previews off is a statement about one device's network.
      *
      * Surfaced on the Settings tab rather than beside the other View settings, because what it
-     * actually governs is whether pasting a link makes the app fetch from a host the user did not
-     * choose — see [com.vivenotes.data.VideoThumbnailStore]. Defaulted on: a preview is what someone
-     * pasting a video link is asking for.
+     * governs is whether pasting a link makes the app fetch from a host the user did not choose —
+     * see [com.vivenotes.data.VideoThumbnailStore]. Defaulted on.
      */
     val linkPreviews: Boolean = true,
 ) {

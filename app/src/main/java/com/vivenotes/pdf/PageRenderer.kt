@@ -25,16 +25,16 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 /**
- * Draws one sheet of an export — `memory/pdfExportPlan.md` PD7.
+ * Draws one sheet of an export.
  *
  * One renderer serves both callers: a `PdfDocument` page and a preview bitmap differ only in the
- * scale they are handed. Everything below works in **page dp**, the unit outlines, shapes, tables,
- * equations and ink all already share, and the paint order is `EditorPane`'s composition order —
- * which is the only thing that makes the output match the screen.
+ * scale they are handed. Everything below works in page dp, the unit outlines, shapes, tables,
+ * equations and ink all share, and the paint order is `EditorPane`'s composition order, which is
+ * what makes the output match the screen.
  *
- * Text is the one exception to page-dp, and it has to be: a font size mark measures itself against
- * the device's display metrics, so the layouts [PageMeasurer] built are in device pixels and are
- * drawn through a `1 / density` scale.
+ * Text is the one exception and has to be: a font size mark measures itself against the device's
+ * display metrics, so the layouts [PageMeasurer] built are in device pixels and are drawn through a
+ * `1 / density` scale.
  */
 class PageRenderer(private val metrics: DisplayMetrics) {
 
@@ -68,7 +68,7 @@ class PageRenderer(private val metrics: DisplayMetrics) {
         fill.alpha = Color.alpha(page.colors.backgroundArgb)
         canvas.drawRect(0f, 0f, paper.widthDp, paper.heightDp, fill)
 
-        // A bound page is already a sheet — PD3's exception — so its tile lands on the paper's own
+        // A bound page is already a sheet, so its tile lands on the paper's own
         // corner. Everything else is a cut out of the canvas, and it lands inside the margins.
         val insetLeft = if (plan.bound) 0f else paper.marginLeftDp
         val insetTop = if (plan.bound) 0f else paper.marginTopDp
@@ -169,12 +169,11 @@ class PageRenderer(private val metrics: DisplayMetrics) {
     /**
      * A stroke as a filled outline, not as a mesh.
      *
-     * **This is not a preference.** `PdfDocument` records into a picture that is replayed onto a PDF
-     * device: `Canvas.drawMesh` needs hardware acceleration, which a recording canvas has not got,
-     * and Skia's PDF backend does not implement `drawVertices` — so `CanvasStrokeRenderer`, which
-     * picks the mesh path on any modern device, silently draws nothing here.
-     * [androidx.ink.geometry.outlinesToPath] gives the stroke's own outline as public API, and
-     * filling it puts vector ink in the PDF at any zoom.
+     * Not a preference. `PdfDocument` records into a picture replayed onto a PDF device:
+     * `Canvas.drawMesh` needs hardware acceleration, which a recording canvas has not got, and
+     * Skia's PDF backend does not implement `drawVertices` — so `CanvasStrokeRenderer`, which picks
+     * the mesh path on any modern device, silently draws nothing here.
+     * [androidx.ink.geometry.outlinesToPath] gives the stroke's own outline as public API.
      *
      * Overlapping outlines inside one stroke are filled once by the winding rule, which is also what
      * stops a translucent highlighter doubling its alpha where it crosses itself.

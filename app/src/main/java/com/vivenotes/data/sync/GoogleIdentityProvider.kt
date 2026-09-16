@@ -42,19 +42,18 @@ sealed interface GoogleIdToken {
 /**
  * Sign in with Google, through Android's Credential Manager.
  *
- * One [GetSignInWithGoogleOption] rather than a [com.google.android.libraries.identity.googleid.GetGoogleIdOption]
- * pass for returning users followed by a fallback for new ones. The account screen offers a single
- * button because `POST /v1/auth/google` is a single endpoint that logs in or registers as needed, so
- * a two-stage credential request would be the client re-introducing a distinction neither the person
- * nor the server makes — and paying for it with a second sheet.
+ * One [GetSignInWithGoogleOption] rather than a `GetGoogleIdOption` pass for returning users and a
+ * fallback for new ones. The account screen offers a single button because `POST /v1/auth/google` is
+ * a single endpoint that logs in or registers as needed, so a two-stage credential request would
+ * reintroduce a distinction neither the person nor the server makes, and pay for it with a second
+ * sheet.
  *
- * **[nonce] is not optional and not decorative.** The server issued it seconds earlier, Google seals
- * it inside the signed token, and the server checks that the token it receives carries the challenge
- * it issued. Without it, a token captured from any other app using the same client id would
- * authenticate here.
+ * [nonce] is not optional: the server issued it seconds earlier, Google seals it inside the signed
+ * token, and the server checks that the token carries the challenge it issued. Without it, a token
+ * captured from any other app using the same client id would authenticate here.
  *
- * The Android half of the flow lives in its own class so that [SyncAccounts] can be driven by tests
- * without Credential Manager, which needs a real Activity and a real Google account to answer.
+ * The Android half lives in its own class so [SyncAccounts] can be driven by tests without
+ * Credential Manager, which needs a real Activity and a real Google account to answer.
  */
 class GoogleIdentityProvider(
     /**

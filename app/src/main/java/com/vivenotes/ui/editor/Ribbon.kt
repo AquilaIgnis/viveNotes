@@ -161,9 +161,9 @@ fun Ribbon(
     eraser: EraserSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
-    /** How the next table arrives — `memory/tablePlan.md` TA7. Draw tab only. */
+    /** How the next table arrives. Draw tab only. */
     table: TableSettings = TableSettings(),
-    /** The ruler that is out, and whether it is — `memory/rulerPlan.md`. */
+    /** The ruler that is out, and whether it is. */
     ruler: RulerSettings = RulerSettings(),
     rulerOut: Boolean = false,
     tool: DrawTool,
@@ -227,7 +227,7 @@ fun Ribbon(
                 onCommand = onCommand,
                 onSetDefault = onSetDefault,
                 textMode = tool == DrawTool.Text,
-                // A toggle, per `memory/textBoxPlan.md` TD2: pressing it again puts the tool down
+                // A toggle: pressing it again puts the tool down
                 // rather than doing nothing, and with nothing in hand a tap on bare canvas stops
                 // opening containers.
                 onTextMode = {
@@ -855,14 +855,12 @@ private fun MenuRow(
  *
  * Long-press is the gesture because picking is not: choosing a size to write the next sentence in
  * used to move the default too, so a passing choice quietly changed what every later page opened in.
- * Separating them means the default only moves when the user says so.
  *
- * What is promoted is exactly [text] — the rule the whole control turns on. Blank means a selection
- * mixing several values, which has no one answer to show and none to set.
+ * What is promoted is exactly [text]. Blank means a selection mixing several values, which has no
+ * one answer to show and none to set.
  *
  * A long press has no result of its own to see, so the border takes the accent colour for a moment
- * to say it landed — without that the gesture is indistinguishable from a mis-tap. The menu carries
- * the same fact permanently, tagging whichever entry is currently the default.
+ * to say it landed. The menu carries the same fact permanently, tagging the current default.
  */
 @Composable
 private fun DefaultableCombo(

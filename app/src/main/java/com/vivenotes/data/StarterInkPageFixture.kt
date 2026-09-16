@@ -13,16 +13,13 @@ import kotlinx.serialization.json.Json
 /**
  * Ink captured from a real device and bundled as the second page of a fresh install.
  *
- * The fixture keeps the original geometry and replay operations, but [materialize] assigns fresh
- * row and group ids on every install. Starter content must not reuse globally visible ids once
- * notebook sync exists.
+ * The fixture keeps the original geometry and replay operations, but [materialize] assigns fresh row
+ * and group ids on every install, since starter content must not reuse globally visible ids.
  *
- * **[moves] are as load-bearing as the strokes.** A stroke's stored points are the coordinates the
- * pen produced and are never rewritten, so where ink sits on the page is the stroke *plus* every
- * lasso drag replayed over it. Schema 1 carried only strokes and erases, which meant a fixture
- * exported from a page whose ink had been dragged into place seeded that ink back at its original
- * scatter. Anything captured from a real page after arranging it needs this list or the arrangement
- * is silently lost.
+ * [moves] are as load-bearing as the strokes. A stroke's stored points are the coordinates the pen
+ * produced and are never rewritten, so where ink sits on the page is the stroke plus every lasso
+ * drag replayed over it. Anything captured from a real page after arranging it needs this list, or
+ * the arrangement is silently lost.
  */
 @Serializable
 data class StarterInkPageFixture(

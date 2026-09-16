@@ -180,7 +180,7 @@ class InkOverlayTest {
     }
 
 
-    // --- Insert Space (E2) -----------------------------------------------------------------------
+    // --- Insert Space -----------------------------------------------------------------------
     //
     // The overlay's transform is identity in these, so view pixels and page units are the same
     // number and the assertions can be read straight off the gesture.
@@ -343,7 +343,7 @@ class InkOverlayTest {
     // --- the ruler -------------------------------------------------------------------------------
 
     /**
-     * A ruled stroke comes out straight however badly the hand wobbles — `memory/rulerPlan.md` RD5.
+     * A ruled stroke comes out straight however badly the hand wobbles.
      *
      * The one assertion that says the feature works. The gesture below wanders 30px either side of
      * the ruler's edge as it travels; unruled, the recorded stroke follows that wander, and the
@@ -385,7 +385,7 @@ class InkOverlayTest {
         }
     }
 
-    /** Start away from it and the ruler is not involved at all — RD5's engagement rule. */
+    /** Start away from it and the ruler is not involved at all. */
     @Test
     fun aStrokeStartedAwayFromTheRulerIsNotSnapped() {
         val ruler = Ruler(400f, 300f, 0f, RulerKind.Straight, 800f)
@@ -862,7 +862,7 @@ class InkOverlayTest {
     }
 
     // -----------------------------------------------------------------------------------------
-    // One loop, both kinds — AD7's first row
+    // One loop, both kinds
     // -----------------------------------------------------------------------------------------
 
     private fun stroke(id: String, x: Float): PageStroke = PageStroke(
@@ -898,7 +898,7 @@ class InkOverlayTest {
 
     @Test
     fun aLoopAroundAShapeSelectsIt() {
-        // The gap AD7 recorded: `InkLassoSelection` named stroke ids, so a loop round a shape
+        // The gap this closes: `InkLassoSelection` named stroke ids, so a loop round a shape
         // returned nothing at all.
         val lasso = LassoHarness(strokes = emptyList(), shapes = listOf(square("box", 60f, 60f, 40f)))
 
@@ -1238,14 +1238,11 @@ class InkOverlayTest {
     /**
      * [awaitLastStroke]'s counting twin, for the negative cases: the hold did nothing, so the
      * freehand stroke is still on its way back from the renderer thread and `up()` has not committed
-     * it yet. Reading [strokes] straight after [liftPointer] is a race that a real tablet wins and
-     * the CI emulator — software GL — loses, which is what made these four the only tests that ever
-     * failed there.
+     * it yet. Reading [strokes] straight after [liftPointer] is a race the CI emulator loses.
      *
-     * The clock stays frozen while this waits. Re-enabling it before the lift would let the hold
-     * timer fire in the cases that pause for deliberately less than a second, which is the whole
-     * point of them. Nothing here needs the clock anyway: the count is bumped by a main-thread post
-     * from the renderer, not by anything Compose drives.
+     * The clock stays frozen while this waits: re-enabling it before the lift would let the hold
+     * timer fire in the cases that pause for deliberately less than a second. Nothing here needs the
+     * clock anyway — the count is bumped by a main-thread post from the renderer.
      */
     private fun awaitTheStroke(failure: String = "the lift committed no stroke") {
         compose.waitUntil(conditionDescription = failure, timeoutMillis = 5_000) { strokes == 1 }

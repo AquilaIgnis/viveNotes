@@ -75,26 +75,22 @@ object ShapePanelTags {
 }
 
 /**
- * The Insert Shape pane, laid out as `memory/references/shapes-tooltip.jpeg` lays it out —
- * `memory/inkPlan.md` §5.4.
+ * The Insert Shape pane, laid out as the reference plate lays it out.
  *
- * **Show 3D lines** is crossed out in the reference, so it is absent entirely rather than disabled —
- * the treatment the middle pen kind gets in [PenPanelContent].
+ * Show 3D lines is crossed out in the reference, so it is absent entirely rather than disabled.
  *
- * **Fill colour** was given the other treatment, placed and inert, on the reasoning that a shape was
- * stored as ink and a stroke has no fill. That stopped being true when SD1 was reversed and a shape
- * became an object carrying `fillArgb`, so it is live as of 2026-08-06. What the reference shows is
- * the *default* — none — and that is still where a shape starts, so the screenshot and the shipped
- * behaviour continue to agree.
+ * Fill colour was given the other treatment, placed and inert, on the reasoning that a shape was
+ * stored as ink and a stroke has no fill. That stopped being true once a shape became an object
+ * carrying `fillArgb`, so it is live as of 2026-08-06. What the reference shows is the default —
+ * none — and that is still where a shape starts.
  *
- * It is **one swatch**, not a swatch and a row: see [FillSwatch]. Border colour keeps its row, and
- * that asymmetry is the point — the two settings are no longer two copies of the same control.
+ * It is one swatch, not a swatch and a row: see [FillSwatch]. Border colour keeps its row, and that
+ * asymmetry is the point.
  *
  * The picker is paged because the reference is, and page 1 is inferred — only page 2 was captured.
  *
- * The border colour row shares the pens' rolling palette rather than keeping one of its own. By ID5
- * the colours someone reaches for are a property of the user, not of a tool, so a colour mixed
- * holding a pen is there when a shape is drawn — and a colour mixed for a fill joins it too.
+ * The border colour row shares the pens' rolling palette rather than keeping one of its own: the
+ * colours someone reaches for are a property of the user, not of a tool.
  */
 @Composable
 fun ColumnScope.ShapePanelContent(
@@ -155,8 +151,8 @@ fun ColumnScope.ShapePanelContent(
     )
 
     Spacer(Modifier.height(6.dp))
-    // Live since 2026-08-06 — SD7 amended. It was placed and inert on the reasoning that a shape was
-    // stored as ink and a stroke has no fill, which stopped being true when SD1 was reversed. What
+    // Live since 2026-08-06. It was placed and inert on the reasoning that a shape was stored as ink
+    // and a stroke has no fill, which stopped being true once a shape became an object. What
     // the reference actually shows is the *default*: none, which is still where a shape starts.
     //
     // One button, not a button and a row (2026-08-07, by request). The palette row that used to sit
@@ -178,20 +174,18 @@ fun ColumnScope.ShapePanelContent(
 }
 
 /**
- * The whole of Fill colour: a swatch that *is* the fill, opening the wheel.
+ * The whole of Fill colour: a swatch that is the fill, opening the wheel.
  *
  * It replaced a 🚫 button plus a ten-swatch row. The row was the same palette the border already
  * shows directly above it, so the pane asked the same question twice and spent a third of its height
- * on the second copy; and the 🚫 could only ever say "not filled", never *what* the fill was.
+ * on the second copy; and the 🚫 could only ever say "not filled", never what the fill was.
  *
- * Which puts **"No fill" inside the popup** rather than beside the swatch, and it has to be
- * somewhere: a shape starts with no inside and has to be able to get back there, and the wheel has
- * no colour that means "none" — an absent fill is not a transparent one. It leads the popup for the
- * reason it used to lead the palette.
+ * Which puts "No fill" inside the popup rather than beside the swatch, and it has to be somewhere: a
+ * shape starts with no inside and has to be able to get back there, and the wheel has no colour that
+ * means "none".
  *
- * The rolling palette (ID5) is still charged on the way out, and still only for a colour the wheel
- * was *left* on — but not when the way out was No fill, which is a rejection of whatever was mixed
- * to get there.
+ * The rolling palette is still charged on the way out, and still only for a colour the wheel was
+ * left on — but not when the way out was No fill, which is a rejection of whatever was mixed.
  */
 @Composable
 internal fun FillSwatch(
@@ -303,12 +297,10 @@ private fun NoFillEntry(selected: Boolean, tag: String, onClick: () -> Unit) {
  * Worth the space for the reason [PenPanelContent]'s stroke preview is: "border width 10" means
  * nothing until you see it.
  *
- * **A scaled-down page, not a small shape.** The shape is traced at [NOMINAL_WIDTH] × [NOMINAL_HEIGHT]
- * page units and the whole thing — geometry *and* border — is scaled to fit the box, which is the
- * same projection `Zoomed` applies to the canvas. Drawing a shrunken shape while stroking it at its
- * true page width instead is what the first version did, and at width 10 it rendered a cube as a
- * black blob: the border was a sixth of the shape rather than a twentieth. What is shown now is what
- * a shape of ordinary size on the page actually looks like.
+ * A scaled-down page, not a small shape. The shape is traced at [NOMINAL_WIDTH] × [NOMINAL_HEIGHT]
+ * page units and the whole thing — geometry and border — is scaled to fit the box, which is the
+ * projection `Zoomed` applies to the canvas. Drawing a shrunken shape while stroking it at its true
+ * page width is what the first version did, and at width 10 it rendered a cube as a black blob.
  */
 @Composable
 private fun ShapePreview(shape: ShapeSettings) {
@@ -349,14 +341,13 @@ private val NOMINAL_HEIGHT: Dp = 150.dp
 /**
  * The chips, six to a row as the reference has them.
  *
- * Each one is a [Canvas] running the same [trace] the page insert runs, so a chip **is** its shape
- * rather than a picture of it — §5.4 SD6. That is also why there are no drawables here: there is no
- * Material Symbol for a wedge with dotted hidden edges, and a hand-drawn glyph per kind would be a
- * chance each to drift from the geometry it illustrates.
+ * Each one is a [Canvas] running the same [trace] the page insert runs, so a chip is its shape
+ * rather than a picture of it. That is also why there are no drawables here: there is no Material
+ * Symbol for a wedge with dotted hidden edges, and a hand-drawn glyph per kind would be a chance
+ * each to drift from the geometry it illustrates.
  *
- * **Swipe sideways to change page**, as well as tapping the dots. The dots are 8dp targets and the
- * grid is the whole width of the pane, so the gesture is by far the larger of the two — the dots
- * stay because they are what says there is a second page at all.
+ * Swipe sideways to change page, as well as tapping the dots. The dots are 8dp targets and the grid
+ * is the whole width of the pane, so the gesture is by far the larger of the two.
  */
 @Composable
 private fun ShapeGrid(

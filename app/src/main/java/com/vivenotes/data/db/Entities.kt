@@ -17,13 +17,11 @@ data class LocalMetadataEntity(
 )
 
 /**
- * Prefix for the installation-local marker saying a notebook's hierarchy is present but its
- * payload was deliberately not downloaded.
+ * Prefix for the installation-local marker saying a notebook's hierarchy is present but its payload
+ * was deliberately not downloaded.
  *
  * This cannot live on [NotebookEntity]: every field on that row except `expanded` is overlaid into
  * the sync snapshot, and a device-local availability choice must never turn into account state.
- * Keeping the key beside [LocalMetadataEntity] also lets Room queries use the same compile-time
- * constant as the sync engine that writes it.
  */
 const val DEFERRED_NOTEBOOK_CONTENT_KEY_PREFIX = "deferredNotebookContent:"
 
@@ -106,22 +104,19 @@ data class NotebookEntity(
      * When this notebook was taken off the rail, or null while it is on it.
      *
      * Not a second kind of tombstone: nothing under here is deleted, purged or hidden from search,
-     * and [deletedAt] stays null. It is a shelf — see `memory/closedNotebooksPlan.md`.
+     * and [deletedAt] stays null. It is a shelf.
      *
-     * Synced because shelving is account-wide. The server carries it as an unrecognised property
-     * of `NotebookFields`, which
-     * `additionalProperties: true` permits and the client's retained `serverJson` preserves.
+     * Synced because shelving is account-wide. The server carries it as an unrecognised property of
+     * `NotebookFields`, which `additionalProperties: true` permits.
      */
     val closedAt: Long? = null,
     /**
      * When this notebook's contents were moved to the server and removed from this device.
      *
-     * Always set together with [closedAt], and always the narrower claim of the two: the notebook,
-     * its sections and its pages are all still here. What is gone is `page_content`,
-     * `page_revisions`, the three ink tables and the pictures no remaining page reaches — which is
-     * effectively all of the bytes, and none of the rows a pulled change can name as a parent. That
-     * distinction is the whole reason the skeleton survives; `NotebookCloudArchive` explains what
-     * evicting it would do to the cursor.
+     * Always set together with [closedAt], and always the narrower claim: the notebook, its sections
+     * and its pages are all still here. What is gone is `page_content`, `page_revisions`, the three
+     * ink tables and the pictures no remaining page reaches — effectively all of the bytes, and none
+     * of the rows a pulled change can name as a parent.
      */
     val cloudOnlyAt: Long? = null,
 )
@@ -288,10 +283,9 @@ data class NotebookWithSections(
  * One ink stroke, in its own table rather than inside `page_content.docJson`.
  *
  * Autosave rewrites the whole document column on a 400ms debounce, so ink living there would rewrite
- * hundreds of kilobytes because someone typed a character. Ink is also append-mostly and immutable —
- * a stroke, once lifted, never changes — which is what makes row-per-stroke match both the access
- * pattern and, later, the merge: a grow-only set of immutable strokes converges without conflict.
- * See `memory/inkPlan.md` ID2 and §8.
+ * hundreds of kilobytes because someone typed a character. Ink is also append-mostly and immutable,
+ * which makes row-per-stroke match both the access pattern and the eventual merge: a grow-only set
+ * of immutable strokes converges without conflict.
  *
  * Only [points] is opaque. Brush, bounds and order stay in readable columns, so `sqlite3` still
  * answers what is on a page.
@@ -306,13 +300,11 @@ data class NotebookWithSections(
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    // (pageId, seq, id) rather than pageId alone, which is two things at once and replaces it
-    // instead of joining it, so a stroke insert still maintains one index. It is the exact order
-    // `byPage` reads in, so the query has no sorter — the alternative pushes whole rows, `points`
-    // blobs included, through SQLite's sorter and spills a densely drawn page to a temp file. And
-    // it is the fast path for `nextSeq`: `MAX(seq)` over an equality-constrained prefix is one seek
-    // to the end of the range instead of a walk of every row on the page. `pageId` is still the
-    // leading column, so the foreign key to `pages` remains indexed.
+    // (pageId, seq, id) rather than pageId alone, so a stroke insert still maintains one index. It
+    // is the exact order `byPage` reads in, so the query has no sorter — otherwise whole rows,
+    // `points` blobs included, go through SQLite's sorter and spill a dense page to a temp file. It
+    // is also the fast path for `nextSeq`: `MAX(seq)` over an equality-constrained prefix is one
+    // seek. `pageId` is still the leading column, so the foreign key stays indexed.
     indices = [Index("pageId", "seq", "id")],
 )
 data class InkStrokeEntity(
@@ -321,16 +313,15 @@ data class InkStrokeEntity(
     /**
      * Draw order within the page: later strokes sit on top, ties broken by [id].
      *
-     * **This is a logical clock, not a count.** `nextSeq` allocates `MAX(seq) + 1` over every row of
-     * the page including tombstones and including strokes pulled from another device, which is
-     * exactly `max(local, incoming) + 1` — so a stroke drawn here is always above everything this
-     * device has seen, without trusting anybody's wall clock. Ordering by [createdAt] instead would
-     * let a tablet running ten minutes fast paint its ink over strokes drawn after it.
+     * A logical clock, not a count. `nextSeq` allocates `MAX(seq) + 1` over every row of the page,
+     * tombstones and pulled strokes included, which is `max(local, incoming) + 1` — so a stroke
+     * drawn here is above everything this device has seen without trusting anybody's wall clock.
+     * Ordering by [createdAt] would let a tablet running ten minutes fast paint over strokes drawn
+     * after it.
      *
-     * Two devices drawing on one page while offline both allocate the same value, which is correct:
-     * neither saw the other, so neither is meant to be on top. The tie is broken by [id], a UUIDv7
-     * whose hex form sorts chronologically under BINARY collation — deterministic on every device,
-     * and within one logical tick it is real draw order. `memory/inkSyncPlan.md` §1.
+     * Two devices drawing offline both allocate the same value, which is correct: neither saw the
+     * other. The tie is broken by [id], a UUIDv7 whose hex form sorts chronologically under BINARY
+     * collation.
      */
     val seq: Int,
     val brushFamily: String,
@@ -342,30 +333,25 @@ data class InkStrokeEntity(
      * Whether [colorArgb] was the automatic colour rather than one the user picked.
      *
      * Recorded so Switch Background can re-resolve it — see [com.vivenotes.data.automaticColorOr],
-     * which owns the rule and explains the tri-state. Stored *beside* the resolved colour rather
-     * than instead of it, so a build that does not know this column still finds a colour that was
-     * correct when it was written.
+     * which owns the tri-state rule. Stored beside the resolved colour rather than instead of it, so
+     * a build that does not know this column still finds a colour that was correct when written.
      *
-     * Null means the intent was never recorded: a row from a build that predates the column, or
-     * one imported from a `.vive` such a build wrote.
+     * Null means the intent was never recorded.
      */
     val colorFollowsTheme: Boolean? = null,
     val epsilon: Float,
     /**
      * The pen's stabilization level when the stroke was drawn, 0–5.
      *
-     * **Applied since 2026-08-10**, which is what this column was always for — it was recorded from
-     * the start precisely so the filter could arrive without a storage migration, and it did.
      * `InkCodec.inputModelFor` turns it into the `BrushFamily.InputModel` the stroke is rebuilt
-     * through; a stroke's mesh is derived from its inputs *via* that model, so replaying with the
+     * through; a stroke's mesh is derived from its inputs via that model, so replaying with the
      * wrong level reshapes ink already on the page.
      *
      * Per-stroke rather than per-pen, and read from here rather than from the pen, for the reason
-     * `brushVersion` is: a stroke has to come back looking like the stroke that was drawn, not like
-     * whatever the pen is set to today.
+     * `brushVersion` is: a stroke has to come back looking like the stroke that was drawn.
      *
-     * A highlighter row stores 0 meaning **not applicable** rather than *off* — it has no such
-     * control — and `InkCodec.family` exempts that family so the value is never read as passthrough.
+     * A highlighter row stores 0 meaning not applicable rather than off — it has no such control —
+     * and `InkCodec.family` exempts that family so the value is never read as passthrough.
      */
     val stabilization: Int,
     /** Page-unit bounds, so a draw pass can skip a stroke without decoding it. */
@@ -433,14 +419,13 @@ data class InkEraseEntity(
 /**
  * The immutable link between an erase gesture and a stroke that existed when it was made.
  *
- * [strokeId] is deliberately **not** a foreign key, and an id naming no stored row is inert —
- * `InkPageLoader` replays an operation against the strokes it can find and ignores the rest.
- * A reference would be a wedge the moment ink replicates: a target recoloured after the erase was
- * made lands in a later delta page than the operation naming it, and a target the seven-day purge
- * has already removed can never arrive at all, so the insert would fail, the transaction would roll
- * back with the sync cursor uncommitted, and the device would re-pull the same delta for ever. It
- * would also let a purge silently rewrite an operation's payload, which is meant to be immutable.
- * `memory/inkSyncPlan.md` §2.2.
+ * [strokeId] is deliberately not a foreign key, and an id naming no stored row is inert —
+ * `InkPageLoader` replays an operation against the strokes it can find and ignores the rest. A
+ * reference would be a wedge the moment ink replicates: a target recoloured after the erase lands
+ * in a later delta page than the operation naming it, and one the seven-day purge has removed can
+ * never arrive, so the insert would fail, the transaction would roll back with the cursor
+ * uncommitted, and the device would re-pull the same delta for ever. It would also let a purge
+ * rewrite an operation's payload, which is meant to be immutable.
  *
  * There is no index on [strokeId] either: nothing queries by it, it existed only because Room asks
  * for one on a foreign key's child column, and an erase across a dense page writes hundreds of these
@@ -535,32 +520,29 @@ data class InkMoveWithTargets(
 )
 
 /**
- * What is known *about* an imported picture. The pixels are not here.
+ * What is known about an imported picture. The pixels are not here.
  *
- * **The bytes are a file, not a column** — `filesDir/attachments/<sha256>`, with this row pointing at
+ * The bytes are a file, not a column — `filesDir/attachments/<sha256>`, with this row pointing at
  * it. Ink argues for a blob column because a stroke is a few hundred bytes; a photograph is a few
- * million, and the two do not want the same home:
+ * million:
  *
- *  - Every query that touches a table pays for the width of the rows it walks. A page's picture list
- *    is a handful of numbers; putting megabytes in the same rows makes reading those numbers cost
- *    what reading the pictures costs.
- *  - `notes.db` is one file that gets copied, backed up and — eventually — synced whole. Content that
- *    is already immutable and already addressed by its hash has no business inflating it.
+ *  - every query that touches a table pays for the width of the rows it walks, and a page's picture
+ *    list is a handful of numbers;
+ *  - `notes.db` is one file that gets copied, backed up and eventually synced whole.
  *
- * **Keyed by the hash of the bytes, so the same picture inserted twice is one file.** That is not
- * only thrift: it is what lets a page be duplicated, or a picture copied and pasted, without deciding
- * who owns the pixels. [refCount] is what makes deleting safe — the file goes when the last outline
- * referencing it does, and never while another still points at it.
+ * Keyed by the hash of the bytes, so the same picture inserted twice is one file. That is what lets
+ * a page be duplicated, or a picture pasted, without deciding who owns the pixels. [refCount] is
+ * what makes deleting safe: the file goes when the last outline referencing it does.
  *
- * Not tied to a page by a foreign key, deliberately. One picture can appear on several pages, which a
- * `pageId` column would have to lie about.
+ * Not tied to a page by a foreign key: one picture can appear on several pages, which a `pageId`
+ * column would have to lie about.
  */
 /**
  * A stroke's colour together with whether it was automatic.
  *
  * The pair travels as one because the two are only meaningful together: undoing a recolour has to
- * put back the colour *and* whether it was a choice, or the stroke comes back looking right and
- * stops following the canvas. See [com.vivenotes.data.automaticColorOr].
+ * put back the colour and whether it was a choice, or the stroke comes back looking right and stops
+ * following the canvas.
  */
 data class StrokeColor(val argb: Int, val followsTheme: Boolean?)
 
@@ -596,27 +578,25 @@ enum class ImageTextStatus {
 }
 
 /**
- * The text PP-OCRv5 read out of one picture — `memory/imageOcrPlan.md` IO2, IO3, IO11.
+ * The text PP-OCRv5 read out of one picture.
  *
- * **Keyed by the attachment, which is keyed by the hash of the pixels.** So the same screenshot
- * pasted on nine pages is one row, one inference and one copy of the text, by construction rather
- * than by a de-duplication pass somebody has to remember to run. There is deliberately no `pageId`
- * and no outline id here: this is what the *picture* says, and where it is placed is the document's
- * business.
+ * Keyed by the attachment, which is keyed by the hash of the pixels, so the same screenshot pasted
+ * on nine pages is one row, one inference and one copy of the text. There is deliberately no
+ * `pageId` and no outline id: this is what the picture says, and where it is placed is the
+ * document's business.
  *
- * **It is a child of `attachments` with `ON DELETE CASCADE`.** `AttachmentStore.release` deletes the
- * attachment row and its file together once the last outline pointing at it is gone for good, and
- * this row goes with them. A derived cache outliving its subject is the bug this table is most
- * likely to grow, so the invariant is checked as well as declared — see `ImageTextDao.deleteOrphans`.
+ * A child of `attachments` with `ON DELETE CASCADE`, so it goes when `AttachmentStore.release`
+ * removes the attachment and its file. A derived cache outliving its subject is the bug this table
+ * is most likely to grow, so the invariant is checked as well as declared — see
+ * `ImageTextDao.deleteOrphans`.
  *
- * Derived, and therefore regenerable: [engine] records which model and preprocessing wrote [text],
- * so changing the pipeline is a rolling re-read rather than a migration, and the whole table can be
- * deleted without losing anything a user typed or drew. That is also why the export in
+ * Derived and regenerable: [engine] records which model and preprocessing wrote [text], so changing
+ * the pipeline is a rolling re-read rather than a migration. That is also why the export in
  * `NotebookTransferManager` drops it.
  *
- * The line boxes are **not** stored. Highlighting the matched line on the picture would need them;
- * opening a hit selects the picture instead (IO10), and a row that stays narrow is a row that stays
- * cheap to read for every page of a notebook on every keystroke.
+ * The line boxes are not stored. Highlighting the matched line on the picture would need them;
+ * opening a hit selects the picture instead, and a narrow row stays cheap to read for every page of
+ * a notebook on every keystroke.
  */
 @Entity(
     tableName = "attachment_text",
@@ -652,10 +632,10 @@ enum class InkTextStatus {
 }
 
 /**
- * Derived handwriting text for one page — `memory/handwritingSearchPlan.md`.
+ * Derived handwriting text for one page.
  *
- * Unlike picture OCR this is keyed by page: the subject is the page's replayed ink together with
- * the geometry of any ink-only table on it. Repository ink mutations delete this row in the same
+ * Unlike picture OCR this is keyed by page: the subject is the page's replayed ink together with the
+ * geometry of any ink-only table on it. Repository ink mutations delete this row in the same
  * transaction, and [layoutHash] catches the other half changing through a document edit.
  */
 @Entity(

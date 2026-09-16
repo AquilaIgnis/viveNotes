@@ -175,7 +175,7 @@ private fun HandwritingTextCard(
 }
 
 /**
- * The switch, the count and the rebuild — `memory/imageOcrPlan.md` IO9.
+ * The switch, the count and the rebuild.
  *
  * On this tab rather than in View settings because what it describes is *this device spending its
  * own CPU*, which is the rule for what belongs here. Rebuild is offered beside it because the table
@@ -257,13 +257,11 @@ private val SWITCH_GAP = 16.dp
  * How much smaller the switch is drawn than Material's own size.
  *
  * `scale` rather than a size modifier because it leaves measurement alone, so the row's layout and
- * the text beside it are unaffected by the change.
+ * the text beside it are unaffected.
  *
- * **It is not free, though, and the cost is the touch target.** `scale` is a `graphicsLayer`, and
- * Compose applies the layer transform when hit-testing as well as when drawing — measured at
- * 46.8 × 28.8 dp against Material's 52 × 32. That is still a comfortable target on the tablet this
- * app is built for, and it is the reason not to take this any lower without deciding to:
- * `AiModelsPanelTest.theSwitchStaysAboveTheSizeAFingerCanFind` holds the floor.
+ * It is not free: the cost is the touch target. `scale` is a `graphicsLayer`, and Compose applies
+ * the layer transform when hit-testing as well as when drawing — measured at 46.8 × 28.8 dp against
+ * Material's 52 × 32. `AiModelsPanelTest.theSwitchStaysAboveTheSizeAFingerCanFind` holds the floor.
  */
 private const val SWITCH_SCALE = 0.9f
 

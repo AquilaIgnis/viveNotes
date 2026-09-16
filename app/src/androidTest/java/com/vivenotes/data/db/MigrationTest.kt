@@ -15,18 +15,15 @@ import org.junit.runner.RunWith
 /**
  * The schema baseline, and the place every future migration gets its case.
  *
- * **There is no migration to exercise yet.** [NotesDatabase] version 1 is a consolidated baseline:
- * the twenty-one development migrations before it were collapsed into the entity definitions once
- * it was certain that no database outside this repository had ever run one. What survives from the
- * suite they had is what nothing else covers — that the schema the entities compile to is the
- * schema committed under `app/schemas/`, and the two table guarantees that live in SQL rather than
- * in Kotlin and would otherwise be believed rather than known.
+ * There is no migration to exercise yet: [NotesDatabase] version 1 is a consolidated baseline, the
+ * twenty-one development migrations before it having been collapsed into the entity definitions
+ * once it was certain no database outside this repository had ever run one. What survives is that
+ * the schema the entities compile to is the schema committed under `app/schemas/`, plus the two
+ * table guarantees that live in SQL rather than in Kotlin.
  *
- * The next schema change puts its test back here, shaped like the ones that were removed: seed a
- * database at the old version with `helper.createDatabase`, apply the migration through
- * `helper.runMigrationsAndValidate`, and assert on the rows that already existed. Room validates
- * the new shape by itself; what no one can see by reading a one-line `ALTER TABLE` is what became
- * of the rows, and that is the half that silently destroys notes.
+ * The next schema change puts its test back here: seed a database at the old version with
+ * `helper.createDatabase`, apply the migration through `helper.runMigrationsAndValidate`, and
+ * assert on the rows that already existed. Room validates the new shape by itself.
  */
 @RunWith(AndroidJUnit4::class)
 class MigrationTest {

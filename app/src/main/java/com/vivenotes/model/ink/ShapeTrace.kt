@@ -17,7 +17,7 @@ import kotlinx.serialization.Serializable
  * Lives in the model rather than beside the pen presets because a shape's border carries one, and a
  * shape is part of the document — it travels with the page, exports with it, and is read by the MCP
  * server without a device. `data/` may depend on `model/`; the reverse would block the `:core:model`
- * split (AD5). A pen's line type is the same enum used the other way round, as a user preference.
+ * split. A pen's line type is the same enum used the other way round, as a user preference.
  */
 @Serializable
 enum class LineType(val label: String) {
@@ -36,16 +36,10 @@ const val PAGE_SOLID = 1
  * The shapes the Insert Shape picker offers, and the ideal path each one traces.
  *
  * Pure Kotlin with no Android types, in `model/ink/` so it can move into `:core:model` when that
- * split happens (AD5) — and, more immediately, so the geometry is covered by JVM tests rather than
- * by eyeballing a device.
+ * split happens — and so the geometry is covered by JVM tests rather than by eyeballing a device.
  *
- * This is `memory/inkPlan.md` §5.3's `traceShape`, built early. §5.4 (Insert Shape) needs it to lay an
- * ideal shape down from nothing; §5.1–5.3 (hold to snap) will need the same function to replace a
- * freehand stroke with an ideal one. Building the picker first leaves 11f only its classifier to
- * write.
- *
- * Everything here is in page units. Nothing here knows about colour, border width or fill — a
- * tracing is geometry, and how it is painted belongs to the `Outline.Shape` that carries it.
+ * Everything here is in page units. Nothing here knows about colour, border width or fill: a tracing
+ * is geometry, and how it is painted belongs to the `Outline.Shape` that carries it.
  */
 @Serializable
 enum class ShapeKind(val label: String, val page: Int) {
@@ -86,7 +80,7 @@ enum class ShapeKind(val label: String, val page: Int) {
      * [ShapeEnd][com.vivenotes.model.ink.ShapeEnd].
      *
      * They are edited by moving those two points rather than by scaling a box, so they carry two
-     * handles instead of AD7's four corners. Named here beside [hasArms] because it is the same sort
+     * handles instead of the usual four corners. Named here beside [hasArms] because it is the same sort
      * of judgement: which affordance a kind is asking for, decided once, in the kind.
      */
     val hasEnds: Boolean get() = this == Line || this == Arrow
@@ -104,22 +98,17 @@ enum class ShapeKind(val label: String, val page: Int) {
 /**
  * One shape's geometry, as polylines of interleaved x/y in page units.
  *
- * `FloatArray` rather than a list of points because `memory/inkPlan.md` §5.2 already declares
- * `ShapeFit.classify(points: FloatArray, …)` — the two halves of the feature then speak one
- * language, and neither allocates an object per point.
+ * `FloatArray` rather than a list of points, so this and `ShapeFit.classify` speak one language and
+ * neither allocates an object per point.
  *
- * A closed polyline repeats its first point as its last, so every array here can be stroked
- * directly without the caller having to know which kinds close.
+ * A closed polyline repeats its first point as its last, so every array here can be stroked directly
+ * without the caller having to know which kinds close.
  *
- * [hidden] is the edges a solid occludes, drawn dotted. It is empty for every flat shape — see
- * `memory/inkPlan.md` §5.4 SD3 for why there is no toggle.
+ * [hidden] is the edges a solid occludes, drawn dotted, and is empty for every flat shape.
  *
- * [fill] is the region a fill colour paints, and it is **not** the same as [solid]. For a flat shape
- * the two are the same closed outline, but a wireframe cube has no single inside: filling its twelve
- * edges would paint three faces in three overlapping passes, or nothing at all depending on the
- * winding rule. So a solid reports its *silhouette* — the outer boundary of what it covers — which is
- * the region a real object of that shape would occupy. Open shapes (the line and the arrows) report
- * none, because a line has no inside to colour.
+ * [fill] is the region a fill colour paints, and is not the same as [solid]: for a flat shape the
+ * two are the same closed outline, but a wireframe cube has no single inside, so a solid reports its
+ * silhouette instead. Open shapes report none.
  *
  * Equality is inherited from `List<FloatArray>` and so compares arrays by identity. That is never
  * what a caller wants; compare the contents if you need to.
@@ -573,7 +562,7 @@ private fun appendArc(
  * which at any size a page shape reaches is under a hundredth of a page unit — far below what any
  * zoom can show. Because it is driven by *length*, the same function serves a 28dp picker chip and
  * a 400dp shape on the page: the chip gets about two dozen segments, the page shape gets the 1°
- * step `memory/inkPlan.md` §5.3 asks for, and neither is a special case.
+ * step the trace asks for, and neither is a special case.
  *
  * The floor matters more than it looks: without it a chip-sized ellipse would be a hexagon.
  */

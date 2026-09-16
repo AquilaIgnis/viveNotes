@@ -30,10 +30,10 @@ private fun penPreferenceKey(index: Int) = stringPreferencesKey("pen_$index")
 private val automaticPenPresetsMigrated = booleanPreferencesKey("automatic_pen_presets_migrated_v1")
 
 /**
- * Pen types from `memory/references/pen-tooltip.jpeg`.
+ * Pen types from the reference plate.
  *
- * The middle entry of that row is crossed out in the screenshot, so it is not here at all — the
- * same handling the View tab gives Dock to Desktop and the rest of the crossed-out list.
+ * The middle entry of that row is crossed out in the screenshot, so it is not here at all — the same
+ * handling the View tab gives Dock to Desktop and the rest of the crossed-out list.
  */
 @Serializable
 enum class PenKind(val label: String) {
@@ -48,7 +48,7 @@ enum class EraserMode(val label: String) {
     Object("Object"),
 }
 
-/** The two rulers — `memory/rulerPlan.md`. A straightedge, and a semicircle for arcs. */
+/** The two rulers. A straightedge, and a semicircle for arcs. */
 @Serializable
 enum class RulerKind(val label: String) {
     Straight("Straight"),
@@ -56,12 +56,11 @@ enum class RulerKind(val label: String) {
 }
 
 /**
- * The ruler you draw against — `memory/rulerPlan.md` RD2.
+ * The ruler you draw against.
  *
- * Only what describes *the user*: which ruler they reach for and how big they like it. Whether it is
- * currently out, and where it is lying, are facts about this moment rather than about anyone, so they
- * are transient state in the ViewModel and in `EditorPane` — the same split [ShapeSettings] draws
- * between its [kind] and `DrawTool.Shape`.
+ * Only what describes the user: which ruler they reach for and how big they like it. Whether it is
+ * out, and where it is lying, are facts about this moment, so they are transient state in the
+ * ViewModel and in `EditorPane` — the same split [ShapeSettings] draws against `DrawTool.Shape`.
  */
 @Serializable
 data class RulerSettings(
@@ -69,10 +68,8 @@ data class RulerSettings(
     /**
      * How far across the semicircle is, in page dp.
      *
-     * **The straightedge has no length here**, and that is the point: it always spans the viewport
-     * (RD3a), so its length is a layout fact rather than a preference. It was a setting until the
-     * reference plate settled the question — the ruler in `memory/references/ruler.png` runs off both
-     * edges of the frame, which is what a straightedge you lay across your work does.
+     * The straightedge has no length here, and that is the point: it always spans the viewport, so
+     * its length is a layout fact rather than a preference.
      */
     val diameterDp: Int = DEFAULT_DIAMETER,
 ) {
@@ -88,13 +85,11 @@ data class RulerSettings(
 /**
  * The Draw tab's highlighter.
  *
- * Not a [PenPreset]. A highlighter answers a different set of questions: it has no line type, no
- * nib, and no pressure response — a real one lays down the same flat band however hard it is pressed
- * — so modelling it as a fourth pen would mean a pane of controls that do nothing. What is left is
- * the two things K2 asks for, colour and thickness, which is why this is its own small record beside
- * [EraserSettings] rather than a variant of the pen.
+ * Not a [PenPreset]: a highlighter has no line type, no nib and no pressure response — a real one
+ * lays down the same flat band however hard it is pressed — so modelling it as a fourth pen would
+ * mean a pane of controls that do nothing. What is left is colour and thickness.
  *
- * Like both of those, it describes the user rather than a page (ID5), so it lives in DataStore.
+ * Like [EraserSettings], it describes the user rather than a page, so it lives in DataStore.
  */
 @Serializable
 data class HighlighterSettings(
@@ -144,20 +139,18 @@ data class EraserSettings(
 }
 
 /**
- * The Insert Shape tool — `memory/inkPlan.md` §5.4.
+ * The Insert Shape tool.
  *
  * Not a [PenPreset], for the reason [HighlighterSettings] is not: the questions differ. A shape has
- * no nib, no pressure response and no stabilization — it is traced along an ideal path, so there is
- * no shake to smooth — and it has two things a pen has no use for, a border width measured
- * separately from a pen's thickness and, eventually, a fill.
+ * no nib, no pressure response and no stabilization — it is traced along an ideal path — and it has
+ * a border width measured separately from a pen's thickness and, eventually, a fill.
  *
- * Every field here describes *the user*, per ID5: how you like to draw shapes. What the traced
- * strokes carry is a property of the shape you drew and travels with the page. Getting that boundary
- * wrong is a sync bug rather than a refactor.
+ * Every field here describes the user: how you like to draw shapes. What the traced strokes carry is
+ * a property of the shape you drew and travels with the page. Getting that boundary wrong is a sync
+ * bug rather than a refactor.
  *
- * [kind] lives here rather than on [DrawTool.Shape] deliberately. Which shape is armed is a setting
- * the way a highlighter's ink is a setting: the tool in your hand is not persisted, but what it is
- * set to is.
+ * [kind] lives here rather than on [DrawTool.Shape] deliberately: the tool in your hand is not
+ * persisted, but what it is set to is.
  */
 @Serializable
 data class ShapeSettings(
@@ -184,14 +177,12 @@ data class ShapeSettings(
 }
 
 /**
- * The Insert Table tool — `memory/tablePlan.md` TA7, and `memory/references/table-opts.jpeg` field for
- * field.
+ * The Insert Table tool.
  *
- * Every value here describes *the user*, per ID5: how you like a table to start. What the table
- * carries in the document is a property of that table and travels with the page — the same boundary
- * [ShapeSettings] draws against `Outline.Shape`, and with the same warning attached. The two panes
- * look alike deliberately and must never be merged: one is a preference, the other is an edit, and
- * collapsing them is a sync bug rather than a refactor.
+ * Every value here describes the user: how you like a table to start. What the table carries in the
+ * document is a property of that table and travels with the page — the same boundary [ShapeSettings]
+ * draws against `Outline.Shape`. The two panes look alike deliberately and must never be merged: one
+ * is a preference, the other is an edit.
  *
  * The plate's fill reads "none", which is where a table starts and is not the same thing as a
  * transparent one.
@@ -199,16 +190,14 @@ data class ShapeSettings(
 @Serializable
 data class TableSettings(
     /**
-     * Whether the next table is a **ruling to write in** rather than a grid of text fields — TA15,
-     * which its cells carry as `Outline.Table.inkOnly`.
+     * Whether the next table is a ruling to write in rather than a grid of text fields, which its
+     * cells carry as `Outline.Table.inkOnly`.
      *
-     * **This was a second tool and is now a setting.** `DrawTool.InkTable` existed because the two
-     * kinds place different objects; what that bought was two Table buttons on two tabs, differing
-     * in a way neither button could show. The kind is a question about the table you are about to
-     * make, which is what every other field here is, so it is asked in the same pane.
+     * This was a second tool and is now a setting. `DrawTool.InkTable` existed because the two kinds
+     * place different objects; what that bought was two Table buttons on two tabs, differing in a
+     * way neither button could show. The kind is a question about the table you are about to make.
      *
-     * Starts on because the one button that reads it sits on the Draw tab, among the things a stylus
-     * uses.
+     * Starts on because the one button that reads it sits on the Draw tab.
      */
     val inkOnly: Boolean = true,
     val columns: Int = DEFAULT_COLUMNS,
@@ -254,11 +243,10 @@ fun ShapeSettings.forCanvasTheme(isDark: Boolean): ShapeSettings =
 /**
  * One of the Draw tab's pens.
  *
- * Every field here describes *the user*, not a page — which is why this is DataStore beside
+ * Every field here describes the user, not a page — which is why this is DataStore beside
  * [EditorDefaults] rather than anything in `PageDoc`. A pen is how someone likes to write; the brush
  * recorded on a stroke is a property of that stroke and travels with it to another device. Getting
- * that boundary wrong is a sync bug rather than a refactor, so it is worth stating twice:
- * `memory/inkPlan.md` ID5 has the full three-way rule.
+ * that boundary wrong is a sync bug rather than a refactor.
  *
  * Defaults are the values the reference screenshot is showing.
  */
@@ -275,15 +263,14 @@ data class PenPreset(
     /**
      * Whether pausing at the end of a straight-ish stroke replaces it with a line object.
      *
-     * **Was `holdToDrawShape`, and the rename is the feature.** `memory/inkPlan.md` §5 planned a
-     * classifier over line, circle and rectangle; what is built is the line alone, by request, so
-     * the toggle says what it does. The old key is not read back — `penSettingsJson` has
-     * `ignoreUnknownKeys`, so a preset saved with the old name arrives with this at its default —
-     * which costs anyone who turned the old toggle off nothing, because the old toggle was wired to
-     * a panel and to nothing else.
+     * Was `holdToDrawShape`, and the rename is the feature: a classifier over line, circle and
+     * rectangle was planned, and what is built is the line alone, so the toggle says what it does.
+     * The old key is not read back — `penSettingsJson` has `ignoreUnknownKeys`, so a preset saved
+     * with the old name arrives with this at its default, which costs nothing because the old toggle
+     * was wired to a panel and to nothing else.
      *
-     * On the pen rather than in one shared place, per ID5: a fine pen for handwriting and a thick
-     * one kept for ruling lines want opposite answers, and this is a question about how you draw.
+     * On the pen rather than in one shared place: a fine pen for handwriting and a thick one kept
+     * for ruling lines want opposite answers.
      */
     val holdForStraightLine: Boolean = true,
 ) {
@@ -324,22 +311,21 @@ fun PenPreset.forCanvasTheme(isDark: Boolean): PenPreset =
 /**
  * The colour to actually paint with, for anything that recorded whether its colour was automatic.
  *
- * **The settings' `forCanvasTheme` family resolves a colour for the tool; this resolves it for the
- * mark already on the page**, and the two exist for opposite halves of the same rule. Resolving only
- * at the tool bakes the answer into the stroke, so Switch Background left every automatic mark at
- * whatever the canvas happened to be when it was drawn — white ink staying white on white paper,
- * while the text beside it flipped. Text never had the bug because it stores no colour at all and
- * reads [com.vivenotes.ui.theme.CanvasColors.text] at paint time; this is how ink and objects get to
- * say the same thing.
+ * The settings' `forCanvasTheme` family resolves a colour for the tool; this resolves it for the
+ * mark already on the page. Resolving only at the tool bakes the answer into the stroke, so Switch
+ * Background left every automatic mark at whatever the canvas happened to be when it was drawn —
+ * white ink staying white on white paper, while the text beside it flipped. Text never had the bug
+ * because it stores no colour at all and reads [com.vivenotes.ui.theme.CanvasColors.text] at paint
+ * time; this is how ink and objects get to say the same thing.
  *
  * [followsTheme] is deliberately tri-state:
  *  - `true` — automatic, drawn with the pen or shape that follows the canvas. Always resolves.
- *  - `false` — a colour the user picked. Never resolves; the codebase's standing rule is that a
- *    deliberate choice survives the theme changing under it.
- *  - `null` — **written before any of this was recorded.** Its intent is genuinely unknown, so it is
- *    inferred: pure white and pure black are what the automatic pen resolved to and nothing else, so
- *    they are read as automatic and every other colour is read as chosen. The inference is confined
- *    to null, so it applies to old marks only and never to anything drawn from now on.
+ *  - `false` — a colour the user picked. Never resolves; a deliberate choice survives the theme
+ *    changing under it.
+ *  - `null` — written before any of this was recorded, so its intent is unknown and is inferred:
+ *    pure white and pure black are what the automatic pen resolved to and nothing else, so they read
+ *    as automatic and every other colour reads as chosen. Confined to null, so it never applies to
+ *    anything drawn from now on.
  *
  * The inference can be wrong in exactly one way — a stroke where white or black was picked from the
  * palette by hand — and it fails safe: that mark flips instead of disappearing.
@@ -360,10 +346,9 @@ const val AUTOMATIC_DARK: Int = 0xFF000000.toInt()
 /**
  * The colour an automatic pen or shape border is showing on this canvas.
  *
- * The mirror of [automaticColorOr], and the half a *picker* needs: that one asks whether a mark was
+ * The mirror of [automaticColorOr], and the half a picker needs: that one asks whether a mark was
  * automatic, this asks whether a colour is the one automatic would have produced. Tapping it is
- * therefore not the same act as tapping any other swatch — see `PenPanel`, which is where the
- * distinction is made and why.
+ * therefore not the same act as tapping any other swatch — see `PenPanel`.
  */
 fun automaticInkFor(isDark: Boolean): Int = if (isDark) AUTOMATIC_LIGHT else AUTOMATIC_DARK
 
@@ -396,29 +381,28 @@ sealed interface DrawTool {
     /**
      * Insert Shape: drag out a box and the chosen shape is traced into it.
      *
-     * One tool rather than sixteen, because *which* shape it draws is [ShapeSettings.kind] — the
-     * same split [Highlighter] has from [HighlighterSettings].
+     * One tool rather than sixteen, because which shape it draws is [ShapeSettings.kind] — the same
+     * split [Highlighter] has from [HighlighterSettings].
      */
     data object Shape : DrawTool
 
     /**
-     * Insert Table: the next tap on bare canvas puts a table there — `memory/tablePlan.md` TA7.
+     * Insert Table: the next tap on bare canvas puts a table there.
      *
      * A tool rather than a button that drops one, for the reason [Shape] is one: a page is a canvas,
      * and what goes on it goes where you put it. How many rows and columns it arrives with is
-     * [TableSettings], the same split [Shape] has from [ShapeSettings].
+     * [TableSettings].
      *
-     * **One tool for both kinds of table.** Whether it places a grid of text fields or a ruling to
-     * write in is [TableSettings.inkOnly] — the same split again, and the reason `InkTable` is gone.
+     * One tool for both kinds of table: whether it places a grid of text fields or a ruling to write
+     * in is [TableSettings.inkOnly], which is why `InkTable` is gone.
      */
     data object Table : DrawTool
 
     /**
-     * Insert Equation **as an object**: the next tap on bare canvas puts the formula there.
+     * Insert Equation as an object: the next tap on bare canvas puts the formula there.
      *
-     * A tool rather than a drop, for the reason [Table] and [Shape] are: a page is a canvas and what
-     * goes on it goes where you put it. *Which* formula is not a setting, though — it is content, so
-     * unlike every other tool here what this one carries is held beside it, as the ViewModel's
+     * A tool rather than a drop, for the reason [Table] and [Shape] are. Which formula is not a
+     * setting, though — it is content, so what this tool carries is held beside it as the ViewModel's
      * pending equation, and is gone when the tool is put down.
      *
      * The Home tab's ƒ writes into text instead and arms nothing; see `Outline.Equation` for why the
@@ -430,23 +414,21 @@ sealed interface DrawTool {
     data object Lasso : DrawTool
 
     /**
-     * Insert Space: draw a line across the page and drag, and everything past it moves — E2.
+     * Insert Space: draw a line across the page and drag, and everything past it moves.
      *
      * A tool rather than a dialog asking for a number, because the thing being edited is a gap and a
-     * gap is something you point at. It is also the one tool here that edits *no object*: what it
-     * changes is where everything else sits, so unlike [Shape] or [Table] it carries no settings at
-     * all — how much space, and in which direction, is the drag itself. See
+     * gap is something you point at. It is also the one tool here that edits no object, so it
+     * carries no settings at all — how much space, and in which direction, is the drag itself. See
      * `com.vivenotes.model.PageSpace`.
      */
     data object InsertSpace : DrawTool
 
     /**
-     * Text: a tap on bare canvas opens a container and puts a caret in it —
-     * `memory/textBoxPlan.md` TD2.
+     * Text: a tap on bare canvas opens a container and puts a caret in it.
      *
-     * This *was* [None], which is why the Home tab's **T** button could be pressed but never
-     * unpressed: the name said "nothing armed" and the behaviour said "text armed", so there was
-     * nothing to turn off to. Naming it is what makes the button a toggle.
+     * This was [None], which is why the Home tab's T button could be pressed but never unpressed:
+     * the name said "nothing armed" and the behaviour said "text armed". Naming it is what makes the
+     * button a toggle.
      */
     data object Text : DrawTool
 
@@ -458,22 +440,22 @@ sealed interface DrawTool {
 }
 
 /**
- * What one press of the stylus's barrel button does — `memory/stylusPlan.md` SB2.
+ * What one press of the stylus's barrel button does.
  *
  * Every entry is something the ribbon can already do, reached through a view-model method that
- * already exists: this is a second way to reach a capability, never a new one. What is *not* here is
- * argued in SB2 — the placement tools are left out because a barrel button is pressed with the pen in
- * the air, and arming one by accident drops an object on the next touch.
+ * already exists: this is a second way to reach a capability, never a new one. The placement tools
+ * are left out because a barrel button is pressed with the pen in the air, and arming one by
+ * accident drops an object on the next touch.
  *
- * [TogglePenEraser] is not a tool but a rule, and has to stay an action of its own (SB2a): flattening
- * it into [Eraser] would hand the user a button that arms the eraser and then has nothing left to do.
+ * [TogglePenEraser] is a rule rather than a tool and has to stay an action of its own: flattening it
+ * into [Eraser] would hand the user a button that arms the eraser and then has nothing left to do.
  *
- * Serialized **by name**, so renaming an entry is a stored-value change: an old blob naming the
- * entry that used to exist decodes to the field's default rather than to its replacement.
+ * Serialized by name, so renaming an entry is a stored-value change: an old blob naming the entry
+ * that used to exist decodes to the field's default rather than to its replacement.
  */
 @Serializable
 enum class StylusAction(val label: String) {
-    /** Unbound. The keycode is left unclaimed so it falls through — SB5, and it is the default for a
+    /** Unbound. The keycode is left unclaimed so it falls through, and it is the default for a
      * press nothing has asked for. */
     None("Nothing"),
     TogglePenEraser("Pen / eraser"),
@@ -489,19 +471,18 @@ enum class StylusAction(val label: String) {
 }
 
 /**
- * What each click count does — `memory/stylusPlan.md` SB1 and SB3.
+ * What each click count does.
  *
- * **The unit is a completed click count, not "the button".** The pen reports one, two and three
- * clicks as three separate keycodes because its firmware has already done the timing, so there are
- * exactly three fields here and nothing anywhere that measures an interval.
+ * The unit is a completed click count, not "the button". The pen reports one, two and three clicks
+ * as three separate keycodes because its firmware has already done the timing, so there are exactly
+ * three fields here and nothing anywhere that measures an interval.
  *
- * A property of **the user**, not of this device (SB3): "double click means highlighter" is a working
- * habit, the same kind of fact as "pen 2 is red", and it should follow its owner to another tablet.
- * Carrying it there is safe — a pen with no triple click simply never fires that binding, so a
- * mapping is never *wrong* on unfamiliar hardware, only unused.
+ * A property of the user rather than of this device: "double click means highlighter" is a working
+ * habit, the same kind of fact as "pen 2 is red". Carrying it to another tablet is safe — a pen with
+ * no triple click simply never fires that binding.
  *
- * **The defaults are exactly the behaviour the hard-coded version shipped with** (SB4). Someone who
- * never opens the Hardware pane must not be able to tell that this became configurable.
+ * The defaults are exactly the behaviour the hard-coded version shipped with, so someone who never
+ * opens the Hardware pane cannot tell that this became configurable.
  */
 @Serializable
 data class StylusButtonMap(
@@ -539,7 +520,7 @@ class PenSettingsStore(context: Context) {
 
     /**
      * Shares [palette] rather than carrying a swatch row of its own: the colours someone reaches for
-     * are one property of the user (ID5), not one per tool. A colour mixed holding a pen is there
+     * are one property of the user, not one per tool. A colour mixed holding a pen is there
      * when a shape is drawn.
      */
     val shape: Flow<ShapeSettings> = store.data.map { prefs ->
@@ -560,8 +541,8 @@ class PenSettingsStore(context: Context) {
      * The swatch row, which the wheel adds to.
      *
      * Stored beside the pens rather than on one of them: the row is the same in all three panes, so
-     * a colour mixed while holding pen 2 is there when pen 1 is picked up. It is a property of the
-     * user by ID5 — the colours someone reaches for — not of a device or of any page.
+     * a colour mixed while holding pen 2 is there when pen 1 is picked up. A property of the user —
+     * the colours someone reaches for — not of a device or of any page.
      */
     val palette: Flow<List<Int>> = store.data.map { prefs ->
         prefs[PALETTE]?.let(::decodePalette) ?: PEN_COLORS
@@ -705,14 +686,13 @@ class PenSettingsStore(context: Context) {
 /**
  * How every blob in this file is written and read.
  *
- * `ignoreUnknownKeys` covers a field this build does not have; `coerceInputValues` covers a *value* it
- * does not have — a pen kind added later, or a [StylusAction] renamed — which would otherwise throw and
- * lose the whole record over one setting. Same pair, for the same reason, as `DocumentJson`.
+ * `ignoreUnknownKeys` covers a field this build does not have; `coerceInputValues` covers a value it
+ * does not have — a pen kind added later, or a [StylusAction] renamed — which would otherwise throw
+ * and lose the whole record over one setting. The same pair, for the same reason, as `DocumentJson`.
  *
- * At file level rather than in [PenSettingsStore]'s companion, and `internal` rather than private, so a
- * JVM test can exercise **this** configuration rather than a copy of it that would go on passing after
- * someone removed a flag from here. The store itself needs a `Context`, which puts it out of reach
- * until Robolectric lands (risk R10); this is the part of it that does not.
+ * At file level rather than in [PenSettingsStore]'s companion, and `internal` rather than private,
+ * so a JVM test can exercise this configuration rather than a copy of it. The store itself needs a
+ * `Context`, which puts it out of reach; this is the part of it that is not.
  */
 internal val penSettingsJson: Json = Json {
     // The false value is meaningful: it distinguishes an explicitly chosen black/white from an old

@@ -37,7 +37,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Export as PDF, end to end — `memory/pdfExportPlan.md` PD10.
+ * Export as PDF, end to end.
  *
  * The tiling and the fit are pinned by JVM tests (`PageTilingTest`); what needs a device is
  * everything they hand off to. A `PageStroke` is a native mesh, a `StaticLayout` needs a real
@@ -121,7 +121,7 @@ class PdfExportTest {
     }
 
     /**
-     * The margin is the export's to set — PD1 — and it is not a border: the canvas is cut *inside*
+     * The margin is the export's to set, and it is not a border: the canvas is cut *inside*
      * it, so the same two blocks of writing are one sheet at a quarter of an inch and two at one
      * inch. The page itself is untouched either way.
      */
@@ -172,7 +172,7 @@ class PdfExportTest {
     }
 
     /**
-     * A page already bound to the paper it is exported onto is one sheet at its own origin — PD3's
+     * A page already bound to the paper it is exported onto is one sheet at its own origin — the
      * exception, and the case where the writer's own layout must not be re-anchored.
      */
     @Test

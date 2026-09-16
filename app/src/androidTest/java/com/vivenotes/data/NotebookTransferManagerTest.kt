@@ -575,14 +575,12 @@ class NotebookTransferManagerTest {
     /**
      * A bundle carries the notebook and nothing about the account that exported it.
      *
-     * The three `sync_*` tables and the triggers that feed them exist on every real install, and
-     * `VACUUM INTO` copies all of it. Left in, three separate things break: `validateSchema`
-     * compares the bundle's table set to `EXPECTED_COLUMNS` exactly and rejects the file, so no
-     * build could import what this build wrote; the surviving triggers fire while the export
-     * rewrites `attachments`, queueing rows into an outbox that is about to be shipped; and the
-     * importer would inherit a cursor belonging to someone else's account and skip deltas it has
-     * never seen. Asserted on the bundle rather than through a round trip because a round trip only
-     * proves the importer accepts the file, not that the account data is gone from it.
+     * The three `sync_*` tables and their triggers exist on every real install, and `VACUUM INTO`
+     * copies all of it. Left in, three things break: `validateSchema` compares the bundle's table
+     * set to `EXPECTED_COLUMNS` exactly and rejects the file; the surviving triggers fire while the
+     * export rewrites `attachments`; and the importer inherits a cursor belonging to another
+     * account. Asserted on the bundle rather than through a round trip, which would only prove the
+     * importer accepts the file.
      */
     @Test
     fun exportStripsTheSyncLayerFromTheBundle() = runBlocking {

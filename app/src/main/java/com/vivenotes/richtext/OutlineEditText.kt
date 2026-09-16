@@ -107,7 +107,6 @@ class OutlineEditText @JvmOverloads constructor(
 
     /**
      * What Tab does when this editor is a table cell: move the caret on, and say whether it moved —
-     * `memory/tablePlan.md` TA17.
      *
      * Null in a text container, which is the common case and the one Tab already had an answer for:
      * inside a note, indent is what a writer means. A cell is where that stops being true, because
@@ -293,16 +292,13 @@ class OutlineEditText @JvmOverloads constructor(
     /**
      * Opens a video when its play badge is tapped, and otherwise leaves every touch to the editor.
      *
-     * **The badge consumes the gesture from the down event onwards**, rather than acting on the up
-     * and letting the widget see both. A tap that both moved the caret and left the app would put
-     * the caret inside the URL on the way out — so the card would be gone and the raw link showing
-     * when the user came back, which is exactly the state the preview exists to avoid. Consuming
-     * the down keeps `EditText`'s own touch state machine out of the gesture entirely, so there is
-     * no half-started selection to unwind.
+     * The badge consumes the gesture from the down event onwards rather than acting on the up. A tap
+     * that both moved the caret and left the app would put the caret inside the URL on the way out,
+     * so the card would be gone and the raw link showing when the user came back. Consuming the down
+     * also keeps `EditText`'s own touch state machine out of the gesture entirely.
      *
-     * The rest of the card is deliberately *not* consumed: a tap there places the caret, which
-     * uncovers the URL for editing. That split is what lets one object be both a video and a piece
-     * of text you can select and delete.
+     * The rest of the card is deliberately not consumed: a tap there places the caret, which
+     * uncovers the URL for editing.
      */
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
@@ -375,7 +371,7 @@ class OutlineEditText @JvmOverloads constructor(
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         // Tab indents rather than moving focus — inside a note, indent is what a writer means. In a
-        // table cell it walks the grid instead (TA17), and falls back to the indent in the last cell,
+        // table cell it walks the grid instead, and falls back to the indent in the last cell,
         // where there is nowhere left to walk.
         if (keyCode == KeyEvent.KEYCODE_TAB) {
             val forward = !event.isShiftPressed
@@ -667,16 +663,14 @@ class OutlineEditText @JvmOverloads constructor(
     /**
      * Draws each pasted video link as its thumbnail while leaving the URL itself as ordinary text.
      *
-     * The same shape as [refreshAutoEquations], and deliberately so — it is the same idea applied to
-     * a different pattern. A card is absent whenever the focused caret or selection touches its
-     * range, so the URL comes back the moment someone goes to edit it; a link whose thumbnail has
-     * not arrived, or cannot be fetched at all, simply never gets a span and stays readable as what
-     * the writer typed.
+     * The same shape as [refreshAutoEquations]. A card is absent whenever the focused caret or
+     * selection touches its range, so the URL comes back the moment someone goes to edit it; a link
+     * whose thumbnail has not arrived simply never gets a span and stays readable.
      *
      * Every span is rebuilt rather than reconciled, because `SpannableCodec.normalize` has already
-     * stripped them: it removes all [Derived] spans on every pass, and this runs after it. What
-     * makes that affordable is that the bitmaps are already decoded — [VideoThumbnails.cached] never
-     * touches disk — so a keystroke costs a `findVideoLinks` scan and a handful of `setSpan` calls.
+     * stripped them. What makes that affordable is that the bitmaps are already decoded —
+     * [VideoThumbnails.cached] never touches disk — so a keystroke costs a `findVideoLinks` scan and
+     * a handful of `setSpan` calls.
      */
     private fun refreshVideoEmbeds() {
         val editable = text ?: return

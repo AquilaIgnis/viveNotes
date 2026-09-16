@@ -3,29 +3,25 @@ package com.vivenotes.ink
 /**
  * The one edge an infinite canvas still has: its origin corner.
  *
- * The page grows to the right and downward without limit — that is what makes it a canvas rather
- * than a sheet — but it does not grow *backwards*. Page coordinates start at (0, 0) and both scroll
- * states start there too, so anything placed at a negative coordinate is not merely off screen: it
- * can never be scrolled to, selected, or dragged back. It is gone, while still being saved, loaded
+ * The page grows right and downward without limit, but it does not grow backwards. Page coordinates
+ * start at (0, 0) and both scroll states start there too, so anything placed at a negative
+ * coordinate can never be scrolled to, selected or dragged back — while still being saved, loaded
  * and counted for ever after.
  *
- * That had already happened twice on real pages by the time this existed — ink dragged off the top
- * left corner by a lasso, and strokes drawn by a pen that left the window mid-stroke, which Android
- * keeps reporting long after the pointer has stopped being over anything. So the rule is enforced in
- * three places, and each is there for a different reason:
+ * That had happened twice on real pages by the time this existed: ink dragged off the top-left
+ * corner by a lasso, and strokes drawn by a pen that left the window mid-stroke. So the rule is
+ * enforced in three places, each for a different reason:
  *
- * 1. **At the gesture**, so the preview matches what will be committed. A drag clamped only on the
- *    lift is a drag that follows the finger past the wall and then snaps back.
- * 2. **At the draw seam**, because a stroke's points are what the pen produced and there is no
- *    honest way to fix them afterwards — the part that *was* on the page would have to move too.
- * 3. **At each kind's document funnel**, which is what makes it an invariant rather than a habit:
- *    whatever a caller asks for, nothing is stored above or to the left of the origin.
+ * 1. At the gesture, so the preview matches what will be committed. A drag clamped only on the lift
+ *    follows the finger past the wall and then snaps back.
+ * 2. At the draw seam, because a stroke's points are what the pen produced and there is no honest
+ *    way to fix them afterwards — the part that was on the page would have to move too.
+ * 3. At each kind's document funnel, which makes it an invariant rather than a habit.
  *
- * Ink is the exception to the third, and gets [clampTranslation] on *replay* instead — see
+ * Ink is the exception to the third and gets [clampTranslation] on replay instead — see
  * `replayMove`. Every stored ink move passes through replay on load, so that is ink's one door.
  *
- * Everything here is in page units (dp), the space ink, shapes, tables, equations and text
- * containers all share.
+ * Everything here is in page units (dp).
  */
 object PageBounds {
 
@@ -76,19 +72,18 @@ object PageBounds {
     /**
      * As much of ([scaleX], [scaleY]) as keeps [bounds] on the page when scaled about [anchor].
      *
-     * Only a corner drag that pulls the *far* side of the rectangle towards the origin can offend, so
+     * Only a corner drag that pulls the far side of the rectangle towards the origin can offend, so
      * the limit exists only on the axes where the anchor lies to the right of, or below, the edge
-     * being moved: `left' = anchor + (left - anchor) × scale ≥ 0` gives `scale ≤ anchor / (anchor -
-     * left)`. On the other axes the edge moves away from the origin and any scale is legal.
+     * being moved: `left' = anchor + (left - anchor) × scale ≥ 0` gives
+     * `scale ≤ anchor / (anchor - left)`.
      *
-     * **Only ever limits growth, and never shrinks anything.** An edge that is already off the page
-     * is left entirely alone: no positive scale about an anchor on the near side can bring it back,
-     * so the honest limit there is zero — and a limit of zero collapses the object into its anchor,
-     * which is a far worse answer than the position it was already in. Bringing content back is a
-     * translation's job ([clampTranslation]), and a scale that destroys it on the way is not help.
+     * Only ever limits growth, and never shrinks anything. An edge already off the page is left
+     * alone: no positive scale about an anchor on the near side can bring it back, so the honest
+     * limit there is zero — and zero collapses the object into its anchor. Bringing content back is
+     * [clampTranslation]'s job.
      *
-     * With that case excluded the ratio cannot fall below 1, so this can only ever stop a corner
-     * drag short of the wall — never drag one inward on its own.
+     * With that case excluded the ratio cannot fall below 1, so this can only stop a corner drag
+     * short of the wall.
      */
     fun clampScale(
         bounds: InkBounds,

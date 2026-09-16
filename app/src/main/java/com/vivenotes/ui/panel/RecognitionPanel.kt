@@ -217,20 +217,17 @@ private fun ColumnScope.FormulaToolsContent(
 
     val analysis = state.analysis ?: return
 
-    // **Debug builds only.** This section is a read-out of the SymPy round-trip — the parsed
-    // summary, the free variables, and the LaTeX the engine normalised the formula to — and it was
-    // written to debug the bridge, not for someone doing arithmetic on a page. It answers a question
-    // a user never asks and shows the same formula they are already looking at, one section above,
-    // in Preview.
+    // Debug builds only. This section is a read-out of the SymPy round-trip — the parsed summary,
+    // the free variables, and the LaTeX the engine normalised the formula to — written to debug the
+    // bridge rather than for someone doing arithmetic on a page.
     //
     // `BuildConfig.DEBUG` is a `static final` constant, so the block below is not merely hidden in
     // release: the compiler folds the condition before R8 processes the release artifact. Verified
-    // rather than assumed: "Understood as" appears in the debug APK's dex and in none of the
+    // rather than assumed — "Understood as" appears in the debug APK's dex and in none of the
     // release APK's.
     //
-    // `analysis.summary`, `variables` and `normalizedLatex` stay in the model regardless — the
-    // actions are derived from the same analysis, and a debug read-out is worth keeping the moment
-    // the bridge misbehaves again.
+    // `analysis.summary`, `variables` and `normalizedLatex` stay in the model regardless, since the
+    // actions are derived from the same analysis.
     if (BuildConfig.DEBUG) {
         PanelSection("Understood as") {
             Text(
@@ -321,22 +318,19 @@ private fun ColumnScope.FormulaToolsContent(
 /**
  * The recognised source, editable — LaTeX or prose.
  *
- * **Not an `OutlinedTextField`, and the reason is vertical space.** Material's field is built for a
- * form: 16dp of padding above and below, `bodyLarge` inside, and a container tall enough to hold a
+ * Not an `OutlinedTextField`, and the reason is vertical space: Material's field is built for a form
+ * — 16dp of padding above and below, `bodyLarge` inside, and a container tall enough to hold a
  * floating label this one never shows. In a 320dp pane the field is followed by a preview, an
- * interpretation, a row of actions and often a graph, and the field was eating the room they need.
- * This is the same construction [PanelMeasure] uses — a `BasicTextField` inside a bordered box — so
- * the panel keeps one field idiom rather than two.
+ * interpretation, a row of actions and often a graph. This is the same construction [PanelMeasure]
+ * uses, so the panel keeps one field idiom rather than two.
  *
- * **Monospaced, because LaTeX is code.** It is read for its backslashes and braces, where a
- * proportional face closes up `\\,` and `{}` into mush; monospace also fits more characters per line,
- * which is the other half of making the box smaller.
+ * Monospaced, because LaTeX is code: it is read for its backslashes and braces, where a
+ * proportional face closes up `\,` and `{}` into mush.
  *
- * **One line minimum, so the box is the size of what is in it.** This is the part that was actually
- * wrong: `minLines` held the field open at three lines and then two, so a one-line formula — which is
- * most of them — was followed by a band of empty field. A minimum is for a box you expect to type a
- * lot into; this one usually holds a correction. Six maximum, so a long expression still scrolls
- * inside the field rather than pushing the preview off the pane.
+ * One line minimum, so the box is the size of what is in it. `minLines` held the field open at three
+ * lines and then two, so a one-line formula — which is most of them — was followed by a band of
+ * empty field. Six maximum, so a long expression scrolls inside the field rather than pushing the
+ * preview off the pane.
  */
 @Composable
 private fun SourceField(value: String, onValueChange: (String) -> Unit) {

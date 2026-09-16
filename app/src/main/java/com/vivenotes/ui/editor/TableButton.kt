@@ -29,22 +29,19 @@ import com.vivenotes.ui.panel.TablePanelContent
 internal const val TABLE_BUTTON_TAG = "insert-table"
 
 /**
- * Insert Table — `memory/tablePlan.md` TA7.
+ * Insert Table.
  *
- * The interaction is [ShapeButton]'s, deliberately: a tap arms the tool, and holding — or tapping the
- * tool already in hand — opens its settings. Two buttons on the same tab behaving differently would
- * be worse than either behaviour.
+ * The interaction is [ShapeButton]'s, deliberately: a tap arms the tool, and holding — or tapping
+ * the tool already in hand — opens its settings.
  *
- * **What it arms is a tool, not a drop.** The next tap on bare canvas is what places the table, so a
- * table goes where you put it, the way everything else on this canvas does. The reference's Table
- * button carries a chevron for the same reason this one opens a pane: how many rows and columns is a
- * question asked before the table exists, not after.
+ * What it arms is a tool, not a drop. The next tap on bare canvas is what places the table, so a
+ * table goes where you put it. How many rows and columns is a question asked before the table
+ * exists, not after, which is why this opens a pane.
  *
- * **One button, one tool, both kinds of table.** This *was* two buttons on two tabs — a grid of text
- * fields on Insert and a ruling to write in on Draw (TA15) — wearing the same glyph and the same
- * pane, distinguished only by which tab you found them on. The kind is now
- * [TableSettings.inkOnly], asked in the pane beside the rows and columns, and the Insert tab's copy
- * is gone. What survives lives here on Draw, with the things a stylus uses.
+ * One button, one tool, both kinds of table. This was two buttons on two tabs — a grid of text
+ * fields on Insert and a ruling to write in on Draw — wearing the same glyph and the same pane,
+ * distinguished only by which tab you found them on. The kind is now [TableSettings.inkOnly], asked
+ * in the pane beside the rows and columns, and what survives lives here on Draw.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable

@@ -52,23 +52,21 @@ sealed interface BlobPresence {
 data class BlobDownloads(val downloaded: Int, val workRemains: Boolean)
 
 /**
- * Attachment bytes, both directions — `viveCServer/memory/syncPlan.md` S5 and SD7.
+ * Attachment bytes, both directions.
  *
- * **The rule the whole phase exists to keep is the server's: a live row never points at bytes the
- * server cannot serve.** It enforces that by rejecting a `pageContent` whose `blobRefs` name a
- * digest it does not hold, and an `attachment` row whose id names one — so on this side, uploading
- * comes *before* the change that references it, and a `missing_blob` rejection is the one failure a
- * client can always clear on its own.
+ * The rule this phase exists to keep is the server's: a live row never points at bytes the server
+ * cannot serve. It enforces that by rejecting a `pageContent` whose `blobRefs` name a digest it does
+ * not hold, so on this side uploading comes before the change that references it, and a
+ * `missing_blob` rejection is the one failure a client can always clear on its own.
  *
- * Two memos, both in memory and both deliberately not persisted:
+ * Two memos, both in memory and deliberately not persisted:
  *
  *  - [serverHolds] is what makes a steady-state run cost nothing. The durable half of the same fact
- *    is `sync_entity_states`: an `attachment` row the server accepted, or one this device pulled,
- *    proves the bytes are there, because the server refuses the row otherwise and never sweeps a
- *    blob while a live row names it. This set only saves the round trip *within* a process.
+ *    is `sync_entity_states`: an `attachment` row the server accepted proves the bytes are there.
+ *    This set only saves the round trip within a process.
  *  - [deferred] stops a picture the server does not have from being asked for on every later event
- *    for the rest of the process. Forgotten when the process restarts, which is the cheapest
- *    retry policy that cannot spin: a repair is a launch away rather than a request away.
+ *    for the rest of the process. Forgotten on restart, which is the cheapest retry policy that
+ *    cannot spin.
  */
 class AttachmentBlobSync(
     db: NotesDatabase,
@@ -145,15 +143,14 @@ class AttachmentBlobSync(
     /**
      * Fetches the bytes for every picture this device knows about and does not have.
      *
-     * **The `attachments` table is the queue.** A row whose file is absent *is* a pending download,
-     * so there is no second table to keep in step with the filesystem, nothing to drain twice, and
-     * nothing stranded when a process dies mid-transfer. A pulled `attachment` row therefore
-     * schedules its own bytes by existing.
+     * The `attachments` table is the queue: a row whose file is absent is a pending download, so
+     * there is no second table to keep in step with the filesystem and nothing stranded when a
+     * process dies mid-transfer.
      *
-     * The first transport failure ends the pass rather than trying the rest. They are all going to
-     * the same server: a tablet that has lost its wifi with two hundred pictures outstanding would
-     * otherwise spend two hundred connect timeouts finding that out on one wakeup. A 404 or a
-     * digest that does not match is about *that* picture and only defers it.
+     * The first transport failure ends the pass rather than trying the rest — they are all going to
+     * the same server, so a tablet that has lost its wifi with two hundred pictures outstanding
+     * would otherwise spend two hundred connect timeouts on one wakeup. A 404 or a mismatched digest
+     * is about that picture and only defers it.
      */
     suspend fun downloadMissing(account: SyncAccount): BlobDownloads {
         var downloaded = 0
@@ -196,15 +193,13 @@ class AttachmentBlobSync(
     /**
      * Deletes the local copies of pictures nothing on this device reaches any more.
      *
-     * The caller — `HierarchySync.evictToCloud` — has already removed their `attachments` rows in
-     * the same operation, and that ordering is not cosmetic: [missingBytes] answers "what is
-     * pending" by looking for a row whose file is absent, so a file deleted while its row survived
-     * would be re-downloaded on the next tick, which is the opposite of what moving a notebook to
-     * the cloud was asked to do.
+     * The caller has already removed their `attachments` rows in the same operation, and that
+     * ordering is not cosmetic: [missingBytes] answers "what is pending" by looking for a row whose
+     * file is absent, so a file deleted while its row survived would be re-downloaded on the next
+     * tick.
      *
-     * [serverHolds] is deliberately *not* cleared. It records what the server has, and this device
-     * dropping its copy does not change that; forgetting would cost a needless `HEAD` the day the
-     * same picture is pasted again.
+     * [serverHolds] is deliberately not cleared: it records what the server has, and this device
+     * dropping its copy does not change that.
      */
     fun discard(ids: Collection<String>): Int = ids.count { id ->
         if (!isBlobDigest(id)) return@count false

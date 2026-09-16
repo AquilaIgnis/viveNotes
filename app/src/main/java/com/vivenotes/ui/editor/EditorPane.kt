@@ -148,10 +148,10 @@ private val CANVAS_TRAILING_SPACE = 320.dp
 private val CANVAS_TRAILING_WIDTH = 200.dp
 private val CANVAS_MIN_WIDTH = 720.dp
 /**
- * How far inside the window a revealed search result is placed — `memory/searchPlan.md` CS9.
+ * How far inside the window a revealed search result is placed.
  *
- * Not flush against the corner: a container scrolled hard against the edge has its move grip and its
- * left rule off screen, and a result that lands there reads as having overshot.
+ * Not flush against the corner: a container scrolled hard against the edge has its move grip and
+ * its left rule off screen, and a result that lands there reads as having overshot.
  */
 private val REVEAL_MARGIN = 48.dp
 private const val INK_SEARCH_HIGHLIGHT_MS = 1_800L
@@ -190,10 +190,10 @@ private fun Density.clampToConstraints(size: DpSize, zoom: Float): DpSize {
  * The page canvas: title, timestamp, ruled background, and free-form text containers.
  *
  * A page is not one linear document. Text lives in independently positioned containers
- * ("outlines"): tapping empty canvas starts a new one, and each can be dragged and resized.
- * Each container — and each table cell — is an [OutlineEditText] hosted through [NoteEditor], the one
- * place the Compose shell hands off to a View, so that span-based editing, IME handling, selection UI
- * and accessibility come from the platform rather than being reimplemented.
+ * ("outlines"): tapping empty canvas starts a new one, and each can be dragged and resized. Each
+ * container — and each table cell — is an [OutlineEditText] hosted through [NoteEditor], the one
+ * place the Compose shell hands off to a View, so that span-based editing, IME handling, selection
+ * UI and accessibility come from the platform.
  */
 @Composable
 fun EditorPane(
@@ -217,10 +217,10 @@ fun EditorPane(
     outlines: List<OutlineBox>,
     pageRevision: Int,
     /**
-     * Which page is open. **Not the same signal as [pageRevision]**, and the difference is what the
-     * selection hangs on: a revision bump means "the containers were rebuilt", which a row added to a
-     * table is, and clearing the selection there would take the toolbar away from under the finger
-     * that had just used it. A page *change* is what makes ids from somewhere else meaningless.
+     * Which page is open. Not the same signal as [pageRevision]: a revision bump means "the
+     * containers were rebuilt", which a row added to a table is, and clearing the selection there
+     * would take the toolbar away from under the finger that had just used it. A page change is
+     * what makes ids from somewhere else meaningless.
      */
     pageId: String? = null,
     initialBlocksFor: (String) -> List<Block>,
@@ -231,26 +231,26 @@ fun EditorPane(
     onMarkArmed: (Mark) -> Unit,
     onCreateOutline: (Float, Float) -> String,
     /**
-     * Whether the Home tab's **T** is pressed — `memory/textBoxPlan.md` TD2.
+     * Whether the Home tab's T is pressed.
      *
-     * A tap on bare canvas opens a container only while it is, which is the whole of what the toggle
-     * toggles. Defaulted true so the canvas can be exercised in isolation, and because a test that
-     * taps to make a container should not have to arm anything first.
+     * A tap on bare canvas opens a container only while it is. Defaulted true so the canvas can be
+     * exercised in isolation, and because a test that taps to make a container should not have to
+     * arm anything first.
      */
     textArmed: Boolean = true,
     onMoveOutline: (String, Float, Float) -> Unit,
     onResizeOutline: (String, Float) -> Unit,
     onSetOutlineMinHeight: (String, Float) -> Unit,
     onOutlineBlurred: (String) -> Unit,
-    /** The TextBox toolkit — `memory/textBoxPlan.md` TD3–TD5. */
+    /** The TextBox toolkit. */
     onCopyOutline: (String) -> Unit = {},
     onDeleteOutlines: (Set<String>) -> Unit = {},
     /**
      * Back into the command bus, for the toolkit's Select all.
      *
-     * The bar is raised a few dp from the editor it is about and could reach for it directly; it does
-     * not, because AD6's point is that there is one way to drive the editor and a second shorter one
-     * is how the two drift apart. This goes out to the ViewModel and comes back through [commands].
+     * The bar is raised a few dp from the editor it is about and could reach for it directly; it
+     * does not, because there is one way to drive the editor and a second shorter one is how the
+     * two drift apart. This goes out to the ViewModel and comes back through [commands].
      */
     onCommand: (FormatCommand) -> Unit = {},
     /** Window width and page width in dp, which is all Zoom to Page Width needs. */
@@ -258,11 +258,11 @@ fun EditorPane(
     /** Drawn while the Paper Size pane is open, so the margins being edited are visible. */
     showPrintMargins: Boolean,
     /**
-     * A search result to show — `memory/searchPlan.md` CS9.
+     * A search result to show.
      *
-     * A standing request rather than an event, because it usually arrives while the page it names is
-     * still loading: it is honoured on the first composition where that page is open *and* the box it
-     * names has been laid out, and [onRevealHandled] is what says it has been taken.
+     * A standing request rather than an event, because it usually arrives while the page it names
+     * is still loading: it is honoured on the first composition where that page is open and the box
+     * it names has been laid out, and [onRevealHandled] says it has been taken.
      */
     reveal: ContentReveal? = null,
     onRevealHandled: () -> Unit = {},
@@ -280,24 +280,24 @@ fun EditorPane(
     /** The armed shape's settings, or null when Insert Shape is not the tool in hand. */
     shaping: ShapeSettings? = null,
     /**
-     * The ruler's settings while it is out, or null while it is away — `memory/rulerPlan.md`.
+     * The ruler's settings while it is out, or null while it is away.
      *
-     * Only *which* ruler and how big, per RD2. Where it is lying is this composable's business,
-     * because it is a fact about this moment and nothing outside the canvas has any use for it.
+     * Only which ruler and how big. Where it is lying is this composable's business, because it is
+     * a fact about this moment and nothing outside the canvas has any use for it.
      */
     ruler: RulerSettings? = null,
     /**
-     * The tables on the page, and everything the Table Class can do to one — `memory/tablePlan.md`.
+     * The tables on the page, and everything that can be done to one.
      *
-     * `tableArmed` is Insert Table in hand (TA7): the next tap on bare canvas puts one there, and
+     * `tableArmed` is Insert Table in hand: the next tap on bare canvas puts one there, and
      * [onInsertTable] returns its id so the page can select what it just made.
      */
     /**
-     * The pictures on the page — feature E6.
+     * The pictures on the page.
      *
      * [attachments] is what turns an id into pixels, and is null in the tests and previews that
-     * exercise the canvas without a database. `ImageLayer` is simply not composed then, which is the
-     * honest answer: a picture whose bytes cannot be reached is not a picture.
+     * exercise the canvas without a database. `ImageLayer` is simply not composed then: a picture
+     * whose bytes cannot be reached is not a picture.
      */
     images: List<Outline.Image> = emptyList(),
     attachments: AttachmentStore? = null,
@@ -322,11 +322,11 @@ fun EditorPane(
     onInsertTableColumn: (String, Int) -> Unit = { _, _ -> },
     onDeleteTableColumn: (String, Int) -> Unit = { _, _ -> },
     /**
-     * The equations on the page, and everything Prime Object can do to one.
+     * The equations on the page, and everything that can be done to one.
      *
      * `equationArmed` is the Draw tab's ƒ in hand: the next tap on bare canvas puts the formula
-     * there, and [onInsertEquation] returns its id so the page can select what it just made — the
-     * same bargain [onInsertTable] and [onInsertShape] strike.
+     * there, and [onInsertEquation] returns its id so the page can select it — the same bargain
+     * [onInsertTable] and [onInsertShape] strike.
      */
     equations: List<Outline.Equation> = emptyList(),
     equationArmed: Boolean = false,
@@ -356,7 +356,7 @@ fun EditorPane(
     erasing: Boolean = false,
     lassoing: Boolean = false,
     /**
-     * Insert Space in hand — feature E2. A drag draws a line across the page and everything past it
+     * Insert Space in hand. A drag draws a line across the page and everything past it
      * moves; [onInsertSpace] receives the one completed cut. See `com.vivenotes.model.PageSpace`.
      */
     insertingSpace: Boolean = false,
@@ -369,9 +369,9 @@ fun EditorPane(
     /**
      * Whether the armed pen straightens a held stroke — `PenPreset.holdForStraightLine`.
      *
-     * Passed through as a flag beside [onStraightenStroke] rather than being derived here, for the
-     * reason [brush] is built by the caller: which pen is in hand is the shell's knowledge, and a
-     * canvas that had to look it up would need the pen list to draw a page.
+     * A flag beside [onStraightenStroke] rather than derived here, for the reason [brush] is built
+     * by the caller: which pen is in hand is the shell's knowledge, and a canvas that had to look it
+     * up would need the pen list to draw a page.
      */
     straightenOnHold: Boolean = false,
     /** One finished hold, in page units: start x, start y, end x, end y. */
@@ -385,7 +385,7 @@ fun EditorPane(
     /** Puts the whole selection on the shared clipboard — every kind it holds, in one call. */
     onCopySelection: (CanvasSelection) -> Unit = {},
     /**
-     * Locks or unlocks the whole selection — `memory/diagram.md`. Locking groups what it holds;
+     * Locks or unlocks the whole selection. Locking groups what it holds;
      * unlocking ungroups it again, because the group *is* the lock (`Outline.lockGroup`).
      */
     onSetSelectionLocked: (CanvasSelection, Boolean) -> Unit = { _, _ -> },
@@ -408,23 +408,21 @@ fun EditorPane(
     var focusedOutlineId by remember { mutableStateOf<String?>(null) }
 
     /**
-     * The table cell with the caret in it, if any — `memory/tablePlan.md` TA6.
+     * The table cell with the caret in it, if any.
      *
-     * Beside [focusedOutlineId] rather than folded into it: the two never both hold something (one
-     * editor has focus), but they mean different things to everything downstream. A container id
-     * names something the text toolkit is about; a cell id names *where in a grid* the Row and Column
-     * menus should insert.
+     * Beside [focusedOutlineId] rather than folded into it: the two never both hold something, but
+     * they mean different things downstream. A container id names something the text toolkit is
+     * about; a cell id names where in a grid the Row and Column menus should insert.
      */
     var focusedCellId by remember { mutableStateOf<String?>(null) }
 
     /**
-     * Puts text input away, wherever on the page it is — `memory/tablePlan.md` TA11.
+     * Puts text input away, wherever on the page it is.
      *
-     * **Nothing else on this canvas ever would.** An editor is a real `EditText` (AD6), and Compose
-     * does not touch the focus of a View it is only hosting, so a tap that lands anywhere but in
-     * another editor leaves the caret exactly where it was with the keyboard still up. TA11 had the
-     * *selection* cleared by such a tap and stopped there, which is how a table finished with could
-     * keep the caret in a cell that no longer showed any chrome saying so.
+     * Nothing else on this canvas ever would. An editor is a real `EditText`, and Compose does not
+     * touch the focus of a View it is only hosting, so a tap landing anywhere but in another editor
+     * leaves the caret where it was with the keyboard still up. Clearing only the selection is how a
+     * table finished with could keep the caret in a cell that showed no chrome saying so.
      *
      * The ids and the ribbon are left to the blur that follows: `clearFocus` fires the same listener
      * a tap on another editor would, so there is one path out of a focused editor rather than two.
@@ -445,10 +443,10 @@ fun EditorPane(
     }
 
     /**
-     * The row or column held by a tap on its gutter handle — `memory/tablePlan.md` TA16.
+     * The row or column held by a tap on its gutter handle.
      *
-     * Beside the selection rather than inside it, for the reason [TableAxis] gives: a `CanvasSelection`
-     * holds objects on the page, and this is a place inside one of them.
+     * Beside the selection rather than inside it, for the reason [TableAxis] gives: a
+     * `CanvasSelection` holds objects on the page, and this is a place inside one of them.
      */
     var heldAxis by remember(pageId) { mutableStateOf<TableAxis?>(null) }
     var lastFocusedEditor by remember { mutableStateOf<OutlineEditText?>(null) }
@@ -460,14 +458,14 @@ fun EditorPane(
 
     /**
      * What that container should select once it has focus, or null to leave the caret where the
-     * editor puts it — CS9.
+     * editor puts it.
      *
      * Set only by a revealed search result. A container created by tapping has no text to select, so
-     * this stays null on that path and nothing about it changes.
+     * this stays null on that path.
      */
     var pendingSelection by remember { mutableStateOf<TextRange?>(null) }
 
-    /** The same request aimed at one table cell, which is focused through the grid's own map (TA17). */
+    /** The same request aimed at one table cell, which is focused through the grid's own map. */
     var pendingCellFocus by remember { mutableStateOf<CellFocus?>(null) }
     var pastePopupAt by remember { mutableStateOf<InkPoint?>(null) }
     val heights = remember { mutableStateMapOf<String, Int>() }
@@ -491,20 +489,20 @@ fun EditorPane(
     val currentEquations = rememberUpdatedState(equations)
 
     /**
-     * Which containers currently hold text — `memory/textBoxPlan.md` TD3.
+     * Which containers currently hold text.
      *
-     * The toolkit appears under the same rule the container's own chrome does, *focused and
-     * non-empty*, and that second half is known here rather than in the ViewModel: an empty
+     * The toolkit appears under the same rule the container's own chrome does — focused and
+     * non-empty — and that second half is known here rather than in the ViewModel: an empty
      * container is a caret position, and a page of stray taps must not sprout toolbars.
      */
     val nonEmpty = remember { mutableStateMapOf<String, Boolean>() }
 
     /**
-     * What is selected on this page, across kinds — AD7's "selection is a page-level concept".
+     * What is selected on this page, across kinds.
      *
      * Held here rather than in the ViewModel because nothing about it is persisted and a live drag
-     * rewrites its bounds: a `StateFlow` write per gesture end is fine, one per frame is not. Cleared
-     * with the page, since ids from the last page mean nothing on this one.
+     * rewrites its bounds: a `StateFlow` write per gesture end is fine, one per frame is not.
+     * Cleared with the page, since ids from the last page mean nothing on this one.
      */
     var selection by remember(pageId) { mutableStateOf<CanvasSelection?>(null) }
 
@@ -521,11 +519,11 @@ fun EditorPane(
     val lassoGesture = remember { LassoGesture() }
 
     /**
-     * The tables as rectangles, measured — `memory/tablePlan.md` TA3 and [TableBounds].
+     * The tables as rectangles, measured — see [TableBounds].
      *
      * A table's height is whatever its cells' text wraps to and the document stores only each row's
      * floor, so the model runs short the moment a cell overflows. The canvas laid the table out, so
-     * the canvas is what says how tall it is; the floors stand in for the one frame before it has.
+     * the canvas says how tall it is; the floors stand in for the one frame before it has.
      */
     val tableBounds = remember(tables, heights.toMap()) {
         tables.map { table ->
@@ -617,11 +615,9 @@ fun EditorPane(
                     if (!editorWasFocused && outlineId != null) onOutlineBlurred(outlineId)
                     onSelectionChanged(SelectionState())
                 }
-                // Picking up another tool drops the object selection — `memory/diagram.md`, Prime
-                // Object Class. The lasso's preview goes with it for the reason Delete clears both:
-                // it holds the transform the handles were drawn from, and a live one outliving the
-                // selection is a rectangle over nothing. `heldAxis` needs no line here — it is
-                // already tied to the selection still holding its table.
+                // Picking up another tool drops the object selection. The lasso's preview goes with
+                // it for the reason Delete clears both: it holds the transform the handles were
+                // drawn from, and a live one outliving the selection is a rectangle over nothing.
                 FormatCommand.ClearCanvasSelection -> {
                     selection = null
                     lassoGesture.clear()
@@ -713,16 +709,16 @@ fun EditorPane(
     val flingSpec = rememberSplineBasedDecay<Float>()
 
     /**
-     * Scrolls a revealed search result into view and hands the caret to it — `memory/searchPlan.md` CS9.
+     * Scrolls a revealed search result into view and hands the caret to it.
      *
      * Keyed on the page's geometry as well as on the request, because the request almost always
-     * arrives before the page it names: opening a result switches page, and the containers land a few
-     * frames later. Returning early leaves the request standing, and the next list of outlines runs
-     * this again.
+     * arrives before the page it names: opening a result switches page, and the containers land a
+     * few frames later. Returning early leaves the request standing, and the next list of outlines
+     * runs this again.
      *
-     * The scroll targets the box's own corner rather than the match inside it. A block's position on
+     * The scroll targets the box's own corner rather than the match inside it: a block's position on
      * screen is known only to the editor that laid it out, and a container is small enough that its
-     * top-left corner puts the caret on screen — which the focus below then makes visible for real.
+     * top-left corner puts the caret on screen.
      */
     LaunchedEffect(reveal, pageId, outlines, tables, images, strokes, inkReady, zoom) {
         val target = reveal ?: return@LaunchedEffect
@@ -734,7 +730,7 @@ fun EditorPane(
             ContentKind.Title -> InkPoint(0f, 0f)
             ContentKind.Text -> outlines.firstOrNull { it.id == target.boxId }
                 ?.let { InkPoint(it.x, it.y) }
-            // A cell has no geometry of its own (TA2), so the canvas scrolls to its table.
+            // A cell has no geometry of its own, so the canvas scrolls to its table.
             ContentKind.Cell -> tables.firstOrNull { it.id == target.tableId }
                 ?.let { InkPoint(it.x, it.y) }
             ContentKind.Image -> images.firstOrNull { it.id == target.boxId }
@@ -789,8 +785,8 @@ fun EditorPane(
     val currentOnZoomCommitted = rememberUpdatedState(onZoomCommitted)
 
     /**
-     * Where the ruler is lying — RD2, held here because it is transient and page-scoped in units
-     * only, not in ownership: it stays put across a page switch, the way a ruler stays on the desk.
+     * Where the ruler is lying. Transient, and page-scoped in units only, not in ownership: it stays
+     * put across a page switch, the way a ruler stays on the desk.
      *
      * Seeded once, the first time it comes out, from the middle of what is on screen. Kept when it
      * is put away, so bringing it back does not lose the angle you set.
@@ -799,7 +795,7 @@ fun EditorPane(
 
     /**
      * The window, in view dp. A layout fact, captured out of [BoxWithConstraints] because the
-     * straightedge's length is measured from it — RD3a.
+     * straightedge's length is measured from it.
      */
     var viewport by remember { mutableStateOf(DpSize.Zero) }
 
@@ -828,7 +824,7 @@ fun EditorPane(
             .background(if (fits) MaterialTheme.colorScheme.surfaceContainer else canvas.background)
             // Ahead of the pinch on the same node, which is the whole of how the two are kept
             // apart: on the Initial pass modifiers are asked in order, so a gesture that began on
-            // the ruler is claimed here and the pinch below stands down. RD6.
+            // the ruler is claimed here and the pinch below stands down.
             .pointerInput(Unit) {
                 detectRulerDrag(
                     rulerAt = { currentRuler.value },
@@ -1019,15 +1015,10 @@ fun EditorPane(
                     )
 
                     // Placed above the surface and beneath everything else on the page, so it hears
-                    // a tap only when nothing else wanted it: taps that land on an object reach its
-                    // layer, taps that land on a container reach its editor, and what is left is
-                    // bare canvas. Two things happen there, in this order — a tap puts down whatever
-                    // is selected, and a tap with nothing selected opens a container.
-                    //
-                    // It used to be the *ancestor* of the object layers, which is how the two were
-                    // ordered before those layers moved in front of the containers. They share their
-                    // touches with what is underneath instead now, and this is simply the last
-                    // sibling to be asked.
+                    // a tap only when nothing else wanted it: taps on an object reach its layer,
+                    // taps on a container reach its editor, and what is left is bare canvas. Two
+                    // things happen there, in this order — a tap puts down whatever is selected, and
+                    // a tap with nothing selected opens a container.
                     Box(
                         Modifier
                             .fillMaxSize()
@@ -1041,18 +1032,15 @@ fun EditorPane(
                                 val onTap: (Offset) -> Unit = tap@ { offset ->
                                     pastePopupAt = null
                                     // Putting the selection down is this tap's first duty, and it
-                                    // ends the gesture — TA11's "a tap on bare canvas clears the
-                                    // page's selection". It used to belong to `ShapeLayer`, which
+                                    // ends the gesture. It used to belong to `ShapeLayer`, which
                                     // paid for it by consuming a down it had no shape under; that
                                     // stopped being affordable when the object layers moved in front
                                     // of the text containers, where such a down is also every tap
-                                    // into a text box. The rule costs what it always did — two taps,
-                                    // the first to drop the object and the second to do what was
-                                    // asked — and a tap that landed on an object or a container is
-                                    // never one of them, because both are asked before this is.
+                                    // into a text box. It costs two taps — one to drop the object
+                                    // and one to do what was asked — and a tap that landed on an
+                                    // object or a container is never one of them.
                                     //
-                                    // The caret goes with it, whatever tool is in hand — TA11 again,
-                                    // and the table is the case that makes it a rule: a cell is a
+                                    // The caret goes with it, whatever tool is in hand. A cell is a
                                     // real `EditText`, so nothing else would take the focus and the
                                     // keyboard off it, and the grid would drop its handles while the
                                     // cell went on being typed into.
@@ -1067,8 +1055,7 @@ fun EditorPane(
                                     // Read through the holders, never captured. This block is keyed
                                     // on page geometry and outlives every other recomposition, so a
                                     // captured `textArmed` would be frozen at whatever it was when
-                                    // the page first composed — false, since the app opens with a
-                                    // pen — and arming Text would then do nothing at all, for ever.
+                                    // the page first composed.
                                     val point = offsetToPage(offset)
                                     // A tap that is not about to open a container is a dismissal: it
                                     // takes the caret out of whatever holds it and puts the keyboard
@@ -1146,18 +1133,15 @@ fun EditorPane(
                                     // the mirror of the object layers' own `onSelect`, which takes
                                     // the caret out of wherever it was: without both halves a shape
                                     // kept its handles and its bar while the writing had the
-                                    // keyboard, and the ribbon went on offering Border and Fill for
-                                    // something the next keystroke could not touch.
+                                    // keyboard.
                                     //
                                     // The lasso's preview goes with the selection, for the reason
-                                    // `ClearCanvasSelection` gives: it holds the transform the
-                                    // handles were drawn from, and one outliving the selection is a
-                                    // rectangle around nothing.
+                                    // `ClearCanvasSelection` gives.
                                     //
-                                    // A **table cell does the opposite on purpose** — TA11, where
-                                    // putting a caret in a cell *selects* its table, because a cell
-                                    // has no chrome of its own to say which grid it belongs to. That
-                                    // is why this lives here and not in `NoteEditor`.
+                                    // A table cell does the opposite on purpose: putting a caret in
+                                    // a cell selects its table, because a cell has no chrome of its
+                                    // own to say which grid it belongs to. That is why this lives
+                                    // here and not in `NoteEditor`.
                                     if (selection != null) {
                                         selection = null
                                         lassoGesture.clear()
@@ -1184,32 +1168,28 @@ fun EditorPane(
                         }
                     }
 
-                    // Prime Object is in front of the writing, in the draw and in the hit test —
-                    // and this is the one place where that whole order is decided.
+                    // Prime Object is in front of the writing, in the draw and in the hit test, and
+                    // this is the one place that whole order is decided.
                     //
                     // The bug it exists for: an object dragged onto a text container could not be
-                    // tapped at all. No selection, no move, no corner handles; the only way back to
-                    // it was to drag the text box off it first. A container's editor is a real
-                    // Android View, and `pointerInteropFilter` hands it the DOWN as the event
-                    // *tunnels* past — before any ordinary bubbling-pass gesture handler runs — so
-                    // whatever sat under it stayed silent however the layers were ordered.
+                    // tapped at all. A container's editor is a real Android View, and
+                    // `pointerInteropFilter` hands it the DOWN as the event tunnels past — before
+                    // any bubbling-pass gesture handler runs — so whatever sat under it stayed
+                    // silent however the layers were ordered.
                     //
                     // Two things answer it, and neither works alone. This stack is composed last, so
                     // it is drawn over the containers and hit-tested before them, and it declares
-                    // [sharingTouchesWithSiblings] so that hit testing carries on past it to the
-                    // containers, the header and the bare-canvas tap target underneath — a full-page
-                    // layer that did not would take every touch on the page and give nothing back.
-                    // And the three layers claim their DOWN on the **tunnelling** pass, because
-                    // sharing appends the branch below to the same path rather than keeping the two
-                    // apart: on the bubbling pass the topmost layout is asked *last*, which is
-                    // exactly backwards for this. `sharingTouchesWithSiblings` argues that out.
+                    // [sharingTouchesWithSiblings] so hit testing carries on past it to the
+                    // containers, the header and the bare-canvas tap target underneath. And the
+                    // three layers claim their DOWN on the tunnelling pass, because sharing appends
+                    // the branch below to the same path: on the bubbling pass the topmost layout is
+                    // asked last, which is backwards for this.
                     //
                     // Tunnelling outermost-first is also why the stack reads inside out: pictures
-                    // hold formulas, which hold shapes, and each layer draws its own canvas *after*
-                    // the slot it holds. So the order a touch is offered in is pictures, formulas,
-                    // shapes, containers, bare canvas — and the paint order is the one it always was,
-                    // shapes under formulas under pictures. A layer with nothing under the finger
-                    // consumes nothing and the touch simply carries on.
+                    // hold formulas, which hold shapes, and each layer draws its own canvas after
+                    // the slot it holds. So a touch is offered to pictures, formulas, shapes,
+                    // containers, bare canvas, while the paint order stays shapes under formulas
+                    // under pictures. A layer with nothing under the finger consumes nothing.
                     //
                     // Inside the zoom — see ShapeLayer for why a shape can live in the page where
                     // ink cannot.
@@ -1242,12 +1222,12 @@ fun EditorPane(
                                     // also try to edit what is under the pointer.
                                     interactive = shaping == null && !lassoing && !insertingSpace,
                                     visibleWindow = visibleWindow,
-                                    // Only ever a *selection*. Clearing one belongs to the
-                                    // bare-canvas tap now: this layer used to pay for it by
-                                    // consuming a down it had no shape under, and in front of the
-                                    // containers such a down is also every tap into a text box.
-                                    // The caret still has to leave here, or it stays behind in a
-                                    // cell whose handles have just disappeared.
+                                    // Only ever a selection. Clearing one belongs to the bare-canvas
+                                    // tap now: this layer used to pay for it by consuming a down it
+                                    // had no shape under, and in front of the containers such a down
+                                    // is also every tap into a text box. The caret still has to
+                                    // leave here, or it stays behind in a cell whose handles have
+                                    // just disappeared.
                                     onSelect = {
                                         dismissTextInput()
                                         selection = it
@@ -1300,13 +1280,11 @@ fun EditorPane(
                         )
                     }
 
-                    // In front of all of it — `memory/tablePlan.md` TA11, half amended. Compose
-                    // hit-tests the last sibling first, so a table is asked before the object layers
-                    // and before the containers they hold. TA11's first half is what that keeps: a
-                    // table takes its own taps from a shape drawn under it. Its second half is gone
-                    // with the rest of the old order — a text container drawn over a table used to
-                    // keep its caret, and now yields the overlap to it, for the same reason a shape
-                    // dragged onto a container takes its own taps back.
+                    // In front of all of it. Compose hit-tests the last sibling first, so a table is
+                    // asked before the object layers and before the containers they hold, which is
+                    // what lets a table take its own taps from a shape drawn under it. A text
+                    // container drawn over a table now yields the overlap to it, for the same reason
+                    // a shape dragged onto a container takes its own taps back.
                     tables.forEach { table ->
                         key(pageRevision, table.id) {
                             TableContainer(
@@ -1314,13 +1292,9 @@ fun EditorPane(
                                 // Not while the lasso is armed, the condition the object layers
                                 // above take as `interactive`: the overlay covers the page then and
                                 // takes every touch, so a table's gutter handles, move grip and
-                                // scale handle are all out of reach — and drawn under the overlay's
-                                // own box and corner discs they were a second, dead set of handles
-                                // around the same table. The ribbon still reads `selection`, so its
-                                // Row and Column verbs are unaffected.
-                                // Insert Space is here for the same reason the lasso is: it covers
-                                // the page and takes every touch, so the grid's own handles would be
-                                // drawn live and be unreachable.
+                                // scale handle would be drawn live and be unreachable. Insert Space
+                                // is here for the same reason. The ribbon still reads `selection`,
+                                // so its Row and Column verbs are unaffected.
                                 selected = selection?.holdsTable(table.id) == true && !lassoing &&
                                     !insertingSpace,
                                 editorStyle = editorStyle,
@@ -1345,7 +1319,7 @@ fun EditorPane(
                                     lastFocusedEditor = view
                                     lastFocusedOutlineId = null
                                     // Putting a caret in a cell selects the table it belongs to —
-                                    // TA11. It costs one tap where AD7's double-tap row asks for
+                                    // It costs one tap where the double-tap rule asks for
                                     // two, and it is what raises the bar the Row and Column menus
                                     // live on.
                                     if (selection?.holdsTable(table.id) != true) {
@@ -1372,7 +1346,7 @@ fun EditorPane(
                                 onRowMinHeight = { row, height ->
                                     onSetTableRowMinHeight(table.id, row, height)
                                 },
-                                // An ink table has no caret to select it by — TA15.
+                                // An ink table has no caret to select it by.
                                 onSelect = {
                                     tableBounds.firstOrNull { it.id == table.id }
                                         ?.let { selection = CanvasSelection.ofTable(it) }
@@ -1472,7 +1446,7 @@ fun EditorPane(
                 onRequestPaste = requestPasteAt,
             )
 
-            // One bar over whatever is selected, whatever kind it is — AD7. Raised here rather than
+            // One bar over whatever is selected, whatever kind it is. Raised here rather than
             // inside a layer because a selection can hold both kinds, and because the bar is chrome:
             // out here it keeps its own size at any zoom and is clamped against the *window*, where a
             // bar drawn inside the zoomed page grew with it and could be clamped off-screen.
@@ -1586,7 +1560,7 @@ fun EditorPane(
                                 onEdit = { onEditEquation(held.equationIds, it) },
                             )
                         }
-                        // The Table Class's half — `memory/tablePlan.md` TA6. The row and column
+                        // The Table Class's half. The row and column
                         // actions need *one* table to act on and a place in it, so they appear for a
                         // single held table; the rules and the fill apply to any number.
                         if (held.isTableOnly) {
@@ -1624,12 +1598,11 @@ fun EditorPane(
                                     heldAxis = null
                                 }
 
-                                // **The bar follows what is held** — `memory/tablePlan.md` TA16, and
-                                // what `table-tooltip1.jpeg` and `2` differ by. With a row or a
-                                // column held there is one thing the verbs are about, so they stop
-                                // needing a menu and become the Material Symbols that draw them.
-                                // With nothing held there are two axes and only a caret to go on,
-                                // which is what the menus are for.
+                                // The bar follows what is held. With a row or a column held there is
+                                // one thing the verbs are about, so they stop needing a menu and
+                                // become the Material Symbols that draw them. With nothing held
+                                // there are two axes and only a caret to go on, which is what the
+                                // menus are for.
                                 when (axis) {
                                     is TableAxis.Row -> HeldRowActions(
                                         canDelete = table.canRemoveRow,
@@ -1660,9 +1633,9 @@ fun EditorPane(
                 )
             }
 
-            // The TextBox toolkit — `memory/textBoxPlan.md` TD3. It hangs off the *focused* container
-            // rather than off a selection, because TD1 declined the object-selection half of AD7:
-            // there is exactly one container a bar could be about, and it is the one you are in.
+            // The TextBox toolkit. It hangs off the focused container rather than off a selection,
+            // because a text box declines the object-selection model: there is exactly one container
+            // a bar could be about, and it is the one you are in.
             //
             // Suppressed while a canvas selection is up, so a shape's bar and a text box's bar are
             // never on screen together arguing about which object "copy" means.
@@ -1708,7 +1681,7 @@ fun EditorPane(
                         // Unreachable with no swatch, and passed rather than defaulted so that
                         // deleting the colour button never silently deletes a behaviour with it.
                         onRecolor = {},
-                        // A text container declines the object-selection model whole (TD1) and keeps
+                        // A text container declines the object-selection model whole and keeps
                         // its own grip and edges, so there is nothing here for a lock to hold still.
                         locked = null,
                         onToggleLock = {},
@@ -1745,11 +1718,10 @@ private fun CanvasSelection.swatch(
     shapes: List<Outline.Shape>,
     tables: List<Outline.Table>,
 ): Color? {
-    // A photograph has no colour of its own to change — the same case a text box makes in TD4, and
-    // the reason the swatch is nullable at all. Absent rather than disabled, and absent rather than
-    // present-and-inert: a button that opens a palette which then changes nothing is worse than no
-    // button. Only when the selection is *nothing but* pictures; mixed with ink or a shape there is
-    // still something for a colour to mean.
+    // A photograph has no colour of its own to change, which is why the swatch is nullable at all.
+    // Absent rather than disabled: a button that opens a palette which then changes nothing is worse
+    // than no button. Only when the selection is nothing but pictures; mixed with ink or a shape
+    // there is still something for a colour to mean.
     if (isImageOnly) return null
     val inkColors = strokes.filter { it.id in inkIds }.map { it.stroke.brush.colorIntArgb }
     val shapeColors = shapes.filter { it.id in shapeIds }.map(Outline.Shape::borderArgb)
@@ -1960,11 +1932,10 @@ private suspend fun PointerInputScope.detectCanvasTapGestures(
 /**
  * The Paste menu, anchored to the point that was double-tapped.
  *
- * **[point] is in page units and this composable is not inside the zoomed viewport**, so it has to be
- * transformed the same way [ObjectTooltip]'s bounds are — through [inkPageToView], which applies the
- * zoom, the density and both scroll offsets. Offsetting by the raw page value treats page dp as view
- * dp: correct only at 100% zoom with the page scrolled to its origin, and wrong by the scroll
- * distance everywhere else, which is what put the menu somewhere unrelated to the tap.
+ * [point] is in page units and this composable is not inside the zoomed viewport, so it has to be
+ * transformed the way [ObjectTooltip]'s bounds are — through [inkPageToView], which applies the
+ * zoom, the density and both scroll offsets. Offsetting by the raw page value treats page dp as
+ * view dp: correct only at 100% zoom with the page scrolled to its origin.
  */
 @Composable
 private fun BoxScope.ObjectPastePopup(
@@ -2019,9 +1990,9 @@ internal object OutlineTags {
 /**
  * Selects [range] in this editor, clamped to the text it is actually holding.
  *
- * The offsets come from the document (`memory/searchPlan.md` CS5) and are applied to a View that may
- * still be a frame behind it — a table cell mid-rebuild, a container whose blocks have not been set.
- * Clamping keeps that a caret in the wrong place for one frame rather than an exception.
+ * The offsets come from the document and are applied to a View that may still be a frame behind it
+ * — a table cell mid-rebuild, a container whose blocks have not been set. Clamping keeps that a
+ * caret in the wrong place for one frame rather than an exception.
  */
 internal fun OutlineEditText.select(range: TextRange) {
     val length = text?.length ?: 0
@@ -2040,7 +2011,7 @@ internal fun OutlineContainer(
     focused: Boolean,
     requestFocus: Boolean,
     /**
-     * What to select once focus arrives, in editor offsets — `memory/searchPlan.md` CS9.
+     * What to select once focus arrives, in editor offsets.
      *
      * Null for every other way a container gets focus, which leaves the caret where the editor puts
      * it. Clamped to the text actually present: the offsets were computed from the document, and a

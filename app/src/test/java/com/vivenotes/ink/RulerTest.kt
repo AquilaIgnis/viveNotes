@@ -9,7 +9,7 @@ import kotlin.math.PI
 import kotlin.math.hypot
 
 /**
- * The ruler's arithmetic — `memory/rulerPlan.md` RD8.
+ * The ruler's arithmetic.
  *
  * Projection onto a rotated edge looks right in several arrangements and is correct in one, and
  * nothing about it is visible until a stroke lands somewhere strange. The rotated cases are the ones
@@ -60,7 +60,7 @@ class RulerTest {
         assertPoint("upper edge", InkPoint(560f, 400f - Ruler.BAND_DP / 2f), snapped)
     }
 
-    /** Two long edges, so it draws from either side — RD5. */
+    /** Two long edges, so it draws from either side. */
     @Test
     fun `a stroke below the ruler lands on its lower edge`() {
         val ruler = straight()
@@ -70,7 +70,7 @@ class RulerTest {
     }
 
     /**
-     * The edge is the *stroke's*, not the sample's — RD5a.
+     * The edge is the *stroke's*, not the sample's.
      *
      * The bug this holds off was reported from a device: a line swept along the ruler and over its
      * body flipped onto the far edge halfway, and joined the two halves with a run straight across

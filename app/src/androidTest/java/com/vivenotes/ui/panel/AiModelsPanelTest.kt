@@ -116,7 +116,7 @@ class AiModelsPanelTest {
         assertTrue(retried)
     }
 
-    // --- text in pictures — `memory/imageOcrPlan.md` IO9 ----------------------------------------
+    // --- text in pictures ---------------------------------------------------------------------
 
     @Test
     fun theSwitchReportsBeingTurnedOff() {

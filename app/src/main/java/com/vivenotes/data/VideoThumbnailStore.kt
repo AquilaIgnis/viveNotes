@@ -20,26 +20,20 @@ import kotlin.coroutines.coroutineContext
 /**
  * Video thumbnails for the editor's link previews.
  *
- * **The only place in the app that talks to a host the user did not choose.** Everything else
- * reaches the user's own sync server or GitHub, so this one is deliberately narrow: it fetches from
- * exactly one origin, at exactly one URL shape, keyed by an id that
- * [com.vivenotes.model.youTubeVideoId] has already proved is eleven characters of `[A-Za-z0-9_-]`.
- * There is no method here that takes a URL, so nothing upstream can turn it into a general
- * fetcher — and the whole class is unreachable while the Settings toggle is off, because the editor
- * is simply handed no [VideoThumbnails] at all.
+ * The only place in the app that talks to a host the user did not choose, so it is deliberately
+ * narrow: one origin, one URL shape, keyed by an id [com.vivenotes.model.youTubeVideoId] has
+ * already proved is eleven characters of `[A-Za-z0-9_-]`. No method here takes a URL, so nothing
+ * upstream can turn it into a general fetcher, and the whole class is unreachable while the
+ * Settings toggle is off.
  *
- * **Files live in `filesDir`, not `cacheDir`, and are still derived data.** A note is meant to
- * survive; a thumbnail evicted by the OS mid-flight would blank a card the writer has been looking
- * at for a month, offline, with no way to get it back. They carry nothing that is not re-fetchable,
- * so they are excluded from `.vive` export exactly as `attachment_text` is — see
- * `NotebookTransferManager`. Nothing references them from the database, so nothing has to be
- * refcounted: the id in the page's own text is the only pointer there is.
+ * Files live in `filesDir` rather than `cacheDir` and are still derived data: a thumbnail evicted
+ * by the OS mid-flight would blank a card the writer has been looking at for a month, offline. They
+ * carry nothing that is not re-fetchable, so they are excluded from `.vive` export exactly as
+ * `attachment_text` is, and nothing references them from the database.
  *
- * Contrast [AttachmentStore], which re-encodes everything it stores. These arrive as small JPEGs
- * already — a maxres frame is around a hundred kilobytes — so re-encoding would cost a lossy pass
- * to save nothing. The allocation that class exists to avoid is handled at *decode* instead:
- * [ImageDecoder] is given a target size, so a 1280×720 frame never becomes a 3.7 MB bitmap for a
- * card 360 dp wide.
+ * Unlike [AttachmentStore] these are not re-encoded: they arrive as small JPEGs already, so a lossy
+ * pass would save nothing. The allocation is handled at decode instead — [ImageDecoder] is given a
+ * target size, so a 1280×720 frame never becomes a 3.7 MB bitmap for a card 360 dp wide.
  */
 class VideoThumbnailStore(
     context: Context,

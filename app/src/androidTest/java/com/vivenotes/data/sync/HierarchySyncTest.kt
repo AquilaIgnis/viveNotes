@@ -903,7 +903,7 @@ class HierarchySyncTest {
         assertFalse("and so must the bytes", pictures.fileFor(digest).exists())
     }
 
-    // --- attachments (S5) -----------------------------------------------------------------------
+    // --- attachments -----------------------------------------------------------------------
 
     @Test
     fun aPicturesBytesReachTheServerBeforeTheChangeThatNamesThem() = runBlocking {
@@ -931,7 +931,7 @@ class HierarchySyncTest {
         assertEquals(digest, idOf(attachment))
         assertEquals("image/webp", attachment.getValue("mimeType").jsonPrimitive.content)
         assertEquals(bytes.size.toLong(), attachment.getValue("byteCount").jsonPrimitive.long)
-        // refCount is per-device reachability and never leaves it — SD7.
+        // refCount is per-device reachability and never leaves it.
         assertNull(attachment["refCount"])
         assertTrue(db.syncDao().outbox(512).isEmpty())
     }
@@ -1077,7 +1077,6 @@ class HierarchySyncTest {
 
     // --- the closed-notebook shelf, and moving one to the cloud -------------------------------
     //
-    // `memory/closedNotebooksPlan.md`.
 
     @Test
     fun closingANotebookTravelsToTheServerAndBackAsAnOrdinaryField() = runBlocking {
@@ -1516,7 +1515,7 @@ class HierarchySyncTest {
 
     // --- deleting something blank -------------------------------------------------------------
     //
-    // `memory/blankFlushPlan.md`. The local half is in `BlankFlushTest`; what is here is the half
+    // The local half is in `BlankFlushTest`; what is here is the half
     // only a server can answer, and it is the half that can go wrong quietly: a delete that never
     // travels leaves a notebook standing on the account for ever, and a create that travels after
     // its delete was dropped comes back on the next pull.

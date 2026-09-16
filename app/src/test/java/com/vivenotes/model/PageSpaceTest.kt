@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Insert Space's arithmetic — feature E2.
+ * Insert Space's arithmetic.
  *
  * The two rules worth pinning down are the ones a user would notice being wrong: which side of the
  * line an object is judged to be on, and how far a closing drag is allowed to go. Both are stated in

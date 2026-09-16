@@ -32,16 +32,16 @@ import java.util.UUID
 private class StopRemoteDelivery : RuntimeException()
 
 /**
- * Where this installation stands with **a** server, managed or self-hosted.
+ * Where this installation stands with a server, managed or self-hosted.
  *
- * One type for both, because the connected state genuinely is one thing: a base URL and a device
- * token, reached either by Sign in with Google against the managed deployment or by registering an
- * account on a server the user runs. Everything past the sign-in — the cursor, the outbox, the
- * blobs — cannot tell them apart and must not have to.
+ * One type for both, because the connected state is one thing: a base URL and a device token,
+ * reached either by Sign in with Google against the managed deployment or by registering an account
+ * on a server the user runs. Everything past the sign-in — the cursor, the outbox, the blobs —
+ * cannot tell them apart and must not have to.
  *
  * [Connecting] is here rather than being the screen's own boolean because the request outlives the
- * screen on purpose — see [SyncAccounts.connect] — so "a connection is in flight" is a fact about
- * the app, not about whether a composable is on screen.
+ * screen on purpose: "a connection is in flight" is a fact about the app, not about whether a
+ * composable is on screen.
  */
 sealed interface ServerConnection {
 
@@ -106,13 +106,11 @@ sealed interface DisconnectResult {
  * How synchronisation is going, for any screen that wants to say so.
  *
  * Every run reports here — event-driven foreground work, WorkManager catch-up and the Sync now
- * button alike — because the ones a person never asked for are exactly the ones that need somewhere
- * to be seen. Before this existed, a failed automatic run looked identical to one with nothing to
- * do, and the only way to find out was to open Account and press a button.
+ * button alike — because the runs nobody asked for are the ones that need somewhere to be seen.
+ * Before this existed, a failed automatic run looked identical to one with nothing to do.
  *
- * Deliberately in memory and not persisted. The first stream connection runs a catch-up immediately,
- * and every later local or remote event refreshes this value without turning status into database
- * churn of its own.
+ * Deliberately in memory and not persisted: the first stream connection runs a catch-up
+ * immediately, and every later event refreshes this without turning status into database churn.
  */
 data class SyncStatus(
     /** True for the length of a run, whoever started it. */
@@ -128,19 +126,15 @@ data class SyncStatus(
     /**
      * Whether the last run could not reach the server at all — the Cloud Off state.
      *
-     * Narrower than "sync is failing", deliberately. The badge this drives says *the server is not
-     * there*, and the only failures that mean that are the two transport ones: nothing answered
-     * ([ConnectFailure.Unreachable] — offline, wrong port, server down), and something answered that
-     * was not viveCServer ([ConnectFailure.NotAViveServer] — a proxy error page, a captive portal).
-     * Both leave this tablet holding writes it cannot deliver, which is the fact worth showing on
-     * every screen rather than only inside Account.
+     * Narrower than "sync is failing", deliberately. The badge this drives says the server is not
+     * there, and only the two transport failures mean that: nothing answered
+     * ([ConnectFailure.Unreachable]) and something answered that was not viveCServer
+     * ([ConnectFailure.NotAViveServer]). Both leave this tablet holding writes it cannot deliver.
      *
      * Everything else is excluded because a cloud with a line through it would misdescribe it. A
-     * 5xx, a revoked token or a change this build cannot store all mean the server *is* reachable
-     * and something else is wrong; each has its own sentence on the account screen, and each needs
-     * a different thing done about it. `InvalidAddress` and `NotStored` cannot arise from a run at
-     * all — they belong to connecting — but they are named here so this stays exhaustive rather
-     * than falling through an `else`.
+     * 5xx, a revoked token or a change this build cannot store all mean the server is reachable and
+     * something else is wrong, and each has its own sentence on the account screen. `InvalidAddress`
+     * and `NotStored` cannot arise from a run at all, but are named so this stays exhaustive.
      */
     val serverUnreachable: Boolean
         get() = when ((failure as? SyncRunResult.Retryable)?.reason) {
@@ -178,10 +172,10 @@ data class SyncStatus(
 /**
  * Connecting this installation to a self-hosted viveCServer, start to finish.
  *
- * Ties [SyncServerClient] to [SyncAccountStore] so that no caller can do half of it: the token is
- * written to disk *before* success is reported, because it is returned exactly once and a caller
- * that reports success first and stores second has a window in which the only copy of a
- * non-reissuable credential exists on the stack.
+ * Ties [SyncServerClient] to [SyncAccountStore] so no caller can do half of it: the token is written
+ * to disk before success is reported, because it is returned exactly once and a caller that reported
+ * success first would have a window in which the only copy of a non-reissuable credential lives on
+ * the stack.
  */
 class SyncAccounts(
     context: Context,
@@ -217,7 +211,7 @@ class SyncAccounts(
     }
 
     /**
-     * Pages the server has written ink into, by generation — `memory/inkSyncPlan.md` IS5.
+     * Pages the server has written ink into, by generation.
      *
      * Held here because this is the one object both coordinators run through: the foreground event
      * scheduler and WorkManager catch-up both call [synchronize] on this instance, in this process,
@@ -260,10 +254,9 @@ class SyncAccounts(
      * `https://sync.vivenotes.net` in release, either overridable from `local.properties`.
      *
      * Put through [normaliseServerAddress] like a typed address, so a trailing slash or a capital in
-     * the host cannot produce two spellings of one server between a debug override and the default.
-     * The unnormalised value is kept as the fallback rather than throwing: a build configured with a
-     * malformed URL should fail its first request with `InvalidAddress`, which names the problem,
-     * rather than crash on launch somewhere unrelated.
+     * the host cannot produce two spellings of one server. The unnormalised value is kept as the
+     * fallback rather than throwing: a build configured with a malformed URL should fail its first
+     * request with `InvalidAddress` rather than crash on launch somewhere unrelated.
      */
     val cloudServerUrl: String =
         normaliseServerAddress(BuildConfig.CLOUD_BASE_URL) ?: BuildConfig.CLOUD_BASE_URL
@@ -538,19 +531,17 @@ class SyncAccounts(
     /**
      * Creates an account on a server and connects this installation to it, in that order.
      *
-     * Two requests, because the contract is two requests: `POST /v1/accounts` mints an account and
-     * **no credential at all**, and `POST /v1/devices` is the only endpoint that returns a token.
-     * They are joined here rather than in the screen so that nobody can do half of it — a created
-     * account with no device is the one outcome of this flow that leaves something behind on the
-     * server.
+     * Two requests, because the contract is two: `POST /v1/accounts` mints an account and no
+     * credential at all, and `POST /v1/devices` is the only endpoint that returns a token. Joined
+     * here rather than in the screen so nobody can do half of it — a created account with no device
+     * is the one outcome of this flow that leaves something behind on the server.
      *
      * That outcome is reported as [ConnectFailure.AccountCreatedNotRegistered] rather than as
      * whatever the second request said, because the instruction it needs is neither request's
-     * message: the account exists, and the way in is now Sign in. Pressing Create account again
-     * would only answer `email_taken`.
+     * message: the account exists, and the way in is now Sign in.
      *
-     * [ConnectFailure.NotStored] is the exception and keeps its own meaning — the device *did*
-     * register, and the thing to fix is local storage rather than anything on the server.
+     * [ConnectFailure.NotStored] is the exception and keeps its own meaning — the device did
+     * register, and the thing to fix is local storage.
      */
     suspend fun register(
         typedAddress: String,
@@ -600,14 +591,13 @@ class SyncAccounts(
     }
 
     /**
-     * Logs in to the **managed** deployment with an email and a password.
+     * Logs in to the managed deployment with an email and a password.
      *
-     * [connect] with the address supplied rather than typed. That is the entire difference, and it
-     * is the point: a managed account is not something a person should have to know a hostname for,
-     * and the app already knows the one hostname there is.
+     * [connect] with the address supplied rather than typed: a managed account is not something a
+     * person should have to know a hostname for, and the app already knows the one hostname there is.
      *
-     * Carries [connect]'s warning unchanged: the request rotates this installation's credential,
-     * so it must not be called speculatively or retried automatically.
+     * Carries [connect]'s warning unchanged: the request rotates this installation's credential, so
+     * it must not be called speculatively or retried automatically.
      */
     suspend fun logInToCloud(email: String, password: String): ServerConnection =
         connect(cloudServerUrl, email, password)
@@ -669,17 +659,16 @@ class SyncAccounts(
      * Signs in to the managed deployment with Google, creating the account if there is not one yet.
      *
      * One method for logging in and registering, because `POST /v1/auth/google` is one endpoint for
-     * both: the server finds the account by `(issuer, sub)` or creates it. Nothing here has to ask
-     * which the person meant, and nothing here can get it wrong.
+     * both: the server finds the account by `(issuer, sub)` or creates it.
      *
      * The order is fixed by the contract and is the whole security story of this flow. The challenge
-     * is fetched **first**, its nonce goes into the sheet, and Google seals it into the signed token;
-     * a token that does not carry the challenge this server issued seconds ago is refused. So the
-     * challenge cannot be cached, reordered, or reused.
+     * is fetched first, its nonce goes into the sheet, and Google seals it into the signed token; a
+     * token that does not carry the challenge this server issued seconds ago is refused. So the
+     * challenge cannot be cached, reordered or reused.
      *
      * [activityContext] must be an Activity — Credential Manager has UI to show. Like [connect],
      * this is expected to run in a scope that outlives the account screen: the device token comes
-     * back once and a cancelled call is how an unusable device row is created.
+     * back once, and a cancelled call is how an unusable device row is created.
      */
     suspend fun signInWithGoogle(activityContext: Context): CloudSignInResult {
         val serverUrl = cloudServerUrl
@@ -740,11 +729,10 @@ class SyncAccounts(
     /**
      * Finishes a sign-in that came back `account_link_required`, by proving the password account.
      *
-     * The email is asked for rather than read out of the ID token. The token's claims are unverified
-     * until the server checks Google's signature over them, and the server is going to compare this
-     * email against the verified one anyway — so typing it costs one field and keeps the client from
-     * ever treating an unverified claim as a fact. A mismatch comes back as `InvalidCredentials`,
-     * which is what the message on that failure has to account for.
+     * The email is asked for rather than read out of the ID token: the token's claims are unverified
+     * until the server checks Google's signature over them, and the server compares this email
+     * against the verified one anyway. A mismatch comes back as `InvalidCredentials`, which is what
+     * the message on that failure has to account for.
      *
      * Returns [ConnectFailure.InvalidChallenge] with no request sent when there is nothing pending:
      * the challenge behind a link expires in five minutes, and a dialog left open outlives it.
@@ -828,10 +816,8 @@ class SyncAccounts(
      *
      * Returns null on success, or the [ConnectFailure] that must be reported instead. Shared by
      * every route that ends in a token — password registration, Google sign-in, Google linking —
-     * because the order matters identically in all three and getting it wrong is expensive: the
-     * token is written **before** success is reported, since it is returned exactly once and the
-     * server keeps only its SHA-256. A caller that reported success first would have a window in
-     * which the only copy of a non-reissuable credential lives on the stack.
+     * because the order matters identically in all three: the token is written before success is
+     * reported, since it is returned exactly once and the server keeps only its SHA-256.
      */
     private suspend fun adopt(
         serverUrl: String,
@@ -895,17 +881,14 @@ class SyncAccounts(
      * Re-checks the stored registration against the server, and forgets it if it has been revoked.
      *
      * Revocation is one-sided: the operator removes a device from the dashboard, and this
-     * installation finds out only by being told `401 unauthenticated` — "unknown or revoked token".
-     * Holding that token afterwards is worse than holding nothing, because every later request fails
-     * identically and the app goes on claiming to be connected. So a revoked token is deleted, which
-     * puts the account screen back on its sign-in form. A managed sign-in rotates and reactivates
-     * this installation's row; an older community server can instead append a new device and retain
-     * the revoked one as history.
+     * installation finds out only by being told `401 unauthenticated`. Holding that token afterwards
+     * is worse than holding nothing, because every later request fails identically and the app goes
+     * on claiming to be connected. So a revoked token is deleted, which puts the account screen back
+     * on its sign-in form.
      *
-     * **Only an explicit 401 clears the store.** Offline, DNS failure, a 5xx from a proxy: all leave
-     * the registration exactly where it was. The token cannot be reissued, so anything less than the
-     * server itself saying no is not enough to throw it away — a tablet out of wifi range must come
-     * back still connected.
+     * Only an explicit 401 clears the store. Offline, DNS failure, a 5xx from a proxy: all leave the
+     * registration where it was. The token cannot be reissued, so anything less than the server
+     * itself saying no is not enough to throw it away.
      *
      * Returns null when there is nothing stored to check.
      */
@@ -952,17 +935,14 @@ class SyncAccounts(
     /**
      * Forgets the registration without the server's agreement, for when it cannot give one.
      *
-     * A revoke that cannot be delivered used to be the end of the road. The stored registration is
-     * what the account screen shows *instead of* the connect form, so a server that stayed down —
-     * decommissioned, moved, or reachable only from a network this tablet has left — held this
-     * installation to itself with no way to reach another one. Being unable to tell that server
-     * anything is a reason to leave it, not a reason to be kept by it.
+     * The stored registration is what the account screen shows instead of the connect form, so a
+     * server that stayed down — decommissioned, moved, or reachable only from a network this tablet
+     * has left — used to hold this installation to itself with no way to reach another one.
      *
      * The cost is real and the screen states it before offering this: the device row stays in the
-     * server's list and its token stays valid there until somebody removes it from that list or the
-     * admin dashboard. Nothing holds that token afterwards — this deletes the only copy — but it is
-     * an entry the operator has to prune by hand, which is why this is the second offer and never
-     * the first.
+     * server's list and its token stays valid there until somebody removes it. Nothing holds that
+     * token afterwards — this deletes the only copy — but it is an entry the operator has to prune
+     * by hand, which is why this is the second offer and never the first.
      */
     suspend fun forgetConnection() {
         val account = store.account.first() ?: return
@@ -980,17 +960,15 @@ class SyncAccounts(
     /**
      * Whether this installation may still create its first-run starter notebook.
      *
-     * A device joining an existing account must not. It seeds before its first pull, activation
+     * A device joining an existing account must not: it seeds before its first pull, activation
      * enqueues the seed into the outbox, and the account permanently grows a second "My Notebook"
-     * that nobody created — which is exactly what happened here on 2026-08-16, three times over, and
-     * is `viveCServer/memory/syncPlan.md` §10 item 4.
+     * that nobody created.
      *
      * True with no registration at all, because an offline install must not open on an empty void.
      * True again once this device is level with the server: an empty tree then really is an empty
-     * account rather than one that has not been pulled yet, and seeding it is the same first-run
-     * courtesy the first device got. The "account is empty" half of that rule needs no code here —
-     * [com.vivenotes.data.NotesRepository.seedIfEmpty] already refuses to run over an existing tree,
-     * and after a pull the local tree *is* the account.
+     * account rather than one that has not been pulled yet. The "account is empty" half needs no
+     * code here — [com.vivenotes.data.NotesRepository.seedIfEmpty] already refuses to run over an
+     * existing tree, and after a pull the local tree is the account.
      */
     suspend fun maySeedStarter(): Boolean {
         val account = store.account.first() ?: return true
@@ -1061,12 +1039,11 @@ class SyncAccounts(
      *
      * The sync run in front is not a convenience: `HierarchySync.evictToCloud` refuses to delete
      * anything while the outbox holds work, and an empty outbox is the server's own statement that
-     * it has every byte this device could offer. The run behind is what tells the other devices,
-     * since the shelf columns travel on the notebook row like any other edit.
+     * it has every byte this device could offer. The run behind tells the other devices, since the
+     * shelf columns travel on the notebook row like any other edit.
      *
-     * Both are ordinary runs and take the sync mutex, so they are deliberately *outside* the
-     * eviction rather than inside it — calling `synchronize` from within would deadlock on a lock
-     * this class does not own.
+     * Both are ordinary runs and take the sync mutex, so they are deliberately outside the eviction
+     * — calling `synchronize` from within would deadlock on a lock this class does not own.
      */
     suspend fun moveNotebookToCloud(notebookId: String): CloudArchiveResult {
         val hierarchy = this.hierarchy ?: return CloudArchiveResult.NoAccount
@@ -1121,21 +1098,16 @@ private fun SyncAccount.toConnection(): ServerConnection.Connected = ServerConne
  * What the server's device list will call this tablet.
  *
  * [Build.MODEL] rather than a name the user types: the field exists so somebody scanning their
- * device list can tell which row to revoke, and a marketing name does that on the first try. The
- * empty fallbacks are for emulator images and stripped ROMs that leave these properties blank, where
- * a blank `name` would be refused by the contract.
+ * device list can tell which row to revoke. The empty fallbacks are for emulator images and
+ * stripped ROMs that leave these properties blank, where a blank `name` would be refused.
  *
- * **The model alone does not identify an installation**, and not only in theory. Android Studio's
- * "Medium Tablet" and "Pixel Tablet" profiles are the same `emu64xa` hardware and both report
- * `Build.MODEL == "Pixel Tablet"`, so two emulators register two rows under one name and the device
- * list cannot say which is which — which is the moment somebody revokes the wrong one. Two real
- * tablets of the same model do the same thing.
+ * The model alone does not identify an installation. Android Studio's "Medium Tablet" and "Pixel
+ * Tablet" profiles are the same `emu64xa` hardware and both report `Build.MODEL == "Pixel Tablet"`,
+ * so two emulators register two rows under one name. Two real tablets of the same model do the same.
  *
  * So the name carries a four-character suffix that differs per installation: the leading two bytes
  * of the SHA-256 of `Settings.Secure.ANDROID_ID`, which Android scopes to this app's signing key on
- * this device and user, and which therefore survives launches, updates and reinstalls while
- * differing on a second device. It is hashed and truncated because the server needs a label and not
- * an identifier — four characters of a digest name a row and cannot be correlated back to a tablet.
+ * this device and user. Hashed and truncated because the server needs a label and not an identifier.
  */
 private fun defaultDeviceName(context: Context): String {
     val model = Build.MODEL?.takeIf { it.isNotBlank() }

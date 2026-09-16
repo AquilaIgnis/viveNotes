@@ -37,7 +37,7 @@ object RulerPanelTags {
 }
 
 /**
- * The floating settings shown under the ruler in the Draw ribbon — `memory/rulerPlan.md` RD7.
+ * The floating settings shown under the ruler in the Draw ribbon.
  *
  * The eraser's pane in shape: cards choosing what the tool is, then how big it is. What differs is
  * that the cards draw miniatures of the two rulers instead of wearing icons — the thing being chosen
@@ -77,7 +77,7 @@ fun ColumnScope.RulerPanelContent(
             onChange = { onChange(settings.copy(diameterDp = it)) },
             showTicks = false,
             // The page is laid out at 160dp to the inch, so this is a real measurement rather than
-            // a number — the whole reason the ruler is placed in page units (RD3).
+            // a number — the whole reason the ruler is placed in page units.
             format = { "%.1f in".format(it / PageStyle.DP_PER_INCH) },
             // A ruler spans hundreds of dp, so stepping by one would make these buttons ornamental.
             step = 40,

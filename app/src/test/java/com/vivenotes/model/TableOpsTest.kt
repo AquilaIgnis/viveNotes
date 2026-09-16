@@ -9,10 +9,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The Table Class's grid arithmetic — `memory/tablePlan.md`, step 0 of §3.
+ * The Table Class's grid arithmetic, step 0 of §3.
  *
  * Deliberately the largest piece of pure logic in the feature, because it is the piece that *runs on
- * this host* (R10) and the piece where a mistake is silent: a column removed from `columns` but not
+ * this host* and the piece where a mistake is silent: a column removed from `columns` but not
  * from every row is a table that renders fine until it is saved, and a row inserted without cells is
  * a table that loses its shape on reload.
  */
@@ -238,7 +238,7 @@ class TableOpsTest {
     }
 
     // -------------------------------------------------------------------------------------------
-    // Where Tab goes — TA17
+    // Where Tab goes
     // -------------------------------------------------------------------------------------------
 
     @Test
@@ -308,7 +308,7 @@ class TableOpsTest {
     }
 
     // -------------------------------------------------------------------------------------------
-    // The Draw tab's table — TA15
+    // The Draw tab's table
     // -------------------------------------------------------------------------------------------
 
     /**

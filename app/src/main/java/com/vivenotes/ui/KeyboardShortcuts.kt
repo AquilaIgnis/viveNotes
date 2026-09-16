@@ -5,24 +5,20 @@ import android.view.KeyboardShortcutGroup
 import android.view.KeyboardShortcutInfo
 
 /**
- * The app's hardware-keyboard shortcuts — feature **L2**, `memory/features.md`.
+ * The app's hardware-keyboard shortcuts.
  *
- * **One table, two readers.** [APP_SHORTCUTS] is both what [handleShortcut] dispatches and what
+ * One table, two readers: [APP_SHORTCUTS] is both what [handleShortcut] dispatches and what
  * [shortcutGroups] hands the system's Meta + / helper panel. A shortcut that works but is not listed
- * is one nobody finds; a shortcut that is listed but does not work is worse, and keeping the two
- * halves in one list is what stops either from happening.
+ * is one nobody finds; one that is listed but does not work is worse.
  *
- * **Where a shortcut belongs.** These are the *global* ones — they act on the page, the notebook or
- * the view, so they must fire wherever the focus is. The formatting shortcuts are not here: Ctrl+B
- * and Tab act on the caret, so they live in `richtext/OutlineEditText.onKeyDown` where the caret is.
- * They appear below with a null [AppShortcut.action], which lists them in the helper without
- * dispatching them from the Activity.
+ * These are the global ones — they act on the page, the notebook or the view, so they must fire
+ * wherever the focus is. The formatting shortcuts are not here: Ctrl+B and Tab act on the caret, so
+ * they live in `richtext/OutlineEditText.onKeyDown`. They appear below with a null
+ * [AppShortcut.action], which lists them in the helper without dispatching them.
  *
- * **`Activity.onKeyDown` is deliberately the last stop.** It runs only after the focused view has
- * declined the key, which is what makes Ctrl+Z do the right thing in both places: inside a text
- * container `EditText` takes it for its own undo, and everywhere else it falls through to here and
- * reverses the last canvas action. Dispatching earlier — from `dispatchKeyEvent` — would take Ctrl+Z
- * away from the editor, and Ctrl+A with it.
+ * `Activity.onKeyDown` is deliberately the last stop: it runs only after the focused view has
+ * declined the key, which is what makes Ctrl+Z do the right thing in both places. Dispatching from
+ * `dispatchKeyEvent` would take Ctrl+Z away from the editor, and Ctrl+A with it.
  */
 internal data class AppShortcut(
     /** How the helper panel names it. */
@@ -75,7 +71,7 @@ internal val APP_SHORTCUTS: List<AppShortcut> = listOf(
     AppShortcut("Indent", "Paragraph", KeyEvent.KEYCODE_TAB, modifiers = 0),
     AppShortcut("Outdent", "Paragraph", KeyEvent.KEYCODE_TAB, KeyEvent.META_SHIFT_ON),
 
-    // The same key, listed twice on purpose — `memory/tablePlan.md` TA17. Inside a table Tab walks the
+    // The same key, listed twice on purpose. Inside a table Tab walks the
     // grid and only indents where the walk runs out, so a panel that named one meaning would be
     // wrong wherever the caret actually was.
     AppShortcut("Next cell", "Table", KeyEvent.KEYCODE_TAB, modifiers = 0),

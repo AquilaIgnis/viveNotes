@@ -4,13 +4,12 @@ package com.vivenotes.model
  * A video URL sitting in a block's own text, and the video it names.
  *
  * [start] and [end] index the string that was scanned — a paragraph's [Block.editorText] — so an
- * offset here is an offset the editor can set a span over. The same contract
- * `AutoEquationCandidate` has, and for the same reason: the preview is drawn *over* text that is
- * still there, so the two numbers have to mean exactly what `setSpan` means by them.
+ * offset here is one the editor can set a span over. The same contract `AutoEquationCandidate` has:
+ * the preview is drawn over text that is still there, so the two numbers have to mean exactly what
+ * `setSpan` means by them.
  *
  * [url] is kept beside [videoId] rather than rebuilt from it, because it carries the parts the id
- * throws away — a `t=90` start offset most of all. Tapping the card opens what the writer pasted,
- * not a canonical form of it that quietly drops them back at zero.
+ * throws away — a `t=90` start offset most of all.
  */
 data class VideoLink(
     val start: Int,
@@ -22,14 +21,12 @@ data class VideoLink(
 /**
  * Every YouTube URL in [text], in the order they appear.
  *
- * **Whitespace-delimited tokens, not a URL regular expression.** A pattern loose enough to find
+ * Whitespace-delimited tokens rather than a URL regular expression: a pattern loose enough to find
  * bare `youtube.com/...` in prose is also loose enough to match half of one inside a longer word,
  * and the failure mode is a thumbnail drawn over text that is not a link. Splitting on whitespace
- * first means every candidate is something the writer typed as a standalone thing, and the host
- * allow-list in [youTubeVideoId] does the rest of the work.
+ * first means every candidate is something the writer typed as a standalone thing.
  *
- * Deliberately Android-free — no `android.net.Uri` — so it is covered by JVM tests rather than
- * needing a device, which is the project's rule for anything that is pure string work.
+ * Deliberately Android-free — no `android.net.Uri` — so it is covered by JVM tests.
  */
 fun findVideoLinks(text: String): List<VideoLink> {
     val found = mutableListOf<VideoLink>()
@@ -57,14 +54,12 @@ fun findVideoLinks(text: String): List<VideoLink> {
  * The eleven-character video id [url] names, or null if it names no YouTube video.
  *
  * Every accepted form, because all of them get pasted: `watch?v=`, the `youtu.be` short link, and
- * the `/shorts/`, `/embed/`, `/live/` and `/v/` paths. A scheme is optional — people paste
- * `youtube.com/watch?v=…` out of an address bar without one — and the host allow-list rather than
- * the scheme is what keeps this from matching arbitrary text.
+ * the `/shorts/`, `/embed/`, `/live/` and `/v/` paths. A scheme is optional, and the host allow-list
+ * rather than the scheme is what keeps this from matching arbitrary text.
  *
- * **The id is validated to exactly eleven characters of `[A-Za-z0-9_-]`, and that is load-bearing
- * twice.** It is what stops a mistyped link from being previewed as a video that does not exist,
- * and it is what makes the id safe to use as a filename — `com.vivenotes.data.VideoThumbnailStore`
- * names cache files by it, so anything that could contain a `/` or a `..` must never get that far.
+ * The id is validated to exactly eleven characters of `[A-Za-z0-9_-]`, which is load-bearing twice:
+ * it stops a mistyped link being previewed as a video that does not exist, and it makes the id safe
+ * as a filename — `com.vivenotes.data.VideoThumbnailStore` names cache files by it.
  */
 fun youTubeVideoId(url: String): String? {
     val withoutScheme = url.substringAfter("://", missingDelimiterValue = url)
@@ -108,14 +103,12 @@ private fun String.queryParameter(name: String): String? = split('&')
  * The URL inside a whitespace-delimited token, once the sentence around it is discounted.
  *
  * `watch this: https://youtu.be/dQw4w9WgXcQ.` ends in a full stop that belongs to the sentence, and
- * `(https://youtu.be/dQw4w9WgXcQ)` is wrapped in brackets the same way. Both ends are trimmed
- * unconditionally rather than by matching pairs across the token, because a YouTube URL contains
- * none of these characters in the first place and [youTubeVideoId] rejects anything that reaches it
- * malformed — so over-trimming costs nothing, while the bracket-matching version needed to reason
- * about the prose either side of the link to decide.
+ * `(https://youtu.be/dQw4w9WgXcQ)` is wrapped in brackets. Both ends are trimmed unconditionally
+ * rather than by matching pairs, because a YouTube URL contains none of these characters and
+ * [youTubeVideoId] rejects anything malformed that reaches it.
  *
  * Returns null for a token that is nothing but punctuation. The range is half-open, matching what
- * `setSpan` means by its two offsets, which is what these numbers eventually become.
+ * `setSpan` means by its two offsets.
  */
 private fun String.urlBoundsIn(start: Int, end: Int): Pair<Int, Int>? {
     var first = start

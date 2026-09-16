@@ -57,7 +57,7 @@ class LassoAfterEraseTest {
         assertNotNull("a loop around the left piece selected nothing", selection)
         // One piece, not the row both pieces share. The row id is still what the stored operation
         // names — that is what `ink_erases` and `ink_moves` can refer to — but what is *held* is the
-        // projection the hand circled. `memory/lassoProjectionPlan.md` §4.
+        // projection the hand circled.
         assertEquals(setOf("stroke"), selection?.targetIds)
         assertEquals(setOf(left.projectionKey), selection?.projections)
     }

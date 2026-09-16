@@ -7,29 +7,22 @@ import kotlin.math.abs
 enum class ShapeAxis { Horizontal, Vertical }
 
 /**
- * One end of one arm, draggable on its own — `memory/inkPlan.md` §5.4 SD9.
+ * One end of one arm, draggable on its own.
  *
- * The L is what this exists for: its two arms are the two axes, and lengthening one of them has
- * nothing to do with the other. The four corner handles scale a shape *whole* (AD7), which is the
- * right gesture for a rectangle and the wrong one here — dragging a corner of an L to make its
- * horizontal arm longer stretches the vertical one to match, and there is no way back to the
- * proportions you wanted.
+ * The L is what this exists for: its two arms are the two axes, and lengthening one has nothing to
+ * do with the other. The four corner handles scale a shape whole, which is right for a rectangle and
+ * wrong here — dragging a corner to lengthen the horizontal arm stretches the vertical one to match.
  *
- * **Both ends of every arm, head and tail.** Only the outer tips were draggable at first, which
- * quietly made the corner the one point on an L that could not move — and so made a cross
- * unreachable, because a cross is precisely an L whose arms have been pulled back *through* their
- * corner. An arm is a line, a line has two ends, and each of them gets a handle; whether the two
- * arms still meet at one of those ends is then just where they happen to be.
+ * Both ends of every arm, head and tail. Only the outer tips were draggable at first, which made the
+ * corner the one point on an L that could not move, and so made a cross unreachable — a cross being
+ * an L whose arms have been pulled back through their corner.
  *
- * **Derived from the segments, never from the kind's ideal geometry.** An arm's axis is read off its
- * own direction, so an L that has already been resized, moved or arm-dragged reports arms where its
- * arms actually are — and a shape dragged out into a cross keeps working, though nothing about it
- * matches what was seeded any more. [ShapeKind.hasArms] decides *whether* a kind offers arms at all;
- * everything else here is geometry.
+ * Derived from the segments, never from the kind's ideal geometry: an arm's axis is read off its own
+ * direction, so an L that has been resized, moved or arm-dragged reports arms where its arms
+ * actually are. [ShapeKind.hasArms] decides whether a kind offers arms at all.
  *
- * [outward] is the sign of the direction this end lies in from the *other* end of the same arm. A
- * drag is clamped against it so an arm can be shortened to [MIN_ARM_LENGTH] but never turned inside
- * out through its own far end.
+ * [outward] is the sign of the direction this end lies in from the other end of the same arm. A drag
+ * is clamped against it, so an arm can be shortened to [MIN_ARM_LENGTH] but never turned inside out.
  */
 data class ShapeArm(
     val segmentId: String,
@@ -58,22 +51,17 @@ fun Outline.Shape.arms(): List<ShapeArm> =
  * Moves one end of one arm to [along] on its own axis, leaving the other coordinate — and every
  * other segment — exactly where it was.
  *
- * **Two limits, both floors on how short the arm may be pulled.** [MIN_ARM_LENGTH] from the arm's
- * *own other end*, without which a fast drag would flip an arm through zero — and a horizontal arm
- * that now points left is one no further drag can straighten, since its axis reads back the other
- * way round and the handle that shortened it now lengthens it. And the **junction**: an end may not
- * be pulled back past a point where its arm currently crosses another one ([junctionWith]).
+ * Two limits, both floors on how short the arm may be pulled. [MIN_ARM_LENGTH] from the arm's own
+ * other end, without which a fast drag would flip an arm through zero — and a horizontal arm that
+ * now points left is one no further drag can straighten. And the junction: an end may not be pulled
+ * back past a point where its arm currently crosses another one ([junctionWith]).
  *
  * The junction limit is what keeps an L an L. Its two arms are two segments that happen to meet, and
- * nothing but this stopped either of them being shortened until they no longer did — leaving a
- * corner with a gap in it, or two loose strokes lying near each other, from a gesture that reads as
- * "make this arm shorter". Outward travel is untouched, so an end still passes the other arm as far
- * as it likes, which is the whole of how an L becomes a cross; what it may no longer do is retreat
- * back through the crossing it is holding.
+ * nothing else stopped either being shortened until they no longer did. Outward travel is untouched,
+ * so an end still passes the other arm as far as it likes, which is how an L becomes a cross.
  *
- * **Absolute, like a corner drag and unlike a move.** It sets where the end is rather than how far
- * it has come, so applying it twice with the same value is applying it once — which is what lets the
- * layer preview a drag frame by frame and commit the same number on the lift.
+ * Absolute, like a corner drag and unlike a move: it sets where the end is rather than how far it
+ * has come, so the layer can preview a drag frame by frame and commit the same number on the lift.
  */
 fun Outline.Shape.withArm(arm: ShapeArm, along: Float): Outline.Shape {
     val segment = segments.firstOrNull { it.id == arm.segmentId } ?: return this
@@ -150,17 +138,15 @@ internal fun List<ShapeSegment>.arms(): List<ShapeArm> = flatMap { segment ->
  * Where [other] crosses the line this arm's segment runs along, on the arm's own axis — or null when
  * it does not, or when the crossing is one this arm is not currently holding.
  *
- * The whole of the junction limit, and the reason it needs no knowledge of the L: it asks where two
- * segments meet, and reports the answer as the single coordinate an arm drag can move. [across] is
- * the arm's other coordinate, the one the drag leaves alone, so the question is "at what [axis] does
- * [other] reach this line".
+ * The whole of the junction limit, and why it needs no knowledge of the L: it asks where two
+ * segments meet and reports the answer as the single coordinate an arm drag can move. [across] is
+ * the arm's other coordinate, the one the drag leaves alone.
  *
- * **Only a crossing that already exists.** A shape whose arms have somehow come apart — one saved
- * before this limit, say — is left as it is rather than snapped back together the moment a handle is
- * grabbed. Dragging the arm back over the other one restores the junction, and from then on it holds.
+ * Only a crossing that already exists. A shape whose arms have come apart is left as it is rather
+ * than snapped back together the moment a handle is grabbed; dragging the arm back over the other
+ * one restores the junction, and from then on it holds.
  *
- * Chords, not arcs: an arm is a straight segment on a kind that declares arms ([ShapeKind.hasArms]),
- * so there is no bulge here to account for.
+ * Chords, not arcs: an arm is a straight segment on a kind that declares arms.
  */
 private fun ShapeSegment.junctionWith(
     other: ShapeSegment,

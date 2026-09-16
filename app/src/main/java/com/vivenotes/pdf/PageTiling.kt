@@ -45,7 +45,7 @@ data class PdfPagePlan(
     /** Item id → the translation the fit gave it. Absent means none, which is the common case. */
     val shifts: Map<String, PdfShift>,
     /**
-     * Whether this took PD3's single-sheet path: the page was already bound to the paper being
+     * Whether this took the single-sheet path: the page was already bound to the paper being
      * exported to, so its own corner is the sheet's corner and the margins are drawn *through*
      * rather than laid out around.
      */
@@ -55,7 +55,7 @@ data class PdfPagePlan(
 }
 
 /**
- * Cutting an infinite canvas into sheets — `memory/pdfExportPlan.md` PD3 and PD5, and
+ * Cutting an infinite canvas into sheets, and
  * `memory/screenshots/canvastopdf.jpg`, which is what both are read off.
  *
  * Kept Android-free on purpose. The grid and the fit are the two parts of this feature that can be
@@ -69,16 +69,14 @@ object PageTiling {
      *
      * [boundSheet] is the one page that is already a page: a document bound to a paper size whose
      * content still fits inside it. There is nothing to cut, and re-anchoring to the content's own
-     * corner would shift a layout the user placed on a sheet deliberately, so it is returned whole.
+     * corner would shift a layout the user placed deliberately, so it is returned whole.
      *
      * Everything else is tiled from the content's top-left corner, in tiles of
-     * [tileWidthDp] × [tileHeightDp] — the printable area, not the sheet — **down a column and then
-     * to the right**, which is the order written twice on the reference drawing. A tile nothing
-     * overlaps is not emitted, because a canvas is mostly empty and the alternative is a dozen
-     * blank sheets between two diagrams.
+     * [tileWidthDp] × [tileHeightDp] — the printable area, not the sheet — down a column and then to
+     * the right. A tile nothing overlaps is not emitted, because a canvas is mostly empty.
      *
-     * The grid is measured off where the content **ended up**, not off where it started: the fit
-     * breaks a page (see [Fitting]), and the sheet a break moves content onto has to exist.
+     * The grid is measured off where the content ended up, not off where it started: the fit breaks
+     * a page (see [Fitting]), and the sheet a break moves content onto has to exist.
      */
     fun plan(
         items: List<PdfItem>,
@@ -127,27 +125,24 @@ object PageTiling {
     }
 
     /**
-     * PD5's fit: what a box hanging over a sheet edge does about it.
+     * The fit: what a box hanging over a sheet edge does about it.
      *
-     * The reference drawing shows a pull — the box slides back inside the tile its corner is in, by
-     * exactly its overhang and no more, and lands beside what was already there. That is still the
-     * first thing tried, and on an airy canvas it is the right answer: it keeps the box on the sheet
-     * its neighbours are on, and costs no paper.
+     * The first thing tried is a pull — the box slides back inside the tile its corner is in, by
+     * exactly its overhang, and lands beside what was already there. On an airy canvas that is the
+     * right answer: it keeps the box on the sheet its neighbours are on and costs no paper.
      *
-     * **But a page of writing has nothing to slide back into.** Pulling a paragraph up by its
-     * overhang puts it on top of the two lines above it, which is what a reader of the first version
-     * of this saw at the foot of every full page. So when the pulled-back box would land on
-     * something, the item does the other thing instead: it **starts on the next sheet**, at the top
-     * of the strip below (or the left of the strip across), and *what follows it in that strip comes
-     * with it* — the carry below. That is a page break, and it is the only version of this that does
-     * not simply move the overlap somewhere else: closing the gap up behind the thing that moved
-     * would put the next paragraph where this one used to be, on top of the one after it.
+     * But a page of writing has nothing to slide back into: pulling a paragraph up by its overhang
+     * puts it on top of the two lines above it. So when the pulled-back box would land on something,
+     * the item starts on the next sheet instead, at the top of the strip below (or the left of the
+     * strip across), and what follows it in that strip comes with it. That is a page break, and it
+     * is the only version that does not simply move the overlap somewhere else.
      *
-     * Two axes, one procedure, run twice — across the columns first so that an item's column is
-     * settled before the columns are walked down. An item **larger than a tile** is left exactly
-     * where it is and cut: there is nowhere to put a drawing bigger than the paper, and shrinking it
-     * would be redrawing the user's work rather than laying it out. So is the title band, which is
-     * not content placed on the canvas but the top of the page.
+     * Two axes, one procedure, run twice — across the columns first, so an item's column is settled
+     * before the columns are walked down.
+     *
+     * An item larger than a tile is left where it is and cut: there is nowhere to put a drawing
+     * bigger than the paper, and shrinking it would be redrawing the user's work. So is the title
+     * band, which is the top of the page rather than content placed on the canvas.
      *
      * Nothing here is written to the document — it is a view of one export, and it dies with it.
      */

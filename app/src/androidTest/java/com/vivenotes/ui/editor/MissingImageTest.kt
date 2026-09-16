@@ -36,20 +36,16 @@ import kotlin.math.abs
 /**
  * A picture whose file is not there says so — the bug being that it did not.
  *
- * [ImageLayer] fills a frame it has no bitmap for with `surfaceVariant`, so that a picture still being
- * decoded is a plate rather than a hole. A picture whose attachment is *gone* took the same path and
- * stayed there: on the dark theme, a black rectangle on the page, permanently, with nothing to say
- * what had happened or which file was involved.
+ * [ImageLayer] fills a frame it has no bitmap for with `surfaceVariant`, so a picture still being
+ * decoded is a plate rather than a hole. A picture whose attachment is gone took the same path and
+ * stayed there: on the dark theme, a permanent black rectangle with nothing to say what happened.
  *
  * Both halves are asserted, because either alone is satisfiable by the bug: the words have to be in
- * the frame's pixels, **and** they have to say which file and what went wrong. The wording is read
- * off the layer's `contentDescription`, which is where the painted message is repeated for exactly
- * this reason — nothing drawn into a canvas has a semantics node (see `PrimeObjectTest` on the dashed
- * selection box) — and the pixels are counted separately, since a correct description over an
- * unchanged plate is the failure that would otherwise slip through.
+ * the frame's pixels, and they have to say which file and what went wrong. The wording is read off
+ * the layer's `contentDescription`, since nothing drawn into a canvas has a semantics node, and the
+ * pixels are counted separately.
  *
- * The healthy case is here too, as the guard on the other side: a picture that loads must not be
- * accused of being missing while it is still on its way.
+ * The healthy case is here too: a picture that loads must not be accused of being missing.
  */
 class MissingImageTest {
 

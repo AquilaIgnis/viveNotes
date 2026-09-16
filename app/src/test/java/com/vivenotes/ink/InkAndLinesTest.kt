@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * What the Math toolkit will act on — `memory/inkPlan.md` §5.4 SD12.
+ * What the Math toolkit will act on.
  *
  * The gate widened from "ink and nothing else" to "ink, plus the shapes that are marks": a fraction
  * bar drawn with the Line tool belongs to the formula it sits in. What this pins is the *edge* of

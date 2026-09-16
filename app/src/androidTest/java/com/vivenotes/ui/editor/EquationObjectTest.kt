@@ -177,7 +177,7 @@ class EquationObjectTest {
     // -----------------------------------------------------------------------------------------
 
     /**
-     * An equation is held by the same selection every other kind is — AD7's first row.
+     * An equation is held by the same selection every other kind is.
      *
      * Pinned because `isEquationOnly` is what decides whether the toolkit shows the equation's half,
      * and the four `is…Only` flags are the kind of code where adding a kind quietly makes an existing

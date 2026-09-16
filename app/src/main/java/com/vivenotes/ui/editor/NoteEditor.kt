@@ -25,12 +25,10 @@ import com.vivenotes.ui.theme.LocalCanvasColors
 /**
  * Thumbnails for the editor's link previews, or null while they are switched off.
  *
- * A composition local rather than a parameter, which is the exception this file makes to the
- * project's habit of threading its stores by hand. Every writing surface needs it — text containers
- * and table cells alike — and a table cell is three composables deep inside `TableContainer`, so
- * passing it down would put a store nothing in between has any use for into four signatures. It is
- * the same shape of dependency `LocalCanvasColors` is: something every editor reads and nothing
- * in the middle acts on.
+ * A composition local rather than a parameter, which is this file's exception to threading stores by
+ * hand: every writing surface needs it, and a table cell is three composables deep inside
+ * `TableContainer`, so passing it down would put a store nothing in between uses into four
+ * signatures. The same shape of dependency `LocalCanvasColors` is.
  *
  * Static, so it costs no recomposition to read; `NotesApp` provides it, and provides null when the
  * Settings toggle is off.
@@ -39,16 +37,16 @@ val LocalVideoThumbnails = staticCompositionLocalOf<VideoThumbnails?> { null }
 
 /**
  * One writing surface, hosted through [AndroidView] — the one place the Compose shell hands off to a
- * View (AD6).
+ * View.
  *
  * Extracted from `OutlineContainer` when tables arrived, because a table cell is the same thing: a
- * box that holds blocks (`memory/tablePlan.md` TA2). Two copies of this configuration would be two
- * places for the base text size, the input type or the default marks to drift apart, and the first
- * symptom of that is text in a table that renders half a point off the text beside it.
+ * box that holds blocks. Two copies would be two places for the base text size, the input type or
+ * the default marks to drift apart, and the first symptom is text in a table rendering half a point
+ * off the text beside it.
  *
- * Everything here is *base* styling — what a character with no span of its own looks like. It is
- * fixed rather than taken from the current default, because changing it would restyle writing that
- * is already on the page; [EditorDefaults] reaches only text with nothing of its own to inherit.
+ * Everything here is base styling — what a character with no span of its own looks like. Fixed
+ * rather than taken from the current default, because changing it would restyle writing already on
+ * the page; [EditorDefaults] reaches only text with nothing of its own to inherit.
  */
 @Composable
 internal fun NoteEditor(
@@ -63,7 +61,7 @@ internal fun NoteEditor(
     onSelectionChanged: (SelectionState) -> Unit,
     onMarkArmed: (Mark) -> Unit = {},
     /**
-     * Where Tab goes, for an editor that is a table cell — `memory/tablePlan.md` TA17. Returns whether
+     * Where Tab goes, for an editor that is a table cell. Returns whether
      * it moved; null, and false, both leave Tab as the indent it is in a text container.
      */
     onTabNavigate: ((forward: Boolean) -> Boolean)? = null,

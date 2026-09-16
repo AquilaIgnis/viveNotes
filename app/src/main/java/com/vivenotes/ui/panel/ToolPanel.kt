@@ -82,7 +82,7 @@ enum class ToolPane(val title: String) {
     Recognition("Recognition"),
     Hardware("Hardware"),
 
-    /** Fuzzy search over the notebook's text boxes and fields — `memory/searchPlan.md` CS1. */
+    /** Fuzzy search over the notebook's text boxes and fields. */
     Content("Content"),
 }
 
@@ -454,19 +454,16 @@ private val SWITCH_HEIGHT = 32.dp
 /**
  * A button at the smallest size M3 Expressive defines, for panes that are a column of controls.
  *
- * **Sized through the expressive API rather than by hand.** `ButtonDefaults.ExtraSmallContainerHeight`
- * comes with `contentPaddingFor`, which is the padding Material intends at that height — writing
- * `height(32.dp)` and guessing the padding instead is how a button ends up with its label off-centre
- * or clipped in another locale.
+ * Sized through the expressive API rather than by hand: `ButtonDefaults.ExtraSmallContainerHeight`
+ * comes with `contentPaddingFor`, which is the padding Material intends at that height. Writing
+ * `height(32.dp)` and guessing the padding is how a button ends up with its label off-centre.
  *
- * A default-size button is 40dp plus its padding, which is right for a dialog and wasteful in a 320dp
- * pane where four of them stack under a preview. This gets a third of that height back per row.
+ * A default-size button is 40dp plus its padding, which is right for a dialog and wasteful in a
+ * 320dp pane where four of them stack under a preview.
  *
- * [colors] is the escape hatch for a row that should read as its own family — pass
- * `ButtonDefaults.buttonColors(containerColor = colorScheme.tertiary, contentColor = onTertiary)` and
- * the whole row fills with the complement instead of the brand azure. Taking a `ButtonColors` rather
- * than a single accent keeps the container/label pairing together, which is the pairing that has to
- * stay legible.
+ * [colors] is the escape hatch for a row that should read as its own family. Taking a `ButtonColors`
+ * rather than a single accent keeps the container/label pairing together, which is the pairing that
+ * has to stay legible.
  */
 @Composable
 fun PanelButton(

@@ -49,7 +49,7 @@ object InkCodec {
      * Who wrote the point blob.
      *
      * `androidx.ink`'s own delta-compressed protobuf, chosen to get ink working rather than for
-     * keeps: `memory/inkPlan.md` §7.3 argues for owning this encoding, because a content hash over
+     * keeps: owning this encoding is deliberate, because a content hash over
      * bytes a dependency controls turns a library upgrade into a full resync. Recording the encoder
      * per row is what makes that swap a rolling change instead of a migration — the same property
      * `page_content.format` gives documents.
@@ -59,7 +59,7 @@ object InkCodec {
     /** Little-endian count followed by x/y float pairs, all in page dp. */
     const val MOVE_ENCODING = "ink/lasso-f32le1"
 
-    /** Stock brush versions are pinned, never `LATEST`; see `memory/inkPlan.md` ID6. */
+    /** Stock brush versions are pinned, never `LATEST`; see */
     const val BRUSH_VERSION = 1
 
     private const val FAMILY_PRESSURE_PEN = "pressure-pen"
@@ -83,15 +83,15 @@ object InkCodec {
     }
 
     /**
-     * How a stabilization level smooths the input — `memory/inkPlan.md` §4, finally applied.
+     * How a stabilization level smooths the input.
      *
-     * **The library does the maths, not us.** `BrushFamily.inputModel` is Ink's own stroke modeller:
-     * a sliding window over recent samples, run in native code *inside* the authoring pipeline. A
-     * hand-rolled filter in front of `addToStroke` would fight the latency prediction and give a wet
-     * stroke whose shape disagreed with the dry one.
+     * The library does the maths. `BrushFamily.inputModel` is Ink's own stroke modeller: a sliding
+     * window over recent samples, run in native code inside the authoring pipeline. A hand-rolled
+     * filter in front of `addToStroke` would fight the latency prediction and give a wet stroke
+     * whose shape disagreed with the dry one.
      *
-     * The numbers are measured rather than guessed, against a synthetic straight line with a sine
-     * tremor on it (2026-08-10, tablet AVD, wobble = how far the centreline still strays):
+     * The numbers are measured, against a synthetic straight line with a sine tremor on it
+     * (2026-08-10, tablet AVD; wobble = how far the centreline still strays):
      *
      * | window | 10 Hz ±3dp | 4 Hz ±4dp |
      * |---|---|---|
@@ -103,33 +103,23 @@ object InkCodec {
      * | 140 ms | 2.26 | 2.91 |
      * | 200 ms | 2.26 | 2.91 |
      *
-     * Two things that shaped the scale. It **saturates** — past about 60 ms nothing more happens to a
-     * fast tremor and past about 140 ms nothing happens at all — so 120 ms is the top of the range
-     * rather than an arbitrary stop, and levels beyond it would be steps that did nothing. And the
-     * effect is **gentle**: a quarter of the wobble at best. This takes the edge off shake; it does
-     * not turn unsteady handwriting into a ruled line, and a scale that implied otherwise would be a
-     * lie told in five steps.
+     * It saturates — past about 60 ms nothing more happens to a fast tremor and past about 140 ms
+     * nothing happens at all — so 120 ms is the top of the range rather than an arbitrary stop. The
+     * effect is also gentle: a quarter of the wobble at best.
      *
-     * `upsamplingFrequencyHz` is deliberately left at the stock 180. It was measured too, and it does
-     * nothing for smoothing — 60, 180 and 400 gave the same wobble to three decimal places. It only
-     * changes how many points the mesh is built from, so moving it would cost triangles and buy
-     * nothing.
+     * `upsamplingFrequencyHz` is left at the stock 180. It was measured too and does nothing for
+     * smoothing — 60, 180 and 400 gave the same wobble to three decimal places.
      *
-     * **Level 1 is the library's own default**, which is what every stroke drawn before this existed
-     * was already getting. That is what makes turning this on a no-op for ink already on the page.
+     * Level 1 is the library's own default, which is what every stroke drawn before this existed was
+     * already getting, so turning this on is a no-op for ink already on the page.
      *
-     * **This mapping is frozen once shipped**, for the reason the family ids above are: the *level*
-     * is what a row stores, so the level → window table is what its meaning depends on. Changing a
-     * number here restyles every stroke ever drawn at that level. A different curve is a new level,
-     * or a new column — never an edit to this one.
+     * This mapping is frozen once shipped, for the reason the family ids are: the level is what a
+     * row stores, so the level → window table is what its meaning depends on. A different curve is a
+     * new level, never an edit to this one.
      *
-     * This reverses `memory/inkPlan.md` **ID4**, which located stabilization in a pre-filter over the
-     * raw samples so the filtered points were what got persisted. The harm ID4 named — "changing the
-     * smoothing slider silently rewrites every drawing ever made" — is answered instead by the
-     * per-stroke column: a stroke replays at the level it was drawn at, not the level in hand. What
-     * ID4 still has right is the residual risk, and it is accepted rather than solved: an input model
-     * is the library's to define, so an Ink upgrade that changes what `SlidingWindowModel(40, 180)`
-     * means will reshape old ink, and there is no equivalent of ID6's version pin for it.
+     * The residual risk is accepted rather than solved: an input model is the library's to define,
+     * so an Ink upgrade that changes what `SlidingWindowModel(40, 180)` means will reshape old ink,
+     * and there is no equivalent of the brush version pin for it.
      */
     internal fun inputModelFor(stabilization: Int): BrushFamily.InputModel =
         when (stabilization.coerceIn(0, PenPreset.MAX_STABILIZATION)) {
@@ -152,12 +142,11 @@ object InkCodec {
     /**
      * The family for an id, wearing the input model that stabilization level asks for.
      *
-     * **The highlighter is exempt, and that is not an oversight.** It has no stabilization control
-     * (see [brushFor] and `HighlighterPanel`), so its rows store 0 to mean *not applicable* rather
-     * than *off* — and 0 maps to passthrough. Handing it that would quietly re-render every
+     * The highlighter is exempt: it has no stabilization control, so its rows store 0 to mean not
+     * applicable rather than off, and 0 maps to passthrough. Handing it that would re-render every
      * highlighter stroke ever saved, rougher than it was drawn, on the next page load.
      *
-     * Cached because a page load decodes every stroke on it, and each [BrushFamily.copy] is a native
+     * Cached because a page load decodes every stroke on it and each [BrushFamily.copy] is a native
      * allocation; the key space is a handful of ids across six levels. Concurrent because decoding
      * runs off the main thread.
      */
@@ -185,7 +174,7 @@ object InkCodec {
             // ACCUMULATE, since that is its default from Android U up. DISCARD is the only option
             // that draws one flat band per stroke, which is what a real highlighter leaves.
             selfOverlap = SelfOverlap.DISCARD,
-            // Pinned, never LATEST: ID6. This id has never been written by any build — the mapping
+            // Pinned, never LATEST. This id has never been written by any build — the mapping
             // existed before anything could produce it — so choosing its meaning now restyles no
             // saved ink.
             version = StockBrushes.HighlighterVersion.V1,

@@ -2,29 +2,27 @@ package com.vivenotes.model
 
 import com.vivenotes.model.Outline.Table
 
-/**
- * Everything the Table Class's toolkit does to a grid — `memory/diagram.md`, `memory/tablePlan.md` TA6.
- */
+// Everything the table toolkit does to a grid.
 
 /**
  * A cell with nothing in it — which is two different things.
  *
  * A typed table's empty cell holds one empty paragraph, because that is what a caret needs to land
- * in. An ink table's holds **no blocks at all** (TA15): nothing types in it, so a paragraph there
+ * in. An ink table's holds **no blocks at all**: nothing types in it, so a paragraph there
  * would be a promise of text that never arrives — and it is exactly the entry that
  * `Table.contentCellIds` exists to keep out of the ViewModel's block map.
  */
 private fun emptyCell(id: String, inkOnly: Boolean): TableCell =
     if (inkOnly) TableCell(id = id) else TableCell.empty(id)
 
-/** Whether another row would fit under the caps — TA9. */
+/** Whether another row would fit under the caps. */
 val Table.canAddRow: Boolean
     get() = rowCount < Table.MAX_ROWS && (rowCount + 1) * columnCount.coerceAtLeast(1) <= Table.MAX_CELLS
 
 val Table.canAddColumn: Boolean
     get() = columnCount < Table.MAX_COLUMNS && rowCount.coerceAtLeast(1) * (columnCount + 1) <= Table.MAX_CELLS
 
-/** A table always has a row and a column, so the last of either cannot be removed — TA6. */
+/** A table always has a row and a column, so the last of either cannot be removed. */
 val Table.canRemoveRow: Boolean get() = rowCount > 1
 
 val Table.canRemoveColumn: Boolean get() = columnCount > 1
@@ -48,7 +46,7 @@ fun newTable(
     borderFollowsTheme: Boolean? = null,
     borderWidth: Float = 1f,
     fillArgb: Int? = null,
-    /** A ruling for the stylus rather than a grid of text fields — TA15. */
+    /** A ruling for the stylus rather than a grid of text fields. */
     inkOnly: Boolean = false,
     newId: () -> String = ::newId,
 ): Table {
@@ -133,7 +131,7 @@ fun Table.withColumnRemoved(at: Int): Table {
     ).withRecomputedWidth()
 }
 
-/** One column's width, from dragging its handle in the top gutter — TA5. */
+/** One column's width, from dragging its handle in the top gutter. */
 fun Table.withColumnWidth(at: Int, width: Float): Table {
     if (at !in columns.indices) return this
     val clamped = width.coerceIn(Table.MIN_COLUMN_WIDTH, Table.MAX_COLUMN_WIDTH)
@@ -142,7 +140,7 @@ fun Table.withColumnWidth(at: Int, width: Float): Table {
         .withRecomputedWidth()
 }
 
-/** One row's floor, from dragging its handle in the left gutter. A floor, never a height — TA3. */
+/** One row's floor, from dragging its handle in the left gutter. A floor, never a height. */
 fun Table.withRowMinHeight(at: Int, minHeight: Float): Table {
     if (at !in rows.indices) return this
     val clamped = minHeight.coerceIn(Table.MIN_ROW_HEIGHT, Table.MAX_ROW_HEIGHT)
@@ -168,7 +166,7 @@ fun Table.withNewIds(newId: () -> String = ::newId): Table = copy(
 /**
  * The table with its cells' content replaced from [blocks], and blank cells kept.
  *
- * A blank cell is written where a blank *container* is not — TA12. An empty container is a caret
+ * A blank cell is written where a blank *container* is not. An empty container is a caret
  * position that nobody typed in; an empty cell is part of the grid's shape, and dropping it would
  * change the table's size the next time the page loads.
  *

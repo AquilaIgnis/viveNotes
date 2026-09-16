@@ -1,34 +1,25 @@
 package com.vivenotes.model
 
 /**
- * Insert Space — feature E2, `memory/plan.md` phase 5.
+ * Insert Space.
  *
- * OneNote's Draw tab has a tool that does something no other tool on a free-form canvas does: it
- * edits the *emptiness*. You draw a line across the page and drag, and everything past that line
- * moves with the drag while everything before it stays — so a paragraph written too close under a
- * diagram can be given room without selecting it, and a gap left by mistake can be closed the same
- * way. Dragging back the other way takes the space away again.
+ * You draw a line across the page and drag: everything past that line moves with the drag while
+ * everything before it stays, so a paragraph written too close under a diagram can be given room
+ * without selecting it, and a gap left by mistake can be closed the same way.
  *
- * **This is a translation applied to a half-plane, and that is the whole of the model.** It is
- * deliberately Android-free and deliberately not a document type: nothing is stored *as* an inserted
- * space, because there is nothing to store — the page after the gesture is a page whose objects have
- * different coordinates, and that is a state every part of the app already understands. A stored
- * "space" would be a second thing that decides where content lives, and everything from export to
- * search to the sync client would have to learn about it.
+ * This is a translation applied to a half-plane, and that is the whole of the model. Nothing is
+ * stored as an inserted space, because there is nothing to store: the page after the gesture is a
+ * page whose objects have different coordinates. A stored "space" would be a second thing that
+ * decides where content lives, and everything from export to search to sync would have to learn it.
  *
- * ### Which side of the line an object is on
+ * Which side of the line an object is on is decided by its near edge — the top for a vertical cut,
+ * the left for a horizontal one — and nothing else. An object that straddles the line stays put,
+ * which is the only answer that keeps the gesture honest and the only rule that can be stated in a
+ * sentence: everything that starts below the line moves.
  *
- * Its **near edge** — the top for a vertical cut, the left for a horizontal one — and nothing else.
- * An object that straddles the line therefore stays put, which is the only answer that keeps the
- * gesture honest: the alternative is a picture that starts above the cut being pushed down and
- * opening a gap where the user was not asking for one. It also means the rule can be stated in one
- * sentence to a user — *everything that starts below the line moves* — which a bounding-box overlap
- * test cannot.
- *
- * This is also the only rule the *document* can answer. A text container's height is whatever its
- * text wraps to and only the canvas knows it ([Outline.Text.minHeight] is a floor, not a height), and
- * a table's is the sum of its row floors — so a far edge is a number the model does not have. A near
- * edge is exact for every kind.
+ * It is also the only rule the document can answer. A text container's height is whatever its text
+ * wraps to and only the canvas knows it, and a table's is the sum of its row floors, so a far edge
+ * is a number the model does not have. A near edge is exact for every kind.
  */
 object PageSpace {
 
@@ -70,19 +61,16 @@ data class SpaceCut(
     /**
      * As much of [amount] as keeps every moved object on the far side of the line.
      *
-     * **The line is the floor, and that is a deliberate choice over OneNote's.** OneNote stops a
-     * closing drag when the content below meets the content *above*, which needs both objects'
-     * heights; this stops it when the content below meets the line the user drew, which needs
-     * neither. The two agree whenever the line is placed against the bottom of the content above it —
-     * which is where you put it anyway, because that is the gap you are trying to close — and where
-     * they differ this one is the rule you can see: the line is on screen, and content does not cross
-     * it.
+     * The line is the floor, deliberately unlike OneNote: OneNote stops a closing drag when the
+     * content below meets the content above, which needs both objects' heights; this stops it when
+     * the content below meets the line the user drew, which needs neither. The two agree whenever
+     * the line is placed against the bottom of the content above it, and where they differ this one
+     * is the rule you can see.
      *
-     * The alternative was to measure the content above, and the model cannot: see [PageSpace] for why
-     * a far edge is a number the document does not have.
+     * The alternative was to measure the content above, and the model cannot: see [PageSpace].
      *
-     * A consequence worth stating, because it is what keeps [com.vivenotes.ink.PageBounds]'s origin
-     * rule intact for free: a cut is only ever placed at a non-negative coordinate, so nothing this
+     * A consequence worth stating, because it keeps [com.vivenotes.ink.PageBounds]'s origin rule
+     * intact for free: a cut is only ever placed at a non-negative coordinate, so nothing this
      * limits can be pushed above or left of the page's corner.
      *
      * [nearestMovedEdge] is the smallest near edge among the objects that [moves] accepted, or null

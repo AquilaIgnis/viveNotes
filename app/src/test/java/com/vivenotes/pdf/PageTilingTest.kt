@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * How an infinite canvas becomes sheets — `memory/pdfExportPlan.md` PD3 and PD5, read off
+ * How an infinite canvas becomes sheets, read off
  * `memory/screenshots/canvastopdf.jpg`.
  *
  * These are the parts of the export that no screenshot catches. A column emitted before the row
@@ -80,7 +80,7 @@ class PageTilingTest {
     }
 
     /**
-     * PD3's exception. A page already bound to the paper being exported to is returned whole, at its
+     * The exception. A page already bound to the paper being exported to is returned whole, at its
      * own origin, because re-anchoring would move a layout the user placed on a sheet deliberately.
      */
     @Test

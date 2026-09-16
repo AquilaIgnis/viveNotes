@@ -57,31 +57,27 @@ internal const val EXAMPLE_EQUATION = "{\\displaystyle \\int _{a}^{b}f'(t)\\,dt=
 /**
  * Write a formula: the ƒ button and the LaTeX panel behind it.
  *
- * **One composable, two tabs, two destinations.** On Home it writes an equation into the text under
- * the caret, as a [com.vivenotes.model.Mark] on a run — a character in a sentence, which is what an
- * equation in a paragraph is. On Draw it arms a tool that puts the same formula on the canvas as an
- * object you can drag and resize. Same panel, same validation, same glyph, because it is the same
- * question either way: *what is the formula?* Where it lands is the tab's business, not the panel's,
- * which is why [onSubmit] is the only thing that differs between the two call sites.
+ * One composable, two tabs, two destinations. On Home it writes an equation into the text under the
+ * caret, as a [com.vivenotes.model.Mark] on a run. On Draw it arms a tool that puts the same formula
+ * on the canvas as an object you can drag and resize. Same panel, same validation, same glyph,
+ * because it is the same question either way: what is the formula? Where it lands is the tab's
+ * business, which is why [onSubmit] is the only thing that differs between the two call sites.
  *
- * That split is the equation's version of the one [TableButton] draws between a typed table and a
- * ruling, and it lands on the opposite answer for a reason: a table's two kinds are one object with
- * different cells, so a setting distinguishes them, while an equation's are genuinely a mark and an
- * object — different types, different toolkits, different places on the page.
+ * That split lands on the opposite answer from [TableButton]'s, and for a reason: a table's two kinds
+ * are one object with different cells, so a setting distinguishes them, while an equation's are
+ * genuinely a mark and an object.
  *
  * [existing] is the formula already under the caret. When there is one the panel edits it rather than
  * inserting beside it, which is the difference between Update and Insert.
  *
- * **The panel takes focus, so the caret has to be held.** A focusable popup pulls focus off the
- * Android editor, and with it the selection the insert is aimed at; [onRetainTarget] and
- * [onReleaseTarget] are how the Home tab pins that caret for the life of the panel and lets it go on
- * every exit — outside click, back, tab switch, cancel or submit. The Draw tab needs neither, because
- * it is aiming at a point on the canvas rather than at a caret.
+ * The panel takes focus, so the caret has to be held: a focusable popup pulls focus off the Android
+ * editor, and with it the selection the insert is aimed at. [onRetainTarget] and [onReleaseTarget]
+ * pin that caret for the life of the panel and let it go on every exit. The Draw tab needs neither,
+ * because it is aiming at a point on the canvas.
  *
- * The opt-in is for the submit button's [LoadingIndicator]. **The loading indicators are the one part
- * of M3 Expressive still gated in 1.5.0-alpha25** — `MaterialExpressiveTheme`, `MotionScheme`,
- * `ToggleButton` and the wavy progress indicators have all graduated and need no annotation, which is
- * worth knowing before adding one reflexively.
+ * The opt-in is for the submit button's [LoadingIndicator], which is the one part of M3 Expressive
+ * still gated in 1.5.0-alpha25 — `MaterialExpressiveTheme`, `MotionScheme`, `ToggleButton` and the
+ * wavy progress indicators have all graduated and need no annotation.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -148,14 +144,14 @@ internal fun EquationButton(
 /**
  * The LaTeX field, its live preview and the two buttons — everything except where the panel hangs.
  *
- * Shared between the ribbon's ƒ and the object toolkit's, which is why it is a composable of its own:
- * editing the formula on a placed equation is the same act as writing one, and two copies of a
- * validating LaTeX editor would drift apart the first time either was touched.
+ * Shared between the ribbon's ƒ and the object toolkit's: editing the formula on a placed equation
+ * is the same act as writing one, and two copies of a validating LaTeX editor would drift apart the
+ * first time either was touched.
  *
- * **A formula is measured on its way through.** The submit path has to render it anyway — the preview
- * is asynchronous, so it can still be showing a stale success when an invalid source is submitted,
- * and the only honest check is to parse it again here. Handing that renderer's metrics to [onSubmit]
- * is what lets an equation arrive on the canvas already knowing its size, for free.
+ * A formula is measured on its way through. The submit path has to render it anyway — the preview is
+ * asynchronous, so it can still be showing a stale success when an invalid source is submitted — and
+ * handing that renderer's metrics to [onSubmit] lets an equation arrive on the canvas already
+ * knowing its size.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -278,7 +274,7 @@ internal fun EquationSourceDialog(
                 if (submitting) {
                     // Uncontained, and sized to the label it replaces — the same call the recognition
                     // panel's in-button spinner makes, for the same reason: a contained indicator
-                    // inside a button is a container in a container. `memory/expressivePlan.md` EX6.
+                    // inside a button is a container in a container.
                     LoadingIndicator(Modifier.size(18.dp))
                 } else {
                     Text(if (editing) "Update" else "Insert")

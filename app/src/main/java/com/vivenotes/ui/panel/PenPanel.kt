@@ -67,27 +67,25 @@ object PenPanelTags {
 }
 
 /**
- * The pen settings pane, laid out as `memory/references/pen-tooltip.jpeg` lays it out.
+ * The pen settings pane, laid out as the reference plate lays it out.
  *
- * Sized to fit the floating settings surface without scrolling in the common tablet layout. The
- * popup itself constrains and scrolls the content when the screen or font scale leaves less room.
+ * Sized to fit the floating settings surface without scrolling in the common tablet layout; the
+ * popup constrains and scrolls the content when the screen or font scale leaves less room.
  *
  * Reached by holding a pen in the Draw tab rather than by a ribbon button, because the pen it edits
- * is the one you held — there is no "which pen?" question to answer first.
+ * is the one you held.
  *
- * Pressure sensitivity shows only for the calligraphy pen. The fountain pen is this app's plain
- * pen — one width for the whole stroke — so the control is absent rather than disabled.
+ * Pressure sensitivity shows only for the calligraphy pen. The fountain pen is this app's plain pen
+ * — one width for the whole stroke — so the control is absent rather than disabled.
  *
  * Two things in the reference are deliberately not here. The middle pen type is crossed out, so it
- * is absent entirely rather than disabled; and the overflow beside the hold toggle, which in the
- * reference chooses *which* shapes are recognised, has nothing left to choose — that toggle is now
- * Hold for straight line, and the line is the only candidate there is (`memory/inkPlan.md` §5).
- * Add colour is placed and inert: it holds the spot the reference gives it and plainly does not work
- * yet. **It is the last control in the app treated that way** — the View tab's Full Page View and
- * Normal View were the other two and were removed on 2026-08-09, so weigh the trade before adding a
- * third rather than pointing at precedent. It is not the wheel at the end of the
- * palette in disguise — that picks an ink, where + would add a swatch to the row and keep it, which
- * needs a stored custom palette this does not have.
+ * is absent entirely; and the overflow beside the hold toggle, which in the reference chooses which
+ * shapes are recognised, has nothing left to choose.
+ *
+ * Add colour is placed and inert, holding the spot the reference gives it. It is the last control in
+ * the app treated that way, so weigh the trade before adding a third rather than pointing at
+ * precedent. It is not the wheel at the end of the palette in disguise — that picks an ink, where +
+ * would add a swatch to the row and keep it.
  */
 @Composable
 fun ColumnScope.PenPanelContent(
@@ -363,15 +361,13 @@ private fun PenKindCard(
  * one colour reads on both the black swatch and the yellow one.
  *
  * The row rolls. A colour mixed on the wheel is inserted at the front and the tail is dropped, so
- * the wheel stays a wheel rather than doubling as a swatch for whatever was last mixed — what you
- * picked is a swatch like any other, in the place your eye goes first. The cost is that the row is
- * finite: nine custom colours will push the shipped palette out entirely, black and white included.
- * They are one trip back through the wheel away, which is why nothing here is pinned.
+ * the wheel stays a wheel rather than doubling as a swatch for whatever was last mixed. The cost is
+ * that the row is finite: nine custom colours will push the shipped palette out entirely.
  *
- * That cost is why the row is charged **once per visit to the wheel, when the wheel closes**, and
- * not once per touch on it. Hunting for a colour means trying several, and a row that took a spot
- * for each would spend the whole palette on the near-misses; only the colour someone left the
- * picker on was actually chosen. The pen still follows every touch, because that is the preview.
+ * That cost is why the row is charged once per visit to the wheel, when the wheel closes, and not
+ * once per touch on it. Hunting for a colour means trying several, and a row that took a spot for
+ * each would spend the whole palette on the near-misses. The pen still follows every touch, because
+ * that is the preview.
  */
 @Composable
 internal fun ColorSwatches(

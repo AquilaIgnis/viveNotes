@@ -10,7 +10,7 @@ import kotlin.math.min
 import kotlin.math.withSign
 
 /**
- * PaddleOCR's DB post-processing, without OpenCV — `memory/imageOcrPlan.md` IO4.
+ * PaddleOCR's DB post-processing, without OpenCV.
  *
  * The detector emits a probability map the size of its input; turning that into text boxes is
  * `cv2.findContours`, `cv2.minAreaRect` and pyclipper upstream. None of those exist here, and
@@ -18,8 +18,8 @@ import kotlin.math.withSign
  * costs. What replaces them is below: an 8-connected flood fill, boundary extraction, a
  * monotone-chain hull, rotating calipers, and a rectangle outset standing in for Vatti offsetting.
  *
- * **Android-free on purpose**, like the rest of `model/`: this is the half that can be tested on the
- * JVM, and it was written against the Python reference in `simulations/image-ocr/dbpost.py`.
+ * Android-free on purpose, like the rest of `model/`, and written against the Python reference in
+ * `simulations/image-ocr/dbpost.py`.
  */
 object TextDetection {
 

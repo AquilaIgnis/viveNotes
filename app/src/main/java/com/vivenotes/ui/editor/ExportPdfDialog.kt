@@ -85,24 +85,21 @@ internal object ExportPdfTags {
 }
 
 /**
- * Export as PDF — `memory/pdfExportPlan.md` PD1.
+ * Export as PDF.
  *
- * **A window rather than a docked pane, and the difference is the preview.** Everything in the
- * right-hand [com.vivenotes.ui.panel.ToolPane] is something kept open while working on the page
- * beside it; this is a decision taken once, and the only way to take it well is to see the sheets
- * the canvas has been cut into. So it takes the screen, and on anything wide enough the options sit
- * beside the sheet they are changing rather than under it — every one of them changes what the
- * preview shows, and a control whose effect is off screen is a control you have to guess at.
+ * A window rather than a docked pane, and the difference is the preview: this is a decision taken
+ * once, and the only way to take it well is to see the sheets the canvas has been cut into. So it
+ * takes the screen, and on anything wide enough the options sit beside the sheet they are changing —
+ * every one of them changes what the preview shows.
  *
  * The options themselves are the pane's own widgets ([PanelSection], [PanelRow], [PanelChoice],
  * [PanelToggle]), so a drop-down here is the same drop-down as the one in Paper Size.
  *
  * Nothing is written until the file picker comes back: the export is a Storage Access Framework
- * document the user chooses, the same door Export Notebook goes through, and it needs no storage
- * permission because choosing the file *is* the grant.
+ * document the user chooses, and it needs no storage permission because choosing the file is the
+ * grant.
  *
- * The opt-in is for [LoadingIndicator], which is the one part of M3 Expressive still gated in
- * 1.5.0-alpha25 — the same one `AccountScreen` takes.
+ * The opt-in is for [LoadingIndicator] — the same one `AccountScreen` takes.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -282,16 +279,15 @@ private fun ExportPdfBar(
 
 /**
  * Every sheet of the export, stacked down the pane and scrolled — which is how a stack of paper
- * reads, and how every PDF viewer the user has ever opened shows one.
+ * reads, and how every PDF viewer the user has opened shows one.
  *
- * A turner was the first version of this and it was the wrong shape: it made the second sheet a
- * thing you had to *discover*, when the whole reason this window exists is to show at a glance what
- * the canvas was cut into.
+ * A turner was the first version and it was the wrong shape: it made the second sheet a thing you
+ * had to discover, when the whole reason this window exists is to show what the canvas was cut into.
  *
- * Lazily, and that is not an optimisation: a sheet is a full render of a page, and a section can be
- * a hundred of them. [LazyColumn] composes what is on screen and disposes what is not, so a hundred
- * sheets cost what two do — and because the sheets of one page are contiguous, the exporter's
- * one-page measurement cache is hit by every one of them but the first.
+ * Lazily, and not as an optimisation: a sheet is a full render of a page and a section can be a
+ * hundred of them. [LazyColumn] composes what is on screen and disposes what is not, and because the
+ * sheets of one page are contiguous, the exporter's one-page measurement cache is hit by every one
+ * of them but the first.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

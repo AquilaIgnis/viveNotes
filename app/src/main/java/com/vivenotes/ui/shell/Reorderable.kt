@@ -24,19 +24,18 @@ import androidx.compose.ui.zIndex
 /**
  * Drag-to-reorder for rows of a [androidx.compose.foundation.lazy.LazyColumn].
  *
- * Compose has no reorderable lazy list, and the two places that need one here disagree about
- * almost everything — the page list is a flat list of variable-height rows, the notebook rail is a
- * tree whose draggable rows are one notebook's sections sitting between headers that must not
- * move. So this is written against *keys* rather than indices, and the caller says which keys are
- * currently draggable. Everything else in the list is simply not a drop target.
+ * Compose has no reorderable lazy list, and the two places that need one here disagree about almost
+ * everything: the page list is a flat list of variable-height rows, the notebook rail is a tree
+ * whose draggable rows are one notebook's sections sitting between headers that must not move. So
+ * this is written against keys rather than indices, and the caller says which keys are currently
+ * draggable.
  *
  * Row heights are read from the live layout rather than assumed, because a page row is one, two or
  * three lines tall depending on whether it has a preview.
  *
- * **The list reorders under the finger, not on release.** The caller keeps an optimistic copy of
- * the order and mutates it on every [onMove]; [onSettle] is when that copy should be written down.
- * A gesture the system cancels mid-drag therefore keeps what the user could already see rather
- * than snapping back to an arrangement they had stopped looking at.
+ * The list reorders under the finger, not on release: the caller keeps an optimistic copy of the
+ * order and mutates it on every [onMove], and [onSettle] is when that copy should be written down.
+ * A gesture the system cancels mid-drag therefore keeps what the user could already see.
  */
 @Stable
 internal class ReorderState internal constructor(

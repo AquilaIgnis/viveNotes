@@ -33,18 +33,14 @@ import com.vivenotes.ui.OutlineBox
 import com.vivenotes.ui.theme.ViveNotesTheme
 
 /**
- * Prime Object, as the whole page assembles it — `memory/diagram.md`, Prime Object Class:
+ * An object on the canvas, as the whole page assembles it: moved freely, selected by a tap, shown
+ * with a rectangle and four resize vertices, and deselected by arming any other tool.
  *
- * > *prime behavior : can be moved around canvas freely, taping on object selects it bring "base
- * > object toolkit", on being selected sow a rectangle around object with 4 vertices that allow re
- * > sizing. Selecting any other tool removes selection of object.*
- *
- * **Through [EditorPane] rather than through a layer**, which is the point of this file existing
- * beside `ShapeToolTest`. That one hosts [ShapeLayer] by itself and proves the gesture arithmetic;
- * it cannot see either of the two things Prime Object is actually about here — the selection lives
- * in the pane and the toolkit is raised out of the layers entirely (AD7) — and, as
- * [aTapOnAShapeReachesTheShapesRatherThanThePageBeneath] records, it kept passing for a day while
- * tapping a shape in the real app did nothing at all.
+ * Through [EditorPane] rather than through a layer, which is why this file exists beside
+ * `ShapeToolTest`. That one hosts [ShapeLayer] by itself and proves the gesture arithmetic; it
+ * cannot see the two things this is about — the selection lives in the pane and the toolkit is
+ * raised out of the layers entirely. As [aTapOnAShapeReachesTheShapesRatherThanThePageBeneath]
+ * records, it kept passing for a day while tapping a shape in the real app did nothing at all.
  */
 class PrimeObjectTest {
 
@@ -185,12 +181,11 @@ class PrimeObjectTest {
     /**
      * The regression that made this file worth writing.
      *
-     * `EquationLayer` arrived as a *sibling* of [ShapeLayer], both filling the page. Compose hands a
+     * `EquationLayer` arrived as a sibling of [ShapeLayer], both filling the page. Compose hands a
      * pointer event to the topmost node under it and to that node's ancestors — overlapping siblings
      * do not both get a say — so the equation layer took every touch on the page and declined it,
-     * and the tap fell past the shapes to the bare-canvas tap target that is their ancestor. Every
-     * one of Prime Object's first three rules was dead for shapes: no selection, no move, no corner
-     * handles, and a tap on a shape opened a text container where the shape was.
+     * and the tap fell past the shapes to the bare-canvas tap target that is their ancestor. No
+     * selection, no move, no corner handles, and a tap on a shape opened a text container.
      *
      * Both halves are asserted, because either alone is satisfiable by the bug: the container is
      * what the touch did instead, and the toolkit is what it should have done.
@@ -282,7 +277,7 @@ class PrimeObjectTest {
 
         // The grip is the assertion: a container shows its chrome only once it is focused and holds
         // text, so the grip existing *is* the caret having landed in it. Not the tooltip — that bar
-        // is raised for every kind of selection, a focused text container included (TD3), so it
+        // is raised for every kind of selection, a focused text container included, so it
         // cannot tell this apart from a shape having been picked up.
         compose.onNodeWithTag(OutlineTags.MOVE).assertIsDisplayed()
     }
@@ -295,7 +290,7 @@ class PrimeObjectTest {
      * went on offering Border and Fill for something the next keystroke could not touch.
      *
      * Asserted on the *thickness* control rather than on the bar itself, because the bar is raised
-     * for a focused text container too (TD3) and so says nothing about which of the two is up.
+     * for a focused text container too and so says nothing about which of the two is up.
      * Border belongs to a shape alone.
      */
     @Test
@@ -329,7 +324,7 @@ class PrimeObjectTest {
     }
 
     /**
-     * `memory/diagram.md`: *"Locked objects : cannot be re-sized or moved from current position"*.
+     * A locked object cannot be resized or moved from its current position.
      *
      * One button that draws the state it is in, which is the user's own instruction on the diagram —
      * so the assertion is that the description changed, not that a second button appeared.

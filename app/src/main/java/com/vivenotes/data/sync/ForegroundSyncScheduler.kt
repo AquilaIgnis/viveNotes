@@ -17,12 +17,12 @@ import kotlinx.coroutines.launch
 /**
  * Event-driven foreground synchronisation.
  *
- * [localChanges] is Room's durable outbox. Collecting [remoteChanges] holds the authenticated
- * server stream, whose payloads are applied upstream; they do not wake a second HTTP pull.
- * [remoteReady] prevents local pushes from racing the stream's initial backlog.
+ * [localChanges] is Room's durable outbox. Collecting [remoteChanges] holds the authenticated server
+ * stream, whose payloads are applied upstream; they do not wake a second HTTP pull. [remoteReady]
+ * prevents local pushes from racing the stream's initial backlog.
  *
- * A conflated channel is the important bit. Ten strokes committed while a run is in flight ask for
- * one more run, not ten; the outbox generation and batch idempotency keep the exact work durable.
+ * A conflated channel is the important bit: ten strokes committed while a run is in flight ask for
+ * one more run, not ten.
  *
  * The seams are flows and lambdas rather than a [SyncAccounts] so this can be tested on the JVM
  * without Room, a lifecycle process, or a server.

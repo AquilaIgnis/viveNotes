@@ -220,7 +220,7 @@ class NotebookTransferManager(
             // A notebook whose contents were moved to the cloud has pages and no bodies, so it would
             // export as a bundle of empty documents that looks like a successful backup and is not
             // one. Refused here, before anything is staged, and read straight from the snapshot
-            // because `readNotebook` predates the column. `memory/closedNotebooksPlan.md`.
+            // because `readNotebook` predates the column.
             val cloudOnly = source.queryRows(
                 "SELECT cloudOnlyAt FROM notebooks WHERE id = ?",
                 arrayOf(notebookId),
@@ -233,16 +233,13 @@ class NotebookTransferManager(
             try {
                 // The sync layer goes first, and the triggers go before the tables they read.
                 //
-                // `VACUUM INTO` copies triggers as faithfully as it copies rows, so a snapshot
-                // taken on a connected device arrives here carrying `installSyncTriggers`' work.
-                // Two things then break at once. The insert below that rewrites `attachments` with
-                // export-local refCounts fires `sync_attachments_insert` and queues rows into an
-                // outbox that belongs to the exporting device's account — and `validateSchema`
-                // rejects any bundle holding a trigger at all, so the bundle this method wrote
-                // could not be imported by the build that wrote it. Dropping every trigger rather
-                // than naming the fifteen is deliberate: the format forbids triggers outright, so
-                // export enforces that rule instead of tracking a list that has to be kept in step
-                // with `installSyncTriggers`.
+                // `VACUUM INTO` copies triggers as faithfully as it copies rows, so a snapshot taken
+                // on a connected device arrives carrying `installSyncTriggers`' work. Two things
+                // then break: the insert below that rewrites `attachments` fires
+                // `sync_attachments_insert` and queues rows into an outbox belonging to the
+                // exporting device's account, and `validateSchema` rejects any bundle holding a
+                // trigger at all. Dropping every trigger rather than naming the fifteen keeps this
+                // from having to be kept in step with `installSyncTriggers`.
                 source.queryRows(
                     "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name NOT LIKE 'sqlite_%'",
                 ) { it.getString(0) }.forEach { trigger ->

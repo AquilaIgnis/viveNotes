@@ -10,18 +10,16 @@ import androidx.sqlite.execSQL
 /**
  * The app's database.
  *
- * **Version 1 is a consolidated baseline, not the first schema this project ever had.** Twenty-one
+ * Version 1 is a consolidated baseline, not the first schema this project ever had: twenty-one
  * development migrations were collapsed into the entity definitions below once it was certain that
- * no installation outside this repository had ever run one: a migration is a cost paid to databases
- * that exist, and none did. Nothing about the tables changed in the collapse — `app/schemas/1.json`
- * describes what schema 22 described — but every earlier version is now unreachable, so a database
- * written by a pre-baseline build cannot be upgraded and has to be cleared instead.
+ * no installation outside this repository had ever run one. Nothing about the tables changed in the
+ * collapse, but every earlier version is now unreachable, so a database written by a pre-baseline
+ * build cannot be upgraded and has to be cleared.
  *
- * From here the ordinary rule applies again, and this is the last time it will not: every schema
- * change needs an explicit `Migration` registered in [create], the exported schema JSON committed
- * under `app/schemas/`, and a case in `MigrationTest` proving what happens to rows that already
- * exist. The migration's KDoc explains *why* each column is backfilled or deliberately left null —
- * the one-line `ALTER TABLE` never shows that, and it is the part that destroys notes when wrong.
+ * From here the ordinary rule applies: every schema change needs an explicit `Migration` registered
+ * in [create], the exported schema JSON committed under `app/schemas/`, and a case in
+ * `MigrationTest` proving what happens to rows that already exist. The migration's KDoc explains
+ * why each column is backfilled or left null — the one-line `ALTER TABLE` never shows that.
  */
 @Database(
     entities = [
@@ -107,9 +105,8 @@ abstract class NotesDatabase : RoomDatabase() {
                 // Attachments, and the one kind with no update trigger. Everything the protocol
                 // carries about an attachment describes the bytes its id is the hash of, so the row
                 // is immutable in every synced field. The only column that ever changes is
-                // `refCount`, which is per-device reachability and deliberately not synced
-                // (`viveCServer/memory/syncPlan.md` SD7), so an update trigger would re-push an
-                // identical row every time a picture was pasted and every other device would pull
+                // `refCount`, which is per-device reachability and deliberately not synced, so an
+                // update trigger would re-push an identical row every time a picture was pasted and every other device would pull
                 // it back.
                 SyncedTable("attachment", "attachments", "id", queueUpdates = false),
             ).forEach { (kind, table, entityIdColumn, queueUpdates) ->

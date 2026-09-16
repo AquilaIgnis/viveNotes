@@ -24,9 +24,8 @@ interface LocalMetadataDao {
      * Repoints every value in one key family from one id to another.
      *
      * `HierarchySync.remapPurgedImport` alone, to keep the import remap map transitive: a notebook
-     * that is moved, permanently deleted again and re-imported is moved a second time, and the
-     * archive id recorded against the first replacement has to follow rather than be left naming a
-     * notebook that no longer exists.
+     * moved, permanently deleted again and re-imported is moved a second time, and the archive id
+     * recorded against the first replacement has to follow.
      */
     @Query(
         "UPDATE local_metadata SET value = :newValue " +
@@ -70,7 +69,7 @@ interface SyncDao {
      * Which of these ids the server has already acknowledged.
      *
      * Read before a flush drops queued work: an entity with a state row has been accepted by the
-     * server, so its delete has to travel or it stands there forever. `memory/blankFlushPlan.md`.
+     * server, so its delete has to travel or it stands there forever.
      */
     @Query("SELECT entityId FROM sync_entity_states WHERE kind = :kind AND entityId IN (:entityIds)")
     suspend fun knownEntityIds(kind: String, entityIds: List<String>): List<String>
@@ -78,16 +77,13 @@ interface SyncDao {
     /**
      * Drops the "the server holds this at version N" rows of entities that no longer exist here.
      *
-     * The twin of [pruneOrphanedOutbox], and written from the same place: a purge takes a notebook
-     * and its subtree away outright, and neither table is joined to the rows it names, so neither
-     * goes with the cascade.
+     * The twin of [pruneOrphanedOutbox]: a purge takes a notebook and its subtree away outright, and
+     * neither table is joined to the rows it names, so neither goes with the cascade.
      *
-     * Blanket rather than scoped to the ids being purged, except for attachments. A remote
-     * attachment's state is also the durable metadata cache used when its row was intentionally not
-     * materialized because every page that named it belonged to a deferred notebook. Keeping that
-     * state lets a later open-page change materialize the picture without replaying the account.
-     * Other orphaned states can only belong to rows removed *outright*. A tombstone keeps its row,
-     * and [DeletionPurgeDao] refuses to collect one the outbox still holds.
+     * Blanket rather than scoped to the purged ids, except for attachments. A remote attachment's
+     * state doubles as the durable metadata cache used when its row was deliberately not
+     * materialized, so keeping it lets a later change materialize the picture without replaying the
+     * account. Other orphaned states can only belong to rows removed outright.
      */
     @Query(
         "DELETE FROM sync_entity_states WHERE " +
@@ -108,9 +104,9 @@ interface SyncDao {
      * Queued work, parents before children.
      *
      * The `CASE` has to name every kind and match `HierarchySync.SyncKind.rank`. Anything it does
-     * not name shares the trailing bucket and is then ordered by id, which mixes kinds together —
-     * harmless between siblings like the three ink kinds, and a batch that pushes a child before its
-     * parent the day a kind hangs off another. Two lists that must agree, so keep them together.
+     * not name shares the trailing bucket and is ordered by id, which mixes kinds together — harmless
+     * between the three ink kinds, and a batch that pushes a child before its parent the day a kind
+     * hangs off another.
      */
     @Query(
         "SELECT * FROM sync_outbox ORDER BY " +
@@ -129,10 +125,9 @@ interface SyncDao {
      * How much is still waiting to reach the server, of any kind.
      *
      * Read by `NotebookCloudArchive` before it deletes anything. Deliberately the whole outbox and
-     * not the rows under one notebook: a queued `attachment` names no notebook — its id is a digest
-     * and one picture can appear anywhere — so "nothing under this notebook is dirty" cannot be
-     * asked honestly, and the question that matters is whether this device has told the server
-     * everything. Zero is the only answer that makes deleting the local copy safe.
+     * not the rows under one notebook: a queued `attachment` names no notebook — its id is a digest —
+     * so "nothing under this notebook is dirty" cannot be asked honestly. Zero is the only answer
+     * that makes deleting the local copy safe.
      */
     @Query("SELECT COUNT(*) FROM sync_outbox")
     suspend fun outboxSize(): Int
@@ -159,10 +154,9 @@ interface SyncDao {
     /**
      * Drops queued work for rows that no longer exist.
      *
-     * The outbox holds keys, not copies, and nothing joins it to the tables it names — so a row
+     * The outbox holds keys, not copies, and nothing joins it to the tables it names, so a row
      * removed outright rather than tombstoned leaves an entry the next push can only answer with
-     * "dirty notebook disappeared", failing every push from then on. Removing rows and pruning here
-     * belong in one transaction.
+     * "dirty notebook disappeared". Removing rows and pruning here belong in one transaction.
      */
     @Query(
         "DELETE FROM sync_outbox WHERE " +
@@ -234,9 +228,9 @@ interface SyncDao {
      * Queues this device's pictures — metadata rows only; the bytes go up the byte route first.
      *
      * `createdAt` is the whole stamp, without the `COALESCE` the ink kinds need: an attachment is
-     * immutable and this build never tombstones one. `AttachmentStore.release` is written and has no
-     * caller (see `NotesViewModel.deleteImages`), so a picture is never removed from this database
-     * and there is no local event a `deletedAt` could carry.
+     * immutable and this build never tombstones one. `AttachmentStore.release` has no caller, so a
+     * picture is never removed from this database and there is no local event a `deletedAt` could
+     * carry.
      */
     @Query(
         "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
@@ -260,10 +254,9 @@ data class DeletedItemRow(
 /**
  * The app-wide soft-delete view.
  *
- * Only the highest deleted ancestor is returned. If a notebook is gone, its section/page rows are
- * implementation detail until it is restored; likewise a page inside a deleted section. This makes
- * each row correspond to one user action and prevents a parent restore from overwriting older child
- * deletion decisions.
+ * Only the highest deleted ancestor is returned: if a notebook is gone, its section and page rows
+ * are implementation detail until it is restored. This makes each row one user action and stops a
+ * parent restore from overwriting older child deletion decisions.
  */
 @Dao
 interface DeletionRecoveryDao {
@@ -358,10 +351,9 @@ interface DeletionRecoveryDao {
 /**
  * The hard-delete half of the recovery policy.
  *
- * Recovery and purge deliberately have separate DAOs: the former is user initiated and clears one
- * tombstone, while this one is scheduled maintenance and may remove many expired rows at once.
- * Every child table already has an `ON DELETE CASCADE` foreign key, so these six parent deletes are
- * the complete operation rather than the first half of manual orphan cleanup.
+ * Recovery and purge have separate DAOs: the former is user initiated and clears one tombstone,
+ * while this is scheduled maintenance and may remove many expired rows at once. Every child table
+ * has an `ON DELETE CASCADE` foreign key, so these six parent deletes are the whole operation.
  */
 @Dao
 interface DeletionPurgeDao {
@@ -420,8 +412,7 @@ interface DeletionPurgeDao {
  *
  * `@Embedded` rather than a flat copy of every column so the screen keeps working on
  * [NotebookEntity]. [contentOnDevice] combines the account-wide `cloudOnlyAt` flag with this
- * installation's deferred-download marker; a fresh device must not claim it holds a merely closed
- * notebook just because another device still does.
+ * installation's deferred-download marker.
  */
 data class ClosedNotebook(
     @androidx.room.Embedded val notebook: NotebookEntity,
@@ -439,7 +430,7 @@ interface NotebookDao {
      *
      * `closedAt` is account shelf state. The local marker is the second gate: if another device
      * reopens a notebook whose payload this installation deferred, it must not appear in the rail
-     * with empty pages before its replay has restored those bytes. `memory/closedNotebooksPlan.md`.
+     * with empty pages before its replay has restored those bytes.
      */
     @Transaction
     @Query(
@@ -457,10 +448,9 @@ interface NotebookDao {
     /**
      * The shelf, newest first, with what each notebook holds counted in SQL.
      *
-     * Counted rather than joined through `@Relation` because the screen wants pages as well as
-     * sections and neither list is ever rendered — a relation would load every section row of every
-     * closed notebook to display two numbers. A cloud-only notebook keeps its sections and pages, so
-     * these counts stay truthful after a move to the cloud; the bytes behind them are what left.
+     * Counted rather than joined through `@Relation` because neither list is ever rendered — a
+     * relation would load every section row of every closed notebook to display two numbers. A
+     * cloud-only notebook keeps its sections and pages, so these counts stay truthful after a move.
      */
     @Query(
         """
@@ -510,10 +500,9 @@ interface NotebookDao {
     /**
      * Puts a notebook on the shelf, or takes it back off.
      *
-     * Unlike [setExpanded] this does move `updatedAt`. Expansion is a scroll position; closing is
-     * something the owner decided, and a notebook whose row claims it has not changed since last
-     * year while sitting on a shelf it was put on this morning is a row that lies. OCC is settled by
-     * the server's version either way, so the clock here is display metadata only.
+     * Unlike [setExpanded] this does move `updatedAt`: expansion is a scroll position, while closing
+     * is something the owner decided. OCC is settled by the server's version either way, so the
+     * clock here is display metadata only.
      */
     @Query("UPDATE notebooks SET closedAt = :closedAt, updatedAt = :now WHERE id = :id")
     suspend fun setClosed(id: String, closedAt: Long?, now: Long)
@@ -521,9 +510,9 @@ interface NotebookDao {
     /**
      * Records that this notebook's contents now live only on the server, or that they are back.
      *
-     * Deliberately separate from [setClosed] and written in its own transaction by
-     * [com.vivenotes.data.sync.NotebookCloudArchive]: the eviction that precedes it must be able to
-     * fail without leaving a notebook claiming its bytes are somewhere they are not.
+     * Deliberately separate from [setClosed] and written in its own transaction: the eviction that
+     * precedes it must be able to fail without leaving a notebook claiming its bytes are somewhere
+     * they are not.
      */
     @Query("UPDATE notebooks SET cloudOnlyAt = :cloudOnlyAt, updatedAt = :now WHERE id = :id")
     suspend fun setCloudOnly(id: String, cloudOnlyAt: Long?, now: Long)
@@ -536,14 +525,12 @@ interface NotebookDao {
     suspend fun softDelete(id: String, now: Long)
 
     /**
-     * A blank row's delete: the tombstone is written **already expired**.
+     * A blank row's delete: the tombstone is written already expired.
      *
      * `deletedAt` one whole retention window in the past is what makes a flush need no marker of its
-     * own — Deleted Items lists tombstones inside the window and never sees it, the purge collects
-     * rows outside the window and takes it on its first run, and the push carries the same backdated
-     * stamp so every other device flushes it too. `updatedAt` stays at now, because the row really
-     * did change now and that is the number the server and the lists display.
-     * `memory/blankFlushPlan.md`.
+     * own — Deleted Items never sees it, the purge takes it on its first run, and the push carries
+     * the same backdated stamp so every other device flushes it too. `updatedAt` stays at now,
+     * because the row really did change now.
      */
     @Query("UPDATE notebooks SET deletedAt = :expiredAt, updatedAt = :now WHERE id = :id")
     suspend fun flush(id: String, expiredAt: Long, now: Long)
@@ -557,13 +544,10 @@ interface NotebookDao {
     /**
      * Removes a notebook outright and, by cascade, its sections, pages and their content.
      *
-     * Deliberately not a tombstone. A tombstone is how a row that other devices have *seen* is
-     * deleted, because they have to learn that it went, and there are two ways for that to be the
-     * wrong shape. One is a notebook no server and no other device has ever held — the seeded
-     * starter that [com.vivenotes.data.sync.HierarchySync] discards when this installation turns
-     * out to be joining an account that already has a tree. The other is a notebook the account
-     * erased for good: the server retired the id, so it refuses a tombstone naming it exactly as it
-     * refuses an edit, and there is no longer anybody to tell.
+     * Deliberately not a tombstone. A tombstone is how a row other devices have seen is deleted, and
+     * there are two cases where that is the wrong shape: a notebook no server has ever held — the
+     * seeded starter [com.vivenotes.data.sync.HierarchySync] discards when joining an account that
+     * already has a tree — and a notebook the account erased for good, whose id the server retired.
      */
     @Query("DELETE FROM notebooks WHERE id = :id")
     suspend fun hardDelete(id: String)
@@ -587,9 +571,9 @@ interface SectionDao {
     /**
      * Moves a whole notebook's sections to another notebook id.
      *
-     * Only `HierarchySync.remapPurgedImport` calls this, and only to carry an imported notebook out
-     * from under an id the account retired. Everything below a section is reached by `sectionId` or
-     * `pageId`, so this one column is the entire subtree: no page, body, revision or ink row moves.
+     * Only `HierarchySync.remapPurgedImport` calls this, to carry an imported notebook out from
+     * under an id the account retired. Everything below a section is reached by `sectionId` or
+     * `pageId`, so this one column is the entire subtree.
      *
      * Must run before the old notebook row is deleted — `sections.notebookId` is `ON DELETE
      * CASCADE`, so dropping it first would take the sections with it.
@@ -672,11 +656,9 @@ interface PageDao {
     /**
      * Moves a row within its section.
      *
-     * **`updatedAt` is deliberately left alone**, unlike every other write in this DAO. It is the
-     * one the list renders under each title as "date modified" and the one `PageSort.Recent` orders
-     * by, so bumping it would make a single drag stamp every page in the section "Just now" and
-     * flatten the very ordering the user might be about to switch to. Where a page sits is not when
-     * it was last written.
+     * `updatedAt` is deliberately left alone, unlike every other write in this DAO: it is the one
+     * the list renders as "date modified" and the one `PageSort.Recent` orders by, so bumping it
+     * would make a single drag stamp every page in the section "Just now".
      */
     @Query("UPDATE pages SET sortIndex = :sortIndex WHERE id = :id")
     suspend fun setSortIndex(id: String, sortIndex: Int)
@@ -685,12 +667,11 @@ interface PageDao {
     fun search(query: String): Flow<List<PageEntity>>
 
     /**
-     * Every live page of a notebook, in reading order — the corpus the Content panel searches
-     * (`memory/searchPlan.md` CS2).
+     * Every live page of a notebook, in reading order — the corpus the Content panel searches.
      *
-     * Metadata only: `page_content` is a separate table precisely so that listing pages does not drag
-     * every document body along, and the search index relies on that to decide which bodies it
-     * actually needs (CS7).
+     * Metadata only: `page_content` is a separate table precisely so that listing pages does not
+     * drag every document body along, and the search index relies on that to decide which bodies it
+     * actually needs.
      */
     @Query(
         "SELECT p.* FROM pages p JOIN sections s ON s.id = p.sectionId " +
@@ -711,7 +692,7 @@ interface PageDao {
      *
      * The tombstones are the reason this is not [inSection]: deciding whether a section can be
      * flushed means asking whether anything under it is still worth recovering, and a deleted page
-     * with text in it is exactly that. `memory/blankFlushPlan.md`.
+     * with text in it is exactly that.
      */
     @Query("SELECT * FROM pages WHERE sectionId = :sectionId ORDER BY sortIndex")
     suspend fun allInSection(sectionId: String): List<PageEntity>
@@ -727,7 +708,7 @@ interface PageContentDao {
     @Query("SELECT * FROM page_content WHERE pageId = :pageId")
     fun observeById(pageId: String): Flow<PageContentEntity?>
 
-    /** The bodies of named pages, for the search index's incremental rebuild — CS7. */
+    /** The bodies of named pages, for the search index's incremental rebuild. */
     @Query("SELECT * FROM page_content WHERE pageId IN (:pageIds)")
     suspend fun byIds(pageIds: List<String>): List<PageContentEntity>
 
@@ -740,9 +721,9 @@ interface PageContentDao {
     /**
      * Drops the bodies of named pages, leaving the page rows themselves.
      *
-     * Written for `NotebookCloudArchive`: moving a notebook to the cloud evicts the payload and
-     * keeps the index, because a `pages` row that stopped existing is a parent a pulled change
-     * cannot find, and a pull that cannot place a row never advances its cursor again.
+     * Moving a notebook to the cloud evicts the payload and keeps the index, because a `pages` row
+     * that stopped existing is a parent a pulled change cannot find, and a pull that cannot place a
+     * row never advances its cursor again.
      */
     @Query("DELETE FROM page_content WHERE pageId IN (:pageIds)")
     suspend fun deleteForPages(pageIds: List<String>)
@@ -752,17 +733,16 @@ interface PageContentDao {
      *
      * The `LIKE` is the same guard `HierarchySync.pictureIdsIn` applies before decoding: it is a
      * field name of `Outline.Image` and of nothing else, and both codecs write field names as text.
-     * Filtering in SQL rather than in Kotlin is what keeps the eviction's survivor scan proportional
-     * to the pages that have pictures on them instead of to every page on the device.
+     * Filtering in SQL keeps the eviction's survivor scan proportional to the pages that have
+     * pictures on them.
      */
     @Query("SELECT * FROM page_content WHERE docJson LIKE '%attachmentId%'")
     suspend fun picturePlacingBodies(): List<PageContentEntity>
 
     /**
-     * Every stored body that could carry a shape or table border, on [picturePlacingBodies]' terms:
-     * the field name belongs to those two outlines and to nothing else, and both codecs write field
-     * names as text. `AutomaticInkRepair` is the only caller, and the guard is what keeps its one
-     * pass proportional to the pages that have a border on them rather than to every page.
+     * Every stored body that could carry a shape or table border, on [picturePlacingBodies]' terms.
+     * `AutomaticInkRepair` is the only caller, and the guard keeps its one pass proportional to the
+     * pages that have a border on them.
      *
      * A border written before the flag existed has no such key, which is correct: those already
      * decode to null and are what the repair is putting the others back to.
@@ -832,9 +812,8 @@ interface PageRevisionDao {
      * Drops every saved version of the named pages.
      *
      * Version history is device-local — `page_revisions` is not a sync kind — so a notebook moved to
-     * the cloud loses it and does not get it back. That is stated rather than worked around: the
-     * server holds current state, and inventing a way to upload history would be a different
-     * feature. `memory/closedNotebooksPlan.md`.
+     * the cloud loses it and does not get it back. The server holds current state, and uploading
+     * history would be a different feature.
      */
     @Query("DELETE FROM page_revisions WHERE pageId IN (:pageIds)")
     suspend fun deleteForPages(pageIds: List<String>)
@@ -853,7 +832,7 @@ interface InkStrokeDao {
     /**
      * Removes these pages' rows outright, for `NotebookCloudArchive`.
      *
-     * Not a tombstone. A tombstone asks the server to forget them, and moving a notebook to the
+     * Not a tombstone: a tombstone asks the server to forget them, and moving a notebook to the
      * cloud asks it to be the one thing that remembers. Erase and move targets go with their
      * operation by foreign key.
      */
@@ -867,10 +846,9 @@ interface InkStrokeDao {
     /**
      * A page's live ink, in draw order. Tombstones are excluded, never removed.
      *
-     * `seq` alone is not a total order: two devices drawing on one page while offline allocate the
-     * same value, and SQLite would then settle the tie by rowid — which differs per device, so the
-     * same rows would paint in a different order on each one. `id` is the tiebreak the erase and
-     * move streams already use. See [InkStrokeEntity.seq].
+     * `seq` alone is not a total order: two devices drawing offline allocate the same value, and
+     * SQLite would settle the tie by rowid, which differs per device. `id` is the tiebreak the erase
+     * and move streams already use. See [InkStrokeEntity.seq].
      */
     @Query(
         "SELECT * FROM ink_strokes WHERE pageId = :pageId AND deletedAt IS NULL ORDER BY seq, id",
@@ -920,9 +898,8 @@ interface InkStrokeDao {
     /**
      * Sets a stroke's colour and whether it is automatic.
      *
-     * Both, because undo has to restore the pair — a recolour writes `followsTheme = false`, and
-     * undoing it must put back what the stroke was before rather than leaving it deliberate. See
-     * `PageStroke.recolor`, which makes the same change to the in-memory copy.
+     * Both, because undo has to restore the pair: a recolour writes `followsTheme = false`, and
+     * undoing it must put back what the stroke was rather than leaving it deliberate.
      */
     @Query(
         "UPDATE ink_strokes SET colorArgb = :colorArgb, colorFollowsTheme = :followsTheme " +
@@ -935,10 +912,10 @@ interface InkStrokeDao {
 
     /**
      * Forgets the intent behind a stroke recorded as deliberately pure white or black, so that it
-     * follows the canvas again — `AutomaticInkRepair`, which explains why, and is the only caller.
+     * follows the canvas again — `AutomaticInkRepair` is the only caller.
      *
-     * The two colours are bound rather than written into the SQL so that they are the same two
-     * constants [com.vivenotes.data.automaticColorOr] infers from, and cannot drift from them.
+     * The two colours are bound rather than written into the SQL so they are the same two constants
+     * [com.vivenotes.data.automaticColorOr] infers from.
      */
     @Query(
         "UPDATE ink_strokes SET colorFollowsTheme = NULL " +
@@ -949,11 +926,9 @@ interface InkStrokeDao {
     /**
      * The next draw-order value for a page — the allocator for [InkStrokeEntity.seq].
      *
-     * Deliberately over **every** row of the page, tombstones and rows pulled from another device
-     * included: that is what makes it `max(local, incoming) + 1` rather than a count, so a stroke
-     * drawn here lands above everything this device has seen. It runs on every stroke commit, which
-     * is why `(pageId, seq, id)` exists — the maximum of an equality-constrained prefix is one seek
-     * rather than a walk of the page's rows.
+     * Deliberately over every row of the page, tombstones and pulled rows included: that makes it
+     * `max(local, incoming) + 1` rather than a count. It runs on every stroke commit, which is why
+     * `(pageId, seq, id)` exists — the maximum of an equality-constrained prefix is one seek.
      */
     @Query("SELECT COALESCE(MAX(seq), -1) + 1 FROM ink_strokes WHERE pageId = :pageId")
     suspend fun nextSeq(pageId: String): Int
@@ -986,9 +961,8 @@ interface AttachmentDao {
      * Every picture this device knows about, ids only.
      *
      * Read by the sync's download phase, which answers "which bytes am I missing" by asking the
-     * filesystem rather than by keeping a second table in step with it. A row whose file is absent
-     * *is* the pending download — there is no queue to lose, drain twice, or leave behind when a
-     * process dies mid-transfer. Ids only because the answer is a `stat` per row and nothing else.
+     * filesystem rather than keeping a second table in step with it. A row whose file is absent is
+     * the pending download, so there is no queue to lose or drain twice.
      */
     @Query("SELECT id FROM attachments")
     suspend fun allIds(): List<String>
@@ -997,19 +971,17 @@ interface AttachmentDao {
     suspend fun deleteIfUnreferenced(id: String)
 
     /**
-     * Removes rows regardless of `refCount`, for `HierarchySync.evictToCloud` and the purge beside
-     * it.
+     * Removes rows regardless of `refCount`, for `HierarchySync.evictToCloud` and the purge.
      *
-     * Unconditional on purpose. `refCount` is maintained by the paths that write documents, and a
-     * pulled picture is documented as arriving at zero, so it cannot be the authority on what is
-     * still reachable. Both callers work that out from the documents themselves and hand the answer
-     * here. `attachment_text` goes with each row by foreign key.
+     * Unconditional on purpose: `refCount` is maintained by the paths that write documents, and a
+     * pulled picture arrives at zero, so it cannot be the authority on what is still reachable. Both
+     * callers work that out from the documents themselves. `attachment_text` goes by foreign key.
      */
     @Query("DELETE FROM attachments WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
 }
 
-/** The recognized-text cache of [AttachmentTextEntity] — `memory/imageOcrPlan.md` IO2, IO3, IO6. */
+/** The recognized-text cache of [AttachmentTextEntity]. */
 @Dao
 interface ImageTextDao {
 
@@ -1035,10 +1007,10 @@ interface ImageTextDao {
     /**
      * Deletes rows whose attachment is gone, and returns how many that was.
      *
-     * **This must always return zero.** The foreign key cascades, so an orphan can only exist if
-     * something wrote this table outside Room or deleted an attachment with foreign keys off. It is
-     * one cheap statement per indexing pass, and it is the difference between believing the cascade
-     * fires and knowing it — see `AttachmentTextEntity`.
+     * This must always return zero. The foreign key cascades, so an orphan can only exist if
+     * something wrote this table outside Room or deleted an attachment with foreign keys off. One
+     * cheap statement per indexing pass, and the difference between believing the cascade fires and
+     * knowing it.
      */
     @Query("DELETE FROM attachment_text WHERE attachmentId NOT IN (SELECT id FROM attachments)")
     suspend fun deleteOrphans(): Int
@@ -1123,15 +1095,13 @@ interface InkEraseDao {
     suspend fun deleteTargetsForErases(eraseIds: List<String>)
 
     /**
-     * The highest operation time on this page, **tombstones included** — the seed for the operation
+     * The highest operation time on this page, tombstones included — the seed for the operation
      * clock this device stamps its next erase or lasso with.
      *
-     * Deliberately unfiltered, exactly as [InkStrokeDao.nextSeq] is over `seq`. Ordering ink by
-     * anything but a logical clock is provably wrong (`memory/inkSyncPlan.md` §1), and a clock that
-     * counted only the operations currently *active* would be reset by the very rows it has to sort
-     * above: a pulled erase that its author has undone still carries the time the author's next
-     * operation was numbered from, and redoing it there resurrects a row this device has already
-     * numbered below. [byPage] filters for replay, which is a different question from ordering.
+     * Deliberately unfiltered, as [InkStrokeDao.nextSeq] is over `seq`. A clock counting only the
+     * currently active operations would be reset by the rows it has to sort above: a pulled erase
+     * its author has undone still carries the time the author's next operation was numbered from.
+     * [byPage] filters for replay, which is a different question from ordering.
      */
     @Query("SELECT MAX(createdAt) FROM ink_erases WHERE pageId = :pageId")
     suspend fun latestCreatedAt(pageId: String): Long?

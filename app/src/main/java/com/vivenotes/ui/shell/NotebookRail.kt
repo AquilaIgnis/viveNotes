@@ -58,16 +58,15 @@ internal object RailTags {
 }
 
 /**
- * Notebook and section tree — the leftmost pane of the reference UI.
+ * Notebook and section tree — the leftmost pane.
  *
- * Notebooks expand to reveal their sections; a section is the unit of selection, since the page
- * list always shows one section's pages.
+ * Notebooks expand to reveal their sections; a section is the unit of selection, since the page list
+ * always shows one section's pages.
  *
- * **Sections reorder within their own notebook and nowhere else.** `sortIndex` is scoped to a
- * notebook, so a section dropped under a different one would need its parent rewritten as well —
- * a move, not a reorder, and a different feature. The draggable set is therefore narrowed to the
- * notebook whose handle was grabbed, which also stops a long drag from sweeping a section through
- * a neighbouring notebook's list on the way past.
+ * Sections reorder within their own notebook and nowhere else. `sortIndex` is scoped to a notebook,
+ * so a section dropped under a different one would need its parent rewritten as well — a move rather
+ * than a reorder. The draggable set is narrowed to the notebook whose handle was grabbed, which also
+ * stops a long drag sweeping a section through a neighbouring notebook's list on the way past.
  */
 @Composable
 fun NotebookRail(

@@ -17,14 +17,13 @@ import kotlin.math.roundToInt
 /**
  * Where a video thumbnail comes from, as the editor needs to see it.
  *
- * Declared by the consumer rather than by the implementation — `com.vivenotes.data`.`VideoThumbnailStore`
- * is the one that fetches and caches — so this package stays free of anything that opens a socket,
- * and an editor handed no source simply draws no cards. That null is deliberately load-bearing: it
- * is how the Settings toggle turns the feature off, and it is why a test or a preview of
- * [OutlineEditText] never reaches the network by accident.
+ * Declared by the consumer rather than by the implementation — `VideoThumbnailStore` is the one that
+ * fetches and caches — so this package stays free of anything that opens a socket, and an editor
+ * handed no source draws no cards. That null is load-bearing: it is how the Settings toggle turns
+ * the feature off, and why a test or preview never reaches the network by accident.
  *
  * [cached] must never block: it is called from a text-change pass that runs on every keystroke.
- * [request] is the slow half, and reports back by calling [onReady] on the main thread once — or
+ * [request] is the slow half and reports back by calling [onReady] on the main thread once — or
  * never, for a video whose thumbnail could not be fetched.
  */
 interface VideoThumbnails {
@@ -44,19 +43,17 @@ interface VideoThumbnails {
 /**
  * A YouTube link drawn as its thumbnail — the pasted URL is still the text underneath.
  *
- * **The URL is the truth; the card is a view.** Exactly the split [LiveEquationSpan] makes over
- * `$x^2$`: nothing is written into [com.vivenotes.model.PageDoc], so there is no new mark, no
- * schema move, and no document an older build cannot open. It also means the preview costs nothing
- * to undo — deleting the card deletes the URL, because they are the same characters — and that a
- * link typed into a note years ago lights up the moment this build opens it.
+ * The URL is the truth; the card is a view. The split [LiveEquationSpan] makes over `$x^2$`: nothing
+ * is written into [com.vivenotes.model.PageDoc], so there is no new mark, no schema move, and no
+ * document an older build cannot open. It also means the preview costs nothing to undo — deleting
+ * the card deletes the URL, because they are the same characters.
  *
  * [Derived] for the reason every preview here is: `SpannableCodec` rebuilds derived spans on every
  * normalise pass and skips them when reading marks back, so this can never be mistaken for
- * formatting the user applied and can never survive into a parsed [com.vivenotes.model.Block].
+ * formatting the user applied.
  *
- * The bitmap is held rather than fetched, so this class does no I/O at all. A span only exists once
- * its picture does — an unfetchable video simply keeps its URL visible as text, which is the same
- * answer [RenderedEquationSpan] gives for LaTeX that will not parse.
+ * The bitmap is held rather than fetched, so this class does no I/O. A span only exists once its
+ * picture does; an unfetchable video keeps its URL visible as text.
  */
 class VideoEmbedSpan(
     val videoId: String,

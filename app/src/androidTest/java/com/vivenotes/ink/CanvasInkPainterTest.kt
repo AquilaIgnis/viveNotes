@@ -13,19 +13,17 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Painting automatic ink for the canvas must not disturb what a stroke *is*.
+ * Painting automatic ink for the canvas must not disturb what a stroke is.
  *
- * This pins a regression rather than a feature. The first version of Switch Background's ink fix
- * mapped the page's strokes into a themed list, which looked right and was: the ink flipped, on both
- * backgrounds. What it also did was mint a new [Stroke] for every automatic stroke, and
- * [projectionKey] is `System.identityHashCode(stroke)` — so every projection was silently
- * renumbered.
+ * This pins a regression. The first version of Switch Background's ink fix mapped the page's
+ * strokes into a themed list, which looked right: the ink flipped on both backgrounds. What it also
+ * did was mint a new [Stroke] for every automatic stroke, and a projection's identity was then
+ * derived from the allocation — so every projection was silently renumbered.
  *
  * Nothing on screen showed it. What broke was everything that resolves a selection back to strokes
- * by that key: `InkSelectionRenderer.renderInkSelection` filtered its input against a selection full
- * of keys that no longer existed, rendered an empty white square, and handed *that* to the formula
- * model — so recognition returned nothing on ink that was plainly there. The lasso's move preview
- * failed the same test for the same reason.
+ * by that key: `InkSelectionRenderer.renderInkSelection` rendered an empty white square and handed
+ * that to the formula model, so recognition returned nothing on ink that was plainly there. The
+ * lasso's move preview failed the same way.
  *
  * Hence the invariant: paint is derived per draw, identity belongs to the stored stroke.
  */

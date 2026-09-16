@@ -9,14 +9,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * What a lock does to selection — `memory/diagram.md`:
- *
- * > *Locked objects : cannot be re-sized or moved from current position, lasso selection will
- * > exclude locked objects from selection unless only locked objects are part of the selection.*
+ * What a lock does to selection: a locked object cannot be resized or moved, and a lasso excludes
+ * locked objects unless they are all it caught.
  *
  * On the JVM, beside [CanvasTapSelectionTest], because none of it needs a device: the rule is a
  * partition of what the loop caught, and the widening that follows is a filter on a list of
- * outlines. Whether a locked object then *refuses the drag* is the layers' half and needs
+ * outlines. Whether a locked object then refuses the drag is the layers' half and needs
  * `MotionEvent`s — `PrimeObjectTest`.
  */
 class LockedObjectSelectionTest {

@@ -61,18 +61,14 @@ internal object HardwareTags {
 /**
  * The Hardware pane: pick a device along the top, and the settings below are that device's.
  *
- * A row rather than a drop-down because there are exactly two and they are not a list that will grow
- * — a tablet is written on with a pen and typed on with a keyboard, and that is the whole set.
- * Showing both at once also answers the question the pane exists to answer ("what can I configure?")
- * without a tap.
+ * A row rather than a drop-down because there are exactly two and they are not a list that will
+ * grow. Showing both at once also answers the question the pane exists to answer without a tap.
  *
- * **The pane's subject is hardware; the scope of each setting in it is still decided one setting at a
- * time** — the three-way split in `CLAUDE.md` and `memory/inkPlan.md` ID5. *Let a finger draw* describes
- * **this device**: whether a stylus is in the room is not a property of a notebook, and must never
- * travel to another device with one. The button bindings below it describe **the user** (SB3): "double
- * click means highlighter" is a working habit like "pen 2 is red", and it should follow its owner to a
- * second tablet. This paragraph used to claim the whole pane was device scope, which was true when the
- * pane held one toggle.
+ * The pane's subject is hardware; the scope of each setting in it is still decided one setting at a
+ * time. *Let a finger draw* describes this device — whether a stylus is in the room is not a
+ * property of a notebook, and must never travel to another device with one. The button bindings
+ * below it describe the user: "double click means highlighter" is a working habit like "pen 2 is
+ * red", and it should follow its owner to a second tablet.
  */
 @Composable
 fun ColumnScope.HardwarePanelContent(
@@ -116,16 +112,15 @@ fun ColumnScope.HardwarePanelContent(
 }
 
 /**
- * One device in the picker — `memory/expressivePlan.md` EX7.
+ * One device in the picker.
  *
- * A real [ToggleButton] rather than the hand-built `Column` with a swapped background colour this
- * used to be. It is the same control Material already has a name for — a segmented, mutually
- * exclusive choice — and the expressive one brings the shape morph on press and check that a
- * background swap cannot express.
+ * A real [ToggleButton] rather than a hand-built `Column` with a swapped background colour: it is
+ * the same control Material already has a name for — a segmented, mutually exclusive choice — and
+ * the expressive one brings the shape morph on press and check that a background swap cannot
+ * express.
  *
  * Two `ToggleButton`s in a `Row` rather than a `ButtonGroup`: that component wants an overflow
- * indicator and exists to collapse a row too long to fit. There are exactly two devices and no third
- * coming — see [HardwareKind] — so its machinery would answer a question this row does not ask.
+ * indicator and exists to collapse a row too long to fit, and there are exactly two devices.
  */
 @Composable
 private fun HardwareTab(
@@ -175,7 +170,7 @@ private fun ColumnScope.StylusSettings(
 }
 
 /**
- * What the barrel button's clicks do — `memory/stylusPlan.md` SB8.
+ * What the barrel button's clicks do.
  *
  * Three rows always, even on a pen with no triple click. The app cannot know how many clicks the pen
  * in your pocket reports — a keycode only says what has been pressed, never what *could* be — and a
@@ -228,7 +223,7 @@ private fun PenButtonRow(
  *
  * A reference rather than a setting, and worth the space: the shortcuts work today but the only way
  * to find them was the system's Meta + / panel, which nobody presses by accident. Rebinding is not
- * offered because nothing in the app can rebind them yet — see `memory/features.md` L2.
+ * offered because nothing in the app can rebind them yet.
  */
 @Composable
 private fun ColumnScope.KeyboardSettings() {

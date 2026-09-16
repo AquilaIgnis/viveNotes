@@ -9,17 +9,14 @@ import com.vivenotes.model.PageDoc
 import com.vivenotes.model.TextDocumentCodec
 
 /**
- * A mark stored as a *deliberate* pure white or pure black.
+ * A mark stored as a deliberate pure white or pure black.
  *
  * The state this file exists to undo, and the one combination [automaticColorOr] can do nothing
- * with: `false` means the colour was chosen, so it is kept, and white kept on the white sheet a PDF
- * export always is, is a mark that does not appear at all. Nobody picks ink they cannot see; what
- * they picked was the colour the automatic pen was already showing them on a dark canvas, which
- * `PenPanel` now records as automatic. This is the same conclusion applied to what was written
- * before it did.
+ * with: `false` means the colour was chosen, so it is kept — and white kept on the white sheet a PDF
+ * export always is, is a mark that does not appear at all. What the user picked was the colour the
+ * automatic pen was showing them on a dark canvas, which `PenPanel` now records as automatic.
  *
- * Alpha is part of the match, so a translucent highlight is never a candidate — deliberately, per
- * the highlighter's note in `InkCodec`.
+ * Alpha is part of the match, so a translucent highlight is never a candidate.
  */
 fun isChosenAutomaticInk(argb: Int, followsTheme: Boolean?): Boolean =
     followsTheme == false && (argb == AUTOMATIC_LIGHT || argb == AUTOMATIC_DARK)
@@ -64,26 +61,22 @@ data class InkRepairResult(val strokes: Int, val pages: Int) {
 /**
  * Gives back the marks that were recorded as deliberately white or black — once per repair version.
  *
- * **Why the flag has to be cleared rather than read around.** `false` is a statement about intent,
- * and the renderers are right to obey it; the bug was upstream, in a picker that could not tell
- * "white" from "the ink this canvas is showing me". Teaching the renderers to distrust `false`
- * would take the standing rule — a colour you picked survives the theme changing under it — away
- * from everyone, forever, to fix marks written in one window of time. Clearing the flag on those
- * marks says the honest thing instead: their intent is no longer known, which is exactly what
- * `null` means to [automaticColorOr] and how every mark drawn before the flag existed is already
- * read.
+ * The flag is cleared rather than read around. `false` is a statement about intent and the
+ * renderers are right to obey it; the bug was upstream, in a picker that could not tell "white"
+ * from "the ink this canvas is showing me". Teaching the renderers to distrust `false` would take
+ * the standing rule — a colour you picked survives the theme changing under it — away from everyone
+ * to fix marks written in one window of time. Clearing the flag says the honest thing instead:
+ * their intent is no longer known, which is what `null` already means.
  *
- * One-shot, recorded in `local_metadata`. Version 2 deliberately repeats version 1's pass: version
- * 1 repaired the rows but missed the saved pen preset, so that preset could create more bad rows
- * after its marker was written and before [AutomaticPenPresetsMigration] shipped. Not a Room
- * migration: the schema is unchanged, and a
- * repair that has to run inside the transaction Room opens for a version bump cannot be retried
- * when a page body fails to decode. A failed pass writes no marker and is simply tried again on the
- * next launch.
+ * One-shot, recorded in `local_metadata`. Version 2 repeats version 1's pass, because version 1
+ * repaired the rows but missed the saved pen preset, which could then create more bad rows. Not a
+ * Room migration: the schema is unchanged, and a repair that runs inside the transaction Room opens
+ * for a version bump cannot be retried when a page body fails to decode. A failed pass writes no
+ * marker and is tried again on the next launch.
  *
  * The rewrites queue sync pushes like any other local edit, so a notebook repaired here reaches the
- * other devices on the account rather than being fixed one install at a time. That is the reason
- * this touches stored rows at all instead of resolving at paint time.
+ * other devices rather than being fixed one install at a time. That is why this touches stored rows
+ * instead of resolving at paint time.
  */
 class AutomaticInkRepair(private val database: NotesDatabase) {
 

@@ -59,7 +59,7 @@ internal object ContentPanelTags {
 }
 
 /**
- * The query field — `memory/searchPlan.md` CS1, pinned above the results by [ToolPanel]'s header slot.
+ * The query field, pinned above the results by [ToolPanel]'s header slot.
  *
  * Its own composable rather than the first row of the list, because a field that scrolls away is a
  * field you cannot correct: the whole interaction here is type, look, retype.
@@ -157,7 +157,7 @@ private fun ImageTextProgress.readingLine(): String {
 }
 
 /**
- * The results, grouped by the page they were found on — CS2, CS4.
+ * The results, grouped by the page they were found on.
  *
  * **A title match is the page heading itself, not a row under it.** Listing it separately would print
  * the page's name directly beneath the page's name, so the heading takes the highlight and opening it

@@ -43,30 +43,25 @@ import kotlin.math.hypot
 internal const val EQUATION_LAYER_TAG = "equation-layer"
 
 /**
- * The equations on the page — the Draw tab's ƒ, as objects rather than as marks in a sentence.
+ * The equations on the page — the Draw tab's ƒ, as objects rather than marks in a sentence.
  *
- * Sits inside the zoomed page layer beside [ShapeLayer], drawn and hit-tested the same way and for
- * the same reasons: page units are dp, so the geometry scales by density while the selection chrome
- * does not, and the whole layer is a *child* of the bare-canvas tap target so that an equation takes
- * a gesture off the page while everything it declines falls through.
+ * Sits inside the zoomed page layer beside [ShapeLayer], drawn and hit-tested the same way: page
+ * units are dp, so the geometry scales by density while the selection chrome does not, and the whole
+ * layer is a child of the bare-canvas tap target so that an equation takes a gesture off the page
+ * while everything it declines falls through.
  *
- * **The picture is rebuilt from the source; only the source is stored.** RaTeX parses to a display
- * list on a background thread and bakes the colour into it, so a renderer is cached per formula *and*
- * colour and thrown away when either changes. Until one is ready — and after a parse this layer never
- * sees fail, because the panel refused to submit a formula that would — the LaTeX is drawn as plain
- * text, exactly as `RenderedEquationSpan` does inline: content that has not finished rendering must
- * never be content that has disappeared.
+ * The picture is rebuilt from the source; only the source is stored. RaTeX parses to a display list
+ * on a background thread and bakes the colour into it, so a renderer is cached per formula and
+ * colour and thrown away when either changes. Until one is ready the LaTeX is drawn as plain text,
+ * exactly as `RenderedEquationSpan` does inline: content that has not finished rendering must never
+ * be content that has disappeared.
  *
- * **Scaled to its box rather than re-laid-out.** An equation is measured once, at the size RaTeX
- * gives it, and a corner drag stretches that box; the glyphs follow. A formula has no line breaks to
- * reflow, so there is nothing a re-layout would do differently, and this way the document's idea of
- * how big an equation is stays exact — see `Outline.Equation`, and contrast a table, whose height
- * only the canvas can know (TA3).
+ * Scaled to its box rather than re-laid-out. An equation is measured once, at the size RaTeX gives
+ * it, and a corner drag stretches that box. A formula has no line breaks to reflow, so the
+ * document's idea of how big an equation is stays exact — contrast a table, whose height only the
+ * canvas can know.
  *
- * Selection, four-corner resize and drag-to-move are `memory/plan.md` AD7, and the geometry deliberately
- * matches [ShapeLayer]'s to the dp: same hit radius, same anchor at the opposite corner, same dashed
- * box and same handles. An affordance that behaves differently depending on what is under it is worse
- * than not having one.
+ * Selection, four-corner resize and drag-to-move match [ShapeLayer]'s geometry to the dp.
  */
 @Composable
 internal fun EquationLayer(
@@ -98,7 +93,7 @@ internal fun EquationLayer(
      * The next layer **down**, composed as a child rather than a sibling — `ShapeLayer` goes here.
      *
      * A slot rather than a sibling because two full-page layers side by side means Compose gives
-     * every touch to whichever is on top and the other goes silently dead — `memory/plan.md` entry 24.
+     * every touch to whichever is on top and the other goes silently dead.
      * Nesting is what orders them instead, and these layers claim a touch on the tunnelling pass,
      * where a parent is asked before its child: a formula takes a touch that lands on one, and the
      * shapes get what it declines.
@@ -167,7 +162,7 @@ internal fun EquationLayer(
                     }
                     // A handle wins over the body: they sit on the boundary, so each is also inside
                     // the move target.
-                    // No handles on a locked object — `memory/diagram.md`. Absent rather than
+                    // No handles on a locked object. Absent rather than
                     // present and dead, the rule the toolkit follows, and the chrome that draws them
                     // is gated on the same field.
                     val handle = selected?.takeIf { it.lockGroup == null }?.handleNear(startX, startY)
@@ -424,7 +419,7 @@ private fun DrawScope.drawEquationSelection(
         ),
     )
 
-    // **Locked: the rectangle stays, the grabs go** — `memory/diagram.md`. What is held still has to
+    // **Locked: the rectangle stays, the grabs go**. What is held still has to
     // be visible, or the bar would float over nothing; what must not be there is a handle that
     // cannot be dragged, which is the rule the toolkit follows for an action a kind cannot perform.
     if (equation.lockGroup != null) return

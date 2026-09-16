@@ -41,13 +41,13 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The Table Class — `memory/diagram.md`, planned in `memory/tablePlan.md`.
+ * The table on the canvas, through the UI.
  *
  * Four things are worth pinning here and none of them is arithmetic; the arithmetic is in
  * `TableOpsTest`, which runs on the JVM. This covers the parts that need a device: that **Insert
- * Table arms a tool** rather than dropping a table (TA7), that **which kind of table is a setting**
- * rather than a second button (TA15), that **a cell is a real editor** (TA2), and that the bar's
- * **Row and Column menus** act where the caret is and hide Delete at the last one (TA6).
+ * Table arms a tool** rather than dropping a table, that **which kind of table is a setting**
+ * rather than a second button, that **a cell is a real editor**, and that the bar's
+ * **Row and Column menus** act where the caret is and hide Delete at the last one.
  */
 class TableToolkitTest {
 
@@ -58,7 +58,7 @@ class TableToolkitTest {
     private var settings: TableSettings? = null
 
     // -----------------------------------------------------------------------------------------
-    // The tool — TA7
+    // The tool
     // -----------------------------------------------------------------------------------------
 
     private fun setDrawTab(tool: DrawTool = DrawTool.None, table: TableSettings = TableSettings()) {
@@ -116,12 +116,12 @@ class TableToolkitTest {
         compose.onNodeWithTag("panel-field-Header row").performClick()
 
         // The default is on, so one tap turns it off — and it is a *preference*, which is the whole
-        // point of TA7: nothing on the page moved.
+        // the point of arming a tool: nothing on the page moved.
         assertEquals(false, settings?.headerRow)
     }
 
     // -----------------------------------------------------------------------------------------
-    // Which kind of table — TA15, now a setting rather than a second tool
+    // Which kind of table, now a setting rather than a second tool
     // -----------------------------------------------------------------------------------------
 
     /**
@@ -190,7 +190,7 @@ class TableToolkitTest {
     }
 
     // -----------------------------------------------------------------------------------------
-    // The grid — TA2, TA5
+    // The grid
     // -----------------------------------------------------------------------------------------
 
     private val style = EditorStyle(
@@ -266,30 +266,25 @@ class TableToolkitTest {
     }
 
     // -----------------------------------------------------------------------------------------
-    // Tab walks the grid — TA17
+    // Tab walks the grid
     // -----------------------------------------------------------------------------------------
 
     /**
      * Sent to the window that holds the caret, and not through a Compose node.
      *
-     * A cell is a real `EditText` (AD6) and it is the *window's* focused view, so what has to be
-     * proved is that a key arriving at the window reaches that editor and walks the grid.
-     * Dispatching into the Compose node tree instead would prove that Compose can be made to route
-     * a key, which is not the claim; this enters at `Activity.dispatchKeyEvent`, above every line
-     * of the app's own key handling and below nothing that belongs to it.
+     * A cell is a real `EditText` and it is the window's focused view, so what has to be proved is
+     * that a key arriving at the window reaches that editor and walks the grid. This enters at
+     * `Activity.dispatchKeyEvent`, above every line of the app's own key handling.
      *
-     * **It used to go through `Instrumentation.sendKeySync`, which is one hop too high.** That
-     * hands the event to the system input router and lets the router pick a window, and the pick is
-     * not always this one: on a loaded device — a full release suite, or the moment after an
-     * install — [focusCell] leaves an editor holding view focus while the key lands somewhere else
-     * entirely. `onKeyDown` is then never called and the caret sits where it started, which reads
-     * exactly like Tab being ignored. All three Tab cases failed that way in one run and passed
-     * individually in the next; probes in `onKeyDown` and `moveCaret` showed that on a failing run
-     * neither ever fired, so nothing about the grid was being tested at all. `DrawTabTest`'s
-     * `tapOutsidePopup` addresses its own window for the same reason.
+     * It used to go through `Instrumentation.sendKeySync`, which is one hop too high: that hands the
+     * event to the system input router and lets the router pick a window, and on a loaded device the
+     * pick is not always this one. `onKeyDown` is then never called and the caret sits where it
+     * started, which reads exactly like Tab being ignored — all three Tab cases failed that way in
+     * one run and passed individually in the next. `DrawTabTest`'s `tapOutsidePopup` addresses its
+     * own window for the same reason.
      *
-     * The `check` is the other half: a key this test believes it sent and the app never saw is the
-     * failure that took a release run to notice, and it should name itself.
+     * The `check` is the other half: a key this test believes it sent and the app never saw should
+     * name itself.
      */
     private fun pressTab(shift: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -323,11 +318,9 @@ class TableToolkitTest {
      * Waits for the caret rather than asserting on the frame after the key, the way [focusCell]
      * already waits for the click it sends.
      *
-     * A cell's editor is a View registered on `onViewCreated`, and `moveCaret` gives up quietly
-     * when the destination is not attached yet — the reveal path retries across frames for exactly
-     * that reason. So Tab across a row boundary can take a frame longer than `waitForIdle` waits,
-     * which on a loaded emulator read as Tab doing nothing at all. What a user gets is the caret
-     * arriving, not the caret arriving this frame.
+     * A cell's editor is a View registered on `onViewCreated`, and `moveCaret` gives up quietly when
+     * the destination is not attached yet, so Tab across a row boundary can take a frame longer than
+     * `waitForIdle` waits. What a user gets is the caret arriving, not the caret arriving this frame.
      *
      * The wait is allowed to time out so the assertion below reports which cell actually holds the
      * caret; a bare `waitUntil` would fail with nothing but a duration.
@@ -373,7 +366,7 @@ class TableToolkitTest {
 
     /**
      * The last cell has nowhere to hand on to, so the caret stays put and Tab is the indent it is
-     * everywhere else — TA17 declines to grow a row here, because a keystroke that edits the
+     * everywhere else: Tab declines to grow a row here, because a keystroke that edits the
      * document is a different promise from one that moves the caret.
      */
     @Test
@@ -388,7 +381,7 @@ class TableToolkitTest {
     }
 
     /**
-     * The handles appear with the selection and not before — and, TA5, they are all in the gutters.
+     * The handles appear with the selection and not before, and they are all in the gutters.
      * A handle over a cell would either eat the drag or take the caret.
      */
     @Test
@@ -409,7 +402,7 @@ class TableToolkitTest {
     }
 
     // -----------------------------------------------------------------------------------------
-    // Holding a row or a column — TA16
+    // Holding a row or a column
     // -----------------------------------------------------------------------------------------
 
     @Test
@@ -447,7 +440,7 @@ class TableToolkitTest {
      *
      * Tap and drag share one target, and the classic way to break that is a tap arm that consumes
      * the down — `detectDragGestures` then waits for an unconsumed one that never comes, and the
-     * drag silently stops working with nothing in the logs (AD7).
+     * drag silently stops working with nothing in the logs.
      */
     @Test
     fun draggingAColumnHandleStillResizesAndDoesNotHoldAnything() {
@@ -527,7 +520,7 @@ class TableToolkitTest {
     }
 
     /**
-     * With a row held the menus are gone and the three Material Symbols are there instead — TA16,
+     * With a row held the menus are gone and the three Material Symbols are there instead,
      * and the one difference between `table-tooltip1.jpeg` and `table-tooltip2.jpeg`.
      */
     @Test

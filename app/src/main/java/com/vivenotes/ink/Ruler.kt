@@ -7,13 +7,13 @@ import kotlin.math.hypot
 import kotlin.math.sin
 
 /**
- * A ruler lying on the page — `memory/rulerPlan.md`.
+ * A ruler lying on the page.
  *
- * Page units throughout (RD3), so it stays where it was put when the page scrolls or zooms, and so
+ * Page units throughout, so it stays where it was put when the page scrolls or zooms, and so
  * its graduations are a real inch apart at 100%.
  *
  * Everything here is arithmetic on a rotated frame, with no Android in it, because this is the part
- * that cannot be eyeballed and the emulator is not always available — RD8.
+ * that cannot be eyeballed and the emulator is not always available.
  *
  * @param centerX the middle of the straight ruler, or the centre of the semicircle's flat edge.
  * @param angleRadians rotation about that centre. At 0 the ruler lies along the page's x axis.
@@ -58,7 +58,7 @@ data class Ruler(
      * Whether a finger landing here takes hold of the ruler.
      *
      * The body, which is the whole of it — there is nothing else to grab, because there are no
-     * handles. One finger on it slides it, two turn it (RD4).
+     * handles. One finger on it slides it, two turn it.
      */
     fun grabs(point: InkPoint): Boolean {
         val local = toLocal(point)
@@ -69,7 +69,7 @@ data class Ruler(
     }
 
     /**
-     * Whether a stroke starting here is a ruled one — RD5.
+     * Whether a stroke starting here is a ruled one.
      *
      * The ruler is *solid*: on it counts, not merely beside it. [tolerance] is how far past the edge
      * still catches, so a stroke that starts a shade off the ruler is still the line you meant.
@@ -86,7 +86,7 @@ data class Ruler(
 
     /**
      * Which side of the ruler a point is drawing against — the half of [snap] that must be decided
-     * once and then held, RD5a.
+     * once and then held.
      *
      * A straight ruler has two long edges, so this is which of them; a semicircle has one drawing
      * edge, so it is only the tie-break at the ends. Either way it is asked on the down and never
@@ -112,7 +112,7 @@ data class Ruler(
      * because a ruler runs out. The semicircle projects radially onto its arc, and a point past
      * either end of the arc lands on that end for the same reason.
      *
-     * **[side] is given rather than worked out here**, and that is the whole of RD5a: a point on
+     * [side] is given rather than worked out here, and that is the whole point: a point on
      * its own answers *whichever edge is nearer now*, which is a different edge once the hand has
      * crossed the ruler — so a stroke swept over the body used to leap to the far edge, dragging a
      * line across the ruler's face to get there. The caller holds the answer for the stroke.
@@ -230,7 +230,7 @@ data class Ruler(
     }
 }
 
-/** Where a ruler is lying, with no opinion about which ruler it is — RD2. */
+/** Where a ruler is lying, with no opinion about which ruler it is. */
 data class RulerPlacement(val centerX: Float, val centerY: Float, val angleRadians: Float)
 
 /**

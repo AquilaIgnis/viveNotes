@@ -8,7 +8,6 @@ package com.vivenotes.data.sync
  * on one notebook, and every outcome below is something to say back about *that* notebook. The
  * failures that are really sync failures carry one along rather than being flattened into a string.
  *
- * `memory/closedNotebooksPlan.md`.
  */
 sealed interface CloudArchiveResult {
 

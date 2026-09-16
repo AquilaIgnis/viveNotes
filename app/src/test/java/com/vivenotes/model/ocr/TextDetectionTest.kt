@@ -11,7 +11,7 @@ import kotlin.math.hypot
 import kotlin.math.sin
 
 /**
- * The geometry that turns a probability map into text boxes — `memory/imageOcrPlan.md` IO4.
+ * The geometry that turns a probability map into text boxes.
  *
  * The reference is `simulations/image-ocr/dbpost.py`, which was written first and run against the
  * real detector. What is guarded here is what silently produces *no boxes at all* rather than wrong

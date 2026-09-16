@@ -9,29 +9,26 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.IntSize
 
 /**
- * Keeps the siblings *underneath* this layout in the hit path instead of letting them go dead.
+ * Keeps the siblings underneath this layout in the hit path instead of letting them go dead.
  *
- * Compose hit-tests a layout's children back to front and **stops at the first one it hits**, so two
- * overlapping siblings do not both get a say and the lower one is never asked. That rule is why the
- * page's object layers spent their life nested inside the bare-canvas tap target rather than beside
- * it, and why a full-page layer laid over the text containers would otherwise swallow every touch on
- * the page: every tap into a text box, the move grip, the resize handles, the caret.
+ * Compose hit-tests a layout's children back to front and stops at the first one it hits, so two
+ * overlapping siblings do not both get a say. That rule is why the page's object layers spent their
+ * life nested inside the bare-canvas tap target rather than beside it, and why a full-page layer
+ * over the text containers would otherwise swallow every touch on the page.
  * [androidx.compose.ui.node.PointerInputModifierNode] exposes the lever that lifts it —
- * `sharePointerInputWithSiblings` — and the flag is read per *layout*, from any pointer-input node in
- * that layout's modifier chain, so a marker node with no behaviour of its own is enough to set it.
+ * `sharePointerInputWithSiblings` — read per layout from any pointer-input node in that layout's
+ * modifier chain, so a marker node with no behaviour of its own is enough.
  *
- * **It shares hit testing, not priority, and the difference decides how a layer above has to be
- * written.** Compose does not keep the two branches apart: the shared sibling's nodes are *appended*
- * to the same flat path, so the whole page ends up as one chain with the topmost layout nearest the
- * root. The event then tunnels down that chain on [PointerEventPass.Initial] and bubbles back up on
- * [PointerEventPass.Main] — which means the layer on **top** is asked first only on the tunnelling
- * pass, and asked *last* on the bubbling one. A gesture handler that waits for its DOWN on `Main`,
- * the ordinary way to write one, therefore loses to everything beneath it.
+ * It shares hit testing, not priority, and the difference decides how a layer above has to be
+ * written. Compose does not keep the two branches apart: the shared sibling's nodes are appended to
+ * the same flat path, so the whole page ends up as one chain with the topmost layout nearest the
+ * root. The event tunnels down that chain on [PointerEventPass.Initial] and bubbles back up on
+ * [PointerEventPass.Main], so the layer on top is asked first only on the tunnelling pass. A gesture
+ * handler that waits for its DOWN on `Main` therefore loses to everything beneath it.
  *
- * That is not a detail here, because what is beneath is a text container, and its editor is a real
- * Android View: `pointerInteropFilter` hands the View the DOWN as the event tunnels past and consumes
- * it right there. Anything that means to beat it has to claim the DOWN on the tunnelling pass too —
- * see the object layers in `EditorPane`, which do, and `ShapeLayer` for what that costs.
+ * That matters because what is beneath is a text container whose editor is a real Android View:
+ * `pointerInteropFilter` hands the View the DOWN as the event tunnels past and consumes it there.
+ * Anything that means to beat it has to claim the DOWN on the tunnelling pass too.
  */
 internal fun Modifier.sharingTouchesWithSiblings(): Modifier = this then ShareTouchesElement
 

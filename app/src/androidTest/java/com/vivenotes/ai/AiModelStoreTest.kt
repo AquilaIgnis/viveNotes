@@ -48,13 +48,12 @@ class AiModelStoreTest {
      * A package that is already there is never fetched again.
      *
      * This build carries the formula files in the `debug` source set, so the store hydrates them
-     * and resolves to Installed — which is exactly the state the eager download must decline to act
-     * on. If it ever stops declining, this test spends 224 MB finding out.
+     * and resolves to Installed — the state the eager download must decline to act on. If it stops
+     * declining, this test spends 224 MB finding out.
      *
-     * **Having the package is a precondition, not the claim.** `app/src/debug/assets/ai/dev/` is
-     * gitignored — 232 MB of ONNX — so a fresh clone and every CI runner reach this with nothing to
-     * hydrate, and asserting Installed there made the workflow red for a missing file rather than a
-     * broken rule. The subject is the line below it: with the package present, nothing is fetched.
+     * Having the package is a precondition, not the claim: `app/src/debug/assets/ai/dev/` is
+     * gitignored, so a fresh clone reaches this with nothing to hydrate. The subject is the line
+     * below it.
      */
     @Test
     fun anInstalledPackageIsNeverFetchedAgain() = runBlocking {

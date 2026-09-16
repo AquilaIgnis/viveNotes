@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * What the fit treats as one entity — `memory/pdfExportPlan.md` PD6.
+ * What the fit treats as one entity.
  *
  * The algorithm rather than [groupContent] itself: a `PageStroke` carries a native ink mesh and
  * cannot be built off a device, and this is the part that decides whether a sum written beside a

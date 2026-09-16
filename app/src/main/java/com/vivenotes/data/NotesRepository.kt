@@ -57,7 +57,7 @@ sealed interface PageLoad {
 }
 
 /**
- * What a delete did with the row it was given — `memory/blankFlushPlan.md`.
+ * What a delete did with the row it was given.
  *
  * The distinction is the user's, not the database's: one of these can be taken back and the other
  * never happened as far as anything downstream is concerned.
@@ -93,7 +93,7 @@ class NotesRepository(
      */
     private val codec: TextDocumentCodec = DocumentCodecs.default,
     /**
-     * Optional real-ink page seeded beside the Welcome page — `memory/ai.md`.
+     * Optional real-ink page seeded beside the Welcome page.
      *
      * Null in the app: `NotesApplication` stopped passing it, so a clean install seeds one empty
      * page rather than a stranger's handwriting. The asset and [StarterInkPageFixture] stay for the
@@ -144,15 +144,14 @@ class NotesRepository(
      * Room invalidates this flow when any hierarchy table changes, so the recovery pane survives
      * process death and stays current without a UI-owned refresh protocol.
      *
-     * **Only tombstones still inside the recovery window.** The pane tells the user that recovery
-     * lasts [DELETION_RETENTION_DAYS] days, and an expired row is one the next purge removes — it is
-     * listed today and gone tomorrow with nothing having happened in between, which is worse than
-     * not listing it. It is also what makes a flush invisible without a marker of its own: a flushed
-     * row is a tombstone written already expired. `memory/blankFlushPlan.md`.
+     * Only tombstones still inside the recovery window. The pane tells the user that recovery lasts
+     * [DELETION_RETENTION_DAYS] days, and an expired row is one the next purge removes — listed
+     * today and gone tomorrow. It is also what makes a flush invisible without a marker of its own:
+     * a flushed row is a tombstone written already expired.
      *
-     * The cutoff is read per emission rather than per collector. A row that expires while the pane
-     * is open therefore stays on screen until something else changes a hierarchy table — which is
-     * the same staleness the purge itself has, since it runs daily and not at the instant of expiry.
+     * The cutoff is read per emission rather than per collector, so a row that expires while the
+     * pane is open stays on screen until something else changes a hierarchy table — the same
+     * staleness the purge itself has, since it runs daily rather than at the instant of expiry.
      */
     fun observeDeletedItems(): Flow<List<DeletedItem>> = deletionRecovery.observeRoots().map { rows ->
         val recoverableSince = clock() - DELETION_RETENTION_MILLIS
@@ -193,19 +192,18 @@ class NotesRepository(
     /**
      * Permanently removes tombstones whose recovery window has elapsed.
      *
-     * All statements share one Room transaction, so a process death cannot leave (for example) an
-     * erase operation gone with its target links still present. Ink operations go before strokes so
-     * their direct cascade is exercised first; hierarchy parents go before children so deleting an
-     * expired notebook removes its whole hidden branch in one foreign-key cascade.
+     * All statements share one Room transaction, so a process death cannot leave an erase operation
+     * gone with its target links still present. Ink operations go before strokes so their cascade is
+     * exercised first; hierarchy parents go before children so an expired notebook's whole hidden
+     * branch goes in one foreign-key cascade.
      *
-     * A target row naming a purged *stroke* is deliberately left behind: the target tables
-     * reference their operation and not the stroke, because a cascade from the stroke side
-     * would edit an operation that is supposed to be immutable, and a replicated operation has to
-     * arrive with the same payload it was pushed with. Replay ignores a target it cannot find, so
-     * the leftover is two short strings and no behaviour. `memory/inkSyncPlan.md` §2.2.
+     * A target row naming a purged stroke is deliberately left behind: the target tables reference
+     * their operation and not the stroke, because a cascade from the stroke side would edit an
+     * operation that is supposed to be immutable. Replay ignores a target it cannot find, so the
+     * leftover is two short strings and no behaviour.
      *
-     * SQLite retains freed pages for reuse. That is intentional: running `VACUUM` here would rewrite
-     * and exclusively lock the complete database every day merely to shorten the file immediately.
+     * SQLite retains freed pages for reuse. That is intentional: `VACUUM` here would rewrite and
+     * exclusively lock the whole database every day merely to shorten the file immediately.
      */
     suspend fun purgeExpiredDeletions(now: Long = clock()): DeletionPurgeResult {
         val cutoff = now - DELETION_RETENTION_MILLIS
@@ -232,7 +230,7 @@ class NotesRepository(
 
     // --- content search --------------------------------------------------------------------
     //
-    // The Content panel's corpus, in the two halves `memory/searchPlan.md` CS7 splits it into: the page
+    // The Content panel's corpus, in two halves: the page
     // rows, which are cheap and tell the index what has changed, and the bodies of only those pages
     // whose stamp has moved.
 
@@ -275,7 +273,7 @@ class NotesRepository(
 
     // --- recognized picture text ------------------------------------------------------------
     //
-    // `memory/imageOcrPlan.md`. Keyed by attachment, so the same picture in ten places is one row;
+    // Keyed by attachment, so the same picture in ten places is one row;
     // deleted with its attachment by the foreign key, so it can never outlive what it describes.
 
     /**
@@ -553,7 +551,7 @@ class NotesRepository(
 
     // --- flushing what was never written ------------------------------------------------------
     //
-    // `memory/blankFlushPlan.md`. Making a notebook makes a section; making a section makes a page.
+    // Making a notebook makes a section; making a section makes a page.
     // Somebody who makes one of those, looks at it and deletes it has produced nothing, and a week
     // of it in Deleted Items, a push to the server and a copy of it on every other device are all
     // answers to a question nobody asked.
@@ -565,12 +563,11 @@ class NotesRepository(
      * notebook of five carefully named empty sections is still a notebook of nothing. Tombstoned
      * pages count too — see [pagesAreBlank].
      *
-     * **A closed or cloud-only notebook is never blank**, whatever it holds. A cloud-only one has no
-     * bodies, no ink and no versions *on this device* while the server holds all of them, so it
-     * would look emptier than anything else in the database; and the server stores a delete of a
-     * closed notebook as a live cloud-only row rather than a tombstone (`viveCServer/docs/openapi.yaml`,
-     * "Deleting a closed notebook keeps it"), so a device that flushed its rows would meet the
-     * notebook again on its next pull with nothing left to draw it from.
+     * A closed or cloud-only notebook is never blank, whatever it holds. A cloud-only one has no
+     * bodies, no ink and no versions on this device while the server holds all of them; and the
+     * server stores a delete of a closed notebook as a live cloud-only row rather than a tombstone,
+     * so a device that flushed its rows would meet the notebook again on its next pull with nothing
+     * left to draw it from.
      */
     suspend fun notebookIsBlank(id: String): Boolean {
         val notebook = notebooks.byId(id) ?: return false
@@ -606,21 +603,18 @@ class NotesRepository(
      * restorable from Deleted Items, and flushing the section around it would take it away without
      * ever naming it.
      *
-     * The four tests, and why each is the one it is:
-     * - **Title.** Typed by a person, and the only content a page carries outside its body.
-     * - **Body.** Decoded and asked [com.vivenotes.model.isBlank], not matched against
-     *   `pages.preview`: the preview is the document's first line of *text*, so a page holding one
-     *   photograph has an empty one. A body that will not decode is never blank — unreadable is not
-     *   empty, and `PageLoad.Unreadable` exists precisely so that such a page is never overwritten.
-     *   A page with no `page_content` row at all is blank, which is what the missing row means for a
-     *   page that has never been saved.
-     * - **Ink**, tombstones included. An erased stroke is still ink somebody drew, and the erase
-     *   that removed it can be undone.
-     * - **Versions.** A page with a history has been written on, whatever it says now. This is the
-     *   blunt end of the rule and it stays blunt: the *first* edit of a page checkpoints the empty
-     *   body it replaced, so a page typed on once and emptied again keeps a revision holding nothing
-     *   and will never be flushed. Keeping it costs a row. Guessing the other way loses version
-     *   history somebody could still have opened.
+     * The four tests:
+     * - Title. Typed by a person, and the only content a page carries outside its body.
+     * - Body. Decoded and asked [com.vivenotes.model.isBlank], not matched against `pages.preview`,
+     *   which is the document's first line of text and so empty for a page holding one photograph.
+     *   A body that will not decode is never blank — unreadable is not empty. A page with no
+     *   `page_content` row at all is blank, which is what a missing row means.
+     * - Ink, tombstones included. An erased stroke is still ink somebody drew, and the erase that
+     *   removed it can be undone.
+     * - Versions. A page with a history has been written on, whatever it says now. Deliberately
+     *   blunt: the first edit checkpoints the empty body it replaced, so a page typed on once and
+     *   emptied again keeps a revision holding nothing and is never flushed. That costs a row;
+     *   guessing the other way loses version history somebody could still have opened.
      */
     private suspend fun pagesAreBlank(rows: List<PageEntity>): Boolean {
         if (rows.any { it.title.isNotBlank() }) return false
@@ -636,32 +630,28 @@ class NotesRepository(
     /**
      * Deletes something blank without keeping any of it.
      *
-     * The tombstone is written **already expired** — `deletedAt` a full retention window in the
-     * past, `updatedAt` at now — and that one number is the whole mechanism. Nothing had to be
-     * taught what a flush is: [observeDeletedItems] lists tombstones inside the window and so never
-     * sees it, [purgeExpiredDeletions] collects tombstones outside the window and so takes it on the
-     * first run, which happens here before this function returns; and the push carries the same
-     * backdated stamp through the ordinary protocol, so the other devices apply a delete that is
-     * expired when it lands and flush it in turn. No new kind, no marker table, no migration.
+     * The tombstone is written already expired — `deletedAt` a full retention window in the past,
+     * `updatedAt` at now — and that one number is the whole mechanism. [observeDeletedItems] lists
+     * tombstones inside the window and never sees it; [purgeExpiredDeletions] collects tombstones
+     * outside the window and takes it on the first run, which happens here before this returns; and
+     * the push carries the same backdated stamp through the ordinary protocol, so other devices
+     * apply a delete that is expired when it lands.
      *
-     * **What the server has never heard of, it is never told.** The entity's own queued generation
-     * is dropped when there is no `sync_entity_states` row for it *and* the durable pending batch
-     * does not name it — the second half because a batch already serialized will be re-sent byte for
-     * byte after a lost response, and a create that lands on the server with no delete queued behind
-     * it is a notebook that comes back on the next pull. Both reads and the write sit in this
-     * transaction, and `HierarchySync.loadOrCreatePendingBatch` builds a batch inside one of its
-     * own, so SQLite's single writer settles the race in whichever direction it happens: either the
-     * batch exists and is seen, or it is built after the row has already gone from the outbox.
+     * What the server has never heard of, it is never told. The entity's queued generation is
+     * dropped when there is no `sync_entity_states` row for it and the durable pending batch does
+     * not name it — the second half because a serialized batch is re-sent byte for byte after a lost
+     * response, and a create that lands with no delete queued behind it is a notebook that comes
+     * back on the next pull. Both reads and the write sit in this transaction, and
+     * `HierarchySync.loadOrCreatePendingBatch` builds a batch inside one of its own, so SQLite's
+     * single writer settles the race either way.
      *
-     * The subtree below needs nothing pruned by name. The purge removes the flushed row, foreign
-     * keys cascade its sections, pages, bodies, ink and versions away, and the
-     * `pruneOrphanedOutbox` in that same transaction drops whatever those rows had queued. A blank
-     * notebook whose creation was never pushed therefore reaches the server as nothing at all.
+     * The subtree below needs nothing pruned by name: the purge removes the flushed row, foreign
+     * keys cascade everything under it, and `pruneOrphanedOutbox` in that same transaction drops
+     * whatever those rows had queued.
      *
-     * When the server *has* acknowledged it, the tombstone stays queued and the purge steps over it
-     * — its outbox entry is the guard — so the rows survive until the delete has actually been
-     * delivered. It is invisible from this moment either way; the next flush, the next app start or
-     * the daily purge worker is what finally collects it.
+     * When the server has acknowledged it, the tombstone stays queued and the purge steps over it,
+     * so the rows survive until the delete has been delivered. It is invisible from this moment
+     * either way.
      */
     private suspend fun flush(kind: DeletedItemKind, id: String): DeletionOutcome {
         val now = clock()
@@ -684,10 +674,9 @@ class NotesRepository(
      * Whether the server has already been told this entity exists, or is about to be.
      *
      * The pending batch is tested by substring rather than by decoding it. `HierarchySync`'s change
-     * model is private to it, and reaching into the sync layer from here to parse one field would
-     * invert the dependency for a question a `String.contains` answers: ids are UUIDs, so a false
-     * match is not a practical possibility, and a false match would only cost one pushed tombstone
-     * for something the server was going to be told about anyway.
+     * model is private to it, and parsing one field from here would invert the dependency for a
+     * question `String.contains` answers: ids are UUIDs, and a false match would cost one pushed
+     * tombstone for something the server was going to be told about anyway.
      */
     private suspend fun serverKnowsOf(kind: DeletedItemKind, id: String): Boolean {
         if (sync.knownEntityIds(kind.syncKind, listOf(id)).isNotEmpty()) return true
@@ -698,10 +687,10 @@ class NotesRepository(
      * The wire name `HierarchySync.SyncKind` pushes this row under.
      *
      * Spelled out here rather than imported for the reason [serverKnowsOf] gives; `DeletionPurgeDao`
-     * writes the same three strings into its SQL for the same reason. Both these and
-     * [PENDING_SYNC_BATCH_KEY] are pinned to the sync layer's own spelling by behaviour rather than
-     * by a string comparison: `HierarchySyncTest` flushes against a real `HierarchySync` and a
-     * server, so a name that drifted would show up as a delete that never travelled.
+     * writes the same three strings into its SQL for the same reason. These and
+     * [PENDING_SYNC_BATCH_KEY] are pinned to the sync layer's spelling by behaviour rather than by a
+     * string comparison: `HierarchySyncTest` flushes against a real `HierarchySync` and a server, so
+     * a name that drifted would show up as a delete that never travelled.
      */
     private val DeletedItemKind.syncKind: String
         get() = when (this) {
@@ -895,7 +884,7 @@ class NotesRepository(
      *
      * Rows rather than the document: ink does not travel through [saveDoc], so drawing never
      * rewrites the document column and autosave latency stays independent of how much ink is on the
-     * page. See `memory/inkPlan.md` ID2.
+     * page.
      */
     suspend fun inkFor(pageId: String): List<InkStrokeEntity> = ink.byPage(pageId)
 
@@ -983,7 +972,7 @@ class NotesRepository(
         inkMoves.byPage(pageId)
 
     /**
-     * What this page's operation clock has to start above — `memory/inkSyncPlan.md` §1.
+     * What this page's operation clock has to start above.
      *
      * Read from the tables rather than derived from the operations that were replayed, because the
      * two differ by exactly the rows that make it a clock: an undone or pulled-and-tombstoned
@@ -1015,25 +1004,22 @@ class NotesRepository(
      * Tombstones strokes the eraser has taken the last piece of, so the seven-day purge collects
      * them.
      *
-     * Ink is an append-only log, so rubbing a stroke out has always *added* rows — the erase and its
-     * targets — while the stroke kept every point it was drawn with, for good. On a page drawn and
-     * redrawn on, that is most of what the database holds: two thirds of the stroke rows on the test
-     * corpus had no geometry left at all. This is the collector for exactly those: a row whose live
-     * projection set is empty draws nothing, is reachable by nothing, and is not ink any more.
+     * Ink is an append-only log, so rubbing a stroke out has always added rows — the erase and its
+     * targets — while the stroke kept every point it was drawn with. On a page drawn and redrawn on
+     * that is most of what the database holds: two thirds of the stroke rows on the test corpus had
+     * no geometry left at all. A row whose live projection set is empty draws nothing, is reachable
+     * by nothing, and is not ink any more.
      *
-     * **[deletedAt] rather than a delete of its own**, so it lands in the machinery that already
-     * exists: `DeletionPurgeWorker` hard-deletes it after the seven-day recovery window, cascading
-     * its target rows; [restoreRevision] un-tombstones exactly the strokes a revision names, so a
-     * page restored inside that window still comes back whole; and `InkStrokeDao.byPage` stops
-     * loading it immediately, which costs nothing because it had nothing to draw.
+     * [deletedAt] rather than a delete of its own, so it lands in the machinery that already exists:
+     * `DeletionPurgeWorker` hard-deletes it after the recovery window, cascading its target rows;
+     * [restoreRevision] un-tombstones exactly the strokes a revision names; and `InkStrokeDao.byPage`
+     * stops loading it immediately, which costs nothing because it had nothing to draw.
      *
-     * **Never told to the server.** Deadness is not an edit, it is a conclusion, and every device
-     * reaches it from the same replicated erases — so pushing it would be one deletion per device per
-     * stroke, all saying what the erase already said. Worse, a deletion is the one message a device
-     * cannot disagree with: a peer that has not yet pulled the erase would lose ink it can still see.
-     * The triggers are therefore held off exactly as `HierarchySync` holds them off when it drops a
-     * joining device's starter notebook. (A stroke whose *insert* is still queued pushes the
-     * tombstone with it; that peer holds the erase too, so it draws the same page either way.)
+     * Never told to the server. Deadness is a conclusion rather than an edit, and every device
+     * reaches it from the same replicated erases, so pushing it would be one deletion per device per
+     * stroke. Worse, a peer that has not yet pulled the erase would lose ink it can still see. The
+     * triggers are therefore held off. (A stroke whose insert is still queued pushes the tombstone
+     * with it; that peer holds the erase too, so it draws the same page either way.)
      *
      * No checkpoint, no recognition invalidation, no starter clearing: nothing a reader could
      * observe has changed, and a revision spent on a garbage collection would evict a real one.
@@ -1111,10 +1097,10 @@ class NotesRepository(
      * Seeds a starter notebook so the first launch is not an empty void. Only ever runs when the
      * database has no notebooks at all, so it cannot resurrect content the user deleted.
      *
-     * The Welcome page is deliberately **empty** — [createPage] already writes `PageDoc.empty()`.
-     * It used to open with a text outline explaining the ribbon, which put a container under the
-     * pen before the owner had drawn anything and made the first gesture on a stylus-first app a
-     * text selection. A blank page teaches the same lesson faster.
+     * The Welcome page is deliberately empty — [createPage] already writes `PageDoc.empty()`. It
+     * used to open with a text outline explaining the ribbon, which put a container under the pen
+     * before the owner had drawn anything and made the first gesture on a stylus-first app a text
+     * selection.
      */
     suspend fun seedIfEmpty() {
         if (notebooks.count() > 0) return

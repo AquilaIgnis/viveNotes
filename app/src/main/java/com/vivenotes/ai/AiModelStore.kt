@@ -92,16 +92,13 @@ class AiModelStore internal constructor(
     /**
      * Whether the formula package may be fetched without anyone asking for it.
      *
-     * **Unmetered connections only, and that is the whole of the condition.** 224 MB pulled onto a
-     * cellular allowance because an app opened is a real cost to somebody who never asked for it,
-     * and the fact that the feature is worth having does not make it the app's money to spend. On a
-     * metered connection the pane keeps its Download button, so the choice is still available — it
-     * is made by the person paying for it.
+     * Unmetered connections only. 224 MB pulled onto a cellular allowance because an app opened is
+     * a real cost to somebody who never asked for it. On a metered connection the pane keeps its
+     * Download button, so the choice is still available.
      *
      * `VALIDATED` as well as `NOT_METERED`, because a captive-portal Wi-Fi reports unmetered and
-     * would otherwise start a 224 MB transfer that cannot succeed. A download that fails leaves the
-     * package untouched and retries on the next launch, so being conservative here costs a delay
-     * and nothing else.
+     * would start a 224 MB transfer that cannot succeed. A failed download leaves the package
+     * untouched and retries on the next launch.
      */
     private fun autoDownloadAllowed(): Boolean {
         if (!autoDownload) return false
@@ -189,7 +186,7 @@ class AiModelStore internal constructor(
     /**
      * Opens the bundled PP-OCRv5 text detector after its asset has been verified.
      *
-     * Bundled rather than downloaded — `memory/imageOcrPlan.md` IO1. 4.7 MB beside a 7.9 MB
+     * Bundled rather than downloaded. 4.7 MB beside a 7.9 MB
      * recognizer is not the size that made FormulaNet optional, and OCR that needs a network round
      * trip before it works is OCR that mostly does not work.
      */
@@ -237,17 +234,15 @@ class AiModelStore internal constructor(
     /**
      * Debug builds carry both optional files so a clean emulator install needs no network.
      *
-     * **All of them, or none.** `pp-formulanet-s.onnx` is gitignored — 232 MB — while the 2 MB
-     * tokenizer beside it is committed, so *half a package* is the ordinary state of a fresh clone,
-     * not a symptom of anything. Half is therefore no bundled package at all: returning null leaves
-     * the caller on whatever the installed package says, which is NotInstalled, and NotInstalled is
-     * the one state the first-run fetch acts on.
+     * All of them, or none. `pp-formulanet-s.onnx` is gitignored at 232 MB while the 2 MB tokenizer
+     * beside it is committed, so half a package is the ordinary state of a fresh clone. Half is
+     * therefore no bundled package at all: returning null leaves the caller on NotInstalled, which
+     * is the one state the first-run fetch acts on.
      *
-     * Gating on "any file present" instead — which is what this did until 2026-08-27 — reported
-     * `Failed("Bundled FormulaNet model is unavailable")` on every clone that had not hand-placed
-     * the ONNX. That was not merely a wrong message. Because the eager fetch fires only on
-     * NotInstalled, the false Failed also suppressed the download that would have fixed it, so the
-     * package never arrived on its own and the pane showed an install error at every launch.
+     * Gating on "any file present" instead reported `Failed("Bundled FormulaNet model is
+     * unavailable")` on every clone that had not hand-placed the ONNX — and because the eager fetch
+     * fires only on NotInstalled, that false Failed also suppressed the download that would have
+     * fixed it.
      */
     private fun installBundledFormulaPackageIfPresent(): AiModelInstallState? {
         val bundledNames = appContext.assets.list(DEBUG_FORMULA_ASSETS_DIRECTORY)?.toSet().orEmpty()
@@ -400,26 +395,21 @@ class AiModelStore internal constructor(
         /**
          * PP-FormulaNet-S.
          *
-         * **`PP-FormulaNet_plus-S` was tried on 2026-08-10 and reverted the same day**, because the
-         * user reported handwriting recognition was markedly worse with it. Do not swap it back in
-         * on the strength of its published numbers; they do not measure this app's input.
+         * `PP-FormulaNet_plus-S` was tried on 2026-08-10 and reverted the same day, because
+         * handwriting recognition was markedly worse with it. Do not swap it back in on the
+         * strength of its published numbers; they do not measure this app's input.
          *
-         * The swap looked free, and mechanically it was. Both are the *same architecture retrained*,
-         * verified rather than assumed: walking both ONNX graphs — including the decoder inside the
-         * generation `Loop`, which a top-level read misses — gives 836 tensors and 57,916,120
-         * parameters each, a `[50000, 384]` embedding and a `[384, 50000]` output projection in
-         * both. The `tokenizer.json` is byte-identical (SHA-256 `2811d827…`) across `_plus`,
-         * non-`_plus` and the copy bundled here, so a swap needs no tokenizer change and the export
-         * is not at fault.
+         * Both are the same architecture retrained, verified rather than assumed: walking both ONNX
+         * graphs — including the decoder inside the generation `Loop` — gives 836 tensors and
+         * 57,916,120 parameters each, with a `[50000, 384]` embedding and a `[384, 50000]` output
+         * projection in both, and a byte-identical `tokenizer.json` (SHA-256 `2811d827…`). So a swap
+         * needs no tokenizer change and the export is not at fault.
          *
-         * **The weights are simply worse on ink.** `_plus` gains 88.71% vs 87.00% En-BLEU and 53.32%
-         * vs 45.71% Zh-BLEU by training on a broader *printed* corpus and on Chinese — and with the
-         * parameter count and vocabulary fixed, that capacity comes from somewhere. English
-         * handwriting is what it came from here. No published benchmark separates handwriting for
-         * either model, so this was found on the device and nowhere else.
+         * The weights are simply worse on ink. `_plus` gains 88.71% vs 87.00% En-BLEU and 53.32% vs
+         * 45.71% Zh-BLEU by training on a broader printed corpus and on Chinese, and with parameter
+         * count and vocabulary fixed that capacity comes from somewhere — English handwriting, here.
          *
-         * The lesson for the next candidate: printed BLEU does not predict this app's accuracy, and
-         * the eval set in `memory/ai.md` open question 4 is the only thing that will.
+         * Printed BLEU does not predict this app's accuracy; only a real eval set will.
          */
         private val FORMULA_MODEL = ModelArtifact(
             fileName = "pp-formulanet-s.onnx",

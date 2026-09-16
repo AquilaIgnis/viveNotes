@@ -57,14 +57,12 @@ object JsonDocumentCodec : TextDocumentCodec {
 /**
  * Compact binary encoding, for the sync protocol and optionally for local storage.
  *
- * CBOR rather than MessagePack: the two are near-equivalent on the wire — both are map-based,
- * self-describing binary formats with wide cross-language support — but CBOR ships in
- * `kotlinx-serialization` itself and is standardised as RFC 8949, whereas every MessagePack
- * binding for kotlinx is community-maintained. For the format your entire note database is written
- * in, that difference is the whole argument.
+ * CBOR rather than MessagePack: the two are near-equivalent on the wire, but CBOR ships in
+ * `kotlinx-serialization` itself and is standardised as RFC 8949, whereas every MessagePack binding
+ * for kotlinx is community-maintained.
  *
- * Note this is not a [TextDocumentCodec]: its output is arbitrary bytes and is not round-trip safe
- * through a `String`, so storing it needs a BLOB column rather than TEXT.
+ * Not a [TextDocumentCodec]: its output is arbitrary bytes and is not round-trip safe through a
+ * `String`, so storing it needs a BLOB column rather than TEXT.
  */
 @OptIn(ExperimentalSerializationApi::class)
 object CborDocumentCodec : DocumentCodec {

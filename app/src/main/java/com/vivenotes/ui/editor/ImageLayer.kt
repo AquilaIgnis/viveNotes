@@ -52,21 +52,19 @@ import kotlin.math.roundToInt
 internal const val IMAGE_LAYER_TAG = "image-layer"
 
 /**
- * The pictures on the page — feature E6, as Prime Objects.
+ * The pictures on the page, as objects on the canvas.
  *
- * **[EquationLayer] is nested inside this one, not beside it.** `memory/plan.md` entry 24 is the whole
- * argument and it cost a day: two full-page layers as siblings means Compose hands every touch to
- * whichever is on top, and the one underneath goes quietly dead. The three are one chain instead —
- * and this is its outermost link, because a picture is the frontmost of the three and the touch is
- * claimed on the way *down*. See the call site in `EditorPane`.
+ * [EquationLayer] is nested inside this one, not beside it, and that nesting cost a day to arrive
+ * at: two full-page layers as siblings means Compose hands every touch to whichever is on top, and
+ * the one underneath goes quietly dead. The three are one chain instead, and this is its outermost
+ * link, because a picture is the frontmost of the three and the touch is claimed on the way down.
  *
- * Selection, drag-to-move and four-corner resize are AD7, and the geometry matches [ShapeLayer] and
- * [EquationLayer] to the dp for the reason they match each other: an affordance that behaves
- * differently depending on what is under it is worse than not having one.
+ * Selection, drag-to-move and four-corner resize match [ShapeLayer] and [EquationLayer] to the dp:
+ * an affordance that behaves differently depending on what is under it is worse than none.
  *
- * **The decoded bitmaps are the expensive part, and they are not in the document.** Loading is keyed
- * on the attachment id, runs off the main thread, and is cached here for as long as some picture on
- * the page refers to it — see [rememberPageAssets], which also names the two ways that can fail.
+ * The decoded bitmaps are the expensive part and are not in the document. Loading is keyed on the
+ * attachment id, runs off the main thread, and is cached here for as long as some picture on the
+ * page refers to it — see [rememberPageAssets].
  */
 @Composable
 internal fun ImageLayer(
@@ -167,7 +165,7 @@ internal fun ImageLayer(
                     }
                     // A handle wins over the body: they sit on the boundary, so each is also inside
                     // the move target.
-                    // No handles on a locked object — `memory/diagram.md`. Absent rather than
+                    // No handles on a locked object. Absent rather than
                     // present and dead, the rule the toolkit follows, and the chrome that draws them
                     // is gated on the same field.
                     val handle = selected?.takeIf { it.lockGroup == null }?.handleNear(startX, startY)
@@ -315,24 +313,22 @@ private sealed interface ImageAsset {
 }
 
 /**
- * Everything the page knows about its pictures' bytes, loaded off the main thread and kept while used.
+ * Everything the page knows about its pictures' bytes, loaded off the main thread and kept while
+ * used.
  *
- * Keyed by attachment id rather than by outline id, so the same picture placed twice is decoded once
- * — which is the same property the content-addressed store gives the file itself.
+ * Keyed by attachment id rather than by outline id, so the same picture placed twice is decoded once.
  *
- * Entries are dropped as soon as no picture refers to them. A cache that only grows is a leak with a
+ * Entries are dropped as soon as no picture refers to them: a cache that only grows is a leak with a
  * photograph in it, and this one would be filled by scrolling through a notebook.
  *
- * **A failure is cached exactly like a success**, and deliberately: a picture whose file is gone is
- * not re-checked on every recomposition of the page. What lifts that cache is
- * [AttachmentStore.arrivals] — bytes actually landing — so the one thing that can change the answer
- * is also the only thing that asks the question again.
+ * A failure is cached exactly like a success, so a picture whose file is gone is not re-checked on
+ * every recomposition. What lifts that cache is [AttachmentStore.arrivals] — bytes actually landing
+ * — so the one thing that can change the answer is also the only thing that asks the question again.
  *
- * That signal exists because of sync. Before it, a file could only appear under an open page during
- * an import, which rewrote the page anyway; now another device's picture arrives seconds after the
- * frame that points at it, and without a retry the reader would sit looking at a broken plate until
- * they navigated away and back. Successes are kept across an arrival: a decoded bitmap cannot have
- * become wrong, since the file is named by the hash of its own contents.
+ * That signal exists because of sync: another device's picture arrives seconds after the frame that
+ * points at it, and without a retry the reader would sit looking at a broken plate. Successes are
+ * kept across an arrival, since a decoded bitmap cannot have become wrong when the file is named by
+ * the hash of its own contents.
  */
 @Composable
 private fun rememberPageAssets(
@@ -440,22 +436,19 @@ private fun DrawScope.drawImage(
 /**
  * The plate for a picture that cannot be drawn, with the reason written on it.
  *
- * **A blank plate is the bug this replaces.** A picture whose file is missing kept the loading fill —
- * `#333333` on the dark theme — so the page showed a black rectangle where the photograph was, with
- * nothing to say whether it was still decoding, empty, or gone for good. The frame is still drawn at
- * the document's size, because the picture has not been deleted and the page must not reflow around a
+ * A blank plate is the bug this replaces: a picture whose file is missing kept the loading fill, so
+ * the page showed a black rectangle where the photograph was. The frame is still drawn at the
+ * document's size, because the picture has not been deleted and the page must not reflow around a
  * file that may come back.
  *
- * **The plate keeps that same fill, and only the message is red.** Painting the whole frame in
- * `errorContainer` was the first attempt and it was rejected on sight: a photograph-sized block of
- * saturated red is the loudest thing on the page, for a condition that needs to be noticed once and
- * then read. A missing picture is now told apart from a loading one by the words on it, not by colour.
+ * The plate keeps that same fill and only the message is red. Painting the whole frame in
+ * `errorContainer` was the first attempt: a photograph-sized block of saturated red is the loudest
+ * thing on the page, for a condition that needs to be noticed once and then read.
  *
- * **Painted rather than composed**, for the reason everything else on this layer is: it has to follow
- * the drag and lasso previews and the window culling, all of which live in this draw scope. A `Text`
- * child would have to read that state during composition and would recompose the layer on every frame
- * of a drag. What a canvas cannot give — words a screen reader or a test can find — the layer's
- * `contentDescription` carries instead.
+ * Painted rather than composed, for the reason everything else on this layer is: it has to follow
+ * the drag and lasso previews and the window culling, all of which live in this draw scope. What a
+ * canvas cannot give — words a screen reader or a test can find — the layer's `contentDescription`
+ * carries instead.
  */
 private fun DrawScope.drawBrokenImage(
     asset: ImageAsset.Broken,
@@ -521,7 +514,7 @@ private fun DrawScope.drawImageSelection(
         ),
     )
 
-    // **Locked: the rectangle stays, the grabs go** — `memory/diagram.md`. What is held still has to
+    // **Locked: the rectangle stays, the grabs go**. What is held still has to
     // be visible, or the bar would float over nothing; what must not be there is a handle that
     // cannot be dragged, which is the rule the toolkit follows for an action a kind cannot perform.
     if (image.lockGroup != null) return

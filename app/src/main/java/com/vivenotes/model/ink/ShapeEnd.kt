@@ -10,24 +10,20 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * One end of a shape that *is* a line — `memory/inkPlan.md` §5.4 SD12.
+ * One end of a shape that is a line.
  *
  * The line and the arrow are the two kinds with no inside and no box: what they are is a run from
- * one point to another, and every question you can ask of one — how long, which way, where it
- * points — is a question about those two points. The four corner handles Prime Object gives
- * everything else (AD7) answer none of them. A horizontal line has no height for two of those
- * corners to pull on, so half the handles do nothing at all; the other half stretch it along its own
- * axis, which is the one edit that *could* be phrased as an endpoint move — and cannot turn it.
+ * one point to another, and every question you can ask of one is a question about those two points.
+ * The four corner handles answer none of them — a horizontal line has no height for two of the
+ * corners to pull on, and the other two stretch it along its own axis without being able to turn it.
  *
- * So a line-like kind offers **two handles, one per end, each dragged freely in both directions**.
+ * So a line-like kind offers two handles, one per end, each dragged freely in both directions.
  * Pulling one across the other's line turns the shape rather than resizing it, which is how a line
- * is aimed: there is nowhere else in the object model to put a rotation, and for a line there is no
- * need for one, because an endpoint already carries the angle.
+ * is aimed: an endpoint already carries the angle, so there is no need for a rotation anywhere.
  *
- * The sibling of [ShapeArm], and deliberately not the same thing. An arm end is pinned to its own
- * axis so that lengthening an L's foot cannot also drift it down; a line end is pinned to nothing,
- * because for a line that drift *is* the gesture. Both are absolute — they say where the end lands,
- * not how far it came — so both preview per frame and commit once on the lift.
+ * The sibling of [ShapeArm], and deliberately not the same thing: an arm end is pinned to its own
+ * axis, while a line end is pinned to nothing, because for a line that drift is the gesture. Both
+ * are absolute, so both preview per frame and commit once on the lift.
  */
 data class ShapeEnd(
     /** True for the shaft's second point. The tip of an arrow; either end of a plain line. */
@@ -69,26 +65,20 @@ fun Outline.Shape.endNear(x: Float, y: Float, reach: Float): ShapeEnd? = ends()
 /**
  * Moves one end of a line-like shape to ([x], [y]), leaving the other where it is.
  *
- * **The shape is re-traced from its two endpoints, not edited in place.** For a plain line the two
- * are the same thing, and for an arrow they are not: the head is geometry *derived* from the shaft —
- * its wings open back along the line, and its size follows the shaft's length up to a cap — so an
- * end moved without rebuilding it leaves the head pointing where the arrow used to go. Asking
- * [trace] the same question the insert asked is what keeps a dragged arrow identical to one drawn at
- * that size in the first place.
+ * The shape is re-traced from its two endpoints rather than edited in place. For a plain line the
+ * two are the same thing; for an arrow they are not, because the head is derived from the shaft —
+ * its wings open back along the line and its size follows the shaft's length — so an end moved
+ * without rebuilding it leaves the head pointing where the arrow used to go.
  *
- * Segment **ids survive**, because the edges come back in the order they were seeded in: the shaft
- * first, then the head. An id that is not re-traced keeps the geometry it had, which is what a kind
- * whose segments have been edited into something [trace] no longer describes gets — nothing rather
- * than a shape rebuilt out from under it.
+ * Segment ids survive, because the edges come back in the order they were seeded in: shaft first,
+ * then head. An id that is not re-traced keeps the geometry it had, which is what a kind whose
+ * segments no longer match [trace] gets — nothing, rather than a shape rebuilt out from under it.
  *
- * Clamped to [MIN_LINE_LENGTH] from the far end. A line dragged onto its own other end has no
- * direction left to be pulled back out along, and its two handles land on the same point with
- * nothing between them to grab — the same reason [MIN_ARM_LENGTH] exists, and the same fate if it
- * did not.
+ * Clamped to [MIN_LINE_LENGTH] from the far end: a line dragged onto its own other end has no
+ * direction left, and its two handles land on the same point with nothing between them to grab.
  *
- * And **aimed**: a drag landing within [END_SNAP_TOLERANCE] of an eighth-turn is taken to mean that
- * eighth-turn exactly — see [aimedFrom]. Nothing else in the app can tell you a line is level, so a
- * line that is meant to be level has to become level on its own.
+ * And aimed: a drag landing within [END_SNAP_TOLERANCE] of an eighth-turn is taken to mean that
+ * eighth-turn exactly — see [aimedFrom]. Nothing else in the app can tell you a line is level.
  */
 fun Outline.Shape.withEnd(end: ShapeEnd, x: Float, y: Float): Outline.Shape {
     if (!kind.hasEnds) return this
@@ -137,26 +127,23 @@ fun Outline.Shape.aimEnd(end: ShapeEnd, x: Float, y: Float): Pair<Float, Float> 
 }
 
 /**
- * Where the end actually lands for a finger at ([x], [y]): the requested point with the angle snapped
- * and the length held off [MIN_LINE_LENGTH], both measured from the end that is staying put.
+ * Where the end actually lands for a finger at ([x], [y]): the requested point with the angle
+ * snapped and the length held off [MIN_LINE_LENGTH], both measured from the end that is staying put.
  *
- * **The angle snaps to an eighth-turn and the length never does.** A drag within
- * [END_SNAP_TOLERANCE] of level, upright or 45° is read as meaning that exactly, and the length stays
- * whatever the finger reached — so the gesture is still "put this end here", with only the one
- * quantity a hand cannot hit by eye taken out of its hands. Snapping the length as well would be a
- * grid, which is a different feature and one nothing here asked for.
+ * The angle snaps to an eighth-turn and the length never does. A drag within [END_SNAP_TOLERANCE]
+ * of level, upright or 45° is read as meaning that exactly, and the length stays whatever the finger
+ * reached, so the gesture is still "put this end here" with only the quantity a hand cannot hit by
+ * eye taken out of its hands. Snapping the length as well would be a grid.
  *
- * Set against the alternative of *showing* the angle and leaving the aim to the user: a readout tells
- * you that you are at 89.4°, and then you still cannot get to 90 — the pixel you would need is
- * smaller than the finger asking for it. The snap is what makes level reachable at all.
+ * The alternative — showing the angle and leaving the aim to the user — does not work: a readout
+ * tells you that you are at 89.4°, and the pixel you would need to reach 90 is smaller than the
+ * finger asking for it.
  *
- * The length is held off along the **aimed** direction, so the two rules compose: a drag pushed
- * through the far end comes back out along the eighth-turn it was nearest, not along the raw one.
- * Only a drag landing *exactly* on the fixed end has no direction of its own, and that one keeps the
- * line's current heading — anything else would spin it at random on the last pixel of travel.
+ * The length is held off along the aimed direction, so the two rules compose. Only a drag landing
+ * exactly on the fixed end has no direction of its own, and that one keeps the line's current
+ * heading rather than spinning it at random on the last pixel of travel.
  *
- * A snapped end is placed from [eighthTurn]'s exact unit vectors rather than from `cos`/`sin`, so
- * level really is level: see there.
+ * A snapped end is placed from [eighthTurn]'s exact unit vectors rather than from `cos`/`sin`.
  */
 private fun aimedFrom(
     fixedX: Float,
@@ -218,18 +205,16 @@ private val SNAP_REACH = END_SNAP_TOLERANCE * PI.toFloat() / 180f
 /**
  * How near an eighth-turn a drag has to come before it is taken to mean it, in degrees.
  *
- * The one number the feature is tuned by, and it is a trade: every degree of it is a degree of angle
- * that can no longer be drawn. Three takes 6° out of each 45° arc — an eighth of the range — leaving
- * 39° of every arc free. Against roughly a degree of steadiness in a hand drawing a 200dp line, that
- * is about three times the wobble it has to absorb: enough that aiming for level lands on level, and
- * little enough that a line meant to lean by five degrees still leans by five degrees.
+ * A trade: every degree of it is a degree of angle that can no longer be drawn. Three takes 6° out
+ * of each 45° arc, leaving 39° free. Against roughly a degree of steadiness in a hand drawing a
+ * 200dp line, that is about three times the wobble it has to absorb.
  *
  * It was 7° for a day, which caught more than it should: a third of every direction on the page
  * became unreachable, and a deliberate shallow lean kept coming back flat.
  *
- * Whether the snap should be escapable is the open question here, and it is a UI one: there is no
- * modifier key on a tablet, so it would have to be a hold, a second finger, or a setting. Nothing is
- * built for it, and until something is, angles within this of an eighth-turn are simply unreachable.
+ * Whether the snap should be escapable is an open UI question — there is no modifier key on a
+ * tablet, so it would have to be a hold, a second finger, or a setting. Until then, angles within
+ * this of an eighth-turn are unreachable.
  */
 const val END_SNAP_TOLERANCE = 3f
 

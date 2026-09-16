@@ -8,17 +8,16 @@ import com.vivenotes.model.PrintMargins
 import kotlin.math.roundToInt
 
 /**
- * The sheet an export is laid onto — `memory/pdfExportPlan.md` PD2.
+ * The sheet an export is laid onto.
  *
- * Two coordinate systems meet here and neither is negotiable. A page is measured in **dp at 160 to
- * the inch** ([PageStyle.DP_PER_INCH]) — that is what makes a page at 100% zoom physically the size
- * it claims — and a PDF is measured in **PostScript points at 72 to the inch**, which is what
- * `PdfDocument.PageInfo.Builder` takes. So [POINTS_PER_DP] is 0.45 and A4 comes out 595 × 842, the
- * numbers every other tool prints.
+ * Two coordinate systems meet here. A page is measured in dp at 160 to the inch
+ * ([PageStyle.DP_PER_INCH]), which is what makes a page at 100% zoom physically the size it claims,
+ * and a PDF is measured in PostScript points at 72 to the inch, which is what
+ * `PdfDocument.PageInfo.Builder` takes. So [POINTS_PER_DP] is 0.45 and A4 comes out 595 × 842.
  *
  * [tileWidthDp] and [tileHeightDp] — the printable area, the sheet less its margins — are what the
- * canvas is actually cut into (PD3). Cutting at the *sheet* size instead would put a band of every
- * page underneath the printer's margin, where the writing on it is simply gone.
+ * canvas is cut into. Cutting at the sheet size instead would put a band of every page underneath
+ * the printer's margin, where the writing on it is simply gone.
  */
 data class PdfPaper(
     val widthDp: Float,

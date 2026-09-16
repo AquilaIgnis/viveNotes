@@ -22,7 +22,7 @@ import java.io.File
 
 /**
  * The feature the user asked for, end to end minus the model: a word inside a picture is findable,
- * and it is findable **once per place it actually is** — `memory/imageOcrPlan.md` IO2, IO5, IO6.
+ * and it is findable **once per place it actually is**.
  *
  * `ContentSearchTest` covers the same rules over the pure model. This covers them over the real
  * query path: stored documents, the cache table, the index's per-page decode, and the live page.

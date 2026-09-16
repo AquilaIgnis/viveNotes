@@ -18,7 +18,7 @@ import org.junit.runner.RunWith
  * stroke erased in two, one piece circled, the other going with it is the one place the narrowing
  * would have cost something irreversible. A piece has no row of its own to tombstone, so what is
  * stored is an Object-mode erase per piece; these tests are about that erase being *provably* the
- * one it claims to be. `memory/lassoProjectionPlan.md` §5.
+ * one it claims to be.
  */
 @RunWith(AndroidJUnit4::class)
 class DeleteProjectionTest {

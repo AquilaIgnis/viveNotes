@@ -72,7 +72,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Insert Shape — `memory/inkPlan.md` §5.4.
+ * Insert Shape.
  *
  * The button has two homes and one armed tool behind them, which is exactly the shape of code where
  * one tab silently stops arming anything. The pane's grid is the other risk: a page of chips whose
@@ -260,8 +260,8 @@ class ShapeToolTest {
 
     @Test
     fun fillColourPicksAndClears() {
-        // Was "placed but does nothing" until 2026-08-06 — SD7's inert treatment, on the reasoning
-        // that a stroke has no inside, which stopped being true when SD1 was reversed. The palette
+        // Was "placed but does nothing" until 2026-08-06, on the reasoning that a stroke has no
+        // inside, which stopped being true once a shape became an object. The palette
         // row it grew went again on 2026-08-07: one swatch, and the wheel behind it.
         setPanel()
 
@@ -298,7 +298,7 @@ class ShapeToolTest {
     fun theFillSwatchWearsTheFill() {
         // Read off the pixels rather than off the state that produced them. The swatch is now the
         // only thing in the pane that says what the fill *is*, so "correct data, nothing on screen"
-        // is exactly the failure this has to see — the lesson from `memory/plan.md` §1a entry 14.
+        // is exactly the failure this has to see.
         val red = 0xFFE53935.toInt()
         setPanel(ShapeSettings(fillArgb = red))
 
@@ -669,7 +669,7 @@ class ShapeToolTest {
     }
 
     // -----------------------------------------------------------------------------------------
-    // The L's arms, one at a time — SD9
+    // The L's arms, one at a time
     // -----------------------------------------------------------------------------------------
 
     @Test
@@ -745,7 +745,7 @@ class ShapeToolTest {
 
     @Test
     fun draggingALinesEndSidewaysTurnsItRatherThanScalingIt() {
-        // SD12, and the reason a line does not carry the four corner handles: no scale of a box can
+        // The reason a line does not carry the four corner handles: no scale of a box can
         // turn a horizontal line, so the handle that could is the end itself.
         setPage(line(40f, 120f, 160f, 120f), selected = "line")
         val tip = at(160f, 120f)
@@ -819,7 +819,7 @@ class ShapeToolTest {
     }
 
     // The object tooltip moved out of this layer and up to `EditorPane`, where one bar covers every
-    // kind of selection (AD7). It is a sibling of the page content there rather than a child of this
+    // kind of selection. It is a sibling of the page content there rather than a child of this
     // layer, so nothing here can swallow its taps and there is nothing left for this file to guard.
 
     @Test
@@ -847,7 +847,7 @@ class ShapeToolTest {
         assertEquals("the tap fell through to the canvas as well", 0, canvasTaps)
     }
     // -----------------------------------------------------------------------------------------
-    // The toolkit: base plus what a shape adds — `memory/diagram.md`
+    // The toolkit: base plus what a shape adds
     // -----------------------------------------------------------------------------------------
 
     private fun setToolkit(extras: @Composable RowScope.() -> Unit) {
@@ -886,7 +886,7 @@ class ShapeToolTest {
 
     @Test
     fun aShapeToolkitCarriesLineThicknessLineTypeAndFill() {
-        // `memory/diagram.md` names the Shapes Class toolkit exactly: "line thickness, line type, fill".
+        // The shape toolkit is exactly line thickness, line type and fill.
         setToolkit {
             ThicknessAction(width = 3) { borderWidth = it }
             LineTypeAction(current = LineType.Solid) { lineType = it }

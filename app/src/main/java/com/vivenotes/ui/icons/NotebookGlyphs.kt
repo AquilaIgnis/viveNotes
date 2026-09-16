@@ -11,25 +11,18 @@ import androidx.compose.ui.unit.dp
 /**
  * The two notebook glyphs the Closed Notebooks shelf lists its rows with.
  *
- * Traced verbatim from the project's own artwork — `viveCServer/assets/notebook_regular.svg` and
- * `cloud-notebook.svg` — after Inkscape had flattened every transform and turned the ellipse and
- * the rectangle into paths, so the coordinates below are the drawing's, not a hand re-derivation of
- * it. Both are authored in a 16x16 box with the origin at the top left, which is why these get
- * their own builder rather than borrowing [RibbonGlyphs]' 20-unit Fluent or 960-unit Material ones.
+ * Traced verbatim from the project's own artwork after Inkscape had flattened every transform and
+ * turned the ellipse and the rectangle into paths, so the coordinates below are the drawing's. Both
+ * are authored in a 16x16 box with the origin at the top left, which is why these get their own
+ * builder rather than borrowing [RibbonGlyphs]' 20-unit Fluent or 960-unit Material ones.
  *
- * **The body takes the notebook's own colour and the page tabs do not**, which is the whole reason
- * these are built here instead of shipping as `res/drawable` vectors. [androidx.compose.material3.Icon]
- * flattens a drawable to one `tint`, and a static multi-colour asset cannot say "azure, except when
- * this notebook is green" — the shelf's rows are the one place a closed notebook's colour is
- * visible, and losing it to a fixed blue would make seven shelved notebooks look alike. The rail
- * already tints `MaterialSymbols.Book` the same way (`NotebookRail.kt`), so a shelved notebook and
- * a railed one are the same colour and, now, nearly the same shape.
+ * The body takes the notebook's own colour and the page tabs do not, which is why these are built
+ * here rather than shipping as `res/drawable` vectors: [androidx.compose.material3.Icon] flattens a
+ * drawable to one `tint`, and a static multi-colour asset cannot say "azure, except when this
+ * notebook is green". The shelf's rows are the one place a closed notebook's colour is visible.
  *
- * The tabs stay as drawn because they are decoration rather than identity: they read as the little
- * plastic dividers of a real notebook, and a green notebook with green dividers would lose that.
- * Their orange is [androidx.compose.material3.ColorScheme.tertiary] to the digit — the exact
- * complement of the brand azure, see `theme/Theme.kt` — so the pairing is the theme's, not a
- * second palette smuggled in.
+ * The tabs stay as drawn because they are decoration rather than identity. Their orange is
+ * [androidx.compose.material3.ColorScheme.tertiary] to the digit, so the pairing is the theme's.
  */
 private inline fun shelfGlyph(name: String, block: ImageVector.Builder.() -> Unit): ImageVector =
     ImageVector.Builder(

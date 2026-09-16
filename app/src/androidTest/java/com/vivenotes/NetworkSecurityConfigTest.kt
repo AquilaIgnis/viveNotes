@@ -15,14 +15,11 @@ import java.net.UnknownServiceException
  * Guards `src/main/res/xml/network_security_config.xml`.
  *
  * Instrumented rather than a JVM test because the subject is not code: it is what the manifest
- * merger and the platform did with a resource. A unit test could only re-read the XML and assert it
- * says what it says.
+ * merger and the platform did with a resource.
  *
- * The failure this catches is quiet. If the attribute is dropped from the manifest, or the resource
+ * The failure it catches is quiet. If the attribute is dropped from the manifest, or the resource
  * is renamed or moved into a build-type source set, nothing breaks at build time — every `http://`
  * URL simply starts failing with `UnknownServiceException`, which reads like the server is down.
- * Since the address is typed by a self-hoster, that lands as a support report about their server
- * rather than a bug report about this app.
  */
 @RunWith(AndroidJUnit4::class)
 class NetworkSecurityConfigTest {

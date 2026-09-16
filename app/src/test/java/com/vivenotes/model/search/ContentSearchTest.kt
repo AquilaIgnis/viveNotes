@@ -16,7 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * What the Content panel searches, and where a hit says it is — `memory/searchPlan.md` CS3–CS5.
+ * What the Content panel searches, and where a hit says it is.
  *
  * The offsets are the part worth guarding: they are handed straight to `setSelection`, so a block
  * counted wrong does not fail here — it silently highlights the wrong words on the page.
@@ -119,7 +119,7 @@ class ContentSearchTest {
             .contentUnits(page, section, "")
         // Ten characters of block — "x = " and " here" either side of the one the formula occupies —
         // then the newline. The LaTeX source is eleven characters long and is in none of them: it is
-        // not in the editor, so it is not in the offsets either (CS5).
+        // not in the editor, so it is not in the offsets either.
         assertEquals(10, block.editorText.length)
         assertEquals(listOf(0, 11), units.map { it.blockStart })
 
@@ -174,7 +174,7 @@ class ContentSearchTest {
         assertEquals("x =   here", snippet.text)
     }
 
-    // --- pictures — `memory/imageOcrPlan.md` IO5 ------------------------------------------------
+    // --- pictures --------------------------------------------------------------------------------
 
     private fun picture(id: String, attachmentId: String) =
         Outline.Image(id = id, attachmentId = attachmentId, height = 100f)

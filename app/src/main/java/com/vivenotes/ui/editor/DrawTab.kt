@@ -51,10 +51,10 @@ data class DrawActions(
     val updateEraser: (EraserSettings) -> Unit,
     val updateHighlighter: (HighlighterSettings) -> Unit = {},
     val updateShape: (ShapeSettings) -> Unit = {},
-    /** How the next table arrives — `memory/tablePlan.md` TA7. A preference, never an edit. */
+    /** How the next table arrives. A preference, never an edit. */
     val updateTable: (TableSettings) -> Unit = {},
     val updateRuler: (RulerSettings) -> Unit = {},
-    /** Lays the ruler on the page, or picks it up again — `memory/rulerPlan.md` RD1. */
+    /** Lays the ruler on the page, or picks it up again. */
     val toggleRuler: () -> Unit = {},
     /**
      * Takes a composed formula in hand: the next tap on bare canvas places it.
@@ -85,29 +85,26 @@ internal object DrawTags {
 /**
  * The Draw tab: undo and redo, three pens, an eraser.
  *
- * **The empty hand is no longer in this tray.** It moved to the tab strip, immediately left of the
+ * The empty hand is no longer in this tray. It moved to the tab strip, immediately left of the
  * finger button, for the same reason that one lives there: putting a tool down is not a drawing
- * setting, and the moment you want it is usually on another tab — a pen stays armed while you type,
- * and reaching the pointer used to cost a trip to Draw and back. See `TabStrip` in `Ribbon.kt`.
+ * setting, and the moment you want it is usually on another tab. See `TabStrip` in `Ribbon.kt`.
  *
  * The pens are deliberately identical — they exist so that three colours are one tap apart instead
- * of a trip through a menu, which is the whole reason a pen tray has more than one pen in it. What
- * distinguishes them on screen is therefore the colour of each pencil itself.
+ * of a trip through a menu — so what distinguishes them on screen is the colour of each pencil.
  *
- * Holding a pen opens its settings (`memory/references/pen-tooltip.jpeg`). Tapping the pen that is
- * already selected does the same thing, because a gesture nobody discovers is a gesture nobody uses.
+ * Holding a pen opens its settings. Tapping the pen that is already selected does the same, because
+ * a gesture nobody discovers is a gesture nobody uses.
  *
- * Undo and redo are icon-only — their glyphs are universal, so a label would only cost width in a
- * row that scrolls. Each reverses one complete ink gesture on the current page.
+ * Undo and redo are icon-only: their glyphs are universal, so a label would only cost width in a row
+ * that scrolls.
  *
  * Insert Space is the odd one out and has no settings at all: it edits the emptiness rather than any
  * object, and how much of it is the drag itself — see `com.vivenotes.model.PageSpace`.
  *
  * The finger button is not in this tray either, and a release APK does not carry it anywhere in the
- * ribbon: it is a debug convenience, because an emulator has no stylus and with the setting off
- * there is no way to draw on one at all. *Let a finger draw* in Settings > Hardware is the shipped
- * control, writing the same device-scoped flag — whether you own a stylus is not an attribute of
- * pen 2. It defaults to off, which is what lets a finger pan the page while the pen draws on it.
+ * ribbon: it is a debug convenience, because an emulator has no stylus. *Let a finger draw* in
+ * Settings > Hardware is the shipped control, writing the same device-scoped flag. It defaults off,
+ * which is what lets a finger pan the page while the pen draws on it.
  */
 @Composable
 internal fun DrawTab(
@@ -322,7 +319,7 @@ private fun HighlighterButton(
 }
 
 /**
- * The ruler — `memory/rulerPlan.md` RD7.
+ * The ruler.
  *
  * **Tap toggles, hold configures**, which is deliberately not the eraser's bargain. Every other
  * control in this tray is picked *up*, so tapping an already-selected one is free to mean "show me

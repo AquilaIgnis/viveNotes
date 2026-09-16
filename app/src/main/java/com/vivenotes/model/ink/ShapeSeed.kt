@@ -4,18 +4,16 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Turns a [ShapeKind] and the box it was dragged out into the segments that shape starts as —
- * `memory/inkPlan.md` §5.4.
+ * Turns a [ShapeKind] and the box it was dragged out in into the segments that shape starts as.
  *
- * The seam between the two halves of the geometry. [trace] answers *what does this shape look like*,
- * which is what a picker chip and a live drag preview need; this answers *what segments is it made
- * of*, which is what the document stores and what the handles edit. Seeding runs once, at insert:
- * afterwards the segments are the shape and this is not consulted again, which is exactly what lets
- * a corner be dragged somewhere no box would have put it.
+ * The seam between the two halves of the geometry: [trace] answers what a shape looks like, which is
+ * what a picker chip and a live drag preview need, and this answers what segments it is made of,
+ * which is what the document stores and what the handles edit. Seeding runs once, at insert, which
+ * is what lets a corner later be dragged somewhere no box would have put it.
  *
- * Curved shapes are seeded as arc segments rather than as sampled polylines, so an ellipse arrives
- * as sixteen records instead of three hundred — and, because an arc is resampled by size when it is
- * drawn, stays smooth at a zoom that would show a stored polyline's facets. See [ShapeSegment.bulge].
+ * Curved shapes are seeded as arc segments rather than sampled polylines, so an ellipse arrives as
+ * sixteen records instead of three hundred and stays smooth at a zoom that would show a stored
+ * polyline's facets. See [ShapeSegment.bulge].
  */
 fun seedSegments(
     kind: ShapeKind,
@@ -190,19 +188,17 @@ private fun edgeSegments(
 /**
  * The ellipse inscribed in the box, as a ring of arcs.
  *
- * **Not four quarter circles.** That is what this was, and it is only an ellipse when the box is
- * square: a quarter circle's bulge stretched across a wider quadrant stands well outside the curve
- * it is meant to trace — 29% out on a 3:1 box — and since each quadrant leans a different way, the
- * four of them meet at visible corners and the shape reads as four arcs pinned together rather than
- * as an ellipse. Which is what a wide ellipse looked like, drawn or dragged.
+ * Not four quarter circles. That is what this was, and it is only an ellipse when the box is square:
+ * a quarter circle's bulge stretched across a wider quadrant stands well outside the curve it is
+ * meant to trace — 29% out on a 3:1 box — and since each quadrant leans a different way, the four
+ * meet at visible corners.
  *
- * So the arcs are cut from the *ellipse*: [ELLIPSE_ARCS] of them at equal parameter, each given the
+ * So the arcs are cut from the ellipse: [ELLIPSE_ARCS] of them at equal parameter, each given the
  * bulge that carries it over the ellipse's own crown. A circular arc still cannot be an elliptical
- * one, but over a short enough span the difference stops being visible — and the joints stop being
- * corners, which is the part the eye actually catches.
+ * one, but over a short enough span the difference stops being visible.
  *
  * Starting at the top and going clockwise, as the four used to, so a fill traverses the ring the
- * same way and nothing downstream can tell the difference except by counting.
+ * same way.
  */
 private fun ellipseRing(
     left: Float,

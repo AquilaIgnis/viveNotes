@@ -9,35 +9,29 @@ import com.vivenotes.data.StylusButtonMap
 /**
  * The stylus's own buttons — the barrel buttons and, on pens that have one, the tail sensor.
  *
- * **They arrive as key events, not as motion events.** Since Android 14 the platform reports a
- * stylus button as `KEYCODE_STYLUS_BUTTON_*`, whether the pen is hovering or touching, so this is
- * ordinary key dispatch rather than something that has to be teased out of `MotionEvent.buttonState`
- * inside the ink overlay. `minSdk` is 35, so there is no older path to keep working.
+ * They arrive as key events, not motion events. Since Android 14 the platform reports a stylus
+ * button as `KEYCODE_STYLUS_BUTTON_*`, whether the pen is hovering or touching, so this is ordinary
+ * key dispatch. `minSdk` is 35, so there is no older path to keep working.
  *
- * **The pen counts its own clicks.** A single click, a double click and a long press arrive as
- * *different keycodes* — the firmware has already done the timing, which it can do better than this
- * app ever could because it knows the button's own travel and debounce. So there is no double-press
- * window here and no timer: one keycode, one meaning. Bluetooth pens name these in their own key
- * layout — a Lenovo Tab Pen Plus ships `/system/usr/keylayout/Vendor_17ef_Product_617f.kl` with
- * `PEN_ONE_CLICK`, `PEN_TWO_CLICK`, `PEN_THREE_CLICK` and `PEN_LONG_CLICK`.
+ * The pen counts its own clicks: a single click, a double click and a long press arrive as different
+ * keycodes, because the firmware has already done the timing. So there is no double-press window
+ * here and no timer — one keycode, one meaning. Bluetooth pens name these in their own key layout; a
+ * Lenovo Tab Pen Plus ships `/system/usr/keylayout/Vendor_17ef_Product_617f.kl` with `PEN_ONE_CLICK`
+ * through `PEN_LONG_CLICK`.
  *
- * **What each click count *does* is the user's choice** — `memory/stylusPlan.md`, decisions SB1–SB9.
- * This file holds the two pure halves of that: which press a keycode is, and what a bound
- * [StylusAction] arms. The stored bindings are [StylusButtonMap] in `data/PenSettings.kt`, and the
- * `when` that turns an action into a call is `NotesViewModel.pressStylusButton`.
+ * This file holds the two pure halves: which press a keycode is, and what a bound [StylusAction]
+ * arms. The stored bindings are [StylusButtonMap] in `data/PenSettings.kt`, and the `when` that
+ * turns an action into a call is `NotesViewModel.pressStylusButton`.
  *
- * **Acted on at key *up*, which is not a detail.** Measured on the Lenovo pen: one click and three
- * clicks deliver only `ACTION_UP` to the app — something upstream keeps the down-press — while two
- * clicks delivers both. `onKeyDown` therefore misses two of the three outright. Up is also the
- * honest moment for a button whose meaning is a completed click count.
+ * Acted on at key up. Measured on the Lenovo pen: one click and three clicks deliver only
+ * `ACTION_UP` to the app while two clicks delivers both, so `onKeyDown` misses two of the three
+ * outright. Up is also the honest moment for a button whose meaning is a completed click count.
  *
  * Dispatched from `MainActivity.onKeyUp` beside [handleShortcut]'s `onKeyDown`, and last for the
- * same reason — a view that wants the press gets it first. Kept out of `APP_SHORTCUTS` deliberately:
- * that table feeds the system's Meta + / panel, and a barrel button is not a keyboard shortcut to
- * list there.
+ * same reason. Kept out of `APP_SHORTCUTS` deliberately: that table feeds the system's Meta + /
+ * panel, and a barrel button is not a keyboard shortcut to list there.
  *
- * A press with no action bound to it is not claimed, so it falls through to whatever else wants it
- * rather than doing something arbitrary.
+ * A press with no action bound to it is not claimed, so it falls through.
  */
 internal fun NotesViewModel.handleStylusButton(keyCode: Int): Boolean {
     val action = boundStylusAction(keyCode) ?: return false
@@ -48,7 +42,7 @@ internal fun NotesViewModel.handleStylusButton(keyCode: Int): Boolean {
 /**
  * Whether a keycode is one of ours *and* currently bound, for claiming the down-press we act on at up.
  *
- * **Both halves read the same bindings, and must** — `memory/stylusPlan.md` SB5. Claiming every stylus
+ * **Both halves read the same bindings, and must**. Claiming every stylus
  * keycode here while acting on only the bound ones at up would turn an unbound press into a
  * *swallowed* press: it would stop falling through to whatever else wanted it, which is the property
  * the feature deliberately has. The two cannot disagree in practice, since changing a binding between
@@ -78,23 +72,22 @@ internal fun StylusButtonMap.actionFor(press: StylusPress): StylusAction = when 
 }
 
 /**
- * Bluetooth pen buttons are **vendor** keycodes, not the AOSP ones.
+ * Bluetooth pen buttons are vendor keycodes, not the AOSP ones.
  *
  * Measured on the Lenovo Tab Pen Plus (`vendor 0x17ef product 0x617f`), whose key layout names them
  * `PEN_ONE_CLICK`/`PEN_TWO_CLICK`/`PEN_THREE_CLICK`: the HID usages `0x0c0600`–`0x0c0602` surface as
- * keycodes **600, 601 and 602**. Numbers rather than named constants because these are outside the
- * public SDK — AOSP's own keycodes stop well below 600, so the vendor range is not going to collide.
+ * keycodes 600, 601 and 602. Numbers rather than named constants because these are outside the
+ * public SDK, and AOSP's own keycodes stop well below 600.
  *
- * [KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY] is kept beside them, not replaced by them: it is what a
+ * [KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY] is kept beside them rather than replaced: it is what a
  * pen wired through the digitizer sends, and both kinds should work.
  *
- * **`_SECONDARY` and `_TERTIARY` are deliberately absent** — SB1. Those are what a *second and third
- * button* send, not what a second and third click send, so binding them to the double- and
- * triple-click rows would bind the wrong physical thing. A pen with a second barrel button gets its
- * own row when there is one in the room.
+ * `_SECONDARY` and `_TERTIARY` are deliberately absent. Those are what a second and third button
+ * send, not what a second and third click send, so binding them to the double- and triple-click rows
+ * would bind the wrong physical thing.
  *
- * `PEN_LONG_CLICK` is missing for a plainer reason: its keycode has never been measured, and it is
- * not 603 by assumption — SB9 has the recipe.
+ * `PEN_LONG_CLICK` is missing because its keycode has never been measured, and it is not 603 by
+ * assumption.
  */
 private const val KEYCODE_PEN_ONE_CLICK = 600
 private const val KEYCODE_PEN_TWO_CLICK = 601
@@ -113,20 +106,16 @@ private const val FIRST_PEN = 0
 /**
  * The tool a bound action arms, given what is in hand — or null for the actions that arm nothing.
  *
- * Null is three different things and they all come to the same: [StylusAction.None] is unbound, and
+ * Null is three different things that come to the same: [StylusAction.None] is unbound, and
  * [StylusAction.Undo] and [StylusAction.Redo] act on the page rather than on the hand. The caller
- * distinguishes them; this function only answers "what tool does this leave me holding".
+ * distinguishes them; this only answers "what tool does this leave me holding".
  *
  * [StylusAction.TogglePenEraser] is the one entry with a rule rather than an answer, and it is the
  * default single click: with a pen in hand it reaches for the eraser, with anything else in hand it
- * reaches for pen 1. That makes one button a *toggle* over the two tools a stylus is actually held
- * for, rather than a key that only ever arms one of them and then has nothing left to do.
- * [StylusAction.CyclePens] is the other rule — it walks the three pens and wraps, and arrives at pen 1
- * from anything that is not a pen.
+ * reaches for pen 1. [StylusAction.CyclePens] is the other rule — it walks the three pens and wraps.
  *
  * Pure so the rules are testable without a device: the emulator has no stylus and cannot generate
- * these presses at all — see the tooling note in `CLAUDE.md` — which makes a JVM test the *only*
- * test available here rather than merely the cheap one.
+ * these presses at all, which makes a JVM test the only test available here.
  */
 internal fun StylusAction.toolFrom(current: DrawTool): DrawTool? = when (this) {
     StylusAction.None, StylusAction.Undo, StylusAction.Redo -> null

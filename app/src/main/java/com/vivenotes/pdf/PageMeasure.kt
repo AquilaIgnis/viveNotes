@@ -28,17 +28,16 @@ import io.ratex.RaTeXRenderer
 import kotlin.math.roundToInt
 
 /**
- * The colours an exported page is painted with — `memory/pdfExportPlan.md` PD7, item 1.
+ * The colours an exported page is painted with.
  *
- * **Always the light canvas**, whatever the app's Switch Background is set to. That setting is a
- * preference about the screen somebody is writing on, not a property of the document, and nobody
- * wants a black PDF because they happened to be working at night. A page carrying a background
- * colour of its own keeps it — that *is* in the document — and
- * [com.vivenotes.ui.theme.paintedWith] re-derives legible ink for it, exactly as the canvas does.
+ * Always the light canvas, whatever Switch Background is set to: that setting is a preference about
+ * the screen somebody is writing on, not a property of the document. A page carrying a background
+ * colour of its own keeps it — that is in the document — and [com.vivenotes.ui.theme.paintedWith]
+ * re-derives legible ink for it.
  *
- * The pleasant consequence: ink, shape borders, table rules and equations that were drawn with the
- * *automatic* colour all re-resolve against [textArgb] through the `automaticColorOr` path they
- * already use, so a page written in white on a dark canvas exports as black on white paper.
+ * So ink, shape borders, table rules and equations drawn with the automatic colour all re-resolve
+ * against [textArgb] through the `automaticColorOr` path they already use, and a page written in
+ * white on a dark canvas exports as black on white paper.
  */
 data class PdfCanvasColors(
     val backgroundArgb: Int,
@@ -100,7 +99,7 @@ class MeasuredPage(
     val tables: Map<String, PdfTableGrid>,
     /** The entities the fit moves — `ContentGroups.kt`. Objects and ink together, by design. */
     val groups: List<PdfGroup>,
-    /** The sheet this page is already laid out on, or null when it has to be tiled — PD3. */
+    /** The sheet this page is already laid out on, or null when it has to be tiled. */
     val boundSheet: InkBounds?,
     val equations: Map<String, RaTeXRenderer>,
     val images: Map<String, Bitmap>,
@@ -351,7 +350,7 @@ class PageMeasurer(
         )
     }
 
-    /** The sheet a bound page fits inside, or null when it does not — PD3's one exception. */
+    /** The sheet a bound page fits inside, or null when it does not — the one exception. */
     private fun boundSheetFor(style: PageStyle, paper: PdfPaper, content: InkBounds?): InkBounds? {
         val (sheetWidth, sheetHeight) = style.pageSizeDp ?: return null
         // Only when the export is going onto the sheet the page was already laid out for. A page
@@ -365,19 +364,17 @@ class PageMeasurer(
     /**
      * Where the title band goes.
      *
-     * **On a tiled export it is anchored to the content, not to the page's own corner**, and that is
-     * the whole of PD3's left-hand normalisation. The grid starts at the leftmost thing on the page,
-     * so a page whose writing begins two inches in has those two inches collapsed and gets its one
-     * inch of margin from the sheet instead — but only if the *title* stops holding the left edge
-     * open at x = 40. It used to, and the result was every page exported with its own dead margin
-     * baked in, and content pushed off the right edge that would otherwise have fitted.
+     * On a tiled export it is anchored to the content, not to the page's own corner, and that is the
+     * whole of the left-hand normalisation. The grid starts at the leftmost thing on the page, so a
+     * page whose writing begins two inches in has those two inches collapsed — but only if the title
+     * stops holding the left edge open at x = 40. It used to, and every page exported with its own
+     * dead margin baked in and content pushed off the right edge.
      *
-     * So the header sits directly above the content block and shares its left edge, which is what a
-     * letterhead does. Never above the page's own top, so a page whose writing starts at the very
+     * So the header sits directly above the content block and shares its left edge, the way a
+     * letterhead does; never above the page's own top, so a page whose writing starts at the very
      * top does not push the band off the sheet.
      *
-     * **A bound page keeps its own placement**, because that page already *is* a sheet: the user put
-     * the title where it is and the export is not entitled to move it.
+     * A bound page keeps its own placement, because that page already is a sheet.
      */
     private fun placeHeader(header: PdfPageHeader, content: InkBounds?, bound: Boolean): PdfPageHeader {
         if (bound || content == null) return header.offsetBy(HEADER_INSET_DP, HEADER_TOP_DP)

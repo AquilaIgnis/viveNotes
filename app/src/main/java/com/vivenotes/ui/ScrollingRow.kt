@@ -43,14 +43,12 @@ internal object ScrollEdgeTags {
  * A row that scrolls horizontally and says so.
  *
  * Every strip in this app overflows on a narrow window — the ribbon tabs, the Home and View
- * controls, the section tabs — and a strip clipped at the edge looks exactly like a strip that
- * simply ends. Without these arrows the only way to discover the rest of the View tab is to try
- * dragging a row of buttons and see what happens.
+ * controls, the section tabs — and a strip clipped at the edge looks exactly like one that simply
+ * ends.
  *
- * They indicate and nothing more: the row is already draggable, and making the arrows *buttons*
- * put a touch target on top of whatever control sits at the edge — "Switch Background", the last
- * item in the View tab, stopped being clickable, which a test caught before it shipped. Without a
- * pointer modifier the fade is invisible to touch and presses land on the control underneath.
+ * The arrows indicate and nothing more: the row is already draggable, and making them buttons put a
+ * touch target on top of whatever control sits at the edge. Without a pointer modifier the fade is
+ * invisible to touch and presses land on the control underneath.
  */
 @Composable
 fun ScrollingRow(

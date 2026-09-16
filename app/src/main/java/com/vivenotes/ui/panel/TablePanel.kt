@@ -34,23 +34,21 @@ object TablePanelTags {
 }
 
 /**
- * The Insert Table pane, laid out as `memory/references/table-opts.jpeg` lays it out —
- * `memory/tablePlan.md` TA7.
+ * The Insert Table pane, laid out as the reference plate lays it out.
  *
  * Field for field, in the plate's order: header column, header row, column count, row count, border
  * width, border colour, fill colour. The plate's counts are chips showing a number, which is
  * [PanelStepper]; its headers are switches, which is [PanelToggle]; its fill reads "none", which is
  * where a table starts.
  *
- * Ahead of the plate's own fields is one it has no equivalent for: **write in with a pen**, which
+ * Ahead of the plate's own fields is one it has no equivalent for: write in with a pen, which
  * chooses between a grid of text fields and a ruling with nothing in its cells. That used to be the
- * difference between two Table buttons on two tabs (TA15) and is a setting here instead, because it
- * is a question about the table you are about to make — which is what everything else in this pane
- * is.
+ * difference between two Table buttons on two tabs and is a setting here instead, because it is a
+ * question about the table you are about to make.
  *
- * **These are the user's defaults, not an edit.** Everything here says how the *next* table arrives
- * (ID5). Changing a table already on the page is the object toolkit's job, and the two must not be
- * merged however alike they look — the Shape pane carries the same warning for the same reason.
+ * These are the user's defaults, not an edit: everything here says how the next table arrives.
+ * Changing a table already on the page is the object toolkit's job, and the two must not be merged
+ * however alike they look.
  *
  * The border colour row shares the pens' rolling palette, as every other colour row in the app does.
  */
@@ -66,7 +64,7 @@ fun ColumnScope.TablePanelContent(
     Spacer(Modifier.height(10.dp))
     // First, because it is the only field that changes what the table *is* rather than how it looks,
     // and every field under it means the same thing either way. Off gives the typed table that used
-    // to be the Insert tab's own button — TA15, folded in here.
+    // to be the Insert tab's own button, folded in here.
     PanelSetting(
         label = "Write in with a pen",
         info = "Off, each cell is a text field you type into."
@@ -105,7 +103,7 @@ fun ColumnScope.TablePanelContent(
             field = "Row count",
             value = table.rows,
             // Capped by the cell budget against the columns already chosen, not by the row cap
-            // alone — TA9. Offering 50 rows beside 12 columns would be offering 600 editors.
+            // alone. Offering 50 rows beside 12 columns would be offering 600 editors.
             range = 1..maxOf(
                 1,
                 minOf(

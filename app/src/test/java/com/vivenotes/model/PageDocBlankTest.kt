@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * What counts as a document holding nothing — `memory/blankFlushPlan.md`.
+ * What counts as a document holding nothing.
  *
  * The stakes are why this is pinned kind by kind rather than by one happy case: a page this says
  * yes about is deleted outright, with no tombstone, no Deleted Items entry and no undo. The mistake

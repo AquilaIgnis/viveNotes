@@ -26,18 +26,15 @@ import kotlin.concurrent.thread
 /**
  * What the stored image format costs, measured rather than assumed.
  *
- * Exists to settle the JPEG → WebP change with numbers on the two axes that could have made it a bad
- * trade: the time an import spends encoding, and the memory a draw spends decoding.
+ * Settles the JPEG → WebP change on the two axes that could have made it a bad trade: the time an
+ * import spends encoding, and the memory a draw spends decoding.
  *
  * The second is the one that mattered. [AttachmentStore.loadBitmap] leans entirely on
- * `setTargetSize` picking a sample size from the file's header, so that a picture shown small is
- * never fully decoded — JPEG gets that from DCT scaling, and whether WebP has an equivalent is a
- * property of Skia, not something the calling code can assert. So it is measured here, against the
- * full-size cost it is supposed to avoid.
+ * `setTargetSize` picking a sample size from the file's header, and whether WebP has an equivalent
+ * of JPEG's DCT scaling is a property of Skia rather than of the calling code.
  *
- * **Sources come from `/data/local/tmp`,** pushed before the run, because `connectedAndroidTest`
- * uninstalls the app and would take anything in its own storage with it. Skipped rather than failed
- * when they are absent, so the suite still passes on a machine that has not staged them.
+ * Sources come from `/data/local/tmp`, pushed before the run, because `connectedAndroidTest`
+ * uninstalls the app. Skipped rather than failed when they are absent.
  */
 @RunWith(AndroidJUnit4::class)
 class AttachmentCostTest {

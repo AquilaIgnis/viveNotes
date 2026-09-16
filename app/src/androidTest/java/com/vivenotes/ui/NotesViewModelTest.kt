@@ -163,15 +163,12 @@ class NotesViewModelTest {
     /**
      * Puts a text outline on the seeded Welcome page.
      *
-     * A fresh install seeds an *empty* page — `NotesRepository.seedIfEmpty` stopped writing the
-     * starter body, and `NotesApplication` no longer passes the bundled ink fixture either — but
-     * this suite is about the load/edit/save cycle over a page that has a container on it, so the
-     * text the seed used to write now lives here. Written the same way the seed wrote it: after
-     * `createPage` has already stored an empty document, so the page still carries a checkpoint of
-     * that blank body for the version-history tests to restore to.
+     * A fresh install seeds an empty page, but this suite is about the load/edit/save cycle over a
+     * page that has a container on it, so the text the seed used to write lives here. Written the
+     * way the seed wrote it: after `createPage` has already stored an empty document, so the page
+     * still carries a checkpoint of that blank body for the version-history tests to restore to.
      *
-     * Idempotent, and deliberately so — a test that builds a second view model over the same
-     * repository must not have its edits overwritten by a second seeding.
+     * Idempotent, so a second view model over the same repository does not overwrite its edits.
      */
     private suspend fun seedStarterText() {
         repository.seedIfEmpty()
@@ -260,13 +257,11 @@ class NotesViewModelTest {
      *
      * Creating a page writes its row and its content separately. The tree observer used to start
      * alongside first-run seeding, so it could open the page in that gap, load the empty document
-     * the row was created with, and hold it — and the first save wrote that emptiness over the
-     * body. Found on a clean install by changing the page colour, which is a save that touches no
-     * text at all.
+     * the row was created with, and hold it — and the first save wrote that emptiness over the body.
+     * Found on a clean install by changing the page colour, which is a save that touches no text.
      *
-     * The seed no longer writes a body of its own, so the original gap is gone from the product;
-     * what still has to hold is the second half — a save that reads no text must not write the
-     * open page's text away. [seedStarterText] puts the body there before the view model opens it.
+     * The seed no longer writes a body, so the original gap is gone; what still has to hold is that
+     * a save which reads no text must not write the open page's text away.
      */
     @Test
     fun theSeededPageIsNotBlankedByASaveThatTouchesNoText() = runTest(dispatcher) {
@@ -477,7 +472,6 @@ class NotesViewModelTest {
     /**
      * The half of the projection-narrowed lasso that touches storage: a piece has no row of its own
      * to tombstone, so deleting one is stored as a proved Object erase and has to survive a reload.
-     * `memory/lassoProjectionPlan.md` §5.
      */
     @Test
     fun deletingOneLassoedPieceLeavesTheOtherOnTheNextOpen() = runTest(dispatcher) {
@@ -664,7 +658,7 @@ class NotesViewModelTest {
     }
 
     /**
-     * Prime Object's fourth rule — `memory/diagram.md`: *"Selecting any other tool removes selection
+     * Prime Object's fourth rule: *"Selecting any other tool removes selection
      * of object."* The pane holds the selection, so what the ViewModel owes it is the command, on a
      * real change and not otherwise.
      */
@@ -937,7 +931,7 @@ class NotesViewModelTest {
 
     @Test
     fun aTextBoxCopiesPastesDeletesAndUndoesWithItsText() = runTest(dispatcher) {
-        // `memory/textBoxPlan.md` TD5. A container is two halves in two places — the box in `uiState`
+        // A container is two halves in two places — the box in `uiState`
         // and its blocks in a private map — so the thing worth asserting is the *text*, not the
         // rectangle: every way of getting this wrong produces a box of the right size and no words.
         val vm = seededViewModel()
@@ -1227,7 +1221,7 @@ class NotesViewModelTest {
         assertEquals("edited body", stored.plainText())
     }
 
-    // --- ink pulled onto an open page — `memory/inkSyncPlan.md` IS5 -----------------------------
+    // --- ink pulled onto an open page ------------------------------------------------------------
 
     @Test
     fun pulledInkAppearsOnThePageThatIsAlreadyOpen() = runTest(dispatcher) {
@@ -1370,7 +1364,7 @@ class NotesViewModelTest {
     private fun Stroke.overlaps(area: ImmutableBox): Boolean =
         shape.computeCoverageIsGreaterThan(area, 0f)
 
-    // --- Insert Space (E2) ---------------------------------------------------------------------
+    // --- Insert Space ---------------------------------------------------------------------
 
     /**
      * A page with something of every movable kind on both sides of a line at y = 200.
@@ -1863,7 +1857,7 @@ class NotesViewModelTest {
      * What the two delete confirmations read the recovery sentence off, and the only part of that
      * wording a test can reach: nothing composes `NotesApp` itself. A blank notebook is not kept in
      * Deleted Items, so a dialog promising it would be is the last thing the user reads before
-     * agreeing. `memory/blankFlushPlan.md`.
+     * agreeing.
      */
     @Test
     fun theDeleteConfirmationsAreToldWhetherTheyAreAboutToFlush() = runTest(dispatcher) {
@@ -2116,7 +2110,7 @@ class NotesViewModelTest {
         withTimeout(STORE_TIMEOUT_MS) { viewSettings.settings.first { it.zoom == 1.75f } }
     }
 
-    // --- tables — `memory/tablePlan.md` ----------------------------------------------------------
+    // --- tables ------------------------------------------------------------------------------
 
     /** The cell at [row], [column] of the only table on the page. */
     private fun NotesViewModel.cellId(row: Int, column: Int): String =
@@ -2137,7 +2131,7 @@ class NotesViewModelTest {
     /**
      * The whole cycle a table has to survive: placed, typed in, saved, reopened.
      *
-     * The trap this guards is TA2's: a cell's live text lives in the ViewModel's block map and the
+     * The trap this guards: a cell's live text lives in the ViewModel's block map and the
      * cells carried on `uiState.tables` go stale the moment anything is typed. A save that read the
      * stale copy would store an empty grid, and nothing before the reload would show it.
      */
@@ -2161,7 +2155,7 @@ class NotesViewModelTest {
     }
 
     /**
-     * A blank cell is written where a blank container is skipped — TA12.
+     * A blank cell is written where a blank container is skipped.
      *
      * The two rules look contradictory and are not: an empty container is a caret position nobody
      * typed in, and an empty cell is part of the grid's shape. Dropping one would resize the table
@@ -2275,7 +2269,7 @@ class NotesViewModelTest {
         assertTrue(pasted.cellIds().none { it in source.cellIds() })
     }
 
-    /** Undo is one ring across kinds (SD10), and a table is the third thing to join it. */
+    /** Undo is one ring across kinds, and a table is the third thing to join it. */
     @Test
     fun undoReachesBackPastATableToTheShapeBeforeIt() = runTest(dispatcher) {
         val vm = seededViewModel()
@@ -2296,7 +2290,7 @@ class NotesViewModelTest {
     /**
      * A cell that happens to be blank must not be swept up by the container sweep.
      *
-     * `onOutlineBlurred` discards empty *containers*, and since TA2 it is handed ids out of a map
+     * `onOutlineBlurred` discards empty *containers*, and it is handed ids out of a map
      * that now also holds cells. Without its guard, tabbing through a blank cell would delete that
      * cell's entry — and the next save writes a table with a hole in it.
      */
@@ -2316,7 +2310,7 @@ class NotesViewModelTest {
     }
 
     /**
-     * The Draw tab's table — TA15. **A page holding only a ruling still saves.**
+     * The Draw tab's table. **A page holding only a ruling still saves.**
      *
      * This is the regression the ink table can cause and nothing else can: `persist` refuses to write
      * while any content box's blocks are unknown, and an ink table's cells have no blocks by design.

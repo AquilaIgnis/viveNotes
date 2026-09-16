@@ -59,42 +59,35 @@ import kotlin.math.hypot
 internal const val SHAPE_LAYER_TAG = "shape-layer"
 
 /**
- * The shapes on the page — `memory/inkPlan.md` §5.4.
+ * The shapes on the page.
  *
- * Sits **inside** the zoomed page layer, unlike `InkOverlay`. Ink has to live outside the zoom
- * because a front-buffered surface cannot be scaled without going soft; a shape is an ordinary
- * vector redrawn every frame, so it can simply be part of the page and inherit its transform.
+ * Sits inside the zoomed page layer, unlike `InkOverlay`. Ink has to live outside the zoom because a
+ * front-buffered surface cannot be scaled without going soft; a shape is an ordinary vector redrawn
+ * every frame, so it can be part of the page and inherit its transform.
  *
- * Drawn — and hit-tested — **in front of** the page's text containers. It used to be behind them, on
- * the reading that a shape is something writing sits on top of; what that actually bought was a
- * shape that could not be tapped at all once one was dragged over a container, because a container's
- * editor is a real Android View and is handed the DOWN as the event tunnels past it, before any
- * bubbling-pass handler runs. This layer claims its own DOWN on that same tunnelling pass, which is
- * what puts Prime Object in front of the writing. The cost is the mirror image: a shape deliberately
- * parked *behind* a container now takes the taps that land inside it, and has to be moved off to
- * type there.
+ * Drawn — and hit-tested — in front of the page's text containers. Behind them, a shape dragged over
+ * a container could not be tapped at all, because a container's editor is a real Android View and is
+ * handed the DOWN as the event tunnels past it, before any bubbling-pass handler runs. This layer
+ * claims its own DOWN on that same tunnelling pass. The cost is the mirror image: a shape
+ * deliberately parked behind a container now takes the taps that land inside it.
  *
  * It is the innermost of the three object layers and so has no slot of its own — [EquationLayer]
  * holds it, [ImageLayer] holds that, and the call site in `EditorPane` sets out the whole order.
  *
- * A shape is selected and moved **whole**, and with two exceptions it is resized whole too. Its
- * segments are how it is stored and drawn — they are what carries the occluded edges a solid needs
- * dotted — but they are not separately editable, so there is no way to pull one corner of a hexagon
- * out of shape. The exceptions are both *ends*, and a kind declares which sort it has:
+ * A shape is selected and moved whole, and with two exceptions resized whole too. Its segments are
+ * how it is stored and drawn, but they are not separately editable. The exceptions are both ends,
+ * and a kind declares which sort it has:
  *
- * - an **arm end** ([ShapeArm]), on a kind with arms: the L has four, head and tail of each arm, and
+ * - an arm end ([ShapeArm]), on a kind with arms: the L has four, head and tail of each arm, and
  *   each drags along its own axis alone. Pulling a tail back past the corner turns an L into a
- *   cross; pulling one back *through* the other arm is the one thing it may not do, since that is
- *   the L coming apart rather than changing shape. See SD9.
- * - a **line end** ([ShapeEnd]), on a kind that is a line: the line and the arrow carry one handle
- *   per end instead of four corners, and each drags in both directions at once, so moving one across
- *   the line turns the shape rather than stretching it. See SD12.
+ *   cross; pulling one back through the other arm is the one thing it may not do.
+ * - a line end ([ShapeEnd]), on a kind that is a line: the line and the arrow carry one handle per
+ *   end instead of four corners, and each drags in both directions at once, so moving one across
+ *   the line turns the shape rather than stretching it.
  *
- * Selection, four-corner resize, drag-to-move and double-tap-to-select are `memory/plan.md` AD7: they
- * belong to *an object on the canvas*, not to shapes, and ink already has the same set. The corner
- * geometry deliberately matches `LassoGesture`'s — same hit radius, same anchor at the opposite
- * corner — because an affordance that behaves differently depending on what is underneath it is
- * worse than not having it.
+ * Selection, four-corner resize, drag-to-move and double-tap-to-select belong to an object on the
+ * canvas rather than to shapes, and ink already has the same set. The corner geometry deliberately
+ * matches `LassoGesture`'s — same hit radius, same anchor at the opposite corner.
  */
 @Composable
 internal fun ShapeLayer(
@@ -168,25 +161,21 @@ internal fun ShapeLayer(
             .testTag(SHAPE_LAYER_TAG)
             // Keyed on nothing, deliberately. `pointerInput(keys)` cancels its coroutine the moment
             // a key changes, and the restarted handler waits for a DOWN that a finger already on the
-            // glass will never send — so keying this on the shapes was fatal: moving a shape rewrites
-            // the list, the first applied delta killed the gesture that had asked for it, and the
-            // scroll containers around the page picked the half-finished drag up and panned instead.
-            // Nothing here may be keyed on document state; the current values are read above.
+            // glass will never send. Keying this on the shapes was fatal: moving a shape rewrites
+            // the list, so the first applied delta killed the gesture that asked for it and the
+            // scroll containers panned instead. Nothing here may be keyed on document state.
             .pointerInput(Unit) {
                 // One gesture handler, not a tap detector plus a drag detector. Two `pointerInput`s
                 // cannot share a gesture here: the tap arm has to consume the DOWN to stop it
-                // reaching the canvas underneath, and `detectDragGestures` waits for an *unconsumed*
-                // down — so consuming for the tap silently meant no drag ever began, and neither
-                // move nor resize worked at all. Deciding once, on the down, is what makes both
-                // possible.
+                // reaching the canvas underneath, and `detectDragGestures` waits for an unconsumed
+                // down — so consuming for the tap meant no drag ever began. Deciding once, on the
+                // down, is what makes both possible.
                 awaitEachGesture {
-                    // Unconsumed only, and on the **tunnelling** pass — which is what puts this
-                    // layer in front of the text containers rather than behind them.
-                    // `sharingTouchesWithSiblings` and the call site in `EditorPane` are where that
-                    // is argued out; the two layers wrapping this one are asked first, on the same
-                    // pass, so a picture or a formula over a shape still takes its own touch. The
-                    // rest of the gesture stays on the bubbling pass, where consuming a sample still
-                    // beats the scroll containers around the page.
+                    // Unconsumed only, and on the tunnelling pass, which is what puts this layer in
+                    // front of the text containers. The two layers wrapping this one are asked
+                    // first, on the same pass, so a picture or a formula over a shape still takes
+                    // its own touch. The rest of the gesture stays on the bubbling pass, where
+                    // consuming a sample still beats the scroll containers around the page.
                     val down = awaitFirstDown(pass = PointerEventPass.Initial)
                     if (!currentInteractive.value) return@awaitEachGesture
                     val shapes = currentShapes.value
@@ -200,7 +189,7 @@ internal fun ShapeLayer(
                     }
                     // A handle wins over the body: they sit on the boundary or just outside it, so
                     // every one of them is also inside the move target.
-                    // No handles on a locked object — `memory/diagram.md`. Absent rather than
+                    // No handles on a locked object. Absent rather than
                     // present and dead, the rule the toolkit follows, and the chrome that draws them
                     // is gated on the same field.
                     val handle = selected?.takeIf { it.lockGroup == null }?.handleNear(startX, startY)
@@ -233,11 +222,10 @@ internal fun ShapeLayer(
 
                     // Nothing of ours under the finger: leave the gesture alone entirely. It falls
                     // to the text container under it if there is one, and then to the bare-canvas
-                    // tap target, which is what clears the page's selection and what opens a new
-                    // container. Clearing the selection used to be done here, by consuming a down
-                    // with no target — that was affordable while this layer sat *behind* the
-                    // containers and never heard a tap meant for one. In front of them it is not:
-                    // it would eat every tap into a text box for as long as anything was selected.
+                    // tap target, which clears the page's selection and opens a new container.
+                    // Clearing here by consuming a target-less down was affordable while this layer
+                    // sat behind the containers; in front of them it would eat every tap into a
+                    // text box for as long as anything was selected.
                     if (target == null) return@awaitEachGesture
                     down.consume()
 
@@ -249,10 +237,9 @@ internal fun ShapeLayer(
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
                         // Every sample, moved or not — not only the ones past the slop. A single
-                        // unconsumed sample with the finger still down is exactly what the scroll
-                        // containers around the page are waiting for: since Compose 1.9 a scroll that
-                        // lost the slop race keeps watching the final pass and picks the drag back up
-                        // (`ComposeFoundationFlags.DragGesturePickUpEnabled`), so leaving the pre-slop
+                        // unconsumed sample with the finger still down is what the scroll containers
+                        // are waiting for: since Compose 1.9 a scroll that lost the slop race keeps
+                        // watching the final pass and picks the drag back up, so leaving the pre-slop
                         // samples free handed the rest of every shape drag to the page as a pan.
                         change.consume()
                         if (!change.pressed) {
@@ -443,13 +430,11 @@ internal fun ShapeLayer(
                     drawShape(drawn, canvasInkArgb)
                 }
             }
-            // Handles only for a lone shape, and only while this layer is the one that would
-            // service them. A selection holding more than one object draws its rectangle over in
-            // the overlay, around everything it holds, ink included — and so does a selection of
-            // *any* size once the lasso is armed, because the lasso owns every gesture on the page
-            // then ([interactive]). Drawing a second set here in that state put two rectangles a
-            // few dp apart around one shape, each with its own four corner discs, of which only the
-            // overlay's answered a finger.
+            // Handles only for a lone shape, and only while this layer is the one that would service
+            // them. A selection holding more than one object draws its rectangle in the overlay
+            // instead, and so does a selection of any size once the lasso is armed ([interactive]).
+            // Drawing a second set here put two rectangles a few dp apart around one shape, of which
+            // only the overlay's answered a finger.
             shapes.takeIf { lassoGesture == null }
                 ?.singleOrNull { selection?.isShapeOnly == true && it.id in held }
                 ?.let { drawSelection(previewOf(it), accent, handleFill, pageScale) }
@@ -461,16 +446,15 @@ internal fun ShapeLayer(
  * A corner drag in flight: where the finger has taken the shape, measured from the geometry the drag
  * began with.
  *
- * **Preview only, committed once on the lift** — which is the whole point of it existing, and the
- * same way the lasso's own resize works. Applying it every frame instead was the bug: each frame
- * reported an absolute scale against the *starting* size, `resizeShape` applied it to the *current*
- * one, and a drag's frames multiplied together. Twenty frames of a smooth drag out to twice the size
- * came to roughly three thousand times it, and because the two axes compound at different rates the
- * shape lost its proportions on the way.
+ * Preview only, committed once on the lift, the same way the lasso's own resize works. Applying it
+ * every frame was the bug: each frame reported an absolute scale against the starting size,
+ * `resizeShape` applied it to the current one, and a drag's frames multiplied together — twenty
+ * frames of a drag out to twice the size came to roughly three thousand times it, losing the shape's
+ * proportions on the way because the two axes compound at different rates.
  *
  * The move followed later and for a different reason — see [ShapeMove]. Every gesture on this layer
  * now previews and commits once, which is also why the tooltip holds still through a drag and lands
- * with it: the selection it anchors to is the committed geometry, and the preview is only drawn.
+ * with it.
  */
 private data class ShapeResize(
     val shapeId: String,
@@ -587,15 +571,14 @@ private fun DrawScope.drawShape(shape: Outline.Shape, canvasInkArgb: Int) {
 /**
  * A dashed box around the selected shape, with its handles on it.
  *
- * The box is most of the selection affordance, because the whole of the interaction is "this one, and
- * it moves": a wireframe is mostly empty, so without it there would be nothing to show a tap had
- * landed until the shape started moving.
+ * The box is most of the selection affordance, because the whole of the interaction is "this one,
+ * and it moves": a wireframe is mostly empty, so without it nothing would show that a tap had landed
+ * until the shape started moving.
  *
- * **A line and an arrow get no box** (SD12). Theirs would be a rectangle drawn around something that
- * is not a rectangle — degenerate on a straight line, and on a diagonal one a box whose corners the
- * shape does not go near — and it advertises a resize those kinds do not have. The two end handles
- * are the whole of it, and two discs on the line's own ends say "this one" clearly enough, which the
- * bare box never did for a shape it fits this badly.
+ * A line and an arrow get no box. Theirs would be a rectangle drawn around something that is not a
+ * rectangle — degenerate on a straight line, and on a diagonal one a box whose corners the shape
+ * does not go near — and it advertises a resize those kinds do not have. Two discs on the line's own
+ * ends say "this one" clearly enough.
  */
 private fun DrawScope.drawSelection(
     shape: Outline.Shape,
@@ -611,15 +594,12 @@ private fun DrawScope.drawSelection(
 
     // The four corner discs are the box's, drawn the way the lasso draws its own — surface disc,
     // accent ring, and the radius off [SelectionChrome] — so the two selections are the same
-    // affordance rather than two that merely do the same thing (AD7).
+    // affordance rather than two that merely do the same thing.
     //
-    // A line has neither: two handles on its own two ends, and no box behind them. The same disc, in
-    // a different place, because it is the same *kind* of grab — take this point and put it
-    // somewhere — rather than four on a box, half of which have no side to pull on and none of which
-    // can turn the line.
-    // A locked line takes the box as well, though it has no box of its own: its whole chrome is
-    // the two end handles, and dropping those without putting something in their place would leave a
-    // selected shape with nothing drawn on it at all.
+    // A line has neither: two handles on its own two ends, and no box behind them. The same disc in
+    // a different place, because it is the same kind of grab. A locked line takes the box as well,
+    // though it has no box of its own: its whole chrome is the two end handles, and dropping those
+    // without putting something in their place would leave a selected shape with nothing drawn on it.
     val ends = shape.ends()
     val points = if (ends.isEmpty() || shape.lockGroup != null) {
         drawRect(
@@ -638,7 +618,7 @@ private fun DrawScope.drawSelection(
         ends.map { end -> (end.x * scale) to (end.y * scale) }
     }
 
-    // **Locked: the rectangle stays, the grabs go** — `memory/diagram.md`. What is held still has to
+    // **Locked: the rectangle stays, the grabs go**. What is held still has to
     // be visible, or the bar would float over nothing; what must not be there is a handle that
     // cannot be dragged, which is the rule the toolkit follows for an action a kind cannot perform.
     if (shape.lockGroup != null) return
@@ -655,19 +635,17 @@ private fun DrawScope.drawSelection(
 /**
  * The tab that moves one end of one arm, out beyond that end on the arm's own line.
  *
- * **A bar, not a disc, and not on the end itself.** An L's outer tips are two corners of its own
- * bounding box, so a handle drawn where an arm ends would sit on top of a corner handle that does
- * something else entirely — the same grab would scale the whole shape half the time. Pushing it out
- * along the axis separates the two targets by more than a finger, and the leader back to the end is
- * what says which arm the tab belongs to rather than leaving it floating beside the box.
+ * A bar, not a disc, and not on the end itself. An L's outer tips are two corners of its own
+ * bounding box, so a handle drawn where an arm ends would sit on top of a corner handle that scales
+ * the whole shape. Pushing it out along the axis separates the two targets by more than a finger,
+ * and the leader back to the end says which arm the tab belongs to.
  *
- * It is also what keeps the *two* tabs at an L's corner apart. They sit on the same point of the
- * shape, but each is offset along its own arm — one down the upright, one back along the foot — and
- * those directions are perpendicular, so the tabs land a comfortable distance from each other.
+ * It also keeps the two tabs at an L's corner apart: they sit on the same point of the shape, but
+ * each is offset along its own arm, and those directions are perpendicular.
  *
  * Same materials as the corner handles — surface fill, accent ring — because it is the same
- * selection; a different *form*, because it is a different gesture (AD7). It lies across the
- * direction it drags in, the way a divider does.
+ * selection; a different form, because it is a different gesture. It lies across the direction it
+ * drags in, the way a divider does.
  */
 private fun DrawScope.drawArmHandle(arm: ShapeArm, accent: Color, handleFill: Color, scale: Float) {
     val horizontal = arm.axis == ShapeAxis.Horizontal
@@ -736,15 +714,14 @@ private fun Outline.Shape.anchorFor(corner: Corner): Pair<Float, Float> = corner
  *
  * Together rather than one before the other because on an L they are neighbours: three of its four
  * arm tabs sit out beyond an end that is itself a corner of the bounding box. Giving either kind
- * priority would mean a touch squarely on one of them sometimes taking the other, so the only honest
- * rule is distance — and it is what puts the boundary between the two exactly halfway along the gap
- * the tab is drawn across.
+ * priority would mean a touch squarely on one sometimes taking the other, so the only honest rule is
+ * distance, which puts the boundary exactly halfway along the gap the tab is drawn across.
  *
- * A line's two ends are not in that contest: they are the *whole* handle set for their kinds, and the
- * corners are not offered at all (SD12).
+ * A line's two ends are not in that contest: they are the whole handle set for their kinds, and the
+ * corners are not offered at all.
  *
  * Page units, so [HANDLE_REACH] and [ARM_HANDLE_GAP] are read as plain dp — the same numbers the
- * draw scales by density, and the reason the two cannot disagree about where a handle is.
+ * draw scales by density.
  */
 private fun Outline.Shape.handleNear(x: Float, y: Float): Handle? {
     // A line's ends *replace* its corners rather than joining them: the two sets would sit on top of
@@ -776,14 +753,12 @@ private fun ShapeArm.handlePoint(): Pair<Float, Float> {
  * How far this shape's chrome stands above and below its own bounds, in page units.
  *
  * For the object tooltip, which anchors to the selection and so has to know that a selection is
- * bigger than its geometry. A vertical arm's tab sits out past the top or the bottom of the shape,
- * which is exactly where the bar wants to go — and on an L the two coincide, because the arm ends at
- * the edge of the bounding box the tooltip is measuring from. The bar landed on top of the handle,
- * and a handle under a bar cannot be grabbed.
+ * bigger than its geometry. A vertical arm's tab sits out past the top or bottom of the shape, which
+ * is exactly where the bar wants to go — and on an L the two coincide, so the bar landed on top of
+ * the handle, and a handle under a bar cannot be grabbed.
  *
- * Only the vertical arms, because the tooltip only ever sits above or below. A horizontal tab is out
- * to the side, where the bar never goes, and inflating sideways would shift the bar off centre for
- * nothing. Zero for every shape without arms, which is every shape but the L.
+ * Only the vertical arms, because the tooltip only ever sits above or below. Zero for every shape
+ * without arms, which is every shape but the L.
  */
 internal fun Outline.Shape.armChromeExtent(): Pair<Float, Float> {
     var above = 0f
@@ -804,8 +779,7 @@ internal fun Outline.Shape.armChromeExtent(): Pair<Float, Float> {
  *
  * Null for a shape with no extent on an axis — one dragged out with no travel in y has zero height,
  * and dividing by it would send every point to infinity. Those resize on their long axis alone. The
- * line and the arrow, which are the kinds that are *always* flat, never reach this: they carry end
- * handles instead of corners (SD12), and this is only ever called for a corner.
+ * line and the arrow never reach this: they carry end handles instead of corners.
  */
 private fun Outline.Shape.scaleFor(corner: Corner, x: Float, y: Float): Pair<Float, Float>? {
     val (anchorX, anchorY) = anchorFor(corner)
@@ -866,21 +840,19 @@ private val HANDLE_REACH: Dp = SelectionChrome.HANDLE_REACH
 /**
  * What a selected object on the canvas looks like, and how near a finger has to come to grab it.
  *
- * **One set of numbers rather than several that happen to agree.** AD7 makes selection a page-level
- * idea, so a handle that a finger misses on an equation but catches on a shape is exactly the
- * inconsistency it argues against — and these are drawn by two layers now ([ShapeLayer] and
- * [EquationLayer]) with a third kind certain to follow.
+ * One set of numbers rather than several that happen to agree: selection is a page-level idea, so a
+ * handle that a finger misses on an equation but catches on a shape is exactly the inconsistency to
+ * avoid. Drawn by [ShapeLayer] and [EquationLayer], with a third kind certain to follow.
  *
  * `TableContainer` keeps its own radius on purpose: its handle is a composed target with its own hit
- * area, not a disc painted into a canvas, so it is a different thing that happens to look similar.
+ * area, not a disc painted into a canvas.
  */
 /**
- * Whether a page-space box is worth drawing — the object half of `memory/inkPlan.md` §3.2.
+ * Whether a page-space box is worth drawing — the object half of the ink culling rule.
  *
- * Ink got this first, and for the obvious reason: a page can hold ten thousand strokes. The document
- * kinds got it late and are *worse* per element, not better — a shape is a path per segment, a formula
- * is a display list, a picture is a decoded bitmap and a texture upload — so a page of them off the
- * edge of the window costs more each than a stroke does.
+ * Ink got this first, because a page can hold ten thousand strokes. The document kinds got it late
+ * and are worse per element: a shape is a path per segment, a formula is a display list, a picture
+ * is a decoded bitmap and a texture upload.
  *
  * [x], [y], [width] and [height] are page units; [window] is what `EditorPane` computes for
  * `PageRuling`, which is page units multiplied by density. Both are converted here rather than at
@@ -910,10 +882,8 @@ internal object SelectionChrome {
     /**
      * Matches `LassoGesture`'s own handle reach, so every selection grabs the same way.
      *
-     * It did not, until the lasso was made to read this: it carried 10 device pixels of its own,
-     * which is a quarter of this on a dense screen. That is the failure this object exists to
-     * prevent, and it survived here as a comment claiming otherwise — so the number is now shared
-     * rather than described.
+     * It did not until the lasso was made to read this: it carried 10 device pixels of its own,
+     * which is a quarter of this on a dense screen. The number is shared rather than described.
      */
     val HANDLE_REACH: Dp = 14.dp
 }

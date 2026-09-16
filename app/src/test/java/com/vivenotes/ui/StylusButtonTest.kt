@@ -21,7 +21,7 @@ class StylusButtonTest {
     // --- the default map: nobody who ignores the pane can tell this became configurable ----------
 
     /**
-     * `memory/stylusPlan.md` SB4. These three assertions are the whole promise of the defaults: single
+     * These three assertions are the whole promise of the defaults: single
      * click toggles pen and eraser, double click reaches the lasso, and a third click is unbound —
      * exactly what the hard-coded version shipped with.
      */
@@ -43,7 +43,7 @@ class StylusButtonTest {
         assertEquals(DrawTool.Lasso, map.armed(StylusPress.Double, from = DrawTool.Pen(0)))
     }
 
-    /** Unbound arms nothing, which is what leaves the keycode to fall through — SB5. */
+    /** Unbound arms nothing, which is what leaves the keycode to fall through. */
     @Test
     fun theDefaultTripleClickArmsNothing() {
         assertNull(StylusButtonMap().armed(StylusPress.Triple, from = DrawTool.Pen(0)))
@@ -63,7 +63,7 @@ class StylusButtonTest {
         assertEquals(StylusAction.Pen3, map.actionFor(StylusPress.Triple))
     }
 
-    // --- the pen/eraser toggle, which is a rule and not a tool (SB2a) ----------------------------
+    // --- the pen/eraser toggle, which is a rule and not a tool ----------------------------
 
     @Test
     fun aPenInHandReachesForTheEraser() {
@@ -104,7 +104,7 @@ class StylusButtonTest {
         assertEquals(DrawTool.Pen(0), twice)
     }
 
-    // --- cycling the pens, the other rule (SB2) --------------------------------------------------
+    // --- cycling the pens, the other rule --------------------------------------------------
 
     @Test
     fun cyclingWalksThePensAndWraps() {
@@ -153,7 +153,7 @@ class StylusButtonTest {
 
     /**
      * Undo and Redo act on the page, not on the hand, so they must not disturb the armed tool — and
-     * that is also what keeps them from dragging the Draw tab forward (SB7), since the view model
+     * that is also what keeps them from dragging the Draw tab forward, since the view model
      * moves the tab only on the branch that produced a tool.
      */
     @Test

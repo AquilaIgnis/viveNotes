@@ -72,7 +72,7 @@ import com.vivenotes.ui.theme.LocalCanvasColors
 internal val TABLE_GUTTER: Dp = 16.dp
 
 /**
- * One row or one column of one table, held — `memory/tablePlan.md` TA16.
+ * One row or one column of one table, held.
  *
  * **Not a `CanvasSelection`.** That one holds *objects on the page*, across kinds; this is a place
  * inside a single object, and it exists for one reason: so that Insert below and Delete row know
@@ -103,21 +103,19 @@ internal object TableTags {
 }
 
 /**
- * One table on the page — `memory/tablePlan.md`.
+ * One table on the page.
  *
- * **A composable rather than a layer, unlike `ShapeLayer`.** A shape is a vector and can be drawn by
- * one canvas for the whole page; a table is a grid of real `EditText`s, so it has to be composed. That
- * one fact decides most of what follows.
+ * A composable rather than a layer, unlike `ShapeLayer`: a shape is a vector and can be drawn by one
+ * canvas for the whole page, while a table is a grid of real `EditText`s and has to be composed.
+ * That one fact decides most of what follows.
  *
- * The grid's **lines are drawn behind the cells**, from the column widths and the row heights the
- * layout reports, rather than as a border on each cell. Cells would have had to be stretched to their
- * row's height for that to work, which means intrinsic measurement across an `AndroidView`; drawing
- * behind needs none of it, gives every rule one width and one colour, and puts the header tint and
- * the fill in the same place as the lines that cross them.
+ * The grid's lines are drawn behind the cells, from the column widths and row heights the layout
+ * reports, rather than as a border on each cell. Cells would have had to be stretched to their row's
+ * height for that to work, which means intrinsic measurement across an `AndroidView`; drawing behind
+ * needs none of it and puts the header tint and the fill in the same place as the lines.
  *
- * **Nothing draggable is ever laid over a cell** (TA5). Every handle is in the reserved gutters or
- * outside the grid entirely, because a cell is an `EditText` and a handle on top of one either eats
- * the drag or loses the caret — the lesson `OutlineContainer` already records about its bottom edge.
+ * Nothing draggable is ever laid over a cell. Every handle is in the reserved gutters or outside the
+ * grid entirely, because a handle on top of an `EditText` either eats the drag or loses the caret.
  */
 @Composable
 internal fun TableContainer(
@@ -144,7 +142,7 @@ internal fun TableContainer(
     onColumnWidth: (column: Int, width: Float) -> Unit,
     onRowMinHeight: (row: Int, minHeight: Float) -> Unit,
     /**
-     * The row or column currently held, if it belongs to this table — TA16.
+     * The row or column currently held, if it belongs to this table.
      *
      * Drawn as a band across the grid and a filled handle, so what the bar's row and column verbs
      * are about is visible rather than remembered.
@@ -153,7 +151,7 @@ internal fun TableContainer(
     /** A tap on a gutter handle. Null clears the hold, which a second tap on the same handle does. */
     onHold: (TableAxis?) -> Unit = {},
     /**
-     * A tap on the grid, for an [Outline.Table.inkOnly] one only — TA15.
+     * A tap on the grid, for an [Outline.Table.inkOnly] one only.
      *
      * A table of text fields needs no such thing: putting a caret in a cell is what selects it. A
      * ruling has no cell to put a caret in, so without this there would be no way to reach its
@@ -161,7 +159,7 @@ internal fun TableContainer(
      */
     onSelect: () -> Unit = {},
     /**
-     * A cell to put the caret in, when it belongs to this table — `memory/searchPlan.md` CS9.
+     * A cell to put the caret in, when it belongs to this table.
      *
      * A revealed search result, and so far the only thing that focuses a cell from outside the grid.
      * The caller clears it through [onCellFocusHandled] once it has been taken.
@@ -187,7 +185,7 @@ internal fun TableContainer(
     val rowHeights = remember(table.id) { mutableStateMapOf<Int, Int>() }
 
     /**
-     * Selected *and* free to move — `memory/diagram.md`. A locked table keeps its selection, its bar
+     * Selected *and* free to move. A locked table keeps its selection, its bar
      * and its row and column gutters; what it loses is the grip and the scale handle, because an
      * affordance that cannot act is worse than an absent one.
      */
@@ -366,7 +364,7 @@ internal fun TableContainer(
             )
 
             if (grabbable) {
-                // **One scale handle, at the bottom right** — TA4, and what
+                // **One scale handle, at the bottom right**, and what
                 // `memory/references/table-tooltip1.jpeg` shows. A table's top and left edges carry the
                 // row and column gutters, so a handle at either of those corners would sit within a
                 // finger's width of a handle that does something else entirely. The gesture is the
@@ -436,7 +434,7 @@ private fun TableGrid(
     headerTint: Color,
 ) {
     /**
-     * Every cell's editor, so Tab can put the caret in the next one — `memory/tablePlan.md` TA17.
+     * Every cell's editor, so Tab can put the caret in the next one.
      *
      * Held here because this is the one place that knows both halves: the grid says which cell comes
      * next, and only the composition that made the editors can reach the one that renders it. The
@@ -453,7 +451,7 @@ private fun TableGrid(
     val currentTable = rememberUpdatedState(table)
 
     /**
-     * Hands the caret to a revealed cell — `memory/searchPlan.md` CS9.
+     * Hands the caret to a revealed cell.
      *
      * Keyed on the editor map as well as on the request, because a result opened on another page
      * arrives before the cells that will render it: the map fills in a frame or two later, and this
@@ -503,7 +501,7 @@ private fun TableGrid(
                     drawRect(headerTint, Offset.Zero, Size(table.columns[0].dp.toPx(), size.height))
                 }
 
-                // The held band, over the header tint and under the rules — TA16. Painted here
+                // The held band, over the header tint and under the rules. Painted here
                 // rather than as a box over the cells for the reason the rules are: a band drawn on
                 // top of a text cell would grey out the writing it is meant to point at.
                 heldRow?.takeIf { it in table.rows.indices }?.let { index ->
@@ -554,7 +552,7 @@ private fun TableGrid(
                                 .padding(CELL_PADDING),
                         ) {
                             if (table.inkOnly) {
-                                // **Empty space, and empty on purpose** — `memory/tablePlan.md` TA15.
+                                // **Empty space, and empty on purpose**.
                                 //
                                 // Not a disabled editor, not a read-only one: nothing at all. A cell
                                 // with any pointer input in it consumes the touch, and the whole
@@ -596,10 +594,10 @@ private fun TableGrid(
 }
 
 /**
- * A cell asked to take the caret, and what it should select when it does — `memory/searchPlan.md` CS9.
+ * A cell asked to take the caret, and what it should select when it does.
  *
  * [selection] is in the cell's own editor offsets, exactly as a container's is, since a cell holds
- * blocks the same way (TA2). Null selects nothing and leaves the caret where focus puts it.
+ * blocks the same way. Null selects nothing and leaves the caret where focus puts it.
  */
 internal data class CellFocus(val cellId: String, val selection: TextRange? = null)
 
@@ -607,16 +605,15 @@ internal data class CellFocus(val cellId: String, val selection: TextRange? = nu
 private const val FOCUS_ATTEMPTS = 5
 
 /**
- * Tab's whole behaviour inside a grid — `memory/tablePlan.md` TA17.
+ * Tab's whole behaviour inside a grid.
  *
- * The caret lands at the *end* of the destination's text rather than selecting it. Selecting is what
- * a spreadsheet does, because there a cell holds one value that Tab is usually about to replace; this
- * is a note, the cell holds prose, and arriving with everything highlighted means the next keystroke
+ * The caret lands at the end of the destination's text rather than selecting it. Selecting is what a
+ * spreadsheet does, because there a cell holds one value Tab is usually about to replace; this is a
+ * note, the cell holds prose, and arriving with everything highlighted means the next keystroke
  * silently deletes a sentence.
  *
  * Returns false when there is nowhere to go — the last cell going forward, the first coming back, or
- * a destination whose editor has not been composed — which is what leaves Tab as the indent it is
- * everywhere else in the app.
+ * a destination whose editor has not been composed — which leaves Tab as the indent it is elsewhere.
  */
 private fun moveCaret(
     table: Outline.Table,
@@ -631,7 +628,7 @@ private fun moveCaret(
     return true
 }
 
-/** A dashed box around the selected table, drawn the way a shape's selection is drawn (AD7). */
+/** A dashed box around the selected table, drawn the way a shape's selection is drawn. */
 @Composable
 private fun SelectionOutline(accent: Color, left: Dp, top: Dp, width: Dp, height: Dp) {
     Box(
@@ -656,7 +653,7 @@ private fun SelectionOutline(accent: Color, left: Dp, top: Dp, width: Dp, height
 /**
  * One column's width handle: a bar lying across the direction it drags in.
  *
- * **Two gestures on one target** — `memory/tablePlan.md` TA16. Dragging it sets the column's width,
+ * **Two gestures on one target**. Dragging it sets the column's width,
  * which is what it has always done; *tapping* it holds that column, which is what makes Insert right
  * and Delete column mean something without a caret. The two cannot collide: one has travelled and
  * the other has not.
@@ -740,19 +737,18 @@ private fun RowHandle(
 }
 
 /**
- * A tap that selects, and a drag that is left entirely alone — TA15.
+ * A tap that selects, and a drag that is left entirely alone.
  *
- * **Consumes the up, never the down**, which is the whole of why this is hand-written rather than a
+ * Consumes the up, never the down, which is why this is hand-written rather than a
  * `detectTapGestures`. That one claims the down, and a claimed down is one the scroll containers
- * around the page never see: dragging from inside an ink table would stop panning the page, and since
- * a table declines the body-drag (TA4) the gesture would do nothing at all — a dead rectangle in the
- * middle of the canvas.
+ * around the page never see: dragging from inside an ink table would stop panning the page, and
+ * since a table declines the body-drag the gesture would do nothing at all.
  *
- * Consuming the up is still enough to keep the tap: the bare-canvas tap detector is a *lower sibling*
+ * Consuming the up is still enough to keep the tap: the bare-canvas tap detector is a lower sibling
  * of this, so it is dispatched to second, and its `waitForUpOrCancellation` gives up on a consumed
- * one. Tapping a ruling therefore selects it rather than also opening a text container on top of it.
+ * one.
  *
- * A press that never travelled is a tap, whatever it landed on — `ShapeLayer`'s rule, and its phrase.
+ * A press that never travelled is a tap, whatever it landed on — `ShapeLayer`'s rule.
  */
 private fun Modifier.selectOnTap(onTap: () -> Unit): Modifier = this.then(
     Modifier.pointerInput(Unit) {
@@ -781,9 +777,9 @@ private fun Modifier.selectOnTap(onTap: () -> Unit): Modifier = this.then(
  *
  * Hand-written rather than `detectDragGestures` beside `detectTapGestures`, because those two cannot
  * share a target: the tap arm consumes the down to keep it from what is underneath, and
- * `detectDragGestures` waits for an *unconsumed* down, so the drag silently never fires at all. AD7
- * records that trap; this is the same one, with the same answer — decide once, on the up, from
- * whether the finger travelled.
+ * `detectDragGestures` waits for an unconsumed down, so the drag silently never fires at all.
+ * `ShapeLayer` records the same trap, with the same answer — decide once, on the up, from whether
+ * the finger travelled.
  *
  * Everything is consumed, unlike the grid's own tap target: a gutter handle is chrome belonging to
  * the table, and nothing underneath it has a claim on the gesture.

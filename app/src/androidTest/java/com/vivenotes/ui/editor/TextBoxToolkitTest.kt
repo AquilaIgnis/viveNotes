@@ -28,11 +28,11 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The TextBox Class — `memory/diagram.md`, planned in `memory/textBoxPlan.md`.
+ * The text container on the canvas, through the UI.
  *
  * Two things are worth pinning here and neither is about text. The **T button** was a mode switch
- * that could be pressed and never unpressed, because `DrawTool.None` *was* text mode (TD2). And the
- * **bar** is the first thing to drop a member of the base toolkit rather than extend it (TD4), which
+ * that could be pressed and never unpressed, because `DrawTool.None` *was* text mode. And the
+ * **bar** is the first thing to drop a member of the base toolkit rather than extend it, which
  * is exactly the kind of change that silently takes a behaviour with it.
  */
 class TextBoxToolkitTest {
@@ -43,7 +43,7 @@ class TextBoxToolkitTest {
     private var armed: DrawTool? = null
 
     // -----------------------------------------------------------------------------------------
-    // The toggle — TD2
+    // The toggle
     // -----------------------------------------------------------------------------------------
 
     private fun setRibbon(tool: DrawTool) {
@@ -112,7 +112,7 @@ class TextBoxToolkitTest {
     }
 
     // -----------------------------------------------------------------------------------------
-    // The bar — TD4
+    // The bar
     // -----------------------------------------------------------------------------------------
 
     private var copied = false
@@ -145,7 +145,7 @@ class TextBoxToolkitTest {
 
     @Test
     fun aTextBoxGetsCopyDeleteAndSelectAllButNoColour() {
-        // `memory/diagram.md`: "hide color from [Prime Object], add select all". Colour is a mark on a
+        // The text bar hides colour and adds select all. Colour is a mark on a
         // run — the Home tab owns it — so a container-level swatch would fight the ribbon.
         setTextToolkit()
 
@@ -172,7 +172,7 @@ class TextBoxToolkitTest {
 
     @Test
     fun selectAllGoesThroughTheCommandBus() {
-        // AD6: one way to drive the editor. The bar is a few dp from it and still does not reach in.
+        // One way to drive the editor. The bar is a few dp from it and still does not reach in.
         setTextToolkit()
 
         compose.onNodeWithTag(OBJECT_SELECT_ALL_TAG).performClick()

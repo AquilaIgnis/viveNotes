@@ -83,7 +83,7 @@ class HardwarePanelTest {
 
     // --- the pen button rows ---------------------------------------------------------------------
 
-    /** Three rows, always — a pen that reports fewer clicks is not something the app can know (SB8). */
+    /** Three rows, always — a pen that reports fewer clicks is not something the app can know. */
     @Test
     fun allThreeClickCountsGetARow() {
         setPanel()

@@ -61,21 +61,19 @@ internal val HUE_STOPS: List<Color> = List(13) { Color.hsv(it * 30f, 1f, 1f) }
  * The custom colour picker behind the wheel swatch at the end of the pen palette.
  *
  * Hue and saturation come off the disc and brightness off the bar below it, because those are the
- * three numbers a colour is, and a disc alone can only show two of them — without the bar the whole
- * lower half of every colour is unreachable, which is where most usable ink lives.
+ * three numbers a colour is and a disc alone can only show two — without the bar the whole lower
+ * half of every colour is unreachable.
  *
- * [onPick] reports the colour when a gesture ends rather than on every sampled point. Each one is a
- * DataStore write, and a drag across the disc is hundreds of points; end-of-gesture is both the
- * moment the choice is meant and the only rate that is sane to persist at.
+ * [onPick] reports the colour when a gesture ends rather than on every sampled point: each one is a
+ * DataStore write, and a drag across the disc is hundreds of points.
  *
  * It fires for every gesture, though, because trying colours is how the wheel is used — so it means
- * "this is what the wheel is showing now", not "this is the colour". Anything that a near-miss must
- * not cost, the swatch row above all, belongs on [onDone] instead. Done itself only closes; the pen
- * is already wearing the colour by then.
+ * "this is what the wheel is showing now", not "this is the colour". Anything a near-miss must not
+ * cost, the swatch row above all, belongs on [onDone] instead.
  *
- * State is seeded once, when the popup opens, and not re-keyed on [initialArgb]. Dragging brightness
- * to zero makes the colour black, and black has no hue to read back — re-seeding from it would drop
- * the pointer to red the moment the user reached the bottom of the bar.
+ * State is seeded once, when the popup opens, and not re-keyed on [initialArgb]: dragging brightness
+ * to zero makes the colour black, and black has no hue to read back, so re-seeding would drop the
+ * pointer to red the moment the user reached the bottom of the bar.
  */
 @Composable
 fun ColumnScope.ColorWheelContent(

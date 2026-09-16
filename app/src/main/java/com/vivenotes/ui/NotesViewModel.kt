@@ -148,9 +148,8 @@ import com.vivenotes.richtext.sameKindAs
 /**
  * Position and size of one text container on the page canvas.
  *
- * Deliberately excludes the container's text: this is UI state and changes on every drag frame,
- * whereas block content changes on every keystroke. Keeping them apart means typing does not
- * recompose the canvas.
+ * Excludes the container's text, which changes on every keystroke, so typing does not recompose
+ * the canvas.
  */
 data class OutlineBox(
     val id: String,
@@ -161,14 +160,10 @@ data class OutlineBox(
 )
 
 /**
- * A hit the user asked to see — `memory/searchPlan.md` CS9.
+ * A search hit to scroll to: the page, the box holding it, and the range to select in that box.
  *
- * Carries where to go rather than what was found: the page it is on, the box that holds it, and the
- * range to select once that box has an editor. [tableId] is set for a cell, because a cell has no
- * geometry of its own and the canvas scrolls to the table it sits in (TA2).
- *
- * [start] and [end] are offsets into the box's editor text, which is what `Block.editorText` exists
- * to make true (CS5).
+ * [tableId] is set for a cell, which has no geometry of its own; the canvas scrolls to its table.
+ * [start] and [end] are offsets into the box's editor text.
  */
 data class ContentReveal(
     val pageId: String,
@@ -217,17 +212,12 @@ private sealed interface InkHistoryMutation {
 }
 
 /**
- * One reversible action on the canvas, of whatever kind — `memory/inkPlan.md` §5.4 SD10.
+ * One reversible canvas action, of whatever kind.
  *
- * **One ring across kinds, not one ring per kind.** Undo is a button, not a mode: what it reverses is
- * the last thing you did on this page, and a user who draws a stroke, drops a shape and presses Undo
- * expects the shape back — not the stroke, and not nothing. Two rings could only ever guess which of
- * them a press belonged to, and would have got it wrong every time the two kinds were interleaved.
- * The same argument AD7 makes for one selection and one tooltip, made again for history.
- *
- * The two arms differ in where the truth lives, which is why this is a sealed type rather than a list
- * of lambdas: ink is rows in `ink_strokes` and its entry names a *mutation* to replay against them,
- * while a shape is part of the document and its entry is simply the page's shape list on either side.
+ * One ring across all kinds, not one per kind: Undo reverses the last thing done on this page
+ * whatever it was. Sealed rather than a list of lambdas because ink lives in `ink_strokes` and its
+ * entry names a mutation to replay, while the other kinds are part of the document and snapshot
+ * their list.
  */
 private sealed interface CanvasHistoryEntry {
 
@@ -238,14 +228,11 @@ private sealed interface CanvasHistoryEntry {
     ) : CanvasHistoryEntry
 
     /**
-     * The page's shapes before and after. Whole lists, because a shape edit can add, remove or alter
-     * any number of them and the document is saved whole regardless — the same shallow-snapshot trade
-     * the ink arm makes, over data that is already immutable.
+     * The page's shapes before and after. Whole lists, because one edit can add, remove or alter
+     * any number of them and the document is saved whole regardless.
      *
-     * [coalesceKey] names actions that arrive as a stream but read as one: dragging the tooltip's
-     * border-width slider fires per step, and thirty undo entries for one slider is not a history,
-     * it is a nuisance. Consecutive entries sharing a key, within [SHAPE_COALESCE_MS], are merged.
-     * Null — every other edit — always pushes its own entry.
+     * Consecutive entries sharing a [coalesceKey], within [SHAPE_COALESCE_MS], are merged, so a
+     * slider drag leaves one undo entry rather than one per step. Null always pushes its own entry.
      */
     data class Shapes(
         val before: List<Outline.Shape>,
@@ -255,10 +242,9 @@ private sealed interface CanvasHistoryEntry {
     ) : CanvasHistoryEntry
 
     /**
-     * The page's pictures before and after — the same whole-list snapshot [Shapes] takes, and safe
-     * for the same reason: an `Outline.Image` is immutable and is a frame, not a photograph. Undoing
-     * back past an insert therefore costs nothing and, in particular, does not touch the stored file
-     * — which is why an attachment's reference is not released until the delete leaves the history.
+     * The page's pictures before and after — the whole-list snapshot [Shapes] takes. Frames only,
+     * so undoing past an insert never touches the stored file; a deleted attachment's reference is
+     * held until the entry leaves the history.
      */
     data class Images(
         val before: List<Outline.Image>,
@@ -266,17 +252,12 @@ private sealed interface CanvasHistoryEntry {
     ) : CanvasHistoryEntry
 
     /**
-     * A structural edit to the text containers — `memory/textBoxPlan.md` TD5: delete and paste, the two
-     * things the TextBox toolkit can do.
+     * A structural edit to the text containers: delete and paste.
      *
-     * **The blocks half is scoped to the containers this edit touched, and the geometry half is not.**
-     * The whole outline list is safe to snapshot because typing never changes it; the blocks map is
-     * not, because typing changes it constantly. A snapshot of the whole map, restored later, would
-     * quietly take back every keystroke made in *other* containers since — an undo that reaches
-     * sideways into text nobody was undoing.
-     *
-     * A null value in either map means "this container did not exist", which is what restores a
-     * delete and takes back a paste.
+     * The outline list is snapshotted whole because typing never changes it; the blocks map is
+     * scoped to the containers this edit touched, because a whole-map snapshot would take back
+     * keystrokes made in other containers since. A null value in either map means the container
+     * did not exist.
      */
     data class Texts(
         val before: List<OutlineBox>,
@@ -286,19 +267,14 @@ private sealed interface CanvasHistoryEntry {
     ) : CanvasHistoryEntry
 
     /**
-     * An edit to the tables — `memory/tablePlan.md` TA10.
+     * An edit to the tables.
      *
-     * The same two-halves shape [Texts] has, for the same reason: the table list is safe to snapshot
-     * whole because typing never changes it, and the block map is not, because typing changes it
-     * constantly. A snapshot of the whole map would take back every keystroke made anywhere else on
-     * the page since.
-     *
-     * [touchedCells] is scoped to the cells this edit added or removed. A null value means "this cell
-     * did not exist", which is what restores a deleted row's text and takes away an undone insert's
-     * blank cells.
+     * Two halves like [Texts], for the same reason: the table list snapshotted whole, the block map
+     * scoped to the cells this edit added or removed, where a null value means the cell did not
+     * exist.
      *
      * [coalesceKey] does the job it does for [Shapes]: a dragged column boundary reports every step
-     * it passes through, and thirty undo entries for one drag is a nuisance rather than a history.
+     * it passes through, and those merge into one entry.
      */
     data class Tables(
         val before: List<Outline.Table>,
@@ -310,12 +286,8 @@ private sealed interface CanvasHistoryEntry {
     ) : CanvasHistoryEntry
 
     /**
-     * An edit to the equations on the canvas.
-     *
-     * [Shapes]'s shape exactly, and for the same reasons — whole lists over immutable data, because
-     * one edit can add, remove or alter any number of them and the document is saved whole anyway.
-     * It needs none of [Tables]' second half: an equation's content *is* the object, so there is no
-     * block map for it to reach into and nothing that typing can change behind its back.
+     * An edit to the equations on the canvas. Whole lists like [Shapes]; an equation's content is
+     * the object, so it needs no block map.
      */
     data class Equations(
         val before: List<Outline.Equation>,
@@ -325,18 +297,12 @@ private sealed interface CanvasHistoryEntry {
     ) : CanvasHistoryEntry
 
     /**
-     * Several kinds' entries that are one action, and must be undone as one.
+     * Several kinds' entries that are one action and must be undone as one.
      *
-     * **The exception to what `pasteObjects` decided, not a change of mind about it.** Paste leaves
-     * one entry per kind and says so: each press of Undo visibly takes back half of a paste, so a
-     * two-press unwind is a curiosity rather than a fault. Insert Space cannot make that bargain —
-     * the whole point of it is that everything past the line moves *together*, so an entry per kind
-     * would leave the page half-shifted between presses, with ink sitting where the text used to be.
-     * A gesture whose correctness is the relationship between the kinds has to be one entry.
-     *
-     * Deliberately not the default for cross-kind work, and deliberately not built by scanning the
-     * ring afterwards: it is opted into around one call ([NotesViewModel.asOneAction]), so the entries
-     * that belong together are the ones that were produced together.
+     * For gestures whose correctness is the relationship between the kinds: Insert Space moves
+     * everything past a line together, so an entry per kind would leave the page half-shifted
+     * between presses. Paste deliberately does not use it. Opted into around one call
+     * ([NotesViewModel.asOneAction]) rather than inferred from the ring afterwards.
      */
     data class Composite(val parts: List<CanvasHistoryEntry>) : CanvasHistoryEntry
 }
@@ -344,9 +310,7 @@ private sealed interface CanvasHistoryEntry {
 /**
  * A formula composed but not yet placed — what [DrawTool.Equation] is holding.
  *
- * Carries the box RaTeX measured for it, in page units, so that the tap which finally places it does
- * not have to render anything to find out how big it is. The panel rendered the formula once already
- * to check that it parses; this is that measurement, kept rather than thrown away.
+ * Carries the box RaTeX measured for it, in page units, so the tap that places it needs no render.
  */
 data class PendingEquation(
     val latex: String,
@@ -390,8 +354,7 @@ data class DeletedItemsState(
 /**
  * One completed delete, announced as a snackbar.
  *
- * [key] is null when the delete was a flush: it held nothing, so nothing was kept and there is no
- * row left to put back. The snackbar shows no Undo for one — `memory/blankFlushPlan.md`.
+ * [key] is null when the delete was a flush: nothing was kept, so the snackbar shows no Undo.
  */
 data class DeletionNotice(
     val key: DeletedItemKey?,
@@ -423,12 +386,9 @@ data class NotebookContents(
     val sections: Int,
     val pages: Int,
     /**
-     * Whether deleting it would flush it rather than tombstone it —
-     * `NotesRepository.notebookIsBlank`.
+     * Whether deleting it would flush it rather than tombstone it — `NotesRepository.notebookIsBlank`.
      *
-     * Read for the confirmation's wording and nothing else: the decision is made again inside the
-     * delete, against the database rather than against a snapshot a dialog has been holding while
-     * the user thought about it.
+     * For the confirmation's wording only; the delete decides again against the database.
      */
     val blank: Boolean = false,
 )
@@ -451,18 +411,16 @@ data class NotesUiState(
     val shapes: List<Outline.Shape> = emptyList(),
     /** Equations placed on the canvas — the Draw tab's ƒ. Objects, like shapes, not marks. */
     val equations: List<Outline.Equation> = emptyList(),
-    /** Pictures on the canvas — E6. Frames only; the pixels are in `attachments`. */
+    /** Pictures on the canvas. Frames only; the pixels are in `attachments`. */
     val images: List<Outline.Image> = emptyList(),
     /**
-     * The tables on the canvas — `memory/tablePlan.md`. **The grid, not the writing in it.**
+     * The tables on the canvas — the grid, not the writing in it.
      *
-     * Split the way a text container is split, and for that reason: this changes when a row is added
-     * or a column dragged, and a cell's text changes on every keystroke, so keeping the two together
-     * would recompose the whole canvas as someone types. The cells carried here therefore hold
-     * whatever they were *loaded* with and go stale the moment anything is typed; the live content is
-     * in the ViewModel's block map, and `withCellBlocks` is what puts them back together at save time.
-     *
-     * Nothing else may read a cell's `blocks` from here. It is the one trap this shape sets.
+     * Split like a text container, and for that reason: a cell's text changes on every keystroke,
+     * so keeping the two together would recompose the canvas as someone types. The cells here hold
+     * whatever they were loaded with and go stale on the first keystroke; the live content is in
+     * the ViewModel's block map, and `withCellBlocks` rejoins them at save time. Nothing else may
+     * read a cell's `blocks` from here.
      */
     val tables: List<Outline.Table> = emptyList(),
     /** The open page's own appearance, loaded and saved with its content. */
@@ -490,30 +448,23 @@ class NotesViewModel(
     /**
      * Reads pictures in the background so the Content panel can find what is written in them.
      *
-     * Optional for the same reason [databaseBackups] is: the Compose suites build a ViewModel over a
-     * seeded database with no ONNX Runtime behind it, and a search that finds typed text is still a
-     * search. Null simply means no picture ever gets read.
+     * Null — as in the Compose suites, which have no ONNX Runtime behind them — means no picture
+     * is ever read.
      */
     private val imageText: ImageTextIndexer? = null,
     /** Reads replayed handwriting lazily for the same cache-only search path as picture OCR. */
     private val inkText: InkTextIndexer? = null,
     /**
-     * Pages the server has written ink into, by generation — `memory/inkSyncPlan.md` IS5.
+     * Pages the server has written ink into, by generation.
      *
-     * Ink has no Room flow of its own on purpose; see
-     * [com.vivenotes.data.sync.RemoteInkSignal] for why the page body has one and this does not.
-     * Null for the suites that build a ViewModel with no server behind it, and it means what it says:
-     * nothing ever arrives from anywhere else, which is what a device that has never been connected
-     * actually experiences.
+     * Ink has no Room flow of its own; see [com.vivenotes.data.sync.RemoteInkSignal] for why the
+     * page body has one and this does not. Null means nothing ever arrives from elsewhere.
      */
     private val remoteInk: StateFlow<Map<String, Long>>? = null,
     /**
      * Whether first-run seeding may happen at all — see
      * [com.vivenotes.data.sync.SyncAccounts.maySeedStarter], which says no while this installation
-     * is registered with a server it has not pulled from yet.
-     *
-     * Optional for the reason [databaseBackups] is: the suites build a ViewModel over a database
-     * with no server behind it, and null there means "seed as this app always has".
+     * is registered with a server it has not pulled from yet. Null means seed unconditionally.
      */
     private val maySeedStarter: (suspend () -> Boolean)? = null,
 ) : ViewModel() {
@@ -565,14 +516,9 @@ class NotesViewModel(
     /**
      * The zoom the canvas is actually drawn at, which is not always the one on disk.
      *
-     * A pinch reports a new zoom every frame, and a preference store is the wrong place to hold
-     * something changing at that rate — sixty file writes for one gesture, with the canvas waiting
-     * on a disk round trip to redraw. So this is where zoom lives while the app is running and the
-     * store is only where it is remembered: every setter writes here first and lands it there
-     * afterwards, and a pinch skips the second half until the fingers come off.
-     *
-     * Null until something sets it, which is what lets the stored value be the starting point
-     * without this having to wait for it.
+     * A pinch reports a new zoom every frame, which is too fast for a preference store. Every setter
+     * writes here first and lands it in the store afterwards; a pinch skips the second half until the
+     * fingers come off. Null until something sets it, so the stored value is the starting point.
      */
     private val liveZoom = MutableStateFlow<Float?>(null)
 
@@ -603,23 +549,21 @@ class NotesViewModel(
     val highlighter: StateFlow<HighlighterSettings> = penSettingsStore.highlighter
         .stateIn(viewModelScope, SharingStarted.Eagerly, HighlighterSettings())
 
-    /** The armed shape and how it is drawn — `memory/inkPlan.md` §5.4. A property of the user (ID5). */
+    /** The armed shape and how it is drawn. A property of the user, so it persists. */
     val shape: StateFlow<ShapeSettings> = penSettingsStore.shape
         .stateIn(viewModelScope, SharingStarted.Eagerly, ShapeSettings())
 
-    /** Which ruler and how big — `memory/rulerPlan.md` RD2. A property of the user, like [shape]. */
+    /** Which ruler and how big. A property of the user, like [shape]. */
     val ruler: StateFlow<RulerSettings> = penSettingsStore.ruler
         .stateIn(viewModelScope, SharingStarted.Eagerly, RulerSettings())
 
-    /** How the next table arrives — `memory/tablePlan.md` TA7. A property of the user, like [shape]. */
+    /** How the next table arrives. A property of the user, like [shape]. */
     val table: StateFlow<TableSettings> = penSettingsStore.table
         .stateIn(viewModelScope, SharingStarted.Eagerly, TableSettings())
 
     /**
-     * Whether the ruler is lying on the page — see [toggleRuler].
-     *
-     * Beside [_tool] rather than in preferences, and for its reason: this is where you are, not what
-     * you have. Which ruler it is *is* what you have, and that persists.
+     * Whether the ruler is lying on the page — see [toggleRuler]. Transient like [_tool]; which
+     * ruler it is persists, but whether it is out does not.
      */
     private val _rulerOut = MutableStateFlow(false)
     val rulerOut: StateFlow<Boolean> = _rulerOut.asStateFlow()
@@ -629,23 +573,21 @@ class NotesViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /**
-     * What the pen's barrel-button clicks do — [StylusButtonMap], and `memory/stylusPlan.md`.
+     * What the pen's barrel-button clicks do — [StylusButtonMap].
      *
-     * `Eagerly` and not lazily, unlike most of the settings flows: key dispatch reads `.value`
-     * synchronously on the UI thread from `MainActivity.onKeyDown`, which can happen before anything
-     * has collected this. The initial value is the default map, which is the hard-coded behaviour the
-     * bindings replaced — so a press arriving in that window does the old thing rather than nothing.
+     * `Eagerly`, unlike most of the settings flows: key dispatch reads `.value` synchronously on the
+     * UI thread from `MainActivity.onKeyDown`, possibly before anything has collected this. The
+     * initial value is the default map, so a press in that window does the default thing.
      */
     val stylusButtons: StateFlow<StylusButtonMap> = penSettingsStore.stylusButtons
         .stateIn(viewModelScope, SharingStarted.Eagerly, StylusButtonMap())
 
     /**
-     * The tool in hand. Held here rather than in preferences: it is where you are, not what you
-     * have, and an app that reopens with an eraser armed would be startling.
+     * The tool in hand. Transient rather than a preference: an app that reopened with an eraser
+     * armed would be startling.
      *
-     * A pen by default, because this is a notebook you draw in — text is what the Home tab's T
-     * button is for. With a pen armed a tap on bare canvas leaves a mark rather than opening a
-     * caret, which is why [createOutline] is reached only in [DrawTool.Text].
+     * A pen by default, so a tap on bare canvas leaves a mark rather than opening a caret — which is
+     * why [createOutline] is reached only in [DrawTool.Text].
      */
     private val _tool = MutableStateFlow<DrawTool>(DrawTool.Pen(0))
     val tool: StateFlow<DrawTool> = _tool.asStateFlow()
@@ -653,14 +595,10 @@ class NotesViewModel(
     /**
      * The formula [DrawTool.Equation] is holding, waiting for a tap to say where it goes.
      *
-     * **Beside the tool rather than in preferences, because it is content.** Every other object tool
-     * carries settings — how many rows, which shape, how thick the rules — and those describe *the
-     * user*, so they persist (ID5). A formula is the thing itself. Storing it would mean reopening
-     * the app with somebody's half-finished integral still loaded in the ƒ button, which is the same
-     * mistake as persisting which pen is in your hand.
-     *
-     * It carries the measured box with it, so the tap that places the equation already knows how big
-     * it is — see [insertEquation].
+     * Transient rather than a preference, because it is content rather than a setting: reopening the
+     * app with somebody's half-finished integral loaded in the ƒ button would be the same mistake as
+     * persisting which pen is in hand. Carries its measured box, so the tap that places it already
+     * knows how big it is — see [insertEquation].
      */
     private val _pendingEquation = MutableStateFlow<PendingEquation?>(null)
     val pendingEquation: StateFlow<PendingEquation?> = _pendingEquation.asStateFlow()
@@ -674,15 +612,11 @@ class NotesViewModel(
     /**
      * Which ribbon tab is open.
      *
-     * Held here rather than in `NotesApp`'s `remember` because it is no longer only the tab strip's
-     * business: a stylus button changes the tool, and the tab that shows tools has to come forward
-     * with it — see `ui/StylusButtons.kt`. Transient like [_tool], and for the same reason.
+     * Held here rather than in `NotesApp`'s `remember` because a stylus button changes the tool and
+     * the tab showing tools has to come forward with it — see `ui/StylusButtons.kt`.
      *
-     * **Draw is the tab a session opens on**, not Document. This is a stylus-first app on a tablet:
-     * the pen is already in hand, so the ribbon should be showing the pens rather than a text
-     * toolbar nobody reached for. Nothing switches it back automatically — taking the caret does
-     * *not* bring Document forward, deliberately: a ribbon that moves under a stylus while you are
-     * writing is worse than one tap.
+     * Draw is the tab a session opens on: the pen is already in hand. Nothing switches it back
+     * automatically — taking the caret does not bring Document forward.
      */
     private val _activeTab = MutableStateFlow(RibbonTab.Draw)
     val activeTab: StateFlow<RibbonTab> = _activeTab.asStateFlow()
@@ -692,22 +626,15 @@ class NotesViewModel(
     }
 
     /**
-     * Runs the action a stylus barrel-button press is bound to — `ui/StylusButtons.kt` resolves which
-     * one that is and says why the resolution lives there.
+     * Runs the action a stylus barrel-button press is bound to; `ui/StylusButtons.kt` resolves which.
      *
-     * Stateless, because the pen has already done the counting: a double click arrives as its own
-     * keycode rather than as two presses this had to time.
+     * Stateless — the pen counts clicks itself, so a double click arrives as its own keycode.
      *
-     * **Only a tool action brings the Draw tab forward** — `memory/stylusPlan.md` SB7. A button that
-     * silently changes what the pen does, while the ribbon still shows Home, is a tool swap you have
-     * to discover by drawing; an undo is already visible on the page, and moving the ribbon for it
-     * would be a second change nobody asked for.
+     * Only a tool action brings the Draw tab forward: an undo is already visible on the page, so
+     * moving the ribbon for it would be a change nobody asked for.
      *
-     * **A bound Undo is always *canvas* undo** (SB6), even with a caret in a text container. Ctrl+Z is
-     * ambiguous on purpose — the focused `EditText` takes it for its own text undo and only the
-     * presses it declines reach the canvas — but no view claims a stylus keycode, so this reaches the
-     * page from anywhere. That is the right answer for a button on a pen, and an asymmetry with the
-     * keyboard worth knowing about.
+     * A bound Undo is always canvas undo, even with a caret in a text container. Ctrl+Z is ambiguous
+     * — the focused `EditText` takes it first — but no view claims a stylus keycode.
      */
     fun pressStylusButton(action: StylusAction) {
         when (action) {
@@ -733,11 +660,11 @@ class NotesViewModel(
     val canvasUndoState: StateFlow<CanvasUndoState> = _canvasUndoState.asStateFlow()
 
     /**
-     * The shared prime object clipboard — `memory/diagram.md`.
+     * The shared prime object clipboard.
      *
-     * One clipboard for every kind on the canvas, not one per kind: copy a stroke and a shape in the
-     * same loop and both come back on the same paste. Session-local, and shallow — native strokes are
-     * immutable and an `Outline.Shape` is a data class, so snapshots are safe to share.
+     * One clipboard for every kind on the canvas, so copying a stroke and a shape in the same loop
+     * brings both back on one paste. Session-local and shallow: native strokes are immutable and an
+     * `Outline.Shape` is a data class, so snapshots are safe to share.
      */
     private var clipboard = CanvasClipboard()
     private val _hasClipboard = MutableStateFlow(false)
@@ -750,12 +677,10 @@ class NotesViewModel(
     private val canvasHistoryByPage = mutableMapOf<String, PageCanvasHistory>()
 
     /**
-     * Where [pushHistory] puts entries while [asOneAction] is collecting them, or null the rest of
-     * the time — which is all of the time except inside one synchronous call.
+     * Where [pushHistory] puts entries while [asOneAction] is collecting them, null otherwise.
      *
-     * A plain field rather than anything thread-aware on purpose: everything that records history
-     * runs on the main thread, and this is only ever set and cleared inside a single stack frame of
-     * it — [asOneAction] is its only writer.
+     * A plain field rather than anything thread-aware: everything that records history runs on the
+     * main thread, and [asOneAction] is its only writer.
      */
     private var historyGroup: MutableList<CanvasHistoryEntry>? = null
 
@@ -769,11 +694,10 @@ class NotesViewModel(
     private var lastInkOperationAt = 0L
 
     /**
-     * The [remoteInk] generation the strokes now on screen were built from — IS5.
+     * The [remoteInk] generation the strokes now on screen were built from.
      *
-     * Captured before the open page's ink is read rather than after it, so a pull that commits
-     * *during* that read leaves this behind the signal and is absorbed instead of being mistaken for
-     * something the canvas already shows.
+     * Captured before the open page's ink is read rather than after, so a pull committing during
+     * that read is absorbed rather than mistaken for something the canvas already shows.
      */
     private var absorbedInkGeneration = 0L
 
@@ -786,9 +710,8 @@ class NotesViewModel(
     /**
      * The page currently being opened, so that opening another one stops it.
      *
-     * Ink now loads *after* its page is on screen, which means a load can still be running when the
-     * next page is opened. Left alone it would finish and publish itself over whatever the user had
-     * moved on to — and go on spending eight cores rebuilding a page nobody is looking at.
+     * Ink loads after its page is on screen, so a load can still be running when the next page is
+     * opened; left alone it would publish itself over whatever the user moved on to.
      */
     private var pageLoad: Job? = null
 
@@ -796,21 +719,18 @@ class NotesViewModel(
     private var versionHistoryLoad: Job? = null
 
     /**
-     * The page [openPage] was last asked for, set the moment it is asked rather than when its state
-     * lands.
+     * The page [openPage] was last asked for, set when it is asked rather than when its state lands.
      *
-     * `uiState.selectedPageId` cannot answer this: it does not become the incoming page until that
-     * page's document has been read, and the outgoing page's ink load — cancelled, but cancellation
-     * is cooperative — can reach a publication inside that gap and still find its own id there.
+     * `uiState.selectedPageId` cannot answer this: it holds the outgoing page until the incoming
+     * document has been read, and the outgoing ink load can still publish inside that gap.
      */
     private var openingPageId: String? = null
 
     /**
-     * The top-left of what the canvas is currently showing, in page units.
+     * The top-left of what the canvas is showing, in page units.
      *
-     * Held as a plain field rather than as state: nothing recomposes on it, and the only reader is an
-     * insert that happens to need somewhere to put a new object. Reported by `EditorPane` from a
-     * `snapshotFlow` over the scroll, so keeping it up to date costs no recomposition either.
+     * A plain field rather than state: nothing recomposes on it, and its only reader is an insert
+     * needing somewhere to put a new object. `EditorPane` reports it from a `snapshotFlow`.
      */
     private var viewportOrigin = InkPoint(0f, 0f)
 
@@ -830,12 +750,11 @@ class NotesViewModel(
     val notebookRailVisible: StateFlow<Boolean> = _notebookRailVisible.asStateFlow()
 
     /**
-     * Live block content per **content box** — a text container, or one cell of a table.
+     * Live block content per content box — a text container, or one cell of a table.
      *
-     * Held outside [uiState] on purpose, for the reason [OutlineBox] gives. Keyed by an id rather
-     * than by an outline since `memory/tablePlan.md` TA2: a cell is a box that holds blocks and has no
-     * geometry of its own, so it belongs in the same map a container's content does — which is what
-     * puts the whole Home ribbon inside a table without a second content path to keep in step.
+     * Held outside [uiState] for the reason [OutlineBox] gives, and keyed by id rather than by
+     * outline because a cell holds blocks but has no geometry of its own. That puts the whole Home
+     * ribbon inside a table without a second content path to keep in step.
      */
     private val blocksById = mutableMapOf<String, List<Block>>()
 
@@ -843,35 +762,23 @@ class NotesViewModel(
      * Outlines this ViewModel does not manage — an `Outline.Ink` layer, and any kind added later.
      *
      * [persist] rebuilds `PageDoc.outlines` from the objects it tracks, so an outline it did not put
-     * there is not merely ignored: it is written out of existence by the next autosave, 400ms after
-     * the next keystroke. Nothing produces those variants yet, which is exactly why the loss would be
-     * silent when something does — the write succeeds and the page looks fine until the drawing is
-     * gone. Carrying them through untouched keeps load → save → load the identity for a document this
-     * ViewModel only half understands.
+     * there would be written out of existence by the next autosave. Carrying them through untouched
+     * keeps load → save → load the identity for a document this ViewModel only half understands.
      *
-     * Position is not recorded here any more; [documentOrder] holds it for every kind at once.
+     * Position is not recorded here; [documentOrder] holds it for every kind at once.
      */
     private var unmanagedOutlines: List<Outline> = emptyList()
 
     /**
      * Where each outline sat in the document as loaded, by id — what [persist] sorts back into.
      *
-     * **The rebuilt list is grouped by kind, and that is not an order the document ever had.**
-     * `persist` concatenates shapes, then equations, then pictures, then tables, then containers,
-     * because that is the order the fields happen to be declared in; so a page loaded as
-     * `[ink, text, image]` was written back as `[ink, image, text]` and every autosave after the
-     * first shuffled the file. It went unnoticed while containers were the only managed kind — the
-     * kind-grouped list was then simply *the* list — and each kind added since (shapes, tables,
-     * equations, pictures) widened it.
+     * Without it the rebuilt list is grouped by kind, in field-declaration order, so every autosave
+     * reshuffles a page nobody reordered. Nothing on screen depends on it — the canvas layers by kind
+     * with a fixed z-order — but everything that reads the file does: `.vive` exports that differ
+     * from the one before, and sync diffs over untouched pages.
      *
-     * Nothing on screen depends on this: the canvas layers by kind with a fixed z-order of its own,
-     * so a reordered document draws identically. What it costs is everything that reads the file — a
-     * `.vive` export that differs from the one before it, a sync diff over a page nobody edited, and
-     * the load → save → load identity [unmanagedOutlines] exists to protect, held for one kind while
-     * being broken for the rest.
-     *
-     * Outlines created since the load are absent here and sort last, keeping the arrival order they
-     * already had among themselves — `sortedBy` is stable.
+     * Outlines created since the load are absent here and sort last, in arrival order, since
+     * `sortedBy` is stable.
      */
     private var documentOrder: Map<String, Int> = emptyMap()
 
@@ -884,11 +791,10 @@ class NotesViewModel(
     private var readOnlyPageId: String? = null
 
     /**
-     * A page to open as soon as the section holding it has listed its pages — CS9.
+     * A page to open as soon as the section holding it has listed its pages.
      *
      * Without it, going to a search result in another section is a race: `selectSection` clears the
-     * selection, and the pages flow opens that section's *first* page the moment it arrives, which is
-     * not the one that was asked for.
+     * selection and the pages flow opens that section's first page when it arrives.
      */
     private var pendingPageId: String? = null
 
@@ -897,15 +803,12 @@ class NotesViewModel(
 
     init {
         viewModelScope.launch {
-            // Nothing may observe the tree until first-run seeding has finished. A page's row is
-            // created before its content is written, so a page opened inside that gap loads the
-            // empty document the row was created with — and the next save writes that emptiness
-            // over the seeded content. On any later launch this returns immediately.
+            // Nothing may observe the tree until first-run seeding has finished: a page's row is
+            // created before its content is written, so a page opened inside that gap loads empty
+            // and the next save writes that emptiness over the seeded content.
             //
-            // The gate is evaluated once, here, rather than watched: a device that is registered but
-            // has not pulled yet simply does not seed on this launch, and by the next one the pull
-            // has either filled the tree or proved the account empty. Waiting for the answer instead
-            // would leave a tablet with no signal staring at a spinner.
+            // The gate is evaluated once rather than watched. A device registered but not yet
+            // pulled simply does not seed on this launch; waiting would leave it on a spinner.
             val maySeed = maySeedStarter?.invoke() ?: true
             if (maySeed) repository.seedIfEmpty()
             // Independent of first paint: SQLite may have a large database to copy, and history is
@@ -932,10 +835,9 @@ class NotesViewModel(
                 .flatMapLatest { repository.observePages(it) }
                 .onEach { pages ->
                     _uiState.value = _uiState.value.copy(pages = pages)
-                    // A page asked for by name — a search result in another section (CS9). Honoured
-                    // once, on the first list that contains it, and dropped otherwise: a request
-                    // that survived a list which did not have the page would fire later, on a
-                    // section the user has since chosen for their own reasons.
+                    // A page asked for by name — a search result in another section. Honoured once,
+                    // on the first list that contains it, and dropped otherwise: a request that
+                    // outlived such a list would fire on a section the user has since chosen.
                     val requested = pendingPageId
                     pendingPageId = null
                     if (requested != null && pages.any { it.id == requested }) {
@@ -958,10 +860,10 @@ class NotesViewModel(
                 }
                 .launchIn(this)
 
-            // Page metadata already flows into the list, which is why a pulled preview could say
-            // "xw" while the open canvas stayed blank. Observe the body independently and rebuild
-            // only when the decoded document differs from what the live editors currently hold.
-            // A matching local autosave therefore keeps the editor and its caret intact.
+            // Page metadata already flows into the list, so a pulled preview could say "xw" while
+            // the open canvas stayed blank. Observe the body independently and rebuild only when the
+            // decoded document differs from what the live editors hold, so a matching local autosave
+            // leaves the editor and its caret intact.
             _uiState
                 .map { it.selectedPageId }
                 .distinctUntilChanged()
@@ -975,9 +877,9 @@ class NotesViewModel(
                 .onEach { (pageId, load) -> acceptStoredDocument(pageId, load) }
                 .launchIn(this)
 
-            // And the same for the page's ink, which has no Room flow to observe — the canvas is
-            // told when the server writes strokes, erases or lassos into a page rather than when the
-            // tables change, because every stroke the user draws changes those tables too.
+            // The same for the page's ink, which has no Room flow to observe: the canvas is told
+            // when the server writes into a page rather than when the tables change, because every
+            // stroke the user draws changes those tables too.
             remoteInk
                 ?.onEach { pages ->
                     val pageId = _uiState.value.selectedPageId ?: return@onEach
@@ -1029,9 +931,8 @@ class NotesViewModel(
                 val selectedSectionId = _uiState.value.selectedSectionId
                 persist()
                 val result = manager.importNotebook(source)
-                // An explicit import always opens what it imported. Besides making the result
-                // visible, this ensures an authoritative archive document replaces a stale open
-                // editor immediately instead of waiting for the user to leave and return.
+                // An explicit import always opens what it imported, so an authoritative archive
+                // document replaces a stale open editor immediately.
                 result.firstSectionId?.let { importedSectionId ->
                     if (importedSectionId == selectedSectionId) {
                         if (result.restored) {
@@ -1246,10 +1147,9 @@ class NotesViewModel(
 
     private fun selectSection(sectionId: String, persistCurrent: Boolean) {
         if (selectedSection.value == sectionId) return
-        // Capture before clearing selectedPageId below. Launching `persist()` and letting the
-        // coroutine read uiState later loses the outgoing page when this runs on a queued dispatcher
-        // (and can do the same on a busy device). The document is immutable, so the Room write can
-        // safely finish after the visible navigation has moved on.
+        // Capture before clearing selectedPageId below: letting the coroutine read uiState later
+        // loses the outgoing page on a queued dispatcher. The document is immutable, so the Room
+        // write can safely finish after the visible navigation has moved on.
         val outgoing = if (persistCurrent) currentPageSave() else null
         if (outgoing != null) {
             viewModelScope.launch { repository.saveDoc(outgoing.pageId, outgoing.doc) }
@@ -1271,14 +1171,12 @@ class NotesViewModel(
     /**
      * Opens a page, and does not wait for its ink to open it.
      *
-     * The page, its text and its objects are published first and the ink arrives afterwards, because
-     * the two are not the same size of job: reading the document is a couple of milliseconds, while
-     * rebuilding a densely drawn page's strokes is seconds — 3.0 s of decoding for the 9,553 strokes
-     * on the page this was measured against, all of it in front of the state that puts the page on
-     * screen. So a page that was ready to show sat behind a page that was not.
+     * The page, its text and its objects are published first; the ink arrives afterwards. Reading
+     * the document is a couple of milliseconds, while rebuilding a densely drawn page's strokes is
+     * seconds — 3.0 s for 9,553 strokes on the page this was measured against.
      *
-     * Held as one cancellable job rather than left to run: opening a second page while the first is
-     * still loading must not let the first finish and publish itself over the second.
+     * One cancellable job, so opening a second page while the first is still loading cannot let the
+     * first publish itself over the second.
      */
     fun openPage(pageId: String) = openPage(pageId, persistCurrent = true)
 
@@ -1292,9 +1190,8 @@ class NotesViewModel(
         }
         pageLoad?.cancel()
         openingPageId = pageId
-        // The outgoing page's ink goes now rather than when the incoming page's arrives. It is the
-        // one piece of the old page that would otherwise stay on screen, drawn over a page it does
-        // not belong to, for exactly as long as the load that this change stopped waiting for.
+        // The outgoing page's ink goes now rather than when the incoming page's arrives; otherwise
+        // it stays on screen, drawn over a page it does not belong to, for the whole load.
         _strokes.value = emptyList()
         _inkReadyPageId.value = null
         // Read before the load below, not after it — see [absorbedInkGeneration].
@@ -1331,10 +1228,9 @@ class NotesViewModel(
                 },
             )
 
-            // The page is on screen from here; what follows fills it in.
-            //
-            // Loading joins the same serialization lane as edits. Otherwise a fast page switch can
-            // read an operation between its immediate canvas update and its database tombstone.
+            // The page is on screen from here; what follows fills it in. Loading joins the same
+            // serialization lane as edits, or a fast page switch can read an operation between its
+            // canvas update and its database tombstone.
             val ink = inkMutations.withLock {
                 loadInk(pageId) { partial -> publishInk(pageId, partial) }
             }
@@ -1365,7 +1261,7 @@ class NotesViewModel(
 
         blocksById.clear()
         loaded.forEach { blocksById[it.id] = it.blocks }
-        // Cells join the same map, per TA2 — one content path for containers and cells alike.
+        // Cells join the same map — one content path for containers and cells alike.
         tables.forEach { table ->
             val cells = table.contentCellIds().toSet()
             table.rows.forEach { row ->
@@ -1404,9 +1300,8 @@ class NotesViewModel(
     /**
      * Makes a body replaced underneath the editor authoritative on the canvas as well as in Room.
      *
-     * Hierarchy sync writes `page_content` directly under trigger suppression. The pages observer
-     * sees the accompanying preview update, but before this observer the editors kept their older
-     * blocks and the next blur/navigation save wrote those stale blocks back as a fresh mutation.
+     * Hierarchy sync writes `page_content` directly under trigger suppression. Without this the
+     * editors keep their older blocks and the next save writes them back as a fresh mutation.
      */
     private fun acceptStoredDocument(pageId: String, load: PageLoad) {
         val state = _uiState.value
@@ -1442,9 +1337,8 @@ class NotesViewModel(
     /**
      * Shows ink, unless the page it belongs to has since been closed.
      *
-     * Cancellation alone does not cover this. It is cooperative, so a load told to stop can still
-     * reach its next publication before it notices, and this is the check that keeps one page's
-     * strokes off another's canvas even then.
+     * Cancellation is cooperative, so a load told to stop can still reach its next publication;
+     * this is the check that keeps one page's strokes off another's canvas.
      */
     private fun publishInk(pageId: String, strokes: List<PageStroke>) {
         if (openingPageId == pageId) _strokes.value = strokes
@@ -1454,35 +1348,26 @@ class NotesViewModel(
     private fun remoteInkGeneration(pageId: String): Long = remoteInk?.value?.get(pageId) ?: 0L
 
     /**
-     * Puts ink the server wrote into the open page onto the open page — `memory/inkSyncPlan.md` IS5.
+     * Puts ink the server wrote into the open page onto the open page.
      *
-     * The ink twin of [acceptStoredDocument], and needed for the same reason: sync writes Room
-     * directly, and until this existed a canvas that was already open kept the strokes it was opened
-     * with. Two tablets drawing on one page each showed only their own until somebody navigated away
-     * and back.
+     * The ink twin of [acceptStoredDocument]: sync writes Room directly, so without this a canvas
+     * already open keeps the strokes it was opened with.
      *
-     * **A rebuild, not a delta.** Erases and lasso moves replay in `(createdAt, id)` order and do not
-     * commute — a pulled operation can sort *below* one already applied, which offline drawing makes
-     * ordinary rather than exotic — and a move's clamp measures the whole selection, so it cannot be
-     * replayed against the new strokes alone. Reading the page back is the only answer that is right
-     * for every arrival, and it re-seeds the operation clock on the way through [loadInk].
+     * A rebuild, not a delta. Erases and lasso moves replay in `(createdAt, id)` order and do not
+     * commute, and a move's clamp measures the whole selection, so pulled operations cannot be
+     * replayed against the new strokes alone. Re-reading the page also re-seeds the operation clock
+     * through [loadInk].
      *
-     * Three things make that safe to do underneath somebody's hand:
-     * - it joins [inkMutations], the lane page opening and every edit already share;
-     * - it stands down while an ink edit is still resolving its geometry off-thread, exactly as undo
-     *   does, and is retried by [changePendingInkEdits] when that edit lands;
-     * - it re-reads rather than publishes if the canvas moved while Room was being read, because a
-     *   stroke finished mid-rebuild is on the page and not yet in the rows the rebuild saw. Its write
-     *   is already queued behind the lock, so the next read includes it. After
-     *   [INK_ABSORB_ATTEMPTS] it gives up and leaves [absorbedInkGeneration] where it was, so the
-     *   next arrival tries again — a page being drawn on continuously absorbs when the pen pauses,
-     *   or when it is next opened.
+     * Three things make that safe underneath somebody's hand: it joins [inkMutations]; it stands
+     * down while an ink edit is still resolving off-thread and is retried by
+     * [changePendingInkEdits]; and it re-reads rather than publishes if the canvas moved while Room
+     * was being read, giving up after [INK_ABSORB_ATTEMPTS] and leaving [absorbedInkGeneration]
+     * alone so the next arrival tries again.
      *
-     * What it deliberately does not do is rebase the page's undo ring, whose entries are whole-list
-     * snapshots taken before the arrival. An undo immediately after absorbing therefore republishes a
-     * list without the pulled strokes: nothing is lost — Room is untouched, and the next absorption
-     * or page open shows them again — where rewriting every snapshot on the ring is a large change
-     * for a case that heals itself. [acceptStoredDocument] makes the same trade for text.
+     * It does not rebase the page's undo ring, whose entries are snapshots taken before the arrival.
+     * An undo just after absorbing republishes a list without the pulled strokes; Room is untouched,
+     * so the next absorption or page open shows them again. [acceptStoredDocument] makes the same
+     * trade for text.
      */
     private fun absorbRemoteInk(pageId: String, generation: Long) {
         if (generation == absorbedInkGeneration) return
@@ -1543,8 +1428,8 @@ class NotesViewModel(
 
     // --- content search ---------------------------------------------------------------------------
     //
-    // `memory/searchPlan.md`. The panel owns the query, this owns everything the query needs: the
-    // notebook to search (CS2), the open page's live text (CS8), and where a result leads (CS9).
+    // The panel owns the query; this owns what the query needs: the notebook to search, the open
+    // page's live text, and where a result leads.
 
     private val searchIndex = ContentSearchIndex(repository)
 
@@ -1552,13 +1437,11 @@ class NotesViewModel(
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     /**
-     * The current query's results — CS11.
+     * The current query's results.
      *
-     * `transformLatest` rather than a `debounce` operator, because the wait and the work belong to
-     * the same cancellable block: a keystroke arriving mid-search abandons that search where an
-     * operator chain would let it finish and race the next one to the state. The previous results
-     * stay on screen while a new query is being typed, which is what makes the list feel like it is
-     * narrowing rather than blinking.
+     * `transformLatest` rather than a `debounce` operator, so the wait and the work share one
+     * cancellable block: a keystroke arriving mid-search abandons that search instead of letting it
+     * finish and race the next one. Previous results stay on screen while a new query is typed.
      */
     val contentSearch: StateFlow<ContentSearchState> = _searchQuery
         .transformLatest { query ->
@@ -1567,20 +1450,17 @@ class NotesViewModel(
                 emit(ContentSearchState())
                 return@transformLatest
             }
-            // **Before the wait, not after it.** The panel's field renders from this state, so a
-            // keystroke that only reached the UI 180ms later would be a text field that fights the
-            // keyboard. The previous query's results ride along until the new ones land, which is
-            // what keeps the list from blinking empty between letters.
+            // Before the wait, not after it: the panel's field renders from this state, so a
+            // keystroke that only reached the UI 180ms later would fight the keyboard. The previous
+            // query's results ride along until the new ones land.
             emit(ContentSearchState(query = query, running = true, results = lastResults))
             delay(SEARCH_DEBOUNCE_MS)
 
-            // **The picture version is collected here rather than combined with the query upstream.**
-            // A picture finishing is a reason to run the query again (`memory/imageOcrPlan.md` IO6),
-            // and `combine(_searchQuery, version)` is the obvious way to say so — but `combine`
-            // conflates, so three keystrokes in a row became one emission and the field stopped
-            // reporting what was typed. Collecting inside the block leaves the keystroke path
-            // exactly as it was and adds the re-run underneath it; `transformLatest` cancels this
-            // collector on the next keystroke, so a superseded query stops re-running too.
+            // The picture version is collected here rather than combined with the query upstream.
+            // A picture finishing is a reason to re-run the query, but `combine` conflates, so three
+            // keystrokes in a row became one emission and the field stopped reporting what was
+            // typed. Collecting inside the block leaves the keystroke path alone, and
+            // `transformLatest` cancels this collector on the next keystroke.
             val imageVersions = imageText?.version ?: MutableStateFlow(0L)
             val inkVersions = inkText?.version ?: MutableStateFlow(0L)
             val versions = combine(
@@ -1625,8 +1505,7 @@ class NotesViewModel(
      * How many pictures on this device currently hold a reading.
      *
      * Counted from the indexer's version rather than kept in step by hand, and only while something
-     * is collecting — which is while the Integrated AI pane is open. `mapLatest` collapses the burst
-     * of bumps a pass produces into one `COUNT`.
+     * collects it. `mapLatest` collapses a pass's burst of bumps into one `COUNT`.
      */
     val picturesRead: StateFlow<Int> = (imageText?.version ?: MutableStateFlow(0L))
         .mapLatest { imageText?.readCount() ?: 0 }
@@ -1659,10 +1538,8 @@ class NotesViewModel(
     }
 
     /**
-     * The last completed search, shown while the next one is being typed.
-     *
-     * Held outside the flow because `transformLatest` throws its own previous emissions away with the
-     * collector it cancelled, and "what was on screen a moment ago" has to survive that.
+     * The last completed search, shown while the next one is being typed. Held outside the flow
+     * because `transformLatest` discards its previous emissions with the collector it cancelled.
      */
     private var lastResults: ContentSearchResults? = null
 
@@ -1671,10 +1548,10 @@ class NotesViewModel(
     }
 
     /**
-     * The open page's searchable text, taken from the editors rather than from storage — CS8.
+     * The open page's searchable text, taken from the editors rather than from storage.
      *
-     * Autosave is 400ms behind the keyboard, so the stored copy of this page is the one thing in the
-     * notebook that can be out of date. Everything else comes from [ContentSearchIndex].
+     * Autosave is 400ms behind the keyboard, so the stored copy of this page is the one thing in
+     * the notebook that can be out of date. Everything else comes from [ContentSearchIndex].
      */
     private fun liveContentUnits(): List<ContentUnit> {
         val state = _uiState.value
@@ -1700,11 +1577,9 @@ class NotesViewModel(
     }
 
     /**
-     * The open page's pictures, for the same reason [liveContentUnits] exists.
-     *
-     * A picture pasted a moment ago is not in the stored document yet, and the text it holds may
-     * well have been read already — the same screenshot on an earlier page reads once for both
-     * (IO2). Deduplicated here as it is there: one placement per picture.
+     * The open page's pictures, for the same reason [liveContentUnits] exists — one pasted a moment
+     * ago is not in the stored document yet. Deduplicated to one placement per picture, since the
+     * same screenshot on an earlier page reads once for both.
      */
     private fun liveImagePlacements(): List<ImagePlacement> {
         val state = _uiState.value
@@ -1715,7 +1590,7 @@ class NotesViewModel(
         }
     }
 
-    /** Which notebook the open section belongs to — the scope of a search (CS2). */
+    /** Which notebook the open section belongs to — the scope of a search. */
     private fun notebookIdOfSelectedSection(): String? {
         val sectionId = _uiState.value.selectedSectionId ?: return null
         return _uiState.value.tree
@@ -1730,11 +1605,10 @@ class NotesViewModel(
     val reveal: StateFlow<ContentReveal?> = _reveal.asStateFlow()
 
     /**
-     * Goes to a hit: its section, its page, and then the box that holds it — CS9.
+     * Goes to a hit: its section, its page, and then the box that holds it.
      *
-     * The reveal is set *first* and outlives the page load on purpose. It is a standing request that
-     * `EditorPane` picks up once the page it names is the open one and the container it names has
-     * been laid out, which is several frames after this returns.
+     * The reveal is set first and outlives the page load: it is a standing request that `EditorPane`
+     * picks up once that page is open and the container it names has been laid out.
      */
     fun openSearchHit(hit: ContentHit) {
         val unit = hit.unit
@@ -1754,10 +1628,9 @@ class NotesViewModel(
             state.selectedSectionId == unit.sectionId -> openPage(unit.pageId)
             else -> {
                 selectSection(unit.sectionId)
-                // Set after the switch, not before: `selectSection` hands the choice of page to the
-                // pages flow, which cannot have emitted yet — nothing else runs on this thread
-                // between here and a database round trip. Clearing it in `selectSection` instead
-                // would delete the request this very line is making.
+                // Set after the switch: `selectSection` hands the choice of page to the pages flow,
+                // which cannot have emitted yet. Clearing it there instead would delete the request
+                // this line is making.
                 pendingPageId = unit.pageId
             }
         }
@@ -1819,12 +1692,11 @@ class NotesViewModel(
     }
 
     /**
-     * Deletes containers outright — the TextBox toolkit's Delete, `memory/textBoxPlan.md` TD5.
+     * Deletes containers outright — the TextBox toolkit's Delete.
      *
-     * **The "last container always survives" rule in [onOutlineBlurred] does not apply here.** That
-     * one exists to sweep up boxes nobody asked for; this is a box someone asked to be rid of, and a
-     * page with no text container on it is not broken — the next tap with the text tool armed makes
-     * another.
+     * The "last container always survives" rule in [onOutlineBlurred] does not apply: that sweeps up
+     * boxes nobody asked for, whereas this is a box someone asked to be rid of, and the next tap
+     * with the text tool armed makes another.
      */
     fun deleteOutlines(outlineIds: Set<String>) {
         if (outlineIds.isEmpty()) return
@@ -1837,9 +1709,8 @@ class NotesViewModel(
     /**
      * Puts one container on the shared clipboard, text and all.
      *
-     * Separate from [copySelection] because a text box is not in a `CanvasSelection` — TD1 declined
-     * the object-selection half of AD7 — so what the toolkit is about is the *focused* container, and
-     * that is an id rather than a selection.
+     * Separate from [copySelection] because a text box is not in a `CanvasSelection`: the toolkit
+     * acts on the focused container, which is an id rather than a selection.
      */
     fun copyOutline(outlineId: String) {
         val box = _uiState.value.outlines.firstOrNull { it.id == outlineId } ?: return
@@ -1862,11 +1733,11 @@ class NotesViewModel(
 
     /**
      * The one door every structural text edit goes through: page guard, both halves of the state,
-     * history, autosave — `editShapes`' counterpart, and for the same reason.
+     * history, autosave. `editShapes`' counterpart.
      *
-     * [touched] names the containers whose *blocks* this edit adds, removes or replaces, and is what
-     * keeps the history entry from reaching sideways into text that was only being typed in. Geometry
-     * is snapshotted whole, which is safe because typing never moves a box.
+     * [touched] names the containers whose blocks this edit adds, removes or replaces, which keeps
+     * the history entry from reaching sideways into text that was only being typed in. Geometry is
+     * snapshotted whole, which is safe because typing never moves a box.
      */
     private inline fun editTexts(
         touched: Set<String>,
@@ -1902,9 +1773,8 @@ class NotesViewModel(
      * does not litter it with empty boxes. The last remaining container always survives.
      */
     fun onOutlineBlurred(outlineId: String) {
-        // Containers only. Since TA2 the block map also holds table cells, and a cell that happened
-        // to be blank would otherwise be swept away here — taking its entry with it and leaving the
-        // grid with a hole the next save would write out.
+        // Containers only. The block map also holds table cells, and a blank cell would otherwise
+        // be swept away here, leaving the grid with a hole the next save would write out.
         if (_uiState.value.outlines.none { it.id == outlineId }) return
         // No recorded content means "unknown", not "empty" — an absent entry must never be
         // grounds for deleting a container, since `emptyList().all { }` is vacuously true.
@@ -1936,12 +1806,9 @@ class NotesViewModel(
     /**
      * Shows a font or size picked with nothing focused, so the ribbon reflects the choice.
      *
-     * The readout only. The editor arms the mark itself for whatever is typed next, and text typed
-     * against existing writing inherits from it, so nothing here needs to reach the document.
-     *
-     * It used to persist the pick as the app-wide default as well, which meant choosing a size to
-     * write one sentence in silently changed what every page opened afterwards started at. Moving
-     * the default is now its own gesture — see [setDefaultFont].
+     * The readout only: the editor arms the mark itself for whatever is typed next, and text typed
+     * against existing writing inherits from it. Moving the app-wide default is its own gesture —
+     * see [setDefaultFont].
      */
     fun onMarkArmed(mark: Mark) {
         _selection.value = _selection.value.let { state ->
@@ -2040,10 +1907,9 @@ class NotesViewModel(
     /**
      * Fits the page's width to the window.
      *
-     * The two widths this needs are known only where the canvas is laid out, so the canvas reports
-     * them and the ribbon stays ignorant of geometry — the same one-way arrangement as AD6's
-     * command bus. They are held outside [uiState] because they change with every layout pass and
-     * nothing renders from them.
+     * The two widths are known only where the canvas is laid out, so the canvas reports them and the
+     * ribbon stays ignorant of geometry. They are held outside [uiState] because they change with
+     * every layout pass and nothing renders from them.
      */
     fun zoomToPageWidth() {
         val (viewport, content) = canvasWidths
@@ -2083,14 +1949,12 @@ class NotesViewModel(
      * Rebuilds one page from its live stroke rows and active replay operations, off the main thread
      * and across every core, reporting each part as it becomes showable.
      *
-     * Decoding is the expensive half and is perfectly parallel — a stroke is rebuilt from its own row
-     * and nothing else — so it is split into fixed-size chunks and awaited **in row order**, which
-     * keeps what is published a prefix of the page in draw order. Later strokes sit on top of
-     * earlier ones, so an out-of-order prefix would show ink stacked wrongly and then rearrange
-     * itself.
+     * Decoding is the expensive half and is perfectly parallel, so it is split into fixed-size chunks
+     * and awaited in row order — later strokes sit on top of earlier ones, so an out-of-order prefix
+     * would show ink stacked wrongly and then rearrange itself.
      *
-     * [onPartial] is called only when the page's stored operations allow a prefix to be shown at all;
-     * see [streamable]. It is always safe to ignore it — the return value is the whole page.
+     * [onPartial] is called only when the page's operations allow a prefix to be shown at all — see
+     * `InkPageLoader.load`. It is always safe to ignore; the return value is the whole page.
      */
     private suspend fun loadInk(
         pageId: String,
@@ -2101,10 +1965,9 @@ class NotesViewModel(
             lastInkOperationAt,
             loaded.latestOperationAt,
         )
-        // Opening a page is where the replay that proves a stroke has nothing left already ran, so it
-        // is where rubbed-out ink is collected — including everything erased before this existed, and
-        // everything an erase pulled from another device finished off. See
-        // [NotesRepository.collectErasedAwayStrokes]; it is a tombstone, so a page only pays once.
+        // Opening a page is where the replay that proves a stroke has nothing left already ran, so
+        // it is where rubbed-out ink is collected. See [NotesRepository.collectErasedAwayStrokes];
+        // it is a tombstone, so a page only pays once.
         repository.collectErasedAwayStrokes(loaded.erasedAway)
         return loaded.strokes
     }
@@ -2113,15 +1976,13 @@ class NotesViewModel(
         // Text is the one tool that wants the caret and the IME; every other one — including
         // nothing at all — takes the page's gestures and should put them away first.
         if (tool != DrawTool.Text) _commands.tryEmit(FormatCommand.DeactivateTextInput)
-        // And the same for what is selected *on* the page — `memory/diagram.md`, Prime Object Class:
-        // "Selecting any other tool removes selection of object." Only on an actual change, which is
-        // what "any other tool" says: re-tapping the tool already in hand has not selected another
-        // one, and taking the selection away there would make the armed button feel like a reset.
+        // And the same for what is selected on the page: selecting any other tool clears the object
+        // selection. Only on an actual change — re-tapping the tool already in hand would otherwise
+        // make the armed button feel like a reset.
         if (tool != _tool.value) _commands.tryEmit(FormatCommand.ClearCanvasSelection)
-        // Picking up anything else drops the formula that was waiting to be placed. It is content
-        // held in the hand, not a setting kept on a shelf, so it has no meaning once the hand is
-        // holding a pen — and leaving it would place a formula the user composed minutes ago the
-        // next time they came back to ƒ.
+        // Picking up anything else drops the formula that was waiting to be placed: it is content
+        // held in the hand, not a setting, so leaving it would place a formula composed minutes ago
+        // the next time the user came back to ƒ.
         if (tool != DrawTool.Equation) _pendingEquation.value = null
         _tool.value = tool
     }
@@ -2155,12 +2016,11 @@ class NotesViewModel(
     }
 
     /**
-     * Lays the ruler on the page, or picks it up — `memory/rulerPlan.md` RD1.
+     * Lays the ruler on the page, or picks it up.
      *
-     * Not [selectTool], and that is the whole design: a ruler is not something you draw *with*, it is
-     * something you draw *against*, so it composes with whatever is in hand instead of replacing it.
-     * Unpersisted for the reason the armed tool is — reopening the app should not leave a ruler lying
-     * across the page.
+     * Not [selectTool], deliberately: a ruler is not something you draw with, it is something you
+     * draw against, so it composes with whatever is in hand. Unpersisted for the reason the armed
+     * tool is.
      */
     fun toggleRuler() {
         _rulerOut.value = !_rulerOut.value
@@ -2214,14 +2074,11 @@ class NotesViewModel(
     /**
      * Seeds a shape into the box just dragged and adds it to the document.
      *
-     * A document edit rather than an ink write: a shape is an object, so it goes through the same
-     * autosave the text containers do rather than through `ink_strokes`. It is still one entry on the
-     * canvas history ring, which spans both kinds (SD10): where a shape is *stored* and what Undo
-     * reverses are two different questions, and the answer to the second is always "the last thing
-     * you did".
+     * A document edit rather than an ink write: a shape is an object, so it autosaves with the text
+     * containers rather than going through `ink_strokes`. It is still one entry on the canvas history
+     * ring, which spans both kinds.
      *
-     * The shape is selected on arrival, because the handles are how it is adjusted and a shape you
-     * have to hunt for before you can move a corner is a shape you would rather have redrawn.
+     * Selected on arrival, because the handles are how it is adjusted.
      */
     fun insertShape(
         shape: ShapeSettings,
@@ -2250,10 +2107,9 @@ class NotesViewModel(
         ).withRecomputedBounds()
 
         editShapes { it + created }
-        // Drawing one shape puts the tool down. The handles are the point of a shape being an
-        // object, and they are unreachable while the tool that draws new ones is still armed —
-        // so placing one hands it straight to you, ready to adjust. Nothing armed genuinely means
-        // nothing since TD2, so the next stray tap no longer opens a text container either.
+        // Drawing one shape puts the tool down: the handles are unreachable while the tool that
+        // draws new ones is still armed. Nothing armed means nothing, so the next stray tap does
+        // not open a text container either.
         _tool.value = DrawTool.None
         return created.id
     }
@@ -2261,25 +2117,19 @@ class NotesViewModel(
     /**
      * Replaces a freehand stroke the user held still at the end of with a straight line object.
      *
-     * The other half of `memory/inkPlan.md` §5, and deliberately **not** a second entry point into
-     * [insertShape]. Two things differ, and both would be bugs if they were shared:
+     * Deliberately not a second entry point into [insertShape]; two things differ:
      *
-     *  - **The pen stays in hand.** [insertShape] puts the Shape tool down, because a shape you just
-     *    dragged out is one you are about to grab a handle on. This one interrupts writing: the pen
-     *    is still on the glass and the next thing it does is the next word, so disarming it here
-     *    would mean every ruled underline cost a trip back to the Draw tab.
-     *  - **Nothing is selected.** For the same reason. A tooltip raised over the page while the pen
-     *    is still down is chrome in the way of the hand holding it.
+     *  - The pen stays in hand. This interrupts writing, so disarming it would cost a trip back to
+     *    the Draw tab for every ruled underline.
+     *  - Nothing is selected, for the same reason: a tooltip raised while the pen is still down is
+     *    chrome in the way of the hand holding it.
      *
-     * The line is drawn with the *pen's* colour, width and line type rather than the Shape tool's,
-     * because it is the mark that pen was making — a black 1.5 dp pen that produced a 2 dp line in
-     * whatever the shape pane was last set to would read as the app substituting its own stroke.
-     * `colorFollowsTheme` rides across for the same reason it rides onto an ink row: this is the one
-     * moment the intent is known, and Switch Background has to be able to flip it later.
+     * The line takes the pen's colour, width and line type rather than the Shape tool's, because it
+     * is the mark that pen was making. `colorFollowsTheme` rides across so Switch Background can
+     * flip it later.
      *
-     * Returns null when there is no page, no pen in hand, or the page is read-only — the caller
-     * cancelled the wet stroke to get here, so a null means the mark is gone; see the overlay's
-     * `StraightenHold` for why it does not reach this without a pen.
+     * Returns null when there is no page, no pen in hand, or the page is read-only. The caller
+     * cancelled the wet stroke to get here, so null means the mark is gone.
      */
     fun straightenStrokeToLine(
         startX: Float,
@@ -2302,8 +2152,7 @@ class NotesViewModel(
             borderFollowsTheme = pen.colorFollowsTheme,
             borderWidth = pen.thickness,
             lineType = pen.lineType,
-            // A line has no inside. Explicit rather than defaulted, because the field exists and a
-            // reader should not have to check whether this forgot it.
+            // A line has no inside. Explicit rather than defaulted.
             fillArgb = null,
         ).withRecomputedBounds()
 
@@ -2312,23 +2161,20 @@ class NotesViewModel(
     }
 
     /**
-     * Moves a shape by a delta — **once per gesture, not once per frame.**
+     * Moves a shape by a delta — once per gesture, not once per frame.
      *
-     * A delta composes safely, so per-frame calls were correct arithmetic; what they were not was one
-     * *action*. Undo reverses actions, and sixty entries for one drag makes the button useless — as
-     * did sixty autosaves. Both callers now report the whole travel on the lift, the layer from its
-     * own preview and the lasso as it always did.
+     * A delta composes safely, so per-frame calls were correct arithmetic but not one action: sixty
+     * undo entries and sixty autosaves for one drag. Both callers report the whole travel on lift.
      */
     fun moveShape(shapeId: String, dx: Float, dy: Float) {
         moveShapes(setOf(shapeId), dx, dy)
     }
 
     /**
-     * The lasso's half of a move: every shape it holds, in **one** edit.
+     * The lasso's half of a move: every shape it holds, in one edit.
      *
-     * Not `ids.forEach(::moveShape)`, which is what it was. One gesture that moved three shapes then
-     * cost three presses of Undo to take back, each putting one shape where the others no longer
-     * were — a history that describes the implementation rather than what the user did.
+     * Not `ids.forEach(::moveShape)`: one gesture that moved three shapes then cost three presses of
+     * Undo, each putting one shape where the others no longer were.
      */
     fun moveShapes(shapeIds: Set<String>, dx: Float, dy: Float) {
         if (shapeIds.isEmpty() || (dx == 0f && dy == 0f)) return
@@ -2338,14 +2184,12 @@ class NotesViewModel(
     }
 
     /**
-     * Scales a shape about the corner opposite the one being dragged — AD7's four-corner resize.
+     * Scales a shape about the corner opposite the one being dragged.
      *
-     * **Once per gesture, not once per frame.** The scale is absolute — where the finger ended up,
+     * Once per gesture, not once per frame. The scale is absolute — where the finger ended up,
      * against the geometry the drag started from — so it is only correct applied to that starting
-     * geometry, which is the shape this still holds precisely because the drag wrote nothing while
-     * it was in flight. Both callers are built that way: the corner handles draw a preview and
-     * commit on the lift, and the lasso has always done the same. Calling this per frame multiplies
-     * a drag's scales into each other and the shape explodes.
+     * geometry, which is what this still holds because the drag wrote nothing in flight. Calling it
+     * per frame multiplies a drag's scales into each other and the shape explodes.
      */
     fun resizeShape(shapeId: String, anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float) {
         resizeShapes(setOf(shapeId), anchorX, anchorY, scaleX, scaleY)
@@ -2368,16 +2212,14 @@ class NotesViewModel(
     }
 
     /**
-     * Moves one arm's free end along its own axis — the L's per-arm handles, `memory/inkPlan.md` SD9.
+     * Moves one arm's free end along its own axis — the L's per-arm handles.
      *
      * The arm is looked up again here rather than passed in, so what is edited is an arm of the
-     * shape as it stands now. That matters because the caller measured it a gesture ago: an arm the
-     * shape no longer has is one this leaves alone rather than one it recreates.
+     * shape as it stands now: an arm the shape no longer has is left alone rather than recreated.
      *
-     * Absolute, like [resizeShape] and unlike [moveShape] — it says where the tip goes, not how far
-     * it travelled — but unlike a scale it does not compound, so applying it per frame would be
-     * harmless. It is still committed once, on the lift, because a drag that wrote every frame would
-     * be a drag that autosaved every frame.
+     * Absolute like [resizeShape], but it does not compound, so per-frame application would be
+     * harmless. Still committed once on the lift, since a drag that wrote every frame would autosave
+     * every frame.
      */
     fun resizeShapeArm(shapeId: String, segmentId: String, atEnd: Boolean, along: Float) {
         updateShapeOutline(shapeId) { shape ->
@@ -2387,14 +2229,13 @@ class NotesViewModel(
     }
 
     /**
-     * Moves one end of a line or an arrow to where the finger left it — `memory/inkPlan.md` SD12.
+     * Moves one end of a line or an arrow to where the finger left it.
      *
      * The line's own resize, in place of the four corners every other kind gets: both coordinates,
-     * so a drag across the line turns it rather than stretching it, and the arrow's head is re-traced
-     * onto the new heading by [withEnd].
+     * so a drag across the line turns it rather than stretching it, and the arrow's head is
+     * re-traced onto the new heading by [withEnd].
      *
-     * Looked up again here rather than passed in, and absolute but idempotent, for exactly the
-     * reasons [resizeShapeArm] gives — it is the same gesture with one fewer constraint.
+     * Looked up again, and absolute but idempotent, for the reasons [resizeShapeArm] gives.
      */
     fun moveShapeEnd(shapeId: String, atEnd: Boolean, x: Float, y: Float) {
         updateShapeOutline(shapeId) { shape ->
@@ -2406,9 +2247,8 @@ class NotesViewModel(
     /**
      * Sets the border width of every selected shape — the shape half of the object toolkit.
      *
-     * Not the same thing as `ShapeSettings.borderWidth`, which is how the *user* likes to draw shapes
-     * and lives in DataStore (`memory/inkPlan.md` SD4). This edits the document. Changing one must never
-     * change the other: one travels with the page, the other with the person.
+     * Not `ShapeSettings.borderWidth`, which is how the user likes to draw shapes and lives in
+     * DataStore. This edits the document; one travels with the page, the other with the person.
      */
     fun setShapeBorderWidth(shapeIds: Set<String>, width: Float) {
         if (shapeIds.isEmpty()) return
@@ -2425,10 +2265,9 @@ class NotesViewModel(
     /**
      * Fills every selected shape, or clears the fill with null.
      *
-     * Null is not transparent black: it is the *absence* of a fill, which is what a shape starts with
-     * and what "None" on the toolkit's palette puts back. A shape with no inside — a line, an arrow,
-     * an L — is filtered out here rather than trusted not to arrive, because the bar hides Fill for
-     * those and a hidden control is not a guarantee.
+     * Null is the absence of a fill, not transparent black — what a shape starts with and what
+     * "None" puts back. A shape with no inside is filtered out here rather than trusted not to
+     * arrive, since the bar hiding Fill is not a guarantee.
      */
     fun setShapeFill(shapeIds: Set<String>, argb: Int?) {
         if (shapeIds.isEmpty()) return
@@ -2445,7 +2284,7 @@ class NotesViewModel(
         }
     }
 
-    /** Recolours the border of every selected shape — the tooltip's swatch, per AD7. */
+    /** Recolours the border of every selected shape — the tooltip's swatch. */
     fun recolorShapes(shapeIds: Set<String>, argb: Int) {
         if (shapeIds.isEmpty()) return
         editShapes { shapes ->
@@ -2476,12 +2315,11 @@ class NotesViewModel(
     /**
      * The one door every shape edit goes through: page guard, state, history, autosave.
      *
-     * Having exactly one is what stopped shapes being the kind of object that is *almost* undoable —
-     * before this, each mutation wrote the state and emitted an autosave by hand, and adding the ring
-     * to five call sites would have meant forgetting it on the sixth.
+     * Having exactly one is what stopped shapes being almost undoable — before this, each mutation
+     * wrote the state and emitted an autosave by hand.
      *
-     * An edit that changes nothing is not an edit: it records no history and wakes no autosave, which
-     * matters because a drag ending exactly where it began still reports itself.
+     * An edit that changes nothing records no history and wakes no autosave, which matters because a
+     * drag ending exactly where it began still reports itself.
      */
     private inline fun editShapes(
         coalesceKey: String? = null,
@@ -2511,18 +2349,16 @@ class NotesViewModel(
     // --- images ---------------------------------------------------------------------------------
 
     /**
-     * Imports a picked picture and puts it on the page — feature E6.
+     * Imports a picked picture and puts it on the page.
      *
      * The import is the slow half (read, downscale, re-encode, hash, write) and is entirely inside
-     * [AttachmentStore], off the main thread. What lands here is a few numbers, so the page edit
-     * itself is the same cheap document change every other object makes.
+     * [AttachmentStore], off the main thread. What lands here is a few numbers.
      *
-     * **Placed where the user is looking**, not at the page's origin: the ribbon button has no tap to
-     * take a position from, and a picture inserted onto a corner of a page scrolled somewhere else is
-     * a picture the user has to go and find. [viewportOrigin] is what the canvas last reported.
+     * Placed where the user is looking rather than at the page's origin: the ribbon button has no
+     * tap to take a position from, and a picture inserted onto a corner of a page scrolled elsewhere
+     * is one the user has to go and find. [viewportOrigin] is what the canvas last reported.
      *
-     * Sized to [Outline.Image.DEFAULT_WIDTH] with the aspect ratio the file actually has, so a
-     * portrait photograph arrives portrait.
+     * Sized to [Outline.Image.DEFAULT_WIDTH] at the file's own aspect ratio.
      */
     fun insertImage(uri: Uri) {
         val pageId = _uiState.value.selectedPageId ?: return
@@ -2540,10 +2376,9 @@ class NotesViewModel(
                 1f
             }
             val width = Outline.Image.DEFAULT_WIDTH
-            // Clear of the title band when the page is scrolled to its top, exactly as a seeded or
-            // newly opened text container is: outline coordinates start at the page's own corner, so
-            // something placed at the viewport origin lands *on* the header rather than below it.
-            // Scrolled anywhere else the viewport wins, which is what the max is for.
+            // Clear of the title band when the page is scrolled to its top, as a seeded container
+            // is: outline coordinates start at the page's corner, so something placed at the
+            // viewport origin lands on the header. Scrolled elsewhere the viewport wins.
             val titleFloor = if (_uiState.value.pageStyle.hideTitle) 0f else PageStyle.TITLE_BAND_DP
             val created = Outline.Image(
                 id = newId(),
@@ -2554,9 +2389,8 @@ class NotesViewModel(
                 attachmentId = imported.id,
             )
             editImages { it + created }
-            // Nothing armed, so the next tap reaches the picture and selects it rather than being
-            // taken by a tool. Not auto-selected: the insert happens off a ribbon button, not a
-            // canvas gesture, so there is no layer in the call path holding the selection to set.
+            // Nothing armed, so the next tap reaches the picture and selects it. Not auto-selected:
+            // the insert happens off a ribbon button, so no layer in the call path holds a selection.
             _tool.value = DrawTool.None
         }
     }
@@ -2592,13 +2426,10 @@ class NotesViewModel(
     /**
      * Removes pictures from the page — the toolkit's Delete.
      *
-     * **The file stays, and for now it stays for good.** Undo restores this list, and a restored
-     * frame pointing at bytes that had been swept would be a hole in the page no further undo could
-     * fill — so nothing is released here. Deciding the moment a delete becomes permanent is a real
-     * question (the history ring? closing the page? a sweep at launch?) and getting it wrong destroys
-     * a picture that is still referenced, so **v1 leaks disk rather than risk that**:
-     * `AttachmentStore.release` exists and is correct, and nothing calls it yet. `refCount` is
-     * maintained so the sweep can be written without a migration.
+     * The file stays. Undo restores this list, and a restored frame pointing at swept bytes would be
+     * a hole no further undo could fill, so nothing is released here. `AttachmentStore.release`
+     * exists and is correct but is not called yet; `refCount` is maintained so a sweep can be added
+     * without a migration.
      */
     fun deleteImages(imageIds: Set<String>) {
         if (imageIds.isEmpty()) return
@@ -2625,14 +2456,10 @@ class NotesViewModel(
      * Puts a formula where the user tapped.
      *
      * [insertShape]'s bargain, kind for kind: a document edit, one entry on the shared history ring,
-     * the tool put down afterwards and the new object handed back so the page can select it. The
-     * handles are the point of it being an object and they are unreachable while the tool that makes
-     * new ones is still in hand.
+     * the tool put down afterwards and the new object handed back so the page can select it.
      *
-     * **The size arrives with the formula rather than being discovered later.** The panel has already
-     * rendered it once to check it parses, so its measured box comes along for free — which is what
-     * spares this the feedback loop a table needs, where only the canvas knows how tall the thing
-     * really is.
+     * The size arrives with the formula rather than being discovered later — the panel rendered it
+     * once to check it parses, so its measured box comes along for free.
      */
     fun insertEquation(
         latex: String,
@@ -2669,11 +2496,10 @@ class NotesViewModel(
     }
 
     /**
-     * Scales about the corner opposite the one being dragged — AD7's four-corner resize.
+     * Scales about the corner opposite the one being dragged.
      *
-     * **Absolute, and applied once on the lift.** The same contract [resizeShapes] documents, and the
-     * same failure if it is called per frame: each frame's scale is measured from the geometry the
-     * drag *started* with, so applying them in sequence multiplies them together.
+     * Absolute, and applied once on the lift — the contract [resizeShapes] documents, with the same
+     * failure if called per frame: the scales multiply together.
      */
     fun resizeEquations(
         equationIds: Set<String>,
@@ -2739,12 +2565,10 @@ class NotesViewModel(
     // --- tables ---------------------------------------------------------------------------------
 
     /**
-     * Puts a table where the user tapped — `memory/tablePlan.md` TA7.
+     * Puts a table where the user tapped.
      *
      * A document edit on the same footing as [insertShape], and it ends the same way: the tool goes
-     * back down and the new object is handed to the caller so the page can select it. The handles are
-     * the point of it being an object, and they are unreachable while the tool that makes new ones is
-     * still armed.
+     * back down and the new object is handed to the caller so the page can select it.
      */
     fun insertTable(
         settings: TableSettings,
@@ -2765,8 +2589,8 @@ class NotesViewModel(
             borderFollowsTheme = settings.colorFollowsTheme,
             borderWidth = settings.borderWidth.toFloat(),
             fillArgb = settings.fillArgb,
-            // A ruling for the stylus rather than a grid of text fields — `memory/tablePlan.md` TA15,
-            // and a setting rather than a second tool since it moved into the Table pane.
+            // A ruling for the stylus rather than a grid of text fields; a setting rather than a
+            // second tool since it moved into the Table pane.
             inkOnly = settings.inkOnly,
         )
 
@@ -2813,10 +2637,9 @@ class NotesViewModel(
     }
 
     /**
-     * One column's width, from its handle in the top gutter — TA5.
+     * One column's width, from its handle in the top gutter.
      *
-     * Coalesced, like the border-width slider: a drag reports every step it passes through, and one
-     * drag is one thing to undo.
+     * Coalesced like the border-width slider: a drag reports every step, and one drag is one undo.
      */
     fun setTableColumnWidth(tableId: String, column: Int, width: Float) {
         editTables(coalesceKey = "column-width:$tableId:$column") { tables ->
@@ -2824,7 +2647,7 @@ class NotesViewModel(
         }
     }
 
-    /** One row's floor, from its handle in the left gutter. A floor, never a height — TA3. */
+    /** One row's floor, from its handle in the left gutter. A floor, never a height. */
     fun setTableRowMinHeight(tableId: String, row: Int, minHeight: Float) {
         editTables(coalesceKey = "row-height:$tableId:$row") { tables ->
             tables.map { if (it.id == tableId) it.withRowMinHeight(row, minHeight) else it }
@@ -2832,12 +2655,11 @@ class NotesViewModel(
     }
 
     /**
-     * The four actions the diagram asks of the class — `memory/diagram.md`, Table Class.
+     * Insert and delete, row and column.
      *
-     * All four take the row or column to act *at*, which the bar works out from where the caret is
-     * (TA6). The model refuses what the caps or the last-row rule forbid, and [editTables] treats an
-     * edit that changed nothing as no edit at all — so a refused action leaves no history entry
-     * behind and wakes no autosave.
+     * All four take the row or column to act at, which the bar works out from where the caret is.
+     * The model refuses what the caps or the last-row rule forbid, and [editTables] treats an edit
+     * that changed nothing as no edit — so a refused action leaves no history entry behind.
      */
     fun insertTableRow(tableId: String, at: Int) {
         val table = _uiState.value.tables.firstOrNull { it.id == tableId } ?: return
@@ -2914,12 +2736,12 @@ class NotesViewModel(
     }
 
     /**
-     * The one door every table edit goes through: page guard, state, cell blocks, history, autosave —
-     * `editShapes`' counterpart, and `memory/tablePlan.md` TA10.
+     * The one door every table edit goes through: page guard, state, cell blocks, history, autosave.
+     * `editShapes`' counterpart.
      *
-     * [touched] names the cells whose *blocks* this edit adds or removes, and is what keeps the
-     * history entry from reaching sideways into cells that were only being typed in. The grid is
-     * snapshotted whole, which is safe because typing never changes it.
+     * [touched] names the cells whose blocks this edit adds or removes, which keeps the history entry
+     * from reaching sideways into cells that were only being typed in. The grid is snapshotted whole,
+     * which is safe because typing never changes it.
      *
      * Structural edits bump `pageRevision`: an `OutlineEditText` holds its own text and will not
      * notice that the grid around it changed shape.
@@ -2981,21 +2803,19 @@ class NotesViewModel(
     /**
      * Deletes exactly the projections a lasso is holding — not the rows they happen to share.
      *
-     * The lasso stopped widening a hit out to its stored row (`selectWithLasso`), which is what makes
-     * a loop round one half of a cut line select that half alone. Delete had to follow it or the
-     * narrowing would be a lie in the one place it costs the user something irreversible: a stroke
-     * erased in two, one piece circled, and the other going with it.
+     * The lasso does not widen a hit out to its stored row, so a loop round one half of a cut line
+     * selects that half alone. Delete follows it, or the narrowing would be a lie in the one place
+     * it costs something irreversible.
      *
-     * Two mechanisms, because a row and a piece are not the same kind of thing to storage:
-     * - **A row nothing of which survives** is tombstoned, which is the ordinary delete this method
-     *   used to be, and the only one the seven-day purge can ever collect.
-     * - **A row that keeps a piece** cannot be tombstoned and has no per-piece row to tombstone
-     *   instead, so what is stored is a proved Object-mode erase per doomed piece — see
-     *   [com.vivenotes.ink.planProjectionDelete] for why that is the only durable way to say it.
+     * Two mechanisms, because a row and a piece are not the same thing to storage:
+     * - A row nothing of which survives is tombstoned — the ordinary delete, and the only one the
+     *   seven-day purge can collect.
+     * - A row that keeps a piece cannot be tombstoned and has no per-piece row to tombstone instead,
+     *   so a proved Object-mode erase is stored per doomed piece. See
+     *   [com.vivenotes.ink.planProjectionDelete].
      *
-     * The two are one press of Undo through [asOneAction], and the whole of it is guarded by
-     * [changePendingInkEdits] for the reason [erase] is: the geometry resolves off the input thread,
-     * and until it lands the page's last action is not yet known.
+     * The two are one press of Undo through [asOneAction], and the whole is guarded by
+     * [changePendingInkEdits] for the reason [erase] is: the geometry resolves off the input thread.
      */
     fun deleteInkSelection(selection: InkLassoSelection) {
         if (selection.projections.isEmpty()) return
@@ -3124,24 +2944,19 @@ class NotesViewModel(
     // --- insert space ---------------------------------------------------------------------------
 
     /**
-     * Insert Space — feature E2, and `com.vivenotes.model.PageSpace` for what the gesture means.
+     * Insert Space — see `com.vivenotes.model.PageSpace` for what the gesture means.
      *
-     * Everything whose near edge is past [cut]'s line moves by its amount; everything else stays. That
-     * is one translation applied to every kind on the page, which makes this the widest single action
-     * in the app: it is the only one that can touch ink, text, shapes, pictures, tables and equations
-     * at once, without anything having been selected.
+     * Everything whose near edge is past [cut]'s line moves by its amount; everything else stays.
+     * The widest single action in the app: ink, text, shapes, pictures, tables and equations at
+     * once, with nothing selected.
      *
-     * **The limit is computed across all six kinds before any of them moves.** A closing drag can only
-     * take back as much space as the *nearest* thing to the line has, and asking each kind to stop
-     * itself would let the ink slide up 40 dp while the text beside it stopped at 10 — which is the
-     * one thing this gesture must never do, since its whole promise is that what moves, moves
-     * together. So the smallest near edge decides for all of them, and [SpaceCut.limitedTo] applies it
-     * once.
+     * The limit is computed across all six kinds before any of them moves. A closing drag can only
+     * take back as much space as the nearest thing to the line has, and letting each kind stop
+     * itself would slide the ink 40 dp while the text beside it stopped at 10. [SpaceCut.limitedTo]
+     * applies the smallest near edge once, for all of them.
      *
-     * Each kind then commits through the door it already has, which is what AD7's second consequence
-     * asks for: the same operation, applied by each kind to its own representation. What is different
-     * here is that they are wrapped in [asOneAction] — see [CanvasHistoryEntry.Composite] for why this
-     * gesture, unlike a paste, cannot be left as one entry per kind.
+     * Each kind then commits through the door it already has, wrapped in [asOneAction] — see
+     * [CanvasHistoryEntry.Composite] for why this gesture cannot be one entry per kind.
      */
     fun insertSpace(cut: SpaceCut) {
         if (cut.isEmpty) return
@@ -3149,17 +2964,14 @@ class NotesViewModel(
         if (readOnlyPageId == pageId) return
         val state = _uiState.value
 
-        // **A stored row — or a group — is the atom, not a projection.** An erase splits one stroke
-        // into several projections that share a row id, and a group is several strokes the user
-        // deliberately tied together; in both cases the pieces are one thing on the page, and one
-        // thing either straddles the line or does not. Deciding per projection would cut a
-        // partially-erased word in half, or push the bottom of a grouped diagram out from under its
-        // own top.
+        // A stored row — or a group — is the atom, not a projection. An erase splits one stroke into
+        // several projections sharing a row id, and a group is several strokes deliberately tied
+        // together; either way the pieces are one thing on the page, and one thing either straddles
+        // the line or does not. Deciding per projection would cut a partially-erased word in half.
         //
-        // **Deliberately not the reading `selectWithLasso` gives**, which takes projections: a lasso
-        // is a hand pointing at what it can see, and this gesture points at nothing at all. Nobody
-        // circled these strokes — a line was drawn across the page and everything past it moves — so
-        // there is no act of pointing to honour, and the unit falls back to the object.
+        // Deliberately not the reading `selectWithLasso` gives, which takes projections: a lasso
+        // points at what it can see, and this gesture points at nothing — a line was drawn across
+        // the page — so the unit falls back to the object.
         val movingInk = _strokes.value
             .groupBy { it.groupId ?: it.id }
             .values
@@ -3210,21 +3022,17 @@ class NotesViewModel(
     /**
      * The ink half of [insertSpace], as an ordinary replayable lasso move.
      *
-     * **A rectangle is a lasso, so this needs no new kind of stored operation.** `ink_moves` already
-     * holds a page-space polygon plus a delta, and `replayMove` already selects by "enclosed by the
-     * polygon *and* named in the targets" — so a box drawn around exactly the strokes that are moving
-     * replays as exactly the move that was committed. The alternative was a seventh operation kind in
-     * the ink log, a migration, and a second replay path to keep in step with the first, for a
-     * translation the existing one already expresses.
+     * A rectangle is a lasso, so this needs no new stored operation kind: `ink_moves` already holds
+     * a page-space polygon plus a delta, and `replayMove` selects by enclosure and by target id, so
+     * a box drawn around exactly the moving strokes replays as exactly the committed move.
      *
      * The box is the union of what is moving rather than the half-plane the gesture describes,
-     * deliberately: an unbounded canvas has no far edge to draw a half-plane to, and a polygon has to
-     * be finite to be stored. Nothing is lost — the targets are named by id, so a stroke drawn below
-     * the line *after* this gesture is not swept up by it on the next load, which is correct.
+     * because an unbounded canvas has no far edge and a stored polygon has to be finite. The targets
+     * are named by id, so a stroke drawn below the line afterwards is not swept up on the next load.
      *
-     * [SPACE_LASSO_MARGIN] keeps the enclosure test off the boundary itself: `pointInPolygon` gives no
-     * useful answer for a corner lying exactly on an edge, and a stroke whose top is exactly at the
-     * line is the common case rather than a curiosity.
+     * [SPACE_LASSO_MARGIN] keeps the enclosure test off the boundary: `pointInPolygon` gives no
+     * useful answer for a corner exactly on an edge, and a stroke whose top is exactly at the line
+     * is the common case.
      */
     private fun moveInkPastLine(moving: List<PageStroke>, dx: Float, dy: Float) {
         val bounds = moving.mapNotNull(PageStroke::pageBounds).unionBounds() ?: return
@@ -3249,23 +3057,20 @@ class NotesViewModel(
     }
 
     /**
-     * Locks or unlocks everything the selection holds — `memory/diagram.md`.
+     * Locks or unlocks everything the selection holds.
      *
-     * **Locking mints one group id and writes it to every object held, which is what groups them.**
+     * Locking mints one group id and writes it to every object held, which is what groups them:
      * `Outline.lockGroup` is the group, so there is no second field to keep in step and no way to be
-     * locked without being grouped; unlocking clears it and ungroups them again, which is the rule
-     * the user stated. A lone object locks into a group of one.
+     * locked without being grouped. Unlocking clears it. A lone object locks into a group of one.
      *
      * Reaches past what is held to every member of the groups it names, so an unlock can never leave
-     * half a group locked — the selection is normally the whole group already (`reconcile` widens it),
-     * and this is what makes that a convenience rather than something correctness rests on.
+     * half a group locked.
      *
-     * **Ink is not touched.** A stroke is not an outline and has no lock: locking it would have meant
-     * taking the database off its version-1 baseline for a column, and the bar declines to offer the
-     * button over ink at all rather than offering one that does half of what it says.
+     * Ink is not touched: a stroke is not an outline and has no lock, so the bar declines to offer
+     * the button over ink rather than offering one that does half of what it says.
      *
-     * Four calls rather than one, because history is per kind — the same shape [deleteShapes] and the
-     * recolour path already have, and the reason locking two kinds at once is two steps of Undo.
+     * Four calls rather than one, because history is per kind — so locking two kinds at once is two
+     * steps of Undo.
      */
     fun setSelectionLocked(selection: CanvasSelection, locked: Boolean) {
         val group = if (locked) newId() else null
@@ -3313,7 +3118,7 @@ class NotesViewModel(
         val strokes = _strokes.value.filter { it.id in selection.inkIds }.distinctBy(PageStroke::id)
         val shapes = _uiState.value.shapes.filter { it.id in selection.shapeIds }
         // Read back through the block map, never off `uiState.tables`, whose cells go stale the
-        // moment anything is typed — TA2. A table copied without what is in it is a grid of lines.
+        // moment anything is typed. A table copied without what is in it is a grid of lines.
         val tables = _uiState.value.tables
             .filter { it.id in selection.tableIds }
             .map { table -> table.withCellBlocks(table.contentCellIds().associateWith { blocksById[it].orEmpty() }) }
@@ -3333,14 +3138,12 @@ class NotesViewModel(
     /**
      * Pastes the clipboard with its union centre at [at], whatever kinds it holds.
      *
-     * The centre is measured across **both** kinds, so a copied stroke-and-shape pair lands in the
-     * same relative arrangement it was copied in rather than each kind centring itself.
+     * The centre is measured across all kinds, so a copied stroke-and-shape pair lands in the
+     * arrangement it was copied in rather than each kind centring itself.
      *
      * Each kind commits the way it already does — ink through `ink_strokes`, a shape through the
-     * document's autosave — which is exactly AD7's second consequence: the same operation, applied by
-     * each kind to its own representation. Both leave one entry on the one history ring (SD10), so a
-     * paste of both kinds takes two presses of Undo to unwind. Worth knowing, and not worth a
-     * cross-kind entry type to fix: each press does visibly undo half of it.
+     * document's autosave — and each leaves one entry on the history ring, so a paste of two kinds
+     * takes two presses of Undo. Each press visibly undoes half of it, so that is left as it is.
      */
     fun pasteObjects(at: InkPoint) {
         val pageId = _uiState.value.selectedPageId ?: return
@@ -3360,25 +3163,21 @@ class NotesViewModel(
             sourceShapes.map(Outline.Shape::pageBounds) +
             // Exact, unlike the two approximations below it: an equation's box is its geometry.
             sourceEquations.map(Outline.Equation::pageBounds) +
-            // The sum of the row floors, which is the height the document can know — TA3. Off by
-            // however far a cell's text runs past its row, exactly as a text box's floor is.
+            // The sum of the row floors, which is the height the document can know. Off by however
+            // far a cell's text runs past its row, exactly as a text box's floor is.
             sourceTables.map { InkBounds(it.x, it.y, it.x + it.width, it.y + it.height) } +
             // A container's height is whatever its text wraps to and only the canvas knows it, so
-            // the floor stands in. It is off by however far the text runs past it, which moves a
-            // pasted box up by half of that — visible only when a text box is pasted together with
-            // something else, and cheaper to accept than to plumb a measurement into the ViewModel.
+            // the floor stands in. A pasted box moves up by half the difference — visible only when
+            // pasted alongside something else, and cheaper to accept than to plumb a measurement in.
             sourceTexts.map { InkBounds(it.x, it.y, it.x + it.width, it.y + it.minHeight) }
         val union = bounds.unionBounds() ?: return
-        // Horizontally centred on the tap, vertically hung *from* it: the paste grows downward from
-        // the point, the way everything else placed on this canvas does. Centring the box vertically
-        // put half of what was pasted above the tap, so a paste near the top of the page landed with
-        // its head off the sheet and the tap looked like it had chosen the middle of the content
-        // rather than its start.
-        // Clamped as **one** delta, against the union, rather than each kind coercing its own corner
-        // afterwards. Both keep the paste on the page — [PageBounds] — but only this one keeps it in
-        // the arrangement it was copied in: coercing per object slides whatever stuck out furthest
-        // back to the wall and leaves the rest where it was, so a diagram pasted near the corner
-        // arrives with its pieces on top of each other.
+        // Horizontally centred on the tap, vertically hung from it: the paste grows downward, the
+        // way everything else placed on this canvas does. Centring vertically put half of what was
+        // pasted above the tap, so a paste near the top landed with its head off the sheet.
+        //
+        // Clamped as one delta against the union rather than per object: coercing per object slides
+        // whatever stuck out furthest back to the wall and leaves the rest, so a diagram pasted near
+        // the corner arrives with its pieces on top of each other.
         val wanted = InkPoint(at.x - union.center.x, at.y - union.top)
         val (dx, dy) = PageBounds.clampTranslation(union, wanted.x, wanted.y)
 
@@ -3401,11 +3200,9 @@ class NotesViewModel(
         }
 
         if (sourceTables.isNotEmpty()) {
-            // Fresh ids all the way down — table, rows and cells. Two tables sharing a cell id would
-            // share the block map entry behind it, so typing in one would appear in the other.
-            // Unlocked, like every pasted copy: a paste puts an object where you asked for it,
-            // and one that arrived immovable would have to be found and unlocked before it could be
-            // put anywhere else. The lock stays on the original, which is where it was set.
+            // Fresh ids all the way down — table, rows and cells — or two tables would share a block
+            // map entry and typing in one would appear in the other. Unlocked, like every pasted
+            // copy: one that arrived immovable would have to be unlocked before it could be moved.
             val pastedTables = sourceTables.map { source ->
                 source.withNewIds().copy(x = source.x + dx, y = source.y + dy, lockGroup = null)
             }
@@ -3649,9 +3446,8 @@ class NotesViewModel(
                 edits.tryEmit(Unit)
             }
             // Backwards on the way out, forwards on the way in. The parts of one composite touch
-            // different halves of the state and so commute in practice, but a history that only
-            // works because its steps happen not to interfere is a history waiting for the first
-            // pair that does.
+            // different halves of the state and commute in practice, but a history that works only
+            // because its steps happen not to interfere is waiting for the first pair that does.
             is CanvasHistoryEntry.Composite -> {
                 val parts = if (applied) entry.parts else entry.parts.asReversed()
                 parts.forEach { applyHistoryEntry(it, applied) }
@@ -3663,15 +3459,12 @@ class NotesViewModel(
      * Collects everything [body] records into a single entry on the ring — see
      * [CanvasHistoryEntry.Composite] for when that is right and when it is not.
      *
-     * **The ring is diverted rather than the entries post-processed.** Each kind's edit funnel is the
-     * one door that kind goes through, and it is the funnel that applies the origin-corner invariant,
-     * wakes autosave and decides that an edit changing nothing is not an edit. Reaching around them to
-     * write history by hand would mean reimplementing all of that per kind and getting it wrong on the
-     * sixth; taking their entries as they are produced costs a redirect in [pushHistory] and leaves
-     * every funnel exactly as it was.
+     * The ring is diverted rather than the entries post-processed: each kind's edit funnel applies
+     * the origin-corner invariant, wakes autosave and decides that an edit changing nothing is not
+     * an edit. Taking their entries as they are produced costs a redirect in [pushHistory] and
+     * leaves every funnel as it was.
      *
-     * Nesting is a no-op rather than an error: the outermost call owns the group, so a helper that
-     * groups internally can still be called from inside a larger action.
+     * Nesting is a no-op rather than an error: the outermost call owns the group.
      */
     private inline fun asOneAction(pageId: String, body: () -> Unit) {
         if (historyGroup != null) {
@@ -3708,10 +3501,9 @@ class NotesViewModel(
     /**
      * Records one action, dropping the redo branch it leaves behind.
      *
-     * Consecutive shape edits that name the same [CanvasHistoryEntry.Shapes.coalesceKey] within
-     * [SHAPE_COALESCE_MS] are folded into the entry already on the stack: its *before* is the state
-     * the run started from, and its *after* moves forward with each step. That is what makes a slider
-     * one undo rather than one per step, without a gesture protocol reaching all the way up here.
+     * Consecutive shape edits naming the same [CanvasHistoryEntry.Shapes.coalesceKey] within
+     * [SHAPE_COALESCE_MS] fold into the entry already on the stack: its before stays where the run
+     * started and its after moves forward, which makes a slider one undo rather than one per step.
      */
     private fun pushHistory(pageId: String, entry: CanvasHistoryEntry) {
         // Being collected into one action. Nothing else may happen yet — in particular the redo
@@ -3921,11 +3713,10 @@ class NotesViewModel(
      * Tombstones a whole notebook.
      *
      * Only the notebook row is soft-deleted; its sections and pages keep their own `deletedAt` null
-     * (see `NotesRepository.deleteNotebook`), which is what makes an eventual undelete a one-row
-     * write. The consequence here is that nothing downstream notices the sections have gone out of
-     * reach: the tree flow drops the notebook, but `selectedSection` would go on pointing into it
-     * and the editor would keep a page of a notebook the user cannot navigate to. So the selection
-     * is moved off it explicitly, using the membership read *before* the write.
+     * (see `NotesRepository.deleteNotebook`), which makes an eventual undelete a one-row write. So
+     * nothing downstream notices the sections have gone out of reach: the tree flow drops the
+     * notebook, but `selectedSection` would go on pointing into it. The selection is moved off it
+     * explicitly, using the membership read before the write.
      */
     fun deleteNotebook(notebookId: String) {
         val notebookName = _uiState.value.tree
@@ -3962,11 +3753,10 @@ class NotesViewModel(
     }
 
     /**
-     * Takes a notebook off the rail. Nothing is deleted — see `memory/closedNotebooksPlan.md`.
+     * Takes a notebook off the rail. Nothing is deleted.
      *
-     * The selection dance is [deleteNotebook]'s, and it is needed for exactly the same reason: the
-     * tree flow stops carrying the notebook, but `selectedSection` would go on pointing inside it
-     * and the editor would keep showing a page nobody can navigate back to. There is no undo notice
+     * The selection dance is [deleteNotebook]'s, for the same reason: the tree flow stops carrying
+     * the notebook, but `selectedSection` would go on pointing inside it. There is no undo notice
      * because the shelf itself is the undo, one command away on the File tab.
      */
     fun closeNotebook(notebookId: String) {
@@ -4038,11 +3828,10 @@ class NotesViewModel(
     /**
      * What to say about a delete that has already happened.
      *
-     * A flush gets no key, so the snackbar offers no Undo — there is nothing left to restore, and a
-     * button that silently fails is worse than no button. It says so in words as well: "deleted for
-     * good" is the only warning the user gets that this one did not go to Deleted Items, and it is
-     * given after the fact rather than in a second confirmation dialog because what was thrown away
-     * was, by construction, nothing. `memory/blankFlushPlan.md`.
+     * A flush gets no key, so the snackbar offers no Undo — there is nothing left to restore. It
+     * says so in words too: "deleted for good" is the only warning that this one did not go to
+     * Deleted Items, given after the fact rather than as a second dialog because what was thrown
+     * away was, by construction, nothing.
      */
     private fun noticeFor(
         outcome: DeletionOutcome,
@@ -4134,10 +3923,10 @@ class NotesViewModel(
             )
         }
 
-        // The same "content unknown → write nothing at all" guard, over cells. What is *not* the
-        // same is the blank case: a blank cell is written where a blank container is skipped —
-        // `memory/tablePlan.md` TA12. An empty container is a caret position nobody typed in; an empty
-        // cell is part of the grid's shape, and dropping it would resize the table on reload.
+        // The same "content unknown → write nothing at all" guard, over cells. What differs is the
+        // blank case: a blank cell is written where a blank container is skipped. An empty container
+        // is a caret position nobody typed in; an empty cell is part of the grid's shape, and
+        // dropping it would resize the table on reload.
         val tables = mutableListOf<Outline.Table>()
         for (table in state.tables) {
             val cells = table.contentCellIds().associateWith { blocksById[it] ?: return null }
@@ -4165,14 +3954,13 @@ class NotesViewModel(
     /**
      * Puts every outline back where the document had it — [documentOrder].
      *
-     * **One rule for all six kinds, replacing a splice that only knew about one.** This used to
-     * reinsert the unmanaged outlines at recorded indices, clamped, into a list whose managed half
-     * had already been reordered by kind — so the ink landed at the right index of the wrong list,
-     * and was only ever accidentally in the right place.
+     * One rule for all six kinds, replacing a splice that only knew about one: that reinserted the
+     * unmanaged outlines at recorded indices into a list whose managed half had already been
+     * reordered by kind, so the ink landed at the right index of the wrong list.
      *
-     * Sorting by the loaded position instead needs no clamping and no special case for outlines
-     * created or deleted while the page was open: a missing key sorts last, and a deleted one simply
-     * is not here to be placed. `sortedBy` is stable, so anything new keeps the order it arrived in.
+     * Sorting by the loaded position needs no clamping and no special case for outlines created or
+     * deleted while the page was open: a missing key sorts last, a deleted one is not here, and
+     * `sortedBy` is stable.
      */
     private fun inDocumentOrder(outlines: List<Outline>): List<Outline> {
         if (documentOrder.isEmpty()) return outlines
@@ -4181,16 +3969,14 @@ class NotesViewModel(
 
     // --- the page's origin corner ---------------------------------------------------------------
     //
-    // Applied inside each kind's edit funnel, which is what turns [PageBounds] from a habit into an
-    // invariant: **no object is ever stored above or to the left of the page's origin**, whatever
-    // asked for it. The gestures clamp too, and have to — a preview that disagreed with this would
-    // follow the finger past the wall and spring back on the lift — but they are five places and
-    // growing, and a rule enforced only at five places is a rule with a sixth coming.
+    // Applied inside each kind's edit funnel, which is what makes [PageBounds] an invariant rather
+    // than a habit: no object is ever stored above or to the left of the page's origin. The gestures
+    // clamp too, and have to — a preview that disagreed would follow the finger past the wall and
+    // spring back on the lift — but they are five places and growing.
     //
-    // A translation rather than a coerced coordinate, because a shape's (x, y) is *derived* from its
-    // segments: writing the corner alone would move the box and leave the drawing behind. It also
-    // means the repair is the gentlest one available — the object keeps its size and its shape, and
-    // only its position changes, by exactly the distance it was out.
+    // A translation rather than a coerced coordinate, because a shape's (x, y) is derived from its
+    // segments: writing the corner alone would move the box and leave the drawing behind. The object
+    // keeps its size and shape, and only its position changes, by exactly the distance it was out.
 
     // The four read as one overloaded name at the call sites and have to be spelled apart for the
     // JVM, whose erasure sees four `List` parameters and one signature.
@@ -4234,11 +4020,11 @@ class NotesViewModel(
         private const val AUTOSAVE_DELAY_MS = 400L
 
         /**
-         * How long the search box waits before running a query — CS11.
+         * How long the search box waits before running a query.
          *
-         * Shorter than autosave, because this is answering a question rather than protecting work:
-         * long enough that typing a word is one search rather than five, short enough that the list
-         * has caught up by the time the fingers stop.
+         * Shorter than autosave, because this answers a question rather than protecting work: long
+         * enough that typing a word is one search, short enough that the list has caught up by the
+         * time the fingers stop.
          */
         private const val SEARCH_DEBOUNCE_MS = 180L
 

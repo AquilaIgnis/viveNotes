@@ -15,17 +15,15 @@ import androidx.compose.ui.unit.dp
  *
  * The reference UI accents the part of a glyph that carries its meaning — the bullet markers, the
  * numerals, the tick — and leaves the surrounding scaffolding neutral. Material's icons cannot
- * express that: each is a single path, and [androidx.compose.material3.Icon] flattens whatever it
- * is given to one `tint`. So the icons that need two colours are built here instead.
+ * express that: each is a single path, and [androidx.compose.material3.Icon] flattens whatever it is
+ * given to one `tint`.
  *
- * Built in Kotlin rather than as XML vector drawables because XML pays runtime inflation — parse,
- * attribute resolution, `TypedArray` churn — on every load, while these are plain object
- * allocation. It is also the only form that can take a colour as a parameter, which the font and
- * highlight glyphs need: their bar shows the *currently selected* colour, so no static asset can
- * express them.
+ * Built in Kotlin rather than as XML vector drawables because XML pays runtime inflation on every
+ * load while these are plain object allocation. It is also the only form that can take a colour as a
+ * parameter, which the font and highlight glyphs need: their bar shows the currently selected colour.
  *
- * Colours are supplied by the caller rather than baked in, so the neutral can follow the theme and
- * the active-button state. See [AppIcons] for where they get built and cached.
+ * Colours are supplied by the caller, so the neutral can follow the theme and the active-button
+ * state. See [AppIcons] for where they get built and cached.
  */
 
 /** Row centres shared by the bulleted and numbered list glyphs, so the two line up in the ribbon. */
@@ -43,14 +41,13 @@ private inline fun glyph(name: String, block: ImageVector.Builder.() -> Unit): I
 /**
  * [glyph], for artwork taken from Microsoft's Fluent UI System Icons.
  *
- * A third box, because Fluent authors in a 20x20 viewport with the origin at the *top* left and y
- * measured downwards — plain SVG convention, and neither of the two above. So there is no
- * translating group here: pasting a Fluent export's path data in verbatim already lands it where it
- * belongs, which is the same reason [materialGlyph] keeps Google's inverted box rather than
- * rescaling it. Nothing is re-derived by hand, so nothing can be re-derived wrongly.
+ * A third box, because Fluent authors in a 20x20 viewport with the origin at the top left and y
+ * measured downwards. So there is no translating group here: pasting a Fluent export's path data in
+ * verbatim already lands it where it belongs, the same reason [materialGlyph] keeps Google's
+ * inverted box rather than rescaling it.
  *
  * The 24.dp default matches every other glyph in this file, so a 20-unit drawing fills the same
- * square a 960-unit one does and the ribbon's icons stay one size.
+ * square a 960-unit one does.
  */
 private inline fun fluentGlyph(
     name: String,
@@ -560,14 +557,12 @@ private val ImportNotebookArrow = addPathNodes(
  * Import Notebook — a book with an arrow coming down into it through the cover.
  *
  * Two-tone for the reason this whole file exists: the book is scaffolding shared with Export, and
- * the arrow is the only part that says which direction the notebook is travelling, so the arrow is
- * what takes the accent. Flattened to one tint the two commands would be near-indistinguishable in
- * a row that puts them side by side.
+ * the arrow is the only part that says which direction the notebook is travelling. Flattened to one
+ * tint the two commands would be near-indistinguishable in a row that puts them side by side.
  *
- * The source artwork already draws that arrow in `#007FFF`, which is the azure the whole theme is
- * built from (`ui/theme/Theme.kt`), so passing [accent] here reproduces the drawing rather than
- * reinterpreting it — and gets the light scheme's darker shade for free, where a baked-in hex would
- * have sat at 2.3:1 on white.
+ * The source artwork already draws that arrow in `#007FFF`, the azure the whole theme is built from,
+ * so passing [accent] reproduces the drawing rather than reinterpreting it — and gets the light
+ * scheme's darker shade for free, where a baked-in hex would have sat at 2.3:1 on white.
  */
 fun importNotebookGlyph(neutral: Color, accent: Color): ImageVector =
     materialGlyph("ImportNotebook") {
@@ -580,20 +575,16 @@ fun importNotebookGlyph(neutral: Color, accent: Color): ImageVector =
  * The File and Settings commands, split out of their Material Symbols.
  *
  * Every symbol below is one exported path made of several subpaths, and in each case the subpaths
- * already separate the meaning from the scaffolding: the hands sit apart from the clock face, the
- * arrow apart from the bin, the keys apart from the keyboard's frame. So these are *splits* rather
- * than redrawings — nothing here is traced by hand, and the two halves add back up to exactly the
- * artwork Google ships.
+ * already separate the meaning from the scaffolding. So these are splits rather than redrawings, and
+ * the two halves add back up to exactly the artwork Google ships.
  *
- * **Each subpath's moveto was made absolute when it was lifted out.** The exports chain their
- * subpaths with relative movetos — every one is an offset from where the previous subpath started —
- * so a subpath pulled out of the middle would land in the wrong place, and one whose neighbour was
- * dropped would drag everything after it. The rewrite was done by script rather than by eye, and
- * the trap it exists to avoid is that the coordinate pairs *after* a moveto are implicit linetos in
- * the same case: turning `m` into `M` silently turns those absolute and throws the pen across the
- * viewport, which is why an explicit `l` appears where one was needed.
+ * Each subpath's moveto was made absolute when it was lifted out. The exports chain their subpaths
+ * with relative movetos, so a subpath pulled out of the middle would land in the wrong place. The
+ * rewrite was done by script rather than by eye: the coordinate pairs after a moveto are implicit
+ * linetos in the same case, so turning `m` into `M` silently turns those absolute and throws the pen
+ * across the viewport, which is why an explicit `l` appears where one was needed.
  *
- * A body and the hole punched through it must stay in the *same* declaration: the hole is a
+ * A body and the hole punched through it must stay in the same declaration: the hole is a
  * counter-wound subpath, and it only reads as a hole while the winding rule can see both.
  * ---------------------------------------------------------------------------------------------
  */
@@ -733,13 +724,12 @@ private val BookMark = addPathNodes(
  * `ic_fluent_notebook_arrow_curve_down_20_regular` — the notebook, its three rings, and nothing else.
  *
  * Fluent rather than a Material Symbol because Google ships no "close a notebook": every book in its
- * set is open, exported, imported or bookmarked, and the nearest thing to putting one away was a
- * cross laid over a cover, which reads as deleting it. This one has the gesture built in.
+ * set is open, exported, imported or bookmarked, and the nearest thing was a cross laid over a
+ * cover, which reads as deleting it.
  *
  * Split the way every glyph here is split, and the halves are unusually clean: this subpath is the
  * cover and the spiral, the one below is the badge. Both are lifted verbatim — Fluent's exports
- * start every subpath with an absolute `M`, so unlike Google's chained relative movetos there is
- * nothing to rewrite and nothing to get wrong in the rewriting.
+ * start every subpath with an absolute `M`, so there is nothing to rewrite.
  */
 private val NotebookCover = addPathNodes(
     "M2.99487 10.3988C3.31176 10.561 3.64645 10.6933 3.99524 10.7921V16C3.99524 16.5523 4.44312 " +
@@ -782,12 +772,11 @@ private val NotebookArrowBadge = addPathNodes(
  * The covers and the two page holes stay in one declaration — the pages are counter-wound and only
  * read as pages while the winding rule can see them with the outline. Google's chained relative
  * movetos were made absolute when the subpaths were lifted: `m260 42` after the first page's `Z` is
- * `M520-278`, `m-40 97` after the second is `M480-181`. Each of those lands on a coordinate the
- * subpath states again in its own commands, which is what checks the arithmetic.
+ * `M520-278`, `m-40 97` after the second is `M480-181`. Each lands on a coordinate the subpath
+ * states again in its own commands, which checks the arithmetic.
  *
- * The degenerate `M280-494Z` between them is dropped. It draws nothing, and it exists only as the
- * anchor the following relative moveto was measured from — an anchor no longer needed now that the
- * rules carry absolute coordinates of their own.
+ * The degenerate `M280-494Z` between them is dropped: it draws nothing and existed only as the
+ * anchor the following relative moveto was measured from.
  */
 private val MenuBookCovers = addPathNodes(
     "M260-320q47 0 91.5 10.5T440-278v-394q-41-24-87-36t-93-12q-36 0-71.5 7T120-692v396q35-12 " +

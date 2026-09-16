@@ -165,23 +165,21 @@ private enum class AppDestination {
     Workspace,
     Account,
 
-    /** The closed-notebook shelf — `memory/closedNotebooksPlan.md`. */
+    /** The closed-notebook shelf. */
     ClosedNotebooks,
 }
 
 /**
  * What the recognition panel runs by itself once a formula is understood, in order of preference.
  *
- * The two that *answer* the formula come first — Solve for an equation, Evaluate for an integral,
+ * The two that answer the formula come first — Solve for an equation, Evaluate for an integral,
  * derivative, sum, product or limit — and Simplify last, since it only restates what is already on
- * screen. See `docs/calculator.md` for which objects offer which.
+ * screen; which objects offer which is documented in `docs/calculator.md`.
  *
- * The order is currently belt and braces: no object offers more than one of these, because `_classify`
- * gives an unevaluated operation `evaluate` alone and gives nothing else `evaluate` at all. It is
- * written as a preference anyway so that adding a fourth entry cannot silently depend on that.
+ * The order is currently belt and braces: no object offers more than one of these. It is written as
+ * a preference anyway so that adding a fourth entry cannot silently depend on that.
  *
- * Ids rather than labels: these are matched against the action list SymPy returns, and a label is
- * display text that may change.
+ * Ids rather than labels: these are matched against the action list SymPy returns.
  */
 private val AUTOMATIC_MATH_ACTIONS = listOf("solve", "evaluate", "simplify")
 
@@ -750,7 +748,7 @@ private fun NotesWorkspace(
     val notebookTransfer by viewModel.notebookTransfer.collectAsStateWithLifecycle()
     val reveal by viewModel.reveal.collectAsStateWithLifecycle()
 
-    // The system photo picker — feature E6. Chosen over `GetContent` and over `READ_MEDIA_IMAGES`
+    // The system photo picker. Chosen over `GetContent` and over `READ_MEDIA_IMAGES`
     // deliberately: it needs **no runtime permission at all**, because the user picking a file *is*
     // the grant, and it shows the same picker whether the photo is local or in the cloud. Asking for
     // storage permission to insert one picture is the thing this API exists to stop.
@@ -779,7 +777,7 @@ private fun NotesWorkspace(
     LaunchedEffect(viewModel, snackbarHostState) {
         viewModel.deletionNotices.collectLatest { notice ->
             // No key means the delete was a flush: it held nothing, so nothing was kept and there is
-            // nothing to put back. `memory/blankFlushPlan.md`.
+            // nothing to put back.
             val result = snackbarHostState.showSnackbar(
                 message = notice.message,
                 actionLabel = notice.key?.let { "Undo" },
@@ -914,13 +912,12 @@ private fun NotesWorkspace(
      * Run the obvious operation without waiting to be asked — Solve where the formula is a question,
      * Simplify where it is a mess.
      *
-     * A recognised equation almost always wants solving, and making the user tap Solve to find that
-     * out spends a tap on a foregone conclusion. Anything with neither action — a matrix, an integral
-     * — is left alone rather than given an arbitrary default.
+     * A recognised equation almost always wants solving. Anything with neither action — a matrix, an
+     * integral — is left alone rather than given an arbitrary default.
      *
      * Keyed on the analysis rather than on the LaTeX, so it fires once when a new analysis lands and
-     * not again: `executeMathAction` only ever `copy`s the state, which leaves `analysis` the same
-     * instance. Tapping a different action afterwards therefore sticks.
+     * not again: `executeMathAction` only `copy`s the state, which leaves `analysis` the same
+     * instance, so tapping a different action afterwards sticks.
      */
     LaunchedEffect(formulaTools.analysis) {
         val available = formulaTools.analysis?.actions?.map { it.id }.orEmpty()
@@ -1459,7 +1456,7 @@ private fun ToolPaneHost(
     style: PageStyle,
     /** Hardware pane, a property of this device — see `HardwarePanelContent` on the pane's two scopes. */
     allowFinger: Boolean,
-    /** Hardware pane, a property of the user — `memory/stylusPlan.md` SB3. */
+    /** Hardware pane, a property of the user. */
     stylusButtons: StylusButtonMap,
     aiModels: AiModelsState,
     onDownloadFormula: () -> Unit,
@@ -1469,9 +1466,9 @@ private fun ToolPaneHost(
     onCopyRecognition: (String) -> Unit,
     onMathAction: (String) -> Unit,
     onCopyMathResult: (String) -> Unit,
-    /** Content pane — the query, and what it found across the notebook (`memory/searchPlan.md`). */
+    /** Content pane — the query, and what it found across the notebook. */
     contentSearch: ContentSearchState,
-    /** How far reading this notebook's pictures has got — `memory/imageOcrPlan.md` IO6. */
+    /** How far reading this notebook's pictures has got. */
     imageTextProgress: ImageTextProgress,
     inkTextProgress: InkTextProgress,
     versionHistory: VersionHistoryState,
@@ -1566,7 +1563,7 @@ private fun EditorSurface(
     /** Whether the Content pane is docked, which the magnifier shows as its own pressed state. */
     searchOpen: Boolean,
     onToggleSearch: () -> Unit,
-    /** A search result the canvas has been asked to scroll to and put the caret on — CS9. */
+    /** A search result the canvas has been asked to scroll to and put the caret on. */
     reveal: ContentReveal?,
     onRevealHandled: () -> Unit,
     tool: DrawTool,
@@ -1582,7 +1579,7 @@ private fun EditorSurface(
     hasClipboard: Boolean,
     strokes: List<PageStroke>,
     inkReady: Boolean,
-    /** Turns a picture's id into its pixels — feature E6. */
+    /** Turns a picture's id into its pixels. */
     attachments: AttachmentStore,
     aiModels: AiModelsState,
     recognitionRunning: Boolean,
@@ -1593,7 +1590,7 @@ private fun EditorSurface(
 ) {
     // The magnifier is a sibling of the page rather than part of it, and composed after it, so it
     // sits above the ink overlay and takes the tap the overlay would otherwise swallow. It stays on
-    // a canvas with no page open, because a notebook-wide search does not need one (CS10).
+    // a canvas with no page open, because a notebook-wide search does not need one.
     Box(modifier.fillMaxSize()) {
         if (state.selectedPageId == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1646,7 +1643,7 @@ private fun EditorSurface(
 internal const val SEARCH_AFFORDANCE_TAG = "canvas-search"
 
 /**
- * The magnifier floating at the canvas's top-right — feature C7, `memory/searchPlan.md` CS10.
+ * The magnifier floating at the canvas's top-right.
  *
  * Over the page rather than in the ribbon so it is reachable from every tab, Draw included, and so
  * that finding something does not cost a tab switch in the middle of a thought.
@@ -1750,13 +1747,13 @@ private fun PageEditor(
         erasing = tool == DrawTool.Eraser,
         lassoing = tool == DrawTool.Lasso,
         shaping = if (tool == DrawTool.Shape) shape else null,
-        // No settings to pass with it: the drag is the whole of what Insert Space knows — E2.
+        // No settings to pass with it: the drag is the whole of what Insert Space knows.
         insertingSpace = tool == DrawTool.InsertSpace,
         onInsertSpace = viewModel::insertSpace,
         ruler = ruler.takeIf { rulerOut },
         tables = state.tables,
         // One tool places a table on the next tap; which *kind* rides in on the settings, so the
-        // canvas never learns there are two — `memory/tablePlan.md` TA15.
+        // canvas never learns there are two.
         tableArmed = tool == DrawTool.Table,
         onInsertTable = { x, y -> viewModel.insertTable(themedTable, x, y) },
         equations = state.equations,
@@ -1807,7 +1804,7 @@ private fun PageEditor(
         allowFinger = allowFinger,
         hasClipboard = hasClipboard,
         onStrokeFinished = viewModel::onStrokeFinished,
-        // Read off the pen in hand, not off a shared switch: this is a per-pen setting (ID5), so a
+        // Read off the pen in hand, not off a shared switch: this is a per-pen setting, so a
         // fine pen kept for handwriting and a thick one kept for ruling can answer differently.
         straightenOnHold = (tool as? DrawTool.Pen)
             ?.let { pens.getOrNull(it.index)?.holdForStraightLine } == true,
@@ -1932,7 +1929,7 @@ private fun NameEntryDialog(
  * The asymmetry is the point: a section takes every page in it out of reach in one tap, and the
  * count is the part worth reading before agreeing to it. The rows are only tombstoned and remain
  * available from the app-wide Deleted Items pane — unless the section holds nothing at all, which
- * is deleted outright and has to say so instead. `memory/blankFlushPlan.md`.
+ * is deleted outright and has to say so instead.
  */
 @Composable
 private fun DeleteSectionDialog(
@@ -2029,7 +2026,6 @@ private fun DeleteNotebookDialog(
  *
  * A notebook whose contents have not been read yet keeps the ordinary wording, because a delete that
  * turns out to be recoverable after a dialog said nothing about recovery disappoints nobody.
- * `memory/blankFlushPlan.md`.
  */
 private const val NOTHING_TO_KEEP =
     "There is nothing in it, so it will be deleted for good rather than kept in Deleted Items."
@@ -2037,18 +2033,15 @@ private const val NOTHING_TO_KEEP =
 /**
  * Confirms closing the notebook the ribbon's File tab is pointed at.
  *
- * A confirmation for something that deletes nothing looks like ceremony, and is not. Closing is
- * reached from a toolbar rather than from the notebook's own row, sits two buttons from Delete
- * Notebook in a row that scrolls under the finger, and its whole effect is that a notebook *stops
- * being on screen* — which is also what deleting looks like from the rail. Somebody who meant one
- * and got the other has no way to tell which they got except by finding out where it went. So the
- * title names the notebook, which is the only place the ribbon's aim can be checked, and the body
- * says the two things that separate this from the button beside it: nothing is deleted, and here is
- * where it went.
+ * A confirmation for something that deletes nothing is not ceremony here. Closing is reached from a
+ * toolbar rather than from the notebook's own row, sits two buttons from Delete Notebook, and its
+ * whole effect is that a notebook stops being on screen — which is what deleting looks like from
+ * the rail. So the title names the notebook, which is the only place the ribbon's aim can be
+ * checked, and the body says the two things that separate this from the button beside it: nothing
+ * is deleted, and here is where it went.
  *
- * The counts are the same ones [DeleteNotebookDialog] reads, and they are doing a different job
- * here — not "this is how much you are about to lose" but "this is how much is going with it", so
- * the notebook can be recognised by its size when it is looked for again.
+ * The counts are [DeleteNotebookDialog]'s, doing a different job: not "this is how much you are
+ * about to lose" but "this is how much is going with it".
  */
 @Composable
 private fun CloseNotebookDialog(

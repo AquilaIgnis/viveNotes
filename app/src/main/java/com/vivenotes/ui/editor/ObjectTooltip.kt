@@ -72,7 +72,7 @@ internal const val OBJECT_EQUATION_EDIT_TAG = "object-tooltip-equation-edit"
  */
 internal const val OBJECT_RECOGNIZE_TAG = "object-tooltip-recognize"
 
-/** The Table Class's half of the toolkit — `memory/tablePlan.md` TA6. */
+/** The Table Class's half of the toolkit. */
 internal object TableActionTags {
     const val ROW = "object-tooltip-row"
     const val COLUMN = "object-tooltip-column"
@@ -99,39 +99,35 @@ private val INK_COLORS = listOf(
  * The ink-only wrapper that used to sit here is gone. Its whole job was deriving a swatch and a
  * grouping state from a stroke list, which it could only ever do for ink — `EditorPane` now derives
  * both from the page's `CanvasSelection`, which holds either kind, and calls [ObjectTooltip] directly.
- * One bar, one call site (AD7).
+ * One bar, one call site.
  */
 
 /**
- * The base object toolkit — `memory/diagram.md`, and `memory/plan.md` AD7.
+ * The base object toolkit.
  *
- * Colour, copy, delete: the three things that mean something for *anything* placed on the canvas.
+ * Colour, copy, delete: the three things that mean something for anything placed on the canvas.
  * Deliberately not ink's own — it takes a swatch and three callbacks rather than a stroke list, so a
  * shape raises the same bar ink does.
  *
- * **Extended, not edited.** Anything true of one kind and not another goes in [extras], between copy
- * and delete: grouping for ink, which is meaningless for a shape that is already one object, and line
- * thickness for a shape, which is meaningless for a stroke whose width is baked into its mesh. Adding
- * a kind means passing different [extras], never adding another flag here — which is what stopped
- * this growing a `canGroup` for every kind that ever arrives.
+ * Extended, not edited. Anything true of one kind and not another goes in [extras], between copy and
+ * delete: grouping for ink, which is meaningless for a shape that is already one object, and line
+ * thickness for a shape, which is meaningless for a stroke whose width is baked into its mesh.
+ * Adding a kind means passing different [extras], never adding another flag here.
  *
- * An action a kind cannot perform is absent for it rather than shown and dead, the same rule the
- * ribbon follows for crossed-out controls.
+ * An action a kind cannot perform is absent for it rather than shown and dead.
  */
 @Composable
 internal fun ObjectTooltip(
     /**
-     * The colour the selection is drawn in, or **null for a kind that has no colour of its own** —
-     * `memory/textBoxPlan.md` TD4, and the first time anything drops a member of the base bar.
+     * The colour the selection is drawn in, or null for a kind that has no colour of its own.
      *
-     * Not a retreat from SD8's "a base plus per-kind extras, never a base with more flags". [extras]
-     * is where a kind's *own* actions go; this is the base saying an action does not apply, which is
-     * the rule the bar already follows for Group and for Line thickness — applied for the first time
-     * to something it ships with. A `canRecolor` flag would be the wrong shape; an absent swatch says
-     * it in the type.
+     * The first time anything drops a member of the base bar, and not a retreat from "a base plus
+     * per-kind extras, never a base with more flags": [extras] is where a kind's own actions go,
+     * while this is the base saying an action does not apply. A `canRecolor` flag would be the wrong
+     * shape; an absent swatch says it in the type.
      *
-     * A text box is the case: its colour is a mark on a run (D7, the Home tab's font colour), so a
-     * container-level colour would either fight the ribbon or silently restyle every run inside it.
+     * A text box is the case: its colour is a mark on a run, so a container-level colour would either
+     * fight the ribbon or silently restyle every run inside it.
      */
     swatch: Color?,
     selectionBoundsInView: () -> RectF?,
@@ -140,16 +136,14 @@ internal fun ObjectTooltip(
     onCopy: () -> Unit,
     onRecolor: (Int) -> Unit,
     /**
-     * Whether what is held is locked, or **null for a kind that cannot lock** — the same absence the
-     * [swatch] makes for a kind with no colour, and for the same reason.
+     * Whether what is held is locked, or null for a kind that cannot lock — the same absence the
+     * [swatch] makes for a kind with no colour.
      *
      * Null over ink, which has no lock to set: locking is a field on an outline, and a stroke is not
-     * one. Null over a text container too, which declines the object-selection model whole
-     * (`memory/textBoxPlan.md` TD1) and keeps its own grip and edges.
+     * one. Null over a text container too, which declines the object-selection model whole.
      *
-     * **One button, not two** — the user's instruction on the diagram. A Lock beside an Unlock is
-     * two controls of which one is always wrong for what is in front of you; this draws the state it
-     * is showing and toggles it, the way every other stateful control on the bar behaves.
+     * One button, not two. A Lock beside an Unlock is two controls of which one is always wrong for
+     * what is in front of you; this draws the state it is showing and toggles it.
      */
     locked: Boolean?,
     onToggleLock: () -> Unit,
@@ -241,7 +235,7 @@ internal fun ObjectTooltip(
                 )
             }
 
-            // Base, not an extra: `memory/diagram.md` puts Lock/Unlock in the toolkit every object
+            // Base, not an extra: Lock/Unlock belongs to the toolkit every object
             // shares, beside colour, copy and delete. It sits before [extras] so the three base
             // actions stay together and a kind's own half stays in one run before Delete.
             if (locked != null) {
@@ -280,7 +274,7 @@ internal fun ObjectTooltip(
  * Ink's half of the toolkit: several strokes can be one object.
  *
  * Absent for shapes — not disabled — because a shape is already a single object and has nothing to
- * group with. `memory/diagram.md` puts grouping outside the base toolkit for exactly that reason.
+ * group with, which is why grouping sits outside the base toolkit.
  */
 @Composable
 internal fun RowScope.GroupAction(
@@ -302,21 +296,16 @@ internal fun RowScope.GroupAction(
 }
 
 /**
- * Hand it to the math engine: the ∫ glyph and the word **Math**.
+ * Hand it to the math engine: the ∫ glyph and the word Math.
  *
- * **One button, not a menu.** This was *Recognize* opening a drop-down of "As text" and "As equation";
- * the text option was removed on 2026-08-09 at the user's request, and one item behind a menu is a tap
- * spent on a choice that no longer exists. So the remaining action is promoted to the bar itself and
- * named for what it gets you rather than for the machinery — you press Math and the panel comes back
- * with the equation and the things SymPy can do to it, which is the same word that panel's own
- * sections use.
+ * One button, not a menu. This was Recognize opening a drop-down of "As text" and "As equation"; the
+ * text option was removed on 2026-08-09, and one item behind a menu is a tap spent on a choice that
+ * no longer exists. So the remaining action is promoted to the bar and named for what it gets you.
  *
- * The glyph is Σ ([MaterialSymbols.Functions]), **not** the ƒ the Insert tab's Equation button uses —
+ * The glyph is Σ ([MaterialSymbols.Functions]), not the ƒ the Insert tab's Equation button uses —
  * one letter apart in Material's naming and two different jobs: ƒ means "an equation goes here", Σ
- * means "hand this ink to the math engine". It carries the meaning at a glance, which matters more
- * here than in the ribbon: this bar floats over the page and is read in a hurry. `Group` and
- * `Select all` beside it stay icon-free for the opposite reason — there is no symbol that reads as
- * "select all" without a caption.
+ * means "hand this ink to the math engine". `Group` and `Select all` beside it stay icon-free for
+ * the opposite reason: there is no symbol that reads as "select all" without a caption.
  *
  * Absent, not disabled, when the formula model is not installed: there is nothing to hand the ink to.
  */
@@ -350,8 +339,7 @@ internal fun RowScope.RecognitionAction(
 }
 
 /**
- * The TextBox's half of the toolkit — `memory/diagram.md`: *"select all : selects all text on TextBox
- * container"*, and the only action the class adds.
+ * The TextBox's half of the toolkit: select all, and the only action it adds.
  *
  * A word rather than a glyph, like Group beside it: there is no Material Symbol that reads as "select
  * all" without a caption, and the bar has room for a short one.
@@ -372,20 +360,16 @@ internal fun RowScope.SelectAllAction(onSelectAll: () -> Unit) {
 }
 
 /**
- * An equation's half of the toolkit: **change what it says.**
+ * An equation's half of the toolkit: change what it says.
  *
- * One action, because it is the only thing about a placed formula that Prime Object does not already
- * cover — the corners resize it, the swatch colours it, and Copy and Delete are the base bar's. That
- * is the whole argument for `Outline.Equation` implementing Prime Object rather than carrying its own
- * toolkit: everything except the source is somebody else's job already.
+ * One action, because it is the only thing about a placed formula the base toolkit does not already
+ * cover — the corners resize it, the swatch colours it, and Copy and Delete are the base bar's.
  *
  * The glyph is ƒ ([MaterialSymbols.Function]) — the same one the ribbon's two equation buttons wear,
- * and deliberately **not** the Σ that hands ink to the math engine. One letter apart in Material's
- * naming, three different jobs, and this bar is read in a hurry.
+ * and deliberately not the Σ that hands ink to the math engine.
  *
  * Absent rather than dead when the selection holds two different formulas: there is no one source to
- * open, and the rule the whole bar follows is that an action a selection cannot perform is missing
- * for it rather than shown and inert.
+ * open.
  */
 @Composable
 internal fun RowScope.EquationEditAction(latex: String?, onEdit: (String) -> Unit) {
@@ -421,10 +405,10 @@ internal fun RowScope.EquationEditAction(latex: String?, onEdit: (String) -> Uni
 }
 
 /**
- * A shape's half of the toolkit: the border it is stroked with — `memory/diagram.md`, Shapes Class.
+ * A shape's half of the toolkit: the border it is stroked with, Shapes Class.
  *
  * **Not the same setting as the pane's Border width**, which is the user's default for the *next*
- * shape and lives in DataStore (`memory/inkPlan.md` SD4). This edits the object in the document. The two
+ * shape and lives in DataStore. This edits the object in the document. The two
  * look alike deliberately — it is the same [PanelSlider] — and must not be merged: one is a property
  * of the user, the other of the page, and collapsing them is a sync bug, not a refactor.
  *
@@ -470,21 +454,18 @@ internal fun RowScope.ThicknessAction(
 }
 
 /**
- * The Table Class's half of the toolkit — `memory/diagram.md`: *"add row, remove row, add column,
- * remove column"*, and `memory/tablePlan.md` TA6.
+ * The table's half of the toolkit: add row, remove row, add column, remove column.
  *
- * **Two menus rather than four buttons.** As four the bar is nine controls wide; as two it is five,
- * and each menu has room for the verbs the diagram's four leave open.
+ * Two menus rather than four buttons: as four the bar is nine controls wide, as two it is five.
  *
- * **Insertion goes one way only**, after rather than before: "insert above" and "insert left" were
- * both dropped on 2026-08-08 because neither did anything on the device. What is left is the pair
- * that works, and a row is still reachable above another one by inserting below the row before it.
+ * Insertion goes one way only, after rather than before — "insert above" and "insert left" were both
+ * dropped on 2026-08-08 because neither did anything on the device, and a row is still reachable
+ * above another by inserting below the row before it.
  *
  * Everything is relative to the cell with the caret in it, which the caller resolves. With no caret,
- * "below" means the bottom and "right" means the far edge, so the actions always mean something.
+ * "below" means the bottom and "right" means the far edge.
  *
- * **Delete is absent, not disabled, at the last row or column**, which is the rule the whole bar
- * follows: an action a kind cannot perform is missing for it. A table with no rows is not a table.
+ * Delete is absent, not disabled, at the last row or column: a table with no rows is not a table.
  */
 @Composable
 internal fun RowScope.TableRowAction(
@@ -521,19 +502,17 @@ internal fun RowScope.TableColumnAction(
 }
 
 /**
- * The row half of the toolkit **when a row is held** — `memory/tablePlan.md` TA16.
+ * The row half of the toolkit when a row is held.
  *
  * The menus above are what the bar shows when there is nothing but a caret to go on. Tap a row's
- * handle and the verbs stop needing a menu: there is one row this is about, so the actions become
- * buttons, and each wears the Material Symbol that draws exactly what it does — `add_row_below` is
- * a picture of a row arriving under a grid.
+ * handle and there is one row this is about, so the actions become buttons, each wearing the
+ * Material Symbol that draws exactly what it does.
  *
  * Insert-above is gone here for the reason it is gone from the menu above: it did nothing.
  *
- * **Delete is a minus, not a second trash.** The base bar's trash means "delete the selected object"
- * for every kind on the canvas, and a trash beside it that meant "delete one row instead" would be
- * the one thing AD7 forbids: the same affordance changing meaning with state. A minus beside a plus
- * says "take one away" without ever competing for that.
+ * Delete is a minus, not a second trash. The base bar's trash means "delete the selected object" for
+ * every kind on the canvas, and a trash beside it meaning "delete one row instead" would be the same
+ * affordance changing meaning with state.
  */
 @Composable
 internal fun RowScope.HeldRowActions(
@@ -553,7 +532,7 @@ internal fun RowScope.HeldRowActions(
     }
 }
 
-/** The same pair, turned through a right angle — TA16. */
+/** The same pair, turned through a right angle. */
 @Composable
 internal fun RowScope.HeldColumnActions(
     canDelete: Boolean,
@@ -634,15 +613,14 @@ private fun GridMenu(
 }
 
 /**
- * A shape's fill — `memory/inkPlan.md` §5.4 SD7, which this is the reversal of.
+ * A shape's fill.
  *
- * **Only for a shape with an inside.** A line, an arrow and an L have none, and the caller leaves this
- * out for them rather than showing it dead: an action a kind cannot perform is absent for it, which is
- * the rule the whole bar follows. `Outline.Shape.canFill` is what answers that.
+ * Only for a shape with an inside. A line, an arrow and an L have none, and the caller leaves this
+ * out for them rather than showing it dead. `Outline.Shape.canFill` is what answers that.
  *
- * The button is the fill itself, as the base bar's colour button is the border — a swatch says what
- * a glyph would only label. "None" leads the palette because it is where every shape starts and the
- * one value that cannot be mixed: an absent fill is not a transparent one, and a chequer of the
+ * The button is the fill itself, as the base bar's colour button is the border: a swatch says what a
+ * glyph would only label. "None" leads the palette because it is where every shape starts and the
+ * one value that cannot be mixed — an absent fill is not a transparent one, and a chequer of the
  * surface behind it is how you say so without a word.
  */
 @Composable
@@ -709,13 +687,11 @@ internal fun RowScope.FillAction(fill: Int?, onChange: (Int?) -> Unit) {
  * A shape's line type: solid, dashed or dotted.
  *
  * The same [LineTypePicker] the Shape pane uses, for the reason [ThicknessAction] reuses the pane's
- * slider — and with the same warning attached. The pane's picker is how *you* like to draw shapes and
- * lives in DataStore (SD4); this one edits the border of the object in the document. They look alike
- * because they are the same question asked about two different things, and merging them would be a
+ * slider — and with the same warning: the pane's picker is how you like to draw shapes and lives in
+ * DataStore, while this one edits the border of the object in the document. Merging them would be a
  * sync bug rather than a refactor.
  *
- * The button draws the current type rather than naming it, which is also what the picker inside does:
- * a dashed line is a picture of itself.
+ * The button draws the current type rather than naming it: a dashed line is a picture of itself.
  */
 @Composable
 internal fun RowScope.LineTypeAction(current: LineType, onChange: (LineType) -> Unit) {

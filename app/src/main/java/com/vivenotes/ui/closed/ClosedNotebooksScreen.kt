@@ -82,16 +82,13 @@ private val RowHeight = 80.dp
 /**
  * The shelf: notebooks that are not in the rail, and what can be done with them.
  *
- * Two sections rather than one list with a badge, because the two states differ in what they can
- * *do* and not merely in where their bytes are. A notebook on the device opens instantly and can be
- * exported; one in the cloud has to be downloaded first and cannot be searched until it is. A single
- * list would have to say that in prose under every row.
+ * Two sections rather than one list with a badge, because the two states differ in what they can do
+ * and not merely in where their bytes are: a notebook on the device opens instantly and can be
+ * exported, while one in the cloud has to be downloaded first and cannot be searched until it is.
  *
  * Presentational, like `AccountScreen` and for the same reason: moving a notebook to the cloud is a
  * multi-request operation that must not be cancelled by somebody pressing Back, so it runs in a
  * scope one level up and arrives back here as [busyNotebookId] and [message].
- *
- * `memory/closedNotebooksPlan.md`.
  */
 @Composable
 fun ClosedNotebooksScreen(
@@ -255,19 +252,18 @@ private fun SectionHeading(text: String, tag: String, supporting: String? = null
 /**
  * One shelved notebook.
  *
- * [anyBusy] disables every other row's buttons while one operation runs. A move and a restore both
- * take the sync mutex and would queue behind each other anyway, and two spinners with one of them
- * silently waiting is a worse account of what is happening than one spinner and a still list.
+ * [anyBusy] disables every other row's buttons while one operation runs: a move and a restore both
+ * take the sync mutex and would queue behind each other anyway, and two spinners with one silently
+ * waiting is a worse account of what is happening than one spinner and a still list.
  *
  * The two sections take opposite shapes on purpose. A device row carries two labelled buttons,
  * because "Open" and "Move to cloud" are different enough that neither could be guessed from a
- * picture, and moving one is the only irreversible-feeling thing here — so it is the one wearing
- * `tertiary`, the complement of the brand azure, while Open steps down to tonal. Open comes first
- * because it is what the shelf is usually opened to do. A cloud row carries one icon button
- * instead: there is exactly one thing to do with a notebook that is not here, a download arrow says
- * it without a label, and an icon button is the only shape a progress ring can be drawn around.
- * "In cloud" is device-relative here: it includes both an account-wide cloud-only notebook and a
- * closed notebook this installation deliberately has not downloaded.
+ * picture, and moving one is the only irreversible-feeling thing here — so it wears `tertiary` while
+ * Open steps down to tonal. A cloud row carries one icon button instead: there is exactly one thing
+ * to do with a notebook that is not here.
+ *
+ * "In cloud" is device-relative: it covers both an account-wide cloud-only notebook and a closed
+ * notebook this installation deliberately has not downloaded.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

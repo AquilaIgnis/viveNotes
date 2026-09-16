@@ -151,10 +151,9 @@ data class PaperDimensions(val widthInches: Float, val heightInches: Float) {
 /**
  * Page margins for printing and export, in inches.
  *
- * Stored with the page because they describe the sheet, not the reader. Export PDF reads them —
- * `memory/pdfExportPlan.md` PD3, where the *printable area* rather than the sheet is what the
- * infinite canvas is cut into — and the Paper Size panel also draws them as guides on the page while
- * it is open, which is the only honest way to show what a setting is doing while it is being set.
+ * Stored with the page because they describe the sheet, not the reader. Export PDF cuts the
+ * infinite canvas into printable areas by them, and the Paper Size panel draws them as guides on
+ * the page while it is open.
  */
 @Serializable
 data class PrintMargins(
@@ -254,25 +253,22 @@ sealed interface Outline {
     val width: Float
 
     /**
-     * The locked group this object belongs to, or null when it is unlocked — `memory/diagram.md`.
+     * The locked group this object belongs to, or null when it is unlocked.
      *
-     * **One nullable field says both things, because the user's rule makes them one fact.** Locking
-     * a selection groups it and unlocking ungroups it again, so an object is grouped exactly while
-     * it is locked: a `locked` flag beside a `groupId` would be two fields that can only ever
-     * disagree by being wrong. Locking a lone object stamps a group of one.
+     * One nullable field says both things: locking a selection groups it and unlocking ungroups it,
+     * so an object is grouped exactly while it is locked. A `locked` flag beside a `groupId` would
+     * be two fields that can only disagree by being wrong. Locking a lone object stamps a group of
+     * one.
      *
-     * What locked means is move and resize, and nothing else — an object that cannot be dragged or
-     * scaled, and which a lasso passes over unless the loop caught nothing but locked objects. Copy,
-     * recolour and delete are untouched: lock means "stays put", not "protected".
+     * Locked means move and resize and nothing else — a lasso passes over it unless the loop caught
+     * nothing but locked objects. Copy, recolour and delete are untouched.
      *
-     * Costs an unlocked page nothing on disk. [DocumentJson] does not encode defaults, so a null
-     * writes no key, and a build that predates this ignores the key when it finds one.
+     * Costs an unlocked page nothing on disk: [DocumentJson] does not encode defaults, and a build
+     * that predates this ignores the key.
      *
-     * Null forever on [Text] and [Ink]. Text containers decline the object-selection model whole
-     * (`memory/textBoxPlan.md` TD1) and keep their own grip and edges; ink is not an outline at all —
-     * its rows live in `ink_strokes`, where locking would have meant taking the database off its
-     * version-1 baseline. The field is on the interface because the selection code reads it without
-     * caring which kind it holds.
+     * Null forever on [Text] and [Ink]. Text containers decline the object-selection model and keep
+     * their own grip and edges; ink is not an outline at all. The field is on the interface because
+     * the selection code reads it without caring which kind it holds.
      */
     val lockGroup: String?
 
@@ -300,20 +296,19 @@ sealed interface Outline {
     }
 
     /**
-     * A picture placed on the canvas — feature E6.
+     * A picture placed on the canvas.
      *
-     * **The document holds the frame; the pixels live outside it.** [attachmentId] is the SHA-256 of
-     * the stored bytes and names a file the `attachments` table knows about; see
+     * The document holds the frame; the pixels live outside it. [attachmentId] is the SHA-256 of
+     * the stored bytes and names a file the `attachments` table knows about — see
      * `data/AttachmentStore.kt` for why megabytes must not travel in `page_content.docJson`. That
-     * makes this outline what every other one is — a handful of numbers — so it costs autosave
-     * nothing, exports as a reference, and can be read by the MCP server without a device.
+     * makes this outline what every other one is: a handful of numbers.
      *
-     * [width] and [height] are the size *on the page*, in page dp, and are not the pixel dimensions:
-     * the same picture can be placed twice at different sizes, and the file is shared between them.
+     * [width] and [height] are the size on the page, in page dp, not the pixel dimensions: the same
+     * picture can be placed twice at different sizes.
      *
      * Resizing scales the two axes independently, as it does for every other kind, rather than
-     * locking the aspect ratio. A lasso holding a picture and a shape applies one transform to both,
-     * and a kind that quietly refused half of it would tear that selection apart.
+     * locking the aspect ratio — a lasso holding a picture and a shape applies one transform to
+     * both, and a kind that refused half of it would tear that selection apart.
      */
     @Serializable
     @SerialName("image")
@@ -330,14 +325,14 @@ sealed interface Outline {
         fun translated(dx: Float, dy: Float): Image = copy(x = x + dx, y = y + dy)
 
         /**
-         * Scales about the corner opposite the one being dragged — AD7's four-corner resize.
+         * Scales about the corner opposite the one being dragged.
          *
-         * **Absolute, against the frame it is called on**, exactly as [Shape.scaledAbout] is: a corner
+         * Absolute, against the frame it is called on, exactly as [Shape.scaledAbout] is: a corner
          * drag reports where the finger is now measured from the geometry the drag started with, so
          * applying it per frame multiplies a drag's own scales together.
          *
          * A negative or zero scale would flip or collapse the frame, so both axes are floored at a
-         * size that can still be grabbed by its handles and dragged back.
+         * size that can still be grabbed by its handles.
          */
         fun scaledAbout(anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float): Image = copy(
             x = anchorX + (x - anchorX) * scaleX,
@@ -361,18 +356,15 @@ sealed interface Outline {
     }
 
     /**
-     * A shape placed on the canvas — `memory/inkPlan.md` §5.4.
+     * A shape placed on the canvas.
      *
-     * **An object, not ink.** A handful of numbers rather than a blob of digitizer samples, so ID2's
-     * argument for keeping strokes in their own table does not apply: a shape belongs in the
-     * document, where it travels with the page, exports with it, and can be read by the MCP server
-     * without a device.
+     * An object, not ink: a handful of numbers rather than digitizer samples, so it belongs in the
+     * document, where it travels with the page and exports with it.
      *
-     * **The segments are the shape.** Geometry is stored rather than derived from [kind] and a box,
-     * because every segment can be selected on its own and either of its ends dragged — once a corner
-     * has moved, no box describes it any more. [kind] is therefore what the shape was *created* as:
-     * it names the shape, picks its icon, and seeds the segments, but it does not constrain them
-     * afterwards.
+     * The segments are the shape. Geometry is stored rather than derived from [kind] and a box,
+     * because every segment can be selected on its own and either of its ends dragged — once a
+     * corner has moved, no box describes it any more. [kind] is what the shape was created as: it
+     * names the shape, picks its icon and seeds the segments, but does not constrain them.
      *
      * [x], [y], [width] and [height] are the bounds the segments currently occupy, kept in sync so
      * the canvas can lay out and hit-test without walking every segment.
@@ -433,15 +425,15 @@ sealed interface Outline {
         )
 
         /**
-         * Scales every segment about [anchorX], [anchorY] — a corner-handle drag, per AD7.
+         * Scales every segment about [anchorX], [anchorY] — a corner-handle drag.
          *
-         * The anchor is the corner opposite the one being dragged, which is what makes the far
-         * corner stay put while the near one follows the finger.
+         * The anchor is the corner opposite the one being dragged, which makes the far corner stay
+         * put while the near one follows the finger.
          *
-         * **Absolute, against the shape it is called on.** A corner drag reports where the finger
-         * is now, measured from the geometry the drag started with, so this must be applied to that
-         * same starting geometry once — never to the result of the previous frame, which multiplies
-         * a drag's own scales together and sends the shape off the page.
+         * Absolute, against the shape it is called on: a corner drag reports where the finger is
+         * now, measured from the geometry the drag started with, so it must be applied to that
+         * starting geometry once. Applied to its own previous result it multiplies the scales
+         * together and sends the shape off the page.
          *
          * How one segment carries a scale, arcs included, is
          * [ShapeSegment.scaledAbout][com.vivenotes.model.ink.ShapeSegment.scaledAbout].
@@ -460,31 +452,22 @@ sealed interface Outline {
     /**
      * A formula placed on the canvas — the Draw tab's ƒ.
      *
-     * **An object, not a mark.** The Home tab's equation is a [Mark.Equation] on a run: a character in
-     * a sentence, which flows with the text around it and has no position of its own. This one
-     * *implements Prime Object* — it is lassoed, dragged, resized by its corners, copied, deleted and
-     * undone like every other thing placed on a page, because that is what "on the canvas" means. The
-     * two are deliberately different types rather than one type with a flag: a table's typed and ink
-     * kinds are one object with different cells, so a setting tells them apart, while these two are a
-     * span of text and a rectangle on a page and share nothing but the LaTeX inside them.
+     * An object, not a mark. The Home tab's equation is a [Mark.Equation] on a run: a character in a
+     * sentence with no position of its own. This one is lassoed, dragged, resized by its corners,
+     * copied, deleted and undone like everything else placed on a page. Two types rather than one
+     * with a flag, because a span of text and a rectangle on a page share nothing but their LaTeX.
      *
-     * **The source is the truth; the picture is a view.** [latex] is all that is stored, exactly as
-     * `Mark.Equation` stores it, so the MCP server and an exporter can read the formula without a
-     * device and without a renderer. What the canvas draws is a RaTeX display list built from it at
-     * paint time and thrown away.
+     * The source is the truth; the picture is a view. [latex] is all that is stored, so an exporter
+     * can read the formula without a renderer. What the canvas draws is a RaTeX display list built
+     * at paint time and thrown away.
      *
-     * **[width] and [height] are the box it is drawn into, and they are honest.** An equation arrives
-     * at the size RaTeX measured it — the panel has already rendered it once to validate it, so the
-     * measurement costs nothing extra — and a corner drag scales that box. The glyphs scale with it,
-     * the way [Image] scales, rather than reflowing: a formula has no line breaks to reflow, so a box
-     * is the whole of its geometry and the document can hit-test it without measuring anything. That
-     * is the one thing [Table] cannot say about itself (TA3), and it is why this needs no canvas
-     * feedback loop to know how big it is.
+     * [width] and [height] are the box it is drawn into. An equation arrives at the size RaTeX
+     * measured, and a corner drag scales that box; the glyphs scale with it the way [Image] does
+     * rather than reflowing, so the box is the whole of its geometry and it needs no canvas feedback
+     * loop to know how big it is — which is the one thing [Table] cannot say about itself.
      *
-     * [colorArgb] is null while the formula follows the canvas's own text colour, which is what lets a
-     * page dropped onto a dark background stay legible — the same automatic that
-     * `TableSettings.colorFollowsTheme` describes for a border, stored here as the absence of a
-     * choice rather than as a second flag.
+     * [colorArgb] is null while the formula follows the canvas's own text colour, which keeps a page
+     * dropped onto a dark background legible.
      */
     @Serializable
     @SerialName("equation")
@@ -502,17 +485,15 @@ sealed interface Outline {
         fun translated(dx: Float, dy: Float): Equation = copy(x = x + dx, y = y + dy)
 
         /**
-         * Scales the box about [anchorX], [anchorY] — a corner-handle drag, per AD7.
+         * Scales the box about [anchorX], [anchorY] — a corner-handle drag.
          *
-         * The anchor is the corner opposite the one being dragged, which is what makes the far corner
-         * stay put while the near one follows the finger. **Absolute, against the geometry the drag
-         * started with**, so it is applied once on the lift rather than per frame — the identical
-         * contract [Shape.scaledAbout] documents, and the identical explosion if it is broken.
+         * The anchor is the corner opposite the one being dragged. Absolute, against the geometry
+         * the drag started with, so it is applied once on the lift rather than per frame — the same
+         * contract [Shape.scaledAbout] documents, and the same explosion if it is broken.
          *
-         * Floored at [MIN_SIZE] rather than allowed through zero. A formula scaled to nothing has no
-         * corners left to grab, so it could never be scaled back up; a negative one would be drawn
-         * inside out. The floor is applied per axis, so squashing one direction flat does not also
-         * pin the other.
+         * Floored at [MIN_SIZE] per axis: a formula scaled to nothing has no corners left to grab,
+         * and a negative one would be drawn inside out. Per axis, so squashing one direction flat
+         * does not also pin the other.
          */
         fun scaledAbout(anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float): Equation {
             val nextWidth = (width * scaleX).coerceAtLeast(MIN_SIZE)
@@ -536,28 +517,25 @@ sealed interface Outline {
     }
 
     /**
-     * A table placed on the canvas — `memory/tablePlan.md`.
+     * A table placed on the canvas.
      *
-     * **An object, not a block.** `memory/plan.md` §4 sketched a table as `BlockType.Table` inside a
-     * text container, which predates AD7; TA1 supersedes it. The diagram says the class *implements
-     * Prime Object*, and every row of that — lassoed, dragged, resized by its corners, copied,
-     * deleted, undone — belongs to something placed on the page rather than to a paragraph inside
+     * An object, not a block: lassoed, dragged, resized by its corners, copied, deleted and undone,
+     * all of which belong to something placed on the page rather than to a paragraph inside
      * something else.
      *
-     * **Columns are widths; rows are floors.** [columns] is one width per column, in page dp, and
+     * Columns are widths; rows are floors. [columns] is one width per column, in page dp, and
      * [width] is their sum, stored so the page can lay out and hit-test without measuring text.
-     * [TableRow.minHeight] is a *floor* for the same reason [Text.minHeight] is — a cell's text wraps,
-     * and a stored height would eventually clip what someone wrote. So the document does not know how
-     * tall a table is; only the canvas does, once it has measured (TA3). [height] is the honest
-     * approximation of it: exact until some cell overflows its row.
+     * [TableRow.minHeight] is a floor for the same reason [Text.minHeight] is — a cell's text wraps,
+     * and a stored height would eventually clip it. So the document does not know how tall a table
+     * is; only the canvas does, once it has measured. [height] is the honest approximation: exact
+     * until some cell overflows its row.
      *
      * [headerRow] and [headerColumn] are properties of the table rather than marks on the cells they
-     * style (TA8) — a bold mark would be indistinguishable from the user's own bolding, so turning the
-     * header off again would have to guess what to un-bold, and an exporter needs the flag to emit a
-     * `<th>` rather than a `<td>` that looks like one.
+     * style: a bold mark would be indistinguishable from the user's own bolding, and an exporter
+     * needs the flag to emit a `<th>`.
      *
-     * [fillArgb] is null for no fill, which is what a table starts with and a different thing from
-     * transparent black — the same distinction [Shape.fillArgb] draws.
+     * [fillArgb] is null for no fill — what a table starts with, and a different thing from
+     * transparent black.
      */
     @Serializable
     @SerialName("table")
@@ -577,18 +555,15 @@ sealed interface Outline {
         val borderWidth: Float = 1f,
         val fillArgb: Int? = null,
         /**
-         * **A ruling to write on with a stylus, not a grid of text fields** — `memory/tablePlan.md`
-         * TA15, the Draw tab's table.
+         * A ruling to write on with a stylus, not a grid of text fields — the Draw tab's table.
          *
          * The same object with the same toolkit, geometry and history; the difference is what a cell
-         * *is*. Here it is empty space: no editor, no caret, nothing that consumes a touch, so the
-         * pen reaches the page through it. [TableCell.blocks] stays empty for every cell, and the
-         * cells exist only so that adding and removing rows and columns is one operation rather than
-         * two.
+         * is. Here it is empty space: no editor, no caret, nothing that consumes a touch, so the pen
+         * reaches the page through it. [TableCell.blocks] stays empty for every cell, and the cells
+         * exist only so that adding and removing rows and columns is one operation rather than two.
          *
-         * A document property rather than a preference, because it changes what the object *is* —
-         * two tables on one page can differ, and an exporter has to know which is a `<table>` of text
-         * and which is a drawn grid.
+         * A document property rather than a preference, because it changes what the object is: two
+         * tables on one page can differ, and an exporter has to know which is a `<table>` of text.
          *
          * Defaulted false so every table written before this existed decodes as what it was.
          */
@@ -618,13 +593,13 @@ sealed interface Outline {
         fun cellIds(): List<String> = rows.flatMap { row -> row.cells.map(TableCell::id) }
 
         /**
-         * The cells that hold *text* — what the ViewModel keys its block map by (TA2), and empty for
-         * an [inkOnly] table.
+         * The cells that hold text — what the ViewModel keys its block map by, and empty for an
+         * [inkOnly] table.
          *
          * One accessor rather than an `if (inkOnly)` at each of the eight places that seed, remove,
-         * snapshot or restore cell content. Forgetting one of those is not a visible bug: it is a
-         * block-map entry for a cell nobody types in, or — the expensive direction — a save that
-         * blocks for ever waiting on content that will never arrive.
+         * snapshot or restore cell content. Forgetting one is not a visible bug: it is a block-map
+         * entry for a cell nobody types in, or a save that blocks for ever waiting on content that
+         * will never arrive.
          */
         fun contentCellIds(): List<String> = if (inkOnly) emptyList() else cellIds()
 
@@ -638,15 +613,13 @@ sealed interface Outline {
         }
 
         /**
-         * Where Tab goes from [cellId], or null when there is nowhere further — `memory/tablePlan.md`
-         * TA17.
+         * Where Tab goes from [cellId], or null when there is nowhere further.
          *
-         * **Reading order, not the row alone.** The last cell of a row hands on to the first of the
-         * next, which is what Tab does in every table anyone has used; stopping at the right-hand
-         * edge would make the key useless on the one row where a writer most wants it. Null at the
-         * very last cell, where the editor falls back to what Tab does everywhere else — this
-         * deliberately does *not* grow a row, because a keystroke that silently edits the document
-         * is a different promise from one that moves the caret.
+         * Reading order, not the row alone: the last cell of a row hands on to the first of the
+         * next, since stopping at the right-hand edge would make the key useless on the one row
+         * where a writer most wants it. Null at the very last cell, where the editor falls back to
+         * what Tab does everywhere else — deliberately not growing a row, because a keystroke that
+         * silently edits the document is a different promise from one that moves the caret.
          */
         fun cellAfter(cellId: String): String? = cellBeside(cellId, step = 1)
 
@@ -665,16 +638,15 @@ sealed interface Outline {
         fun translated(dx: Float, dy: Float): Table = copy(x = x + dx, y = y + dy)
 
         /**
-         * Scales the grid about [anchorX], [anchorY] — a corner-handle drag, per AD7.
+         * Scales the grid about [anchorX], [anchorY] — a corner-handle drag.
          *
-         * Columns carry the horizontal scale and row floors carry the vertical one, which is the
-         * whole reason a table may keep the corner handles a text box had to decline (TA4): it has
-         * two real axes of geometry rather than one wrap width. Cells re-wrap inside exactly as they
-         * do when a single column is dragged, and because rows are floors, scaling down can never
-         * clip.
+         * Columns carry the horizontal scale and row floors the vertical one, which is why a table
+         * may keep the corner handles a text box had to decline: it has two real axes of geometry
+         * rather than one wrap width. Cells re-wrap inside as they do when a single column is
+         * dragged, and because rows are floors, scaling down can never clip.
          *
-         * **Absolute, against the table it is called on** — the same contract [Shape.scaledAbout]
-         * has, and it fails the same way if applied to its own result frame after frame.
+         * Absolute, against the table it is called on — the same contract [Shape.scaledAbout] has,
+         * and the same failure if applied to its own result frame after frame.
          */
         fun scaledAbout(anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float): Table = copy(
             x = anchorX + (x - anchorX) * scaleX,
@@ -685,7 +657,7 @@ sealed interface Outline {
 
         companion object {
             /**
-             * Caps on the grid — TA9.
+             * Caps on the grid.
              *
              * One `EditText` per cell is what buys the whole Home ribbon inside a table; it is also
              * what would make an uncapped table a way to put a thousand Android Views on one page.
@@ -711,8 +683,8 @@ sealed interface Outline {
     }
 
     /**
-     * Reserved. Stylus input is deferred (memory/initial.md), but declaring the variant now means
-     * adding ink later is additive rather than a migration.
+     * Reserved. Stylus input is deferred, but declaring the variant now means adding ink later is
+     * additive rather than a migration.
      */
     @Serializable
     @SerialName("ink")
@@ -729,9 +701,8 @@ sealed interface Outline {
 /**
  * One row of an [Outline.Table]: a height floor, and one cell per column.
  *
- * [minHeight] is a floor rather than a height — `memory/tablePlan.md` TA3. The row renders as tall as
- * its tallest cell needs and never shorter than this, which is the same promise the text container's
- * bottom edge makes.
+ * [minHeight] is a floor rather than a height. The row renders as tall as its tallest cell needs
+ * and never shorter than this, which is the promise the text container's bottom edge makes.
  */
 @Serializable
 data class TableRow(
@@ -741,13 +712,12 @@ data class TableRow(
 )
 
 /**
- * One cell: an id, and the blocks it holds — `memory/tablePlan.md` TA2.
+ * One cell: an id, and the blocks it holds.
  *
- * **Content-shaped like a text container and geometry-shaped like nothing.** The blocks are the same
+ * Content-shaped like a text container and geometry-shaped like nothing. The blocks are the same
  * type a container's are, held in the ViewModel under the same map and rendered by the same
- * `OutlineEditText`, which is what puts the entire Home ribbon inside a table for free (AD6). What a
- * cell does not have is an x, a y or a width: where it sits is decided by its row and its column,
- * and that is the whole difference between a table and three loose text boxes.
+ * `OutlineEditText`, which is what puts the entire Home ribbon inside a table for free. What a cell
+ * does not have is an x, a y or a width: where it sits is decided by its row and its column.
  */
 @Serializable
 data class TableCell(
@@ -776,17 +746,14 @@ data class Block(
     val text: String get() = runs.joinToString("") { it.plainText }
 
     /**
-     * The block exactly as the editor holds it — `memory/searchPlan.md` CS5.
+     * The block exactly as the editor holds it.
      *
-     * **Not the same string as [text]**, and the difference is the whole reason this exists: [text]
-     * substitutes an equation run's LaTeX source, while the editor writes one
-     * [OBJECT_REPLACEMENT_CHARACTER] for it. Search over this projection and a match offset *is* an
-     * offset the editor can select; search over [text] and it is a number that means nothing to
-     * `setSelection` without a run-level mapping table.
+     * Not the same string as [text], and that is the whole reason this exists: [text] substitutes an
+     * equation run's LaTeX source, while the editor writes one [OBJECT_REPLACEMENT_CHARACTER] for
+     * it. Search over this projection and a match offset is an offset the editor can select.
      *
-     * Paired with `SpannableCodec.render`, which is the code that actually builds the editor's text.
-     * The two must agree character for character; `SpannableCodecTest` is where that is asserted,
-     * being the one place that can run both.
+     * Paired with `SpannableCodec.render`, which builds the editor's text. The two must agree
+     * character for character; `SpannableCodecTest` asserts it, being the one place that runs both.
      */
     val editorText: String get() = runs.joinToString("") { it.editorText }
 
@@ -936,19 +903,17 @@ fun PageDoc.plainText(): String = outlines
     .joinToString("\n")
 
 /**
- * Whether this document holds nothing at all — `memory/blankFlushPlan.md`.
+ * Whether this document holds nothing at all.
  *
  * Deleting a page that was never written on flushes it instead of tombstoning it, and this is the
- * half of that decision the document can answer. Deliberately **not** `plainText().isBlank()`: a
- * page holding one photograph, one shape or an empty table flattens to no text whatsoever, and
- * discarding it because of that would be the one mistake this predicate must never make. Only a
- * text container can be empty; every other kind of outline is content by existing.
+ * half of that decision the document can answer. Deliberately not `plainText().isBlank()`: a page
+ * holding one photograph, one shape or an empty table flattens to no text whatsoever. Only a text
+ * container can be empty; every other kind of outline is content by existing.
  *
  * [PageDoc.empty] is blank, which is the point — it is exactly what `createPage` writes.
  *
- * The page's [PageStyle] is not consulted. Someone who set an untouched page to A4 and then deleted
- * it chose a paper size for a page they threw away, and there is nothing in that worth keeping in a
- * recovery list for a week.
+ * The page's [PageStyle] is not consulted: a paper size chosen for a page that was then thrown away
+ * is not worth keeping in a recovery list for a week.
  */
 fun PageDoc.isBlank(): Boolean = outlines.all { outline ->
     outline is Outline.Text && outline.blocks.all { block ->

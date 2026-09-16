@@ -28,17 +28,15 @@ import java.util.UUID
 import java.util.zip.GZIPOutputStream
 
 /**
- * What the first upload of a drawn notebook costs — `memory/inkSyncPlan.md` §5, the IS5 row.
+ * What the first upload of a drawn notebook costs.
  *
- * The budget table says "measured at IS5, not guessed", and this is the measurement: connecting an
- * installation that has already been drawn on seeds every ink row into the outbox at once, so the
- * first push is by far the largest thing sync ever does, and its shape decides whether joining an
- * account on a tablet with a real notebook on it is a minute or an afternoon.
+ * Connecting an installation that has already been drawn on seeds every ink row into the outbox at
+ * once, so the first push is by far the largest thing sync ever does.
  *
- * The assertions are the invariants that must hold whatever the numbers are — every row leaves
- * exactly once, no request exceeds the transport's cap, the outbox drains — and the numbers
- * themselves are logged under [TAG] for the plan to record. A test that asserted on measured bytes
- * would fail the first time the wire shape improved.
+ * The assertions are the invariants that hold whatever the numbers are — every row leaves exactly
+ * once, no request exceeds the transport's cap, the outbox drains — and the numbers themselves are
+ * logged under [TAG]. A test that asserted on measured bytes would fail the first time the wire
+ * shape improved.
  */
 @RunWith(AndroidJUnit4::class)
 class InkSyncCostTest {
@@ -270,7 +268,7 @@ class InkSyncCostTest {
         /**
          * Enough strokes to cross the row cap several times and to make a per-stroke number mean
          * something, and few enough that the suite stays a suite. The reference page in
-         * `memory/inkSyncPlan.md` §5 has 9,553; this scales linearly in rows, and the per-stroke
+         * The measured corpus has 9,553; this scales linearly in rows, and the per-stroke
          * figures are what carry across.
          */
         const val STROKE_COUNT = 2_000

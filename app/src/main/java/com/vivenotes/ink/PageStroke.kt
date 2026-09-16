@@ -49,21 +49,17 @@ data class PageStroke(
     val colorFollowsTheme: Boolean? = null,
     val groupId: String? = null,
     /**
-     * What makes this projection *this* projection, for as long as it is on the page.
+     * What makes this projection this projection, for as long as it is on the page.
      *
-     * **This used to be `System.identityHashCode(stroke)`, and that was a trap.** Selection, the
-     * lasso's move preview and recognition are all keyed on [projectionKey], so deriving it from the
+     * This used to be `System.identityHashCode(stroke)`, and that was a trap: selection, the lasso's
+     * move preview and recognition are all keyed on [projectionKey], so deriving it from the
      * allocation meant any code that rebuilt a `Stroke` silently renumbered every selection pointing
-     * at it. Nothing failed loudly: the selection simply stopped matching, and
-     * `InkSelectionRenderer.renderInkSelection` — which filters its input by exactly this key —
-     * rendered an empty square and handed it to the formula model, which read the blank page it was
-     * given. Recolouring a held selection did it, and so did the first version of Switch Background's
-     * ink fix.
+     * at it. Nothing failed loudly — the selection stopped matching, and
+     * `InkSelectionRenderer.renderInkSelection` rendered an empty square.
      *
      * Carrying the number instead means a projection keeps its identity through anything `copy` can
-     * do to it — a rebound brush, a new colour, a move, a regroup — because those all produce the
-     * same projection wearing different paint. Only a genuinely *new* projection mints a new number,
-     * which is the constructor's default and, explicitly, the pieces an erase splits a stroke into.
+     * do to it — a rebound brush, a new colour, a move, a regroup. Only a genuinely new projection
+     * mints a new number: the constructor's default, and the pieces an erase splits a stroke into.
      */
     val projection: Int = newProjection(),
 ) {
@@ -71,12 +67,12 @@ data class PageStroke(
      * This projection's page-space rectangle, or null once a cut has left it with no geometry.
      *
      * Computed once per instance rather than per call. `computeBoundingBox` is a JNI hop into the
-     * mesh, and the two callers that matter ask for it on *every* stroke: the draw pass, which culls
-     * against the window on every frame, and lasso replay, which measures what an operation is about
-     * to move. At page scale that was tens of thousands of crossings per frame.
+     * mesh, and the two callers that matter ask for it on every stroke: the draw pass, which culls
+     * against the window every frame, and lasso replay. At page scale that was tens of thousands of
+     * crossings per frame.
      *
-     * Outside the constructor on purpose — it is derived, so it stays out of `equals`, `hashCode` and
-     * `copy`, and a `copy` that changes the offset, the scale or the stroke gets a fresh one.
+     * Outside the constructor on purpose — it is derived, so it stays out of `equals`, `hashCode`
+     * and `copy`, and a `copy` that changes the offset, the scale or the stroke gets a fresh one.
      */
     internal val pageBounds: InkBounds? by lazy {
         stroke.shape.computeBoundingBox()?.let {
@@ -96,8 +92,8 @@ data class InkPoint(val x: Float, val y: Float)
 /**
  * Identifies one live projection, including a disconnected piece that shares its stored row id.
  *
- * [projection] was `System.identityHashCode(stroke)` and is now a number the projection carries —
- * see [PageStroke.projection] for what that bought.
+ * [projection] is a number the projection carries rather than an allocation identity — see
+ * [PageStroke.projection] for what that bought.
  */
 data class InkProjectionKey(val strokeId: String, val projection: Int)
 
@@ -165,20 +161,19 @@ private data class ProjectionIdentity(
 /**
  * The same page, wearing the projection numbers [previous] gave the projections it still holds.
  *
- * Rebuilding a page from Room mints a fresh [PageStroke.projection] for every stroke on it, which is
- * right when the page is being opened and wrong when it is already on screen: a lasso selection
- * lives in `EditorPane` and is a set of [InkProjectionKey]s, so a silent renumbering is a selection
- * that stops matching anything — the exact failure [PageStroke.projection] exists to prevent, and
- * one that shows up as recognition reading a blank square rather than as anything failing. Absorbing
- * a stroke another device drew must not cost the user the selection they are holding.
+ * Rebuilding a page from Room mints a fresh [PageStroke.projection] for every stroke, which is right
+ * when the page is being opened and wrong when it is already on screen: a lasso selection lives in
+ * `EditorPane` as a set of [InkProjectionKey]s, so a silent renumbering is a selection that stops
+ * matching anything. Absorbing a stroke another device drew must not cost the user the selection
+ * they are holding.
  *
- * A projection is the same one when it comes from the same row, is the same one *of* that row, and
- * occupies the same page rectangle. The last clause is what keeps this conservative: an operation
- * pulled from another device that cut, moved or resized a stroke changes its bounds, so it mints a
- * new number exactly as a local erase would, and only ink nobody touched keeps its identity.
+ * A projection is the same one when it comes from the same row, is the same one of that row, and
+ * occupies the same page rectangle. The last clause keeps this conservative: an operation pulled
+ * from another device that cut, moved or resized a stroke changes its bounds, so it mints a new
+ * number exactly as a local erase would.
  *
  * [PageStroke.pageBounds] is computed once per instance and the draw pass asks every stroke for it
- * on the next frame regardless, so this reads what was going to be read anyway.
+ * on the next frame anyway, so this reads what was going to be read regardless.
  */
 internal fun List<PageStroke>.keepingProjectionsOf(previous: List<PageStroke>): List<PageStroke> {
     if (isEmpty() || previous.isEmpty()) return this
@@ -209,8 +204,8 @@ private fun PageStroke.pageToStrokeTransform(): AffineTransform =
  *
  * [Stroke.subtract] can cut a mesh away entirely, and Ink's shape comparisons do not tolerate the
  * result: `computeCoverageIsGreaterThan` reaches a native `CHECK failed: !meshes_.empty()` and
- * **aborts the process** rather than returning false. So an empty mesh has to be caught here, in
- * Kotlin, before it is ever handed to one.
+ * aborts the process rather than returning false. So an empty mesh has to be caught here, in Kotlin,
+ * before it is handed to one.
  *
  * `computeBoundingBox` is the safe test — it returns null for an empty mesh, which is what
  * [pageBounds] already relies on.
@@ -240,13 +235,13 @@ internal fun List<PageStroke>.targetsFor(mask: Stroke): List<String> =
 /**
  * Whether this stroke can only be drawn from the outlines of its mesh.
  *
- * `SelfOverlap.DISCARD` forces the path renderer — the mesh renderer refuses the mode, and that is
- * the documented trade for a highlighter that does not double its opacity where it crosses itself.
- * The path renderer draws from outlines, and draws *nothing* for a mesh that has none.
+ * `SelfOverlap.DISCARD` forces the path renderer — the mesh renderer refuses the mode, which is the
+ * documented trade for a highlighter that does not double its opacity where it crosses itself. The
+ * path renderer draws from outlines, and draws nothing for a mesh that has none.
  *
- * That matters because [Stroke.split] returns pieces with no outlines, while [Stroke.subtract]
- * keeps them. Splitting one of these strokes therefore does not cut it — it erases it from the
- * screen entirely, while leaving its geometry intact and its row in the database.
+ * That matters because [Stroke.split] returns pieces with no outlines, while [Stroke.subtract] keeps
+ * them. Splitting one of these strokes therefore erases it from the screen entirely, while leaving
+ * its geometry intact and its row in the database.
  */
 private val Stroke.isDrawnFromOutlines: Boolean
     get() = brush.family.coats.any { coat ->
@@ -356,27 +351,24 @@ internal data class InkProjectionDelete(
 /**
  * How to delete exactly [held], given what is live on the page.
  *
- * **A piece of ink has no storable form of its own, so removing one can only be another erase.**
+ * A piece of ink has no storable form of its own, so removing one can only be another erase.
  * `ink_strokes` holds a brush and an input batch and the mesh is rebuilt from them; a projection is
- * "row X, minus its replayed erases, the component containing this region" and there is nothing about
- * it to write down. A row every piece of which is going can therefore be tombstoned — that is an
- * ordinary delete and stays one — while a row that keeps a piece has to be told what to lose in the
- * only language the log has. `memory/lassoProjectionPlan.md` §5.
+ * "row X, minus its replayed erases, the component containing this region", and there is nothing
+ * about it to write down. A row every piece of which is going can therefore be tombstoned, while a
+ * row that keeps a piece has to be told what to lose in the only language the log has.
  *
- * The language it has is [eraseObjects], which removes every disconnected component its mask
- * *touches*. Touching is the whole requirement — no coverage is measured — so the mask is a **dot on
- * the piece**, placed on a vertex of the piece's own mesh ([pointOnInk]). Deleting a piece is then
- * recorded as the eraser having been tapped on it, which the log, page-open replay, the undo ring and
- * the sync client all already understand, and which needed no new operation kind and no migration.
+ * That language is [eraseObjects], which removes every disconnected component its mask touches. No
+ * coverage is measured, so the mask is a dot on the piece, placed on a vertex of the piece's own
+ * mesh ([pointOnInk]). Deleting a piece is then recorded as the eraser having been tapped on it,
+ * which the log, page-open replay, the undo ring and the sync client all already understand.
  *
- * **Every dot is proved before it is offered**, by [eraserDotAvoiding]: it must take the piece and
- * leave that row's other pieces alone. A stored operation proved against the state it was made in
- * replays identically, because replay reproduces that state — and this is the one place the two can
- * be compared, so it is the place to compare them.
+ * Every dot is proved before it is offered, by [eraserDotAvoiding]: it must take the piece and leave
+ * that row's other pieces alone. A stored operation proved against the state it was made in replays
+ * identically, because replay reproduces that state.
  *
- * One erase per piece rather than one for the gesture: a mask is a stroke, a stroke is one continuous
- * path, and a path visiting two pieces runs through the gap the eraser cut between them. The caller
- * folds them into a single undo.
+ * One erase per piece rather than one for the gesture: a mask is one continuous path, and a path
+ * visiting two pieces runs through the gap the eraser cut between them. The caller folds them into
+ * a single undo.
  */
 internal fun List<PageStroke>.planProjectionDelete(held: Set<InkProjectionKey>): InkProjectionDelete {
     val byRow = groupBy(PageStroke::id)
@@ -435,21 +427,20 @@ private fun PageStroke.eraserDotAvoiding(others: List<PageStroke>): Stroke? {
 /**
  * A page-space point certainly on this projection's ink, or null once it has no mesh left.
  *
- * **Found by asking the mesh, not by reading it.** The direct answer — a vertex out of
- * `PartitionedMesh.renderGroupMeshes` — is `@RestrictTo(LIBRARY_GROUP)` and lint refuses it, rightly:
- * a restricted accessor can change or vanish between alphas, and this decides what an *erase* is
- * allowed to remove. `computeCoverageIsGreaterThan` against a probe triangle is public, is the same
- * question, and is already how [LassoShape.crosses] talks to a mesh with no outlines.
+ * Found by asking the mesh, not by reading it. The direct answer — a vertex out of
+ * `PartitionedMesh.renderGroupMeshes` — is `@RestrictTo(LIBRARY_GROUP)`, and a restricted accessor
+ * can change or vanish between alphas. `computeCoverageIsGreaterThan` against a probe triangle is
+ * public, is the same question, and is already how [LassoShape.crosses] talks to a mesh with no
+ * outlines.
  *
- * The candidates are the stroke's **own input samples**, which is what makes one round of probes
- * enough rather than a search: `Stroke.split` gives each piece a new shape but *"retains the original
- * inputs"*, so every sample of the whole stroke is offered to every piece of it and each piece
- * answers for the stretch that is its. Samples run down the centre of the ink at drawing resolution,
- * so a piece with any length to it is hit almost at once.
+ * The candidates are the stroke's own input samples, which is what makes one round of probes enough
+ * rather than a search: `Stroke.split` gives each piece a new shape but retains the original inputs,
+ * so every sample is offered to every piece and each answers for the stretch that is its. Samples
+ * run down the centre of the ink at drawing resolution, so a piece with any length is hit at once.
  *
  * The box sweep behind it is for the piece too short to hold a sample — a sliver the eraser left
  * between two of them. It walks the piece's own rectangle, which is tight around a sliver, so the
- * expensive path is the one that has almost nothing to search.
+ * expensive path is the one with almost nothing to search.
  */
 internal fun PageStroke.pointOnInk(): InkPoint? {
     val bounds = pageBounds ?: return null
@@ -508,24 +499,18 @@ private const val DOT_MASK_MAX_DP = 4f
 /**
  * Selects objects whose visible ink outline is enclosed by the free-form lasso.
  *
- * **A loop takes projections; only a group takes rows.** A partial erase leaves one row wearing
- * several disconnected projections, and this used to widen every hit back out to its row — so a loop
- * drawn round one half of a cut line selected both halves, and the rectangle spanned the gap between
- * them. That widening was written when a piece of erased ink could not be *reached* by the lasso at
- * all (`Stroke.split` returns pieces with no outlines and the exact test walked outlines), so for two
- * weeks it had nothing to widen; the moment [LassoShape.encloses] made pieces selectable it became
- * the behaviour the user sees. `memory/lassoProjectionPlan.md` §1.
+ * A loop takes projections; only a group takes rows. A partial erase leaves one row wearing several
+ * disconnected projections, and this used to widen every hit back out to its row — so a loop drawn
+ * round one half of a cut line selected both halves, and the rectangle spanned the gap between them.
  *
- * It was there for a reason that was real and is answered elsewhere: delete, colour and grouping are
- * properties of the stored row, so a selection narrower than a row could name geometry they would
- * overrun. Colour and `groupId` *are* the row and say so; delete is projection-scoped in
- * `NotesViewModel.deleteInkSelection`. Pre-widening the selection to protect three operations left
- * the other three — move, resize and recognition, all keyed on [projectionKey] — acting on ink the
- * hand never circled.
+ * The widening was there for a real reason, answered elsewhere: delete, colour and grouping are
+ * properties of the stored row. Colour and `groupId` are the row and say so; delete is
+ * projection-scoped in `NotesViewModel.deleteInkSelection`. Pre-widening to protect three operations
+ * left the other three — move, resize and recognition, all keyed on [projectionKey] — acting on ink
+ * the hand never circled.
  *
- * It was also already inconsistent with replay: [replayMove] re-derives its targets geometrically,
- * so the widened set moved on screen and only the circled piece moved on the next page open. The
- * gesture and the replay now ask the same question.
+ * It was also inconsistent with replay: [replayMove] re-derives its targets geometrically, so the
+ * widened set moved on screen and only the circled piece moved on the next page open.
  *
  * A group still expands, because a group is the user saying these rows are one object — the one
  * expansion that comes from an intent rather than from an implementation detail of the eraser.
@@ -557,10 +542,9 @@ internal fun List<PageStroke>.selectWithLasso(
 /**
  * Rebinds selected immutable meshes to a brush carrying the requested colour.
  *
- * **Clears the automatic flag**, because picking a colour off the palette is exactly the act that
- * makes one deliberate — leaving it set would have the stroke go back to the canvas's ink the next
- * time the background was switched, silently discarding the choice just made. Explicitly `false`
- * rather than null: this stroke's intent is now known, and null means only "never recorded".
+ * Clears the automatic flag, because picking a colour off the palette is what makes one deliberate:
+ * leaving it set would send the stroke back to the canvas's ink the next time the background was
+ * switched. Explicitly `false` rather than null, since null means only "never recorded".
  */
 internal fun List<PageStroke>.recolor(ids: Collection<String>, colorArgb: Int): List<PageStroke> {
     val targets = ids.toSet()
@@ -581,13 +565,11 @@ internal fun List<PageStroke>.recolor(ids: Collection<String>, colorArgb: Int): 
 /**
  * What to paint an automatic stroke with on this canvas, leaving the stroke itself alone.
  *
- * **A view, not an edit, and deliberately not a new list of [PageStroke]s.** The obvious shape for
- * this — map the list, rebinding automatic strokes to a themed brush — is wrong in a way that does
- * not show up on screen: [projectionKey] is `System.identityHashCode(stroke)`, so handing the page a
- * themed copy silently renumbers every projection. A lasso selection captured against those copies
- * then matches nothing in the list the view model holds, which is what
- * `InkSelectionRenderer.renderInkSelection` filters by — so recognition renders a blank square and
- * reads an empty page, and the lasso's own move preview stops finding the strokes it is moving.
+ * A view, not an edit, and deliberately not a new list of [PageStroke]s. Mapping the list to rebind
+ * automatic strokes to a themed brush would hand the page copies, and a copy is a different
+ * `Stroke` instance: the projection numbers are carried on [PageStroke], so a themed list built that
+ * way loses the identity a held selection is keyed on. Recognition then renders a blank square, and
+ * the lasso's move preview stops finding the strokes it is moving.
  *
  * So identity stays with the stored stroke and only the paint is derived. The themed [Stroke] is
  * built once per stroke and cached by identity; `Stroke.copy(brush)` rebinds the existing immutable
@@ -689,16 +671,14 @@ private fun PageStroke.scaledAround(anchor: InkPoint, x: Float, y: Float): PageS
 /**
  * Replays a persisted move against the projections that existed inside its original lasso.
  *
- * **This is where the page's origin corner is enforced for ink** — [PageBounds]. A shape, a table or
- * an equation is a position in the document and can be held to the rule where it is written down;
- * ink is a stroke plus every operation ever replayed over it, so the only place its final position
- * is known is here, at the end of the fold that produces it.
+ * This is where the page's origin corner is enforced for ink — [PageBounds]. A shape, a table or an
+ * equation is a position in the document and can be held to the rule where it is written down; ink
+ * is a stroke plus every operation ever replayed over it, so the only place its final position is
+ * known is here, at the end of the fold that produces it.
  *
- * For a move recorded by a build that has the rule, this changes nothing: the gesture had already
- * clamped the delta against a selection the ink was part of, so the same limit computed again is the
- * same limit. It fires only for the pages that were dragged off the corner before the rule existed,
- * and it brings the whole moved set back **together**, by the one delta it shares, rather than
- * shuffling each stroke to the wall on its own.
+ * For a move recorded by a build that has the rule this changes nothing, since the gesture had
+ * already clamped the delta. It fires only for pages dragged off the corner before the rule existed,
+ * and it brings the whole moved set back together, by the one delta it shares.
  */
 internal fun List<PageStroke>.replayMove(
     path: List<InkPoint>,
@@ -734,11 +714,10 @@ internal fun List<PageStroke>.replayResize(
 ): List<PageStroke> {
     val targets = targetIds.toSet()
     if (path.size < 3 || targets.isEmpty()) return this
-    // A plain move stores no scale, and every stored move is replayed through here — so on most
-    // pages this is the whole of the work and none of it changes anything. Provably nothing:
-    // `clampScale` only ever *lowers* a scale towards 1 and never below it, so an identity scale
-    // survives the clamp, and `scaledAround` by 1 returns the stroke it was given. On the page this
-    // was found on it was 228 ms of a 3.8 s open, spent to arrive back where it started.
+    // A plain move stores no scale, and every stored move is replayed through here, so on most pages
+    // this is the whole of the work and none of it changes anything: `clampScale` only lowers a
+    // scale towards 1 and never below it, and `scaledAround` by 1 returns the stroke it was given.
+    // On the page this was found on it was 228 ms of a 3.8 s open.
     if (scaleX == 1f && scaleY == 1f) return this
     val lasso = LassoShape(path)
     val selected = map { it.id in targets && lasso.contains(it) }
@@ -777,13 +756,13 @@ private fun pointInPolygon(point: InkPoint, polygon: List<InkPoint>): Boolean {
  * A lasso polygon, prepared once so that testing a whole page against it does not walk every mesh.
  *
  * The exact test in [containsExactly] reads every outline vertex of every stroke through JNI, which
- * is the right answer and far too much of it: replaying the page-sized lasso that repairs a drawing's
- * position cost 253 ms of a page open, and an interactive lasso pays the same per gesture. Both
- * shortcuts below are *decisions*, never approximations — each one reaches a conclusion the exact
- * walk would have reached, using the bounding box the stroke already cached.
+ * is the right answer and far too much of it: replaying a page-sized lasso cost 253 ms of a page
+ * open, and an interactive lasso pays the same per gesture. Both shortcuts below are decisions
+ * rather than approximations — each reaches a conclusion the exact walk would have reached, from the
+ * bounding box the stroke already cached.
  *
- * A projection with no outlines — a piece of erased ink — is answered by [encloses] instead, which is
- * the same question put to the mesh.
+ * A projection with no outlines — a piece of erased ink — is answered by [encloses] instead, which
+ * puts the same question to the mesh.
  */
 internal class LassoShape(
     val path: List<InkPoint>,
@@ -830,34 +809,29 @@ internal class LassoShape(
     /**
      * The same question asked of a projection that has no outlines to walk — a piece of erased ink.
      *
-     * **This is why erased ink could not be lassoed at all.** `Stroke.split` — which is what gives
-     * each surviving region of a partially erased stroke its own projection ([subtract]) — returns
-     * pieces whose meshes carry *no outlines*, the same fact that stops a cut highlighter from being
-     * split ([isDrawnFromOutlines]). [containsExactly] walks outlines and so walked nothing, and
-     * every piece of erased ink answered "not inside" to every loop drawn round it. It went unnoticed
-     * because the convex shortcut above answers first for a rectangle or a triangle, which is every
-     * lasso a test ever draws; a loop drawn by hand is never convex.
+     * This is why erased ink could not be lassoed at all. `Stroke.split`, which gives each surviving
+     * region of a partially erased stroke its own projection, returns pieces whose meshes carry no
+     * outlines. [containsExactly] walks outlines and so walked nothing, and every piece of erased ink
+     * answered "not inside" to every loop drawn round it. It went unnoticed because the convex
+     * shortcut above answers first for a rectangle or a triangle, which is every lasso a test draws.
      *
      * Two tests, because neither alone is containment:
-     * - [region] answers *overlaps the loop at all*. Coverage cannot answer more than that: it is the
-     *   fraction of the mesh's triangles that **intersect** the region, so a piece lying half outside
-     *   still measures 1.0 — measured on a device rather than assumed.
-     * - [crosses] answers *reaches over the loop's edge*. A piece is by construction one connected
-     *   region, so a piece that overlaps the loop without crossing its edge lies wholly inside it.
+     * - [region] answers "overlaps the loop at all". Coverage cannot answer more: it is the fraction
+     *   of the mesh's triangles that intersect the region, so a piece lying half outside still
+     *   measures 1.0.
+     * - [crosses] answers "reaches over the loop's edge". A piece is one connected region by
+     *   construction, so one that overlaps the loop without crossing its edge lies wholly inside.
      *
-     * **Two shapes of this were tried and are wrong.** Subtracting the region from the piece and
-     * asking what is left outside cuts nothing at all: a region from `createClosedShape` carries no
-     * outlines either, and that is what `Stroke.subtract` cuts with. Drawing the loop's edge as one
-     * closed *stroke* and testing against that mesh looks right and is not reproducible: a stroke's
-     * mesh is built through the brush's modeler, so it lags the input and depends on the timestamps
-     * the path is fed with — the same loop came out truncated at x=39 of 45 with one clock and at
-     * y=67 of 70 with another. [crosses] uses plain triangles, which are geometry and nothing else.
+     * Two other shapes were tried and are wrong. Subtracting the region from the piece cuts nothing:
+     * a region from `createClosedShape` carries no outlines either, and that is what
+     * `Stroke.subtract` cuts with. Drawing the loop's edge as one closed stroke is not reproducible:
+     * a stroke's mesh is built through the brush's modeler, so it lags the input and depends on the
+     * timestamps the path is fed with. [crosses] uses plain triangles instead.
      *
-     * The edge tolerance is deliberately not applied here: a hairline edge means ink must be inside
-     * the loop rather than inside-or-within-a-few-dp of it, so grazing the edge of a piece of erased
-     * ink misses where grazing an untouched stroke would catch. Widening the quads would trade that
-     * for the opposite error — rejecting ink that is genuinely inside — and this is the half that
-     * costs a user nothing but a slightly wider loop.
+     * The edge tolerance is deliberately not applied here: grazing the edge of a piece of erased ink
+     * misses where grazing an untouched stroke would catch. Widening the quads would trade that for
+     * rejecting ink that is genuinely inside, and this is the half that costs a user nothing but a
+     * slightly wider loop.
      */
     private fun encloses(stroke: PageStroke): Boolean {
         val region = region ?: return false

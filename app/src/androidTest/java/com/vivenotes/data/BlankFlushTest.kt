@@ -23,16 +23,15 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Deleting something that never held anything — `memory/blankFlushPlan.md`.
+ * Deleting something that never held anything.
  *
- * Two halves, and they fail in opposite directions. **Flushing too eagerly loses data with no
- * tombstone to recover it from**, which is why the blank tests below are mostly about the things
- * that must *not* be flushed: a page with a picture on it, a page with ink, a section holding an
- * older deleted page somebody may still restore, a notebook whose bytes are on the server. Flushing
- * too rarely only leaves rows around, which is the complaint this feature answers.
+ * Two halves that fail in opposite directions. Flushing too eagerly loses data with no tombstone to
+ * recover it from, which is why most of the tests below are about what must not be flushed: a page
+ * with a picture on it, a page with ink, a section holding an older deleted page, a notebook whose
+ * bytes are on the server. Flushing too rarely only leaves rows around.
  *
- * The database is built with the sync triggers installed, because "nothing is sent to the server" is
- * half of what a flush means and the outbox is where that is visible.
+ * The database is built with the sync triggers installed, because "nothing is sent to the server"
+ * is half of what a flush means.
  */
 @RunWith(AndroidJUnit4::class)
 class BlankFlushTest {

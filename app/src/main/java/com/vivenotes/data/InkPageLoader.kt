@@ -40,13 +40,11 @@ data class LoadedInkPage(
      * and nothing on the page draws them any more.
      *
      * Reported rather than acted on, because a loader is not the place to write. The caller
-     * ([com.vivenotes.ui.NotesViewModel.loadInk]) tombstones them so the seven-day purge collects
-     * them — see `NotesRepository.collectErasedAwayStrokes` for why that is safe and why it is not
-     * told to the server.
+     * tombstones them so the seven-day purge collects them — see
+     * `NotesRepository.collectErasedAwayStrokes`.
      *
-     * **Only rows that decoded.** A row this build cannot read produces no projection either, and
-     * counting that as erased-away would have the garbage collector delete ink over a codec it does
-     * not happen to know.
+     * Only rows that decoded. A row this build cannot read produces no projection either, and
+     * counting that as erased-away would delete ink over a codec it does not happen to know.
      */
     val erasedAway: List<String> = emptyList(),
 )

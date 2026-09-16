@@ -549,7 +549,7 @@ class SyncServerClientTest {
         assertEquals("", requestBody)
     }
 
-    // --- attachment bytes (S5) --------------------------------------------------------------
+    // --- attachment bytes --------------------------------------------------------------
 
     @Test
     fun aBlobHeadAsksTheDocumentedPathAndReportsWhatTheAccountHolds() = runBlocking {

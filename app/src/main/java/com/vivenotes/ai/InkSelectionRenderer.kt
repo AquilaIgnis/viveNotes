@@ -20,17 +20,16 @@ import kotlin.math.min
 
 /**
  * Renders the lasso's selection to a high-contrast, tightly bounded bitmap: its ink projections, and
- * the **line and arrow shapes** it holds with them.
+ * the line and arrow shapes it holds with them.
  *
  * A line drawn with the Line tool is part of the formula it sits in — a fraction bar, a minus, the
- * bar over a radical, a vector's arrow — and leaving it out was leaving the recogniser to read
- * `\frac{1}{2}` as two numbers with a gap. It is a mark that happens to be stored as a shape rather
- * than as a stroke, so it is inked here the same way a stroke is: black, at the recognition stem
- * width, ignoring the border width, colour and line type it carries on the page. The model is being
- * shown a formula, not a drawing, and a dashed rule means nothing to it that a solid one does not.
+ * bar over a radical, a vector's arrow — and leaving it out had the recogniser read `\frac{1}{2}` as
+ * two numbers with a gap. It is a mark that happens to be stored as a shape, so it is inked here the
+ * same way a stroke is: black, at the recognition stem width, ignoring the border width, colour and
+ * line type it carries on the page.
  *
- * [shapes] is the page's, filtered here rather than by the caller, so what is drawn is decided by the
- * same rule that decides whether the Math button appears at all — `CanvasSelection.isInkAndLines`.
+ * [shapes] is the page's, filtered here rather than by the caller, so what is drawn is decided by
+ * the same rule that decides whether the Math button appears — `CanvasSelection.isInkAndLines`.
  */
 internal fun renderInkSelection(
     strokes: List<PageStroke>,
@@ -116,25 +115,23 @@ private fun ShapeContour.asPath(): Path = Path().apply {
 /**
  * How wide to ink a stroke so the stem lands at [RECOGNITION_STEM_PX] in the model's own square.
  *
- * **Thickness has to be stated in the frame the model sees, not in page units.**
- * `preprocessFormula` scales every crop to fit 384, so one width in page units becomes a different
- * width in the tensor for every selection: a formula written large is squeezed to a hairline and a
- * small one comes out fat. Measured on the three formulas of page 3 (`simulations/formula-render`),
- * that single confusion is worth more than everything else in the pipeline put together — mean
- * token accuracy 0.615 at the stored 2 dp, 0.898 once the stem is pinned here, and the first exact
- * readings the model has ever produced on that page.
+ * Thickness has to be stated in the frame the model sees, not in page units. `preprocessFormula`
+ * scales every crop to fit 384, so one width in page units becomes a different width in the tensor
+ * for every selection: a formula written large is squeezed to a hairline and a small one comes out
+ * fat. Measured on three formulas (`simulations/formula-render`), that one confusion is worth more
+ * than everything else in the pipeline put together — mean token accuracy 0.615 at the stored 2 dp,
+ * 0.898 once the stem is pinned here.
  *
  * Solving `stem * 384 / (longest + stem) = target` for the width to draw with:
  *
  *     stem = target * longest / (384 - target)
  *
- * [longest] is the long edge of the selection in page units. It is the *mesh* bounds, so it already
- * carries the stored stroke's half-width at each end — about 1% on a formula this size, and a
- * rounding error next to the width being solved for.
+ * [longest] is the long edge of the selection in page units — the mesh bounds, so it already carries
+ * the stored stroke's half-width at each end, about 1% on a formula this size.
  *
  * 10 px was measured, not chosen: 2 px reads as noise and scored 0.617, 24 px blots the counters
- * shut and scored 0.437, and the curve between them is not monotonic — 12 and 13 px both dip. Nudge
- * this only with the sweep in `simulations/formula-render` in front of you.
+ * shut and scored 0.437, and the curve between them is not monotonic. Nudge this only with the sweep
+ * in `simulations/formula-render` in front of you.
  */
 internal fun recognitionStemSize(longest: Float): Float =
     RECOGNITION_STEM_PX * longest / (FORMULA_INPUT_PX - RECOGNITION_STEM_PX)

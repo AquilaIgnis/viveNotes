@@ -35,21 +35,18 @@ data class ImageTextProgress(
 )
 
 /**
- * Reads the pictures of a notebook with PP-OCRv5, in the background — `memory/imageOcrPlan.md`
- * IO6, IO7, IO9.
+ * Reads the pictures of a notebook with PP-OCRv5, in the background.
  *
- * **Nothing here is on the keystroke path.** A search runs against whatever has already been read
- * and returns at once; this is handed the notebook's picture ids afterwards, reads the ones with no
+ * Nothing here is on the keystroke path. A search runs against whatever has already been read and
+ * returns at once; this is handed the notebook's picture ids afterwards, reads the ones with no
  * current row, and bumps [version] as it writes. The search flow re-runs on that, so results grow
  * into an open panel instead of needing a retype.
  *
- * **The concurrency is deliberately lopsided.** Inference is serialized inside
- * `OnnxInkRecognitionEngine` — one mutex, one tensor at a time, because ONNX Runtime is already
- * given four intra-op threads and a second concurrent session would only multiply resident model
- * memory to compete for the same cores. What runs in parallel is everything around it: decoding a
- * picture off disk, normalizing it, and labelling the probability map's components, which on the
- * desktop study cost as much as inference did. So [IMAGE_WORKERS] pictures are in flight and one is
- * ever in the graph, and picture N+1 is being decoded while picture N is being read.
+ * The concurrency is deliberately lopsided. Inference is serialized inside
+ * `OnnxInkRecognitionEngine` — one tensor at a time, because ONNX Runtime already has four intra-op
+ * threads and a second session would only multiply resident model memory. What runs in parallel is
+ * everything around it: decoding a picture off disk, normalizing it, and labelling the probability
+ * map's components. So [IMAGE_WORKERS] pictures are in flight and one is ever in the graph.
  */
 class ImageTextIndexer(
     private val repository: NotesRepository,

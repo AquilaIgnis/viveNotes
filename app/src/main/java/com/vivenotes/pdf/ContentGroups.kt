@@ -31,16 +31,14 @@ class PdfGroup(
 /**
  * How much empty page separates two things that belong together, in page dp.
  *
- * **Per axis, because a page is not isotropic.** Two marks 20 dp apart across the line are letters
- * of a word; 20 dp down the page they are two lines of the same paragraph; 60 dp across is the
- * channel between two columns and 60 dp down is the space before the next heading. One radius
- * cannot tell those apart, and the first version of this used one — which is why a sum written
- * beside a paragraph was never part of it.
+ * Per axis, because a page is not isotropic. Two marks 20 dp apart across the line are letters of a
+ * word; 20 dp down the page they are two lines of a paragraph; 60 dp across is the channel between
+ * two columns and 60 dp down is the space before a heading. One radius cannot tell those apart, and
+ * the first version of this used one — which is why a sum beside a paragraph was never part of it.
  *
  * Forty is chosen against the page's own ruling: the widest this app offers is
- * [com.vivenotes.model.RuleLines.GridLarge] at 38 dp of *pitch*, so consecutive lines of writing
- * leave far less than this and hold together, while the gap anyone leaves deliberately between two
- * blocks is larger.
+ * [com.vivenotes.model.RuleLines.GridLarge] at 38 dp of pitch, so consecutive lines of writing leave
+ * less than this and hold together.
  */
 const val GROUP_GAP_X_DP: Float = 40f
 
@@ -49,7 +47,7 @@ const val GROUP_GAP_Y_DP: Float = 40f
 
 /**
  * Everything on the page, gathered into the entities the fit is allowed to move — the corrected
- * PD6, and what `memory/pdfExportPlan.md` now describes.
+ * which is what the exporter now does.
  *
  * A whitespace cut, on both axes, over **objects and ink together**. That last part is the point:
  * a diagram is a shape with handwriting on it, a working is a paragraph with a sum beside it, and
@@ -85,17 +83,16 @@ fun groupContent(
 /**
  * A page's ink as atoms, with anything the lasso grouped kept whole.
  *
- * **The names must survive being asked for twice.** An export plans a page and then draws it, and
- * those are two separate loads of the same ink — so an atom whose name changes between them takes
- * its group's name with it, and the shift the fit worked out is then looked up under a name nothing
- * answers to. That is not a hypothetical: the first version of this named a stroke by its
- * [PageStroke.projection], which `PageStroke` documents as process-local and never stored, and every
- * ungrouped formula on a real page came out with its right-hand half sliced off, while the one that
- * happened to be a lasso group — named by an id the *document* holds — came out whole.
+ * The names must survive being asked for twice. An export plans a page and then draws it, and those
+ * are two separate loads of the same ink, so an atom whose name changes between them takes its
+ * group's name with it and the shift the fit worked out is looked up under a name nothing answers
+ * to. The first version named a stroke by its [PageStroke.projection], which is process-local and
+ * never stored, and every ungrouped formula on a real page came out with its right-hand half sliced
+ * off.
  *
  * So the name is the stored row id, plus an ordinal for the pieces an eraser has split one row into.
- * `InkPageLoader` decodes rows in a fixed order and replays operations in a fixed order, so those
- * pieces arrive in the same order every time.
+ * `InkPageLoader` decodes rows and replays operations in a fixed order, so those pieces arrive in
+ * the same order every time.
  */
 fun inkAtoms(strokes: List<PageStroke>): List<PdfAtom> {
     val measured = strokes.mapNotNull { stroke -> stroke.pageBounds?.let { stroke to it } }
@@ -121,28 +118,24 @@ fun inkAtoms(strokes: List<PageStroke>): List<PdfAtom> {
  * Recursive whitespace cutting: split a block wherever a lane of empty page runs right through it,
  * and stop when none does.
  *
- * This is the classic XY cut, and it is the right shape for the question because **it only ever
- * divides at emptiness**. A rule like "these two rectangles are near each other" is transitive in a
- * way page layout is not: one stray stroke bridging two columns joins them for ever. A cut that has
- * to find a clear lane across the whole block cannot be bridged by proximity, and what it leaves is
- * what a reader would circle with a finger.
+ * The classic XY cut, and the right shape for the question because it only ever divides at
+ * emptiness. A rule like "these two rectangles are near each other" is transitive in a way page
+ * layout is not: one stray stroke bridging two columns joins them for ever. A cut that has to find a
+ * clear lane across the whole block cannot be bridged by proximity.
  *
  * Two things make a cut:
  *
- *  1. **A gap wider than its axis's tolerance.** The ordinary case, and what decides where one
- *     entity stops and the next begins.
- *  2. **A block too large for a sheet, at whatever gap it has.** Without this, a densely written
- *     page is one entity that fits nowhere and the fit gives up on it entirely. With it, the page
- *     breaks fall in the widest channel available — between paragraphs rather than through a line —
- *     which is the whole point of the option. The over-size axis is tried first, because that is the
- *     one that has to shrink.
+ *  1. A gap wider than its axis's tolerance — the ordinary case, and what decides where one entity
+ *     stops and the next begins.
+ *  2. A block too large for a sheet, at whatever gap it has. Without this a densely written page is
+ *     one entity that fits nowhere and the fit gives up on it; with it the page breaks fall in the
+ *     widest channel available. The over-size axis is tried first.
  *
  * Iterative rather than recursive so a page of thousands of strokes cannot exhaust the stack. It
  * terminates because every cut strictly shrinks a block and a block of one is a leaf.
  *
- * Generic over its item type and taking geometry through a lambda, so this — the part that decides
- * what a page is *made of* — is covered by JVM tests. A [PageStroke] carries a native mesh and
- * cannot be built off a device.
+ * Generic over its item type and taking geometry through a lambda, so this is covered by JVM tests:
+ * a [PageStroke] carries a native mesh and cannot be built off a device.
  */
 internal fun <T> segmentByWhitespace(
     items: List<T>,

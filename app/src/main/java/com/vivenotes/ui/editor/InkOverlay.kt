@@ -115,27 +115,24 @@ internal object NoPan : CanvasPan {
 /**
  * The drawing surface: wet ink under the pen, finished ink behind it, in one layer over the page.
  *
- * **Why this sits outside the zoom.** `Zoomed` scales the page through a `graphicsLayer`, and
- * scaling a front-buffered surface renders the wet ink at the layer's resolution and then stretches
- * the result — ink would be soft while drawing and snap sharp on release. So the overlay covers the
- * viewport at 1:1 device scale and is handed the page → view transform instead, which is exactly
- * what `InProgressStrokesView.startStroke` takes two matrices for. Strokes are therefore captured
- * and stored in page units at any zoom, the same invariant `Zoomed` already keeps for text.
+ * Sits outside the zoom. `Zoomed` scales the page through a `graphicsLayer`, and scaling a
+ * front-buffered surface renders wet ink at the layer's resolution and then stretches it — soft
+ * while drawing, snapping sharp on release. So the overlay covers the viewport at 1:1 device scale
+ * and is handed the page → view transform instead, which is what `InProgressStrokesView.startStroke`
+ * takes two matrices for. Strokes are captured and stored in page units at any zoom.
  *
- * [pageToView] is a lambda called at draw time and at event time rather than a captured value, for
- * the reason `PageRuling` takes its window as one: reading the scroll position during composition
- * would recompose this on every scrolled pixel, where reading it during the draw re-runs only the
- * draw.
+ * [pageToView] is a lambda called at draw and event time rather than a captured value: reading the
+ * scroll position during composition would recompose this on every scrolled pixel.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun InkOverlay(
     strokes: List<PageStroke>,
-    /** Shapes on the page, so a lasso loop can take one — AD7's first row. */
+    /** Shapes on the page, so a lasso loop can take one. */
     shapes: List<Outline.Shape> = emptyList(),
     /**
-     * The tables, as rectangles the *canvas* measured — `memory/tablePlan.md` TA4, and [TableBounds]
-     * for why the model's own height will not do here.
+     * The tables, as rectangles the canvas measured — see [TableBounds] for why the model's own
+     * height will not do here.
      */
     tables: List<TableBounds> = emptyList(),
     /** Equations on the page, which a loop takes by their box like a table. */
@@ -143,8 +140,8 @@ internal fun InkOverlay(
     /** Pictures, taken by their frame for the reason an equation is taken by its box. */
     images: List<Outline.Image> = emptyList(),
     /**
-     * What is selected, across kinds. Owned by the page rather than by this overlay: a shape can be in
-     * it, and `ShapeLayer` has to draw the same selection this does. See [CanvasSelection].
+     * What is selected, across kinds. Owned by the page rather than this overlay: a shape can be in
+     * it, and `ShapeLayer` has to draw the same selection. See [CanvasSelection].
      */
     selection: CanvasSelection? = null,
     /** Brief, non-interactive emphasis for a handwriting search result. */
@@ -159,18 +156,18 @@ internal fun InkOverlay(
     /** The armed shape's settings, or null when Insert Shape is not the tool in hand. */
     shaping: ShapeSettings?,
     /**
-     * Whether Insert Space is in hand — E2.
+     * Whether Insert Space is in hand.
      *
      * A plain flag rather than a settings object like [shaping], because the tool has nothing to
      * configure: the drag says where the line is, which way it runs and how far it goes.
      */
     insertingSpace: Boolean = false,
     /**
-     * The ruler lying on the page, or null when it is away — `memory/rulerPlan.md`.
+     * The ruler lying on the page, or null when it is away.
      *
-     * Drawn here because this canvas is composed in every tool state, and applied here because RD5's
-     * snapping has to reach the wet stroke rather than the finished one. Moving it is somebody
-     * else's job: see `detectRulerDrag` for why that lives on an ancestor.
+     * Drawn here because this canvas is composed in every tool state, and applied here because the
+     * snapping has to reach the wet stroke rather than the finished one. Moving it lives on an
+     * ancestor — see `detectRulerDrag`.
      */
     ruler: Ruler? = null,
     eraser: EraserSettings,
@@ -183,10 +180,8 @@ internal fun InkOverlay(
      * Whether the pen in hand turns a held, straight-enough stroke into a line —
      * `com.vivenotes.data.PenPreset.holdForStraightLine`.
      *
-     * A flag rather than the pen itself, because that is genuinely all this layer needs to know.
-     * What the line is *drawn* like — colour, width, line type — is the pen's business and is read
-     * where the object is made; handing the overlay a `PenPreset` it would only forward is how a
-     * canvas ends up knowing about settings it never uses.
+     * A flag rather than the pen itself: what the line is drawn like is read where the object is
+     * made, so the overlay never needs to know about pen settings it would only forward.
      */
     straightenOnHold: Boolean = false,
     /**
@@ -203,7 +198,7 @@ internal fun InkOverlay(
     onResizeSelection: (InkLassoResize) -> Unit = {},
     onMoveShapes: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
-    /** One end of a lassoed line, in place of the corner resize it has no corners for — SD12. */
+    /** One end of a lassoed line, in place of the corner resize it has no corners for. */
     onMoveShapeEnd: (String, Boolean, Float, Float) -> Unit = { _, _, _, _ -> },
     onMoveTables: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
@@ -219,13 +214,11 @@ internal fun InkOverlay(
     onUngroupSelection: (Set<String>) -> Unit = {},
     /**
      * Pans the page. The overlay owns this because it owns the gesture: a hit pointer node blocks
-     * its siblings from seeing the event at all, so declining a touch is not enough to hand it to
-     * the scroll container underneath — the page simply stopped panning while a pen was in hand.
-     * A drawing surface that dispatches between ink and pan is also the shape this needs anyway.
+     * its siblings from seeing the event, so declining a touch is not enough to hand it to the
+     * scroll container underneath.
      *
-     * One finger only. Two are a pinch, which is owned by `detectPinchZoom` on an ancestor of this
-     * whole pane — nothing less than an ancestor can take a gesture off a hit pointer node — so a
-     * second contact ends the pan here rather than dragging the page from the first pointer alone.
+     * One finger only. Two are a pinch, owned by `detectPinchZoom` on an ancestor of this whole
+     * pane, so a second contact ends the pan here rather than dragging from the first pointer alone.
      */
     pan: CanvasPan = NoPan,
     modifier: Modifier = Modifier,
@@ -234,13 +227,12 @@ internal fun InkOverlay(
     var wetView by remember { mutableStateOf<InProgressStrokesView?>(null) }
 
     // What automatic ink resolves to on this canvas. Strokes drawn with the automatic pen follow the
-    // page they are on, exactly as the text beside them does — Switch Background used to leave them
-    // at whatever the canvas was when they were drawn, which on a flip meant white ink on white
-    // paper.
+    // page they are on, as the text beside them does; Switch Background used to leave them at
+    // whatever the canvas was when they were drawn, so a flip meant white ink on white paper.
     //
-    // **The painter is consulted at the draw and nowhere else.** Everything below still holds the
-    // stored strokes, because a stroke's identity is what selection, erase and recognition are keyed
-    // on — see [CanvasInkPainter], which exists because theming the list instead broke all three.
+    // The painter is consulted at the draw and nowhere else: everything below holds the stored
+    // strokes, because a stroke's identity is what selection, erase and recognition are keyed on.
+    // See [CanvasInkPainter].
     val canvasInkArgb = LocalCanvasColors.current.text.toArgb()
     val inkPainter = remember(strokes, canvasInkArgb) { CanvasInkPainter(canvasInkArgb) }
 
@@ -294,12 +286,10 @@ internal fun InkOverlay(
     var livePointer by remember { mutableStateOf(-1) }
 
     /**
-     * Which side of the ruler the stroke in progress is ruled against, or null if it is not ruled —
-     * RD5 and RD5a.
+     * Which side of the ruler the stroke in progress is ruled against, or null if it is not ruled.
      *
      * Decided on the down and held for the whole stroke, so a hand drifting off the ruler still
-     * draws the line it started; the alternative is a stroke that changes character halfway. The
-     * *side* is held for the same reason and it is the sharper one: asked afresh each sample, a
+     * draws the line it started. The side is held for the same reason: asked afresh each sample, a
      * hand sweeping across the body would flip the line onto the far edge mid-stroke.
      */
     var ruledSide by remember { mutableStateOf<RulerSide?>(null) }
@@ -344,16 +334,12 @@ internal fun InkOverlay(
     /*
      * The dwell clock — the half of hold-for-straight-line that no motion event can supply.
      *
-     * A pen resting on the glass produces no `ACTION_MOVE`, so *one second of nothing happening* is
-     * not something the gesture can be told about; it has to be waited for. [StraightenHold.dwell]
-     * changes to a fresh value every time the pen moves far enough to start the wait over, and
-     * `collectLatest` cancels the pending [delay] when it does — which is the whole timer, reset
-     * rule included, in one operator.
+     * A pen resting on the glass produces no `ACTION_MOVE`, so a second of nothing happening has to
+     * be waited for. [StraightenHold.dwell] takes a fresh value every time the pen moves far enough
+     * to restart the wait, and `collectLatest` cancels the pending [delay] when it does.
      *
-     * Watched through [snapshotFlow] rather than read in composition on purpose. Reading it up
-     * there would recompose this whole overlay on every significant sample of every stroke, which
-     * is the cost the file's header goes to some length to avoid; the erase preview above observes
-     * its gesture the same way and for the same reason.
+     * Watched through [snapshotFlow] rather than read in composition: reading it up there would
+     * recompose the whole overlay on every significant sample of every stroke.
      */
     LaunchedEffect(Unit) {
         snapshotFlow { straightenHold.dwell }.collectLatest { dwell ->
@@ -406,17 +392,15 @@ internal fun InkOverlay(
 
     // Clipped here rather than left to the caller, because nothing else stops it. Compose does not
     // clip children to their parent, and this draws through a matrix that can put a stroke anywhere
-    // in the window — so a stroke begun on the canvas and dragged over the ribbon, the page list or
-    // an open tool pane painted straight over them. Android delivers the whole gesture to whoever
-    // took the ACTION_DOWN, which is right (a stroke must not break because the pen left the page),
-    // so the fix belongs in what is drawn, not in what is delivered.
+    // in the window, so a stroke begun on the canvas and dragged over the ribbon painted straight
+    // over it. Android delivers the whole gesture to whoever took the ACTION_DOWN, which is right,
+    // so the fix belongs in what is drawn rather than in what is delivered.
     val lassoColor = MaterialTheme.colorScheme.primary.toArgb()
     val searchHighlightFill = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f).toArgb()
     val searchHighlightBorder = MaterialTheme.colorScheme.primary.copy(alpha = 0.72f).toArgb()
-    // The disc inside each corner handle, and the app's surface rather than white for the reason the
-    // radius beside it is a shared dp: `ShapeLayer`, `EquationLayer` and `ImageLayer` all fill theirs
-    // with `colorScheme.surface`, so a hardcoded white here was one selection affordance in two
-    // colours — the same one, on the same page, depending only on which tool had made it (AD7).
+    // The disc inside each corner handle, in the app's surface rather than white: `ShapeLayer`,
+    // `EquationLayer` and `ImageLayer` all fill theirs with `colorScheme.surface`, so a hardcoded
+    // white here was one selection affordance in two colours depending on which tool made it.
     val lassoHandleFill = MaterialTheme.colorScheme.surface.toArgb()
     // The app's accent, not the canvas's ink: the Insert Space guide is a tool showing its work, the
     // same kind of thing the lasso's trace is, and it disappears the moment the pointer lifts. The
@@ -439,18 +423,15 @@ internal fun InkOverlay(
     Box(
         modifier
             .clipToBounds()
-            // With nothing in hand the overlay has to be *transparent to touch*, and since the
-            // authoring view below is composed whether or not a tool is armed, being transparent is
-            // no longer the same as being absent: an `AndroidView` carries a pointer-input node of
-            // its own, so the moment it is in the tree it is a hit target, and Compose stops at the
-            // first sibling it hits. Left alone that killed the page — no scrolling and no tap into
-            // a text container while the pointer was the tool. The marker node is exactly the lever
-            // for that; see `sharingTouchesWithSiblings`.
+            // With nothing in hand the overlay has to be transparent to touch, and since the
+            // authoring view below is composed whether or not a tool is armed, transparent is no
+            // longer the same as absent: an `AndroidView` carries a pointer-input node of its own,
+            // and Compose stops at the first sibling it hits. Left alone that killed scrolling and
+            // tapping into a text container. See `sharingTouchesWithSiblings`.
             //
-            // Only while nothing is armed, deliberately. With a tool in hand the filter below is in
-            // front of the authoring view and takes the gesture first, and it is *meant* to own it
-            // outright — that is why `handleInk` pans the page itself rather than declining to a
-            // sibling that would never be asked.
+            // Only while nothing is armed. With a tool in hand the filter below is in front of the
+            // authoring view and is meant to own the gesture outright, which is why `handleInk` pans
+            // the page itself rather than declining to a sibling that would never be asked.
             .then(if (armed) Modifier else Modifier.sharingTouchesWithSiblings())
             .testTag(INK_OVERLAY_TAG)
             .onSizeChanged { viewportSize = it },
@@ -469,9 +450,9 @@ internal fun InkOverlay(
             val matrix = currentTransform()
             // The window in page units, so a stroke that cannot be seen is not drawn. On a densely
             // handwritten page this is the difference between drawing a screenful and drawing ten
-            // thousand strokes, every frame, for a scroll that shows a few dozen of them. Computed
-            // from the transform *here* in the draw scope, for the same reason the transform is read
-            // here: scrolling re-runs the draw and nothing above it. See `memory/inkPlan.md` §3.2.
+            // thousand strokes every frame. Computed from the transform here in the draw scope, for
+            // the same reason the transform is read here: scrolling re-runs the draw and nothing
+            // above it.
             val visible = matrix.pageWindow(size.width, size.height)
             drawIntoCanvas { canvas ->
                 val native = canvas.nativeCanvas
@@ -538,36 +519,30 @@ internal fun InkOverlay(
             }
         }
 
-        // Held for as long as the page is open, and **never rebuilt when the tool changes**.
+        // Held for as long as the page is open, and never rebuilt when the tool changes.
         //
-        // This used to be composed only while a tool was armed — it is the expensive half, a
-        // front-buffered surface and its render thread, and holding one while nobody is drawing
-        // looked like waste. It cost ink instead. Arming a pen with nothing in hand then had to
-        // build the whole surface at the exact moment the user was reaching for the page, and the
-        // first stroke fell into the gap two different ways:
+        // This used to be composed only while a tool was armed, since it is the expensive half — a
+        // front-buffered surface and its render thread. It cost ink instead: arming a pen had to
+        // build the whole surface at the moment the user was reaching for the page, and the first
+        // stroke fell into the gap two ways.
         //
         //  - The touch filter below is composed on the same recomposition, so a pen that came down
-        //    before that frame landed had its whole gesture taken by the scroll container — Android
-        //    gives the gesture to whoever took the down, so it never came back as ink.
+        //    before that frame landed had its whole gesture taken by the scroll container.
         //  - Worse, a stroke that did start went nowhere. `InProgressStrokesView` renders into a
         //    `SurfaceView` whose viewport only exists after `surfaceChanged` reports a size, and
         //    `CanvasInProgressStrokesRenderHelperV33.requestStrokeCohortHandoffToHwui` drops the
         //    finished cohort on a null viewport. `onStrokeCohortHandoffToHwuiComplete` then never
-        //    fires, the manager's `newCohortStartAwaitingHandoff` latch stays set, and from that
-        //    point its `onDraw` returns immediately: no wet ink is ever drawn again and no stroke
-        //    ever reaches [onStrokeFinished]. That is the "swap to a pen and the page stops taking
-        //    ink" bug, and it stayed broken until something rebuilt the view.
+        //    fires, the manager's `newCohortStartAwaitingHandoff` latch stays set, and its `onDraw`
+        //    returns immediately from then on — no wet ink, and no stroke ever reaching
+        //    [onStrokeFinished], until something rebuilt the view.
         //
-        // Both are races against surface setup, so the fix is to do that setup once, while the page
-        // is still loading and the pen is nowhere near the glass. What it costs is one surface and
-        // one render thread held while the pointer is the tool — which is the tool nobody stays on,
-        // in an app whose whole point is the pen.
+        // Both are races against surface setup, so the setup happens once while the page is still
+        // loading. It costs one surface and one render thread held while the pointer is the tool.
         //
-        // The touch filter below stays conditional, because *it* has to be absent with nothing in
-        // hand or it swallows the taps that belong to the canvas (`memory/rulerPlan.md` RD6). This
-        // one cannot be absent and cannot be silent either — an `AndroidView` brings a pointer-input
-        // node with it — so the overlay shares its hit path with its siblings while nothing is
-        // armed. See the root `Box` above.
+        // The touch filter below stays conditional, because it has to be absent with nothing in
+        // hand or it swallows the taps that belong to the canvas. This one cannot be absent and
+        // cannot be silent either — an `AndroidView` brings a pointer-input node with it — so the
+        // overlay shares its hit path with its siblings while nothing is armed. See the root `Box`.
         AndroidView(
             factory = { context ->
                 // Wrapped rather than hosted directly. An AndroidView reports the gesture as
@@ -687,8 +662,8 @@ internal fun InkOverlay(
         }
 
         // The object tooltip is raised by `EditorPane` from the page's selection, not here. A shape
-        // can be in that selection, and a bar that appeared twice — once per layer — could not
-        // describe a loop holding both (AD7).
+        // can be in that selection, and a bar that appeared once per layer could not describe a loop
+        // holding both.
     }
 
     DisposableEffect(Unit) {
@@ -742,18 +717,15 @@ private const val SEARCH_HIGHLIGHT_STROKE_DP = 1.5f
 /**
  * Recognises stationary, single-pointer double taps without taking drag/pan ownership.
  *
- * **The pen is admitted per-gesture, not per-tool** — [observe]'s `acceptStylus`. A finger double
- * tap is always safe here: when a drawing tool owns touch the finger is not drawing, so the second
- * tap can only have been meant as a gesture. A stylus double tap is not safe in general, because
- * with a brush or the eraser active those two taps *are* two marks on the page, and raising a paste
- * button on top of them would fire during ordinary drawing — dotting an "i" twice would offer to
- * paste. The lasso is the one tool where a tap deposits nothing, so it is the one tool that passes
- * `acceptStylus = true`.
+ * The pen is admitted per gesture, not per tool — [observe]'s `acceptStylus`. A finger double tap
+ * is always safe: when a drawing tool owns touch the finger is not drawing. A stylus double tap is
+ * not, because with a brush or the eraser active those two taps are two marks on the page, so
+ * dotting an "i" twice would offer to paste. The lasso is the one tool where a tap deposits
+ * nothing, so it is the one that passes `acceptStylus = true`.
  *
- * Deliberately unlike `StylusButtons`: there the firmware counts the clicks and a software timer
- * would double-count them. Nothing counts screen taps for us, so the interval test below is the
- * only way to see this one, and it is measured against [ViewConfiguration]'s own double-tap window
- * rather than a constant of our own.
+ * Unlike `StylusButtons`, where the firmware counts clicks and a software timer would double-count
+ * them: nothing counts screen taps, so the interval test below is the only way to see this one, and
+ * it uses [ViewConfiguration]'s own double-tap window rather than a constant of our own.
  */
 internal class DoubleTapGesture(
     private val minimumIntervalMillis: Long,
@@ -880,19 +852,18 @@ private fun handleInk(
 ): Boolean {
     val index = event.actionIndex
     val toolType = event.getToolType(index)
-    // Both count as "a pointer with no pen behind it", which is what the finger setting is really
-    // about. A mouse is here for the emulator, though **not** because the emulator reports one:
-    // checked on the `Medium_Tablet` AVD 2026-08-06, and `dumpsys input` lists eleven
-    // `virtio_input_multi_touch` devices and no mouse at all, so a host click arrives as a finger.
-    // Other emulator configurations do deliver a real mouse, and either way the answer is the same.
+    // Both count as "a pointer with no pen behind it", which is what the finger setting is about.
+    // A mouse is here for the emulator, though not because the emulator reports one: on the
+    // `Medium_Tablet` AVD `dumpsys input` lists only `virtio_input_multi_touch` devices, so a host
+    // click arrives as a finger. Other configurations do deliver a real mouse; either way the
+    // answer is the same.
     val isDirectTouch = toolType == MotionEvent.TOOL_TYPE_FINGER ||
         toolType == MotionEvent.TOOL_TYPE_MOUSE
 
-    // Lasso used to claim every finger drag even in stylus-only mode. That made the page impossible
-    // to pan with one hand while the lasso was armed. It follows the same finger setting as ink and
-    // the eraser now: stylus always selects, while a disallowed finger moves the page.
-    // Ahead of every other mode for the same reason lasso is ahead of ink: it is a tool that owns
-    // the whole gesture, and a shape drag must not also start a stroke.
+    // Lasso follows the same finger setting as ink and the eraser: stylus always selects, while a
+    // disallowed finger moves the page. It used to claim every finger drag even in stylus-only
+    // mode, which made the page impossible to pan one-handed with the lasso armed. Ahead of every
+    // other mode because it owns the whole gesture, and a shape drag must not also start a stroke.
     if (shaping != null) {
         if (isDirectTouch && !allowFinger) {
             return panPage(event, pan, velocity, panning, lastPan, setPanning)
@@ -901,10 +872,9 @@ private fun handleInk(
         return shapeGesture.handle(event, toPage, touchSlop, onInsertShape)
     }
 
-    // Ahead of the lasso for the reason the shape tool is ahead of both: a tool that owns the whole
-    // gesture must be asked before anything that would also like part of it. It follows the same
-    // finger rule as its neighbours — a disallowed finger pans, so the page can still be moved
-    // one-handed with the tool in hand.
+    // Ahead of the lasso for the same reason the shape tool is ahead of both: a tool that owns the
+    // whole gesture must be asked before anything that would also like part of it. A disallowed
+    // finger pans, so the page can still be moved one-handed with the tool in hand.
     if (insertingSpace) {
         if (isDirectTouch && !allowFinger) {
             return panPage(event, pan, velocity, panning, lastPan, setPanning)
@@ -987,12 +957,11 @@ private fun handleInk(
     if (brush == null) return false
     val toWorld = Matrix().also { transform.invert(it) }
 
-    // A ruled stroke is fed rewritten coordinates rather than the ones the hand produced — RD5. The
+    // A ruled stroke is fed rewritten coordinates rather than the ones the hand produced. The
     // substitution happens here, at the one seam every branch below passes through, so the stroke
-    // lifecycle underneath is the same code whether the ruler is out or not.
-    // What is carried across samples is not merely *that* the stroke is ruled but *which side of
-    // the ruler it is ruled against* — RD5a. One nullable value carries both, so there is no way to
-    // hold a stroke ruled without also holding the edge it is ruled to.
+    // lifecycle underneath is the same code whether the ruler is out or not. What is carried across
+    // samples is not merely that the stroke is ruled but which side of the ruler it is ruled
+    // against; one nullable value carries both.
     val ruledTo = ruledSide ?: run {
         if (ruler == null || event.actionMasked != MotionEvent.ACTION_DOWN) return@run null
         val landed = event.pagePoint(index, toWorld)
@@ -1010,12 +979,11 @@ private fun handleInk(
     val bounded = (drawn ?: event).clampedToPage(toWorld, transform)
     val inkEvent = bounded ?: drawn ?: event
 
-    // Fed the same points the stroke is — after the ruler and after the wall — so that what the
-    // fit judges is the mark that would land on the page rather than the raw path of the hand.
+    // Fed the same points the stroke is — after the ruler and after the wall — so the fit judges
+    // the mark that would land on the page rather than the raw path of the hand.
     //
-    // **Never for a ruled stroke.** That one is already straight, drawn against an object the user
-    // deliberately laid there, and turning it into a shape object would swap out the mark they were
-    // making for a different kind of thing entirely.
+    // Never for a ruled stroke: that one is already straight, drawn against an object the user
+    // deliberately laid there, so turning it into a shape would swap out the mark being made.
     if (straightenOnHold && ruledTo == null) {
         straightenHold.observe(inkEvent, toWorld, touchSlop)
     } else {
@@ -1103,20 +1071,16 @@ private fun handleInkStroke(
 }
 
 /**
- * A copy of this event with its point moved onto the ruler's edge — `memory/rulerPlan.md` RD5.
+ * A copy of this event with its point moved onto the ruler's edge.
  *
- * A rewritten `MotionEvent` rather than the `StrokeInput` overloads, because this way the whole
- * stroke path underneath keeps the matrix arrangement that is already known to be right — the one
- * this file records getting wrong twice. Pressure, tilt, orientation, tool type and the pointer id
- * are copied wholesale; only x and y are the ruler's business.
+ * A rewritten `MotionEvent` rather than the `StrokeInput` overloads, so the stroke path underneath
+ * keeps the matrix arrangement already known to be right. Pressure, tilt, orientation, tool type
+ * and the pointer id are copied wholesale; only x and y are the ruler's business.
  *
- * **Historical samples are dropped**, and lose nothing: a ruled stroke's path is decided by the
- * ruler rather than by what the hand did between frames, and the points that matter — where it
- * started and where it is now — are both still here.
+ * Historical samples are dropped and lose nothing: a ruled stroke's path is decided by the ruler,
+ * and where it started and where it is now are both still here.
  *
- * [side] is the stroke's, not this sample's: see [Ruler.snap].
- *
- * The caller recycles.
+ * [side] is the stroke's, not this sample's: see [Ruler.snap]. The caller recycles.
  */
 private fun MotionEvent.snappedTo(
     ruler: Ruler,
@@ -1155,29 +1119,22 @@ private fun MotionEvent.snappedTo(
 }
 
 /**
- * A copy of this event with its point pulled back onto the page, or **null when it is already on it**
- * — [PageBounds].
+ * A copy of this event with its point pulled back onto the page, or null when it is already on it —
+ * [PageBounds].
  *
- * The pen is the one thing on this canvas that can put marks outside it, and it does not need to
- * leave the glass to do it: a stroke begun inside the window keeps receiving moves after the pointer
- * has left it, and those arrive with coordinates behind the origin. That is how a page ends up
- * carrying strokes at a negative y — invisible, unselectable, and unreachable, because neither
- * scroll state goes below zero.
+ * A stroke begun inside the window keeps receiving moves after the pointer has left it, and those
+ * arrive with coordinates behind the origin. That is how a page ends up carrying strokes at a
+ * negative y: invisible, unselectable and unreachable, because neither scroll state goes below zero.
  *
- * There is no fixing it afterwards. A stroke's points are what the pen produced, and translating one
- * back onto the page would move the half that was never off it. So it is stopped here, on the way
- * in: past the wall, the ink piles up against it, which is what a hard edge looks like.
+ * There is no fixing it afterwards — translating a stroke back onto the page would move the half
+ * that was never off it — so it is stopped here on the way in, and the ink piles up against the wall.
  *
- * **Null for the common case**, and that is the whole reason for the return type: an in-bounds event
- * is passed through untouched and keeps its historical samples, which are most of a fast stroke's
- * fidelity. Only an event that has actually crossed the wall is rebuilt, and only that one loses its
- * history — the same trade [snappedTo] makes, and for the same reason: the samples given up are the
- * ones being pushed into a wall.
+ * Null for the common case: an in-bounds event passes through untouched and keeps its historical
+ * samples, which are most of a fast stroke's fidelity. Only an event that has crossed the wall is
+ * rebuilt, and only that one loses its history.
  *
- * Single-pointer events only. A second contact cancels the stroke a line later, so there is nothing
- * here worth rebuilding, and the caller's `index` is only valid against a one-pointer copy.
- *
- * The caller recycles.
+ * Single-pointer events only; the caller's `index` is only valid against a one-pointer copy. The
+ * caller recycles.
  */
 private fun MotionEvent.clampedToPage(toPage: Matrix, toView: Matrix): MotionEvent? {
     if (pointerCount != 1) return null
@@ -1327,12 +1284,10 @@ private fun drawLasso(
         style = Paint.Style.FILL
     }
 
-    // A lassoed line gets exactly what a tapped one gets: two handles on its own ends, and no box
-    // (SD12). It used to get the generic rectangle and four corners here, which is the same shape
-    // `ShapeLayer` had stopped drawing — one affordance that changed depending on which tool had
-    // selected it, and four handles that pointed at a resize the kind does not have.
-    // A locked line takes the rectangle instead of its two end handles. Its whole chrome is those
-    // handles, so dropping them on their own would leave a selected shape with nothing drawn on it.
+    // A lassoed line gets what a tapped one gets: two handles on its own ends, and no box. It used
+    // to get the generic rectangle and four corners, which pointed at a resize the kind does not
+    // have. A locked line takes the rectangle instead of its end handles, since those are its whole
+    // chrome and dropping them alone would leave a selected shape with nothing drawn on it.
     val locked = selection?.isLocked == true
     val line = if (locked) null else selection.lineShape(shapes)
     if (line != null) {
@@ -1351,15 +1306,14 @@ private fun drawLasso(
     }
 
     gesture.previewBounds(selection)?.let { bounds ->
-        // **Page units are dp**, so the chrome is drawn from [SelectionChrome] as it stands, with no
+        // Page units are dp, so the chrome is drawn from [SelectionChrome] as it stands, with no
         // division by [scale] — those are the same numbers `ShapeLayer`, `EquationLayer` and
-        // `ImageLayer` hand to `Dp.toPx()`, and reading them here is what makes a lassoed object's
-        // selection *the same* affordance as a tapped one rather than one that resembles it (AD7).
+        // `ImageLayer` hand to `Dp.toPx()`, which is what makes a lassoed object's selection the
+        // same affordance as a tapped one.
         //
-        // Dividing by the scale was the bug: it pinned the chrome to a fixed number of **device
-        // pixels**, which is the same number divided by the density — so a lassoed object's handles
-        // came out at a third of the radius a tapped one's have on a 3× screen, and shrank further
-        // against the page with every step of zoom, where a tapped object's grow with it.
+        // Dividing by the scale pinned the chrome to a fixed number of device pixels, so a lassoed
+        // object's handles came out at a third of a tapped one's radius on a 3× screen and shrank
+        // further with every step of zoom.
         val padding = SelectionChrome.PADDING.value
         val selectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
@@ -1371,9 +1325,9 @@ private fun drawLasso(
         val right = bounds.right + padding
         val bottom = bounds.bottom + padding
         canvas.drawRect(left, top, right, bottom, selectionPaint)
-        // **The rectangle stays, the corners go** — a locked selection cannot be scaled, and the
-        // rule the whole app follows is that an affordance which cannot act is absent rather than
-        // present and dead. The same gate the object layers apply to their own handles.
+        // The rectangle stays, the corners go: a locked selection cannot be scaled, and an
+        // affordance that cannot act is absent rather than present and dead. The same gate the
+        // object layers apply to their own handles.
         if (!locked) {
             listOf(
                 left to top,
@@ -1393,9 +1347,8 @@ private fun drawLasso(
  * The shape under the pointer, mid-drag.
  *
  * Drawn from the same [trace] call the commit will run, so the preview cannot show one thing and
- * land another — that is the whole reason SD6 has the picker chips draw themselves too. Everything
- * here is in page space, so the border width is in page units and scales with zoom exactly as the
- * committed ink will.
+ * land another. Everything here is in page space, so the border width is in page units and scales
+ * with zoom exactly as the committed ink will.
  */
 private fun drawShapePreview(
     canvas: android.graphics.Canvas,
@@ -1495,13 +1448,12 @@ internal fun List<PageStroke>.previewErase(mask: Stroke, mode: EraserMode): List
 }
 
 /**
- * Owns one drag that becomes a shape — `memory/inkPlan.md` §5.4.
+ * Owns one drag that becomes a shape.
  *
  * Deliberately not routed through `InProgressStrokesView` like freehand ink is. A shape is not
- * captured, it is *constructed*: the front buffer renders one continuous stroke where a cube is
- * twelve, and there is nothing about a traced path that needs low-latency wet rendering. So this
- * owns two page-space points and the overlay draws the preview from them, the same way it draws the
- * lasso.
+ * captured, it is constructed: the front buffer renders one continuous stroke where a cube is
+ * twelve, and a traced path needs no low-latency wet rendering. So this owns two page-space points
+ * and the overlay draws the preview from them, as it draws the lasso.
  */
 internal class ShapeGesture {
     private var pointerId: Int = -1
@@ -1605,18 +1557,16 @@ private fun toPageLength(toPage: Matrix, pixels: Float): Float {
 }
 
 /**
- * Watches one freehand stroke for the pause that turns it into a straight line — `memory/inkPlan.md`
- * §5, scoped to the line.
+ * Watches one freehand stroke for the pause that turns it into a straight line.
  *
- * **This class holds a trace and a stopwatch's starting gun; it does not hold a timer.** A stationary
- * pen emits no events, so nothing here can notice a second going by. What it does instead is publish
- * [dwell], a value that changes every time the pen moves far enough to make the wait start over; the
- * overlay turns that into an actual wait with `collectLatest` and [delay]. Keeping the clock out here
- * is what lets this be driven straight from `MotionEvent`s in a test, at whatever speed the test
- * likes.
+ * This holds a trace and a stopwatch's starting gun, not a timer. A stationary pen emits no events,
+ * so nothing here can notice a second going by; instead it publishes [dwell], a value that changes
+ * every time the pen moves far enough to restart the wait, and the overlay turns that into an actual
+ * wait with `collectLatest` and [delay]. Keeping the clock outside lets this be driven straight from
+ * `MotionEvent`s in a test.
  *
  * The trace is accumulated rather than read back from `InProgressStrokesView`, which does not offer
- * the points of a stroke that has not finished — and could not offer them in page units if it did.
+ * the points of an unfinished stroke — and could not offer them in page units if it did.
  */
 internal class StraightenHold {
 
@@ -1749,10 +1699,9 @@ internal class StraightenHold {
 /**
  * How long the pen has to rest before a straight-enough stroke becomes a line.
  *
- * One second, by request. `memory/inkPlan.md` §5.1 proposed 500 ms, which is the number a gesture
- * with a visible preview can afford; this one has no preview and replaces a mark that is already on
- * the page, so it is worth being sure the pause was meant. It is also long enough not to fire on the
- * pause people make mid-word.
+ * One second. This gesture has no preview and replaces a mark already on the page, so it is worth
+ * being sure the pause was meant; it is also long enough not to fire on the pause people make
+ * mid-word.
  */
 private const val STRAIGHTEN_HOLD_MILLIS = 1_000L
 
@@ -1761,19 +1710,17 @@ private const val DEFAULT_SHAPE_WIDTH = 120f
 private const val DEFAULT_SHAPE_HEIGHT = 80f
 
 /**
- * Owns one Insert Space drag — feature E2, and `com.vivenotes.model.PageSpace` for what it means.
+ * Owns one Insert Space drag — see `com.vivenotes.model.PageSpace` for what it means.
  *
- * Like [ShapeGesture] this holds two page-space facts and lets the overlay draw from them, because
- * there is nothing here for the front buffer to do: no ink is being laid down, and what the user
- * needs to see is a line and a band, not a wet stroke.
+ * Like [ShapeGesture], this holds two page-space facts and lets the overlay draw from them: no ink
+ * is being laid down, and what the user needs to see is a line and a band.
  *
- * **The axis is chosen by the drag, not by where the pointer is.** OneNote decides it from proximity
- * to the sheet's left and right edges, and shows the guide on hover before you press. Neither half
- * of that survives here: this canvas is unbounded by default ([com.vivenotes.model.PaperSize.Auto]),
- * so there is no edge to be near, and a finger has no hover to show a guide during. So the first
- * unambiguous direction of travel decides, and then **locks** — a gesture that could still change its
+ * The axis is chosen by the drag, not by where the pointer is. OneNote decides it from proximity to
+ * the sheet's edges and shows the guide on hover, and neither half survives here: this canvas is
+ * unbounded by default, so there is no edge to be near, and a finger has no hover. So the first
+ * unambiguous direction of travel decides and then locks — a gesture that could still change its
  * mind at 300 dp would flip the whole page sideways on a wobble. Until it locks the guide is drawn
- * horizontal, which is both the common case and a promise the lock only ever keeps or turns.
+ * horizontal, which is the common case.
  */
 internal class InsertSpaceGesture {
 
@@ -1792,8 +1739,7 @@ internal class InsertSpaceGesture {
     /**
      * The cut as it currently stands, for the preview to draw, or null while idle.
      *
-     * Deliberately the same value the commit will send: a preview computed one way and a commit
-     * computed another is the bug SD6 has the shape picker chips drawing themselves to avoid.
+     * Deliberately the same value the commit will send, so the preview cannot disagree with it.
      */
     val preview: SpaceCut?
         get() = origin?.let { SpaceCut(axis, axis.coordinateOf(it), amount) }
@@ -1988,25 +1934,24 @@ private const val GUIDE_ARROW_DP = 9f
 private const val GUIDE_FALLBACK_SPAN = 2000f
 
 /**
- * Owns one lasso loop and the live move or corner-resize that follows it — but **not** the selection.
+ * Owns one lasso loop and the live move or corner-resize that follows it — but not the selection.
  *
- * What is selected is a page-level fact ([CanvasSelection], AD7) held by `EditorPane`, because a
- * shape can be in it and a shape is not ink. This class holds only what is true for the length of one
- * gesture: which corner is being dragged, how far, and the loop being traced. It reads the current
- * selection as an argument and reports a new one through a callback.
+ * What is selected is a page-level fact ([CanvasSelection]) held by `EditorPane`, because a shape
+ * can be in it and a shape is not ink. This class holds only what is true for one gesture: which
+ * corner is being dragged, how far, and the loop being traced. It reads the current selection as an
+ * argument and reports a new one through a callback.
  *
- * The live transform is therefore readable by every layer that draws a selected object — the ink
- * canvas here and `ShapeLayer` inside the zoom — from one place, in page units, rather than each
- * keeping its own idea of how far the finger has travelled.
+ * The live transform is therefore readable from one place, in page units, by every layer that draws
+ * a selected object — the ink canvas here and `ShapeLayer` inside the zoom.
  */
 internal class LassoGesture {
     /**
-     * [Held] is a press on a **locked** selection: ours, and inert.
+     * [Held] is a press on a locked selection: ours, and inert.
      *
      * Not [Idle], which would hand the rest of the gesture back and let the scroll containers pan
-     * the page out from under a finger that was trying to drag an object; and not [Drawing], which
-     * would clear the selection and lasso over the very thing under the finger. A locked object
-     * refuses the transform, not the touch — `memory/diagram.md`.
+     * the page out from under a finger dragging an object; and not [Drawing], which would clear the
+     * selection and lasso over the thing under the finger. A locked object refuses the transform,
+     * not the touch.
      */
     private enum class Mode { Idle, Drawing, Moving, Resizing, LineEnd, Held }
     private enum class Corner { TopLeft, TopRight, BottomRight, BottomLeft }
@@ -2140,7 +2085,7 @@ internal class LassoGesture {
                 pointerId = event.getPointerId(event.actionIndex)
                 val point = event.pagePoint(event.actionIndex, toPage)
                 // One line held alone has ends where everything else has corners, and never both —
-                // SD12, and the same question `ShapeLayer.handleNear` asks of a tapped one.
+                // the same question `ShapeLayer.handleNear` asks of a tapped one.
                 val line = selection.lineShape(shapes)
                 // Locked: no handle answers, because none is drawn. Both grabs are refused here
                 // rather than at the point of applying them, so the gesture never enters a mode
@@ -2241,11 +2186,10 @@ internal class LassoGesture {
                         // what the finger was shown — see [travelTo].
                         val delta = travelTo(event.pagePoint(event.actionIndex, toPage))
                         if (selection != null && (delta.x != 0f || delta.y != 0f)) {
-                            // One gesture, one payload per kind: ink persists a move for replay,
-                            // a shape translates its own segments. AD7's second consequence —
-                            // "move and resize are transforms on an object, not on its
-                            // representation" — is why the gesture states the delta once and lets
-                            // each kind apply it its own way.
+                            // One gesture, one payload per kind: ink persists a move for replay, a
+                            // shape translates its own segments. Move and resize are transforms on
+                            // an object rather than on its representation, so the gesture states
+                            // the delta once and lets each kind apply it its own way.
                             selection.inkHalf()?.let { ink ->
                                 onMove(
                                     InkLassoMove(
@@ -2422,10 +2366,9 @@ internal class LassoGesture {
     /**
      * Whether the point is on the selection's body, with [slack] of room around it.
      *
-     * Exact for a rectangle, and not for a line: a horizontal line's bounds have no height at all, so
-     * a body test against them is a demand for the one row of pixels the line occupies. It was
-     * affordable while a lassoed line also carried four corner handles standing 6dp outside those
-     * bounds — there was always something to grab — and stopped being so the moment those went (SD12).
+     * Exact for a rectangle, and not for a line: a horizontal line's bounds have no height, so a
+     * body test against them demands the one row of pixels the line occupies. That was affordable
+     * while a lassoed line also carried four corner handles 6dp outside those bounds.
      */
     private fun InkBounds.holdsBody(point: InkPoint, slack: Float): Boolean =
         point.x >= left - slack && point.x <= right + slack &&
@@ -2471,18 +2414,15 @@ internal class LassoGesture {
     /**
      * The corner handle under the point, or null.
      *
-     * Measured from where the handle is **drawn** — a corner of the padded rectangle, not of the
-     * bounds themselves — because that is the disc a finger aims at. The two are only
-     * [SelectionChrome.PADDING] apart, but a reach measured from the wrong one of them is
-     * off-centre by that much in both axes at once, and every dp of that comes off the far side of
-     * the target. The resize itself still measures against the raw bounds: see [handle], where
-     * [Corner.point] is called without an outset for the anchor.
+     * Measured from where the handle is drawn — a corner of the padded rectangle, not of the bounds
+     * themselves — because that is the disc a finger aims at. The two are only
+     * [SelectionChrome.PADDING] apart, but measuring from the wrong one is off-centre by that much
+     * in both axes at once. The resize itself still measures against the raw bounds: see [handle],
+     * where [Corner.point] is called without an outset for the anchor.
      *
-     * [SelectionChrome.HANDLE_REACH] is a dp value read as page units, which is what page units
-     * are — the same reading `ShapeLayer.handleNear` makes of it, and the reason a handle grabs the
-     * same way whichever layer drew it (AD7). It was 10 *device pixels* before, so a selection was
-     * markedly harder to grab on a dense screen than on a coarse one, and harder again the further
-     * the page was zoomed out.
+     * [SelectionChrome.HANDLE_REACH] is a dp value read as page units, the same reading
+     * `ShapeLayer.handleNear` makes of it. It was 10 device pixels before, so a selection was
+     * markedly harder to grab on a dense screen and harder again the further the page was zoomed out.
      */
     private fun InkBounds.cornerNear(point: InkPoint): Corner? {
         val outset = SelectionChrome.PADDING.value

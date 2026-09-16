@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The arms of an L, and what a handle on one of them may do — `memory/inkPlan.md` §5.4 SD9.
+ * The arms of an L, and what a handle on one of them may do.
  *
  * All of this is geometry, so it belongs here rather than on a device: which ends a shape offers,
  * which axis each runs along, and what a drag along that axis leaves untouched. The failure it is
@@ -72,7 +72,7 @@ class ShapeArmTest {
 
     @Test
     fun `a line has two ends but they are not arms`() {
-        // The gate is the kind, not the geometry. A line's ends are handles — SD12, and
+        // The gate is the kind, not the geometry. A line's ends are handles, and
         // `ShapeEndTest` — but they are not *arms*: an arm runs on one axis, and the whole of what a
         // line's end handle is for is leaving that axis.
         var next = 0

@@ -30,17 +30,15 @@ import kotlin.math.roundToInt
 enum class PdfExportScope { Page, Section }
 
 /**
- * Everything the dialog can change — `memory/pdfExportPlan.md` PD1.
+ * Everything the dialog can change.
  *
- * [fitContent] defaults on, which is the option the reference drawing is mostly about: content that
- * straddles a page boundary is kept whole rather than cut in half. [includeRuling] defaults on
- * because the ruling lives in the document, not in preferences — a page written on squared paper
- * *is* squared paper — and one tap says otherwise.
+ * [fitContent] defaults on: content that straddles a page boundary is kept whole rather than cut in
+ * half. [includeRuling] defaults on because the ruling lives in the document rather than in
+ * preferences — a page written on squared paper is squared paper — and one tap says otherwise.
  *
  * [margins] open on the page's own and can then be set here, because the margin is the one paper
- * setting whose right value is a property of the *printer* rather than of the document: the same
- * page goes out edge to edge to a PDF a reader scrolls, and inset for a printer with a hard margin.
- * The cuts are made inside them, so widening them is not a border — it is less page per sheet.
+ * setting whose right value is a property of the printer rather than of the document. The cuts are
+ * made inside them, so widening them is not a border — it is less page per sheet.
  */
 data class PdfExportOptions(
     val scope: PdfExportScope = PdfExportScope.Page,
@@ -103,7 +101,7 @@ class PdfExportPlan(
 }
 
 /**
- * Turns pages into a PDF — `memory/pdfExportPlan.md`.
+ * Turns pages into a PDF.
  *
  * The public shape is three steps, and they are separate because the dialog needs them separately:
  * [plan] answers "how many sheets, and where do they cut", [preview] draws one of them into a
@@ -337,17 +335,15 @@ class PdfExporter(
     /**
      * The page to draw, and where its parts go.
      *
-     * **The fit is worked out again here, against the measurement about to be drawn**, rather than
+     * The fit is worked out again here, against the measurement about to be drawn, rather than
      * carried over from [plan]. A page is measured twice in an export — once to decide how many
-     * sheets it takes, and once per page to draw it — and those are two separate loads of the same
-     * ink. Carrying a map keyed by anything those two loads might name differently is a trap that
-     * fails *silently*: the sheet count is right, the tiles are right, and one formula quietly loses
-     * the half of itself that was supposed to be pulled back onto the page.
+     * sheets it takes, once per page to draw it — and those are two separate loads of the same ink.
+     * Carrying a map keyed by anything those two loads might name differently fails silently: the
+     * sheet count is right, the tiles are right, and one formula quietly loses half of itself.
      *
-     * The names are stable now (`ContentGroups.inkAtoms` says how, and why), so the two agree — but
-     * they agree because the geometry is the same, which is a much smaller thing to have to trust
-     * than a naming scheme. The stored tile is still what decides *which* sheet this is; only the
-     * shifts are local.
+     * The names are stable now (`ContentGroups.inkAtoms` says how), so the two agree — but they
+     * agree because the geometry is the same, which is a smaller thing to trust than a naming
+     * scheme. The stored tile still decides which sheet this is; only the shifts are local.
      */
     private suspend fun measureCached(pageId: String, exportPlan: PdfExportPlan): RenderTarget {
         cached

@@ -27,10 +27,9 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * Why connecting to a server failed, in the terms the person who typed the address can act on.
  *
- * Deliberately not the HTTP status and not the server's `message` field: viveCServer's contract
- * (`viveCServer/docs/openapi.yaml`) says client logic branches on the `error` code and treats `message` as
- * human-readable detail that may change. This enum is that decision made once, at the boundary, so
- * no caller is tempted to match on prose.
+ * Deliberately not the HTTP status and not the server's `message` field: the contract says client
+ * logic branches on the `error` code and treats `message` as human-readable detail that may change.
+ * This enum is that decision made once, at the boundary, so no caller matches on prose.
  */
 enum class ConnectFailure {
     /** Not a usable http/https address at all — nothing was sent. */
@@ -72,9 +71,9 @@ enum class ConnectFailure {
     /**
      * `403 signup_closed` — this deployment does not accept registrations over HTTP.
      *
-     * The **default** on viveCServer (`SignupModeClosed`), not an error state: a self-hosted server
-     * reachable from the internet with open registration is a service somebody else's users end up
-     * on. So the message says to ask the operator rather than suggesting anything is broken.
+     * The default on viveCServer, not an error state: a self-hosted server reachable from the
+     * internet with open registration is a service somebody else's users end up on. So the message
+     * says to ask the operator rather than suggesting anything is broken.
      */
     SignupClosed,
 
@@ -249,10 +248,10 @@ sealed interface GoogleAuthentication {
      * `409 account_link_required`: the verified Google email already belongs to a password account
      * that has not been linked.
      *
-     * **Not a failure, and it must not be retried as a sign-in.** The contract is explicit that the
+     * Not a failure, and it must not be retried as a sign-in. The contract is explicit that the
      * client must not create a second account: it asks for that account's password and submits the
-     * *same* ID token and the *same, still unconsumed* challenge to `POST /v1/auth/google/link`. So
-     * the caller keeps both, which is why this carries neither — [SyncAccounts] already holds them.
+     * same ID token and the same, still unconsumed challenge to `POST /v1/auth/google/link`. The
+     * caller keeps both, which is why this carries neither.
      */
     data object LinkRequired : GoogleAuthentication
 
@@ -535,16 +534,16 @@ fun normaliseServerAddress(typed: String): String? {
 }
 
 /**
- * The viveCServer sync API — `viveCServer/docs/openapi.yaml`, which is the contract this file is
- * written against and the thing to re-read before adding an operation.
+ * The viveCServer sync API, written against its OpenAPI contract — re-read that before adding an
+ * operation.
  *
  * `HttpURLConnection` rather than a new HTTP dependency, following
  * [com.vivenotes.ai.VerifiedArtifactDownloader]: this API is low-frequency WorkManager traffic and
  * does not need an interceptor stack or an application-owned connection pool. [openConnection] is
  * injectable for the same reason it is there.
  *
- * Android-free on purpose, so `app/src/test` can drive it against a real loopback server rather than
- * a mock of the thing being tested.
+ * Android-free on purpose, so `app/src/test` can drive it against a real loopback server rather
+ * than a mock of the thing being tested.
  */
 class SyncServerClient(
     private val openConnection: (URL) -> HttpURLConnection = { url ->
@@ -707,7 +706,7 @@ class SyncServerClient(
     /**
      * `POST /v1/accounts` — creates an account from an email address and a password.
      *
-     * **Deployment-gated**, and closed by default: a server that has not opted in answers
+     * Deployment-gated, and closed by default: a server that has not opted in answers
      * `403 signup_closed`, which is a configuration statement rather than a fault. The endpoint
      * returns no credential of any kind, only an id, so the caller must follow it with
      * [registerDevice] to get a token.
@@ -890,11 +889,10 @@ class SyncServerClient(
      * says which it did in [GoogleAuthentication.Authenticated.createdAccount]. Returning users are
      * never identified by email, so changing a Google account's email does not strand its notes.
      *
-     * [idempotencyKey] is a new random UUID per logical attempt and must be **reused unchanged if
-     * the HTTP response is lost**, because an exact retry returns the same account, device and
-     * token rather than minting a second device. Unlike `POST /v1/devices`, it also returns the
-     * exact original response for a lost-response retry; password reauthentication rotates the
-     * credential again on the same row. Using the same key with different content is
+     * [idempotencyKey] is a new random UUID per logical attempt and must be reused unchanged if the
+     * HTTP response is lost, because an exact retry returns the same account, device and token
+     * rather than minting a second device. Unlike `POST /v1/devices`, it also returns the exact
+     * original response for a lost-response retry. Using the same key with different content is
      * `409 idempotency_conflict`.
      */
     suspend fun signInWithGoogle(
@@ -923,11 +921,10 @@ class SyncServerClient(
     /**
      * `POST /v1/auth/google/link` — the only resolution to [GoogleAuthentication.LinkRequired].
      *
-     * Takes the **same** [challengeId] and [idToken] as the sign-in that was refused: that challenge
-     * is deliberately left unconsumed by a `409 account_link_required`, so this proves the same
-     * Google session rather than opening a second sheet whose token could be for another account.
-     * [idempotencyKey] is a *new* one, because the request content differs and reusing the sign-in
-     * key would be `409 idempotency_conflict` rather than a retry.
+     * Takes the same [challengeId] and [idToken] as the sign-in that was refused: that challenge is
+     * deliberately left unconsumed by a `409 account_link_required`, so this proves the same Google
+     * session rather than opening a second sheet whose token could be for another account.
+     * [idempotencyKey] is a new one, because the request content differs.
      *
      * The password is the existing password account's, verified fresh by the server before the
      * Google subject is linked. It is never stored — see [SyncAccountStore].
@@ -1020,13 +1017,12 @@ class SyncServerClient(
     /**
      * Asks the server whether a stored device token is still accepted, with `GET /v1/devices`.
      *
-     * That endpoint is used rather than a dedicated probe because it is the cheapest authenticated
-     * call in the contract and the answer is a side effect of the middleware, not of the handler —
-     * any authenticated endpoint would do, and this one has no arguments to get wrong. The device
-     * list itself is discarded; only the verdict matters here.
+     * That endpoint rather than a dedicated probe because it is the cheapest authenticated call in
+     * the contract and the answer is a side effect of the middleware, not of the handler. The device
+     * list itself is discarded; only the verdict matters.
      *
-     * **[TokenCheck.Revoked] is returned only for an explicit 401.** Everything else that goes wrong
-     * is [TokenCheck.Unknown], because the caller deletes a non-reissuable credential on the strength
+     * [TokenCheck.Revoked] is returned only for an explicit 401. Everything else is
+     * [TokenCheck.Unknown], because the caller deletes a non-reissuable credential on the strength
      * of this answer and "the server did not respond" is not the server saying no.
      */
     suspend fun checkToken(serverBaseUrl: String, token: String): TokenCheck =
@@ -1340,12 +1336,11 @@ class SyncServerClient(
     /**
      * `HEAD /v1/blobs/{sha256}` — 204 means the account holds the bytes, 404 that it does not.
      *
-     * **`Expect: 100-continue` is deliberately not used**, although the contract offers it as the
-     * way to skip this request. `HttpURLConnection` turns an early final response into a
+     * `Expect: 100-continue` is deliberately not used, although the contract offers it as the way
+     * to skip this request: `HttpURLConnection` turns an early final response into a
      * `ProtocolException` thrown out of the output stream rather than a status a caller can read,
-     * on both the JDK and the OkHttp-backed Android implementation — so a 204 for a picture the
-     * server already had would arrive as a transport error. This costs the same round trip the
-     * `Expect` handshake costs and reports the same fact as a status code.
+     * on both the JDK and the OkHttp-backed Android implementation. This costs the same round trip
+     * and reports the same fact as a status code.
      */
     override suspend fun hasBlob(
         serverBaseUrl: String,
@@ -1446,11 +1441,11 @@ class SyncServerClient(
     /**
      * `GET /v1/blobs/{sha256}` into [target], which is written only if the bytes prove their name.
      *
-     * **The digest is verified here rather than by the caller**, because this is the only place that
-     * sees the bytes as they arrive and the only place that can refuse them without a second read of
-     * the file. Content addressing makes that check free of trust: bytes that do not hash to the
-     * name they were fetched under are not the picture the document asked for, whatever produced
-     * them — a truncating proxy, a captive portal, the wrong server behind one address.
+     * The digest is verified here rather than by the caller, because this is the only place that
+     * sees the bytes as they arrive and the only place that can refuse them without a second read
+     * of the file. Bytes that do not hash to the name they were fetched under are not the picture
+     * the document asked for, whatever produced them — a truncating proxy, a captive portal, the
+     * wrong server behind one address.
      *
      * [target] is removed on every failure path, so a partial body can never be renamed into the
      * attachment store by a caller that only checked for an exception.
@@ -1711,12 +1706,12 @@ class SyncServerClient(
      * Maps an error response to a [ConnectFailure], preferring the `error` code and falling back to
      * the status when there is no readable body.
      *
-     * **The fallback is not defensive padding — a 401 reaches it routinely.** `HttpURLConnection`
+     * The fallback is not defensive padding — a 401 reaches it routinely. `HttpURLConnection`
      * handles authentication itself, and on the JVM implementation it consumes a 401's body while
      * looking for a challenge it can answer, leaving `getErrorStream()` null. Android's
-     * implementation is OkHttp-backed and hands the body over, so without this the *same* wrong
+     * implementation is OkHttp-backed and hands the body over, so without this the same wrong
      * password would report "not a ViveNotes server" in unit tests and "credentials rejected" on
-     * device. Reading the status is what makes the two agree.
+     * device.
      */
     private fun failureFor(status: Int, payload: String): ConnectFailure {
         return when (val error = errorCode(payload)) {
@@ -1793,12 +1788,11 @@ class SyncServerClient(
      * [failureFor] for the Google routes, whose error codes are their own and whose 401 is not the
      * device endpoint's 401.
      *
-     * [bodilessUnauthorized] is what a 401 with no readable body means *on this route*, and it
+     * [bodilessUnauthorized] is what a 401 with no readable body means on this route, and it
      * differs: on `POST /v1/auth/google` a 401 is always the ID token, while on the link route it is
      * far more likely the password. The parameter exists because the body is routinely unavailable —
-     * `HttpURLConnection` eats a 401's body on the JVM while looking for a challenge, which is the
-     * same trap [failureFor] documents. Guessing "invalid password" at a token problem would send
-     * somebody to retype a password that was never wrong.
+     * the same trap [failureFor] documents. Guessing "invalid password" at a token problem would
+     * send somebody to retype a password that was never wrong.
      */
     private fun googleFailureFor(
         status: Int,
@@ -1923,10 +1917,9 @@ internal const val MIN_ACCOUNT_PASSWORD = 8
 internal const val MAX_SYNC_PUSH_BYTES = 4 * 1024 * 1024
 
 /**
- * `VIVE_MAX_BLOB_BYTES`, the server's per-attachment cap and the only storage limit it has — there
- * is no per-account quota (`viveCServer/memory/syncPlan.md` §12 decision 1). It is also
- * `NotebookTransferManager`'s cap for the same field, so a picture that imports from a `.vive`
- * bundle is a picture that syncs.
+ * `VIVE_MAX_BLOB_BYTES`, the server's per-attachment cap and its only storage limit — there is no
+ * per-account quota. It is also `NotebookTransferManager`'s cap for the same field, so a picture
+ * that imports from a `.vive` bundle is a picture that syncs.
  */
 internal const val MAX_BLOB_BYTES = 32L * 1024 * 1024
 

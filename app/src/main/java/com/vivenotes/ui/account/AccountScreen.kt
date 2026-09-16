@@ -184,28 +184,23 @@ data class AccountDeletionUiState(
  *
  * Three routes to one place, in descending order of how many people want them.
  *
- * **Sign in with Google sits on top and is the default**: one button, because `POST /v1/auth/google`
- * is one endpoint that logs in or registers as the account turns out to need, so the screen never
- * asks somebody to declare which they are. Below it, **Log in and Sign up** are the same managed
- * account reached with an email and a password — and neither asks for a server address, because
- * there is one managed deployment and [com.vivenotes.BuildConfig.CLOUD_BASE_URL] already names it.
+ * Sign in with Google sits on top and is the default: one button, because `POST /v1/auth/google` is
+ * one endpoint that logs in or registers as the account turns out to need. Below it, Log in and Sign
+ * up are the same managed account reached with an email and a password, and neither asks for a
+ * server address because [com.vivenotes.BuildConfig.CLOUD_BASE_URL] already names the one there is.
  *
- * **Self host is the third and is a different server**, run by whoever is using it, so it is the one
- * route that has an address to type. Keeping that field out of Log in and Sign up is the whole point
- * of the separation: a managed account is not something a person should have to know a hostname for.
+ * Self host is the third and is a different server, run by whoever is using it, so it is the one
+ * route with an address to type.
  *
- * All three end in the same place — a base URL and a device token — so [connection] describes all of
- * them and the connected panel is written once (`viveCServer/docs/openapi.yaml`).
+ * All three end in a base URL and a device token, so [connection] describes all of them and the
+ * connected panel is written once.
  *
  * Presentational, including the connect flow: [connection] comes in and [onConnect] goes out, so the
- * request lives in a scope that outlives this screen. That matters more here than it looks. The
- * device token comes back exactly once and cannot be reissued, so a request tied to this
- * composition would turn "closing the screen while it spins" into a device row on the server that
- * nothing holds the credential for. It also makes the wait testable by driving [connection], which
- * is the pattern the rest of the suite uses.
+ * request lives in a scope that outlives this screen. The device token comes back exactly once and
+ * cannot be reissued, so a request tied to this composition would turn "closing the screen while it
+ * spins" into a device row on the server that nothing holds the credential for.
  *
- * The opt-in is for the connect button's [LoadingIndicator] — see `EquationButton` for why the
- * loading indicators are the one part of M3 Expressive still gated in 1.5.0-alpha25.
+ * The opt-in is for the connect button's [LoadingIndicator] — see `EquationButton`.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -1268,18 +1263,17 @@ private fun PasswordResetScreen(
 /**
  * Sign in with Google, drawn as the screen's primary action.
  *
- * A **neutral** container rather than the scheme's `primary`, and that is Google's requirement
- * rather than a taste call: the four-colour G is a brand mark that may not be recoloured and is
- * specified against a light or dark neutral, not against an app's accent. `surfaceContainerHighest`
- * with `onSurface` is the M3 token pair that lands closest in both themes, so the button stays part
- * of this app's surface language while the mark keeps its own colours.
+ * A neutral container rather than the scheme's `primary`, which is Google's requirement rather than
+ * a taste call: the four-colour G is a brand mark that may not be recoloured and is specified
+ * against a light or dark neutral. `surfaceContainerHighest` with `onSurface` is the M3 token pair
+ * that lands closest in both themes.
  *
  * It is the most prominent control on the card because it is the only one: the second route is a
  * text link below. Full width for the same reason the connect button is — this card is capped at
- * 560dp, and a centred half-width button inside it reads as one of two things when there is one.
+ * 560dp, and a centred half-width button inside it reads as one of two.
  *
- * The spinner replaces the whole label, so the button carries an explicit content description for
- * as long as it is up; without it the control loses its accessible name mid-request.
+ * The spinner replaces the whole label, so the button carries an explicit content description for as
+ * long as it is up; without it the control loses its accessible name mid-request.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -1332,14 +1326,12 @@ private fun GoogleSignInButton(
  * What the disclosure shows once this installation holds a device token.
  *
  * Green, from [com.vivenotes.ui.theme.IconAccents] rather than from the colour scheme, because the
- * scheme has no "good" colour — `primary` is azure and means "this is the app", `tertiary` is an
- * accent. The accents are already tuned per theme, which matters: a green that reads on the dark
- * shell is invisible on a white card. The tinted plate behind it is that same green at low alpha, so
- * one hue carries the whole state and the panel needs no border to separate from the card.
+ * scheme has no "good" colour. The accents are already tuned per theme, which matters: a green that
+ * reads on the dark shell is invisible on a white card. The tinted plate behind it is that same
+ * green at low alpha, so one hue carries the whole state.
  *
  * The check mark is knocked out in [androidx.compose.material3.ColorScheme.surface], which lands
- * light on the light theme's dark green and dark on the dark theme's light green — the inversion is
- * automatic rather than two hand-picked colours that could drift apart.
+ * light on the light theme's dark green and dark on the dark theme's light green.
  */
 @Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -1962,18 +1954,14 @@ private fun SyncStatusLine(status: SyncStatus) {
 /**
  * "Synced just now", and what that run moved when it moved anything.
  *
- * The counts are appended only when they are not both zero. Repeatedly reporting "Pulled 0 · Pushed
- * 0" is a line that trains its reader to stop looking at it, and "nothing to do" is already what a
- * bare timestamp means.
+ * The counts are appended only when they are not both zero: repeatedly reporting "Pulled 0 · Pushed
+ * 0" trains its reader to stop looking, and "nothing to do" is already what a bare timestamp means.
  *
  * Pictures are counted separately and shown only when a run carried any, because they are the one
- * thing that makes a sync take noticeably long — a page of photographs is megabytes where a page of
- * writing is kilobytes — and a reader watching a slow first sync deserves to know that is what it
- * is doing. A row and its picture are two different units, so they are two different numbers.
+ * thing that makes a sync take noticeably long. A row and its picture are two different units, so
+ * they are two different numbers.
  *
- * Relative rather than a clock time because the question is "is this tablet current", and *five
- * minutes ago* answers it without the reader doing arithmetic. It goes stale only while sync is
- * failing, and that case shows the failure instead.
+ * Relative rather than a clock time, because the question is "is this tablet current".
  */
 @Composable
 private fun syncedAtText(atMillis: Long, summary: SyncSummary?): String {
