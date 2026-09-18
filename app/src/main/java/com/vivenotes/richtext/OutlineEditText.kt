@@ -547,11 +547,18 @@ class OutlineEditText @JvmOverloads constructor(
         autoEquationRenderJob?.cancel()
 
         var spansChanged = false
+        // These cheap zero-width spans are rebuilt from the candidate whose renderer remains. They
+        // never cross a newline, because Android measures replacement spans once per paragraph.
+        editable.getSpans(0, editable.length, HiddenEquationSourceSpan::class.java).forEach { span ->
+            editable.removeSpan(span)
+            spansChanged = true
+        }
         editable.getSpans(0, editable.length, LiveEquationSpan::class.java).forEach { span ->
             val start = editable.getSpanStart(span)
             val end = editable.getSpanEnd(span)
             val candidate = candidates.firstOrNull {
-                it.start == start && it.end == end && it.latex == span.latex &&
+                it.start == span.sourceStart && it.end == span.sourceEnd &&
+                    it.renderStart == start && it.renderEnd == end && it.latex == span.latex &&
                     equationRenderKey(editable, it).let { key ->
                         span.renderSizePx == key.sizePx && span.renderColor == key.color
                     }
@@ -559,13 +566,16 @@ class OutlineEditText @JvmOverloads constructor(
             if (candidate == null || isEditing(candidate)) {
                 editable.removeSpan(span)
                 spansChanged = true
+            } else {
+                applyHiddenEquationSource(editable, candidate)
             }
         }
 
         val missing = candidates.filterNot(::isEditing).filterNot { candidate ->
-            editable.getSpans(candidate.start, candidate.end, LiveEquationSpan::class.java).any {
-                editable.getSpanStart(it) == candidate.start &&
-                    editable.getSpanEnd(it) == candidate.end &&
+            editable.getSpans(candidate.renderStart, candidate.renderEnd, LiveEquationSpan::class.java).any {
+                editable.getSpanStart(it) == candidate.renderStart &&
+                    editable.getSpanEnd(it) == candidate.renderEnd &&
+                    it.sourceStart == candidate.start && it.sourceEnd == candidate.end &&
                     it.latex == candidate.latex &&
                     equationRenderKey(editable, candidate).let { key ->
                         it.renderSizePx == key.sizePx && it.renderColor == key.color
@@ -626,13 +636,52 @@ class OutlineEditText @JvmOverloads constructor(
         key: EquationRenderKey,
         renderer: io.ratex.RaTeXRenderer,
     ) {
-        if (editable.getSpans(candidate.start, candidate.end, LiveEquationSpan::class.java).any {
-                editable.getSpanStart(it) == candidate.start && editable.getSpanEnd(it) == candidate.end
+        if (editable.getSpans(candidate.renderStart, candidate.renderEnd, LiveEquationSpan::class.java).any {
+                editable.getSpanStart(it) == candidate.renderStart &&
+                    editable.getSpanEnd(it) == candidate.renderEnd &&
+                    it.sourceStart == candidate.start && it.sourceEnd == candidate.end
             }
         ) return
-        val span = LiveEquationSpan(candidate.latex, key.sizePx, key.color)
+        val span = LiveEquationSpan(
+            latex = candidate.latex,
+            renderSizePx = key.sizePx,
+            renderColor = key.color,
+            sourceStart = candidate.start,
+            sourceEnd = candidate.end,
+        )
         span.show(renderer)
-        editable.setSpan(span, candidate.start, candidate.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        editable.setSpan(
+            span,
+            candidate.renderStart,
+            candidate.renderEnd,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+        )
+        applyHiddenEquationSource(editable, candidate)
+    }
+
+    /** Hides a block's delimiters and non-anchor lines without swallowing paragraph separators. */
+    private fun applyHiddenEquationSource(
+        editable: Editable,
+        candidate: AutoEquationCandidate,
+    ) {
+        if (candidate.renderStart == candidate.start && candidate.renderEnd == candidate.end) return
+
+        var hiddenStart = -1
+        for (offset in candidate.start..candidate.end) {
+            val hidden = offset < candidate.end &&
+                offset !in candidate.renderStart until candidate.renderEnd &&
+                editable[offset] != '\n'
+            if (hidden && hiddenStart < 0) hiddenStart = offset
+            if (!hidden && hiddenStart >= 0) {
+                editable.setSpan(
+                    HiddenEquationSourceSpan(),
+                    hiddenStart,
+                    offset,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+                hiddenStart = -1
+            }
+        }
     }
 
     private fun equationRenderKey(
@@ -652,7 +701,7 @@ class OutlineEditText @JvmOverloads constructor(
             TypedValue.COMPLEX_UNIT_SP,
             sp.toFloat(),
             resources.displayMetrics,
-        )
+        ) * EQUATION_FONT_SCALE
     }
 
     private fun refreshEquationLayout() {
@@ -779,12 +828,48 @@ class OutlineEditText @JvmOverloads constructor(
         SpannableCodec.applyMark(editable, mark, from, to)
     }
 
-    /** Font size belongs to the rendered formula, even when only its caret-sized source is active. */
+    /**
+     * Keeps the user's selection intact while making a partially selected formula atomic.
+     *
+     * The old path returned the first equation touched by any selection. With Select all, that
+     * collapsed the formatting target to the first formula, so later formulas and prose never saw
+     * the chosen size. A real selection remains the target and grows only where one of its edges
+     * cuts through a formula; a caret still resolves to the single formula beside it.
+     */
     private fun equationFormattingRange(editable: Editable, from: Int, to: Int): EquationRange? {
-        SpannableCodec.equationAt(editable, from, to)?.let { return it }
-        return findAutoEquationCandidates(editable.toString())
-            .firstOrNull { it.isBeingEdited(true, from, to) }
-            ?.let { EquationRange(it.latex, it.start, it.end) }
+        if (from == to) {
+            SpannableCodec.equationAt(editable, from, to)?.let { return it }
+            return findAutoEquationCandidates(editable.toString())
+                .firstOrNull { it.isBeingEdited(true, from, to) }
+                ?.let { EquationRange(it.latex, it.start, it.end) }
+        }
+
+        var expandedStart = from
+        var expandedEnd = to
+        var touchesEquation = false
+
+        editable.getSpans(0, editable.length, EquationSpan::class.java).forEach { span ->
+            val start = editable.getSpanStart(span)
+            val end = editable.getSpanEnd(span)
+            if (start < to && end > from) {
+                touchesEquation = true
+                expandedStart = minOf(expandedStart, start)
+                expandedEnd = maxOf(expandedEnd, end)
+            }
+        }
+        findAutoEquationCandidates(editable.toString()).forEach { candidate ->
+            if (candidate.start < to && candidate.end > from) {
+                touchesEquation = true
+                expandedStart = minOf(expandedStart, candidate.start)
+                expandedEnd = maxOf(expandedEnd, candidate.end)
+            }
+        }
+
+        return if (touchesEquation) {
+            EquationRange(latex = "", start = expandedStart, end = expandedEnd)
+        } else {
+            null
+        }
     }
 
     /**

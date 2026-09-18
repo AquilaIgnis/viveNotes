@@ -15,6 +15,10 @@ import com.vivenotes.model.Align
 import com.vivenotes.model.BlockType
 import io.ratex.RaTeXRenderer
 import kotlin.math.ceil
+import kotlin.math.floor
+
+/** LaTeX is intentionally more prominent than the prose size that owns it. */
+internal const val EQUATION_FONT_SCALE = 1.6f
 
 /**
  * Marks a span as generated from block metadata rather than from a user's inline formatting.
@@ -160,7 +164,20 @@ abstract class RenderedEquationSpan(val latex: String) : ReplacementSpan() {
         fm: Paint.FontMetricsInt?,
     ): Int {
         val equation = renderer
-        if (equation == null) return ceil(paint.measureText(latex)).toInt().coerceAtLeast(1)
+        if (equation == null) {
+            fm?.let {
+                val fallback = paint.fontMetricsInt
+                val ascent = floor(fallback.ascent * EQUATION_FONT_SCALE).toInt()
+                val top = floor(fallback.top * EQUATION_FONT_SCALE).toInt()
+                val descent = ceil(fallback.descent * EQUATION_FONT_SCALE).toInt()
+                val bottom = ceil(fallback.bottom * EQUATION_FONT_SCALE).toInt()
+                it.ascent = minOf(it.ascent, ascent)
+                it.top = minOf(it.top, top)
+                it.descent = maxOf(it.descent, descent)
+                it.bottom = maxOf(it.bottom, bottom)
+            }
+            return ceil(paint.measureText(latex) * EQUATION_FONT_SCALE).toInt().coerceAtLeast(1)
+        }
 
         fm?.let {
             val ascent = -ceil(equation.heightPx).toInt()
@@ -186,7 +203,10 @@ abstract class RenderedEquationSpan(val latex: String) : ReplacementSpan() {
     ) {
         val equation = renderer
         if (equation == null) {
+            canvas.save()
+            canvas.scale(EQUATION_FONT_SCALE, EQUATION_FONT_SCALE, x, y.toFloat())
             canvas.drawText(latex, x, y.toFloat(), paint)
+            canvas.restore()
             return
         }
         canvas.save()
@@ -206,7 +226,33 @@ class LiveEquationSpan(
     val renderSizePx: Float,
     /** RaTeX bakes colour into its display list, so theme changes invalidate it too. */
     val renderColor: Int,
+    /** Full editable source range; the span itself may cover only one line of a display block. */
+    val sourceStart: Int = -1,
+    val sourceEnd: Int = -1,
 ) : RenderedEquationSpan(latex), Derived
+
+/** Hides one newline-free remainder of a multiline display block while its preview is visible. */
+class HiddenEquationSourceSpan : ReplacementSpan(), Derived {
+    override fun getSize(
+        paint: Paint,
+        text: CharSequence?,
+        start: Int,
+        end: Int,
+        fm: Paint.FontMetricsInt?,
+    ): Int = 0
+
+    override fun draw(
+        canvas: Canvas,
+        text: CharSequence?,
+        start: Int,
+        end: Int,
+        x: Float,
+        top: Int,
+        y: Int,
+        bottom: Int,
+        paint: Paint,
+    ) = Unit
+}
 
 val BlockType.headingScale: Float?
     get() = when (this) {

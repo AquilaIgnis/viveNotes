@@ -10,6 +10,7 @@ CLAUDE.md
 memory
 .claude
 .codex
+converter/
 
 #trash
 *.db

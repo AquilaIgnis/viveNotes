@@ -5,6 +5,9 @@ internal data class AutoEquationCandidate(
     val start: Int,
     val end: Int,
     val latex: String,
+    /** The single paragraph segment that owns the rendered replacement. */
+    val renderStart: Int = start,
+    val renderEnd: Int = end,
 )
 
 /**
@@ -43,17 +46,29 @@ internal fun findAutoEquationCandidates(text: String): List<AutoEquationCandidat
         }
 
         val sourceStart = offset + opening.open.length
-        val close = text.findClosing(opening.close, sourceStart)
+        val close = text.findClosing(opening, sourceStart)
         if (close < 0) {
             offset += opening.open.length
             continue
         }
         val source = text.substring(sourceStart, close).trim()
         if (source.isNotEmpty()) {
+            val candidateEnd = close + opening.close.length
+            // Android lays text out one paragraph at a time. A ReplacementSpan crossing a newline
+            // is therefore measured and drawn once per paragraph. Anchor a display block to its
+            // first source line instead; the view hides the remaining source segments while the
+            // preview is visible and reveals all of them as soon as the block is edited.
+            val renderRange = if (opening.multiline && text.hasLineBreak(offset, candidateEnd)) {
+                text.firstSourceLine(sourceStart, close)
+            } else {
+                offset to candidateEnd
+            }
             found += AutoEquationCandidate(
                 start = offset,
-                end = close + opening.close.length,
+                end = candidateEnd,
                 latex = if (opening.display) "{\\displaystyle $source}" else source,
+                renderStart = renderRange.first,
+                renderEnd = renderRange.second,
             )
         }
         offset = close + opening.close.length
@@ -74,19 +89,37 @@ internal fun findAutoEquationCandidates(text: String): List<AutoEquationCandidat
     }
 }
 
-private data class Delimiter(val open: String, val close: String, val display: Boolean)
+private data class Delimiter(
+    val open: String,
+    val close: String,
+    val display: Boolean,
+    /** Display delimiters may wrap a block; inline delimiters must close on their opening line. */
+    val multiline: Boolean = display,
+)
 
-private fun String.findClosing(delimiter: String, start: Int): Int {
+private fun String.findClosing(delimiter: Delimiter, start: Int): Int {
     var index = start
-    while (index <= length - delimiter.length) {
-        if (this[index] == '\n') return -1
-        if (startsWith(delimiter, index) && !isEscaped(index)) {
+    while (index <= length - delimiter.close.length) {
+        if (!delimiter.multiline && this[index] == '\n') return -1
+        if (startsWith(delimiter.close, index) && !isEscaped(index)) {
             // A single-dollar close cannot consume the first half of a display delimiter.
-            if (delimiter != "\$" || !startsWith("\$\$", index)) return index
+            if (delimiter.close != "\$" || !startsWith("\$\$", index)) return index
         }
         index++
     }
     return -1
+}
+
+private fun String.hasLineBreak(start: Int, end: Int): Boolean {
+    val lineBreak = indexOf('\n', startIndex = start)
+    return lineBreak >= 0 && lineBreak < end
+}
+
+/** A newline-free piece of source on which Android can draw one block preview exactly once. */
+private fun String.firstSourceLine(start: Int, end: Int): Pair<Int, Int> {
+    val first = (start until end).first { !this[it].isWhitespace() }
+    val lineBreak = indexOf('\n', startIndex = first).takeIf { it in (first + 1)..end }
+    return first to (lineBreak ?: end)
 }
 
 private fun String.isEscaped(index: Int): Boolean {

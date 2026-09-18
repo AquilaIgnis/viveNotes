@@ -25,6 +25,27 @@ class AutoEquationSyntaxTest {
     }
 
     @Test
+    fun `finds multiline display blocks and anchors each preview to one source line`() {
+        val dollars = "before\n\$\$\n\\frac{a}{b} = c\n\$\$\nafter"
+        val brackets = "\\[\n  x^2 + y^2\n= z^2\n\\]"
+
+        val dollarBlock = findAutoEquationCandidates(dollars).single()
+        val bracketBlock = findAutoEquationCandidates(brackets).single()
+
+        assertEquals("{\\displaystyle \\frac{a}{b} = c}", dollarBlock.latex)
+        assertEquals("\$\$\n\\frac{a}{b} = c\n\$\$", dollars.substring(dollarBlock.start, dollarBlock.end))
+        assertEquals("\\frac{a}{b} = c", dollars.substring(dollarBlock.renderStart, dollarBlock.renderEnd))
+        assertEquals("{\\displaystyle x^2 + y^2\n= z^2}", bracketBlock.latex)
+        assertEquals("x^2 + y^2", brackets.substring(bracketBlock.renderStart, bracketBlock.renderEnd))
+    }
+
+    @Test
+    fun `inline delimiters do not cross a line break`() {
+        assertTrue(findAutoEquationCandidates("\$x + y\nstill prose\$").isEmpty())
+        assertTrue(findAutoEquationCandidates("\\(x + y\nstill prose\\)").isEmpty())
+    }
+
+    @Test
     fun `recognises a balanced wikipedia displaystyle paragraph`() {
         val source = "{\\displaystyle \\int _{a}^{b}f'(t)\\,dt=f(b)-f(a)}"
 
