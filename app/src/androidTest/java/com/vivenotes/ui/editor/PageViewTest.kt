@@ -68,6 +68,7 @@ class PageViewTest {
     private val title = mutableStateOf("A page")
     private val outlines = mutableStateOf(emptyList<OutlineBox>())
     private val tables = mutableStateOf(emptyList<Outline.Table>())
+    private val shapes = mutableStateOf(emptyList<Outline.Shape>())
     private var composed = false
     private lateinit var density: Density
     private var created: Pair<Float, Float>? = null
@@ -85,6 +86,7 @@ class PageViewTest {
         title: String = "A page",
         outlines: List<OutlineBox> = emptyList(),
         tables: List<Outline.Table> = emptyList(),
+        shapes: List<Outline.Shape> = emptyList(),
         hasClipboard: Boolean = false,
         textArmed: Boolean = true,
     ) {
@@ -99,6 +101,7 @@ class PageViewTest {
         this.title.value = title
         this.outlines.value = outlines
         this.tables.value = tables
+        this.shapes.value = shapes
         if (!composed) {
             composed = true
             compose.setContent {
@@ -132,6 +135,7 @@ class PageViewTest {
                         onSetOutlineMinHeight = { _, _ -> },
                         onOutlineBlurred = {},
                         tables = this.tables.value,
+                        shapes = this.shapes.value,
                         onCanvasMeasured = { _, _ -> },
                         hasClipboard = this.hasClipboard.value,
                         onPaste = { pasted = it },
@@ -544,7 +548,70 @@ class PageViewTest {
         )
     }
 
+    /** Regression for the first 5% fix, which avoided a crash by cutting the page off at 16,383dp. */
+    @Test
+    fun fivePercentZoomKeepsContentBelowThePairedConstraintReachable() {
+        val bottom = 18_685f + 600f
+        setPage(
+            style = PageStyle(hideTitle = true),
+            zoom = 0.05f,
+            outlines = listOf(
+                OutlineBox(id = "far", x = 212f, y = 18_685f, width = 1_642f, minHeight = 600f),
+            ),
+        )
+
+        val bottomPx = with(density) { bottom.dp.roundToPx() }
+        assertTrue("the canvas was cut off before the far container", canvasHeight() >= bottomPx)
+
+        compose.onRoot().performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        compose.onNodeWithTag(OutlineTags.CONTAINER).assertIsDisplayed()
+    }
+
+    /**
+     * A real imported page can be wide and tall at the same time. That pair cannot be encoded as
+     * one fixed Compose `Constraints` value even though each coordinate is otherwise valid; the
+     * document-space layout must keep both axes rather than cap one or crash.
+     */
+    @Test
+    fun fivePercentZoomKeepsWideAndTallContentReachable() {
+        val right = 7_561f + 500f
+        val bottom = 18_685f + 600f
+        setPage(
+            style = PageStyle(hideTitle = true),
+            zoom = 0.05f,
+            outlines = listOf(
+                OutlineBox(id = "far", x = 7_561f, y = 18_685f, width = 500f, minHeight = 600f),
+            ),
+        )
+
+        val rightPx = with(density) { right.dp.roundToPx() }
+        val bottomPx = with(density) { bottom.dp.roundToPx() }
+        assertTrue("the canvas was cut off before the far-right content", canvasWidth() >= rightPx)
+        assertTrue("the canvas was cut off before the far-bottom content", canvasHeight() >= bottomPx)
+
+        compose.onRoot().performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        compose.onNodeWithTag(OutlineTags.CONTAINER).assertIsDisplayed()
+    }
+
+    @Test
+    fun nonTextContentAlsoDefinesTheRequiredCanvasBounds() {
+        val bottom = 18_685f + 600f
+        setPage(
+            style = PageStyle(hideTitle = true),
+            zoom = 0.05f,
+            shapes = listOf(
+                Outline.Shape(id = "far-shape", x = 212f, y = 18_685f, width = 1_642f, height = 600f),
+            ),
+        )
+
+        val bottomPx = with(density) { bottom.dp.roundToPx() }
+        assertTrue("non-text content was left outside the canvas", canvasHeight() >= bottomPx)
+    }
+
     private fun canvasHeight() = compose.onNodeWithTag(PageTags.CANVAS).fetchSemanticsNode().size.height
+    private fun canvasWidth() = compose.onNodeWithTag(PageTags.CANVAS).fetchSemanticsNode().size.width
 
     // --- title and ruling ------------------------------------------------------------------------
 

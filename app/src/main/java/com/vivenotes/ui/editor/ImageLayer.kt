@@ -1,11 +1,8 @@
 package com.vivenotes.ui.editor
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.ink.CanvasSelection
@@ -98,11 +96,13 @@ internal fun ImageLayer(
     ) -> Unit = { _, _, _, _, _ -> },
     density: Float,
     modifier: Modifier = Modifier,
+    /** Null in standalone uses; the document extent when hosted by the unbounded page. */
+    canvasExtent: DpSize? = null,
     /**
      * The next layer **down** — [EquationLayer], and [ShapeLayer] inside that. This is the outermost
      * of the three, so it is asked first and paints last. See [EquationLayer.beneath].
      */
-    beneath: @Composable BoxScope.() -> Unit = {},
+    beneath: @Composable () -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val handleFill = MaterialTheme.colorScheme.surface
@@ -140,7 +140,6 @@ internal fun ImageLayer(
 
     Box(
         modifier
-            .fillMaxSize()
             .testTag(IMAGE_LAYER_TAG)
             .semantics {
                 if (failures.isNotEmpty()) contentDescription = failures.joinToString(". ")
@@ -253,12 +252,13 @@ internal fun ImageLayer(
                     resize.value = null
                     move.value = null
                 }
-            },
+            }
+            .fillDocument(canvasExtent),
     ) {
         // First, so the pictures paint over it and are offered the touch before it — see [beneath].
         beneath()
 
-        Canvas(Modifier.fillMaxSize()) {
+        DocumentCanvas(canvasExtent) {
             val revision = lassoGesture?.renderRevision ?: 0
             val moving = lassoGesture?.takeIf { it.isTransforming && revision >= 0 }
             val heldIds = selection?.imageIds.orEmpty()

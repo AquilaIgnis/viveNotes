@@ -1,10 +1,8 @@
 package com.vivenotes.ui.editor
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,6 +29,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.vivenotes.data.automaticColorOr
 import com.vivenotes.ui.theme.LocalCanvasColors
@@ -121,6 +120,8 @@ internal fun ShapeLayer(
     /** One end of a line or an arrow, moved to where the finger left it — see [ShapeEnd]. */
     onMoveShapeEnd: (shapeId: String, atEnd: Boolean, x: Float, y: Float) -> Unit =
         { _, _, _, _ -> },
+    /** Null in standalone uses; the document extent when hosted by the unbounded page. */
+    canvasExtent: DpSize? = null,
     modifier: Modifier = Modifier,
 ) {
     val accent = MaterialTheme.colorScheme.primary
@@ -157,7 +158,6 @@ internal fun ShapeLayer(
 
     Box(
         modifier
-            .fillMaxSize()
             .testTag(SHAPE_LAYER_TAG)
             // Keyed on nothing, deliberately. `pointerInput(keys)` cancels its coroutine the moment
             // a key changes, and the restarted handler waits for a DOWN that a finger already on the
@@ -379,9 +379,10 @@ internal fun ShapeLayer(
                     endMove.value = null
                     move.value = null
                 }
-            },
+            }
+            .fillDocument(canvasExtent),
     ) {
-        Canvas(Modifier.fillMaxSize()) {
+        DocumentCanvas(canvasExtent) {
             // Read in the draw so a live lasso drag re-runs this and nothing above it, the same
             // reason the ruling takes its window as a lambda.
             val revision = lassoGesture?.renderRevision ?: 0

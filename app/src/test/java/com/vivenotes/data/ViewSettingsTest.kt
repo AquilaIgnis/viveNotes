@@ -17,6 +17,15 @@ class ViewSettingsTest {
     }
 
     @Test
+    fun `zooming out reaches the extended canvas overview`() {
+        assertEquals(0.05f, ViewSettings.MIN_ZOOM)
+        assertEquals(0.25f, ViewSettings.zoomStepDown(0.5f))
+        assertEquals(0.1f, ViewSettings.zoomStepDown(0.25f))
+        assertEquals(0.05f, ViewSettings.zoomStepDown(0.1f))
+        assertEquals(0.1f, ViewSettings.zoomStepUp(0.05f))
+    }
+
+    @Test
     fun `stepping from a value between presets lands on the next one either way`() {
         // Page Width produces exactly this: whatever fits, not a round number.
         assertEquals(1.25f, ViewSettings.zoomStepUp(1.13f))

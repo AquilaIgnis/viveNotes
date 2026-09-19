@@ -112,6 +112,7 @@ import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkLassoSelection
 import com.vivenotes.ink.InkBounds
+import com.vivenotes.ink.pageBounds
 import com.vivenotes.ink.Ruler
 import com.vivenotes.ink.RulerPlacement
 import com.vivenotes.ink.TableBounds
@@ -159,31 +160,69 @@ private val GRIP_HEIGHT = 18.dp
 private val RESIZE_HANDLE_WIDTH = 18.dp
 
 /**
- * Ceilings imposed by [Constraints], which packs both axes into a single Int.
+ * Conservative budgets for speculative blank canvas, based on [Constraints]' packed axis sizes.
  *
- * The allowance on one axis depends on the other: while one stays under [CONSTRAINT_NARROW_PX] the
- * other may reach [CONSTRAINT_SOLE_PX], and past that both drop to [CONSTRAINT_PAIRED_PX]. A page
- * that grows as you scroll will find that edge eventually, and the old fixed 20,000dp height was
- * already only legal because the canvas happened to stay narrow — a wide sheet carrying tall content
- * would have thrown at layout time.
+ * The virtual document layout no longer needs to fit these budgets. They remain useful as a ceiling
+ * on empty high-water growth: while one axis stays narrow, the other can offer substantially more
+ * writing room; when both grow, neither blank direction gets to dominate memory and draw-node size.
  */
 private const val CONSTRAINT_NARROW_PX = 8_191
 private const val CONSTRAINT_SOLE_PX = 262_143
 private const val CONSTRAINT_PAIRED_PX = 32_767
 
-/**
- * The largest canvas that can actually be laid out, at this zoom.
- *
- * Zoom belongs in the arithmetic because [Zoomed] reports the *scaled* size to its parent, so it is
- * the scaled size that has to be packable — a canvas that is legal at 100% can overflow at 400%.
- */
-private fun Density.clampToConstraints(size: DpSize, zoom: Float): DpSize {
-    fun limit(dp: Dp, ceiling: Int): Dp = minOf(dp, (ceiling / zoom).toDp())
+private data class CanvasConstraintBudget(val widthPx: Int, val heightPx: Int)
 
-    val width = limit(size.width, CONSTRAINT_PAIRED_PX)
-    val widthPx = width.toPx() * zoom
-    val heightCeiling = if (widthPx <= CONSTRAINT_NARROW_PX) CONSTRAINT_SOLE_PX else CONSTRAINT_PAIRED_PX
-    return DpSize(width, limit(size.height, heightCeiling))
+/**
+ * Limits only the empty area requested around [requiredSize]. Document content is never shortened.
+ *
+ * [Constraints] can represent either two medium axes or one narrow axis plus one long axis. The
+ * viewport and the endless-canvas high-water mark request blank writing room, but letting that
+ * padding choose the medium/medium budget can cut off real content on the long axis. Each viable
+ * budget is therefore tested against the required page first; only its remaining capacity is
+ * offered to [requestedSize]. If content itself exceeds every budget, [requiredSize] wins unchanged
+ * and [DocumentLayout] carries it without constructing a packed fixed-size constraint.
+ *
+ * Zoom belongs in the blank-space arithmetic because [Zoomed] reports the scaled size to its
+ * parent, so a budgeted extension accounts for both its raw and projected extent.
+ */
+internal fun Density.limitEmptyCanvas(
+    requiredSize: DpSize,
+    requestedSize: DpSize,
+    zoom: Float,
+): DpSize {
+    fun rawCeiling(reportedCeiling: Int): Int =
+        if (zoom <= 1f) reportedCeiling else (reportedCeiling / zoom).toInt()
+
+    fun constraintExtent(dp: Dp): Int {
+        val raw = dp.roundToPx()
+        return maxOf(raw, (raw * zoom).roundToInt())
+    }
+
+    fun CanvasConstraintBudget.holds(size: DpSize): Boolean =
+        constraintExtent(size.width) <= widthPx && constraintExtent(size.height) <= heightPx
+
+    fun CanvasConstraintBudget.fill(): DpSize {
+        fun axis(required: Dp, requested: Dp, ceiling: Int): Dp = maxOf(
+            required,
+            minOf(requested, (rawCeiling(ceiling) / density).toDp()),
+        )
+        return DpSize(
+            width = axis(requiredSize.width, requestedSize.width, widthPx),
+            height = axis(requiredSize.height, requestedSize.height, heightPx),
+        )
+    }
+
+    val budgets = listOf(
+        CanvasConstraintBudget(CONSTRAINT_PAIRED_PX, CONSTRAINT_PAIRED_PX),
+        CanvasConstraintBudget(CONSTRAINT_NARROW_PX, CONSTRAINT_SOLE_PX),
+        CanvasConstraintBudget(CONSTRAINT_SOLE_PX, CONSTRAINT_NARROW_PX),
+    )
+    return budgets
+        .asSequence()
+        .filter { it.holds(requiredSize) }
+        .map { it.fill() }
+        .maxByOrNull { constraintExtent(it.width).toLong() * constraintExtent(it.height) }
+        ?: requiredSize
 }
 
 /**
@@ -663,20 +702,37 @@ fun EditorPane(
     // What the content occupies, measured from the page's own top-left corner and including the
     // band the title sits in. Derived rather than recomputed: the canvas now grows as the user
     // scrolls, so this is read on far more recompositions than it used to be.
-    val contentBounds by remember(outlines, tables, style.hideTitle, density) {
+    val contentBounds by remember(
+        outlines,
+        tableBounds,
+        strokes,
+        shapes,
+        images,
+        equations,
+        style.hideTitle,
+        density,
+    ) {
         derivedStateOf {
             var width = 0.dp
             var height = if (style.hideTitle) 0.dp else PageStyle.TITLE_BAND_DP.dp
+
+            fun include(bounds: InkBounds?) {
+                if (bounds == null) return
+                width = maxOf(width, bounds.right.dp)
+                height = maxOf(height, bounds.bottom.dp)
+            }
+
             outlines.forEach { box ->
-                width = maxOf(width, (box.x + box.width).dp)
-                height = maxOf(height, box.y.dp + with(density) { (heights[box.id] ?: 0).toDp() })
+                val measuredHeight = heights[box.id]
+                    ?.let { with(density) { it.toDp().value } }
+                    ?: box.minHeight
+                include(InkBounds(box.x, box.y, box.x + box.width, box.y + measuredHeight))
             }
-            // A table's box is its grid plus the gutter reserved for its handles, and its height is
-            // measured for the reason `tableBounds` gives.
-            tables.forEach { table ->
-                width = maxOf(width, table.x.dp + TABLE_GUTTER + table.width.dp)
-                height = maxOf(height, table.y.dp + with(density) { (heights[table.id] ?: 0).toDp() })
-            }
+            tableBounds.forEach { include(it.bounds) }
+            strokes.forEach { include(it.pageBounds) }
+            shapes.forEach { include(it.pageBounds()) }
+            images.forEach { include(it.pageBounds()) }
+            equations.forEach { include(it.pageBounds()) }
             DpSize(width, height)
         }
     }
@@ -924,15 +980,19 @@ fun EditorPane(
         // unbounded one always keeps a screenful in front of wherever the user has got to, which is
         // what makes it feel like it has no end.
         val room = DpSize(pageSize.width + CANVAS_TRAILING_WIDTH, pageSize.height + CANVAS_TRAILING_SPACE)
-        val canvasSize = density.clampToConstraints(
-            if (fits) {
+        val requestedCanvasSize = if (fits) {
                 DpSize(maxOf(room.width, window.width), maxOf(room.height, window.height))
             } else {
                 DpSize(
                     maxOf(room.width, window.width * (reachedX + 1)),
                     maxOf(room.height, window.height * (reachedY + 1)),
                 )
-            },
+            }
+        val canvasSize = density.limitEmptyCanvas(
+            // The small working margin is part of the floor: even a page already larger than every
+            // empty-area budget must leave enough space past its last object to continue writing.
+            requiredSize = room,
+            requestedSize = requestedCanvasSize,
             zoom,
         )
 
@@ -1000,14 +1060,14 @@ fun EditorPane(
                 // so are the sheet, the ruling and the margin guides drawn behind it — before, the
                 // content sat in a box below the title and the two disagreed by the height of the
                 // header, which is why the guides never lined up with anything.
-                Box(
-                    Modifier
-                        .size(canvasSize)
-                        .testTag(PageTags.CANVAS),
+                DocumentLayout(
+                    extent = canvasSize,
+                    modifier = Modifier.testTag(PageTags.CANVAS),
                 ) {
                     PageSurface(
                         sheet = sheet,
                         bound = fits,
+                        canvasExtent = canvasSize,
                         colors = canvas,
                         ruleLines = style.ruleLines,
                         margins = style.margins.takeIf { showPrintMargins },
@@ -1021,7 +1081,6 @@ fun EditorPane(
                     // a tap with nothing selected opens a container.
                     Box(
                         Modifier
-                            .fillMaxSize()
                             .pointerInput(
                                 pageRevision,
                                 fits,
@@ -1103,7 +1162,8 @@ fun EditorPane(
                                 } else {
                                     detectTapGestures(onTap = onTap)
                                 }
-                            },
+                            }
+                            .documentExtent(canvasSize),
                     )
 
                     outlines.forEach { box ->
@@ -1193,8 +1253,12 @@ fun EditorPane(
                     //
                     // Inside the zoom — see ShapeLayer for why a shape can live in the page where
                     // ink cannot.
-                    Box(Modifier.fillMaxSize().sharingTouchesWithSiblings()) {
-                        val shapesAndFormulas: @Composable BoxScope.() -> Unit = {
+                    Box(
+                        Modifier
+                            .sharingTouchesWithSiblings()
+                            .documentExtent(canvasSize),
+                    ) {
+                        val shapesAndFormulas: @Composable () -> Unit = {
                             EquationLayer(
                                 equations = equations,
                                 selection = selection,
@@ -1211,6 +1275,7 @@ fun EditorPane(
                                 onResize = { id, anchorX, anchorY, scaleX, scaleY ->
                                     onResizeEquations(setOf(id), anchorX, anchorY, scaleX, scaleY)
                                 },
+                                canvasExtent = canvasSize,
                             ) {
                                 ShapeLayer(
                                     shapes = shapes,
@@ -1236,6 +1301,7 @@ fun EditorPane(
                                     onResizeShape = onResizeShape,
                                     onResizeShapeArm = onResizeShapeArm,
                                     onMoveShapeEnd = onMoveShapeEnd,
+                                    canvasExtent = canvasSize,
                                 )
                             }
                         }
@@ -1262,6 +1328,7 @@ fun EditorPane(
                                     onResizeImages(setOf(id), anchorX, anchorY, scaleX, scaleY)
                                 },
                                 density = density.density,
+                                canvasExtent = canvasSize,
                                 beneath = shapesAndFormulas,
                             )
                         } else {
@@ -1773,9 +1840,10 @@ private fun PageViewport(
  * [PageTags.SURFACE] is therefore the writable area, which is the sheet exactly when [bound].
  */
 @Composable
-private fun BoxScope.PageSurface(
+private fun PageSurface(
     sheet: DpSize?,
     bound: Boolean,
+    canvasExtent: DpSize,
     colors: CanvasColors,
     ruleLines: RuleLines,
     margins: PrintMargins?,
@@ -1783,13 +1851,21 @@ private fun BoxScope.PageSurface(
 ) {
     Box(
         Modifier
-            .then(if (bound && sheet != null) Modifier.size(sheet) else Modifier.matchParentSize())
             .background(colors.background)
             .then(if (bound && sheet != null) Modifier.border(1.dp, colors.ruleLine) else Modifier)
-            .testTag(PageTags.SURFACE),
+            .testTag(PageTags.SURFACE)
+            .then(
+                if (bound && sheet != null) Modifier.size(sheet)
+                else Modifier.documentExtent(canvasExtent),
+            ),
     ) {
         if (ruleLines != RuleLines.None) {
-            PageRuling(color = colors.ruleLine, rules = ruleLines, window = window)
+            PageRuling(
+                color = colors.ruleLine,
+                rules = ruleLines,
+                window = window,
+                extent = if (bound) sheet else canvasExtent,
+            )
         }
     }
 
@@ -2272,12 +2348,17 @@ private fun PageHeader(
  * re-runs this lambda and nothing above it.
  */
 @Composable
-private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
-    Canvas(modifier = Modifier.fillMaxSize()) {
+private fun PageRuling(
+    color: Color,
+    rules: RuleLines,
+    window: () -> Rect,
+    extent: DpSize?,
+) {
+    DocumentCanvas(extent) {
         val stepPx = rules.spacingDp.dp.toPx()
-        if (stepPx <= 0f) return@Canvas
+        if (stepPx <= 0f) return@DocumentCanvas
         val visible = window().intersect(Rect(Offset.Zero, size))
-        if (visible.isEmpty) return@Canvas
+        if (visible.isEmpty) return@DocumentCanvas
 
         if (rules.hexagonal) {
             val side = stepPx
@@ -2324,7 +2405,7 @@ private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
                 color = color.copy(alpha = color.alpha * HEXAGON_RULE_ALPHA),
                 style = Stroke(width = 1f),
             )
-            return@Canvas
+            return@DocumentCanvas
         }
 
         if (rules.dotted) {
@@ -2338,7 +2419,7 @@ private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
                 }
                 y += stepPx
             }
-            return@Canvas
+            return@DocumentCanvas
         }
 
         // Snapped to the ruling's own grid, not to the window, so the lines stay where the page puts
@@ -2348,7 +2429,7 @@ private fun PageRuling(color: Color, rules: RuleLines, window: () -> Rect) {
             drawLine(color, Offset(visible.left, y), Offset(visible.right, y), strokeWidth = 1f)
             y += stepPx
         }
-        if (!rules.squared) return@Canvas
+        if (!rules.squared) return@DocumentCanvas
         var x = maxOf(stepPx, ceil(visible.left / stepPx) * stepPx)
         while (x < visible.right) {
             drawLine(color, Offset(x, visible.top), Offset(x, visible.bottom), strokeWidth = 1f)

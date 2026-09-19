@@ -1,12 +1,9 @@
 package com.vivenotes.ui.editor
 
 import android.graphics.Paint
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +28,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpSize
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
@@ -89,6 +87,8 @@ internal fun EquationLayer(
         scaleY: Float,
     ) -> Unit = { _, _, _, _, _ -> },
     modifier: Modifier = Modifier,
+    /** Null in standalone uses; the document extent when hosted by the unbounded page. */
+    canvasExtent: DpSize? = null,
     /**
      * The next layer **down**, composed as a child rather than a sibling — `ShapeLayer` goes here.
      *
@@ -98,7 +98,7 @@ internal fun EquationLayer(
      * where a parent is asked before its child: a formula takes a touch that lands on one, and the
      * shapes get what it declines.
      */
-    beneath: @Composable BoxScope.() -> Unit = {},
+    beneath: @Composable () -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val handleFill = MaterialTheme.colorScheme.surface
@@ -139,7 +139,6 @@ internal fun EquationLayer(
 
     Box(
         modifier
-            .fillMaxSize()
             .testTag(EQUATION_LAYER_TAG)
             // Keyed on nothing, for the reason ShapeLayer spells out at length: `pointerInput(keys)`
             // cancels its coroutine when a key changes, and a restarted handler waits for a DOWN that
@@ -254,12 +253,13 @@ internal fun EquationLayer(
                     resize.value = null
                     move.value = null
                 }
-            },
+            }
+            .fillDocument(canvasExtent),
     ) {
         // First, so the formulas paint over it and are offered the touch before it — see [beneath].
         beneath()
 
-        Canvas(Modifier.fillMaxSize()) {
+        DocumentCanvas(canvasExtent) {
             val revision = lassoGesture?.renderRevision ?: 0
             val moving = lassoGesture?.takeIf { it.isTransforming && revision >= 0 }
             val heldIds = selection?.equationIds.orEmpty()

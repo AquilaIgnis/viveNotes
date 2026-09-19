@@ -50,7 +50,7 @@ data class ViewSettings(
          * The zoom levels the ribbon offers, and the ladder the +/- buttons climb. Kept together so
          * stepping can never land on a value the combo box cannot display.
          */
-        val ZOOM_STEPS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f)
+        val ZOOM_STEPS = listOf(0.05f, 0.1f, 0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f)
 
         val MIN_ZOOM = ZOOM_STEPS.first()
         val MAX_ZOOM = ZOOM_STEPS.last()
