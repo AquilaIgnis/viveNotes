@@ -91,32 +91,71 @@ and all AI features run entirely on-device.
 
 # Dev
 
-## Build and install release
+## Build prerequisites
+
+| Item                                    | What this project uses                                                     |
+| --------------------------------------- | -------------------------------------------------------------------------- |
+| JDK                                     | 21 in CI                                                                   |
+| Android SDK platform                    | Android 37.0 (`compileSdk` 37)                                             |
+| Android SDK Build Tools                 | A compatible version selected by AGP; 37.0.0 is a known-good choice        |
+| Python                                  | `python3.13` executable                                                    |
+| Android NDK                             | 28.2.13676358, selected by AGP 9.2.1                                       |
+| Platform Tools and a device or emulator | Android API 35 or newer; arm64-v8a or x86_64 for debug and `-PtestRelease` |
+
+The Gradle wrapper downloads **Gradle 9.7.0**; the build pins **Android Gradle Plugin 9.2.1** and **Kotlin 2.2.10** in `gradle/libs.versions.toml`.
+Gradle invokes `python3.13` directly; the exact Python 3.13.14 pin in the root `pyproject.toml` is for a separate Python environment.
+
+Install the SDK packages with Android Studio's SDK Manager or the Android SDK command-line tools:
 
 ```bash
-./gradlew installRelease
-
+sdkmanager 'platforms;android-37' 'build-tools;37.0.0' 'ndk;28.2.13676358'
 ```
 
-## Run all tests on Release ( arm and R8)
+## Build and install
 
-Installs as `com.vivenotes.testrelease`, so it neither collides with nor uninstalls a signed
+For a first build, use the debug variant. An Android device is needed only for `installDebug`:
+
+```bash
+./gradlew :app:assembleDebug
+./gradlew :app:installDebug
+```
+
+An unsigned release can be built without signing credentials:
+
+```bash
+./gradlew :app:assembleRelease
+```
+
+To sign and install a release, put the upload-key values named in `env.example` in a gitignored `.env` at the repo root, and keep the keystore outside the working tree.
+Then run `./gradlew :app:installRelease`. The normal release APK includes arm64-v8a only; use debug or `-PtestRelease` for an x86_64 emulator.
+
+`local.properties` may also hold the optional public Google Web client ID and cloud URL settings described in `app/build.gradle.kts`. They are not required to compile the app.
+
+## Run tests
+
+Local tests need no device:
+
+```bash
+./gradlew :app:testDebugUnitTest
+```
+
+The release instrumented suite tests the R8-minified app on a connected API 35+ device or emulator.
+
+It installs as `com.vivenotes.testrelease`, so it neither collides with nor uninstalls a signed
 `com.vivenotes`.
 
 ```bash
 ./gradlew connectedAndroidTest -PtestRelease
 ```
 
-## Run all tests on Debug
+The debug instrumented suite uses the same device requirements:
 
-report: app/build/reports/androidTests/connected/
+Reports are written under `app/build/reports/androidTests/connected/`.
 
 ```bash
-
-  ./gradlew connectedDebugAndroidTest
-  ./gradlew connectedDebugAndroidTest \
-    -Pandroid.testInstrumentationRunnerArguments.class=com.vivenotes.ui.editor.PageViewTest
-
+./gradlew connectedDebugAndroidTest
+./gradlew connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.vivenotes.ui.editor.PageViewTest
 ```
 
 # Acknowledgments
