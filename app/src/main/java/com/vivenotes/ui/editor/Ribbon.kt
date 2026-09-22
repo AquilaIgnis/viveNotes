@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -71,7 +72,6 @@ import com.vivenotes.ui.icons.AppIcons
 import com.vivenotes.ui.icons.LocalRibbonIcons
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.icons.fontColorGlyph
-import com.vivenotes.ui.icons.highlightGlyph
 import com.vivenotes.ui.theme.LocalIconAccents
 import com.vivenotes.ui.panel.FloatingSettingsPanel
 
@@ -527,7 +527,7 @@ private fun HomeTab(
             onClear = { onCommand(FormatCommand.ClearMark(Mark.TextColor(0))) },
         )
         ColorPicker(
-            glyph = ::highlightGlyph,
+            symbol = MaterialSymbols.StylusHighlighter,
             label = "Highlight",
             colors = HIGHLIGHT_COLORS,
             current = selection.highlight,
@@ -1058,16 +1058,14 @@ internal fun ComboBox(
 }
 
 /**
- * Font colour and highlight, whose bar shows the colour that is currently applied.
+ * Font colour and highlight, whose icons show the colour that is currently applied.
  *
- * That bar is live selection state, so unlike the accented glyphs it cannot be pre-built — the
- * [glyph] is a builder taking the swatch, rebuilt only when the selected colour actually changes.
- * It also replaces a bar drawn under the icon: Material's `FormatColorText` and `FormatColorFill`
- * already include one in the glyph, so the old layout showed two.
+ * Font colour draws its swatch into [glyph]. Highlight uses the same tinted marker as Draw.
  */
 @Composable
 private fun ColorPicker(
-    glyph: (neutral: Color, swatch: Color) -> ImageVector,
+    glyph: ((neutral: Color, swatch: Color) -> ImageVector)? = null,
+    symbol: ImageVector? = null,
     label: String,
     colors: List<Int>,
     current: Int?,
@@ -1076,17 +1074,20 @@ private fun ColorPicker(
 ) {
     var open by remember { mutableStateOf(false) }
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
-    // Highlights are stored semi-transparent so they read over text. The bar has nothing behind
-    // it, so it is drawn opaque or the lighter shades would be all but invisible.
+    // Highlights are stored semi-transparent so they read over text. The icon is drawn opaque
+    // like Draw's marker, so lighter shades remain visible against the ribbon.
     val swatch = current?.takeIf { it != 0 }?.let { Color(it).copy(alpha = 1f) } ?: neutral
-    val icon = remember(neutral, swatch) { glyph(neutral, swatch) }
+    val icon = remember(neutral, swatch, glyph, symbol) {
+        symbol ?: requireNotNull(glyph)(neutral, swatch)
+    }
     Box {
         RibbonButtonSlot(active = false, onClick = { open = true }) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = Color.Unspecified,
-                modifier = Modifier.size(20.dp),
+                tint = if (symbol == null) Color.Unspecified else swatch,
+                modifier = if (symbol == null) Modifier.size(20.dp)
+                    else Modifier.size(19.dp).rotate(180f),
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {

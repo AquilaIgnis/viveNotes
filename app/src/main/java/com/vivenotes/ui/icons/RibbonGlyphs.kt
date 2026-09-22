@@ -939,20 +939,3 @@ fun linkPreviewGlyph(neutral: Color, accent: Color): ImageVector = glyph("LinkPr
         close()
     }
 }
-
-fun highlightGlyph(neutral: Color, swatch: Color): ImageVector = glyph("Highlight") {
-    path(fill = SolidColor(neutral)) {         // pen body
-        moveTo(9.0f, 13.4f)
-        lineTo(14.6f, 4.6f)
-        lineTo(18.4f, 7.0f)
-        lineTo(12.8f, 15.8f)
-        close()
-    }
-    path(fill = SolidColor(neutral)) {         // pen tip
-        moveTo(9.0f, 13.4f)
-        lineTo(12.8f, 15.8f)
-        lineTo(7.8f, 17.4f)
-        close()
-    }
-    swatchBar(swatch)
-}
