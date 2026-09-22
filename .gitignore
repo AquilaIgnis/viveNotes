@@ -28,6 +28,7 @@ mytrash/
 app/src/debug/assets/ai/dev/*.onnx
 
 #jsc
+**secret**
 .env
 *.jks
 android-release.jks
