@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.vivenotes.data.EditorDefaults
@@ -72,6 +73,7 @@ internal fun NoteEditor(
     val canvas = LocalCanvasColors.current
     val thumbnails = LocalVideoThumbnails.current
     val hostContext = LocalContext.current
+    val linkColor = MaterialTheme.colorScheme.primary.toArgb()
 
     AndroidView(
         factory = { context ->
@@ -116,11 +118,14 @@ internal fun NoteEditor(
             // it was when the editor was made.
             editor.onTabNavigate = onTabNavigate
             editor.setTextColor(canvas.text.toArgb())
+            editor.setLinkTextColor(linkColor)
+            editor.linkColor = linkColor
             editor.equationColor = canvas.text.toArgb()
             editor.setHintTextColor(canvas.secondaryText.toArgb())
             editor.defaultMarks = defaults.asEditorMarks()
             editor.videoThumbnails = thumbnails
             editor.onOpenVideo = { url -> hostContext.openExternally(url) }
+            editor.onOpenLink = { url -> hostContext.openExternally(url) }
             // Applied to the view rather than as a Compose height constraint: constraining the
             // wrapper only grows the box around the editor, leaving the text area itself — and its
             // touch target — at the height of its content.
@@ -131,16 +136,21 @@ internal fun NoteEditor(
 }
 
 /**
- * Hands a pasted video link to whatever the device opens YouTube with.
+ * Hands a web link to the device's browser or matching app.
  *
  * `runCatching` because a device with no browser and no YouTube app resolves nothing, and a note
- * editor must not crash over a tap on a picture. `NEW_TASK` because the card can be tapped from a
+ * editor must not crash over a tap on a link. `NEW_TASK` because the card can be tapped from a
  * page hosted in any activity, and without it the video would open inside this task's back stack.
  */
 private fun Context.openExternally(url: String) {
     runCatching {
+        val destination = if (url.startsWith("http://", true) || url.startsWith("https://", true)) {
+            url
+        } else {
+            "https://$url"
+        }
         startActivity(
-            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            Intent(Intent.ACTION_VIEW, Uri.parse(destination)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
 }

@@ -22,12 +22,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +61,7 @@ import com.vivenotes.model.Align
 import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
 import com.vivenotes.model.PageStyle
+import com.vivenotes.model.normalizedLinkUrl
 import com.vivenotes.richtext.ClipboardAction
 import com.vivenotes.richtext.FontRegistry
 import com.vivenotes.richtext.FormatCommand
@@ -68,6 +73,7 @@ import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.icons.fontColorGlyph
 import com.vivenotes.ui.icons.highlightGlyph
 import com.vivenotes.ui.theme.LocalIconAccents
+import com.vivenotes.ui.panel.FloatingSettingsPanel
 
 /**
  * Ribbon tabs from the reference UI. Each tab owns commands with the same scope as its name: File
@@ -591,9 +597,17 @@ private fun HomeTab(
         EquationButton(
             enabled = pageOpen && selection.editorFocused,
             existing = selection.equation,
-            onRetainTarget = { onCommand(FormatCommand.RetainEquationTarget) },
-            onReleaseTarget = { onCommand(FormatCommand.ReleaseEquationTarget) },
+            onRetainTarget = { onCommand(FormatCommand.RetainInlineTarget) },
+            onReleaseTarget = { onCommand(FormatCommand.ReleaseInlineTarget) },
             onSubmit = { latex, _ -> onCommand(FormatCommand.InsertEquation(latex)) },
+        )
+
+        LinkButton(
+            enabled = pageOpen && selection.editorFocused,
+            selection = selection,
+            onRetainTarget = { onCommand(FormatCommand.RetainInlineTarget) },
+            onReleaseTarget = { onCommand(FormatCommand.ReleaseInlineTarget) },
+            onSubmit = { label, url -> onCommand(FormatCommand.InsertLink(label, url)) },
         )
 
         Box(Modifier.testTag(HomeTags.PICTURE)) {
@@ -606,6 +620,82 @@ private fun HomeTab(
         }
 
 
+    }
+}
+
+@Composable
+private fun LinkButton(
+    enabled: Boolean,
+    selection: SelectionState,
+    onRetainTarget: () -> Unit,
+    onReleaseTarget: () -> Unit,
+    onSubmit: (String, String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var label by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+
+    DisposableEffect(expanded) {
+        onDispose { if (expanded) onReleaseTarget() }
+    }
+
+    Box {
+        RibbonButton(
+            icon = MaterialSymbols.Link,
+            label = "Link",
+            active = expanded,
+            enabled = enabled || expanded,
+            modifier = Modifier.testTag("insert-link"),
+            onClick = {
+                label = selection.linkText
+                address = selection.linkUrl.orEmpty()
+                onRetainTarget()
+                expanded = true
+            },
+        )
+        FloatingSettingsPanel(
+            expanded = expanded,
+            onDismissRequest = {
+                expanded = false
+            },
+            title = if (selection.linkUrl == null) "Insert link" else "Edit link",
+        ) {
+            OutlinedTextField(
+                value = label,
+                onValueChange = { label = it },
+                label = { Text("Text to display") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().testTag("link-text"),
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = address,
+                onValueChange = { address = it },
+                label = { Text("Web address") },
+                singleLine = true,
+                isError = address.isNotBlank() && normalizedLinkUrl(address) == null,
+                supportingText = { Text("https://example.com") },
+                modifier = Modifier.fillMaxWidth().testTag("link-address"),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = {
+                    expanded = false
+                }) { Text("Cancel") }
+                Button(
+                    enabled = normalizedLinkUrl(address) != null,
+                    onClick = {
+                        val url = normalizedLinkUrl(address) ?: return@Button
+                        onSubmit(label.ifBlank { url }, url)
+                        expanded = false
+                    },
+                    modifier = Modifier.testTag("link-submit"),
+                ) { Text("Apply") }
+            }
+        }
     }
 }
 

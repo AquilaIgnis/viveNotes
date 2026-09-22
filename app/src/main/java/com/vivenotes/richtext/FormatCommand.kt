@@ -47,14 +47,17 @@ sealed interface FormatCommand {
      */
     data object ClearCanvasSelection : FormatCommand
 
-    /** Keeps the current editor/caret alive while the focusable equation panel is open. */
-    data object RetainEquationTarget : FormatCommand
+    /** Keeps the current editor and selection while an inline insertion panel has focus. */
+    data object RetainInlineTarget : FormatCommand
 
-    /** Releases a retained target when equation entry is cancelled or dismissed. */
-    data object ReleaseEquationTarget : FormatCommand
+    /** Releases that target when the panel is cancelled or dismissed. */
+    data object ReleaseInlineTarget : FormatCommand
 
     /** Inserts a new equation, or replaces the equation at the retained caret. */
     data class InsertEquation(val latex: String) : FormatCommand
+
+    /** Inserts linked text, or changes the link at the retained selection/caret. */
+    data class InsertLink(val text: String, val url: String) : FormatCommand
 
     /**
      * Delegated to the platform widget's own handlers, which already move styled text through the
@@ -96,6 +99,10 @@ data class SelectionState(
 
     /** Source of the equation at the selection/caret, if there is one to edit. */
     val equation: String? = null,
+
+    /** Text selected for linking, or the complete link at the caret. */
+    val linkText: String = "",
+    val linkUrl: String? = null,
 
     /** An equation needs a real insertion target; a page by itself is not enough. */
     val editorFocused: Boolean = false,

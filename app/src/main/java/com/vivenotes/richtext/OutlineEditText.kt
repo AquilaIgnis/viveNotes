@@ -6,6 +6,8 @@ import android.text.Editable
 import android.text.Spanned
 import android.text.TextWatcher
 import android.text.style.AbsoluteSizeSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.URLSpan
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.KeyEvent
@@ -100,6 +102,16 @@ class OutlineEditText @JvmOverloads constructor(
      */
     var onOpenVideo: ((url: String) -> Unit)? = null
 
+    /** Opens a link after a second tap on its exposed text. */
+    var onOpenLink: ((url: String) -> Unit)? = null
+
+    var linkColor: Int = 0xFF0063C6.toInt()
+        set(value) {
+            if (field == value) return
+            field = value
+            if (initialised) refreshLinkStyles()
+        }
+
     /** Called after any user edit, debounced by the caller. */
     var onBlocksChanged: ((List<Block>) -> Unit)? = null
 
@@ -189,6 +201,7 @@ class OutlineEditText @JvmOverloads constructor(
 
     /** The card whose play badge a finger went down on, held until it lifts. See [onTouchEvent]. */
     private var pressedBadge: VideoEmbedSpan? = null
+    private var pressedLink: String? = null
 
     private val watcher = object : TextWatcher {
         private var insertStart = 0
@@ -223,6 +236,7 @@ class OutlineEditText @JvmOverloads constructor(
             onBlocksChanged?.invoke(SpannableCodec.parse(s))
             emitSelectionState()
             refreshAutoEquations()
+            refreshLinkStyles()
             refreshVideoEmbeds()
         }
     }
@@ -251,6 +265,7 @@ class OutlineEditText @JvmOverloads constructor(
         hydrateEquations()
         emitSelectionState()
         refreshAutoEquations()
+        refreshLinkStyles()
         refreshVideoEmbeds()
     }
 
@@ -290,7 +305,7 @@ class OutlineEditText @JvmOverloads constructor(
     }
 
     /**
-     * Opens a video when its play badge is tapped, and otherwise leaves every touch to the editor.
+     * Opens a video badge or an exposed link, and otherwise leaves touches to the editor.
      *
      * The badge consumes the gesture from the down event onwards rather than acting on the up. A tap
      * that both moved the caret and left the app would put the caret inside the URL on the way out,
@@ -308,11 +323,22 @@ class OutlineEditText @JvmOverloads constructor(
                     pressedBadge = span
                     return true
                 }
+                val link = linkAt(event.x, event.y)
+                if (link != null && rangeIsBeingEdited(
+                        link.start, link.end, hasFocus(), selectionStart, selectionEnd,
+                    )) {
+                    pressedLink = link.url
+                    return true
+                }
             }
             MotionEvent.ACTION_MOVE -> if (pressedBadge != null) {
                 // Sliding off the badge abandons the tap rather than opening on release, the same
                 // way a button behaves when a finger wanders out of it.
                 if (badgeAt(event.x, event.y) !== pressedBadge) pressedBadge = null
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> if (pressedLink != null) {
+                if (linkAt(event.x, event.y)?.url != pressedLink) pressedLink = null
                 return true
             }
             MotionEvent.ACTION_UP -> {
@@ -322,13 +348,44 @@ class OutlineEditText @JvmOverloads constructor(
                     if (badgeAt(event.x, event.y) === span) onOpenVideo?.invoke(span.url)
                     return true
                 }
+                val url = pressedLink
+                pressedLink = null
+                if (url != null) {
+                    if (linkAt(event.x, event.y)?.url == url) onOpenLink?.invoke(url)
+                    return true
+                }
             }
             MotionEvent.ACTION_CANCEL -> if (pressedBadge != null) {
                 pressedBadge = null
                 return true
             }
+            MotionEvent.ACTION_CANCEL -> if (pressedLink != null) {
+                pressedLink = null
+                return true
+            }
         }
         return super.onTouchEvent(event)
+    }
+
+    private data class TouchedLink(val start: Int, val end: Int, val url: String)
+
+    private fun linkAt(x: Float, y: Float): TouchedLink? {
+        val editable = text ?: return null
+        val textLayout = layout ?: return null
+        val textX = x - totalPaddingLeft + scrollX
+        val textY = y - totalPaddingTop + scrollY
+        if (textY < 0 || textY >= textLayout.height) return null
+        val line = textLayout.getLineForVertical(textY.toInt())
+        if (textX < textLayout.getLineLeft(line) || textX > textLayout.getLineRight(line)) return null
+        val offset = textLayout.getOffsetForHorizontal(line, textX)
+        val stored = editable.getSpans(offset, (offset + 1).coerceAtMost(editable.length), URLSpan::class.java)
+            .firstOrNull { offset in editable.getSpanStart(it) until editable.getSpanEnd(it) }
+        if (stored != null) return TouchedLink(
+            editable.getSpanStart(stored), editable.getSpanEnd(stored), stored.url,
+        )
+        return editable.getSpans(offset, (offset + 1).coerceAtMost(editable.length), AutoVideoLinkSpan::class.java)
+            .firstOrNull { offset in editable.getSpanStart(it) until editable.getSpanEnd(it) }
+            ?.let { TouchedLink(editable.getSpanStart(it), editable.getSpanEnd(it), it.url) }
     }
 
     /** The card whose play badge is under ([x], [y]) in this view's coordinates, or null. */
@@ -399,8 +456,8 @@ class OutlineEditText @JvmOverloads constructor(
         // command surface exhaustive without turning panel lifetime into a document edit.
         if (
             command == FormatCommand.DeactivateTextInput ||
-            command == FormatCommand.RetainEquationTarget ||
-            command == FormatCommand.ReleaseEquationTarget ||
+            command == FormatCommand.RetainInlineTarget ||
+            command == FormatCommand.ReleaseInlineTarget ||
             command == FormatCommand.ClearCanvasSelection
         ) return
         val editable = text ?: return
@@ -445,6 +502,7 @@ class OutlineEditText @JvmOverloads constructor(
                 it.copy(align = command.align)
             }
             is FormatCommand.InsertEquation -> insertEquation(editable, command.latex, from, to)
+            is FormatCommand.InsertLink -> insertLink(editable, command.text, command.url, from, to)
             is FormatCommand.Clipboard -> {
                 val id = when (command.action) {
                     ClipboardAction.Cut -> android.R.id.cut
@@ -467,8 +525,8 @@ class OutlineEditText @JvmOverloads constructor(
             // and the toolkit see change.
             FormatCommand.SelectAll -> selectAll()
             FormatCommand.DeactivateTextInput,
-            FormatCommand.RetainEquationTarget,
-            FormatCommand.ReleaseEquationTarget,
+            FormatCommand.RetainInlineTarget,
+            FormatCommand.ReleaseInlineTarget,
             // The canvas's selection, not this view's — `EditorPane` holds it and consumes this.
             FormatCommand.ClearCanvasSelection,
             -> Unit
@@ -479,7 +537,40 @@ class OutlineEditText @JvmOverloads constructor(
         if (command.affectsEquationMetrics()) hydrateEquations()
         emitSelectionState()
         refreshAutoEquations()
+        refreshLinkStyles()
         refreshVideoEmbeds()
+    }
+
+    private fun insertLink(editable: Editable, label: String, url: String, from: Int, to: Int) {
+        val existing = if (from == to) linkAtCaret(editable, from) else null
+        val start = existing?.let { editable.getSpanStart(it) } ?: from
+        val end = existing?.let { editable.getSpanEnd(it) } ?: to
+        if (label.isEmpty()) return
+        if (editable.subSequence(start, end).toString() != label) editable.replace(start, end, label)
+        SpannableCodec.removeMark(editable, Mark.Link(""), start, start + label.length)
+        SpannableCodec.applyMark(editable, Mark.Link(url), start, start + label.length)
+        SpannableCodec.normalize(editable, editorStyle)
+        setSelection(start + label.length)
+    }
+
+    private fun linkAtCaret(editable: Editable, offset: Int): URLSpan? =
+        editable.getSpans(0, editable.length, URLSpan::class.java).firstOrNull {
+            offset in editable.getSpanStart(it)..editable.getSpanEnd(it)
+        }
+
+    /** These colour spans are a view of bare YouTube URLs, not stored document marks. */
+    private fun refreshLinkStyles() {
+        val editable = text ?: return
+        editable.getSpans(0, editable.length, AutoVideoLinkSpan::class.java)
+            .forEach(editable::removeSpan)
+        findVideoLinks(editable.toString()).forEach { link ->
+            val marked = editable.getSpans(link.start, link.end, URLSpan::class.java).any {
+                editable.getSpanStart(it) <= link.start && editable.getSpanEnd(it) >= link.end
+            }
+            if (!marked) editable.setSpan(
+                AutoVideoLinkSpan(linkColor, link.url), link.start, link.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
     }
 
     private fun insertEquation(editable: Editable, latex: String, from: Int, to: Int) {
@@ -943,6 +1034,11 @@ class OutlineEditText @JvmOverloads constructor(
                     SpannableCodec.fontFamilyIn(editable, from, to, baseFontFamily)
                 },
                 equation = SpannableCodec.equationAt(editable, from, to)?.latex,
+                linkText = if (caret) linkAtCaret(editable, from)?.let {
+                    editable.subSequence(editable.getSpanStart(it), editable.getSpanEnd(it)).toString()
+                }.orEmpty() else editable.subSequence(from, to).toString(),
+                linkUrl = if (caret) linkAtCaret(editable, from)?.url
+                    else marks.filterIsInstance<Mark.Link>().firstOrNull()?.href,
                 editorFocused = hasFocus(),
             ),
         )
@@ -959,6 +1055,8 @@ class OutlineEditText @JvmOverloads constructor(
         val key: EquationRenderKey,
     )
 }
+
+private class AutoVideoLinkSpan(color: Int, val url: String) : ForegroundColorSpan(color), Derived
 
 private fun FormatCommand.affectsEquationMetrics(): Boolean = when (this) {
     is FormatCommand.InsertEquation -> true

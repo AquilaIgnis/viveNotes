@@ -29,6 +29,7 @@ import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.PrintMargins
 import com.vivenotes.model.Run
+import com.vivenotes.model.RuleLines
 import com.vivenotes.model.newId
 import com.vivenotes.richtext.LiveEquationSpan
 import com.vivenotes.richtext.HiddenEquationSourceSpan
@@ -98,6 +99,45 @@ class PdfExportTest {
                 // A4 at 72 points to the inch, which is the size every other reader will report.
                 assertEquals(595, page.width)
                 assertEquals(842, page.height)
+            }
+        }
+    }
+
+    @Test
+    fun linkedTextIsVisibleInTheSavedPdf() = runBlocking {
+        val linkedPage = repository.createPage(sectionId, "Linked text")
+        repository.saveDoc(
+            linkedPage,
+            PageDoc(
+                outlines = listOf(
+                    Outline.Text(
+                        id = newId(),
+                        x = 0f,
+                        y = 120f,
+                        blocks = listOf(Block(id = newId(), runs = listOf(
+                            Run("And some link", setOf(Mark.Link("https://example.com"))),
+                        ))),
+                    ),
+                ),
+                style = PageStyle(hideTitle = true, ruleLines = RuleLines.None),
+            ),
+        )
+        val plan = exporter.plan(PdfExportRequest(
+            linkedPage, sectionId, PdfExportOptions(includeRuling = false),
+        ))
+        write(plan)
+        openPdf { pdf ->
+            pdf.openPage(0).use { page ->
+                val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                val bluePixels = (0 until bitmap.width).sumOf { x ->
+                    (0 until bitmap.height).count { y ->
+                        val pixel = bitmap.getPixel(x, y)
+                        Color.blue(pixel) > Color.red(pixel) + 40 &&
+                            Color.blue(pixel) > Color.green(pixel) + 30
+                    }
+                }
+                assertTrue("linked text disappeared from the PDF", bluePixels > 20)
             }
         }
     }

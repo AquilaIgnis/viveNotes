@@ -400,6 +400,9 @@ class PageMeasurer(
         )
         typeface = Typeface.SANS_SERIF
         color = colors.textArgb
+        // URLSpan reads TextPaint.linkColor, which a standalone StaticLayout does not inherit
+        // from NoteEditor's setLinkTextColor. Its default is transparent, hiding linked runs.
+        linkColor = colors.accentArgb
     }
 
     private suspend fun layoutFor(

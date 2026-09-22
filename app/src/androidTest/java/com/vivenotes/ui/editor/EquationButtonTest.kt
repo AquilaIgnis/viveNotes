@@ -21,6 +21,7 @@ import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -89,7 +90,7 @@ class EquationButtonTest {
         val source = compose.onNodeWithTag(EquationTags.SOURCE)
             .fetchSemanticsNode().config[SemanticsProperties.EditableText].text
         assertTrue(source.contains("\\int"))
-        assertTrue(commands.firstOrNull() == FormatCommand.RetainEquationTarget)
+        assertTrue(commands.firstOrNull() == FormatCommand.RetainInlineTarget)
     }
 
     @Test
@@ -116,6 +117,20 @@ class EquationButtonTest {
         compose.waitUntil(timeoutMillis = 10_000) {
             commands.any { it == FormatCommand.InsertEquation("x^2+y^2=z^2") }
         }
+    }
+
+    @Test
+    fun linkButtonUsesSelectedTextAndNormalizesTheAddress() {
+        setRibbon(SelectionState(editorFocused = true, hasSelection = true, linkText = "selected"))
+        compose.onNodeWithTag("insert-link").performScrollTo().performClick()
+        compose.onNodeWithText("Insert link").assertIsDisplayed()
+        val text = compose.onNodeWithTag("link-text")
+            .fetchSemanticsNode().config[SemanticsProperties.EditableText].text
+        assertEquals("selected", text)
+        compose.onNodeWithTag("link-address").performTextReplacement("example.com/page")
+        compose.onNodeWithTag("link-submit").performClick()
+        assertTrue(commands.contains(FormatCommand.RetainInlineTarget))
+        assertTrue(commands.contains(FormatCommand.InsertLink("selected", "https://example.com/page")))
     }
 
     /** Equation sits at the far end of the horizontally scrolling Document ribbon. */

@@ -490,8 +490,8 @@ fun EditorPane(
     var heldAxis by remember(pageId) { mutableStateOf<TableAxis?>(null) }
     var lastFocusedEditor by remember { mutableStateOf<OutlineEditText?>(null) }
     var lastFocusedOutlineId by remember { mutableStateOf<String?>(null) }
-    var retainedEquationEditor by remember { mutableStateOf<OutlineEditText?>(null) }
-    var retainedEquationOutlineId by remember { mutableStateOf<String?>(null) }
+    var retainedInlineEditor by remember { mutableStateOf<OutlineEditText?>(null) }
+    var retainedInlineOutlineId by remember { mutableStateOf<String?>(null) }
     /** Container to grab focus once composed — the one the user just created by tapping. */
     var pendingFocusId by remember { mutableStateOf<String?>(null) }
 
@@ -637,8 +637,8 @@ fun EditorPane(
         commands.collect { command ->
             when (command) {
                 FormatCommand.DeactivateTextInput -> {
-                    val editor = focusedEditor ?: retainedEquationEditor
-                    val outlineId = focusedOutlineId ?: retainedEquationOutlineId
+                    val editor = focusedEditor ?: retainedInlineEditor
+                    val outlineId = focusedOutlineId ?: retainedInlineOutlineId
                     val editorWasFocused = editor?.hasFocus() == true
                     pendingFocusId = null
                     focusedEditor = null
@@ -646,8 +646,8 @@ fun EditorPane(
                     focusedCellId = null
                     lastFocusedEditor = null
                     lastFocusedOutlineId = null
-                    retainedEquationEditor = null
-                    retainedEquationOutlineId = null
+                    retainedInlineEditor = null
+                    retainedInlineOutlineId = null
                     editor?.deactivateTextInput()
                     // A retained equation target has already lost View focus to its popup, so it
                     // will not produce another blur callback when the Draw tool releases it.
@@ -661,20 +661,20 @@ fun EditorPane(
                     selection = null
                     lassoGesture.clear()
                 }
-                FormatCommand.RetainEquationTarget -> {
-                    retainedEquationEditor = focusedEditor ?: lastFocusedEditor
-                    retainedEquationOutlineId = focusedOutlineId ?: lastFocusedOutlineId
+                FormatCommand.RetainInlineTarget -> {
+                    retainedInlineEditor = focusedEditor ?: lastFocusedEditor
+                    retainedInlineOutlineId = focusedOutlineId ?: lastFocusedOutlineId
                 }
-                FormatCommand.ReleaseEquationTarget -> {
-                    val releasedId = retainedEquationOutlineId
-                    retainedEquationEditor = null
-                    retainedEquationOutlineId = null
+                FormatCommand.ReleaseInlineTarget -> {
+                    val releasedId = retainedInlineOutlineId
+                    retainedInlineEditor = null
+                    retainedInlineOutlineId = null
                     if (releasedId != null && focusedOutlineId != releasedId) onOutlineBlurred(releasedId)
                 }
-                is FormatCommand.InsertEquation -> {
-                    (retainedEquationEditor ?: focusedEditor)?.apply(command)
-                    retainedEquationEditor = null
-                    retainedEquationOutlineId = null
+                is FormatCommand.InsertEquation, is FormatCommand.InsertLink -> {
+                    (retainedInlineEditor ?: focusedEditor)?.apply(command)
+                    retainedInlineEditor = null
+                    retainedInlineOutlineId = null
                 }
                 else -> {
                     val editor = focusedEditor
@@ -693,8 +693,8 @@ fun EditorPane(
     LaunchedEffect(pageRevision) {
         lastFocusedEditor = null
         lastFocusedOutlineId = null
-        retainedEquationEditor = null
-        retainedEquationOutlineId = null
+        retainedInlineEditor = null
+        retainedInlineOutlineId = null
     }
 
     val sheet = style.pageSizeDp?.let { (w, h) -> DpSize(w.dp, h.dp) }
@@ -1212,7 +1212,7 @@ fun EditorPane(
                                         focusedOutlineId = null
                                         focusedEditor = null
                                     }
-                                    if (retainedEquationOutlineId != box.id) onOutlineBlurred(box.id)
+                                    if (retainedInlineOutlineId != box.id) onOutlineBlurred(box.id)
                                 },
                                 onBlocksChanged = { blocks ->
                                     nonEmpty[box.id] = blocks.any { it.text.isNotBlank() }

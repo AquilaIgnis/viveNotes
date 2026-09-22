@@ -2,6 +2,7 @@ package com.vivenotes.richtext
 
 import android.graphics.Bitmap
 import android.os.SystemClock
+import android.text.style.ForegroundColorSpan
 import android.view.MotionEvent
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.viewinterop.AndroidView
@@ -65,6 +66,29 @@ class VideoEmbedTest {
         // And comes back once the caret leaves, from the cache rather than a second fetch.
         compose.runOnIdle { editor.setSelection(0) }
         compose.waitUntil(timeoutMillis = 2_000) { editor.cards().isNotEmpty() }
+    }
+
+    @Test
+    fun exposedUrlIsBlueAndOpensOnTap() {
+        val editor = editorShowing(url, FakeThumbnails())
+        compose.waitUntil(timeoutMillis = 5_000) { editor.cards().isNotEmpty() }
+        var opened: String? = null
+        compose.runOnIdle {
+            editor.onOpenLink = { opened = it }
+            editor.requestFocus()
+            editor.setSelection(5)
+        }
+        compose.waitUntil(timeoutMillis = 2_000) { editor.cards().isEmpty() }
+        compose.runOnIdle {
+            val colour = editor.text.getSpans(0, url.length, ForegroundColorSpan::class.java).single()
+            assertEquals(editor.linkColor, colour.foregroundColor)
+            val line = editor.layout.getLineForOffset(5)
+            val x = editor.totalPaddingLeft + editor.layout.getPrimaryHorizontal(5) + 1f
+            val y = editor.totalPaddingTop +
+                (editor.layout.getLineTop(line) + editor.layout.getLineBottom(line)) / 2f
+            editor.tap(x, y)
+            assertEquals(url, opened)
+        }
     }
 
     @Test
