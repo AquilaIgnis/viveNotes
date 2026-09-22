@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.text.Layout
 import android.text.Spannable
+import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.style.AbsoluteSizeSpan
@@ -20,11 +21,16 @@ import com.vivenotes.model.PageDoc
 import com.vivenotes.model.PageStyle
 import com.vivenotes.richtext.EditorStyle
 import com.vivenotes.richtext.EquationSpan
+import com.vivenotes.richtext.EQUATION_FONT_SCALE
+import com.vivenotes.richtext.HiddenEquationSourceSpan
+import com.vivenotes.richtext.LiveEquationSpan
 import com.vivenotes.richtext.SpannableCodec
 import com.vivenotes.richtext.createEquationRenderer
+import com.vivenotes.richtext.findAutoEquationCandidates
 import com.vivenotes.ui.theme.canvasColorsFor
 import com.vivenotes.ui.theme.paintedWith
 import io.ratex.RaTeXRenderer
+import kotlinx.coroutines.CancellationException
 import kotlin.math.roundToInt
 
 /**
@@ -407,6 +413,7 @@ class PageMeasurer(
         // renderer it is holding, and one hydrated afterwards would be measured as its own LaTeX
         // source and drawn as a formula into the gap that left.
         hydrateEquations(text, colors)
+        hydrateAutoEquations(text, colors)
         val widthPx = (widthDp * density).roundToInt().coerceAtLeast(1)
         return StaticLayout.Builder.obtain(text, 0, text.length, basePaint(colors), widthPx)
             .setLineSpacing(0f, LINE_SPACING_MULTIPLIER)
@@ -439,6 +446,67 @@ class PageMeasurer(
                 createEquationRenderer(context, span.latex, sizePx, colors.textArgb)
             }.getOrNull()
             span.show(renderer)
+        }
+    }
+
+    /** Applies the rich editor's delimiter previews to the copy laid out for PDF export. */
+    private suspend fun hydrateAutoEquations(text: Spannable, colors: PdfCanvasColors) {
+        findAutoEquationCandidates(text.toString()).forEach { candidate ->
+            val sp = SpannableCodec.fontSizeIn(
+                text,
+                candidate.start,
+                candidate.end,
+                EditorDefaults.FALLBACK_FONT_SIZE,
+            ) ?: text.getSpans(
+                candidate.start,
+                candidate.end,
+                AbsoluteSizeSpan::class.java,
+            ).lastOrNull()?.size ?: EditorDefaults.FALLBACK_FONT_SIZE
+            val sizePx = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP,
+                sp.toFloat(),
+                metrics,
+            ) * EQUATION_FONT_SCALE
+            // The editor leaves invalid or unfinished LaTeX as source text. Export does too.
+            val renderer = try {
+                createEquationRenderer(context, candidate.latex, sizePx, colors.textArgb)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                null
+            } ?: return@forEach
+            text.setSpan(
+                LiveEquationSpan(
+                    latex = candidate.latex,
+                    renderSizePx = sizePx,
+                    renderColor = colors.textArgb,
+                    sourceStart = candidate.start,
+                    sourceEnd = candidate.end,
+                ).apply { show(renderer) },
+                candidate.renderStart,
+                candidate.renderEnd,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+            // A multiline display equation draws once on its first source line. Keep paragraph
+            // breaks for layout, while suppressing delimiters and the remaining source lines.
+            if (candidate.renderStart != candidate.start || candidate.renderEnd != candidate.end) {
+                var hiddenStart = -1
+                for (offset in candidate.start..candidate.end) {
+                    val hidden = offset < candidate.end &&
+                        offset !in candidate.renderStart until candidate.renderEnd &&
+                        text[offset] != '\n'
+                    if (hidden && hiddenStart < 0) hiddenStart = offset
+                    if (!hidden && hiddenStart >= 0) {
+                        text.setSpan(
+                            HiddenEquationSourceSpan(),
+                            hiddenStart,
+                            offset,
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                        )
+                        hiddenStart = -1
+                    }
+                }
+            }
         }
     }
 

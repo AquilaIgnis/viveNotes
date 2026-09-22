@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import android.text.Spanned
 import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
@@ -19,6 +20,8 @@ import com.vivenotes.data.forCanvasTheme
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.model.Block
+import com.vivenotes.model.Mark
+import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
 import com.vivenotes.model.Orientation
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
@@ -27,6 +30,8 @@ import com.vivenotes.model.PaperSize
 import com.vivenotes.model.PrintMargins
 import com.vivenotes.model.Run
 import com.vivenotes.model.newId
+import com.vivenotes.richtext.LiveEquationSpan
+import com.vivenotes.richtext.HiddenEquationSourceSpan
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -238,6 +243,111 @@ class PdfExportTest {
             (0 until bitmap.height step 3).any { y -> bitmap.getPixel(x, y) != corner }
         }
         assertTrue("the preview drew nothing but its background", marked)
+    }
+
+    @Test
+    fun placedLatexEquationIsVisibleInSavedPdf() = runBlocking {
+        assertEquationExports(
+            Outline.Equation(
+                id = newId(),
+                x = 40f,
+                y = 80f,
+                width = 240f,
+                height = 70f,
+                latex = "{\\displaystyle \\int _{a}^{b}f'(t)\\,dt=f(b)-f(a)}",
+            ),
+        )
+    }
+
+    @Test
+    fun inlineLatexEquationIsVisibleInSavedPdf() = runBlocking {
+        assertEquationExports(
+            Outline.Text(
+                id = newId(),
+                x = 40f,
+                y = 80f,
+                blocks = listOf(
+                    Block(
+                        id = newId(),
+                        runs = listOf(
+                            Run(
+                                OBJECT_REPLACEMENT_CHARACTER.toString(),
+                                setOf(Mark.Equation("{\\displaystyle \\int _{a}^{b}f'(t)\\,dt=f(b)-f(a)}")),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun dollarDelimitedRichTextEquationIsVisibleInSavedPdf() = runBlocking {
+        assertEquationExports(
+            Outline.Text(
+                id = newId(),
+                x = 40f,
+                y = 80f,
+                blocks = listOf(Block(id = newId(), runs = listOf(Run("\$\$ \\int\$\$")))),
+            ),
+            expectedAutoLatex = "{\\displaystyle \\int}",
+        )
+    }
+
+    @Test
+    fun multilineRichTextEquationHidesItsSourceInSavedPdf() = runBlocking {
+        assertEquationExports(
+            Outline.Text(
+                id = newId(),
+                x = 40f,
+                y = 80f,
+                blocks = listOf(Block(id = newId(), runs = listOf(Run("\$\$\n\\int\n\$\$")))),
+            ),
+            expectedAutoLatex = "{\\displaystyle \\int}",
+            expectHiddenSource = true,
+        )
+    }
+
+    private suspend fun assertEquationExports(
+        equation: Outline,
+        expectedAutoLatex: String? = null,
+        expectHiddenSource: Boolean = false,
+    ) {
+        val equationPage = repository.createPage(sectionId, "Equation only")
+        val doc = PageDoc(outlines = listOf(equation), style = PageStyle(hideTitle = true))
+        repository.saveDoc(equationPage, doc)
+        if (expectedAutoLatex != null) {
+            val measured = PageMeasurer(context).measure(
+                pageId = equationPage,
+                title = "Equation only",
+                createdAt = 0L,
+                doc = doc,
+                strokes = emptyList(),
+                paper = PdfPaper.of(PaperSize.A4, Orientation.Portrait),
+            )
+            val layoutText = measured.texts.values.single().layout.text as Spanned
+            val spans = layoutText.getSpans(0, layoutText.length, LiveEquationSpan::class.java)
+            assertEquals(listOf(expectedAutoLatex), spans.map { it.latex })
+            if (expectHiddenSource) {
+                assertTrue(
+                    layoutText.getSpans(0, layoutText.length, HiddenEquationSourceSpan::class.java)
+                        .isNotEmpty(),
+                )
+            }
+        }
+        val plan = exporter.plan(PdfExportRequest(equationPage, sectionId, PdfExportOptions()))
+        assertEquals(1, plan.sheetCount)
+        write(plan)
+        openPdf { pdf ->
+            pdf.openPage(0).use { page ->
+                val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                val hasInk = (0 until bitmap.width).any { x ->
+                    (0 until bitmap.height).any { y -> Color.red(bitmap.getPixel(x, y)) < 128 }
+                }
+                assertTrue("${equation.javaClass.simpleName} disappeared from the saved PDF", hasInk)
+            }
+        }
     }
 
     /**
