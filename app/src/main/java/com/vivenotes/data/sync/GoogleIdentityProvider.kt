@@ -1,6 +1,7 @@
 package com.vivenotes.data.sync
 
 import android.content.Context
+import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -93,16 +94,16 @@ class GoogleIdentityProvider(
         } catch (none: NoCredentialException) {
             // No Google account on the device, or none the user was willing to use. Distinct from
             // a dismissal because it names something to go and do.
-            return GoogleIdToken.Rejected(ConnectFailure.NoGoogleAccount)
+            return refused(none, ConnectFailure.NoGoogleAccount)
         } catch (missing: GetCredentialProviderConfigurationException) {
             // No provider answered: a device without Play services, or the dependency missing.
-            return GoogleIdToken.Rejected(ConnectFailure.GoogleNotConfigured)
+            return refused(missing, ConnectFailure.GoogleNotConfigured)
         } catch (unsupported: GetCredentialUnsupportedException) {
-            return GoogleIdToken.Rejected(ConnectFailure.GoogleNotConfigured)
+            return refused(unsupported, ConnectFailure.GoogleNotConfigured)
         } catch (failed: GetCredentialException) {
             // Interrupted, unknown, or a provider-specific failure. Nothing was sent anywhere, so
             // this is the same instruction as the others: it did not work, try again.
-            return GoogleIdToken.Rejected(ConnectFailure.GoogleNotConfigured)
+            return refused(failed, ConnectFailure.GoogleNotConfigured)
         }
 
         val credential = response.credential
@@ -125,5 +126,17 @@ class GoogleIdentityProvider(
         } catch (malformed: GoogleIdTokenParsingException) {
             GoogleIdToken.Rejected(ConnectFailure.GoogleNotConfigured)
         }
+    }
+
+    /**
+     * The screen can only say "not configured", which is the same sentence for a stale Play
+     * services and for a signing certificate missing from the Cloud project. The exception's type
+     * and message separate them, so they are logged rather than discarded.
+     */
+    private fun refused(cause: GetCredentialException, reason: ConnectFailure): GoogleIdToken =
+        GoogleIdToken.Rejected(reason).also { Log.w(TAG, "${cause.type}: ${cause.message}") }
+
+    private companion object {
+        const val TAG = "GoogleIdentity"
     }
 }
