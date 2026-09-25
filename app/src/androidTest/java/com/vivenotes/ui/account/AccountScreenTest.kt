@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.R
@@ -321,7 +322,12 @@ class AccountScreenTest {
             authProvider = AccountAuthProvider.Google,
         )
 
-        compose.onNodeWithText("https://sync.vivenotes.net").assertIsDisplayed()
+        // Shown, never a link: there is nothing at the sync address for a person to open.
+        compose.onNodeWithText("https://sync.vivenotes.net")
+            .assertIsDisplayed()
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick))
+        compose.onNodeWithText(context.getString(R.string.account_connected_server))
+            .assertIsDisplayed()
         compose.onNodeWithText("owner@example.com").assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.account_provider_google))
             .assertIsDisplayed()
@@ -553,8 +559,12 @@ class AccountScreenTest {
         )
     }
 
+    /**
+     * Somebody who is paying reads that storage is active and when it renews; nothing on the card
+     * asks them to buy anything or to enter a coupon.
+     */
     @Test
-    fun ownedPlayPlanIsManagedInPlayAndCouponDoesNotReplaceIt() {
+    fun renewingPlayPlanIsAStatusWithOnlyAManageLink() {
         connection = ServerConnection.Connected("https://sync.vivenotes.net", "Pixel Tablet")
         managedSubscription = ManagedSubscriptionState(
             visible = true,
@@ -573,14 +583,61 @@ class AccountScreenTest {
         )
         setScreen()
 
+        compose.onNodeWithTag(AccountTags.SUBSCRIPTION_BADGE, useUnmergedTree = true)
+            .assertTextContains(context.getString(R.string.account_subscription_badge_active))
+        compose.onNodeWithText(
+            context.getString(R.string.account_subscription_renews, formattedSubscriptionDate("2026-10-03T12:00:00Z")),
+        ).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(
+            context.getString(R.string.account_subscription_price_short, "\$4.99"),
+        ).assertIsDisplayed()
         compose.onNodeWithTag(AccountTags.SUBSCRIBE).assertDoesNotExist()
+        compose.onNodeWithTag(AccountTags.COUPON_TOGGLE).assertDoesNotExist()
+        compose.onNodeWithTag(AccountTags.COUPON).assertDoesNotExist()
         compose.onNodeWithTag(AccountTags.MANAGE_SUBSCRIPTION)
             .performScrollTo()
+            .assertTextContains(context.getString(R.string.account_subscription_manage_link))
             .performClick()
         assertEquals(1, managedSubscriptions)
-        compose.onNodeWithTag(AccountTags.COUPON)
-            .performScrollTo()
+    }
+
+    /** Auto-renewal off: an end date instead of "renews", and a way back that is not a new purchase. */
+    @Test
+    fun aPlanThatWillNotRenewSaysUntilWhenAndOffersRenewInPlay() {
+        connection = ServerConnection.Connected("https://sync.vivenotes.net", "Pixel Tablet")
+        managedSubscription = ManagedSubscriptionState(
+            visible = true,
+            status = ManagedSubscriptionStatus(
+                active = true,
+                validUntil = "2027-01-21T12:00:00Z",
+                paidState = PaidSubscriptionState.Canceled,
+                paidValidUntil = "2027-01-21T12:00:00Z",
+                promotionalValidUntil = null,
+                autoRenewing = false,
+                productId = "vivenotes_storage_monthly",
+            ),
+            formattedPrice = "\$4.99",
+            productAvailable = true,
+            playPurchaseOwned = true,
+        )
+        setScreen()
+
+        compose.onNodeWithTag(AccountTags.SUBSCRIPTION_STATUS).performScrollTo().assertTextContains(
+            context.getString(
+                R.string.account_subscription_available_until,
+                formattedSubscriptionDate("2027-01-21T12:00:00Z"),
+            ),
+        )
+        compose.onNodeWithText(context.getString(R.string.account_subscription_renewal_off))
             .assertIsDisplayed()
+        compose.onNodeWithTag(AccountTags.SUBSCRIBE).assertDoesNotExist()
+        compose.onNodeWithTag(AccountTags.COUPON_TOGGLE).assertDoesNotExist()
+        compose.onNodeWithTag(AccountTags.MANAGE_SUBSCRIPTION)
+            .performScrollTo()
+            .assertTextContains(context.getString(R.string.account_subscription_renew))
+            .performClick()
+        assertEquals(1, managedSubscriptions)
+        assertEquals(0, subscriptions)
     }
 
     @Test
@@ -589,6 +646,9 @@ class AccountScreenTest {
         managedSubscription = ManagedSubscriptionState(visible = true)
         setScreen()
 
+        // Folded behind its link until asked for.
+        compose.onNodeWithTag(AccountTags.COUPON).assertDoesNotExist()
+        compose.onNodeWithTag(AccountTags.COUPON_TOGGLE).performScrollTo().performClick()
         compose.onNodeWithTag(AccountTags.COUPON).performScrollTo().performTextInput("FREE-MONTH")
         val planWidth = compose.onNodeWithTag(AccountTags.SUBSCRIPTION)
             .fetchSemanticsNode().boundsInRoot.width

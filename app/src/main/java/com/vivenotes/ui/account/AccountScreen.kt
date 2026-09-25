@@ -8,14 +8,13 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,12 +35,17 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,6 +65,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
@@ -149,6 +154,10 @@ internal object AccountTags {
     const val COUPON = "account-coupon"
     const val REDEEM_COUPON = "account-redeem-coupon"
     const val SUBSCRIPTION_STATUS = "account-subscription-status"
+    const val SUBSCRIPTION_BADGE = "account-subscription-badge"
+
+    /** Coupon entry is folded behind this link, and exists only while no Play plan does. */
+    const val COUPON_TOGGLE = "account-coupon-toggle"
     const val SYNC = "account-sync"
     const val SYNC_PROGRESS = "account-sync-progress"
     const val SYNC_STATUS = "account-sync-status"
@@ -1323,7 +1332,11 @@ private fun GoogleSignInButton(
 }
 
 /**
- * What the disclosure shows once this installation holds a device token.
+ * What the screen shows once this installation holds a device token.
+ *
+ * A status dashboard rather than a checkout page: connection, storage and sync read top to bottom,
+ * so somebody can open it, see that notes are syncing, and leave. The two actions that end the
+ * relationship sit apart at the foot, under their own heading.
  *
  * Green, from [com.vivenotes.ui.theme.IconAccents] rather than from the colour scheme, because the
  * scheme has no "good" colour. The accents are already tuned per theme, which matters: a green that
@@ -1363,86 +1376,100 @@ private fun ConnectedPanel(
             .fillMaxWidth()
             .testTag(AccountTags.CONNECTED),
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(accents.green, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = MaterialSymbols.Check,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    // "Account created" is the one thing the single Google button cannot show any
-                    // other way: the server is the only party that knows whether it found the
-                    // account or made it, and it says so once, in the response.
-                    text = stringResource(
-                        if (accountCreated) {
-                            R.string.account_connected_created
-                        } else {
-                            R.string.account_connected_title
-                        },
-                    ),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = accents.green,
-                    modifier = Modifier.testTag(AccountTags.CONNECT_STATUS),
-                )
-                Text(
-                    text = connected.serverUrl,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                connected.email?.let { email ->
-                    val google = connected.authProvider == AccountAuthProvider.Google
-                    val provider = stringResource(
-                        if (google) {
-                            R.string.account_provider_google
-                        } else {
-                            R.string.account_provider_password
-                        },
+        Column(Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(accents.green, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = MaterialSymbols.Check,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.size(24.dp),
                     )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.testTag(AccountTags.CONNECTED_IDENTITY),
-                    ) {
-                        Icon(
-                            imageVector = if (google) {
-                                ImageVector.vectorResource(R.drawable.ic_google_g)
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        // "Account created" is the one thing the single Google button cannot show
+                        // any other way: the server is the only party that knows whether it found
+                        // the account or made it, and it says so once, in the response.
+                        text = stringResource(
+                            if (accountCreated) {
+                                R.string.account_connected_created
                             } else {
-                                MaterialSymbols.Lock
+                                R.string.account_connected_title
                             },
-                            contentDescription = provider,
-                            tint = if (google) Color.Unspecified else accents.green,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .testTag(AccountTags.CONNECTED_PROVIDER),
+                        ),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = accents.green,
+                        modifier = Modifier.testTag(AccountTags.CONNECT_STATUS),
+                    )
+                    connected.email?.let { email ->
+                        val google = connected.authProvider == AccountAuthProvider.Google
+                        val provider = stringResource(
+                            if (google) {
+                                R.string.account_provider_google
+                            } else {
+                                R.string.account_provider_password
+                            },
                         )
-                        Column {
-                            Text(
-                                text = email,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface,
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.testTag(AccountTags.CONNECTED_IDENTITY),
+                        ) {
+                            Icon(
+                                imageVector = if (google) {
+                                    ImageVector.vectorResource(R.drawable.ic_google_g)
+                                } else {
+                                    MaterialSymbols.Lock
+                                },
+                                contentDescription = provider,
+                                tint = if (google) Color.Unspecified else accents.green,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .testTag(AccountTags.CONNECTED_PROVIDER),
                             )
-                            Text(
-                                text = provider,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            Column {
+                                Text(
+                                    text = email,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    text = provider,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
             }
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 16.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+            Text(
+                text = stringResource(R.string.account_connected_server),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            // Plain text, not a link: this is the address the device syncs with, and opening it in a
+            // browser shows nothing a person can use.
+            Text(
+                text = connected.serverUrl,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 
@@ -1482,25 +1509,62 @@ private fun ConnectedPanel(
 
     SyncStatusLine(syncStatus)
 
-    FilledTonalButton(
-        onClick = onDisconnect,
-        enabled = !syncing && !disconnecting,
-        colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        ),
+    HorizontalDivider(Modifier.padding(top = 8.dp))
+    Text(
+        text = stringResource(R.string.account_settings),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier
-            .fillMaxWidth()
-            .testTag(AccountTags.DISCONNECT),
-    ) {
-        if (disconnecting) {
-            LoadingIndicator(
-                Modifier
-                    .size(18.dp)
-                    .semantics { contentDescription = disconnectingDescription },
-            )
-        } else {
-            Text(stringResource(R.string.account_disconnect))
+            .padding(top = 4.dp)
+            .semantics { heading() },
+    )
+
+    // Delete exists only for the managed account; a self-hosted server's accounts belong to whoever
+    // runs it.
+    val settingsCount = if (managedSubscription.visible) 2 else 1
+    Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+        SegmentedListItem(
+            onClick = onDisconnect,
+            shapes = ListItemDefaults.segmentedShapes(index = 0, count = settingsCount),
+            enabled = !syncing && !disconnecting,
+            leadingContent = {
+                Icon(imageVector = MaterialSymbols.Logout, contentDescription = null)
+            },
+            trailingContent = {
+                if (disconnecting) {
+                    LoadingIndicator(
+                        Modifier
+                            .size(24.dp)
+                            .semantics { contentDescription = disconnectingDescription },
+                    )
+                } else {
+                    Icon(imageVector = MaterialSymbols.ChevronRight, contentDescription = null)
+                }
+            },
+            modifier = Modifier.testTag(AccountTags.DISCONNECT),
+        ) {
+            Text(stringResource(R.string.account_disconnect_account))
+        }
+
+        if (managedSubscription.visible) {
+            SegmentedListItem(
+                onClick = onDeleteAccount,
+                shapes = ListItemDefaults.segmentedShapes(index = 1, count = settingsCount),
+                enabled = !disconnecting,
+                colors = ListItemDefaults.segmentedColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                    leadingContentColor = MaterialTheme.colorScheme.error,
+                ),
+                leadingContent = {
+                    Icon(imageVector = MaterialSymbols.Delete, contentDescription = null)
+                },
+                trailingContent = {
+                    Icon(imageVector = MaterialSymbols.ChevronRight, contentDescription = null)
+                },
+                modifier = Modifier.testTag(AccountTags.DELETE_ACCOUNT),
+            ) {
+                Text(stringResource(R.string.account_delete_action))
+            }
         }
     }
 
@@ -1534,24 +1598,81 @@ private fun ConnectedPanel(
             Text(stringResource(R.string.account_disconnect_anyway))
         }
     }
+}
 
-    if (managedSubscription.visible) {
-        TextButton(
-            onClick = onDeleteAccount,
-            modifier = Modifier
-                .widthIn(min = 120.dp)
-                .testTag(AccountTags.DELETE_ACCOUNT),
-        ) {
-            Text(
-                text = stringResource(R.string.account_delete_action),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+/**
+ * How the managed storage card reads. Each value is one layout, so a plan somebody is paying for is
+ * never shown beside a checkout.
+ */
+internal enum class StoragePlan {
+    /** The first read is in flight and nothing is known yet. */
+    Checking,
+
+    /** The first read failed; the card shows only the failure. */
+    Unknown,
+
+    /** Paid, and the server says Play will renew it. */
+    Renewing,
+
+    /** Paid, auto-renewal off; access continues until the period ends. */
+    EndingWithoutRenewal,
+
+    /** Play's grace period: storage stays on while Play retries the payment. */
+    PaymentRetrying,
+    OnHold,
+    Paused,
+    PaymentPending,
+
+    /** Active through a coupon alone, with no Play subscription behind it. */
+    Coupon,
+    NotSubscribed,
+}
+
+/**
+ * "Renews" only when the server confirms auto-renewal; an expiry date on its own says nothing
+ * about whether Google will charge again.
+ */
+internal fun storagePlan(state: ManagedSubscriptionState): StoragePlan {
+    val status = state.status ?: return when {
+        state.loading -> StoragePlan.Checking
+        // A failed read is not a "no": offering a purchase here would be offering it to somebody
+        // who may already be paying.
+        state.failure != null -> StoragePlan.Unknown
+        else -> StoragePlan.NotSubscribed
+    }
+    return when (status.paidState) {
+        PaidSubscriptionState.Active -> if (status.autoRenewing) {
+            StoragePlan.Renewing
+        } else {
+            StoragePlan.EndingWithoutRenewal
+        }
+        PaidSubscriptionState.Canceled -> if (status.active) {
+            StoragePlan.EndingWithoutRenewal
+        } else {
+            StoragePlan.NotSubscribed
+        }
+        PaidSubscriptionState.Grace -> StoragePlan.PaymentRetrying
+        PaidSubscriptionState.OnHold -> StoragePlan.OnHold
+        PaidSubscriptionState.Paused -> StoragePlan.Paused
+        PaidSubscriptionState.Pending -> StoragePlan.PaymentPending
+        PaidSubscriptionState.Expired,
+        PaidSubscriptionState.PendingCanceled,
+        PaidSubscriptionState.Unknown,
+        null,
+        -> when {
+            status.active -> StoragePlan.Coupon
+            state.purchasePending -> StoragePlan.PaymentPending
+            else -> StoragePlan.NotSubscribed
         }
     }
 }
 
-/** Managed-service plan and promotion controls; never composed for a self-hosted registration. */
+/**
+ * Managed-service plan card; never composed for a self-hosted registration.
+ *
+ * Buying and coupon entry appear only while no Play subscription stands behind the storage. Every
+ * other state offers at most one action, and it opens Google Play rather than a purchase.
+ */
 @Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private fun ManagedSubscriptionPanel(
@@ -1562,25 +1683,77 @@ private fun ManagedSubscriptionPanel(
     onRedeemCoupon: (String) -> Unit,
 ) {
     var coupon by rememberSaveable { mutableStateOf("") }
+    var couponOpen by rememberSaveable { mutableStateOf(false) }
     val checkingDescription = stringResource(R.string.account_subscription_checking)
     val buyingDescription = stringResource(R.string.account_subscription_buying)
-    val panelShape = MaterialTheme.shapes.large
+    val spatialMotion = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
+    val effectsMotion = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    val status = state.status
+    val plan = storagePlan(state)
 
-    Surface(
-        shape = panelShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    @Composable
+    fun PurchaseAction(filled: Boolean) {
+        // Play already holds a purchase the server has not accepted; buying again would only
+        // return "already owned", and the failure line below says why it was not accepted.
+        if (state.playPurchaseOwned) {
+            GooglePlayActionButton(
+                label = stringResource(R.string.account_subscription_manage),
+                onClick = onManageSubscription,
+                enabled = !state.purchasing,
+                filled = filled,
+                modifier = Modifier.testTag(AccountTags.MANAGE_SUBSCRIPTION),
+            )
+        } else {
+            GooglePlayActionButton(
+                label = stringResource(R.string.account_subscription_subscribe),
+                onClick = onSubscribe,
+                enabled = state.productAvailable && !state.purchasePending &&
+                    !state.purchasing && !state.loading,
+                filled = filled,
+                loading = state.purchasing,
+                loadingDescription = buyingDescription,
+                requiredForSync = membershipRequired,
+                modifier = Modifier.testTag(AccountTags.SUBSCRIBE),
+            )
+        }
+    }
+
+    @Composable
+    fun CouponEntry() {
+        TextButton(
+            onClick = { couponOpen = !couponOpen },
+            modifier = Modifier.testTag(AccountTags.COUPON_TOGGLE),
+        ) {
+            Text(stringResource(R.string.account_subscription_coupon_prompt))
+        }
+        AnimatedVisibility(
+            visible = couponOpen,
+            enter = expandVertically(animationSpec = spatialMotion) +
+                fadeIn(animationSpec = effectsMotion),
+            exit = shrinkVertically(animationSpec = spatialMotion) +
+                fadeOut(animationSpec = effectsMotion),
+        ) {
+            CouponRedemptionControls(
+                coupon = coupon,
+                onCouponChange = { coupon = it },
+                redeeming = state.redeemingCoupon,
+                onRedeem = { onRedeemCoupon(coupon) },
+            )
+        }
+    }
+
+    OutlinedCard(
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
         modifier = Modifier
             .fillMaxWidth()
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f),
-                shape = panelShape,
-            )
             .testTag(AccountTags.SUBSCRIPTION),
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -1591,116 +1764,136 @@ private fun ManagedSubscriptionPanel(
                 if (state.loading) {
                     LoadingIndicator(
                         Modifier
-                            .size(20.dp)
+                            .size(24.dp)
                             .semantics { contentDescription = checkingDescription },
                     )
+                } else {
+                    StoragePlanBadge(plan = plan, active = status?.active == true)
                 }
             }
 
-            val status = state.status
-            Text(
-                text = if (status?.active == true && status.validUntil != null) {
-                    stringResource(
-                        R.string.account_subscription_active,
-                        formattedSubscriptionDate(status.validUntil),
-                    )
-                } else {
-                    stringResource(R.string.account_subscription_inactive)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (status?.active == true) {
-                    LocalIconAccents.current.green
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.testTag(AccountTags.SUBSCRIPTION_STATUS),
-            )
+            when (plan) {
+                StoragePlan.Checking -> PlanDetail(checkingDescription)
 
-            status?.paidState?.let { paidState ->
-                val paidText = when (paidState) {
-                    PaidSubscriptionState.Active -> if (status.autoRenewing) {
-                        stringResource(R.string.account_subscription_paid_renews)
-                    } else {
-                        status.paidValidUntil?.let {
+                StoragePlan.Unknown -> Unit
+
+                StoragePlan.Renewing -> {
+                    PlanHeadline(stringResource(R.string.account_subscription_active_headline))
+                    (status?.paidValidUntil ?: status?.validUntil)?.let {
+                        PlanDetail(
                             stringResource(
-                                R.string.account_subscription_paid_canceled,
+                                R.string.account_subscription_renews,
                                 formattedSubscriptionDate(it),
+                            ),
+                        )
+                    }
+                    // A coupon never defers Play's renewal, so both dates are true at once.
+                    status?.promotionalValidUntil?.let {
+                        PlanDetail(
+                            stringResource(
+                                R.string.account_subscription_promotion,
+                                formattedSubscriptionDate(it),
+                            ),
+                        )
+                    }
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = state.formattedPrice?.let {
+                                stringResource(R.string.account_subscription_price_short, it)
+                            }.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(
+                            onClick = onManageSubscription,
+                            modifier = Modifier.testTag(AccountTags.MANAGE_SUBSCRIPTION),
+                        ) {
+                            Text(stringResource(R.string.account_subscription_manage_link))
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                imageVector = MaterialSymbols.ArrowOutward,
+                                // The label already names the action; the arrow only says it
+                                // leaves the app.
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
                             )
                         }
                     }
-                    PaidSubscriptionState.Grace ->
-                        stringResource(R.string.account_subscription_paid_grace)
-                    PaidSubscriptionState.OnHold ->
-                        stringResource(R.string.account_subscription_paid_on_hold)
-                    PaidSubscriptionState.Paused ->
-                        stringResource(R.string.account_subscription_paid_paused)
-                    PaidSubscriptionState.Canceled -> status.paidValidUntil?.let {
-                        stringResource(
-                            R.string.account_subscription_paid_canceled,
-                            formattedSubscriptionDate(it),
-                        )
-                    }
-                    PaidSubscriptionState.Expired,
-                    PaidSubscriptionState.PendingCanceled,
-                    -> stringResource(R.string.account_subscription_paid_expired)
-                    PaidSubscriptionState.Pending,
-                    PaidSubscriptionState.Unknown,
-                    -> null
                 }
-                if (paidText != null) {
-                    Text(
-                        text = paidText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+                StoragePlan.EndingWithoutRenewal -> {
+                    PlanHeadline(availableUntilText(status?.validUntil))
+                    PlanDetail(stringResource(R.string.account_subscription_renewal_off))
+                    // Play has no in-app "resubscribe" for a subscription that is still owned; its
+                    // subscription centre is where auto-renewal is turned back on.
+                    PlayManagementButton(
+                        label = R.string.account_subscription_renew,
+                        onClick = onManageSubscription,
                     )
                 }
+
+                StoragePlan.PaymentRetrying -> {
+                    PlanHeadline(stringResource(R.string.account_subscription_active_headline))
+                    PlanDetail(stringResource(R.string.account_subscription_paid_grace))
+                    PlayManagementButton(
+                        label = R.string.account_subscription_fix_payment,
+                        onClick = onManageSubscription,
+                    )
+                }
+
+                StoragePlan.OnHold -> {
+                    PlanHeadline(stringResource(R.string.account_subscription_paid_on_hold))
+                    PlayManagementButton(
+                        label = R.string.account_subscription_fix_payment,
+                        onClick = onManageSubscription,
+                        filled = status?.active != true,
+                    )
+                }
+
+                StoragePlan.Paused -> {
+                    PlanHeadline(stringResource(R.string.account_subscription_paid_paused))
+                    PlayManagementButton(
+                        label = R.string.account_subscription_manage,
+                        onClick = onManageSubscription,
+                    )
+                }
+
+                StoragePlan.PaymentPending ->
+                    PlanHeadline(stringResource(R.string.account_subscription_pending))
+
+                StoragePlan.Coupon -> {
+                    PlanHeadline(availableUntilText(status?.validUntil))
+                    PlanDetail(stringResource(R.string.account_subscription_coupon_no_renewal))
+                    PurchaseAction(filled = false)
+                    CouponEntry()
+                }
+
+                StoragePlan.NotSubscribed -> {
+                    PlanHeadline(stringResource(R.string.account_subscription_pitch))
+                    state.formattedPrice?.let {
+                        PlanDetail(stringResource(R.string.account_subscription_price, it))
+                    }
+                    if (status?.paidState == PaidSubscriptionState.Expired) {
+                        PlanDetail(stringResource(R.string.account_subscription_paid_expired))
+                    }
+                    if (state.purchasePending) {
+                        Text(
+                            text = stringResource(R.string.account_subscription_pending),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    PurchaseAction(filled = true)
+                    CouponEntry()
+                }
             }
 
-            status?.promotionalValidUntil?.let { promotionalUntil ->
-                Text(
-                    text = stringResource(
-                        R.string.account_subscription_promotion,
-                        formattedSubscriptionDate(promotionalUntil),
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Text(
-                text = state.formattedPrice?.let {
-                    stringResource(R.string.account_subscription_price, it)
-                } ?: stringResource(R.string.account_subscription_monthly),
-                style = MaterialTheme.typography.titleSmall,
-            )
-
-            if (state.playPurchaseOwned) {
-                GooglePlayActionButton(
-                    label = stringResource(R.string.account_subscription_manage),
-                    onClick = onManageSubscription,
-                    enabled = !state.purchasing,
-                    modifier = Modifier.testTag(AccountTags.MANAGE_SUBSCRIPTION),
-                )
-            } else {
-                GooglePlayActionButton(
-                    label = stringResource(R.string.account_subscription_subscribe),
-                    onClick = onSubscribe,
-                    enabled = state.productAvailable && !state.purchasePending &&
-                        !state.purchasing && !state.loading,
-                    loading = state.purchasing,
-                    loadingDescription = buyingDescription,
-                    emphasized = membershipRequired,
-                    modifier = Modifier.testTag(AccountTags.SUBSCRIBE),
-                )
-            }
-
-            if (state.purchasePending) {
-                Text(
-                    text = stringResource(R.string.account_subscription_pending),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
-            }
             if (state.purchaseConfirmed) {
                 Text(
                     text = stringResource(R.string.account_subscription_confirmed),
@@ -1708,15 +1901,6 @@ private fun ManagedSubscriptionPanel(
                     color = LocalIconAccents.current.green,
                 )
             }
-
-            Spacer(Modifier.height(2.dp))
-            CouponRedemptionControls(
-                coupon = coupon,
-                onCouponChange = { coupon = it },
-                redeeming = state.redeemingCoupon,
-                onRedeem = { onRedeemCoupon(coupon) },
-            )
-
             state.couponGrant?.let { grant ->
                 Text(
                     text = stringResource(
@@ -1738,10 +1922,109 @@ private fun ManagedSubscriptionPanel(
     }
 }
 
+@Composable
+private fun PlanHeadline(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.testTag(AccountTags.SUBSCRIPTION_STATUS),
+    )
+}
+
+@Composable
+private fun PlanDetail(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun availableUntilText(validUntil: String?): String = if (validUntil != null) {
+    stringResource(
+        R.string.account_subscription_available_until,
+        formattedSubscriptionDate(validUntil),
+    )
+} else {
+    stringResource(R.string.account_subscription_active_headline)
+}
+
 /**
- * A compact payment pill inspired by the supplied Google Pay reference, but labelled for the
- * service this action actually opens: Google Play Billing. The full-colour Google mark is kept
- * untinted on a neutral surface, with Azure reserved for the outline that ties it back to the app.
+ * The plan's state in one word, in the colour the connected card uses for the same meaning: the
+ * same green for "working", the error container for a plan that has stopped for want of payment.
+ */
+@Composable
+private fun StoragePlanBadge(plan: StoragePlan, active: Boolean) {
+    val accents = LocalIconAccents.current
+    val colors = MaterialTheme.colorScheme
+    val (label, container, content) = when {
+        plan == StoragePlan.Checking || plan == StoragePlan.Unknown -> return
+        // On hold or paused while a coupon still covers the storage: the storage is what the badge
+        // is about, and the line under it explains the Play side.
+        active -> Triple(
+            R.string.account_subscription_badge_active,
+            accents.green.copy(alpha = CONNECTED_PLATE_ALPHA),
+            accents.green,
+        )
+        plan == StoragePlan.OnHold -> Triple(
+            R.string.account_subscription_badge_on_hold,
+            colors.errorContainer,
+            colors.onErrorContainer,
+        )
+        plan == StoragePlan.PaymentPending -> Triple(
+            R.string.account_subscription_badge_pending,
+            colors.tertiaryContainer,
+            colors.onTertiaryContainer,
+        )
+        plan == StoragePlan.Paused -> Triple(
+            R.string.account_subscription_badge_paused,
+            colors.surfaceContainerHighest,
+            colors.onSurfaceVariant,
+        )
+        else -> Triple(
+            R.string.account_subscription_badge_none,
+            colors.surfaceContainerHighest,
+            colors.onSurfaceVariant,
+        )
+    }
+    Surface(
+        shape = CircleShape,
+        color = container,
+        contentColor = content,
+        modifier = Modifier.testTag(AccountTags.SUBSCRIPTION_BADGE),
+    ) {
+        Text(
+            text = stringResource(label),
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
+    }
+}
+
+/** Renew, fix payment, or resume: each only opens Google Play's page for this subscription. */
+@Composable
+private fun PlayManagementButton(
+    @StringRes label: Int,
+    onClick: () -> Unit,
+    filled: Boolean = false,
+) {
+    val modifier = Modifier
+        .fillMaxWidth()
+        .testTag(AccountTags.MANAGE_SUBSCRIPTION)
+    if (filled) {
+        Button(onClick = onClick, modifier = modifier) { Text(stringResource(label)) }
+    } else {
+        OutlinedButton(onClick = onClick, modifier = modifier) { Text(stringResource(label)) }
+    }
+}
+
+/**
+ * The button that opens Google Play Billing, labelled for that service rather than for Google Pay.
+ *
+ * The full-colour Google mark stays untinted on its own white disc, so it keeps all four colours on
+ * the filled primary container as well as on the outlined surface.
  */
 @Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -1749,55 +2032,24 @@ private fun GooglePlayActionButton(
     label: String,
     onClick: () -> Unit,
     enabled: Boolean,
+    filled: Boolean,
     modifier: Modifier = Modifier,
     loading: Boolean = false,
     loadingDescription: String = label,
-    emphasized: Boolean = false,
+    /** Sync has been refused for want of a plan; said to accessibility, since the colour cannot. */
+    requiredForSync: Boolean = false,
 ) {
     val requiredDescription = stringResource(R.string.account_subscription_required_state)
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (emphasized) {
-                MaterialTheme.colorScheme.primary
+    val buttonModifier = modifier
+        .fillMaxWidth()
+        .then(
+            if (requiredForSync) {
+                Modifier.semantics { stateDescription = requiredDescription }
             } else {
-                MaterialTheme.colorScheme.surface
+                Modifier
             },
-            contentColor = if (emphasized) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-            disabledContainerColor = if (emphasized) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surface
-            },
-            disabledContentColor = if (emphasized) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-            },
-        ),
-        border = BorderStroke(
-            width = if (emphasized) 2.dp else 1.dp,
-            color = if (enabled) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.outlineVariant
-            },
-        ),
-        modifier = modifier
-            .widthIn(min = 220.dp, max = 280.dp)
-            .then(
-                if (emphasized) {
-                    Modifier.semantics { stateDescription = requiredDescription }
-                } else {
-                    Modifier
-                },
-            ),
-    ) {
+        )
+    val content: @Composable RowScope.() -> Unit = {
         if (loading) {
             LoadingIndicator(
                 Modifier
@@ -1805,17 +2057,34 @@ private fun GooglePlayActionButton(
                     .semantics { contentDescription = loadingDescription },
             )
         } else {
-            Icon(
-                imageVector = ImageVector.vectorResource(R.drawable.ic_google_g),
-                contentDescription = null,
-                tint = Color.Unspecified,
+            Box(
                 modifier = Modifier
-                    .size(20.dp)
-                    .testTag(AccountTags.GOOGLE_PLAY_MARK),
-            )
+                    .size(24.dp)
+                    .background(Color.White, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = ImageVector.vectorResource(R.drawable.ic_google_g),
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .testTag(AccountTags.GOOGLE_PLAY_MARK),
+                )
+            }
             Spacer(Modifier.width(10.dp))
             Text(label)
         }
+    }
+    if (filled) {
+        Button(onClick = onClick, enabled = enabled, modifier = buttonModifier, content = content)
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = buttonModifier,
+            content = content,
+        )
     }
 }
 
@@ -1883,7 +2152,7 @@ private fun CouponRedemptionControls(
     }
 }
 
-private fun formattedSubscriptionDate(value: String): String = runCatching {
+internal fun formattedSubscriptionDate(value: String): String = runCatching {
     DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date.from(Instant.parse(value)))
 }.getOrDefault(value)
 
@@ -1940,6 +2209,13 @@ private fun SyncStatusLine(status: SyncStatus) {
                 modifier = Modifier
                     .size(16.dp)
                     .testTag(AccountTags.SYNC_OFFLINE),
+            )
+        } else if (!isError && status.lastSucceededAtMillis != null) {
+            Icon(
+                imageVector = MaterialSymbols.CheckCircle,
+                contentDescription = null,
+                tint = LocalIconAccents.current.green,
+                modifier = Modifier.size(16.dp),
             )
         }
         Text(
