@@ -6,7 +6,7 @@ By using the software, you agree to all of the terms and conditions below.
 
 ## Copyright License
 
-AquilaIgnis (the “Licensor”) grants you a non-exclusive, royalty-free, worldwide, non-sublicensable, non-transferable license to use, copy, distribute, make available, and prepare derivative works of the software, in each case subject to the limitations below.
+CROWNBYTE LLC (the “Licensor”) grants you a non-exclusive, royalty-free, worldwide, non-sublicensable, non-transferable license to use, copy, distribute, make available, and prepare derivative works of the software, in each case subject to the limitations below.
 
 ## Limitations
 
@@ -44,7 +44,7 @@ As far as the law allows, the software comes as is, without any warranty or cond
 
 ## Definitions
 
-- The “Licensor” is the individual publishing the software under the GitHub username “AquilaIgnis”.
+- The “Licensor” is the entity offering these terms, CROWNBYTE LLC.
 - The “software” is the software the licensor makes available under these terms, including any portion of it.
 - “You” refers to the individual or entity agreeing to these terms.
 - “Your company” is any legal entity, sole proprietorship, or other kind of organization that you work for, plus all organizations that have control over, are under the control of, or are under common control with that organization. Control means ownership of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise. Control can be direct or indirect.
