@@ -143,6 +143,7 @@ class EquationButtonTest {
 
     private fun noopViewActions() = ViewActions(
         setRuleLines = {},
+        setDefaultRuleLines = {},
         setPageColor = {},
         setHideTitle = {},
         setZoom = {},

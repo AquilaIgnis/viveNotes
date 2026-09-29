@@ -242,7 +242,7 @@ fun Ribbon(
                 onInsertPicture = onInsertPicture,
                 pageOpen = pageOpen,
             )
-            RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen)
+            RibbonTab.View -> ViewTab(pageStyle, viewSettings, view, pageOpen, defaults.ruleLines)
             RibbonTab.Draw -> DrawTab(
                 pens = pens,
                 palette = palette,
@@ -911,28 +911,41 @@ private fun FontSizePicker(
  *
  * Holding deliberately leaves the menu open. The tag moving onto the entry under the finger is the
  * confirmation, and closing the menu would hide the one thing that says it worked.
+ *
+ * [leadingIcon] sits where a [DropdownMenuItem]'s would, 12dp before the label.
  */
 @Composable
-private fun MenuRow(
+internal fun MenuRow(
     label: String,
     isDefault: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    leadingIcon: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .sizeIn(minWidth = 112.dp, minHeight = 48.dp)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onLongClickLabel = "Make default",
+            )
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (leadingIcon != null) {
+                leadingIcon()
+                Spacer(Modifier.width(12.dp))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
         if (isDefault) {
             Spacer(Modifier.width(16.dp))
             DefaultTag()
@@ -997,21 +1010,30 @@ private fun DefaultableCombo(
             },
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            // Heads the menu rather than closing it: the size list is long enough to scroll, and a
-            // footer teaching a gesture nobody knows about would sit below the fold unread.
-            Text(
-                text = hint,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            )
+            DefaultHint(hint)
             HorizontalDivider()
             items { open = false }
         }
     }
 }
 
-/** Marks the entry that new text starts in, so the setting is visible rather than remembered. */
+/**
+ * Teaches the hold in a menu of [MenuRow]s.
+ *
+ * Heads the menu rather than closing it: the size list is long enough to scroll, and a footer
+ * teaching a gesture nobody knows about would sit below the fold unread.
+ */
+@Composable
+internal fun DefaultHint(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+    )
+}
+
+/** Marks the entry new writing starts with, so the setting is visible rather than remembered. */
 @Composable
 private fun DefaultTag() {
     Text(

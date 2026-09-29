@@ -28,6 +28,7 @@ import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.data.db.deferredNotebookContentKey
 import com.vivenotes.model.DocumentCodecs
 import com.vivenotes.model.PageDoc
+import com.vivenotes.model.PageStyle
 import com.vivenotes.model.isBlank
 import com.vivenotes.model.migrated
 import com.vivenotes.model.TextDocumentCodec
@@ -467,7 +468,12 @@ class NotesRepository(
 
     // --- pages -----------------------------------------------------------------------------
 
-    suspend fun createPage(sectionId: String, title: String = ""): String {
+    /** [style] is how the page starts out — the ruling the user has made their default. */
+    suspend fun createPage(
+        sectionId: String,
+        title: String = "",
+        style: PageStyle = PageStyle(),
+    ): String {
         clearReplaceableStarter()
         val now = clock()
         val index = pages.nextSortIndex(sectionId)
@@ -483,7 +489,7 @@ class NotesRepository(
             ),
         )
         contents.upsert(
-            PageContentEntity(id, codec.encodeToString(PageDoc.empty()), now, codec.id),
+            PageContentEntity(id, codec.encodeToString(PageDoc.empty(style)), now, codec.id),
         )
         return id
     }

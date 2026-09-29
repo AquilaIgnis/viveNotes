@@ -61,6 +61,7 @@ class TextBoxToolkitTest {
                     viewSettings = ViewSettings(),
                     view = ViewActions(
                         setRuleLines = {},
+                        setDefaultRuleLines = {},
                         setPageColor = {},
                         setHideTitle = {},
                         setZoom = {},

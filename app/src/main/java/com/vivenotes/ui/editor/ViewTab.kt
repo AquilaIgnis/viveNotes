@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.model.PageStyle
@@ -49,12 +50,14 @@ import kotlin.math.roundToInt
  * What the View tab can do, gathered into one object.
  *
  * The ribbon deliberately holds no reference to the ViewModel — it is handed values and callbacks,
- * so it can be composed in a test with neither a database nor a preferences store. Eleven separate
+ * so it can be composed in a test with neither a database nor a preferences store. Twelve separate
  * lambda parameters would make that principle unreadable, so they travel together.
  */
 @Immutable
 data class ViewActions(
     val setRuleLines: (RuleLines) -> Unit,
+    /** The ruling new pages start on. Holding an entry in the Paper menu, never picking one. */
+    val setDefaultRuleLines: (RuleLines) -> Unit,
     val setPageColor: (Int?) -> Unit,
     val setHideTitle: (Boolean) -> Unit,
     val setZoom: (Float) -> Unit,
@@ -103,6 +106,8 @@ internal fun ViewTab(
     settings: ViewSettings,
     actions: ViewActions,
     pageOpen: Boolean,
+    /** Tagged in the Paper menu, so what a new page will look like is visible there. */
+    defaultRuleLines: RuleLines = EditorDefaults.FALLBACK_RULE_LINES,
 ) {
     val canvas = LocalCanvasColors.current
 
@@ -136,7 +141,13 @@ internal fun ViewTab(
 
         Divider()
 
-        RuleLinesMenu(style.ruleLines, pageOpen, actions.setRuleLines)
+        RuleLinesMenu(
+            current = style.ruleLines,
+            default = defaultRuleLines,
+            pageOpen = pageOpen,
+            onPick = actions.setRuleLines,
+            onSetDefault = actions.setDefaultRuleLines,
+        )
         PageColorMenu(style.backgroundArgb, pageOpen, actions.setPageColor)
         RibbonCommand(
             label = "Paper Size",
@@ -242,8 +253,20 @@ private fun TabsLayoutMenu(current: TabsLayout, onPick: (TabsLayout) -> Unit) {
     }
 }
 
+/**
+ * The ruling picker: a tap rules the open page, a hold makes that ruling the one new pages start on.
+ *
+ * Two marks because they answer different questions — the tick is this page, the tag is the next
+ * one — and a page ruled differently from the default is exactly when both are worth seeing.
+ */
 @Composable
-private fun RuleLinesMenu(current: RuleLines, pageOpen: Boolean, onPick: (RuleLines) -> Unit) {
+private fun RuleLinesMenu(
+    current: RuleLines,
+    default: RuleLines,
+    pageOpen: Boolean,
+    onPick: (RuleLines) -> Unit,
+    onSetDefault: (RuleLines) -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     Box {
         RibbonCommand(
@@ -255,12 +278,20 @@ private fun RuleLinesMenu(current: RuleLines, pageOpen: Boolean, onPick: (RuleLi
             icon = { active -> TwoToneIcon({ it.ruleLines }, active) },
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DefaultHint("Hold a paper to start new pages on it")
+            HorizontalDivider()
             RULE_LINE_LABELS.forEach { (rule, label) ->
                 if (rule == RuleLines.Dotted) HorizontalDivider()
-                CheckableItem(label, rule == current) {
-                    open = false
-                    onPick(rule)
-                }
+                MenuRow(
+                    label = label,
+                    isDefault = rule == default,
+                    onClick = {
+                        open = false
+                        onPick(rule)
+                    },
+                    onLongClick = { onSetDefault(rule) },
+                    leadingIcon = { CheckSlot(rule == current) },
+                )
             }
         }
     }
@@ -334,18 +365,21 @@ private fun PageColorMenu(current: Int?, pageOpen: Boolean, onPick: (Int?) -> Un
 private fun CheckableItem(label: String, selected: Boolean, onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text(label) },
-        leadingIcon = {
-            if (selected) {
-                Icon(
-                    imageVector = MaterialSymbols.Check,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-            } else {
-                Spacer(Modifier.width(18.dp))
-            }
-        },
+        leadingIcon = { CheckSlot(selected) },
         onClick = onClick,
     )
+}
+
+@Composable
+private fun CheckSlot(selected: Boolean) {
+    if (selected) {
+        Icon(
+            imageVector = MaterialSymbols.Check,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+    } else {
+        Spacer(Modifier.width(18.dp))
+    }
 }

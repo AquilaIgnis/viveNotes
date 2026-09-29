@@ -25,6 +25,12 @@ class PageDocBlankTest {
         assertTrue(PageDoc.empty().isBlank())
     }
 
+    /** New pages start on the user's default paper; that alone must not keep one from flushing. */
+    @Test
+    fun aNewPageOnTheDefaultPaperIsStillBlank() {
+        assertTrue(PageDoc.empty(PageStyle(ruleLines = RuleLines.Dotted)).isBlank())
+    }
+
     @Test
     fun aPageWithNoOutlinesAtAllIsBlank() {
         assertTrue(PageDoc().isBlank())

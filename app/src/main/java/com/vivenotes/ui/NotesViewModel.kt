@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -509,7 +510,10 @@ class NotesViewModel(
     private val _selection = MutableStateFlow(SelectionState())
     val selection: StateFlow<SelectionState> = _selection.asStateFlow()
 
-    /** Font and size for text with no mark of its own — the ribbon's readout and the editor's base. */
+    /**
+     * Font and size for text with no mark of its own — the ribbon's readout and the editor's base —
+     * and the paper the ribbon tags as the one new pages start on.
+     */
     val editorDefaults: StateFlow<EditorDefaults> = editorDefaultsStore.defaults
         .stateIn(viewModelScope, SharingStarted.Eagerly, EditorDefaults())
 
@@ -1840,6 +1844,16 @@ class NotesViewModel(
     // --- view ----------------------------------------------------------------------------------
 
     fun setRuleLines(rule: RuleLines) = updatePageStyle { it.copy(ruleLines = rule) }
+
+    /**
+     * Makes a ruling the one new pages start on — the Paper menu's press-and-hold.
+     *
+     * The open page is left as it is, and so is every other page: the default is copied into a page
+     * only when [addPage] creates it.
+     */
+    fun setDefaultRuleLines(rule: RuleLines) {
+        viewModelScope.launch { editorDefaultsStore.setRuleLines(rule) }
+    }
 
     /** Null restores the theme's canvas colour rather than painting a light page dark. */
     fun setPageColor(argb: Int?) = updatePageStyle { it.copy(backgroundArgb = argb) }
@@ -3654,7 +3668,10 @@ class NotesViewModel(
         val sectionId = selectedSection.value ?: return
         viewModelScope.launch {
             persist()
-            val id = repository.createPage(sectionId)
+            // Read from the store rather than [editorDefaults], which holds the fallback until the
+            // store's first read lands and would rule a page created in that gap wrongly.
+            val ruling = editorDefaultsStore.defaults.first().ruleLines
+            val id = repository.createPage(sectionId, style = PageStyle(ruleLines = ruling))
             openPage(id)
         }
     }

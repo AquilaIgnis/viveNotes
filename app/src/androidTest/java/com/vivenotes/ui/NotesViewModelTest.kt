@@ -134,6 +134,7 @@ class NotesViewModelTest {
             runBlocking {
                 editorDefaults.setFontSize(saved.fontSize)
                 editorDefaults.setFontFamily(saved.fontFamily)
+                editorDefaults.setRuleLines(saved.ruleLines)
             }
         }
         savedZoom?.let { runBlocking { viewSettings.setZoom(it) } }
@@ -2039,6 +2040,39 @@ class NotesViewModelTest {
         vm.setDefaultFont(Mark.FontFamily("lora"))
 
         withTimeout(STORE_TIMEOUT_MS) { editorDefaults.defaults.first { it.fontFamily == "lora" } }
+    }
+
+    @Test
+    @FlakyOnEmulator
+    fun holdingAPaperStoresItAsTheDefault() = runBlocking<Unit> {
+        Dispatchers.setMain(Dispatchers.Unconfined)
+        val vm = NotesViewModel(repository, attachments, editorDefaults, viewSettings, penSettings)
+
+        vm.setDefaultRuleLines(RuleLines.Dotted)
+
+        withTimeout(STORE_TIMEOUT_MS) {
+            editorDefaults.defaults.first { it.ruleLines == RuleLines.Dotted }
+        }
+    }
+
+    /** The default reaches a page once, when it is created — and it is stored, not just shown. */
+    @Test
+    @FlakyOnEmulator
+    fun aNewPageStartsOnTheDefaultPaper() = runBlocking<Unit> {
+        Dispatchers.setMain(Dispatchers.Unconfined)
+        editorDefaults.setRuleLines(RuleLines.Hexagonal)
+        val vm = NotesViewModel(repository, attachments, editorDefaults, viewSettings, penSettings)
+        val welcome = withTimeout(STORE_TIMEOUT_MS) {
+            vm.uiState.first { it.selectedPageId != null }.selectedPageId
+        }
+
+        vm.addPage()
+
+        val created = withTimeout(STORE_TIMEOUT_MS) {
+            vm.uiState.first { it.selectedPageId != null && it.selectedPageId != welcome }
+        }.selectedPageId!!
+        val stored = (repository.loadDoc(created) as PageLoad.Loaded).doc
+        assertEquals(RuleLines.Hexagonal, stored.style.ruleLines)
     }
 
     /**

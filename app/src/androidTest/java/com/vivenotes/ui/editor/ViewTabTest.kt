@@ -1,10 +1,14 @@
 package com.vivenotes.ui.editor
 
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -28,6 +32,7 @@ class ViewTabTest {
     val compose = createComposeRule()
 
     private var ruleLines: RuleLines? = null
+    private var defaultRuleLines: RuleLines? = null
     private var pageColor: Int? = null
     private var pageColorCleared = false
     private var openedPane: ToolPane? = null
@@ -43,6 +48,7 @@ class ViewTabTest {
         style: PageStyle = PageStyle(),
         settings: ViewSettings = ViewSettings(),
         pageOpen: Boolean = true,
+        defaultPaper: RuleLines = RuleLines.GridMedium,
     ) {
         compose.setContent {
             ViveNotesTheme {
@@ -50,8 +56,10 @@ class ViewTabTest {
                     style = style,
                     settings = settings,
                     pageOpen = pageOpen,
+                    defaultRuleLines = defaultPaper,
                     actions = ViewActions(
                         setRuleLines = { ruleLines = it },
+                        setDefaultRuleLines = { defaultRuleLines = it },
                         setPageColor = { if (it == null) pageColorCleared = true else pageColor = it },
                         setHideTitle = { hideTitle = it },
                         setZoom = { zoom = it },
@@ -76,6 +84,40 @@ class ViewTabTest {
         compose.onNodeWithText("Hexagonal Paper").performClick()
 
         assertEquals(RuleLines.Hexagonal, ruleLines)
+    }
+
+    /** Picking rules the open page; it is not also a vote for what the next page looks like. */
+    @Test
+    fun pickingAPaperLeavesTheDefaultAlone() {
+        setTab()
+
+        compose.onNodeWithText("Paper").performClick()
+        compose.onNodeWithText("Wide Ruled").performClick()
+
+        assertNull(defaultRuleLines)
+    }
+
+    @Test
+    fun holdingAPaperMakesItTheDefaultForNewPages() {
+        setTab(style = PageStyle(ruleLines = RuleLines.Standard))
+
+        compose.onNodeWithText("Paper").performClick()
+        compose.onNodeWithText("Dotted Paper").performTouchInput { longClick() }
+
+        assertEquals(RuleLines.Dotted, defaultRuleLines)
+        assertNull("holding sets the default; it must not re-rule the open page", ruleLines)
+        // The tag moving is the confirmation, so the menu has to still be up to show it.
+        compose.onNodeWithText("Dotted Paper").assertIsDisplayed()
+    }
+
+    @Test
+    fun theMenuTagsTheDefaultAndTeachesTheHold() {
+        setTab(defaultPaper = RuleLines.Hexagonal)
+
+        compose.onNodeWithText("Paper").performClick()
+
+        compose.onNodeWithText("Hexagonal Paper").assert(hasText("Default"))
+        compose.onNodeWithText("Hold a paper to start new pages on it").assertIsDisplayed()
     }
 
     @Test

@@ -928,6 +928,7 @@ private fun NotesWorkspace(
     val viewActions = remember(viewModel) {
         ViewActions(
             setRuleLines = viewModel::setRuleLines,
+            setDefaultRuleLines = viewModel::setDefaultRuleLines,
             setPageColor = viewModel::setPageColor,
             setHideTitle = viewModel::setHideTitle,
             setZoom = viewModel::setZoom,

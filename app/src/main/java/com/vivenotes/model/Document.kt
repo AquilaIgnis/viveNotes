@@ -30,7 +30,10 @@ data class PageDoc(
         const val CURRENT_SCHEMA = 2
 
         /** A page starts with one full-width outline holding a single empty paragraph. */
-        fun empty(): PageDoc = PageDoc(outlines = listOf(Outline.Text.empty(y = PageStyle.TITLE_BAND_DP)))
+        fun empty(style: PageStyle = PageStyle()): PageDoc = PageDoc(
+            outlines = listOf(Outline.Text.empty(y = PageStyle.TITLE_BAND_DP)),
+            style = style,
+        )
     }
 }
 

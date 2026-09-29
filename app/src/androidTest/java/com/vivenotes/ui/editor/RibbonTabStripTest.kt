@@ -241,6 +241,7 @@ class RibbonTabStripTest {
 
     private fun noopViewActions() = ViewActions(
         setRuleLines = {},
+        setDefaultRuleLines = {},
         setPageColor = {},
         setHideTitle = {},
         setZoom = {},
