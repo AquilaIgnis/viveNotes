@@ -597,6 +597,12 @@ class NotesViewModel(
     val tool: StateFlow<DrawTool> = _tool.asStateFlow()
 
     /**
+     * The pen last in hand, however it was picked up, so the barrel button's pen/eraser toggle hands
+     * back the pen the user was writing with rather than pen 1. Transient, like [_tool].
+     */
+    private var lastPen = 0
+
+    /**
      * The formula [DrawTool.Equation] is holding, waiting for a tap to say where it goes.
      *
      * Transient rather than a preference, because it is content rather than a setting: reopening the
@@ -644,7 +650,7 @@ class NotesViewModel(
         when (action) {
             StylusAction.Undo -> undoCanvas()
             StylusAction.Redo -> redoCanvas()
-            else -> action.toolFrom(_tool.value)?.let { next ->
+            else -> action.toolFrom(_tool.value, lastPen)?.let { next ->
                 selectTool(next)
                 selectRibbonTab(RibbonTab.Draw)
             }
@@ -1998,6 +2004,7 @@ class NotesViewModel(
         // held in the hand, not a setting, so leaving it would place a formula composed minutes ago
         // the next time the user came back to ƒ.
         if (tool != DrawTool.Equation) _pendingEquation.value = null
+        if (tool is DrawTool.Pen) lastPen = tool.index
         _tool.value = tool
     }
 

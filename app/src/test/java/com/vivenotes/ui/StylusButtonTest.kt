@@ -1,6 +1,7 @@
 package com.vivenotes.ui
 
 import com.vivenotes.data.DrawTool
+import com.vivenotes.data.PenPreset
 import com.vivenotes.data.StylusAction
 import com.vivenotes.data.StylusButtonMap
 import org.junit.Assert.assertEquals
@@ -78,30 +79,40 @@ class StylusButtonTest {
     }
 
     @Test
-    fun anEraserInHandReachesBackForPenOne() {
+    fun anEraserInHandReachesBackForPenOneBeforeAnyOtherPen() {
         assertEquals(DrawTool.Pen(0), toggle(DrawTool.Eraser))
     }
 
+    /** Writing in pen 2, erasing, and clicking again carries on in pen 2 — not pen 1. */
+    @Test
+    fun anEraserInHandReachesBackForTheLastPen() {
+        assertEquals(DrawTool.Pen(1), toggle(DrawTool.Eraser, lastPen = 1))
+        assertEquals(DrawTool.Pen(2), toggle(DrawTool.Eraser, lastPen = 2))
+    }
+
     /**
-     * Every other tool arms pen 1, which is what makes the button useful from anywhere rather than
-     * only from the eraser. The empty hand is the case that matters most: it is what the canvas is
-     * left in after a lasso or a text container is dismissed.
+     * Every other tool arms the last pen, which is what makes the button useful from anywhere rather
+     * than only from the eraser. The empty hand is the case that matters most: it is what the canvas
+     * is left in after a lasso or a text container is dismissed.
      */
     @Test
-    fun everyOtherToolArmsPenOne() {
+    fun everyOtherToolArmsTheLastPen() {
         EVERY_TOOL.filterNot { it is DrawTool.Pen || it == DrawTool.Eraser }.forEach { tool ->
             assertEquals("from $tool", DrawTool.Pen(0), toggle(tool))
+            assertEquals("from $tool", DrawTool.Pen(2), toggle(tool, lastPen = 2))
         }
     }
 
-    /** Clicked twice from a pen, you are back where you started. */
+    /** Clicked twice from any pen, you are back where you started. */
     @Test
     fun theToggleTogglesRatherThanLatching() {
-        val once = toggle(DrawTool.Pen(0))
-        val twice = toggle(once!!)
+        (0 until PenPreset.COUNT).forEach { index ->
+            val once = toggle(DrawTool.Pen(index), lastPen = index)
+            val twice = toggle(once!!, lastPen = index)
 
-        assertEquals(DrawTool.Eraser, once)
-        assertEquals(DrawTool.Pen(0), twice)
+            assertEquals(DrawTool.Eraser, once)
+            assertEquals(DrawTool.Pen(index), twice)
+        }
     }
 
     // --- cycling the pens, the other rule --------------------------------------------------
@@ -187,7 +198,8 @@ class StylusButtonTest {
         }
     }
 
-    private fun toggle(current: DrawTool) = armed(StylusAction.TogglePenEraser, current)
+    private fun toggle(current: DrawTool, lastPen: Int = 0) =
+        StylusAction.TogglePenEraser.toolFrom(current, lastPen)
 
     private fun cycle(current: DrawTool) = armed(StylusAction.CyclePens, current)
 

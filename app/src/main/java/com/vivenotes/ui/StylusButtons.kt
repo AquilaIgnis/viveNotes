@@ -112,15 +112,19 @@ private const val FIRST_PEN = 0
  *
  * [StylusAction.TogglePenEraser] is the one entry with a rule rather than an answer, and it is the
  * default single click: with a pen in hand it reaches for the eraser, with anything else in hand it
- * reaches for pen 1. [StylusAction.CyclePens] is the other rule — it walks the three pens and wraps.
+ * reaches back for [lastPen] — the pen last in hand — so writing in blue, erasing, and clicking again
+ * carries on in blue. [StylusAction.CyclePens] is the other rule — it walks the three pens and wraps.
  *
  * Pure so the rules are testable without a device: the emulator has no stylus and cannot generate
  * these presses at all, which makes a JVM test the only test available here.
  */
-internal fun StylusAction.toolFrom(current: DrawTool): DrawTool? = when (this) {
+internal fun StylusAction.toolFrom(
+    current: DrawTool,
+    lastPen: Int = FIRST_PEN,
+): DrawTool? = when (this) {
     StylusAction.None, StylusAction.Undo, StylusAction.Redo -> null
     StylusAction.TogglePenEraser ->
-        if (current is DrawTool.Pen) DrawTool.Eraser else DrawTool.Pen(FIRST_PEN)
+        if (current is DrawTool.Pen) DrawTool.Eraser else DrawTool.Pen(lastPen)
     StylusAction.CyclePens -> DrawTool.Pen(
         if (current is DrawTool.Pen) (current.index + 1) % PenPreset.COUNT else FIRST_PEN,
     )
