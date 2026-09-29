@@ -136,6 +136,7 @@ import com.vivenotes.ui.panel.TOOL_PANEL_WIDTH
 import com.vivenotes.ui.panel.ToolPane
 import com.vivenotes.ui.panel.ToolPanel
 import com.vivenotes.ui.panel.VersionHistoryPanelContent
+import com.vivenotes.ui.panel.VersionHistoryPanelFooter
 import com.vivenotes.ui.shell.NotebookRail
 import com.vivenotes.ui.shell.PageListPane
 import com.vivenotes.ui.shell.SectionTabsBar
@@ -1492,12 +1493,28 @@ private fun ToolPaneHost(
     } else {
         null
     }
-    ToolPanel(pane = pane, onClose = onClose, modifier = modifier, header = header) {
+    // Likewise Restore, which forty versions would otherwise push off the bottom of the pane.
+    val footer: (@Composable ColumnScope.() -> Unit)? = if (pane == ToolPane.VersionHistory) {
+        {
+            VersionHistoryPanelFooter(
+                state = versionHistory,
+                onRestore = viewModel::restoreSelectedVersion,
+            )
+        }
+    } else {
+        null
+    }
+    ToolPanel(
+        pane = pane,
+        onClose = onClose,
+        modifier = modifier,
+        header = header,
+        footer = footer,
+    ) {
         when (pane) {
             ToolPane.VersionHistory -> VersionHistoryPanelContent(
                 state = versionHistory,
                 onSelect = viewModel::selectVersionRevision,
-                onRestore = viewModel::restoreSelectedVersion,
             )
             ToolPane.DeletedItems -> DeletedItemsPanelContent(
                 state = deletedItems,

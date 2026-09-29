@@ -1,11 +1,13 @@
 package com.vivenotes.ui.panel
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.db.PageRevisionSummary
 import com.vivenotes.model.Block
 import com.vivenotes.model.Outline
@@ -23,7 +25,7 @@ class VersionHistoryPanelTest {
 
     private val first = PageRevisionSummary("rev-1", "page-1", 1_700_000_000_000, 240)
     private val second = PageRevisionSummary("rev-2", "page-1", 1_699_000_000_000, 180)
-    private val preview = PageDoc(
+    private val decoded = PageDoc(
         outlines = listOf(Outline.Text(id = "text", blocks = listOf(Block.of("Earlier text")))),
     )
 
@@ -48,12 +50,11 @@ class VersionHistoryPanelTest {
                 pageId = "page-1",
                 revisions = listOf(first),
                 selectedRevision = first,
-                preview = preview,
+                preview = decoded,
             ),
             onRestore = { restored = true },
         )
 
-        compose.onNodeWithText("Earlier text").assertIsDisplayed()
         compose.onNodeWithTag(VersionHistoryPanelTags.RESTORE).performClick()
         assertTrue(!restored)
         compose.onNodeWithText("Restore this version?").assertIsDisplayed()
@@ -61,6 +62,29 @@ class VersionHistoryPanelTest {
         compose.onNodeWithTag(VersionHistoryPanelTags.CONFIRM).performClick()
 
         assertTrue(restored)
+    }
+
+    @Test
+    fun restoreStaysOnScreenAboveAFullHistory() {
+        val revisions = (0 until NotesRepository.MAX_REVISIONS_PER_PAGE).map {
+            PageRevisionSummary("rev-$it", "page-1", 1_700_000_000_000 - it * 30_000L, 240)
+        }
+        setPanel(
+            VersionHistoryState(
+                pageId = "page-1",
+                revisions = revisions,
+                selectedRevision = revisions.first(),
+                preview = decoded,
+            ),
+        )
+        val oldest = compose.onNodeWithTag(VersionHistoryPanelTags.revision(revisions.last().id))
+
+        // Otherwise the list fits and this proves nothing about scrolling.
+        oldest.assertIsNotDisplayed()
+        compose.onNodeWithTag(VersionHistoryPanelTags.RESTORE).assertIsDisplayed()
+
+        oldest.performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag(VersionHistoryPanelTags.RESTORE).assertIsDisplayed()
     }
 
     @Test
@@ -77,12 +101,12 @@ class VersionHistoryPanelTest {
     ) {
         compose.setContent {
             ViveNotesTheme {
-                Column {
-                    VersionHistoryPanelContent(
-                        state = state,
-                        onSelect = onSelect,
-                        onRestore = onRestore,
-                    )
+                ToolPanel(
+                    pane = ToolPane.VersionHistory,
+                    onClose = {},
+                    footer = { VersionHistoryPanelFooter(state = state, onRestore = onRestore) },
+                ) {
+                    VersionHistoryPanelContent(state = state, onSelect = onSelect)
                 }
             }
         }

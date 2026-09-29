@@ -31,8 +31,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vivenotes.data.db.PageRevisionSummary
-import com.vivenotes.model.PageDoc
-import com.vivenotes.model.plainText
 import com.vivenotes.ui.VersionHistoryState
 import java.text.DateFormat
 import java.util.Date
@@ -40,21 +38,20 @@ import kotlin.math.roundToInt
 
 internal object VersionHistoryPanelTags {
     const val STATUS = "version-history-status"
-    const val PREVIEW = "version-history-preview"
     const val RESTORE = "version-history-restore"
     const val CONFIRM = "version-history-confirm"
     fun revision(id: String) = "version-history-revision-$id"
 }
 
-/** Page checkpoints from SQLite. The outer [ToolPanel] supplies this pane's scrolling container. */
+/**
+ * Page checkpoints from SQLite. The outer [ToolPanel] supplies this pane's scrolling container;
+ * Restore lives in [VersionHistoryPanelFooter], outside it, so a long list never scrolls it away.
+ */
 @Composable
 internal fun VersionHistoryPanelContent(
     state: VersionHistoryState,
     onSelect: (String) -> Unit,
-    onRestore: () -> Unit,
 ) {
-    var confirmingRestore by remember { mutableStateOf(false) }
-
     Text(
         text = "Earlier saved versions of this page, newest first.",
         style = MaterialTheme.typography.bodyMedium,
@@ -84,40 +81,26 @@ internal fun VersionHistoryPanelContent(
         }
     }
 
-    state.error?.let {
-        Text(
-            text = it,
-            modifier = Modifier
-                .padding(vertical = 8.dp)
-                .testTag(VersionHistoryPanelTags.STATUS),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-        )
-    }
-    state.message?.let {
-        Text(
-            text = it,
-            modifier = Modifier
-                .padding(vertical = 8.dp)
-                .testTag(VersionHistoryPanelTags.STATUS),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
+    // A list that failed to load has nothing selected to restore, so its error reads here. Every
+    // other outcome answers the Restore button and is reported beside it in the footer.
+    if (state.selectedRevision == null) state.error?.let { Notice(it, isError = true) }
+}
 
-    if (state.selectedRevision != null) {
-        HorizontalDivider(Modifier.padding(vertical = 10.dp))
-        Text(
-            text = "Preview",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(6.dp))
-        when {
-            state.previewLoading -> Status("Loading preview…", progress = true)
-            state.preview != null -> VersionPreview(state.preview)
-        }
-        Spacer(Modifier.height(12.dp))
+/** Restore, pinned under the list, and what the selection or the last restore reported. */
+@Composable
+internal fun VersionHistoryPanelFooter(
+    state: VersionHistoryState,
+    onRestore: () -> Unit,
+) {
+    var confirmingRestore by remember { mutableStateOf(false) }
+    val selected = state.selectedRevision != null
+
+    if (selected) HorizontalDivider(Modifier.padding(bottom = 4.dp))
+    if (selected) state.error?.let { Notice(it, isError = true) }
+    state.message?.let { Notice(it, isError = false) }
+
+    if (selected) {
+        Spacer(Modifier.height(4.dp))
         Button(
             onClick = { confirmingRestore = true },
             enabled = state.preview != null && !state.previewLoading && !state.restoring,
@@ -205,34 +188,15 @@ private fun RevisionRow(
 }
 
 @Composable
-private fun VersionPreview(doc: PageDoc) {
-    val text = doc.plainText().trim()
-    val objectCount = doc.outlines.count { it !is com.vivenotes.model.Outline.Text }
-    Column(
+private fun Notice(text: String, isError: Boolean) {
+    Text(
+        text = text,
         modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
-                shape = RoundedCornerShape(8.dp),
-            )
-            .padding(12.dp)
-            .testTag(VersionHistoryPanelTags.PREVIEW),
-    ) {
-        Text(
-            text = if (text.isBlank()) "No text in this version." else text.take(600),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 10,
-        )
-        if (objectCount > 0) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "$objectCount placed ${if (objectCount == 1) "object" else "objects"}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+            .padding(vertical = 8.dp)
+            .testTag(VersionHistoryPanelTags.STATUS),
+        style = MaterialTheme.typography.bodySmall,
+        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+    )
 }
 
 @Composable

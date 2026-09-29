@@ -1142,7 +1142,7 @@ class NotesViewModel(
             )
             is PageRevisionLoad.Unreadable -> current.copy(
                 previewLoading = false,
-                error = "That version is damaged and cannot be previewed.",
+                error = "That version is damaged and cannot be restored.",
             )
             null -> current.copy(
                 previewLoading = false,

@@ -115,6 +115,11 @@ fun ToolPanel(
      * nothing else. Panes that pass nothing are laid out exactly as they were.
      */
     header: (@Composable ColumnScope.() -> Unit)? = null,
+    /**
+     * Fixed content under the scrolling area, pinned to the bottom of the pane, for the action that
+     * applies to whatever is picked above it — Version History's Restore.
+     */
+    footer: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
@@ -161,10 +166,20 @@ fun ToolPanel(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 4.dp),
             content = content,
         )
+
+        if (footer != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                content = footer,
+            )
+        }
     }
 }
 
