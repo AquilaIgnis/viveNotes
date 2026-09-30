@@ -1,10 +1,14 @@
 package com.vivenotes.ui.editor
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,13 +27,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -709,7 +719,7 @@ internal fun RibbonButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    RibbonButtonSlot(active, onClick, enabled, modifier) {
+    RibbonButtonSlot(label, active, onClick, enabled, modifier) {
         Icon(
             imageVector = icon,
             contentDescription = label,
@@ -795,7 +805,7 @@ internal fun TwoToneRibbonButton(
     onClick: () -> Unit,
 ) {
     val icons = LocalRibbonIcons.current
-    RibbonButtonSlot(active, onClick) {
+    RibbonButtonSlot(label, active, onClick) {
         Icon(
             imageVector = glyph(if (active) icons.active else icons.idle),
             contentDescription = label,
@@ -805,9 +815,10 @@ internal fun TwoToneRibbonButton(
     }
 }
 
-/** The pressed-state chrome shared by both button flavours. */
+/** The pressed-state chrome shared by both button flavours, with [label] shown on hover. */
 @Composable
 internal fun RibbonButtonSlot(
+    label: String,
     active: Boolean,
     onClick: () -> Unit,
     enabled: Boolean = true,
@@ -815,18 +826,59 @@ internal fun RibbonButtonSlot(
     icon: @Composable () -> Unit,
 ) {
     val background = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-    Box(
-        modifier = modifier
-            .padding(horizontal = 1.dp)
-            .size(32.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(background)
-            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
-            .alpha(if (enabled) 1f else DISABLED_ALPHA),
-        contentAlignment = Alignment.Center,
-    ) {
-        icon()
+    HoverLabel(label) {
+        Box(
+            modifier = modifier
+                .padding(horizontal = 1.dp)
+                .size(32.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(background)
+                .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+                .alpha(if (enabled) 1f else DISABLED_ALPHA),
+            contentAlignment = Alignment.Center,
+        ) {
+            icon()
+        }
     }
+}
+
+/** How long a pen has to rest over a button before its name appears — the platform's own delay. */
+private const val HOVER_LABEL_DELAY_MS = 500L
+
+/**
+ * Names an icon-only control while a stylus or mouse hovers over it.
+ *
+ * Material's [TooltipBox] reacts to mouse hover only, and to a long press — which on the Draw tab
+ * already means "open this tool's settings". So its own input is switched off and hover drives it
+ * instead, which a stylus reports the same way a mouse does.
+ *
+ * The delay is what keeps the ribbon quiet while a pen merely crosses it on the way to the page.
+ * Putting the pen down ends the hover, so a tap never leaves a label behind.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun HoverLabel(label: String, content: @Composable () -> Unit) {
+    val state = rememberTooltipState()
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    LaunchedEffect(hovered) {
+        if (hovered) {
+            delay(HOVER_LABEL_DELAY_MS)
+            // UserInput priority holds it open with no timeout; leaving cancels this and hides it.
+            state.show(MutatePriority.UserInput)
+        }
+    }
+    TooltipBox(
+        // Below, because the ribbon is the top of the window.
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+            TooltipAnchorPosition.Below,
+        ),
+        tooltip = { PlainTooltip { Text(label) } },
+        state = state,
+        modifier = Modifier.hoverable(hover),
+        enableUserInput = false,
+        content = content,
+    )
 }
 
 @Composable
@@ -1103,7 +1155,7 @@ private fun ColorPicker(
         symbol ?: requireNotNull(glyph)(neutral, swatch)
     }
     Box {
-        RibbonButtonSlot(active = false, onClick = { open = true }) {
+        RibbonButtonSlot(label = label, active = false, onClick = { open = true }) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,

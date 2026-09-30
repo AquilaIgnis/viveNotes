@@ -56,47 +56,48 @@ internal fun TableButton(
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
 
+    val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .testTag(TABLE_BUTTON_TAG)
-                .clip(RoundedCornerShape(4.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                )
-                .then(
-                    if (enabled) {
-                        Modifier.combinedClickable(
-                            onClick = {
-                                onSelect()
-                                if (selected) settingsOpen = true
-                            },
-                            onLongClick = {
-                                onSelect()
-                                settingsOpen = true
-                            },
-                        )
+        HoverLabel(if (table.inkOnly) "Table to write in" else "Table") {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .testTag(TABLE_BUTTON_TAG)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(background)
+                    .then(
+                        if (enabled) {
+                            Modifier.combinedClickable(
+                                onClick = {
+                                    onSelect()
+                                    if (selected) settingsOpen = true
+                                },
+                                onLongClick = {
+                                    onSelect()
+                                    settingsOpen = true
+                                },
+                            )
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .alpha(if (enabled) 1f else DISABLED_ALPHA),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = MaterialSymbols.Table,
+                    // Named for what it will make, not for what it is. One glyph now covers both
+                    // kinds, so the label is all a screen reader gets to tell them apart — and it
+                    // has to follow the setting, because the setting is what decides.
+                    contentDescription = if (table.inkOnly) "Table to write in" else "Table",
+                    tint = if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
-                        Modifier
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
+                    modifier = Modifier.size(18.dp),
                 )
-                .alpha(if (enabled) 1f else DISABLED_ALPHA),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = MaterialSymbols.Table,
-                // Named for what it will make, not for what it is. One glyph now covers both kinds,
-                // so the label is all a screen reader gets to tell them apart — and it has to follow
-                // the setting, because the setting is what decides.
-                contentDescription = if (table.inkOnly) "Table to write in" else "Table",
-                tint = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(18.dp),
-            )
+            }
         }
 
         FloatingSettingsPanel(

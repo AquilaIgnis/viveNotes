@@ -55,44 +55,45 @@ internal fun ShapeButton(
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
 
+    val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .testTag(SHAPE_BUTTON_TAG)
-                .clip(RoundedCornerShape(4.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                )
-                .then(
-                    if (enabled) {
-                        Modifier.combinedClickable(
-                            onClick = {
-                                onSelect()
-                                if (selected) settingsOpen = true
-                            },
-                            onLongClick = {
-                                onSelect()
-                                settingsOpen = true
-                            },
-                        )
+        HoverLabel("Shapes") {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .testTag(SHAPE_BUTTON_TAG)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(background)
+                    .then(
+                        if (enabled) {
+                            Modifier.combinedClickable(
+                                onClick = {
+                                    onSelect()
+                                    if (selected) settingsOpen = true
+                                },
+                                onLongClick = {
+                                    onSelect()
+                                    settingsOpen = true
+                                },
+                            )
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .alpha(if (enabled) 1f else DISABLED_ALPHA),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = MaterialSymbols.Category,
+                    contentDescription = "Shapes",
+                    tint = if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
-                        Modifier
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
+                    modifier = Modifier.size(18.dp),
                 )
-                .alpha(if (enabled) 1f else DISABLED_ALPHA),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = MaterialSymbols.Category,
-                contentDescription = "Shapes",
-                tint = if (selected) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(18.dp),
-            )
+            }
         }
 
         FloatingSettingsPanel(

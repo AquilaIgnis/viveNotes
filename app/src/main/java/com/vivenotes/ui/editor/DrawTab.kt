@@ -277,35 +277,36 @@ private fun HighlighterButton(
     val swatch = Color(settings.colorArgb).copy(alpha = 1f)
     val marker = MaterialSymbols.StylusHighlighter
 
+    val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .testTag(DrawTags.HIGHLIGHTER)
-                .clip(RoundedCornerShape(4.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                )
-                .combinedClickable(
-                    onClick = {
-                        onSelect()
-                        if (selected) onOpen()
-                    },
-                    onLongClick = {
-                        onSelect()
-                        onOpen()
-                    },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = marker,
-                contentDescription = "Highlighter",
-                tint = swatch,
+        HoverLabel("Highlighter") {
+            Box(
                 modifier = Modifier
-                    .size(19.dp)
-                    .rotate(180f),
-            )
+                    .size(32.dp)
+                    .testTag(DrawTags.HIGHLIGHTER)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(background)
+                    .combinedClickable(
+                        onClick = {
+                            onSelect()
+                            if (selected) onOpen()
+                        },
+                        onLongClick = {
+                            onSelect()
+                            onOpen()
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = marker,
+                    contentDescription = "Highlighter",
+                    tint = swatch,
+                    modifier = Modifier
+                        .size(19.dp)
+                        .rotate(180f),
+                )
+            }
         }
 
         FloatingSettingsPanel(
@@ -338,35 +339,38 @@ private fun RulerButton(
     onChange: (RulerSettings) -> Unit,
 ) {
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .testTag(DrawTags.RULER)
-                .clip(RoundedCornerShape(4.dp))
-                .background(
-                    if (out) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                )
-                .combinedClickable(
-                    onClick = onToggle,
-                    // Holding it brings it out as well as configuring it, for the reason holding a
-                    // pen picks it up: the ruler you are about to change is the one you would use.
-                    onLongClick = {
-                        if (!out) onToggle()
-                        onOpen()
+        HoverLabel(if (out) "Put the ruler away" else "Ruler") {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .testTag(DrawTags.RULER)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        if (out) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                    )
+                    .combinedClickable(
+                        onClick = onToggle,
+                        // Holding it brings it out as well as configuring it, for the reason
+                        // holding a pen picks it up: the ruler you are about to change is the
+                        // one you would use.
+                        onLongClick = {
+                            if (!out) onToggle()
+                            onOpen()
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = MaterialSymbols.Straighten,
+                    contentDescription = if (out) "Put the ruler away" else "Ruler",
+                    tint = if (out) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = MaterialSymbols.Straighten,
-                contentDescription = if (out) "Put the ruler away" else "Ruler",
-                tint = if (out) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(18.dp),
-            )
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
 
         FloatingSettingsPanel(
@@ -392,33 +396,34 @@ private fun EraserButton(
     onChange: (EraserSettings) -> Unit,
 ) {
     val icons = LocalRibbonIcons.current
+    val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .testTag(DrawTags.ERASER)
-                .clip(RoundedCornerShape(4.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        HoverLabel("Eraser") {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .testTag(DrawTags.ERASER)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(background)
+                    .combinedClickable(
+                        onClick = {
+                            onSelect()
+                            if (selected) onOpen()
+                        },
+                        onLongClick = {
+                            onSelect()
+                            onOpen()
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (selected) icons.active.eraser else icons.idle.eraser,
+                    contentDescription = "Eraser",
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(18.dp),
                 )
-                .combinedClickable(
-                    onClick = {
-                        onSelect()
-                        if (selected) onOpen()
-                    },
-                    onLongClick = {
-                        onSelect()
-                        onOpen()
-                    },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = if (selected) icons.active.eraser else icons.idle.eraser,
-                contentDescription = "Eraser",
-                tint = Color.Unspecified,
-                modifier = Modifier.size(18.dp),
-            )
+            }
         }
 
         FloatingSettingsPanel(
@@ -454,37 +459,38 @@ private fun PenButton(
     val swatch = Color(pen.colorArgb)
     val stylus = MaterialSymbols.Stylus
 
+    val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .testTag(DrawTags.pen(index))
-                .clip(RoundedCornerShape(4.dp))
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                )
-                .combinedClickable(
-                    onClick = {
-                        onSelect()
-                        if (selected) onOpen()
-                    },
-                    // Configuring a pen picks it up as well: the settings you are about to change
-                    // are the ones you would then be drawing with.
-                    onLongClick = {
-                        onSelect()
-                        onOpen()
-                    },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = stylus,
-                contentDescription = "Pen ${index + 1}",
-                tint = swatch,
+        HoverLabel("Pen ${index + 1}") {
+            Box(
                 modifier = Modifier
-                    .size(19.dp)
-                    .rotate(180f),
-            )
+                    .size(32.dp)
+                    .testTag(DrawTags.pen(index))
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(background)
+                    .combinedClickable(
+                        onClick = {
+                            onSelect()
+                            if (selected) onOpen()
+                        },
+                        // Configuring a pen picks it up as well: the settings you are about to
+                        // change are the ones you would then be drawing with.
+                        onLongClick = {
+                            onSelect()
+                            onOpen()
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = stylus,
+                    contentDescription = "Pen ${index + 1}",
+                    tint = swatch,
+                    modifier = Modifier
+                        .size(19.dp)
+                        .rotate(180f),
+                )
+            }
         }
 
         FloatingSettingsPanel(
