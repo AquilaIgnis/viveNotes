@@ -1251,6 +1251,10 @@ class NotesRepository(
          * archive's id, so every later import of that same file has to be told which notebook it is
          * an update of. Without it a `.vive` file whose notebook was moved would install a second
          * copy every time it was opened.
+         *
+         * Never synced: other devices hold the moved notebook without it, and `NotebookTransferManager`
+         * finds it there by the archive's sections instead. Here it still answers once those sections
+         * are gone.
          */
         const val IMPORT_REMAP_KEY_PREFIX = "importRemap:"
 
