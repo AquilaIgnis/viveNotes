@@ -235,6 +235,19 @@ data class PageRevisionEntity(
     @ColumnInfo(defaultValue = "0") val inkByteCount: Int = 0,
     @ColumnInfo(defaultValue = "''") val inkSha256: String = "",
     @ColumnInfo(defaultValue = "X''") val inkPayload: ByteArray = byteArrayOf(),
+    /**
+     * The attachments this version places, as `DocumentPictures.encode` writes them; null until
+     * indexed.
+     *
+     * Exists so `AttachmentSweep` can tell which pictures version history still shows without
+     * inflating every gzipped payload on the device. Written with the revision; rows that predate
+     * the column are indexed by the sweep, once each.
+     *
+     * Left out of [equals]: it is derived from [payload], so two versions with the same payload are
+     * the same version whether or not one of them has been indexed yet — which is exactly what an
+     * imported `.vive` version and its local twin look like.
+     */
+    val pictureIds: String? = null,
 ) {
     override fun equals(other: Any?): Boolean =
         this === other ||
@@ -555,9 +568,21 @@ data class AttachmentEntity(
     val pixelWidth: Int,
     val pixelHeight: Int,
     val byteCount: Long,
-    /** How many outlines currently point at this. Zero means the file may be swept. */
+    /**
+     * How many outlines this device has counted pointing at this. Kept up to date by imports and by
+     * documents arriving from elsewhere, but not by every editor path, so nothing deletes on the
+     * strength of it — `AttachmentSweep` reads the documents instead.
+     */
     val refCount: Int = 0,
     val createdAt: Long,
+    /**
+     * When this device stopped placing the picture anywhere it can still be undone or restored
+     * to, and so told the server it no longer needs the bytes. Null while something here places it.
+     *
+     * Not a deletion: the file stays while a saved version still shows the picture, and a release
+     * reverses itself if the picture is placed again. Travels as the attachment's `deletedAt`.
+     */
+    val releasedAt: Long? = null,
 )
 
 /** What happened the last time a picture was read. */

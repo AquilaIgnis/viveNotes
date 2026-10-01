@@ -51,6 +51,9 @@ internal object DocumentRevisionPayload {
             inkByteCount = ink.byteCount,
             inkSha256 = ink.sha256,
             inkPayload = ink.payload,
+            // Read from the body while it is still plain text, which is the one moment knowing
+            // costs nothing. See `AttachmentSweep` for what reads it.
+            pictureIds = DocumentPictures.encode(DocumentPictures.idsIn(row.docJson, row.format)),
         )
     }
 

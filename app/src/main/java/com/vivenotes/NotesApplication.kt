@@ -6,6 +6,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.OnnxInkRecognitionEngine
 import com.vivenotes.data.AttachmentStore
+import com.vivenotes.data.AttachmentSweep
 import com.vivenotes.data.AutomaticInkRepair
 import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.DeletionPurgeWorker
@@ -51,6 +52,11 @@ class NotesApplication : Application() {
      */
     val repository: NotesRepository by lazy { NotesRepository(database) }
     val attachments: AttachmentStore by lazy { AttachmentStore(this, database) }
+
+    /** Lets go of pictures nothing can put back on a page; run by [DeletionPurgeWorker]. */
+    val attachmentSweep: AttachmentSweep by lazy {
+        AttachmentSweep(database, attachments, attachments::heldPictures)
+    }
 
     /**
      * Thumbnails for the editor's link previews — `richtext/VideoEmbedSpan.kt`.

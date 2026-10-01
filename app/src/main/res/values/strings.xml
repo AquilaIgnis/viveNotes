@@ -101,6 +101,7 @@
     <string name="account_sync_will_retry">%1$s Syncing will retry by itself.</string>
     <string name="account_sync_error_response">The server returned sync data this version cannot read.</string>
     <string name="account_sync_membership_required">Purchase a subscription to sync.</string>
+    <string name="account_sync_storage_full">Cloud storage is full. Delete something or upgrade your plan to keep syncing.</string>
     <string name="account_sync_error_local">The local sync queue could not be read. The notes themselves are still stored locally.</string>
     <string name="account_sync_error_large">One local hierarchy change is larger than the server accepts.</string>
     <string name="account_sync_error_malformed">The server rejected one local hierarchy change as malformed.</string>

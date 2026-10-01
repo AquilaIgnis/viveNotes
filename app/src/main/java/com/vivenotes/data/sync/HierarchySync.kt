@@ -2,8 +2,8 @@ package com.vivenotes.data.sync
 
 import android.util.Log
 import androidx.room.withTransaction
+import com.vivenotes.data.DocumentPictures
 import com.vivenotes.data.EraserMode
-import com.vivenotes.data.DocumentRevisionPayload
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.db.AttachmentEntity
 import com.vivenotes.data.db.InkEraseEntity
@@ -16,15 +16,11 @@ import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.data.db.PageEntity
-import com.vivenotes.data.db.PageRevisionEntity
 import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.data.db.SyncEntityStateEntity
 import com.vivenotes.data.db.SyncOutboxEntity
 import com.vivenotes.data.db.SyncStateEntity
 import com.vivenotes.data.db.deferredNotebookContentKey
-import com.vivenotes.model.DocumentCodecs
-import com.vivenotes.model.Outline
-import com.vivenotes.model.migrated
 import com.vivenotes.model.newId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -70,6 +66,12 @@ enum class PermanentSyncFailure {
 
     /** The managed server requires an active paid, promotional, or staff membership for sync. */
     MembershipRequired,
+
+    /**
+     * The account's storage quota is full. What could not be stored stays queued and goes through
+     * once there is room; deletes still sync, because they never grow the account.
+     */
+    StorageFull,
 
     /**
      * The server holds a change of a kind this build cannot store, so the cursor cannot advance past
@@ -1012,6 +1014,10 @@ class HierarchySync(
                         // same answer for ever. Standing still here is the failure this clears.
                         "purged" -> purged += rejected.kind to rejected.id
                         "too_large" -> permanent = PermanentSyncFailure.ChangeTooLarge
+                        // The account's storage is full. The change stays queued, exactly as it is:
+                        // it is valid, and it goes through once the account deletes something or
+                        // moves to a larger plan. Dropping it would lose the edit.
+                        "quota_exceeded" -> permanent = PermanentSyncFailure.StorageFull
                         "malformed" -> permanent = PermanentSyncFailure.MalformedChange
                         // A reason no build this old has a branch for, which is what a server newer
                         // than this app looks like. The whole run stops rather than the entity being
@@ -1148,7 +1154,10 @@ class HierarchySync(
 
     /** The attachment digests one queued change will name on the wire. */
     private fun digestsNamedBy(change: PendingChange): List<String> = when (change.kind) {
-        SyncKind.Attachment.wire -> listOf(change.id)
+        // A release names no bytes to carry: uploading them would put back on the server the very
+        // copy the release exists to free.
+        SyncKind.Attachment.wire ->
+            if (change.payload["deletedAt"].let { it == null || it is JsonNull }) listOf(change.id) else emptyList()
         SyncKind.PageContent.wire ->
             (change.payload[BLOB_REFS] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }
                 .orEmpty()
@@ -1313,7 +1322,7 @@ class HierarchySync(
                 // push replaces the whole set. Always written, never inherited from the stored
                 // server row: a stale set would keep bytes alive this page no longer draws.
                 base[BLOB_REFS] = JsonArray(
-                    pictureIdsIn(row.docJson, row.format)
+                    DocumentPictures.idsIn(row.docJson, row.format)
                         .asSequence()
                         .filter(::isBlobDigest)
                         .filterNot(undeliverableBlobs::contains)
@@ -1391,10 +1400,10 @@ class HierarchySync(
             SyncKind.Attachment -> {
                 val row = attachments.byId(outbox.entityId)
                     ?: throw IllegalStateException("dirty attachment disappeared")
-                // No `deletedAt` to send and no `updatedAt` column to send it from: an attachment is
-                // immutable in every field the protocol carries, so its creation time is the only
-                // honest stamp and the envelope's display value is the same number.
-                base.putEnvelope(null, maxOf(row.createdAt, outbox.changedAt), row.createdAt)
+                // `deletedAt` is this device's release: nothing here places the picture any more,
+                // which is what lets the server free the bytes. The row has no `updatedAt` column,
+                // so the queue's own stamp is the newest honest one and creation is the display.
+                base.putEnvelope(row.releasedAt, maxOf(row.createdAt, outbox.changedAt), row.createdAt)
                 base["mimeType"] = JsonPrimitive(row.mimeType)
                 base["pixelWidth"] = JsonPrimitive(row.pixelWidth)
                 base["pixelHeight"] = JsonPrimitive(row.pixelHeight)
@@ -1660,10 +1669,10 @@ class HierarchySync(
              * carrying the pulled row's zero would overwrite it. `AttachmentDao.insert` ignores a
              * conflict, so a row already here keeps the count this device computed.
              *
-             * A tombstone is applied by doing nothing. No build produces one, but one from a future
-             * build would mean "the device that sent it has no outline pointing here any more",
-             * which says nothing about this device. When local sweeping exists this becomes a
-             * release of one reference rather than a delete.
+             * A tombstone is applied by doing nothing. It means "the device that sent it no longer
+             * places this picture", which says nothing about this device: `AttachmentSweep` decides
+             * from this device's own documents, saved versions and undo history whether to release
+             * it here too.
              */
             SyncKind.Attachment -> if (change.deletedAt == null) {
                 attachments.insert(attachmentEntity(change, refCount = 0))
@@ -1695,7 +1704,7 @@ class HierarchySync(
     private suspend fun materializeReferencedRemoteAttachments(): Int {
         val referenceCounts = linkedMapOf<String, Int>()
         contents.picturePlacingBodies().forEach { body ->
-            pictureIdsIn(body.docJson, body.format).forEach { id ->
+            DocumentPictures.idsIn(body.docJson, body.format).forEach { id ->
                 referenceCounts[id] = referenceCounts.getOrDefault(id, 0) + 1
             }
         }
@@ -1755,11 +1764,11 @@ class HierarchySync(
         val deltas = linkedMapOf<String, Int>()
         pictureRecounts.forEach { recount ->
             recount.before?.let { row ->
-                pictureIdsIn(row.docJson, row.format)
+                DocumentPictures.idsIn(row.docJson, row.format)
                     .forEach { id -> deltas[id] = deltas.getOrDefault(id, 0) - 1 }
             }
             recount.after?.let { row ->
-                pictureIdsIn(row.docJson, row.format)
+                DocumentPictures.idsIn(row.docJson, row.format)
                     .forEach { id -> deltas[id] = deltas.getOrDefault(id, 0) + 1 }
             }
         }
@@ -1768,31 +1777,6 @@ class HierarchySync(
             repeat(delta.coerceAtLeast(0)) { attachments.retain(id) }
             repeat((-delta).coerceAtLeast(0)) { attachments.release(id) }
         }
-    }
-
-    /**
-     * The attachments a stored document places, in the order it places them.
-     *
-     * The document is the only record of which pictures a page shows, which is why `blobRefs`
-     * exists: the server cannot read `docJson`, so it cannot know what to keep.
-     *
-     * Guarded by a substring test before the decode. A body is decoded twice per pulled row — the
-     * one being replaced and the one replacing it — and most pages have no picture at all, so a full
-     * parse per page of a first sync would be the most expensive thing in the pull. `attachmentId`
-     * is a field name of [Outline.Image] and of nothing else, and survives both codecs. A page whose
-     * text happens to contain the word costs one wasted decode.
-     *
-     * An undecodable body yields nothing rather than throwing: the editor already refuses to write
-     * to a page it cannot read.
-     */
-    private fun pictureIdsIn(docJson: String, format: String): List<String> {
-        if (!docJson.contains(IMAGE_FIELD_HINT)) return emptyList()
-        val codec = DocumentCodecs.byId(format) ?: return emptyList()
-        return runCatching {
-            codec.decode(docJson.encodeToByteArray()).migrated().outlines
-                .filterIsInstance<Outline.Image>()
-                .map { it.attachmentId }
-        }.getOrDefault(emptyList())
     }
 
     /**
@@ -2050,6 +2034,7 @@ class HierarchySync(
     private fun ServerResult.Failed.asSyncResult(): SyncRunResult = when {
         reason == ConnectFailure.MembershipRequired ->
             SyncRunResult.Failed(PermanentSyncFailure.MembershipRequired)
+        reason == ConnectFailure.StorageFull -> SyncRunResult.Failed(PermanentSyncFailure.StorageFull)
         retryable -> SyncRunResult.Retryable(reason)
         else -> SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse)
     }
@@ -2256,8 +2241,8 @@ class HierarchySync(
     private suspend fun picturesReachedOnlyBy(pageIds: List<String>): List<String> {
         val leaving = buildSet {
             pageIds.chunked(SQLITE_BIND_CHUNK).forEach { chunk ->
-                contents.byIds(chunk).forEach { addAll(pictureIdsIn(it.docJson, it.format)) }
-                revisions.byPageIds(chunk).forEach { addAll(picturesIn(it)) }
+                contents.byIds(chunk).forEach { addAll(DocumentPictures.idsIn(it.docJson, it.format)) }
+                revisions.byPageIds(chunk).forEach { addAll(DocumentPictures.idsIn(it)) }
             }
         }
         if (leaving.isEmpty()) return emptyList()
@@ -2265,18 +2250,11 @@ class HierarchySync(
         val evicting = pageIds.toSet()
         val staying = buildSet {
             contents.picturePlacingBodies().forEach { row ->
-                if (row.pageId !in evicting) addAll(pictureIdsIn(row.docJson, row.format))
+                if (row.pageId !in evicting) addAll(DocumentPictures.idsIn(row.docJson, row.format))
             }
         }
         return (leaving - staying).toList()
     }
-
-    /** The pictures a saved version places, or none if its payload cannot be read. */
-    private fun picturesIn(revision: PageRevisionEntity): List<String> = runCatching {
-        DocumentRevisionPayload.unpack(revision).outlines
-            .filterIsInstance<Outline.Image>()
-            .map { it.attachmentId }
-    }.getOrDefault(emptyList())
 
     /**
      * Downloads a notebook whose contents are absent here and puts it back on this device.
@@ -2409,7 +2387,7 @@ class HierarchySync(
         }
 
         val needed = restored.flatMapTo(mutableSetOf()) { (json, format) ->
-            pictureIdsIn(json, format)
+            DocumentPictures.idsIn(json, format)
         }
         try {
             db.withTransaction {
@@ -2504,12 +2482,6 @@ class HierarchySync(
 
         /** `PageContentFields.blobRefs` is `maxItems: 512`. A page with more is not a page. */
         const val MAX_BLOB_REFS = 512
-
-        /**
-         * A field name only [Outline.Image] has, used to skip decoding a body that cannot mention a
-         * picture. Both codecs write field names as text, so it holds for `cbor/1` as well.
-         */
-        const val IMAGE_FIELD_HINT = "attachmentId"
     }
 }
 

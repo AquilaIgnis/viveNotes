@@ -14,16 +14,29 @@ import com.vivenotes.NotesApplication
 import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
 
-/** Scheduled maintenance for the seven-day deletion recovery window. */
+/**
+ * Scheduled maintenance for the seven-day deletion recovery window, and the picture sweep that
+ * follows it.
+ *
+ * The sweep runs second because the purge is what makes pictures sweepable: a page leaving Deleted
+ * Items takes its body, and with it the last reference to the pictures only it placed.
+ */
 class DeletionPurgeWorker(
     appContext: Context,
     workerParameters: WorkerParameters,
 ) : CoroutineWorker(appContext, workerParameters) {
 
     override suspend fun doWork(): Result = try {
-        val repository = (applicationContext as NotesApplication).repository
-        val purge = repository.purgeExpiredDeletions()
-        Result.success(workDataOf(PURGED_TOMBSTONES to purge.tombstones))
+        val application = applicationContext as NotesApplication
+        val purge = application.repository.purgeExpiredDeletions()
+        val sweep = application.attachmentSweep.sweep()
+        Result.success(
+            workDataOf(
+                PURGED_TOMBSTONES to purge.tombstones,
+                RELEASED_PICTURES to sweep.released,
+                DELETED_PICTURE_FILES to sweep.filesDeleted,
+            ),
+        )
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (failure: Exception) {
@@ -38,6 +51,8 @@ class DeletionPurgeWorker(
         private const val STARTUP_WORK = "deletion-purge-startup"
         private const val PERIODIC_WORK = "deletion-purge-daily"
         private const val PURGED_TOMBSTONES = "purgedTombstones"
+        private const val RELEASED_PICTURES = "releasedPictures"
+        private const val DELETED_PICTURE_FILES = "deletedPictureFiles"
 
         /**
          * Queues one prompt catch-up and one durable daily pass.

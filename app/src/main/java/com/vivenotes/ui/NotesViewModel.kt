@@ -694,6 +694,13 @@ class NotesViewModel(
      */
     private var historyGroup: MutableList<CanvasHistoryEntry>? = null
 
+    init {
+        // Undo and redo live only in memory, so the picture sweep cannot see them in the database:
+        // a picture deleted from a page stays one tap of Undo away until its entry leaves the
+        // history. Answered on the main thread, where every history write happens.
+        attachments.hold(this, ::picturesHeldByEditor)
+    }
+
     /** An erase resolves native geometry off-thread; history pauses until its action is committed. */
     private val pendingInkEditsByPage = mutableMapOf<String, Int>()
 
@@ -2448,9 +2455,9 @@ class NotesViewModel(
      * Removes pictures from the page — the toolkit's Delete.
      *
      * The file stays. Undo restores this list, and a restored frame pointing at swept bytes would be
-     * a hole no further undo could fill, so nothing is released here. `AttachmentStore.release`
-     * exists and is correct but is not called yet; `refCount` is maintained so a sweep can be added
-     * without a migration.
+     * a hole no further undo could fill, so nothing is released here: the history entry this pushes
+     * is what [picturesHeldByEditor] reports, and `AttachmentSweep` lets the picture go only once
+     * that entry has left the history and no document or saved version places it.
      */
     fun deleteImages(imageIds: Set<String>) {
         if (imageIds.isEmpty()) return
@@ -3584,6 +3591,36 @@ class NotesViewModel(
         // rows preserves sync history; only their in-memory route back is discarded.
         history.redo.clear()
         if (_uiState.value.selectedPageId == pageId) publishCanvasUndoState(pageId)
+    }
+
+    /**
+     * Every picture this editor can put back on a page without reading the database: the open
+     * page's own, and those named by any undo or redo entry of any page, including an action still
+     * being collected. Registered with [AttachmentStore.hold] so the picture sweep keeps them.
+     */
+    private fun picturesHeldByEditor(): Set<String> = buildSet {
+        _uiState.value.images.forEach { add(it.attachmentId) }
+        canvasHistoryByPage.values.forEach { history ->
+            history.undo.forEach { addPicturesOf(it) }
+            history.redo.forEach { addPicturesOf(it) }
+        }
+        historyGroup?.forEach { addPicturesOf(it) }
+    }
+
+    private fun MutableSet<String>.addPicturesOf(entry: CanvasHistoryEntry) {
+        when (entry) {
+            is CanvasHistoryEntry.Images -> {
+                entry.before.forEach { add(it.attachmentId) }
+                entry.after.forEach { add(it.attachmentId) }
+            }
+            is CanvasHistoryEntry.Composite -> entry.parts.forEach { addPicturesOf(it) }
+            else -> Unit
+        }
+    }
+
+    override fun onCleared() {
+        attachments.releaseHold(this)
+        super.onCleared()
     }
 
     private fun publishCanvasUndoState(pageId: String? = _uiState.value.selectedPageId) {

@@ -268,6 +268,13 @@ class NotebookTransferManager(
                 // has several versions past.
                 source.execSQL("ALTER TABLE notebooks DROP COLUMN closedAt")
                 source.execSQL("ALTER TABLE notebooks DROP COLUMN cloudOnlyAt")
+                // Likewise per device, and dropped for the same reason. Whether this installation
+                // has released a picture from its account says nothing about the notebook, and the
+                // saved-version picture index is a cache the importing device rebuilds: an imported
+                // picture arrives unreleased and an imported version unindexed, which is what a
+                // picture and a version this device has never swept are.
+                source.execSQL("ALTER TABLE attachments DROP COLUMN releasedAt")
+                source.execSQL("ALTER TABLE page_revisions DROP COLUMN pictureIds")
                 // Installation identity is not notebook content and must never travel to another
                 // device. The notebook UUID itself remains in both `notebooks.id` and vive_bundle.
                 source.execSQL("DROP TABLE IF EXISTS local_metadata")

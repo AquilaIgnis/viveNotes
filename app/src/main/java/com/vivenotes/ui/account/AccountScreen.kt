@@ -2281,6 +2281,7 @@ private fun syncFailureText(failure: SyncRunResult): String = when (failure) {
 private fun syncFailureMessage(reason: PermanentSyncFailure): Int = when (reason) {
     PermanentSyncFailure.InvalidServerResponse -> R.string.account_sync_error_response
     PermanentSyncFailure.MembershipRequired -> R.string.account_sync_membership_required
+    PermanentSyncFailure.StorageFull -> R.string.account_sync_storage_full
     PermanentSyncFailure.LocalData -> R.string.account_sync_error_local
     PermanentSyncFailure.ChangeTooLarge -> R.string.account_sync_error_large
     PermanentSyncFailure.MalformedChange -> R.string.account_sync_error_malformed
@@ -2356,6 +2357,7 @@ private fun failureMessage(reason: ConnectFailure): Int = when (reason) {
     ConnectFailure.PayloadTooLarge -> R.string.account_error_too_large
     ConnectFailure.ServerError -> R.string.account_error_server
     ConnectFailure.MembershipRequired -> R.string.account_sync_membership_required
+    ConnectFailure.StorageFull -> R.string.account_sync_storage_full
     ConnectFailure.NotAViveServer -> R.string.account_error_not_vive
     ConnectFailure.NotStored -> R.string.account_error_not_stored
     ConnectFailure.Revoked -> R.string.account_error_revoked

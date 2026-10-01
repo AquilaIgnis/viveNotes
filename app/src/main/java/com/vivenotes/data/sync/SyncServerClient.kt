@@ -54,6 +54,12 @@ enum class ConnectFailure {
     MembershipRequired,
 
     /**
+     * `403 quota_exceeded` — the account's storage is full. Not retryable as it stands: the same
+     * upload succeeds only after the account deletes something or moves to a larger plan.
+     */
+    StorageFull,
+
+    /**
      * Something answered and it was not viveCServer: a proxy error page, a different service on
      * that port, a captive portal. Worth distinguishing from [Unreachable] because the fix is
      * different — the address resolves, it is just pointing at the wrong thing.
@@ -1719,6 +1725,7 @@ class SyncServerClient(
             "invalid_request" -> ConnectFailure.InvalidRequest
             "payload_too_large" -> ConnectFailure.PayloadTooLarge
             "membership_required" -> ConnectFailure.MembershipRequired
+            "quota_exceeded" -> ConnectFailure.StorageFull
             null -> failureForStatus(status)
             // "internal", and anything this build has not heard of. A code added to the contract
             // later is a server-side problem from here, not a reason to claim the address is wrong.

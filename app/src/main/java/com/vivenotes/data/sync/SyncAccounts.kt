@@ -146,6 +146,7 @@ data class SyncStatus(
             ConnectFailure.PayloadTooLarge,
             ConnectFailure.ServerError,
             ConnectFailure.MembershipRequired,
+            ConnectFailure.StorageFull,
             ConnectFailure.NotStored,
             ConnectFailure.Revoked,
             ConnectFailure.SignupClosed,

@@ -3,6 +3,7 @@ package com.vivenotes.data.sync
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.vivenotes.data.AttachmentSweep
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.db.AttachmentEntity
@@ -937,6 +938,73 @@ class HierarchySyncTest {
     }
 
     @Test
+    fun aReleasedPictureIsPushedAsATombstoneAndNoBytesTravel() = runBlocking {
+        val bytes = "a photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        val pageId = seedPageWithPicture(digest)
+        hierarchy.run(account())
+        server.blobCalls.clear()
+
+        // The picture leaves the page, and with nothing else placing it the sweep releases it.
+        repository.saveDoc(pageId, PageDoc.empty())
+        AttachmentSweep(db, pictures, { emptySet() }, clock = { now + AttachmentSweep.FRESH_IMPORT_MILLIS }).sweep()
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        // A release names no bytes: uploading them would put back the copy it exists to free.
+        assertEquals(emptyList<String>(), server.blobCalls)
+        val stored = server.current("attachment", digest)!!
+        assertTrue("the server must learn of the release", stored.getValue("deletedAt") !is JsonNull)
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+        // The file stays on this device until the release has aged a day.
+        assertTrue(pictures.fileFor(digest).exists())
+    }
+
+    @Test
+    fun aFullAccountKeepsThePictureAndItsPageQueuedUntilThereIsRoom() = runBlocking {
+        val bytes = "a photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        val pageId = seedPageWithPicture(digest)
+        server.storageFull = true
+
+        val full = hierarchy.run(account())
+
+        // Not "undeliverable": that would drop the picture from the page and from the queue for
+        // good, and it would never reach the server even after the account freed space.
+        assertEquals(SyncRunResult.Failed(PermanentSyncFailure.StorageFull), full)
+        val queued = db.syncDao().outbox(512).map { it.kind to it.entityId }
+        assertTrue(("attachment" to digest) in queued)
+        assertTrue(("pageContent" to pageId) in queued)
+
+        server.storageFull = false
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertArrayEquals(bytes, server.blobs.getValue(digest))
+        assertEquals(
+            listOf(digest),
+            (server.current("pageContent", pageId)!!.getValue("blobRefs") as JsonArray)
+                .map { it.jsonPrimitive.content },
+        )
+    }
+
+    @Test
+    fun aChangeAFullAccountRefusesStaysQueued() = runBlocking {
+        hierarchy.run(account())
+        server.storageFull = true
+        val notebookId = repository.createNotebook("Notebook")
+
+        val full = hierarchy.run(account())
+
+        assertEquals(SyncRunResult.Failed(PermanentSyncFailure.StorageFull), full)
+        assertTrue(("notebook" to notebookId) in db.syncDao().outbox(512).map { it.kind to it.entityId })
+
+        server.storageFull = false
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+        assertNotNull(server.current("notebook", notebookId))
+    }
+
+    @Test
     fun aSecondRunUploadsNothingBecauseTheAcceptedRowIsProofTheServerHasTheBytes() = runBlocking {
         val bytes = "a photograph".toByteArray()
         val digest = sha256(bytes)
@@ -1642,6 +1710,13 @@ class HierarchySyncTest {
          */
         val lostBlobs = mutableSetOf<String>()
 
+        /**
+         * The account's storage quota is full: a new live row is refused `quota_exceeded`, and so is
+         * an upload, exactly as the managed server answers. Changes that do not grow the account —
+         * edits and tombstones of rows it holds — still go through.
+         */
+        var storageFull = false
+
         fun seed(vararg changes: JsonObject) {
             cursor++
             changes.forEach { raw ->
@@ -1812,6 +1887,14 @@ class HierarchySyncTest {
                         null,
                         current,
                     )
+                } else if (storageFull && current == null && incoming["deletedAt"].let { it == null || it is JsonNull }) {
+                    rejected += RejectedServerChange(
+                        key.first,
+                        key.second,
+                        "quota_exceeded",
+                        "this account's storage is full",
+                        null,
+                    )
                 } else {
                     accepted += incoming to (currentVersion + 1)
                     acceptedKeys += key
@@ -1855,6 +1938,7 @@ class HierarchySyncTest {
             file: File,
         ): ServerResult<Boolean> {
             blobCalls += "PUT $digest"
+            if (storageFull) return ServerResult.Failed(ConnectFailure.StorageFull, retryable = false)
             val bytes = file.readBytes()
             // The real server hashes what arrives and refuses a body that does not match its name.
             if (sha256(bytes) != digest) {

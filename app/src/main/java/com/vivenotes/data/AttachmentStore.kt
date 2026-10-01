@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Where imported pictures live.
@@ -147,9 +148,10 @@ class AttachmentStore(
     /**
      * Drops a reference, and sweeps the file if that was the last one.
      *
-     * Deliberately *not* called when an outline is deleted, only when a delete can no longer be
-     * undone. Sweeping on delete would make undo restore an outline pointing at a file that had been
-     * removed underneath it.
+     * Only for a picture this call's own caller just imported and never placed. Everything else is
+     * [AttachmentSweep]'s, which decides from the documents, the saved versions and [heldPictures]
+     * rather than from a count — deleting on a delete would make undo restore an outline pointing at
+     * a file that had been removed underneath it.
      */
     suspend fun release(id: String) = withContext(io) {
         attachments.release(id)
@@ -157,6 +159,36 @@ class AttachmentStore(
             fileFor(id).delete()
             attachments.deleteIfUnreferenced(id)
         }
+    }
+
+    /**
+     * Pictures something in memory can still put back on a page, by whoever holds them.
+     *
+     * The editor's undo and redo history is not persisted — it dies with the process — so it cannot
+     * be found in the database, and a picture deleted from a page is still one tap of Undo away.
+     * The editor registers a function answering "which pictures could I restore right now", and
+     * [AttachmentSweep] asks it before letting any go. A process death takes both the history and
+     * the registration with it, which is exactly when the protection stops being needed.
+     */
+    private val holders = ConcurrentHashMap<Any, () -> Set<String>>()
+
+    /** Registers [owner]'s answer. Called on the main thread, and asked on it. */
+    fun hold(owner: Any, pictures: () -> Set<String>) {
+        holders[owner] = pictures
+    }
+
+    fun releaseHold(owner: Any) {
+        holders.remove(owner)
+    }
+
+    /**
+     * Every picture a registered holder can restore.
+     *
+     * Asked on the main thread, because the editor's history is main-thread state and reading it
+     * from the sweep's thread would race the edit that changes it.
+     */
+    suspend fun heldPictures(): Set<String> = withContext(Dispatchers.Main.immediate) {
+        holders.values.flatMapTo(hashSetOf()) { it() }
     }
 
     suspend fun metadata(id: String): AttachmentEntity? = withContext(io) { attachments.byId(id) }

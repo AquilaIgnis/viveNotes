@@ -499,6 +499,55 @@ class NotesViewModelTest {
         assertFalse(vm.strokes.value.single().stroke.overlaps(leftBox()))
     }
 
+    /**
+     * A deleted picture is held for the picture sweep for exactly as long as Undo can bring it back.
+     *
+     * The history is in memory only, so this registration is the sole thing standing between a
+     * picture one tap of Undo away and the sweep releasing it; and once the delete has been pushed
+     * off the end of the history, holding it any longer would keep it on the account's quota for
+     * nothing.
+     */
+    @Test
+    fun aDeletedPictureIsHeldUntilItsUndoLeavesTheHistory() = runTest(dispatcher) {
+        seedStarterText()
+        val pageId = db.query("SELECT id FROM pages ORDER BY sortIndex LIMIT 1", emptyArray())
+            .use { cursor ->
+                cursor.moveToFirst()
+                cursor.getString(0)
+            }
+        val picture = Outline.Image(
+            id = "picture-1",
+            x = 40f,
+            y = 200f,
+            width = 120f,
+            height = 80f,
+            attachmentId = "sha-held",
+        )
+        val loaded = repository.loadDoc(pageId) as PageLoad.Loaded
+        repository.saveDoc(pageId, loaded.doc.copy(outlines = loaded.doc.outlines + picture))
+        val vm = NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+        )
+        advanceUntilIdle()
+        assertTrue("the open page's picture is held", "sha-held" in attachments.heldPictures())
+
+        vm.deleteImages(setOf("picture-1"))
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.images.isEmpty())
+        assertTrue("one tap of Undo away", "sha-held" in attachments.heldPictures())
+
+        repeat(100) { vm.insertEquation("x", 10f, 10f) }
+        advanceUntilIdle()
+
+        assertFalse("the delete left the 100-step history", "sha-held" in attachments.heldPictures())
+    }
+
     /** One press, because a piece delete is one action however many operations it took to say. */
     @Test
     fun undoingAPieceDeleteBringsThePieceBack() = runTest(dispatcher) {

@@ -227,14 +227,14 @@ interface SyncDao {
     /**
      * Queues this device's pictures — metadata rows only; the bytes go up the byte route first.
      *
-     * `createdAt` is the whole stamp, without the `COALESCE` the ink kinds need: an attachment is
-     * immutable and this build never tombstones one. `AttachmentStore.release` has no caller, so a
-     * picture is never removed from this database and there is no local event a `deletedAt` could
-     * carry.
+     * Released pictures are left out. A server this device is only now joining has never held
+     * them, and telling it to forget a row it never had would leave a tombstone behind for nothing.
+     * `createdAt` is the whole stamp, without the `COALESCE` the ink kinds need, because a live
+     * attachment is immutable in every synced field.
      */
     @Query(
         "INSERT OR IGNORE INTO sync_outbox(kind, entityId, generation, changedAt) " +
-            "SELECT 'attachment', id, 1, createdAt FROM attachments",
+            "SELECT 'attachment', id, 1, createdAt FROM attachments WHERE releasedAt IS NULL",
     )
     suspend fun enqueueAllAttachments()
 }
@@ -731,7 +731,7 @@ interface PageContentDao {
     /**
      * Every stored body that could name a picture.
      *
-     * The `LIKE` is the same guard `HierarchySync.pictureIdsIn` applies before decoding: it is a
+     * The `LIKE` is the same guard `DocumentPictures.idsIn` applies before decoding: it is a
      * field name of `Outline.Image` and of nothing else, and both codecs write field names as text.
      * Filtering in SQL keeps the eviction's survivor scan proportional to the pages that have
      * pictures on them.
@@ -807,6 +807,20 @@ interface PageRevisionDao {
 
     @Query("DELETE FROM page_revisions WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
+
+    /** Saved versions written before `pictureIds` existed, a bounded batch at a time. */
+    @Query("SELECT * FROM page_revisions WHERE pictureIds IS NULL LIMIT :limit")
+    suspend fun unindexed(limit: Int): List<PageRevisionEntity>
+
+    @Query("UPDATE page_revisions SET pictureIds = :pictureIds WHERE id = :id")
+    suspend fun setPictureIds(id: String, pictureIds: String)
+
+    @Query("SELECT COUNT(*) FROM page_revisions WHERE pictureIds IS NULL")
+    suspend fun unindexedCount(): Int
+
+    /** Every indexed version's pictures, in `DocumentPictures.encode` form; empty lists skipped. */
+    @Query("SELECT pictureIds FROM page_revisions WHERE pictureIds IS NOT NULL AND pictureIds != ''")
+    suspend fun indexedPictureIds(): List<String>
 
     /**
      * Drops every saved version of the named pages.
@@ -956,6 +970,17 @@ interface AttachmentDao {
 
     @Query("SELECT * FROM attachments WHERE refCount <= 0")
     suspend fun unreferenced(): List<AttachmentEntity>
+
+    @Query("SELECT * FROM attachments")
+    suspend fun all(): List<AttachmentEntity>
+
+    /** Marks pictures nothing here places any more. Only rows not already released move. */
+    @Query("UPDATE attachments SET releasedAt = :releasedAt WHERE id IN (:ids) AND releasedAt IS NULL")
+    suspend fun markReleased(ids: List<String>, releasedAt: Long)
+
+    /** Takes back a release: something places the picture again. */
+    @Query("UPDATE attachments SET releasedAt = NULL WHERE id IN (:ids)")
+    suspend fun markPlaced(ids: List<String>)
 
     /**
      * Every picture this device knows about, ids only.

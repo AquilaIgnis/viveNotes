@@ -129,7 +129,10 @@ class AttachmentBlobSync(
                 BlobPresence.Present(uploaded = upload.value)
             }
             ServerResult.Unauthorized -> BlobPresence.Stopped(SyncRunResult.Revoked)
-            is ServerResult.Failed -> if (upload.retryable) {
+            // A full account is not a picture that can never be delivered: it goes once there is
+            // room. Undeliverable would drop it from every page pushed this run and from the queue
+            // for good, so the picture would never reach the server even after space was freed.
+            is ServerResult.Failed -> if (upload.retryable || upload.reason == ConnectFailure.StorageFull) {
                 BlobPresence.Stopped(upload.asSyncResult())
             } else {
                 // A picture the server will not take however many times it is offered: over the
@@ -230,6 +233,7 @@ class AttachmentBlobSync(
     private fun ServerResult.Failed.asSyncResult(): SyncRunResult = when {
         reason == ConnectFailure.MembershipRequired ->
             SyncRunResult.Failed(PermanentSyncFailure.MembershipRequired)
+        reason == ConnectFailure.StorageFull -> SyncRunResult.Failed(PermanentSyncFailure.StorageFull)
         retryable -> SyncRunResult.Retryable(reason)
         else -> SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse)
     }
