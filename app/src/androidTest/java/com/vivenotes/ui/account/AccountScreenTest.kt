@@ -1,8 +1,10 @@
 package com.vivenotes.ui.account
 
+import android.view.View
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assert
@@ -11,14 +13,18 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onChild
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.R
 import com.vivenotes.data.billing.ManagedSubscriptionState
@@ -583,7 +589,9 @@ class AccountScreenTest {
         )
         setScreen()
 
+        // The label is the Surface's child: a non-clickable Surface does not merge its content.
         compose.onNodeWithTag(AccountTags.SUBSCRIPTION_BADGE, useUnmergedTree = true)
+            .onChild()
             .assertTextContains(context.getString(R.string.account_subscription_badge_active))
         compose.onNodeWithText(
             context.getString(R.string.account_subscription_renews, formattedSubscriptionDate("2026-10-03T12:00:00Z")),
@@ -710,6 +718,7 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.LOGIN).performClick()
         compose.onNodeWithTag(AccountTags.CLOUD_EMAIL).performTextInput("owner@example.com")
         compose.onNodeWithTag(AccountTags.CLOUD_PASSWORD).performTextInput("correct horse")
+        closeKeyboard(AccountTags.CLOUD_PASSWORD)
 
         compose.onNodeWithTag(AccountTags.CLOUD_SUBMIT).performScrollTo().performClick()
 
@@ -749,6 +758,7 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.RESET_CONFIRM_PASSWORD)
             .performScrollTo()
             .performTextInput("new password")
+        closeKeyboard(AccountTags.RESET_CONFIRM_PASSWORD)
         compose.onNodeWithTag(AccountTags.RESET_COMPLETE).performScrollTo().performClick()
 
         assertEquals(
@@ -811,6 +821,7 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.CLOUD_CONFIRM).performScrollTo()
             .performTextInput("correct horse")
 
+        closeKeyboard(AccountTags.CLOUD_CONFIRM)
         compose.onNodeWithTag(AccountTags.CLOUD_SUBMIT).performScrollTo().performClick()
 
         assertEquals(listOf("owner@example.com" to "correct horse"), signUpCalls)
@@ -836,6 +847,7 @@ class AccountScreenTest {
         // `performTextInput` adds at the end, so the difference has to be at the end.
         compose.onNodeWithTag(AccountTags.CLOUD_CONFIRM).performScrollTo()
             .performTextInput("correct hors")
+        closeKeyboard(AccountTags.CLOUD_CONFIRM)
         compose.onNodeWithTag(AccountTags.CLOUD_SUBMIT).performScrollTo().assertIsNotEnabled()
         compose.onNodeWithText(context.getString(R.string.account_password_mismatch))
             .assertIsDisplayed()
@@ -881,6 +893,7 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.CLOUD_PASSWORD).performTextInput("correct horse")
         compose.onNodeWithTag(AccountTags.CLOUD_CONFIRM).performScrollTo()
             .performTextInput("correct horse")
+        closeKeyboard(AccountTags.CLOUD_CONFIRM)
         compose.onNodeWithTag(AccountTags.CLOUD_SUBMIT).performScrollTo().assertIsEnabled()
 
         // Scrolled to before each press: the assertion above scrolled the card down, and a tap
@@ -982,8 +995,32 @@ class AccountScreenTest {
             .assertTextContains(context.getString(R.string.account_error_signup_closed))
     }
 
+    /** The screen's host view, for reading the window insets the soft keyboard changes. */
+    private lateinit var view: View
+
+    /**
+     * Presses the field's Done key, which puts the soft keyboard away, and waits for it to finish
+     * sliding out.
+     *
+     * The keyboard slides over frames that Compose's idling does not wait for, and the screen's
+     * `imePadding` shrinks the scroll viewport as it goes. A node `performScrollTo` has just brought
+     * into view can be clipped out again before the next action reaches it, and a click on it then
+     * lands nowhere.
+     */
+    private fun closeKeyboard(fieldTag: String) {
+        compose.onNodeWithTag(fieldTag).performImeAction()
+        compose.waitUntil(KEYBOARD_TIMEOUT_MS) {
+            compose.runOnUiThread {
+                val insets = ViewCompat.getRootWindowInsets(view) ?: return@runOnUiThread true
+                !insets.isVisible(WindowInsetsCompat.Type.ime()) &&
+                    insets.getInsets(WindowInsetsCompat.Type.ime()).bottom == 0
+            }
+        }
+    }
+
     private fun setScreen() {
         compose.setContent {
+            view = LocalView.current
             ViveNotesTheme {
                 AccountScreen(
                     onBack = {},
@@ -1024,5 +1061,10 @@ class AccountScreenTest {
                 )
             }
         }
+    }
+
+    private companion object {
+        /** A slide takes a few hundred milliseconds; this only bounds a keyboard that never goes. */
+        const val KEYBOARD_TIMEOUT_MS = 5_000L
     }
 }

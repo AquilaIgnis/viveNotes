@@ -1823,11 +1823,14 @@ class NotesViewModelTest {
         vm.createNotebook("Second")
         advanceUntilIdle()
         // A new notebook's section starts empty, so give it a page for the assertion to be about
-        // something: the editor's contents must survive a delete that is not about them.
-        vm.addPage()
+        // something: the editor's contents must survive a delete that is not about them. Not
+        // `addPage`, which reads the editor defaults from DataStore on a dispatcher
+        // `advanceUntilIdle` does not wait for.
+        val openSection = vm.uiState.value.selectedSectionId!!
+        val openPage = repository.createPage(openSection)
+        vm.openPage(openPage)
         advanceUntilIdle()
-        val openSection = vm.uiState.value.selectedSectionId
-        val openPage = vm.uiState.value.selectedPageId!!
+        assertEquals(openPage, vm.uiState.value.selectedPageId)
 
         vm.deleteNotebook(seeded)
         advanceUntilIdle()
