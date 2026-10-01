@@ -44,6 +44,12 @@ sealed interface BlobPresence {
      */
     data object Undeliverable : BlobPresence
 
+    /**
+     * The account has no room for these [bytes]. Not [Undeliverable]: the picture goes once there is
+     * room, so what names it waits in the queue while everything else still syncs.
+     */
+    data class NoRoom(val bytes: Long) : BlobPresence
+
     /** The connection failed, or the token did. The whole phase stops on [result]. */
     data class Stopped(val result: SyncRunResult) : BlobPresence
 }
@@ -88,11 +94,16 @@ class AttachmentBlobSync(
      * that would normally save an upload can only repeat what the rejection already said. That is
      * also the path that repairs a server whose blob volume was lost while its database survived —
      * §13.12 designed the 404 for exactly this.
+     *
+     * [noRoomFrom] is the smallest picture the account has already refused for room. One at least
+     * that large cannot fit either, and is answered [BlobPresence.NoRoom] without being sent: the
+     * server reads the whole body before it refuses.
      */
     suspend fun ensureUploaded(
         account: SyncAccount,
         digest: String,
         force: Boolean = false,
+        noRoomFrom: Long = Long.MAX_VALUE,
     ): BlobPresence {
         if (!isBlobDigest(digest)) {
             // Not a content address, so it can never name a blob. Only a local row written by
@@ -121,6 +132,9 @@ class AttachmentBlobSync(
             }
         }
 
+        val size = file.length()
+        if (size >= noRoomFrom) return BlobPresence.NoRoom(size)
+
         return when (val upload = client.uploadBlob(account.serverUrl, account.token, digest, file)) {
             is ServerResult.Success -> {
                 serverHolds += digest
@@ -129,16 +143,19 @@ class AttachmentBlobSync(
                 BlobPresence.Present(uploaded = upload.value)
             }
             ServerResult.Unauthorized -> BlobPresence.Stopped(SyncRunResult.Revoked)
-            // A full account is not a picture that can never be delivered: it goes once there is
-            // room. Undeliverable would drop it from every page pushed this run and from the queue
-            // for good, so the picture would never reach the server even after space was freed.
-            is ServerResult.Failed -> if (upload.retryable || upload.reason == ConnectFailure.StorageFull) {
-                BlobPresence.Stopped(upload.asSyncResult())
-            } else {
-                // A picture the server will not take however many times it is offered: over the
-                // per-attachment cap, or bytes it refuses to hash to their own name.
-                Log.e(TAG, "Server permanently refused attachment $digest: ${upload.reason}")
-                BlobPresence.Undeliverable
+            is ServerResult.Failed -> when {
+                // A full account is not a picture that can never be delivered: it goes once there
+                // is room. Undeliverable would drop it from every page pushed this run and from the
+                // queue for good, so the picture would never reach the server even after space was
+                // freed.
+                upload.reason == ConnectFailure.StorageFull -> BlobPresence.NoRoom(size)
+                upload.retryable -> BlobPresence.Stopped(upload.asSyncResult())
+                else -> {
+                    // A picture the server will not take however many times it is offered: over the
+                    // per-attachment cap, or bytes it refuses to hash to their own name.
+                    Log.e(TAG, "Server permanently refused attachment $digest: ${upload.reason}")
+                    BlobPresence.Undeliverable
+                }
             }
         }
     }

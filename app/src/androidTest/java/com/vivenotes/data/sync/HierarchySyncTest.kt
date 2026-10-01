@@ -989,6 +989,37 @@ class HierarchySyncTest {
     }
 
     @Test
+    fun aFullAccountStillPushesADeleteQueuedBesideAPictureThatDoesNotFit() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val doomedId = repository.createPage(sectionId, "Doomed")
+        val pageId = repository.createPage(sectionId, "Page")
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        val bytes = "a photograph".toByteArray()
+        val digest = sha256(bytes)
+        pictures.write(digest, bytes)
+        placePicture(pageId, digest)
+        repository.deletePage(doomedId)
+        server.storageFull = true
+        server.blobCalls.clear()
+
+        val full = hierarchy.run(account())
+
+        assertEquals(SyncRunResult.Failed(PermanentSyncFailure.StorageFull), full)
+        // Deleting is how a full account makes room, so a picture with none must not hold it back.
+        assertTrue(server.current("page", doomedId)!!.getValue("deletedAt") !is JsonNull)
+        val queued = db.syncDao().outbox(512).map { it.kind to it.entityId }
+        assertEquals(setOf("attachment" to digest, "pageContent" to pageId), queued.toSet())
+        assertEquals(listOf("HEAD $digest", "PUT $digest"), server.blobCalls)
+
+        server.storageFull = false
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+        assertArrayEquals(bytes, server.blobs.getValue(digest))
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    @Test
     fun aChangeAFullAccountRefusesStaysQueued() = runBlocking {
         hierarchy.run(account())
         server.storageFull = true
@@ -1512,6 +1543,12 @@ class HierarchySyncTest {
         val notebookId = repository.createNotebook("Notebook")
         val sectionId = repository.createSection(notebookId, "Section")
         val pageId = repository.createPage(sectionId, "Page")
+        placePicture(pageId, digest)
+        return pageId
+    }
+
+    /** Puts one picture on an existing page, with its metadata row. */
+    private suspend fun placePicture(pageId: String, digest: String) {
         db.attachmentDao().insert(
             AttachmentEntity(
                 id = digest,
@@ -1526,7 +1563,6 @@ class HierarchySyncTest {
         )
         db.attachmentDao().retain(digest)
         repository.saveDoc(pageId, docWithPicture(digest))
-        return pageId
     }
 
     private fun docWithPicture(digest: String, x: Float = 0f) = PageDoc(

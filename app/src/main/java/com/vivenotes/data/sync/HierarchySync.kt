@@ -157,6 +157,20 @@ class HierarchySync(
     private val repairedBlobs = mutableSetOf<String>()
 
     /**
+     * Digests the account had no room for this run. Every change naming one is left queued and out
+     * of the batch, so it cannot hold back the rest — deletes above all, which are what free room.
+     *
+     * Cleared at the start of every run, because only the server knows when room comes back.
+     */
+    private val noRoomBlobs = mutableSetOf<String>()
+
+    /** The smallest of [noRoomBlobs], in bytes: a picture at least this large is not offered. */
+    private var smallestNoRoom = Long.MAX_VALUE
+
+    /** Queued rows passed over for naming one of [noRoomBlobs], by the generation that did. */
+    private val waitingForRoom = mutableMapOf<Pair<String, String>, Long>()
+
+    /**
      * Bodies written by this transaction whose pictures have still to be counted. A plain list for
      * the reason [remoteInkPages] is a plain set.
      */
@@ -264,8 +278,7 @@ class HierarchySync(
                 return@withLock SyncRunResult.Succeeded(SyncSummary(0, 0, 0, 0))
             }
 
-            undeliverableBlobs.clear()
-            repairedBlobs.clear()
+            forgetBlobVerdicts()
             dropStarterSupersededByAccount()
             when (val pushed = pushOutbox(account)) {
                 is PhaseResult.Done -> SyncRunResult.Succeeded(
@@ -318,8 +331,7 @@ class HierarchySync(
     suspend fun run(account: SyncAccount): SyncRunResult = mutex.withLock {
         try {
             activateLocked(account.accountId)
-            undeliverableBlobs.clear()
-            repairedBlobs.clear()
+            forgetBlobVerdicts()
 
             var pulled = 0
             var pushed = 0
@@ -403,6 +415,14 @@ class HierarchySync(
             // looking at, and a set left full here would announce it on the next run instead.
             publishRemoteInk()
         }
+    }
+
+    private fun forgetBlobVerdicts() {
+        undeliverableBlobs.clear()
+        repairedBlobs.clear()
+        noRoomBlobs.clear()
+        smallestNoRoom = Long.MAX_VALUE
+        waitingForRoom.clear()
     }
 
     private suspend fun activateLocked(accountId: String) {
@@ -929,7 +949,13 @@ class HierarchySync(
 
         while (batchCount++ < MAX_BATCHES_PER_RUN) {
             val pending = loadOrCreatePendingBatch()
-                ?: return PhaseResult.ConflictDone(pushed, conflicts, pictures)
+                ?: return if (noRoomBlobs.isEmpty()) {
+                    PhaseResult.ConflictDone(pushed, conflicts, pictures)
+                } else {
+                    // Everything that could go has gone. What is left names a picture the account
+                    // has no room for, and the screen has to say so.
+                    PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.StorageFull))
+                }
 
             // The bytes go up before the change that names them. The server refuses it otherwise —
             // that refusal is what makes reachability knowable to it at all — so this is not an
@@ -937,9 +963,10 @@ class HierarchySync(
             when (val preflight = uploadBlobsFor(account, pending.changes)) {
                 is BlobPhase.Ready -> pictures += preflight.uploaded
                 BlobPhase.Rebuild -> {
-                    // A digest in this batch cannot be delivered. The batch was serialized naming
-                    // it, so it is thrown away and built again without it rather than sent to be
-                    // rejected: the durable batch is what a retry re-sends byte for byte.
+                    // A digest in this batch cannot be delivered, or not until the account has
+                    // room. The batch was serialized naming it, so it is thrown away and built again
+                    // without it rather than sent to be rejected: the durable batch is what a retry
+                    // re-sends byte for byte.
                     metadata.delete(PENDING_BATCH_KEY)
                     continue
                 }
@@ -1106,10 +1133,14 @@ class HierarchySync(
                 rebuild = true
                 return@forEach
             }
-            when (val presence = blobs.ensureUploaded(account, digest)) {
+            when (val presence = blobs.ensureUploaded(account, digest, noRoomFrom = smallestNoRoom)) {
                 is BlobPresence.Present -> if (presence.uploaded) uploaded++
                 BlobPresence.Undeliverable -> {
                     markUndeliverable(digest)
+                    rebuild = true
+                }
+                is BlobPresence.NoRoom -> {
+                    markNoRoom(digest, presence.bytes)
                     rebuild = true
                 }
                 is BlobPresence.Stopped -> return BlobPhase.Stop(presence.result)
@@ -1141,9 +1172,18 @@ class HierarchySync(
                 markUndeliverable(digest)
                 return@forEach
             }
-            when (val presence = blobs.ensureUploaded(account, digest, force = true)) {
+            when (
+                val presence = blobs.ensureUploaded(
+                    account,
+                    digest,
+                    force = true,
+                    noRoomFrom = smallestNoRoom,
+                )
+            ) {
                 is BlobPresence.Present -> if (presence.uploaded) uploaded++
                 BlobPresence.Undeliverable -> markUndeliverable(digest)
+                // The rejected change is still queued, and the next batch is built without it.
+                is BlobPresence.NoRoom -> markNoRoom(digest, presence.bytes)
                 is BlobPresence.Stopped -> return BlobPhase.Stop(presence.result)
             }
         }
@@ -1166,6 +1206,18 @@ class HierarchySync(
         if (!undeliverableBlobs.add(digest)) return
         Log.e(TAG, "Attachment $digest cannot be delivered; pages will be pushed without it")
         sync.deleteOutbox(SyncKind.Attachment.wire, digest)
+    }
+
+    /**
+     * Holds back, for the rest of this run, every change that names [digest].
+     *
+     * Unlike [markUndeliverable] this drops nothing: the picture and the pages showing it stay
+     * queued exactly as they are, and go through on a later run once the account has room.
+     */
+    private fun markNoRoom(digest: String, bytes: Long) {
+        if (!noRoomBlobs.add(digest)) return
+        smallestNoRoom = minOf(smallestNoRoom, bytes)
+        Log.w(TAG, "No room on the account for attachment $digest; changes naming it stay queued")
     }
 
     /** The attachment digests one queued change will name on the wire. */
@@ -1219,8 +1271,6 @@ class HierarchySync(
             return@withTransaction hierarchyJson.decodeFromString(PendingBatch.serializer(), encoded)
         }
 
-        val rows = sync.outbox(MAX_PUSH_CHANGES)
-        if (rows.isEmpty()) return@withTransaction null
         val batchId = UUID.randomUUID().toString()
         val changes = mutableListOf<PendingChange>()
         // A row-count cap stopped bounding the request once pageContent joined the protocol, so the
@@ -1232,16 +1282,31 @@ class HierarchySync(
         // envelope is `{"batchId":"…","changes":[…]}`, so its length is the empty envelope plus each
         // element's length plus one comma between elements.
         var encodedSize = encodedPushSize(batchId, emptyList())
-        for (row in rows) {
-            val change = snapshot(row)
-            val addition = change.payload.toString().encodeToByteArray().size +
-                if (changes.isEmpty()) 0 else 1
-            // A first row is still admitted so the transport/server can return the permanent size
-            // verdict instead of leaving it queued behind an empty batch.
-            if (changes.isNotEmpty() && encodedSize + addition > MAX_SYNC_PUSH_BYTES) break
-            changes += change
-            encodedSize += addition
-        }
+        // Rows waiting for room are passed over, and the read reaches that many rows further so they
+        // never crowd out what is queued behind them. A read that turns up nothing but newly found
+        // ones reads again, further; one that reaches the end of the queue stops.
+        do {
+            val limit = MAX_PUSH_CHANGES + waitingForRoom.size
+            val rows = sync.outbox(limit)
+            for (row in rows) {
+                if (changes.size == MAX_PUSH_CHANGES) break
+                val key = row.kind to row.entityId
+                if (waitingForRoom[key] == row.generation) continue
+                val change = snapshot(row)
+                if (digestsNamedBy(change).any(noRoomBlobs::contains)) {
+                    waitingForRoom[key] = row.generation
+                    continue
+                }
+                val addition = change.payload.toString().encodeToByteArray().size +
+                    if (changes.isEmpty()) 0 else 1
+                // A first row is still admitted so the transport/server can return the permanent
+                // size verdict instead of leaving it queued behind an empty batch.
+                if (changes.isNotEmpty() && encodedSize + addition > MAX_SYNC_PUSH_BYTES) break
+                changes += change
+                encodedSize += addition
+            }
+        } while (changes.isEmpty() && rows.size == limit)
+        if (changes.isEmpty()) return@withTransaction null
         val pending = PendingBatch(
             batchId = batchId,
             changes = changes,
@@ -2045,7 +2110,10 @@ class HierarchySync(
     private sealed interface BlobPhase {
         data class Ready(val uploaded: Int) : BlobPhase
 
-        /** A digest cannot be delivered, so what named it has to be snapshotted again without it. */
+        /**
+         * A digest cannot be delivered, or the account has no room for it, so the batch has to be
+         * built again without what named it.
+         */
         data object Rebuild : BlobPhase
         data class Stop(val result: SyncRunResult) : BlobPhase
     }
