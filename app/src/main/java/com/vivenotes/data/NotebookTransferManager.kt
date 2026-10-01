@@ -39,6 +39,7 @@ import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import java.util.zip.ZipInputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -85,33 +86,70 @@ class NotebookTransferManager(
     suspend fun exportNotebook(notebookId: String, destination: Uri): NotebookExportResult =
         mutex.withLock {
             withContext(io) {
-                context.contentResolver.openOutputStream(destination, "w")?.use { output ->
-                    exportNotebookLocked(notebookId, output)
-                } ?: throw NotebookTransferException("The selected destination could not be opened.")
+                logged({ "Export of notebook $notebookId to $destination" }) {
+                    context.contentResolver.openOutputStream(destination, "w")?.use { output ->
+                        exportNotebookLocked(notebookId, output)
+                    } ?: throw NotebookTransferException("The selected destination could not be opened.")
+                }
             }
         }
 
     suspend fun importNotebook(source: Uri): NotebookImportResult = mutex.withLock {
         withContext(io) {
-            context.contentResolver.openInputStream(source)?.use { input ->
-                importNotebookLocked(input)
-            } ?: throw NotebookTransferException("The selected notebook file could not be opened.")
+            logged({ "Import from $source" }) {
+                context.contentResolver.openInputStream(source)?.use { input ->
+                    importNotebookLocked(input)
+                } ?: throw NotebookTransferException("The selected notebook file could not be opened.")
+            }
         }
     }
 
     /** Test seam which exercises the exact package writer without a document provider. */
     internal suspend fun exportNotebook(notebookId: String, output: OutputStream): NotebookExportResult =
-        mutex.withLock { withContext(io) { exportNotebookLocked(notebookId, output) } }
+        mutex.withLock {
+            withContext(io) {
+                logged({ "Export of notebook $notebookId" }) { exportNotebookLocked(notebookId, output) }
+            }
+        }
 
     /** Test seam which still stages and validates every byte before importing. */
     internal suspend fun importNotebook(input: InputStream): NotebookImportResult =
-        mutex.withLock { withContext(io) { importNotebookLocked(input) } }
+        mutex.withLock { withContext(io) { logged({ "Import" }) { importNotebookLocked(input) } } }
+
+    /**
+     * Runs one transfer and, in debug builds, says how it ended.
+     *
+     * The File tab shows only a failure's message, so this is where the cause behind "damaged or
+     * unsafe" can be read: the exception is logged with its whole chain before it is rethrown.
+     */
+    private inline fun <T> logged(describe: () -> String, transfer: () -> T): T {
+        val started = System.nanoTime()
+        DebugLog.i(DebugLog.TRANSFER) { "${describe()} started" }
+        return try {
+            transfer().also { result ->
+                DebugLog.i(DebugLog.TRANSFER) {
+                    "${describe()} finished in ${(System.nanoTime() - started) / 1_000_000} ms: $result"
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            DebugLog.w(DebugLog.TRANSFER) { "${describe()} was cancelled" }
+            throw cancelled
+        } catch (failure: Throwable) {
+            DebugLog.e(DebugLog.TRANSFER, failure) {
+                "${describe()} failed after ${(System.nanoTime() - started) / 1_000_000} ms: " +
+                    failure.message
+            }
+            throw failure
+        }
+    }
 
     private fun exportNotebookLocked(notebookId: String, output: OutputStream): NotebookExportResult {
         val root = freshDirectory("export")
+        DebugLog.d(DebugLog.TRANSFER) { "Staging the export in ${root.absolutePath}" }
         try {
             val bundleDb = File(root, DATABASE_ENTRY)
             createConsistentSnapshot(bundleDb)
+            DebugLog.d(DebugLog.TRANSFER) { "VACUUM INTO took a ${bundleDb.length()}-byte snapshot of notes.db" }
             val prepared = prepareNotebookDatabase(bundleDb, notebookId, root)
 
             val databaseFile = BundleFile(
@@ -119,6 +157,10 @@ class NotebookTransferManager(
                 byteCount = bundleDb.length(),
                 sha256 = bundleDb.sha256(),
             )
+            DebugLog.d(DebugLog.TRANSFER) {
+                "$DATABASE_ENTRY is ${databaseFile.byteCount} bytes, sha256 ${databaseFile.sha256}; " +
+                    "${prepared.counts}"
+            }
             val manifest = NotebookBundleManifest(
                 bundleId = newId(),
                 createdAt = clock(),
@@ -151,6 +193,10 @@ class NotebookTransferManager(
             val checksumBytes = checksums.joinToString(separator = "\n", postfix = "\n") {
                 "${it.sha256}  ${it.path}"
             }.encodeToByteArray()
+            DebugLog.d(DebugLog.TRANSFER) {
+                "$MANIFEST_ENTRY is ${manifestBytes.size} bytes (bundle ${manifest.bundleId}); " +
+                    "$CHECKSUMS_ENTRY covers ${checksums.size} file(s)"
+            }
 
             val archive = File(root, "notebook.vive")
             ZipOutputStream(FileOutputStream(archive).buffered()).use { zip ->
@@ -160,6 +206,9 @@ class NotebookTransferManager(
                     zip.putFile("$ATTACHMENTS_PREFIX${staged.metadata.id}", staged.file, stored = true)
                 }
                 zip.putBytes(CHECKSUMS_ENTRY, checksumBytes)
+            }
+            DebugLog.d(DebugLog.TRANSFER) {
+                "Wrote a ${archive.length()}-byte archive of ${checksums.size + 1} entries; copying it out"
             }
             FileInputStream(archive).use { it.copyTo(output) }
             output.flush()
@@ -180,7 +229,11 @@ class NotebookTransferManager(
             FileOutputStream(archive).use { output ->
                 input.copyBounded(output, MAX_ARCHIVE_BYTES, "The notebook file is too large.")
             }
+            DebugLog.d(DebugLog.TRANSFER) {
+                "Copied the ${archive.length()}-byte file into ${root.absolutePath} for validation"
+            }
             val validated = validateArchive(archive, root)
+            DebugLog.d(DebugLog.TRANSFER) { "The archive is valid; installing it" }
             return install(validated)
         } catch (failure: NotebookTransferException) {
             throw failure
@@ -228,6 +281,7 @@ class NotebookTransferManager(
             if (cloudOnly) throw NotebookTransferException(
                 "This notebook's contents are in the cloud. Bring it back to this device first.",
             )
+            DebugLog.d(DebugLog.TRANSFER) { "Pruning the snapshot down to notebook \"${notebook.name}\"" }
 
             source.beginTransaction()
             try {
@@ -240,11 +294,13 @@ class NotebookTransferManager(
                 // exporting device's account, and `validateSchema` rejects any bundle holding a
                 // trigger at all. Dropping every trigger rather than naming the fifteen keeps this
                 // from having to be kept in step with `installSyncTriggers`.
-                source.queryRows(
+                val triggers = source.queryRows(
                     "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name NOT LIKE 'sqlite_%'",
-                ) { it.getString(0) }.forEach { trigger ->
+                ) { it.getString(0) }
+                triggers.forEach { trigger ->
                     source.execSQL("DROP TRIGGER IF EXISTS `$trigger`")
                 }
+                DebugLog.d(DebugLog.TRANSFER) { "Dropped ${triggers.size} sync trigger(s) from the snapshot" }
                 // The sync tables themselves are per-device bookkeeping about one account: which
                 // account this install is connected to and where its cursor stands (`sync_state`),
                 // what the server last confirmed for each row (`sync_entity_states`), and what this
@@ -293,6 +349,9 @@ class NotebookTransferManager(
             } finally {
                 source.endTransaction()
             }
+            DebugLog.d(DebugLog.TRANSFER) {
+                "Removed other notebooks, sync tables, device-local columns and derived caches"
+            }
 
             val currentDocs = source.queryRows("SELECT * FROM page_content", mapper = ::readContent)
             val revisions = source.queryRows("SELECT * FROM page_revisions", mapper = ::readRevision)
@@ -312,6 +371,10 @@ class NotebookTransferManager(
                 "SELECT * FROM attachments",
                 mapper = ::readAttachment,
             ).filter { it.id in attachmentRefs }
+            DebugLog.d(DebugLog.TRANSFER) {
+                "${currentDocs.size} page bodies and ${revisions.size} saved versions place " +
+                    "${attachmentRefs.size} picture(s)"
+            }
             if (metadata.map { it.id }.toSet() != attachmentRefs.keys) {
                 throw NotebookTransferException("The notebook references an attachment whose metadata is missing.")
             }
@@ -326,6 +389,9 @@ class NotebookTransferManager(
                     parentFile?.mkdirs()
                 }
                 original.copyTo(staged)
+                DebugLog.d(DebugLog.TRANSFER) {
+                    "Staged picture ${row.id} (${row.byteCount} bytes, ${attachmentRefs.getValue(row.id)} ref(s))"
+                }
                 StagedAttachment(row.copy(refCount = attachmentRefs.getValue(row.id)), staged)
             }
 
@@ -349,6 +415,7 @@ class NotebookTransferManager(
             }
             source.execSQL("VACUUM")
             requireDatabaseOkay(source)
+            DebugLog.d(DebugLog.TRANSFER) { "The pruned database passed quick_check and foreign_key_check" }
             PreparedExport(
                 notebook = notebook,
                 attachments = stagedAttachments,
@@ -380,16 +447,19 @@ class NotebookTransferManager(
                 val target = safeTarget(extractedRoot, entry.name)
                 target.parentFile?.mkdirs()
                 FileOutputStream(target).use { output ->
-                    expandedBytes += zip.copyBounded(
+                    val written = zip.copyBounded(
                         output,
                         limit,
                         "Archive entry ${entry.name} expands beyond its limit.",
                     )
+                    expandedBytes += written
+                    DebugLog.d(DebugLog.TRANSFER) { "Extracted ${entry.name} ($written bytes)" }
                 }
                 if (expandedBytes > MAX_EXPANDED_BYTES) fail("The archive expands beyond its limit.")
                 zip.closeEntry()
             }
         }
+        DebugLog.d(DebugLog.TRANSFER) { "Extracted ${names.size} entries, $expandedBytes bytes in all" }
         if (MANIFEST_ENTRY !in names || DATABASE_ENTRY !in names || CHECKSUMS_ENTRY !in names) {
             fail("The archive is missing required files.")
         }
@@ -398,6 +468,11 @@ class NotebookTransferManager(
         val manifest = runCatching {
             JSON.decodeFromString<NotebookBundleManifest>(manifestFile.readText())
         }.getOrElse { fail("manifest.json is not valid ViveNotes metadata.", it) }
+        DebugLog.d(DebugLog.TRANSFER) {
+            "Manifest: bundle ${manifest.bundleId}, notebook ${manifest.sourceNotebookId} " +
+                "\"${manifest.notebookName}\", format ${manifest.format} v${manifest.formatVersion}, " +
+                "app schema ${manifest.appSchemaVersion}, written at ${manifest.createdAt}; ${manifest.counts}"
+        }
         validateManifest(manifest)
 
         val expectedNames = buildSet {
@@ -414,6 +489,7 @@ class NotebookTransferManager(
         checksums.forEach { (path, expected) ->
             if (File(extractedRoot, path).sha256() != expected) fail("Checksum verification failed for $path.")
         }
+        DebugLog.d(DebugLog.TRANSFER) { "Verified ${checksums.size} SHA-256 checksum(s)" }
         if (manifest.database.sha256 != checksums[DATABASE_ENTRY] ||
             manifest.database.byteCount != File(extractedRoot, DATABASE_ENTRY).length()
         ) fail("The database metadata does not match its file.")
@@ -446,6 +522,9 @@ class NotebookTransferManager(
             if (bounds.width != metadata.pixelWidth || bounds.height != metadata.pixelHeight) {
                 fail("Attachment ${metadata.id.take(12)} has incorrect image dimensions.")
             }
+            DebugLog.d(DebugLog.TRANSFER) {
+                "Verified picture ${metadata.id} (${metadata.mimeType}, ${bounds.width}x${bounds.height})"
+            }
         }
         return ValidatedBundle(manifest, data, stagedAttachments)
     }
@@ -465,6 +544,7 @@ class NotebookTransferManager(
         return source.use { database ->
             database.rawQuery("PRAGMA query_only = ON", null).close()
             requireDatabaseOkay(database)
+            DebugLog.d(DebugLog.TRANSFER) { "$DATABASE_ENTRY passed quick_check and foreign_key_check" }
             if (database.scalarLong("PRAGMA application_id") != APPLICATION_ID.toLong() ||
                 database.scalarLong("PRAGMA user_version") != FORMAT_VERSION.toLong()
             ) fail("The notebook database has an unsupported format.")
@@ -478,8 +558,10 @@ class NotebookTransferManager(
                 bundleMetadata["appSchemaVersion"] != APP_SCHEMA_VERSION.toString() ||
                 bundleMetadata["notebookId"] != manifest.sourceNotebookId
             ) fail("The manifest and notebook database describe different bundles.")
+            DebugLog.d(DebugLog.TRANSFER) { "Schema, application_id and vive_bundle identity match" }
 
             validateTableCounts(database, manifest.counts)
+            DebugLog.d(DebugLog.TRANSFER) { "Table counts match the manifest and are within limits" }
 
             val notebooks = database.queryRows("SELECT * FROM notebooks", mapper = ::readNotebook)
             val sections = database.queryRows("SELECT * FROM sections", mapper = ::readSection)
@@ -496,6 +578,12 @@ class NotebookTransferManager(
                 "SELECT moveId, strokeId FROM ink_move_targets",
             ) { InkMoveTargetEntity(it.getString(0), it.getString(1)) }
             val attachments = database.queryRows("SELECT * FROM attachments", mapper = ::readAttachment)
+            DebugLog.d(DebugLog.TRANSFER) {
+                "Read ${notebooks.size} notebook, ${sections.size} section(s), ${pages.size} page(s), " +
+                    "${contents.size} body(ies), ${revisions.size} version(s), ${strokes.size} stroke(s), " +
+                    "${erases.size} erase(s) with ${eraseTargets.size} target(s), ${moves.size} move(s) " +
+                    "with ${moveTargets.size} target(s), ${attachments.size} picture(s)"
+            }
 
             validateCounts(manifest.counts, sections, pages, strokes, revisions, attachments)
             val notebook = notebooks.singleOrNull()
@@ -532,9 +620,11 @@ class NotebookTransferManager(
                 }
                 row.pageId to decodeDocument(row.format, row.docJson.encodeToByteArray())
             }
+            DebugLog.d(DebugLog.TRANSFER) { "Decoded all ${decodedCurrent.size} page bodies" }
             strokes.forEach(::validateStroke)
             erases.forEach(::validateErase)
             moves.forEach(::validateMove)
+            DebugLog.d(DebugLog.TRANSFER) { "Every stroke, erase and move is well formed" }
 
             val strokesById = strokes.associateBy { it.id }
             val erasesById = erases.associateBy { it.id }
@@ -582,6 +672,10 @@ class NotebookTransferManager(
                 row.id to ValidatedRevision(row, doc.imageIds(), snapshot)
             }
 
+            DebugLog.d(DebugLog.TRANSFER) {
+                "Erase and move targets stay on their pages; unpacked ${revisionSnapshots.size} saved version(s)"
+            }
+
             val referencedAttachments = buildSet {
                 decodedCurrent.values.forEach { addAll(it.imageIds()) }
                 revisionSnapshots.values.forEach { addAll(it.imageIds) }
@@ -617,7 +711,12 @@ class NotebookTransferManager(
                 ?: bundle.data.notebook.id,
         )
         val notebookId = data.notebook.id
+        if (notebookId != bundle.data.notebook.id) DebugLog.d(DebugLog.TRANSFER) {
+            "The archive's notebook ${bundle.data.notebook.id} was moved to $notebookId on this device " +
+                "after a purge; importing into $notebookId"
+        }
         val existingRows = auditLiveCollisions(data)
+        DebugLog.d(DebugLog.TRANSFER) { "No stable id collides with different content on this device" }
         val existingNotebook = existingRows.notebook
         val localSections = db.sectionDao().allInNotebook(notebookId)
         val localPages = db.pageDao().allInNotebook(notebookId)
@@ -642,6 +741,15 @@ class NotebookTransferManager(
         }
         val restored = restoringNotebook || restoringSectionIds.isNotEmpty() || restoringPageIds.isNotEmpty()
         val importedAt = clock()
+        DebugLog.d(DebugLog.TRANSFER) {
+            describeInstall(
+                data,
+                existingRows,
+                localSections,
+                localPages,
+                revived = restoringSectionIds.size + restoringPageIds.size + if (restoringNotebook) 1 else 0,
+            )
+        }
 
         /** A restored archive state is a new mutation and must supersede the state it replaces. */
         fun importedTimestamp(incoming: Long, existing: Long): Long = maxOf(
@@ -658,6 +766,7 @@ class NotebookTransferManager(
                     if (!target.isFile || target.length() != staged.length() || target.sha256() != id) {
                         fail("An existing attachment with the same identity is damaged.")
                     }
+                    DebugLog.d(DebugLog.TRANSFER) { "Picture $id is already on this device" }
                 } else {
                     val pending = File(target.parentFile, "$id.${UUID.randomUUID()}.import")
                     staged.copyTo(pending)
@@ -667,6 +776,7 @@ class NotebookTransferManager(
                     }
                     moveAtomically(pending, target)
                     installedFiles += target
+                    DebugLog.d(DebugLog.TRANSFER) { "Installed picture file $id" }
                 }
             }
 
@@ -683,7 +793,10 @@ class NotebookTransferManager(
                     // Recheck inside the write transaction so an edit which clears the marker can
                     // never race an import and lose a real notebook.
                     val replaceableStarter = replaceableStarterNotebook()
-                    replaceableStarter?.let { notebookDao.retirePlaceholder(it.id, importedAt) }
+                    replaceableStarter?.let {
+                        notebookDao.retirePlaceholder(it.id, importedAt)
+                        DebugLog.d(DebugLog.TRANSFER) { "Retired the untouched starter notebook ${it.id}" }
+                    }
                     notebookDao.upsert(
                         data.notebook.copy(
                             sortIndex = replaceableStarter?.sortIndex ?: notebookDao.nextSortIndex(),
@@ -720,8 +833,10 @@ class NotebookTransferManager(
                     db.localMetadataDao().put(
                         LocalMetadataEntity(NotesRepository.importedNotebookKey(notebookId), "$importedAt"),
                     )
+                    DebugLog.d(DebugLog.TRANSFER) { "Marked $notebookId as imported and not yet on the server" }
                 } else {
                     db.localMetadataDao().delete(NotesRepository.importedNotebookKey(notebookId))
+                    DebugLog.d(DebugLog.TRANSFER) { "The server already holds $notebookId; no import mark" }
                 }
 
                 val sectionDao = db.sectionDao()
@@ -783,6 +898,9 @@ class NotebookTransferManager(
                     db.inkEraseDao().softDeletePage(page.id, importedAt)
                     db.inkMoveDao().softDeletePage(page.id, importedAt)
                 }
+                DebugLog.d(DebugLog.TRANSFER) {
+                    "Wrote notebook, sections, pages and bodies; reset active ink on ${data.pages.size} page(s)"
+                }
                 if (data.strokes.isNotEmpty()) db.inkStrokeDao().upsert(data.strokes)
                 data.erases.forEach { db.inkEraseDao().upsert(it) }
                 data.erases.map { it.id }.chunked(SQLITE_BIND_CHUNK).forEach { ids ->
@@ -799,13 +917,20 @@ class NotebookTransferManager(
                     db.inkMoveDao().insertTargetsIfAbsent(data.moveTargets)
                 }
 
+                DebugLog.d(DebugLog.TRANSFER) {
+                    "Rebuilt ink from ${data.strokes.size} stroke(s), ${data.erases.size} erase(s), " +
+                        "${data.moves.size} move(s)"
+                }
+
                 val revisionDao = db.pageRevisionDao()
                 val importedRevisionIds = data.revisions.mapTo(hashSetOf()) { it.id }
-                localRevisions.map { it.id }.filterNot(importedRevisionIds::contains)
-                    .chunked(SQLITE_BIND_CHUNK)
-                    .forEach { revisionDao.deleteByIds(it) }
+                val localOnlyRevisions = localRevisions.map { it.id }.filterNot(importedRevisionIds::contains)
+                localOnlyRevisions.chunked(SQLITE_BIND_CHUNK).forEach { revisionDao.deleteByIds(it) }
                 val newRevisions = data.revisions.filter { it.id !in existingRows.revisions }
                 newRevisions.forEach { revisionDao.insertIfAbsent(it) }
+                DebugLog.d(DebugLog.TRANSFER) {
+                    "Versions: removed ${localOnlyRevisions.size} local-only, added ${newRevisions.size}"
+                }
                 newRevisions.map { it.pageId }.distinct().forEach { pageId ->
                     revisionDao.trimToNewest(pageId, NotesRepository.MAX_REVISIONS_PER_PAGE)
                 }
@@ -814,9 +939,16 @@ class NotebookTransferManager(
                     repeat(delta.coerceAtLeast(0)) { attachmentDao.retain(id) }
                     repeat((-delta).coerceAtLeast(0)) { attachmentDao.release(id) }
                 }
+                DebugLog.d(DebugLog.TRANSFER) {
+                    val adjusted = attachmentDeltas.count { it.value != 0 }
+                    "Adjusted reference counts of $adjusted picture(s); committing"
+                }
             }
         } catch (failure: Throwable) {
             installedFiles.forEach(File::delete)
+            DebugLog.d(DebugLog.TRANSFER) {
+                "Install rolled back; removed ${installedFiles.size} picture file(s) this attempt had added"
+            }
             throw failure
         }
 
@@ -825,6 +957,10 @@ class NotebookTransferManager(
             db.pageDao().inNotebook(notebookId).firstOrNull { it.sectionId == sectionId }?.id
         }
         val finalNotebook = db.notebookDao().byId(notebookId) ?: error("synced notebook disappeared")
+        DebugLog.i(DebugLog.DB) {
+            "Imported notebook $notebookId \"${finalNotebook.name}\" from a .vive file " +
+                "(${if (existingNotebook == null) "created" else "updated"}${if (restored) ", restored" else ""})"
+        }
         return NotebookImportResult(
             notebookId,
             finalNotebook.name,
@@ -833,6 +969,48 @@ class NotebookTransferManager(
             created = existingNotebook == null,
             restored = restored,
         )
+    }
+
+    /** Debug builds only: what [install] is about to write, kind by kind. */
+    private fun describeInstall(
+        data: BundleData,
+        existing: ExistingBundleRows,
+        localSections: List<SectionEntity>,
+        localPages: List<PageEntity>,
+        revived: Int,
+    ): String {
+        fun <T> plan(
+            rows: List<T>,
+            key: (T) -> String,
+            found: Map<String, T>,
+            same: (T, T) -> Boolean,
+        ): String {
+            val added = rows.count { key(it) !in found }
+            val changed = rows.count { row -> found[key(row)]?.let { !same(it, row) } == true }
+            return "${rows.size} ($added new, $changed changed)"
+        }
+        val archivedSections = data.sections.mapTo(hashSetOf()) { it.id }
+        val archivedPages = data.pages.mapTo(hashSetOf()) { it.id }
+        val localOnlySections = localSections.count { it.id !in archivedSections && it.deletedAt == null }
+        val localOnlyPages = localPages.count { it.id !in archivedPages && it.deletedAt == null }
+        return listOf(
+            "Plan: notebook ${data.notebook.id} " + if (existing.notebook == null) "is new" else "exists",
+            "sections " +
+                plan(data.sections, SectionEntity::id, existing.sections, SectionEntity::sameImportedStateAs),
+            "pages " + plan(data.pages, PageEntity::id, existing.pages, PageEntity::sameImportedStateAs),
+            "bodies " + plan(
+                data.contents,
+                PageContentEntity::pageId,
+                existing.contents,
+                PageContentEntity::sameImportedStateAs,
+            ),
+            "$revived tombstoned row(s) revived",
+            "local-only to tombstone: $localOnlySections section(s), $localOnlyPages page(s)",
+            "strokes ${data.strokes.size} (${data.strokes.count { it.id !in existing.strokes }} new)",
+            "versions ${data.revisions.size} (${data.revisions.count { it.id !in existing.revisions }} new)",
+            "pictures ${data.attachments.size} " +
+                "(${data.attachments.count { it.id !in existing.attachments }} new)",
+        ).joinToString("; ")
     }
 
     /**

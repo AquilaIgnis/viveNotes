@@ -58,10 +58,16 @@ class DatabaseBackupManager(
                 check(isValid(pending)) { "SQLite produced an invalid backup at $pending" }
                 moveAtomically(pending, finished)
                 finished.setLastModified(now)
-                backupFilesNewestFirst().drop(maxBackups).forEach(File::delete)
+                val pruned = backupFilesNewestFirst().drop(maxBackups)
+                pruned.forEach(File::delete)
+                DebugLog.i(DebugLog.DB) {
+                    "Backed up notes.db to ${finished.name} (${finished.length()} bytes); " +
+                        "pruned ${pruned.size} old backup(s)"
+                }
                 finished
             } catch (failure: Throwable) {
                 pending.delete()
+                DebugLog.e(DebugLog.DB, failure) { "Backup of notes.db failed" }
                 throw failure
             }
         }

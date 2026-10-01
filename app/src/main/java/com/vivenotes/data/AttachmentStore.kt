@@ -139,11 +139,17 @@ class AttachmentStore(
             )
             attachments.retain(id)
         }
+        DebugLog.i(DebugLog.DB) {
+            "Stored picture $id (${decoded.width}x${decoded.height}, ${bytes.size} bytes)"
+        }
         ImportedAttachment(id, decoded.width, decoded.height)
     }
 
     /** Claims a reference — a picture pasted or duplicated shares the file rather than copying it. */
-    suspend fun retain(id: String) = withContext(io) { attachments.retain(id) }
+    suspend fun retain(id: String) = withContext(io) {
+        attachments.retain(id)
+        DebugLog.i(DebugLog.DB) { "Retained picture $id" }
+    }
 
     /**
      * Drops a reference, and sweeps the file if that was the last one.
@@ -155,9 +161,14 @@ class AttachmentStore(
      */
     suspend fun release(id: String) = withContext(io) {
         attachments.release(id)
-        if (attachments.byId(id)?.refCount == 0) {
+        val unreferenced = attachments.byId(id)?.refCount == 0
+        if (unreferenced) {
             fileFor(id).delete()
             attachments.deleteIfUnreferenced(id)
+        }
+        DebugLog.i(DebugLog.DB) {
+            if (unreferenced) "Released picture $id and deleted it: nothing references it"
+            else "Released picture $id"
         }
     }
 

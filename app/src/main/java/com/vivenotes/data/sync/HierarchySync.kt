@@ -2,6 +2,7 @@ package com.vivenotes.data.sync
 
 import android.util.Log
 import androidx.room.withTransaction
+import com.vivenotes.data.DebugLog
 import com.vivenotes.data.DocumentPictures
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.NotesRepository
@@ -301,6 +302,7 @@ class HierarchySync(
             metadata.delete(CAUGHT_UP_KEY)
             streamAccountId = null
             streamCarried = emptyList()
+            DebugLog.i(DebugLog.DB) { "Sync: cleared state, outbox and versions for account $accountId" }
         }
     }
 
@@ -436,6 +438,9 @@ class HierarchySync(
             // Metadata rows only. Their bytes are offered to the server by the push that names
             // them, one `HEAD` and at most one `PUT` per picture, however many pages show it.
             sync.enqueueAllAttachments()
+            DebugLog.i(DebugLog.DB) {
+                "Sync: activated account $accountId and queued ${sync.outboxSize()} local row(s)"
+            }
         }
     }
 
@@ -481,6 +486,9 @@ class HierarchySync(
             sync.pruneOrphanedOutbox()
             metadata.delete(NotesRepository.REPLACEABLE_STARTER_KEY)
             sync.setApplyingRemote(false)
+        }
+        DebugLog.i(DebugLog.DB) {
+            "Sync: dropped untouched starter notebook $starterId; the account has its own"
         }
     }
 
@@ -538,6 +546,7 @@ class HierarchySync(
             if (orphans.isEmpty()) sync.setCursor(page.cursor)
             sync.setApplyingRemote(false)
         }
+        logApplied("streamed", applicable, purged.size, orphans.size, page.cursor)
         if (discardedPictures.isNotEmpty()) blobs.discard(discardedPictures)
         publishRemoteInk()
 
@@ -662,6 +671,7 @@ class HierarchySync(
                 if (orphans.isEmpty()) sync.setCursor(page.cursor)
                 sync.setApplyingRemote(false)
             }
+            logApplied("pulled", applicable, purged.size, orphans.size, page.cursor)
             // Once the transaction has committed, for the reason the push phase discards there.
             if (discardedPictures.isNotEmpty()) blobs.discard(discardedPictures)
             // Per page of the delta rather than at the end of the run: a first reconcile can carry
@@ -1041,6 +1051,12 @@ class HierarchySync(
                 purged.forEach { (kind, id) -> discardedPictures += applyPurgeOrRemap(kind, id) }
                 metadata.delete(PENDING_BATCH_KEY)
                 sync.setApplyingRemote(false)
+            }
+            DebugLog.i(DebugLog.DB) {
+                val rejections = response.rejected.groupingBy { it.reason }.eachCount()
+                "Sync: push batch ${pending.batchId} recorded ${response.applied.size} accepted, " +
+                    "${response.rejected.size} rejected" +
+                    if (rejections.isEmpty()) "" else " ($rejections)"
             }
             // A conflict the server won writes its row over this device's, ink included.
             publishRemoteInk()
@@ -1735,6 +1751,9 @@ class HierarchySync(
             }
             sync.setApplyingRemote(false)
         }
+        if (inserted > 0) {
+            DebugLog.i(DebugLog.DB) { "Sync: stored metadata for $inserted pulled picture(s)" }
+        }
         return inserted
     }
 
@@ -2217,6 +2236,10 @@ class HierarchySync(
             if (notebook.closedAt == null) notebooks.setClosed(notebook.id, now, now)
             if (notebook.cloudOnlyAt == null) notebooks.setCloudOnly(notebook.id, now, now)
         }
+        DebugLog.i(DebugLog.DB) {
+            "Sync: removed notebook ${notebook.id}'s contents from this device, " +
+                "${evicted.size} picture(s) with them; the account keeps them"
+        }
         return CloudArchiveResult.Moved
     }
 
@@ -2303,6 +2326,7 @@ class HierarchySync(
         var cursor = 0L
         var hasMore: Boolean
         var replayed = 0
+        var applied = 0
         do {
             val page = when (
                 val result = client.pullChanges(account.serverUrl, account.token, cursor)
@@ -2360,6 +2384,7 @@ class HierarchySync(
                     applyPictureCounts()
                     sync.setApplyingRemote(false)
                 }
+                applied += mine.size
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failed: Exception) {
@@ -2415,10 +2440,30 @@ class HierarchySync(
             notebooks.setClosed(notebookId, null, now)
             metadata.delete(deferredNotebookContentKey(notebookId))
         }
+        DebugLog.i(DebugLog.DB) {
+            "Sync: brought notebook $notebookId back from the cloud, $applied replayed change(s) " +
+                "and ${needed.size} picture(s)"
+        }
 
         val downloads = blobs.downloadMissing(account)
         downloadsOutstanding = downloads.workRemains
         CloudArchiveResult.BroughtBack
+    }
+
+    /** Debug builds only: one line per committed page of remote changes, by kind. */
+    private fun logApplied(
+        source: String,
+        applied: List<RemoteChange>,
+        purges: Int,
+        heldBack: Int,
+        cursor: Long,
+    ) {
+        if (applied.isEmpty() && purges == 0) return
+        DebugLog.i(DebugLog.DB) {
+            val kinds = applied.groupingBy { it.kind.wire }.eachCount()
+            "Sync: applied ${applied.size} $source change(s) $kinds, $purges purge(s), " +
+                "$heldBack held back; cursor " + if (heldBack == 0) "now $cursor" else "unchanged"
+        }
     }
 
     /**

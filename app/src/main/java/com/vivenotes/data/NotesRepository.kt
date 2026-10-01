@@ -187,6 +187,11 @@ class NotesRepository(
             } == 1
             if (restored) clearReplaceableStarter()
             restored
+        }.also { restored ->
+            DebugLog.i(DebugLog.DB) {
+                if (restored) "Restored ${key.kind} ${key.id} from Deleted Items"
+                else "Nothing to restore for ${key.kind} ${key.id}"
+            }
         }
     }
 
@@ -225,6 +230,12 @@ class NotesRepository(
                 // body would answer the next push with "dirty page content disappeared" and fail
                 // every push from then on.
                 sync.pruneOrphanedOutbox()
+            }
+        }.also { purged ->
+            if (purged.tombstones > 0) DebugLog.i(DebugLog.DB) {
+                "Purged ${purged.tombstones} expired tombstone(s): ${purged.notebooks} notebook(s), " +
+                    "${purged.sections} section(s), ${purged.pages} page(s), ${purged.inkStrokes} " +
+                    "stroke(s), ${purged.inkErases} erase(s), ${purged.inkMoves} move(s)"
             }
         }
     }
@@ -290,14 +301,24 @@ class NotesRepository(
             .associateBy { it.attachmentId }
     }
 
-    suspend fun saveImageText(row: AttachmentTextEntity) = imageText.upsert(row)
+    suspend fun saveImageText(row: AttachmentTextEntity) {
+        imageText.upsert(row)
+        DebugLog.d(DebugLog.DB) { "Saved recognized text for picture ${row.attachmentId}" }
+    }
 
     suspend fun imageTextCount(engine: String): Int = imageText.countForEngine(engine)
 
-    suspend fun clearImageText() = imageText.clear()
+    suspend fun clearImageText() {
+        imageText.clear()
+        DebugLog.i(DebugLog.DB) { "Cleared all recognized picture text" }
+    }
 
     /** See `ImageTextDao.deleteOrphans`: this must always return zero. */
-    suspend fun deleteOrphanImageText(): Int = imageText.deleteOrphans()
+    suspend fun deleteOrphanImageText(): Int = imageText.deleteOrphans().also { deleted ->
+        if (deleted > 0) DebugLog.w(DebugLog.DB) {
+            "Deleted $deleted orphaned picture-text row(s), where none should exist"
+        }
+    }
 
     /** What is known about the named pages' handwriting, chunked below SQLite's bind limit. */
     suspend fun inkTextFor(pageIds: Collection<String>): Map<String, InkTextEntity> {
@@ -318,19 +339,29 @@ class NotesRepository(
                 inkText.upsert(row)
                 true
             }
+        }.also { saved ->
+            DebugLog.d(DebugLog.DB) {
+                if (saved) "Saved recognized handwriting for page ${row.pageId}"
+                else "Dropped stale handwriting reading for page ${row.pageId}: ink changed meanwhile"
+            }
         }
 
     suspend fun inkTextCount(engine: String): Int = inkText.countForEngine(engine)
 
-    suspend fun clearInkText() = inkText.clear()
+    suspend fun clearInkText() {
+        inkText.clear()
+        DebugLog.i(DebugLog.DB) { "Cleared all recognized handwriting" }
+    }
 
     fun observeInkTextStamps(): Flow<List<InkTextStamp>> = inkText.observeStamps()
 
     /** One installation-local setting. Never travels in a notebook bundle — see `local_metadata`. */
     suspend fun localValue(key: String): String? = localMetadata.value(key)
 
-    suspend fun putLocalValue(key: String, value: String) =
+    suspend fun putLocalValue(key: String, value: String) {
         localMetadata.put(LocalMetadataEntity(key, value))
+        DebugLog.i(DebugLog.DB) { "Set local value $key" }
+    }
 
     // --- notebooks -------------------------------------------------------------------------
 
@@ -349,12 +380,14 @@ class NotesRepository(
                 updatedAt = now,
             ),
         )
+        DebugLog.i(DebugLog.DB) { "Created notebook $id \"$name\"" }
         return id
     }
 
     suspend fun renameNotebook(id: String, name: String) {
         clearReplaceableStarter()
         notebooks.rename(id, name, clock())
+        DebugLog.i(DebugLog.DB) { "Renamed notebook $id to \"$name\"" }
     }
 
     /**
@@ -369,6 +402,7 @@ class NotesRepository(
         sync.setApplyingRemote(true)
         notebooks.setExpanded(id, expanded)
         sync.setApplyingRemote(false)
+        DebugLog.i(DebugLog.DB) { "Notebook $id ${if (expanded) "expanded" else "collapsed"}" }
     }
 
     /**
@@ -387,7 +421,7 @@ class NotesRepository(
             if (notebookIsBlank(id)) return@withTransaction flush(DeletedItemKind.Notebook, id)
             notebooks.softDelete(id, clock())
             DeletionOutcome.Tombstoned
-        }
+        }.also { outcome -> DebugLog.i(DebugLog.DB) { "Deleted notebook $id: $outcome" } }
     }
 
     /**
@@ -401,12 +435,14 @@ class NotesRepository(
         clearReplaceableStarter()
         val now = clock()
         notebooks.setClosed(id, now, now)
+        DebugLog.i(DebugLog.DB) { "Closed notebook $id" }
     }
 
     /** Puts it back in the rail. A cloud-only notebook has to be brought back before this. */
     suspend fun reopenNotebook(id: String) {
         clearReplaceableStarter()
         notebooks.setClosed(id, null, clock())
+        DebugLog.i(DebugLog.DB) { "Reopened notebook $id" }
     }
 
     fun observeClosedNotebooks(): Flow<List<ClosedNotebook>> = notebooks.observeClosed()
@@ -431,12 +467,14 @@ class NotesRepository(
                 updatedAt = now,
             ),
         )
+        DebugLog.i(DebugLog.DB) { "Created section $id \"$name\" in notebook $notebookId" }
         return id
     }
 
     suspend fun renameSection(id: String, name: String) {
         clearReplaceableStarter()
         sections.rename(id, name, clock())
+        DebugLog.i(DebugLog.DB) { "Renamed section $id to \"$name\"" }
     }
 
     /** Tombstones a section, or flushes an empty one — see [deleteNotebook] and [flush]. */
@@ -446,7 +484,7 @@ class NotesRepository(
             if (sectionIsBlank(id)) return@withTransaction flush(DeletedItemKind.Section, id)
             sections.softDelete(id, clock())
             DeletionOutcome.Tombstoned
-        }
+        }.also { outcome -> DebugLog.i(DebugLog.DB) { "Deleted section $id: $outcome" } }
     }
 
     /** How much a section takes with it when deleted — what the confirmation is worth reading for. */
@@ -455,7 +493,7 @@ class NotesRepository(
     /** Rewrites a notebook's section order. See [reorderPages], which this mirrors exactly. */
     suspend fun reorderSections(notebookId: String, orderedIds: List<String>) {
         clearReplaceableStarter()
-        db.withTransaction {
+        val moved = db.withTransaction {
             resequence(
                 live = sections.inNotebook(notebookId),
                 orderedIds = orderedIds,
@@ -464,6 +502,7 @@ class NotesRepository(
                 write = sections::setSortIndex,
             )
         }
+        DebugLog.i(DebugLog.DB) { "Reordered sections in notebook $notebookId ($moved moved)" }
     }
 
     // --- pages -----------------------------------------------------------------------------
@@ -491,12 +530,14 @@ class NotesRepository(
         contents.upsert(
             PageContentEntity(id, codec.encodeToString(PageDoc.empty(style)), now, codec.id),
         )
+        DebugLog.i(DebugLog.DB) { "Created page $id \"$title\" in section $sectionId" }
         return id
     }
 
     suspend fun renamePage(id: String, title: String) {
         clearReplaceableStarter()
         pages.rename(id, title, clock())
+        DebugLog.i(DebugLog.DB) { "Renamed page $id to \"$title\"" }
     }
 
     /** Tombstones a page, or flushes one that was never written on — see [deleteNotebook], [flush]. */
@@ -506,7 +547,7 @@ class NotesRepository(
             if (pageIsBlank(id)) return@withTransaction flush(DeletedItemKind.Page, id)
             pages.softDelete(id, clock())
             DeletionOutcome.Tombstoned
-        }
+        }.also { outcome -> DebugLog.i(DebugLog.DB) { "Deleted page $id: $outcome" } }
     }
 
     /**
@@ -523,7 +564,7 @@ class NotesRepository(
      */
     suspend fun reorderPages(sectionId: String, orderedIds: List<String>) {
         clearReplaceableStarter()
-        db.withTransaction {
+        val moved = db.withTransaction {
             resequence(
                 live = pages.inSection(sectionId),
                 orderedIds = orderedIds,
@@ -532,12 +573,15 @@ class NotesRepository(
                 write = pages::setSortIndex,
             )
         }
+        DebugLog.i(DebugLog.DB) { "Reordered pages in section $sectionId ($moved moved)" }
     }
 
     /**
      * Applies [orderedIds] to [live] and writes the resulting positions, skipping the rows already
      * sitting where they belong — a drag moves one row past a handful of others, so renumbering the
      * whole list would be mostly no-op writes that still wake every observer of the table.
+     *
+     * Returns how many rows it wrote.
      */
     private suspend fun <T> resequence(
         live: List<T>,
@@ -545,14 +589,19 @@ class NotesRepository(
         id: (T) -> String,
         sortIndex: (T) -> Int,
         write: suspend (String, Int) -> Unit,
-    ) {
+    ): Int {
         val byId = live.associateBy(id)
         val requested = orderedIds.mapNotNull(byId::get)
         val requestedIds = requested.mapTo(mutableSetOf(), id)
         val resolved = requested + live.filterNot { id(it) in requestedIds }
+        var written = 0
         resolved.forEachIndexed { index, row ->
-            if (sortIndex(row) != index) write(id(row), index)
+            if (sortIndex(row) != index) {
+                write(id(row), index)
+                written++
+            }
         }
+        return written
     }
 
     // --- flushing what was never written ------------------------------------------------------
@@ -724,11 +773,16 @@ class NotesRepository(
         if (row == null) return PageLoad.Loaded(PageDoc.empty())
         // Decode with the codec that wrote the row, not the current default, so a format change
         // does not orphan everything written before it.
-        val rowCodec = DocumentCodecs.byId(row.format)
-            ?: return PageLoad.Unreadable(row.docJson, IllegalStateException("unknown format '${row.format}'"))
+        val rowCodec = DocumentCodecs.byId(row.format) ?: run {
+            DebugLog.w(DebugLog.DB) { "Page ${row.pageId} body has unknown format '${row.format}'" }
+            return PageLoad.Unreadable(row.docJson, IllegalStateException("unknown format '${row.format}'"))
+        }
         return runCatching { rowCodec.decode(row.docJson.encodeToByteArray()) }.fold(
             onSuccess = { PageLoad.Loaded(it.migrated()) },
-            onFailure = { PageLoad.Unreadable(row.docJson, it) },
+            onFailure = {
+                DebugLog.w(DebugLog.DB, it) { "Page ${row.pageId} body could not be decoded" }
+                PageLoad.Unreadable(row.docJson, it)
+            },
         )
     }
 
@@ -768,18 +822,22 @@ class NotesRepository(
         val now = clock()
         val encoded = codec.encodeToString(doc)
         val preview = previewOf(doc)
-        db.withTransaction {
-            val previous = contents.byId(pageId) ?: return@withTransaction
+        val replaced = db.withTransaction {
+            val previous = contents.byId(pageId) ?: return@withTransaction false
             val current = checkpointOf(previous, now)
-            if (!current.sameContentAs(row)) {
-                clearReplaceableStarter()
-                // Forced even inside the coalescing window: the complete page being replaced must
-                // remain reachable. Content identity keeps repeated A <-> B restores idempotent.
-                storeCheckpoint(current)
-                contents.upsert(PageContentEntity(pageId, encoded, now, codec.id))
-                restoreInkLocked(pageId, restoredInk, now)
-                pages.updatePreview(pageId, preview, now)
-            }
+            if (current.sameContentAs(row)) return@withTransaction false
+            clearReplaceableStarter()
+            // Forced even inside the coalescing window: the complete page being replaced must
+            // remain reachable. Content identity keeps repeated A <-> B restores idempotent.
+            storeCheckpoint(current)
+            contents.upsert(PageContentEntity(pageId, encoded, now, codec.id))
+            restoreInkLocked(pageId, restoredInk, now)
+            pages.updatePreview(pageId, preview, now)
+            true
+        }
+        DebugLog.i(DebugLog.DB) {
+            if (replaced) "Restored page $pageId to version $revisionId"
+            else "Page $pageId already matches version $revisionId; nothing written"
         }
         return PageRevisionLoad.Loaded(summary, doc)
     }
@@ -789,9 +847,9 @@ class NotesRepository(
         val encoded = codec.encodeToString(doc)
         val preview = previewOf(doc)
 
-        db.withTransaction {
+        val written = db.withTransaction {
             val previous = contents.byId(pageId)
-            if (previous?.docJson == encoded && previous.format == codec.id) return@withTransaction
+            if (previous?.docJson == encoded && previous.format == codec.id) return@withTransaction false
             clearReplaceableStarter()
 
             if (previous != null && shouldCheckpoint(pageId, now)) {
@@ -799,7 +857,9 @@ class NotesRepository(
             }
             contents.upsert(PageContentEntity(pageId, encoded, now, codec.id))
             pages.updatePreview(pageId, preview, now)
+            true
         }
+        if (written) DebugLog.i(DebugLog.DB) { "Saved page $pageId body (${encoded.length} chars)" }
     }
 
     private suspend fun shouldCheckpoint(pageId: String, now: Long): Boolean {
@@ -844,8 +904,12 @@ class NotesRepository(
         if (healthyMatches.isEmpty()) {
             revisions.insert(checkpoint)
             revisions.trimToNewest(checkpoint.pageId, MAX_REVISIONS_PER_PAGE)
+            DebugLog.i(DebugLog.DB) { "Saved version ${checkpoint.id} of page ${checkpoint.pageId}" }
         } else if (healthyMatches.size > 1) {
             revisions.deleteByIds(healthyMatches.drop(1).map { it.id })
+            DebugLog.i(DebugLog.DB) {
+                "Dropped ${healthyMatches.size - 1} duplicate version(s) of page ${checkpoint.pageId}"
+            }
         }
     }
 
@@ -901,6 +965,8 @@ class NotesRepository(
         inkText.deleteForPage(stroke.pageId)
         inkText.bumpGeneration(stroke.pageId)
         stroke.copy(seq = ink.nextSeq(stroke.pageId)).also { ink.insert(it) }
+    }.also { added ->
+        DebugLog.d(DebugLog.DB) { "Added stroke ${added.id} to page ${added.pageId} (seq ${added.seq})" }
     }
 
     /** Appends a copied selection as one contiguous draw-order block. */
@@ -915,6 +981,8 @@ class NotesRepository(
             inkText.bumpGeneration(pageId)
             var sequence = ink.nextSeq(pageId)
             strokes.map { stroke -> stroke.copy(seq = sequence++).also { ink.insert(it) } }
+        }.also { added ->
+            DebugLog.d(DebugLog.DB) { "Added ${added.size} stroke(s) to page ${added.first().pageId}" }
         }
     }
 
@@ -927,28 +995,32 @@ class NotesRepository(
     suspend fun eraseStrokes(ids: List<String>) {
         if (ids.isEmpty()) return
         val now = clock()
-        db.withTransaction {
+        val pageIds = db.withTransaction {
             clearReplaceableStarter()
             val pageIds = ink.pageIdsFor(ids)
             pageIds.forEach { checkpointBeforeInkMutation(it, now) }
             pageIds.chunked(SQLITE_BIND_CHUNK).forEach { inkText.deleteForPages(it) }
             pageIds.forEach { inkText.bumpGeneration(it) }
             ink.softDelete(ids, now)
+            pageIds
         }
+        DebugLog.i(DebugLog.DB) { "Erased ${ids.size} stroke(s) on page(s) ${pageIds.joinToString()}" }
     }
 
     /** Restores stroke rows tombstoned by Draw-toolbar undo. */
     suspend fun restoreStrokes(ids: List<String>) {
         if (ids.isEmpty()) return
         val now = clock()
-        db.withTransaction {
+        val pageIds = db.withTransaction {
             clearReplaceableStarter()
             val pageIds = ink.pageIdsFor(ids)
             pageIds.forEach { checkpointBeforeInkMutation(it, now) }
             pageIds.chunked(SQLITE_BIND_CHUNK).forEach { inkText.deleteForPages(it) }
             pageIds.forEach { inkText.bumpGeneration(it) }
             ink.restore(ids)
+            pageIds
         }
+        DebugLog.i(DebugLog.DB) { "Restored ${ids.size} stroke(s) on page(s) ${pageIds.joinToString()}" }
     }
 
     suspend fun setInkColors(colors: Map<String, StrokeColor>) {
@@ -959,6 +1031,7 @@ class NotesRepository(
             ink.pageIdsFor(colors.keys.toList()).forEach { checkpointBeforeInkMutation(it, now) }
             colors.forEach { (id, color) -> ink.setColor(id, color.argb, color.followsTheme) }
         }
+        DebugLog.i(DebugLog.DB) { "Recolored ${colors.size} stroke(s)" }
     }
 
     suspend fun setInkGroups(groups: Map<String, String?>) {
@@ -969,6 +1042,7 @@ class NotesRepository(
             ink.pageIdsFor(groups.keys.toList()).forEach { checkpointBeforeInkMutation(it, now) }
             groups.forEach { (id, group) -> ink.setGroup(id, group) }
         }
+        DebugLog.i(DebugLog.DB) { "Regrouped ${groups.size} stroke(s)" }
     }
 
     suspend fun partialErasesFor(pageId: String): List<InkEraseWithTargets> =
@@ -1003,6 +1077,9 @@ class NotesRepository(
             inkText.bumpGeneration(erase.pageId)
             inkErases.insert(erase)
             inkErases.insertTargets(strokeIds.distinct().map { InkEraseTargetEntity(erase.id, it) })
+        }
+        DebugLog.i(DebugLog.DB) {
+            "Added partial erase ${erase.id} on page ${erase.pageId} over ${strokeIds.size} stroke(s)"
         }
     }
 
@@ -1041,6 +1118,7 @@ class NotesRepository(
             ink.softDelete(collected, now)
             sync.setApplyingRemote(false)
         }
+        DebugLog.i(DebugLog.DB) { "Collected ${collected.size} fully erased stroke(s)" }
     }
 
     /**
@@ -1068,6 +1146,7 @@ class NotesRepository(
                 ink.restore(inkErases.targetsForErases(listOf(id)).map { it.strokeId })
             }
         }
+        DebugLog.i(DebugLog.DB) { "Partial erase $id ${if (active) "reapplied" else "undone"}" }
     }
 
     /** Stores a lasso move or resize with the source rows it was allowed to transform. */
@@ -1080,6 +1159,9 @@ class NotesRepository(
             inkText.bumpGeneration(move.pageId)
             inkMoves.insert(move)
             inkMoves.insertTargets(strokeIds.distinct().map { InkMoveTargetEntity(move.id, it) })
+        }
+        DebugLog.i(DebugLog.DB) {
+            "Added ink move ${move.id} on page ${move.pageId} over ${strokeIds.size} stroke(s)"
         }
     }
 
@@ -1095,6 +1177,7 @@ class NotesRepository(
             }
             inkMoves.setDeletedAt(id, if (active) null else now)
         }
+        DebugLog.i(DebugLog.DB) { "Ink move $id ${if (active) "reapplied" else "undone"}" }
     }
 
     // --- first run -------------------------------------------------------------------------
@@ -1131,6 +1214,7 @@ class NotesRepository(
         // Written last: all calls above are seed construction, while any later content mutation
         // clears this marker. The UUID lets import remove only this installation's placeholder.
         localMetadata.put(LocalMetadataEntity(REPLACEABLE_STARTER_KEY, notebookId))
+        DebugLog.i(DebugLog.DB) { "Seeded starter notebook $notebookId into an empty database" }
     }
 
     private suspend fun clearReplaceableStarter() {

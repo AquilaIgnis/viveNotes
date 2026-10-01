@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
+import com.vivenotes.data.DebugLog
 
 /**
  * The app's database.
@@ -101,6 +102,7 @@ abstract class NotesDatabase : RoomDatabase() {
          */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(connection: SQLiteConnection) {
+                DebugLog.i(DebugLog.DB) { "Migrating notes.db from version 1 to 2" }
                 connection.execSQL("ALTER TABLE attachments ADD COLUMN releasedAt INTEGER")
                 connection.execSQL("ALTER TABLE page_revisions ADD COLUMN pictureIds TEXT")
                 installAttachmentReleaseTrigger(connection)
@@ -113,7 +115,25 @@ abstract class NotesDatabase : RoomDatabase() {
                 // deleting the notes.
                 .addMigrations(MIGRATION_1_2)
                 .addCallback(SYNC_TRIGGER_CALLBACK)
+                .addCallback(OPEN_LOG_CALLBACK)
                 .build()
+
+        /** Debug builds only: when `notes.db` is created and opened, and at which version. */
+        private val OPEN_LOG_CALLBACK = object : RoomDatabase.Callback() {
+            override fun onCreate(connection: SQLiteConnection) {
+                DebugLog.i(DebugLog.DB) { "Created notes.db" }
+            }
+
+            override fun onOpen(connection: SQLiteConnection) {
+                DebugLog.i(DebugLog.DB) {
+                    val version = connection.prepare("PRAGMA user_version").use { statement ->
+                        statement.step()
+                        statement.getLong(0)
+                    }
+                    "Opened notes.db at schema version $version"
+                }
+            }
+        }
 
         private fun installSyncTriggers(connection: SQLiteConnection) {
             listOf(
