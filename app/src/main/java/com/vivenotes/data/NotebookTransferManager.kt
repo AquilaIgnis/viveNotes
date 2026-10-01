@@ -19,6 +19,7 @@ import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.data.db.PageEntity
 import com.vivenotes.data.db.PageRevisionEntity
 import com.vivenotes.data.db.SectionEntity
+import com.vivenotes.data.db.deferredNotebookContentKey
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.model.DocumentCodecs
 import com.vivenotes.model.Outline
@@ -702,19 +703,15 @@ class NotebookTransferManager(
     }
 
     private suspend fun install(bundle: ValidatedBundle): NotebookImportResult {
-        // Where this device keeps the archive's notebook, which is the id the archive names unless
-        // the account permanently deleted it and `HierarchySync.remapPurgedImport` had to move the
-        // import out from under it. Resolved before anything is read, so every collision below is
-        // asked about the notebook this file is actually an update of.
-        val data = bundle.data.installedUnder(
-            db.localMetadataDao().value(NotesRepository.importRemapKey(bundle.data.notebook.id))
-                ?: bundle.data.notebook.id,
-        )
+        // Resolved before anything is read, so every collision below is asked about the notebook
+        // this file is actually an update of.
+        val data = bundle.data.installedUnder(installTarget(bundle.data))
         val notebookId = data.notebook.id
         if (notebookId != bundle.data.notebook.id) DebugLog.d(DebugLog.TRANSFER) {
-            "The archive's notebook ${bundle.data.notebook.id} was moved to $notebookId on this device " +
-                "after a purge; importing into $notebookId"
+            "The archive's notebook ${bundle.data.notebook.id} is kept here as $notebookId, where a " +
+                "purge moved it; importing into $notebookId"
         }
+        requireContentsOnDevice(notebookId)
         val existingRows = auditLiveCollisions(data)
         DebugLog.d(DebugLog.TRANSFER) { "No stable id collides with different content on this device" }
         val existingNotebook = existingRows.notebook
@@ -1023,6 +1020,53 @@ class NotebookTransferManager(
         val starterId = metadata.value(NotesRepository.REPLACEABLE_STARTER_KEY) ?: return null
         if (db.notebookDao().count() != 1) return null
         return db.notebookDao().byId(starterId)?.takeIf { it.deletedAt == null }
+    }
+
+    /**
+     * Where this device keeps the archive's notebook: the id the archive names, unless the account
+     * permanently deleted it and `HierarchySync.remapPurgedImport` moved the import to a fresh one.
+     *
+     * The device that made the move records it, but `local_metadata` never syncs. Every other
+     * device, and this one after a reinstall, receives the moved notebook with the archive's own
+     * section ids under it and no record of the id it replaced, so those sections are what find it.
+     * The move copies the notebook row under the new id, so the notebook holding them also carries
+     * the archive's `createdAt`. Sections held anywhere else are left for [auditLiveCollisions] to
+     * refuse.
+     */
+    private suspend fun installTarget(archive: BundleData): String {
+        val archiveId = archive.notebook.id
+        val recorded = db.localMetadataDao().value(NotesRepository.importRemapKey(archiveId)) ?: archiveId
+        val holder = loadChunked(archive.sections.map { it.id }, db.sectionDao()::byIds)
+            .mapTo(hashSetOf()) { it.notebookId }
+            .singleOrNull()
+            ?.takeIf { it != recorded }
+            ?: return recorded
+        if (db.notebookDao().byId(holder)?.createdAt != archive.notebook.createdAt) return recorded
+        DebugLog.d(DebugLog.TRANSFER) {
+            "The archive's sections are under $holder rather than $recorded, and $holder was created " +
+                "with the archive's notebook"
+        }
+        return holder
+    }
+
+    /**
+     * Refuses a notebook this device holds without its contents: one moved to the cloud, or first
+     * seen here already closed.
+     *
+     * A restore makes the notebook match the archive by tombstoning whatever this device holds
+     * beyond it, and here that is only the index. Strokes added since the export were never
+     * downloaded, so they would stay live on the server and every other device while this one
+     * showed the archive, and a page added since would go to Deleted Items with no body to restore.
+     */
+    private suspend fun requireContentsOnDevice(notebookId: String) {
+        val notebook = db.notebookDao().byId(notebookId) ?: return
+        if (notebook.cloudOnlyAt == null &&
+            db.localMetadataDao().value(deferredNotebookContentKey(notebookId)) == null
+        ) return
+        fail(
+            "${notebook.name} is in the cloud. Bring it back to this device from Closed Notebooks, " +
+                "then import this file again.",
+        )
     }
 
     /** Stable ids enable sync, so an id may only meet the same immutable object in the live DB. */
