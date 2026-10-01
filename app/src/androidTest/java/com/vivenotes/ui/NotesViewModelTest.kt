@@ -501,6 +501,7 @@ class NotesViewModelTest {
 
     /**
      * A deleted picture is held for the picture sweep for exactly as long as Undo can bring it back.
+     * The history is 20 steps per page.
      *
      * The history is in memory only, so this registration is the sole thing standing between a
      * picture one tap of Undo away and the sweep releasing it; and once the delete has been pushed
@@ -542,10 +543,45 @@ class NotesViewModelTest {
         assertTrue(vm.uiState.value.images.isEmpty())
         assertTrue("one tap of Undo away", "sha-held" in attachments.heldPictures())
 
-        repeat(100) { vm.insertEquation("x", 10f, 10f) }
+        repeat(20) { vm.insertEquation("x", 10f, 10f) }
         advanceUntilIdle()
 
-        assertFalse("the delete left the 100-step history", "sha-held" in attachments.heldPictures())
+        assertFalse("the delete left the 20-step history", "sha-held" in attachments.heldPictures())
+    }
+
+    /**
+     * Undo history is kept for the three pages edited most recently, not every page of a session.
+     *
+     * Each page's history is memory nothing else frees, and an erase keeps the strokes it removed
+     * alive, so a session moving through many pages would otherwise hold every one of them. The page
+     * that loses its history is the one edited longest ago; the three after it still undo.
+     */
+    @Test
+    fun undoIsKeptOnlyForTheThreePagesEditedMostRecently() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val sectionId = vm.uiState.value.selectedSectionId!!
+        val pages = mutableListOf<String>()
+        repeat(4) { index ->
+            // Created through the repository rather than `addPage`, which waits on the editor
+            // defaults file — real I/O the test scheduler does not wait for.
+            val pageId = if (index == 0) vm.uiState.value.selectedPageId!! else repository.createPage(sectionId)
+            vm.openPage(pageId)
+            advanceUntilIdle()
+            pages += pageId
+            vm.selectTool(DrawTool.Pen(0))
+            vm.onStrokeFinished(inkStroke(10f to 50f, 90f to 50f))
+            advanceUntilIdle()
+        }
+
+        vm.openPage(pages.first())
+        advanceUntilIdle()
+        assertFalse("the page edited longest ago kept its history", vm.canvasUndoState.value.canUndo)
+
+        pages.drop(1).forEach { pageId ->
+            vm.openPage(pageId)
+            advanceUntilIdle()
+            assertTrue("page $pageId lost its history", vm.canvasUndoState.value.canUndo)
+        }
     }
 
     /** One press, because a piece delete is one action however many operations it took to say. */

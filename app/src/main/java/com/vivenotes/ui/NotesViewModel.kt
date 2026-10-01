@@ -683,8 +683,18 @@ class NotesViewModel(
     /**
      * Snapshots are shallow lists: native strokes are immutable, an `Outline.Shape` is a data class,
      * and both are safely shared between entries.
+     *
+     * Kept for the [CANVAS_HISTORY_PAGES] pages edited most recently, not for every page touched in
+     * the session. The history is memory nothing else frees until the process dies, and an erase
+     * entry keeps every stroke it removed alive, native mesh and all, so the bill grows with each
+     * page a session passes through. Access-ordered, so undoing on a page counts as using it, and
+     * the page dropped is the one least recently edited — never the open one, which is the page
+     * every edit is made on.
      */
-    private val canvasHistoryByPage = mutableMapOf<String, PageCanvasHistory>()
+    private val canvasHistoryByPage = object : LinkedHashMap<String, PageCanvasHistory>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PageCanvasHistory>?): Boolean =
+            size > CANVAS_HISTORY_PAGES
+    }
 
     /**
      * Where [pushHistory] puts entries while [asOneAction] is collecting them, null otherwise.
@@ -4108,7 +4118,15 @@ class NotesViewModel(
          * half off the screen, and the first thing anyone does with a new picture is resize it.
          */
         private const val INSERT_MARGIN = 24f
-        private const val CANVAS_HISTORY_LIMIT = 100
+        /**
+         * Undo steps per page. Each draw entry holds a reference list of the whole page, and each
+         * erase entry keeps the strokes it removed in memory — roughly 8 KB of native mesh apiece —
+         * so the ring's cost is this times the page's size and its erasing.
+         */
+        private const val CANVAS_HISTORY_LIMIT = 20
+
+        /** Pages whose undo history is kept; see [canvasHistoryByPage]. */
+        private const val CANVAS_HISTORY_PAGES = 3
 
         /**
          * How many times a rebuild triggered by pulled ink will re-read a page that moved underneath
