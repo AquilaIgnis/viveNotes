@@ -16,8 +16,10 @@ import com.vivenotes.ai.InkRecognitionEngine
 import com.vivenotes.ai.TextRecognitionResult
 import com.vivenotes.data.db.ImageTextStatus
 import com.vivenotes.data.db.NotesDatabase
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -60,6 +62,25 @@ class ImageTextIndexerTest {
         override suspend fun recognizeImageText(image: Bitmap): ImageTextResult {
             calls.incrementAndGet()
             return reading() ?: error("recognition failed")
+        }
+    }
+
+    /** Holds each picture open until a second is in flight beside it; records the most at once. */
+    private class OverlapEngine : InkRecognitionEngine {
+        private val active = AtomicInteger()
+        private val overlapped = CompletableDeferred<Unit>()
+        val peak = AtomicInteger()
+
+        override suspend fun recognizeText(image: Bitmap) = TextRecognitionResult("", 0f)
+        override suspend fun recognizeFormula(image: Bitmap) = FormulaRecognitionResult("")
+
+        override suspend fun recognizeImageText(image: Bitmap): ImageTextResult {
+            val now = active.incrementAndGet()
+            peak.accumulateAndGet(now) { seen, current -> maxOf(seen, current) }
+            if (now >= 2) overlapped.complete(Unit)
+            withTimeoutOrNull(OVERLAP_WAIT_MS) { overlapped.await() }
+            active.decrementAndGet()
+            return ImageTextResult(listOf(ImageTextLine("read", 0.9f, emptyList())), 0.9f)
         }
     }
 
@@ -214,10 +235,26 @@ class ImageTextIndexerTest {
         assertEquals(2, engine.calls.get())
     }
 
+    @Test
+    fun severalPicturesAreReadAtOnce() = runBlocking {
+        val ids = setOf(importPicture(Color.RED), importPicture(Color.GREEN), importPicture(Color.BLUE))
+        val engine = OverlapEngine()
+        val indexer = ImageTextIndexer(repository, attachments, engine)
+
+        indexer.request(ids)
+        indexer.awaitIdle()
+
+        assertTrue("pictures were read one at a time", engine.peak.get() >= 2)
+        assertEquals(ids, repository.imageTextFor(ids.toList()).keys)
+        assertEquals(3, indexer.progress.value.done)
+        assertEquals(0, indexer.progress.value.pending)
+    }
+
     private suspend fun ImageTextIndexer.awaitIdle() =
         withTimeout(AWAIT_TIMEOUT_MS) { awaitPass() }
 
     private companion object {
         const val AWAIT_TIMEOUT_MS = 30_000L
+        const val OVERLAP_WAIT_MS = 2_000L
     }
 }

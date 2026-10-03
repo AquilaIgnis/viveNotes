@@ -14,7 +14,12 @@ import java.security.MessageDigest
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -95,41 +100,48 @@ private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
  *
  * The recognizer sees bounded phrases rather than a squeezed page. A 1.5 px primary rendering is
  * followed by a 1 px alternate only below the measured 0.88 confidence boundary.
+ *
+ * Regions are independent, so they are read side by side — one is rasterized while another is in
+ * the graph — and come back in reading order regardless of which finished first.
  */
 class HandwritingRecognizer(private val engine: InkRecognitionEngine) {
 
     suspend fun recognize(strokes: List<PageStroke>, layout: InkPageLayout): List<InkTextRegion> {
         val groups = segmentHandwriting(strokes, layout.cells)
-        return buildList(groups.size) {
-            groups.forEach { group ->
-                kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                val primary = read(group, PRIMARY_STEM_PX)
-                val alternate = if (primary.confidence < FALLBACK_CONFIDENCE) {
-                    read(group, ALTERNATE_STEM_PX)
-                } else {
-                    null
-                }
-                val primaryText = primary.text.trim()
-                val alternateText = alternate?.text?.trim()
-                    ?.takeIf { it.isNotBlank() && it != primaryText }
-                if (primaryText.isNotBlank() || alternateText != null) {
-                    add(
-                        InkTextRegion(
-                            id = group.id,
-                            text = primaryText,
-                            confidence = primary.confidence,
-                            alternateText = alternateText,
-                            alternateConfidence = alternate?.confidence?.takeIf { alternateText != null },
-                            left = group.bounds.left,
-                            top = group.bounds.top,
-                            right = group.bounds.right,
-                            bottom = group.bounds.bottom,
-                            strokeIds = group.strokes.map(PageStroke::id).distinct(),
-                        ),
-                    )
-                }
-            }
+        // Twice what the engine runs at once: enough to keep it fed, few enough that a page of two
+        // hundred regions does not hold two hundred bitmaps waiting for it.
+        val inFlight = Semaphore(engine.parallelism * 2)
+        return coroutineScope {
+            groups.map { group ->
+                async { inFlight.withPermit { region(group) } }
+            }.awaitAll().filterNotNull()
         }
+    }
+
+    private suspend fun region(group: HandwritingGroup): InkTextRegion? {
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        val primary = read(group, PRIMARY_STEM_PX)
+        val alternate = if (primary.confidence < FALLBACK_CONFIDENCE) {
+            read(group, ALTERNATE_STEM_PX)
+        } else {
+            null
+        }
+        val primaryText = primary.text.trim()
+        val alternateText = alternate?.text?.trim()
+            ?.takeIf { it.isNotBlank() && it != primaryText }
+        if (primaryText.isBlank() && alternateText == null) return null
+        return InkTextRegion(
+            id = group.id,
+            text = primaryText,
+            confidence = primary.confidence,
+            alternateText = alternateText,
+            alternateConfidence = alternate?.confidence?.takeIf { alternateText != null },
+            left = group.bounds.left,
+            top = group.bounds.top,
+            right = group.bounds.right,
+            bottom = group.bounds.bottom,
+            strokeIds = group.strokes.map(PageStroke::id).distinct(),
+        )
     }
 
     private suspend fun read(group: HandwritingGroup, stem: Float): TextRecognitionResult {

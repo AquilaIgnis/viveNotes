@@ -21,7 +21,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicInteger
 
 /** What the panel says about reading pictures. */
 data class ImageTextProgress(
@@ -42,11 +41,9 @@ data class ImageTextProgress(
  * current row, and bumps [version] as it writes. The search flow re-runs on that, so results grow
  * into an open panel instead of needing a retype.
  *
- * The concurrency is deliberately lopsided. Inference is serialized inside
- * `OnnxInkRecognitionEngine` — one tensor at a time, because ONNX Runtime already has four intra-op
- * threads and a second session would only multiply resident model memory. What runs in parallel is
- * everything around it: decoding a picture off disk, normalizing it, and labelling the probability
- * map's components. So [IMAGE_WORKERS] pictures are in flight and one is ever in the graph.
+ * Pictures are read side by side, one more at a time than the engine runs inferences, so one is
+ * being decoded off disk while the others' lines are in the graph. Inside a picture the engine reads
+ * its lines side by side too; how many actually run at once is the engine's to bound.
  */
 class ImageTextIndexer(
     private val repository: NotesRepository,
@@ -57,7 +54,8 @@ class ImageTextIndexer(
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
-    private val gate = Semaphore(IMAGE_WORKERS)
+    private val gate = Semaphore(engine.parallelism + 1)
+    private val progressLock = Any()
 
     private val _version = MutableStateFlow(0L)
 
@@ -100,8 +98,8 @@ class ImageTextIndexer(
             }
 
             _progress.value = ImageTextProgress(enabled = true, running = true, pending = unread.size)
-            val done = AtomicInteger()
-            val failed = AtomicInteger()
+            var done = 0
+            var failed = 0
             coroutineScope {
                 unread.map { id ->
                     async {
@@ -113,17 +111,19 @@ class ImageTextIndexer(
                             // better as it goes, and a pass that is cancelled half way should keep
                             // the half it did.
                             repository.saveImageText(outcome)
-                            val finished = done.incrementAndGet()
-                            val broken =
-                                if (outcome.status == ImageTextStatus.Failed) failed.incrementAndGet()
-                                else failed.get()
-                            _progress.value = ImageTextProgress(
-                                enabled = true,
-                                running = true,
-                                pending = unread.size - finished,
-                                done = finished,
-                                failed = broken,
-                            )
+                            // Counted and published under one lock: pictures finish in any order,
+                            // and a count read outside it could be overtaken by an older one.
+                            synchronized(progressLock) {
+                                done++
+                                if (outcome.status == ImageTextStatus.Failed) failed++
+                                _progress.value = ImageTextProgress(
+                                    enabled = true,
+                                    running = true,
+                                    pending = unread.size - done,
+                                    done = done,
+                                    failed = failed,
+                                )
+                            }
                             _version.update { it + 1 }
                         }
                     }
@@ -133,8 +133,8 @@ class ImageTextIndexer(
                 enabled = true,
                 running = false,
                 pending = 0,
-                done = done.get(),
-                failed = failed.get(),
+                done = done,
+                failed = failed,
             )
         }
     }
@@ -241,21 +241,12 @@ class ImageTextIndexer(
         const val ENABLED_KEY = "imageTextEnabled"
 
         /**
-         * How many pictures are prepared at once.
-         *
-         * Two, not the core count. Only the preparation overlaps — inference is one lane — so the
-         * third worker would have nothing to overlap with and would hold a third decoded bitmap
-         * (up to about 10 MB at [OCR_MAX_DIMENSION]) waiting for the lock.
-         */
-        const val IMAGE_WORKERS = 2
-
-        /**
          * The longest side a picture is decoded at for reading.
          *
          * Detection resizes to 960 regardless, but the *crops* are taken from this bitmap, and that
          * is where the recognizer's resolution comes from — cropping from a 960-pixel copy throws
          * away the detail that makes small type readable. Below `AttachmentStore.MAX_DIMENSION`
-         * (2048) because two of these are resident at once by [IMAGE_WORKERS].
+         * (2048) because two or three of these are resident at once, one per picture in flight.
          */
         const val OCR_MAX_DIMENSION = 1600
     }

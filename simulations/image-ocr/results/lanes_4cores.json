@@ -1,0 +1,62 @@
+{
+  "cores": 4,
+  "pictures": 18,
+  "lines": 66,
+  "configs": {
+    "lanes1_threads4": {
+      "pass_ms": 797.0,
+      "speedup": 1.0,
+      "lasso_line_ms": 5.69
+    },
+    "lanes1_threads8": {
+      "pass_ms": 3471.1,
+      "speedup": 0.23,
+      "lasso_line_ms": 33.16
+    },
+    "lanes2_threads1": {
+      "pass_ms": 1146.5,
+      "speedup": 0.7,
+      "lasso_line_ms": 17.77
+    },
+    "lanes2_threads2": {
+      "pass_ms": 845.7,
+      "speedup": 0.94,
+      "lasso_line_ms": 9.7
+    },
+    "lanes2_threads4": {
+      "pass_ms": 912.4,
+      "speedup": 0.87,
+      "lasso_line_ms": 5.68
+    },
+    "lanes3_threads1": {
+      "pass_ms": 851.1,
+      "speedup": 0.94,
+      "lasso_line_ms": 17.75
+    },
+    "lanes3_threads2": {
+      "pass_ms": 722.5,
+      "speedup": 1.1,
+      "lasso_line_ms": 9.76
+    },
+    "lanes4_threads1": {
+      "pass_ms": 708.4,
+      "speedup": 1.12,
+      "lasso_line_ms": 17.9
+    },
+    "lanes4_threads2": {
+      "pass_ms": 739.6,
+      "speedup": 1.08,
+      "lasso_line_ms": 9.76
+    },
+    "lanes6_threads1": {
+      "pass_ms": 739.3,
+      "speedup": 1.08,
+      "lasso_line_ms": 17.9
+    },
+    "lanes8_threads1": {
+      "pass_ms": 779.4,
+      "speedup": 1.02,
+      "lasso_line_ms": 18.03
+    }
+  }
+}

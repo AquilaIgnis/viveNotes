@@ -1,5 +1,10 @@
 package com.vivenotes.ui.panel
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -39,6 +46,7 @@ import com.vivenotes.model.search.ContentKind
 import com.vivenotes.model.search.MatchSpan
 import com.vivenotes.model.search.snippetOf
 import com.vivenotes.data.ImageTextProgress
+import com.vivenotes.data.InkTextProgress
 import com.vivenotes.data.PageResults
 import com.vivenotes.ui.ContentSearchState
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -48,8 +56,8 @@ internal object ContentPanelTags {
     const val CLEAR = "content-clear"
     const val STATUS = "content-status"
 
-    /** The "reading N pictures" line, shown only while an indexing pass is in flight. */
-    const val PICTURES = "content-pictures"
+    /** The bar and "reading N pictures" line, shown only while an indexing pass is in flight. */
+    const val READING = "content-reading"
 
     /** A page heading in the result list, which is also the way a title match is opened. */
     fun page(pageId: String) = "content-page-$pageId"
@@ -69,6 +77,7 @@ internal fun ColumnScope.ContentPanelHeader(
     state: ContentSearchState,
     onQueryChange: (String) -> Unit,
     imageProgress: ImageTextProgress = ImageTextProgress(enabled = false),
+    inkProgress: InkTextProgress = InkTextProgress(enabled = false),
 ) {
     Row(
         modifier = Modifier
@@ -135,25 +144,55 @@ internal fun ColumnScope.ContentPanelHeader(
             .testTag(ContentPanelTags.STATUS),
     )
 
-    // Said only while it is happening, and only when there is a query to be incomplete about: a
+    // Shown only while it is happening, and only when there is a query to be incomplete about: a
     // result list that is still growing should say so, and one that is finished should not carry a
-    // line about machinery.
-    if (imageProgress.running && state.query.isNotBlank()) {
-        Text(
-            text = imageProgress.readingLine(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .padding(bottom = 2.dp)
-                .testTag(ContentPanelTags.PICTURES),
-        )
+    // line about machinery. Indeterminate, because handwriting requests merge into a running pass
+    // and a fraction of a total that grows would run backwards.
+    val reading = state.query.isNotBlank() && (imageProgress.running || inkProgress.running)
+    AnimatedVisibility(
+        visible = reading,
+        enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) +
+            fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+        exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) +
+            fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+    ) {
+        // One node for a screen reader: the line says what is being read, the bar says it is
+        // still going.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) {}
+                .testTag(ContentPanelTags.READING),
+        ) {
+            LinearWavyProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 2.dp),
+            )
+            Text(
+                text = readingLine(imageProgress, inkProgress),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 2.dp),
+            )
+        }
     }
 }
 
-private fun ImageTextProgress.readingLine(): String {
-    val remaining = pending.coerceAtLeast(0)
-    val pictures = if (remaining == 1) "1 picture" else "$remaining pictures"
-    return "Reading $pictures…"
+/** "Reading 3 pictures and 2 handwritten pages…", naming only what is actually running. */
+private fun readingLine(pictures: ImageTextProgress, ink: InkTextProgress): String {
+    val parts = buildList {
+        if (pictures.running) add(counted(pictures.pending, "picture", "pictures"))
+        if (ink.running) add(counted(ink.pending, "handwritten page", "handwritten pages"))
+    }
+    return "Reading ${parts.joinToString(" and ")}…"
+}
+
+/** A pass between batches has nothing pending yet and is still running; it gets no number. */
+private fun counted(count: Int, one: String, many: String): String = when {
+    count <= 0 -> many
+    count == 1 -> "1 $one"
+    else -> "$count $many"
 }
 
 /**

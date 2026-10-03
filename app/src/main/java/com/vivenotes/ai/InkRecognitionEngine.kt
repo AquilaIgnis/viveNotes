@@ -8,9 +8,14 @@ import ai.onnxruntime.OrtSession
 import com.vivenotes.model.ocr.TextDetection
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.Closeable
 import java.nio.FloatBuffer
@@ -29,6 +34,13 @@ data class FormulaRecognitionResult(val latex: String)
  * sessions, and two owners would mean two copies of the same graph competing for the same cores.
  */
 interface InkRecognitionEngine {
+    /**
+     * How many recognitions run at once. Background callers fan out a little wider than this, so
+     * the next bitmap is being prepared while these are in the graph — and no wider, since a caller
+     * past that only waits, holding its bitmap.
+     */
+    val parallelism: Int get() = 1
+
     suspend fun recognizeText(image: Bitmap): TextRecognitionResult
     suspend fun recognizeFormula(image: Bitmap): FormulaRecognitionResult
 
@@ -42,29 +54,43 @@ interface InkRecognitionEngine {
     suspend fun recognizeImageText(image: Bitmap): ImageTextResult
 }
 
-/** Offline PP-OCRv5 and PP-FormulaNet-S inference through Android ONNX Runtime. */
+/**
+ * Offline PP-OCRv5 and PP-FormulaNet-S inference through Android ONNX Runtime.
+ *
+ * **Inference runs in [parallelism] lanes, and the work around it runs beside them.** An OCR `run`
+ * holds one lane, and the OCR sessions are shared between lanes — `OrtSession.run` is thread-safe,
+ * so a second lane costs one more set of activations, not a second copy of the graph. FormulaNet
+ * holds every lane, because opening it closes the OCR sessions and it is 231 MB on its own.
+ *
+ * Preprocessing, detection post-processing, crops and CTC decoding hold no lane. They used to sit
+ * inside one engine-wide mutex with the inference, which made a notebook's pictures and handwriting
+ * strictly one item at a time even though the graph was only busy for part of each.
+ */
 class OnnxInkRecognitionEngine(
     private val models: AiModelStore,
     private val inferenceDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    lanes: Int = defaultInferenceLanes(),
 ) : InkRecognitionEngine, Closeable {
     private val environment = OrtEnvironment.getEnvironment()
-    private val mutex = Mutex()
+
+    override val parallelism: Int = lanes.coerceAtLeast(1)
+
+    private val lanePermits = Semaphore(parallelism)
+
+    /** Serializes FormulaNet's claim on every lane, so two claims cannot each end up holding half. */
+    private val exclusive = Mutex()
     private val sessions = mutableMapOf<ModelKind, OrtSession>()
 
     override suspend fun recognizeText(image: Bitmap): TextRecognitionResult =
-        withContext(inferenceDispatcher) {
-            mutex.withLock {
-                runText(session(ModelKind.Text), image, textCharacters())
-            }
-        }
+        withContext(inferenceDispatcher) { readLine(image) }
 
     override suspend fun recognizeFormula(image: Bitmap): FormulaRecognitionResult =
         withContext(inferenceDispatcher) {
-            mutex.withLock {
-                val files = models.installedFormulaFiles()
-                    ?: error("PP-FormulaNet-S is not installed")
+            val files = models.installedFormulaFiles()
+                ?: error("PP-FormulaNet-S is not installed")
+            val input = preprocessFormula(image)
+            everyLane {
                 val session = session(ModelKind.Formula)
-                val input = preprocessFormula(image)
                 OnnxTensor.createTensor(
                     environment,
                     FloatBuffer.wrap(input),
@@ -82,109 +108,146 @@ class OnnxInkRecognitionEngine(
         }
 
     /**
-     * Detection followed by line-by-line recognition.
+     * Detection, then every line recognized side by side.
      *
      * One line per `run`, not a batch. The recognizer takes a fixed-width tensor, so a batch has to
      * be padded to its widest member, and a picture mixes a 46-pixel crop with a 940-pixel one.
      * Measured over real crops in `simulations/image-ocr/bench.py`, six-wide batches are 30% slower
      * than one at a time and sixteen-wide are 2.2× slower.
      *
-     * The whole call holds the lock: a picture is background work, and letting it interleave with a
-     * lasso recognition would only make the interactive one wait in the middle rather than at the
-     * start.
+     * Only the two graphs hold a lane. Labelling the probability map costs about what detection
+     * does, and it, the crops and their tensors are prepared while other lines are in the graph.
      */
     override suspend fun recognizeImageText(image: Bitmap): ImageTextResult =
         withContext(inferenceDispatcher) {
-            val scope = this
-            // Outside the lock: decoding and normalizing a picture is the half of this that can
-            // overlap another picture's inference, and background indexing is built on it doing so.
             val input = preprocessDetection(image)
-            mutex.withLock {
+            val probability = inLane {
                 val detector = session(ModelKind.Detect)
-                val quads = OnnxTensor.createTensor(
+                OnnxTensor.createTensor(
                     environment,
                     FloatBuffer.wrap(input.values),
                     longArrayOf(1, 3, input.height.toLong(), input.width.toLong()),
                 ).use { tensor ->
                     detector.run(mapOf(detector.inputNames.first() to tensor)).use { output ->
-                        val map = (output[0] as OnnxTensor).floatBuffer
                         val probability = FloatArray(input.width * input.height)
-                        map.get(probability)
-                        TextDetection.quads(probability, input.width, input.height)
+                        (output[0] as OnnxTensor).floatBuffer.get(probability)
+                        probability
                     }
                 }
-                if (quads.isEmpty()) return@withLock ImageTextResult.Empty
-
-                // Detection ran on the aligned, side-limited copy; the crops come out of the picture
-                // at the size it actually is, which is where the resolution the recognizer needs is.
-                val scaleX = image.width.toFloat() / input.width
-                val scaleY = image.height.toFloat() / input.height
-                val recognizer = session(ModelKind.Text)
-                val characters = textCharacters()
-                val lines = mutableListOf<ImageTextLine>()
-                quads.forEach { detected ->
-                    // A picture with two hundred lines is two hundred inferences; a cancelled
-                    // indexing pass has to stop between them rather than at the end of them.
-                    scope.ensureActive()
-                    val quad = detected.scaled(scaleX, scaleY)
-                    val strip = cropQuad(image, quad) ?: return@forEach
-                    val reading = try {
-                        runText(recognizer, strip, characters)
-                    } finally {
-                        strip.recycle()
-                    }
-                    val text = reading.text.trim()
-                    if (isSearchableReading(text) && reading.confidence >= MIN_LINE_CONFIDENCE) {
-                        lines += ImageTextLine(text, reading.confidence, quad.corners)
-                    }
-                }
-                if (lines.isEmpty()) return@withLock ImageTextResult.Empty
-                ImageTextResult(
-                    lines = TextDetection.readingOrder(lines) { line ->
-                        TextDetection.Quad(line.corners, line.confidence)
-                    },
-                    meanConfidence = lines.map { it.confidence }.average().toFloat(),
-                )
             }
+            val quads = TextDetection.quads(probability, input.width, input.height)
+            if (quads.isEmpty()) return@withContext ImageTextResult.Empty
+
+            // Detection ran on the aligned, side-limited copy; the crops come out of the picture at
+            // the size it actually is, which is where the resolution the recognizer needs is.
+            val scaleX = image.width.toFloat() / input.width
+            val scaleY = image.height.toFloat() / input.height
+            // Bounds the strips alive at once: a picture with two hundred lines would otherwise crop
+            // all two hundred before the first reached the graph.
+            val inFlight = Semaphore(parallelism * 2)
+            val lines = coroutineScope {
+                quads.map { detected ->
+                    async {
+                        inFlight.withPermit {
+                            // A cancelled indexing pass has to stop between lines rather than after
+                            // the last of them.
+                            ensureActive()
+                            val quad = detected.scaled(scaleX, scaleY)
+                            val strip = cropQuad(image, quad) ?: return@withPermit null
+                            val reading = try {
+                                readLine(strip)
+                            } finally {
+                                strip.recycle()
+                            }
+                            val text = reading.text.trim()
+                            if (isSearchableReading(text) && reading.confidence >= MIN_LINE_CONFIDENCE) {
+                                ImageTextLine(text, reading.confidence, quad.corners)
+                            } else {
+                                null
+                            }
+                        }
+                    }
+                }.awaitAll().filterNotNull()
+            }
+            if (lines.isEmpty()) return@withContext ImageTextResult.Empty
+            ImageTextResult(
+                lines = TextDetection.readingOrder(lines) { line ->
+                    TextDetection.Quad(line.corners, line.confidence)
+                },
+                meanConfidence = lines.map { it.confidence }.average().toFloat(),
+            )
         }
 
     override fun close() {
-        synchronized(this) {
+        synchronized(sessions) {
             sessions.values.forEach(OrtSession::close)
             sessions.clear()
         }
     }
 
-    private fun runText(
-        session: OrtSession,
-        image: Bitmap,
-        characters: List<String>,
-    ): TextRecognitionResult {
+    /** One line through the recognizer: the tensor is built and decoded outside the lane. */
+    private suspend fun readLine(image: Bitmap): TextRecognitionResult {
         val input = preprocessText(image)
-        return OnnxTensor.createTensor(
-            environment,
-            FloatBuffer.wrap(input.values),
-            longArrayOf(1, 3, TEXT_HEIGHT.toLong(), input.width.toLong()),
-        ).use { tensor ->
-            session.run(mapOf(session.inputNames.first() to tensor)).use { output ->
-                @Suppress("UNCHECKED_CAST")
-                val logits = output[0].value as Array<Array<FloatArray>>
-                decodeCtc(logits[0], characters)
+        val logits = inLane {
+            val session = session(ModelKind.Text)
+            OnnxTensor.createTensor(
+                environment,
+                FloatBuffer.wrap(input.values),
+                longArrayOf(1, 3, TEXT_HEIGHT.toLong(), input.width.toLong()),
+            ).use { tensor ->
+                session.run(mapOf(session.inputNames.first() to tensor)).use { output ->
+                    // `value` copies out of native memory, so it outlives the closed result.
+                    @Suppress("UNCHECKED_CAST")
+                    (output[0].value as Array<Array<FloatArray>>)[0]
+                }
             }
+        }
+        return decodeCtc(logits, textCharacters)
+    }
+
+    /** Runs [block] holding one inference lane. Every OCR `run` goes through here. */
+    private suspend inline fun <T> inLane(block: () -> T): T = lanePermits.withPermit(block)
+
+    /**
+     * Runs [block] holding every lane, for FormulaNet.
+     *
+     * Taken one permit at a time behind [exclusive]. The semaphore is fair, so an OCR line asking
+     * after this started queues behind it rather than starving it. Counted, so a cancellation
+     * halfway through the claim gives back exactly what it took.
+     */
+    private suspend fun <T> everyLane(block: () -> T): T {
+        var held = 0
+        try {
+            exclusive.withLock {
+                while (held < parallelism) {
+                    lanePermits.acquire()
+                    held++
+                }
+            }
+            return block()
+        } finally {
+            repeat(held) { lanePermits.release() }
         }
     }
 
     /**
-     * The session for [kind], opening it if this is the first ask.
+     * The session for [kind], opening it if this is the first ask. Called only while holding a lane.
      *
      * **Detection and recognition stay resident together; FormulaNet stays exclusive**. The
      * original rule was one session at a time, which cannot survive a detect-then-recognize pipeline
      * without rebuilding both graphs for every picture. The two OCR graphs are 12 MB between them
      * and are kept; FormulaNet is 231 MB and is the reason a rule existed at all, so it still evicts
      * and is evicted.
+     *
+     * Eviction never closes a session in use: FormulaNet runs holding every lane, so no OCR `run` is
+     * in flight when it evicts them, and an OCR lane evicting FormulaNet means FormulaNet is not
+     * running. The lock only stops two lanes opening the same graph at once.
      */
-    private fun session(kind: ModelKind): OrtSession {
-        sessions[kind]?.let { return it }
+    private fun session(kind: ModelKind): OrtSession = synchronized(sessions) {
+        sessions[kind] ?: open(kind)
+    }
+
+    private fun open(kind: ModelKind): OrtSession {
         val evicted = when (kind) {
             ModelKind.Formula -> sessions.keys.filterNot { it == ModelKind.Formula }
             ModelKind.Text, ModelKind.Detect -> listOf(ModelKind.Formula)
@@ -219,16 +282,17 @@ class OnnxInkRecognitionEngine(
     /**
      * The CTC alphabet, read once.
      *
-     * Cached because reading a picture calls this per *line*: re-opening and re-parsing a 436-entry
-     * asset for every line of a screenshot was invisible when only a lasso used it.
+     * Cached because reading a picture needs it per *line*: re-opening and re-parsing a 436-entry
+     * asset for every line of a screenshot was invisible when only a lasso used it. `lazy`'s lock
+     * because lines now decode on several threads at once.
      */
-    private fun textCharacters(): List<String> = characters ?: buildList {
-        add("") // CTC blank at index zero.
-        models.openTextDictionary().bufferedReader().useLines { lines -> addAll(lines.toList()) }
-        add(" ") // Paddle's CTC decoder appends the optional space character.
-    }.also { characters = it }
-
-    private var characters: List<String>? = null
+    private val textCharacters: List<String> by lazy {
+        buildList {
+            add("") // CTC blank at index zero.
+            models.openTextDictionary().bufferedReader().useLines { lines -> addAll(lines.toList()) }
+            add(" ") // Paddle's CTC decoder appends the optional space character.
+        }
+    }
 
     private enum class ModelKind { Text, Detect, Formula }
 
@@ -238,6 +302,20 @@ class OnnxInkRecognitionEngine(
         private const val TEXT_MAX_WIDTH = 3200
         private const val FORMULA_SIZE = 384
         private const val INFERENCE_THREADS = 4
+        private const val MAX_INFERENCE_LANES = 2
+
+        /**
+         * One inference lane per [INFERENCE_THREADS] cores, and at most two.
+         *
+         * Measured in `simulations/image-ocr/lanes.py` over pure inference, one shared session per
+         * graph: on eight cores two four-thread lanes finish a pass 1.21× faster than one, while on
+         * four cores they are 0.87× — slower, because each `run` already spreads over four threads.
+         * Narrower lanes win throughput only by giving up the lasso: one-thread lanes read a single
+         * line three times slower. The rest of the speed is in what no longer waits for a lane.
+         */
+        fun defaultInferenceLanes(
+            cores: Int = Runtime.getRuntime().availableProcessors(),
+        ): Int = (cores / INFERENCE_THREADS).coerceIn(1, MAX_INFERENCE_LANES)
 
         /**
          * How sure the recognizer has to be before a line is worth indexing.

@@ -12,12 +12,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 data class InkTextPageRequest(
     val pageId: String,
@@ -33,7 +36,11 @@ data class InkTextProgress(
 )
 
 /**
- * Lazily reads replayed page ink for fuzzy search, one page and one model call at a time.
+ * Lazily reads replayed page ink for fuzzy search.
+ *
+ * [PAGE_WORKERS] pages are in flight at once, and each page's regions are read side by side by
+ * [HandwritingRecognizer], so one page's ink is being replayed from the database while another's
+ * regions are in the graph. How many model calls actually run at once is the engine's to bound.
  *
  * Requests merge while a pass is running, which avoids the last-page race a simple "already
  * active" guard creates. [NotesRepository.saveInkText] checks the page's monotonic ink generation
@@ -48,6 +55,7 @@ class InkTextIndexer(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val loader = InkPageLoader(repository, dispatcher)
     private val recognizer = HandwritingRecognizer(engine)
+    private val pageGate = Semaphore(PAGE_WORKERS)
     private val guard = Any()
     private val pending = linkedMapOf<String, InkTextPageRequest>()
     private var pass: Job? = null
@@ -100,32 +108,44 @@ class InkTextIndexer(
             }
             if (unread.isEmpty()) continue
 
+            var remaining = unread.size
             _progress.value = InkTextProgress(
                 enabled = true,
                 running = true,
-                pending = unread.size,
+                pending = remaining,
                 done = done,
                 failed = failed,
             )
-            unread.forEachIndexed { index, request ->
-                kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                val outcome = read(request)
-                val saved = repository.saveInkText(outcome.row, outcome.generation)
-                if (saved) {
-                    done++
-                    if (outcome.row.status == InkTextStatus.Failed) failed++
+            coroutineScope {
+                unread.forEach { request ->
+                    launch {
+                        pageGate.withPermit {
+                            ensureActive()
+                            val outcome = read(request)
+                            val saved = repository.saveInkText(outcome.row, outcome.generation)
+                            // Counted and published under the guard: pages finish in any order, and
+                            // a count read outside it could be overtaken by an older one.
+                            synchronized(guard) {
+                                if (saved) {
+                                    done++
+                                    if (outcome.row.status == InkTextStatus.Failed) failed++
+                                }
+                                remaining--
+                                _progress.value = InkTextProgress(
+                                    enabled = true,
+                                    running = true,
+                                    pending = remaining + pending.size,
+                                    done = done,
+                                    failed = failed,
+                                )
+                            }
+                            // A discarded stale pass also bumps: when a page had no previous row,
+                            // its edit had nothing for Room to invalidate, and this is what asks
+                            // search to queue it again.
+                            _version.update { it + 1 }
+                        }
+                    }
                 }
-                // A discarded stale pass also bumps: when a page had no previous row, its edit had
-                // nothing for Room to invalidate, and this is what asks search to queue it again.
-                _version.update { it + 1 }
-                val waiting = synchronized(guard) { pending.size }
-                _progress.value = InkTextProgress(
-                    enabled = true,
-                    running = true,
-                    pending = unread.size - index - 1 + waiting,
-                    done = done,
-                    failed = failed,
-                )
             }
         }
         _progress.value = InkTextProgress(
@@ -232,5 +252,11 @@ class InkTextIndexer(
     companion object {
         const val ENGINE = "ppocrv5-en-ink/1"
         const val ENABLED_KEY = "inkTextEnabled"
+
+        /**
+         * Pages read at once. Two, so one page's replay overlaps the other's inference; a page's
+         * own regions already fill the engine, and a third page would only hold its strokes waiting.
+         */
+        const val PAGE_WORKERS = 2
     }
 }

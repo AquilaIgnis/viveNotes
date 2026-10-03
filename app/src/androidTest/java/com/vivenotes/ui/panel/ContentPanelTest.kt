@@ -5,12 +5,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import com.vivenotes.data.ContentSearchResults
+import com.vivenotes.data.ImageTextProgress
+import com.vivenotes.data.InkTextProgress
 import com.vivenotes.data.PageResults
 import com.vivenotes.model.search.ContentHit
 import com.vivenotes.model.search.ContentKind
@@ -78,11 +81,18 @@ class ContentPanelTest {
         state: ContentSearchState,
         onQueryChange: (String) -> Unit = {},
         onOpenHit: (ContentHit) -> Unit = {},
+        imageProgress: ImageTextProgress = ImageTextProgress(enabled = false),
+        inkProgress: InkTextProgress = InkTextProgress(enabled = false),
     ) {
         compose.setContent {
             ViveNotesTheme {
                 Column {
-                    ContentPanelHeader(state = state, onQueryChange = onQueryChange)
+                    ContentPanelHeader(
+                        state = state,
+                        onQueryChange = onQueryChange,
+                        imageProgress = imageProgress,
+                        inkProgress = inkProgress,
+                    )
                     ContentPanelContent(state = state, onOpenHit = onOpenHit)
                 }
             }
@@ -187,5 +197,50 @@ class ContentPanelTest {
             ContentSearchState(query = "invoic", running = true, results = results(titleHit)),
         )
         compose.onNodeWithText("Searching…").assertIsDisplayed()
+    }
+
+    @Test
+    fun resultsStillComingInShowAProgressBarSayingWhatIsBeingRead() {
+        setPanel(
+            ContentSearchState(query = "invoices", results = results(bodyHit)),
+            imageProgress = ImageTextProgress(running = true, pending = 3),
+            inkProgress = InkTextProgress(running = true, pending = 1),
+        )
+
+        compose.onNodeWithTag(ContentPanelTags.READING)
+            .assertIsDisplayed()
+            .assertTextEquals("Reading 3 pictures and 1 handwritten page…")
+    }
+
+    @Test
+    fun handwritingAloneIsNamedAlone() {
+        setPanel(
+            ContentSearchState(query = "invoices", results = results(bodyHit)),
+            inkProgress = InkTextProgress(running = true, pending = 4),
+        )
+
+        compose.onNodeWithTag(ContentPanelTags.READING)
+            .assertTextEquals("Reading 4 handwritten pages…")
+    }
+
+    @Test
+    fun aFinishedPassShowsNoProgressBar() {
+        setPanel(
+            ContentSearchState(query = "invoices", results = results(bodyHit)),
+            imageProgress = ImageTextProgress(running = false, done = 3),
+            inkProgress = InkTextProgress(running = false, done = 2),
+        )
+
+        compose.onNodeWithTag(ContentPanelTags.READING).assertDoesNotExist()
+    }
+
+    @Test
+    fun withNoQueryThereIsNothingToBeIncompleteAbout() {
+        setPanel(
+            ContentSearchState(),
+            imageProgress = ImageTextProgress(running = true, pending = 3),
+        )
+
+        compose.onNodeWithTag(ContentPanelTags.READING).assertDoesNotExist()
     }
 }

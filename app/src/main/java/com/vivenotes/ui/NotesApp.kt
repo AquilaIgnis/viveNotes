@@ -1532,6 +1532,7 @@ private fun ToolPaneHost(
                 state = contentSearch,
                 onQueryChange = onSearchQueryChange,
                 imageProgress = imageTextProgress,
+                inkProgress = inkTextProgress,
             )
         }
     } else {

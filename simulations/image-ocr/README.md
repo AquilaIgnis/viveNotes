@@ -90,6 +90,24 @@ way: **every sample is clean, synthetic type at a comfortable size.** It cannot 
 a binarization threshold, and the sweeps that came out flat say only that, not that the constants do
 not matter. It is a regression corpus, not a benchmark.
 
+## Several inferences at once (2026-10-03)
+
+`lanes.py` asks whether background OCR should run several `Run`s at once on one shared session per
+graph, each with fewer intra-op threads. Pure inference, 18 detections and 66 lines, pinned with
+`taskset` to a tablet's core count:
+
+```
+lanes × threads     1×4    2×4    2×2    4×2    4×1    8×1    one lasso line
+8 cores (x)        1.00   1.21   0.87   1.14   1.03   1.35   5.7 ms at 4 threads, 18 ms at 1
+4 cores (x)        1.00   0.87   0.94   1.08   1.12   1.02
+```
+
+Four intra-op threads already use the cores well, so extra lanes buy little: 1.21× from a second
+four-thread lane on eight cores, a loss on four. One-thread lanes win throughput only by making the
+interactive lasso three times slower. The app takes `cores / 4` lanes, at most two, and gets the rest
+of its speed from what used to wait behind the lock — post-processing, crops, tensors, ink replay and
+rasterization — none of which this study times.
+
 ## Layout
 
 ```
@@ -98,6 +116,7 @@ dbpost.py      DB post-processing with no OpenCV: flood fill, hull, calipers, un
 pipeline.py    det tensor -> ONNX -> quads -> warp -> rec -> CTC -> lines in reading order
 run.py         sweeps (baseline | resize | thresholds | unclip) and scores them
 bench.py       batch size × thread count for the recognizer
+lanes.py       concurrent inference lanes × intra-op threads, and the lasso latency each costs
 results/       every sweep's raw numbers
 ```
 

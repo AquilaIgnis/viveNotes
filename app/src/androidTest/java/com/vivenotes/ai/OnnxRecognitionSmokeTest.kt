@@ -14,6 +14,9 @@ import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.projectionKey
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -74,15 +77,7 @@ class OnnxRecognitionSmokeTest {
         assertEquals(AiModelInstallState.Installed, models.state.value.handwritingText)
 
         val lines = listOf("Release notes", "Search covers pictures", "Known issue")
-        val bitmap = Bitmap.createBitmap(760, 340, Bitmap.Config.ARGB_8888)
-        Canvas(bitmap).apply {
-            drawColor(Color.WHITE)
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.BLACK
-                textSize = 48f
-            }
-            lines.forEachIndexed { index, line -> drawText(line, 32f, 80f + index * 96f, paint) }
-        }
+        val bitmap = picture(lines)
 
         val engine = OnnxInkRecognitionEngine(models)
         try {
@@ -101,6 +96,54 @@ class OnnxRecognitionSmokeTest {
             engine.close()
             bitmap.recycle()
         }
+    }
+
+    /**
+     * Two lanes reading one picture four times at once agree with one lane reading it alone.
+     *
+     * The lanes share a single session per graph and all four calls crop from the same bitmap, so
+     * this is what shows both are safe on a device rather than only on the desktop.
+     */
+    @Test
+    fun parallelLanesReadWhatOneLaneReads() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val models = AiModelStore(context)
+        withTimeout(10_000) {
+            models.state.first { it.handwritingText !is AiModelInstallState.Verifying }
+        }
+        assertEquals(AiModelInstallState.Installed, models.state.value.handwritingText)
+        val bitmap = picture(listOf("Release notes", "Search covers pictures", "Known issue"))
+
+        val serial = OnnxInkRecognitionEngine(models, lanes = 1)
+        val parallel = OnnxInkRecognitionEngine(models, lanes = 2)
+        try {
+            val expected = withTimeout(60_000) { serial.recognizeImageText(bitmap) }
+                .lines.map { it.text }
+            assertEquals(3, expected.size)
+            val readings = withTimeout(120_000) {
+                coroutineScope {
+                    List(4) { async { parallel.recognizeImageText(bitmap) } }.awaitAll()
+                }
+            }
+            readings.forEach { reading -> assertEquals(expected, reading.lines.map { it.text }) }
+        } finally {
+            serial.close()
+            parallel.close()
+            bitmap.recycle()
+        }
+    }
+
+    private fun picture(lines: List<String>): Bitmap {
+        val bitmap = Bitmap.createBitmap(760, 340, Bitmap.Config.ARGB_8888)
+        Canvas(bitmap).apply {
+            drawColor(Color.WHITE)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.BLACK
+                textSize = 48f
+            }
+            lines.forEachIndexed { index, line -> drawText(line, 32f, 80f + index * 96f, paint) }
+        }
+        return bitmap
     }
 
     /**
