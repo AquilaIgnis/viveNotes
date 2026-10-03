@@ -26,7 +26,10 @@ jobs:
           java-version: '21'
 
       - name: Set up the Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android 37 SDK platform
+        run: sdkmanager 'platforms;android-37.0'
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v7
