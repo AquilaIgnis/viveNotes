@@ -654,6 +654,7 @@ private fun PictureButton(enabled: Boolean, onPick: (PictureSource) -> Unit) {
             "Picture",
             active = open,
             enabled = enabled,
+            dropdown = true,
             onClick = { open = true },
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -765,9 +766,11 @@ internal fun RibbonButton(
     /** Renders the button without wiring it up — see [RibbonCommand] for why that beats hiding it. */
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
+    /** Marks a button that opens a menu rather than acting — see [RibbonButtonSlot]. */
+    dropdown: Boolean = false,
     onClick: () -> Unit,
 ) {
-    RibbonButtonSlot(label, active, onClick, enabled, modifier) {
+    RibbonButtonSlot(label, active, onClick, enabled, modifier, dropdown) {
         Icon(
             imageVector = icon,
             contentDescription = label,
@@ -871,6 +874,12 @@ internal fun RibbonButtonSlot(
     onClick: () -> Unit,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
+    /**
+     * Adds the same small triangle [RibbonCommand] and the Styles picker carry, so an icon that
+     * opens a menu reads differently from one that acts the moment it is pressed. The slot widens
+     * to fit it rather than shrinking the icon.
+     */
+    dropdown: Boolean = false,
     icon: @Composable () -> Unit,
 ) {
     val background = if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
@@ -878,14 +887,29 @@ internal fun RibbonButtonSlot(
         Box(
             modifier = modifier
                 .padding(horizontal = 1.dp)
-                .size(32.dp)
+                .then(if (dropdown) Modifier.height(32.dp) else Modifier.size(32.dp))
                 .clip(RoundedCornerShape(4.dp))
                 .background(background)
                 .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
                 .alpha(if (enabled) 1f else DISABLED_ALPHA),
             contentAlignment = Alignment.Center,
         ) {
-            icon()
+            if (dropdown) {
+                Row(
+                    modifier = Modifier.padding(start = 7.dp, end = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    icon()
+                    Icon(
+                        imageVector = MaterialSymbols.ArrowDropDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            } else {
+                icon()
+            }
         }
     }
 }
