@@ -50,6 +50,7 @@ class BinaryCodecTest {
                 ),
             ),
             Outline.Image(id = "i1", attachmentId = "a1", height = 200f),
+            Outline.Image(id = "i2", attachmentId = "a1", height = 200f, backgroundArgb = 0xFF3B82F6.toInt()),
             Outline.Ink(id = "k1", height = 90f),
         ),
     )

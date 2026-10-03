@@ -312,6 +312,10 @@ sealed interface Outline {
      * Resizing scales the two axes independently, as it does for every other kind, rather than
      * locking the aspect ratio — a lasso holding a picture and a shape applies one transform to
      * both, and a kind that refused half of it would tear that selection apart.
+     *
+     * [backgroundArgb] is a rectangle of colour filling the frame behind the pixels, seen wherever
+     * the picture is transparent. Null is no background — what a picture starts with — and not
+     * transparent black, the same distinction [Shape.fillArgb] makes.
      */
     @Serializable
     @SerialName("image")
@@ -323,6 +327,7 @@ sealed interface Outline {
         val attachmentId: String,
         val height: Float,
         override val lockGroup: String? = null,
+        val backgroundArgb: Int? = null,
     ) : Outline {
 
         fun translated(dx: Float, dy: Float): Image = copy(x = x + dx, y = y + dy)

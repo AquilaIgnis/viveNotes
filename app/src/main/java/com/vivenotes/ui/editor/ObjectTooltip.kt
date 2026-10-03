@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.LineTypePicker
@@ -622,9 +624,20 @@ private fun GridMenu(
  * glyph would only label. "None" leads the palette because it is where every shape starts and the
  * one value that cannot be mixed — an absent fill is not a transparent one, and a chequer of the
  * surface behind it is how you say so without a word.
+ *
+ * A picture's background is the same control in its own words and glyphs: [noun], and the
+ * [glyph] / [noneGlyph] pair standing in for the swatch and the Block icon.
  */
 @Composable
-internal fun RowScope.FillAction(fill: Int?, onChange: (Int?) -> Unit) {
+internal fun RowScope.FillAction(
+    fill: Int?,
+    noun: String = "fill",
+    /** What the button wears once a colour is set. Null shows the colour itself, as a swatch. */
+    glyph: ImageVector? = null,
+    /** What it wears with no colour, also leading the "No …" entry. Null is the shape's Block icon. */
+    noneGlyph: ImageVector? = null,
+    onChange: (Int?) -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(
@@ -632,14 +645,16 @@ internal fun RowScope.FillAction(fill: Int?, onChange: (Int?) -> Unit) {
             modifier = Modifier
                 .size(32.dp)
                 .testTag(OBJECT_FILL_TAG)
-                .semantics { contentDescription = "Change fill color" },
+                .semantics { contentDescription = "Change $noun color" },
         ) {
             if (fill == null) {
                 Icon(
-                    MaterialSymbols.Block,
+                    noneGlyph ?: MaterialSymbols.Block,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
+            } else if (glyph != null) {
+                Icon(glyph, contentDescription = null, modifier = Modifier.size(18.dp))
             } else {
                 Box(
                     Modifier
@@ -658,7 +673,11 @@ internal fun RowScope.FillAction(fill: Int?, onChange: (Int?) -> Unit) {
                     },
                     modifier = Modifier.testTag(OBJECT_FILL_NONE_TAG),
                 ) {
-                    Text("No fill", style = MaterialTheme.typography.labelLarge)
+                    noneGlyph?.let {
+                        Icon(it, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    }
+                    Text("No $noun", style = MaterialTheme.typography.labelLarge)
                 }
             }
             INK_COLORS.chunked(5).forEach { row ->
@@ -670,7 +689,7 @@ internal fun RowScope.FillAction(fill: Int?, onChange: (Int?) -> Unit) {
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color(argb))
-                                .semantics { contentDescription = "$name fill" }
+                                .semantics { contentDescription = "$name $noun" }
                                 .clickable {
                                     open = false
                                     onChange(argb)

@@ -423,13 +423,26 @@ private fun DrawScope.drawImage(
         null -> drawRect(color = placeholder, topLeft = topLeft, size = size)
         is ImageAsset.Broken ->
             drawBrokenImage(asset, topLeft, size, placeholder, brokenLabel, measurer)
-        is ImageAsset.Ready -> drawImage(
-            image = asset.bitmap,
-            srcOffset = IntOffset.Zero,
-            srcSize = IntSize(asset.bitmap.width, asset.bitmap.height),
-            dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
-            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
-        )
+        is ImageAsset.Ready -> {
+            val dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt())
+            val dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+            // On the pixel grid the bitmap is about to land on, so no sliver of colour shows past
+            // an opaque picture's edge.
+            image.backgroundArgb?.let { argb ->
+                drawRect(
+                    color = Color(argb),
+                    topLeft = Offset(dstOffset.x.toFloat(), dstOffset.y.toFloat()),
+                    size = Size(dstSize.width.toFloat(), dstSize.height.toFloat()),
+                )
+            }
+            drawImage(
+                image = asset.bitmap,
+                srcOffset = IntOffset.Zero,
+                srcSize = IntSize(asset.bitmap.width, asset.bitmap.height),
+                dstOffset = dstOffset,
+                dstSize = dstSize,
+            )
+        }
     }
 }
 

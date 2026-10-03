@@ -63,6 +63,7 @@ import com.vivenotes.richtext.SelectionState
 import com.vivenotes.ui.panel.PenPanelTags
 import com.vivenotes.ui.panel.ShapePanelContent
 import com.vivenotes.ui.panel.ShapePanelTags
+import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -919,6 +920,26 @@ class ShapeToolTest {
         compose.onNodeWithTag(OBJECT_FILL_TAG).performClick()
         compose.onNodeWithTag(OBJECT_FILL_NONE_TAG).performClick()
         assertNull("No fill did not clear the fill", fill)
+    }
+
+    @Test
+    fun aPictureBackgroundIsTheSameControlInItsOwnWords() {
+        setToolkit {
+            FillAction(
+                fill = null,
+                noun = "background",
+                glyph = MaterialSymbols.BackgroundReplace,
+                noneGlyph = MaterialSymbols.BackgroundNone,
+            ) { fill = it }
+        }
+
+        compose.onNodeWithContentDescription("Change background color").performClick()
+        compose.onNodeWithContentDescription("Blue background").performClick()
+        assertEquals(0xFF3B82F6.toInt(), fill)
+
+        compose.onNodeWithTag(OBJECT_FILL_TAG).performClick()
+        compose.onNodeWithText("No background").performClick()
+        assertNull("No background did not clear the background", fill)
     }
 
     @Test

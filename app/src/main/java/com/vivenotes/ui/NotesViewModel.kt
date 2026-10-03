@@ -2474,6 +2474,14 @@ class NotesViewModel(
         editImages { images -> images.filterNot { it.id in imageIds } }
     }
 
+    /** Null is no background, not a transparent one — the same value "No background" restores. */
+    fun setImageBackground(imageIds: Set<String>, argb: Int?) {
+        if (imageIds.isEmpty()) return
+        editImages { images ->
+            images.map { if (it.id in imageIds) it.copy(backgroundArgb = argb) else it }
+        }
+    }
+
     private inline fun editImages(change: (List<Outline.Image>) -> List<Outline.Image>) {
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return

@@ -51,6 +51,12 @@ class DocumentSerializationTest {
                     ),
                 ),
                 Outline.Image(id = "img-1", attachmentId = "att-1", height = 200f),
+                Outline.Image(
+                    id = "img-2",
+                    attachmentId = "att-1",
+                    height = 200f,
+                    backgroundArgb = 0xFFFFEB3B.toInt(),
+                ),
                 Outline.Ink(id = "ink-1", height = 120f),
             ),
         )

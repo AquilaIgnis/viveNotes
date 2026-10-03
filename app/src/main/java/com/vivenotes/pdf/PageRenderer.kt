@@ -144,6 +144,10 @@ class PageRenderer(private val metrics: DisplayMetrics) {
                 line.pathEffect = null
                 canvas.drawRect(target, line)
             } else {
+                picture.backgroundArgb?.let { argb ->
+                    fill.color = argb
+                    canvas.drawRect(target, fill)
+                }
                 canvas.drawBitmap(bitmap, null, target, image)
             }
         }

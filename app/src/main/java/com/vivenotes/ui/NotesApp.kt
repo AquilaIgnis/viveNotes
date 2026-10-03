@@ -1791,6 +1791,7 @@ private fun PageEditor(
         onMoveImages = viewModel::moveImages,
         onResizeImages = viewModel::resizeImages,
         onDeleteImages = viewModel::deleteImages,
+        onSetImageBackground = viewModel::setImageBackground,
         onViewport = viewModel::reportViewport,
         onRecolorEquations = viewModel::recolorEquations,
         onEditEquation = viewModel::setEquationLatex,

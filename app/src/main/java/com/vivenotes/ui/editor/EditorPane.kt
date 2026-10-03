@@ -343,6 +343,7 @@ fun EditorPane(
     onMoveImages: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeImages: (Set<String>, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     onDeleteImages: (Set<String>) -> Unit = {},
+    onSetImageBackground: (Set<String>, Int?) -> Unit = { _, _ -> },
     /** The page's top-left corner in page units, reported as it scrolls. See the `snapshotFlow`. */
     onViewport: (Float, Float) -> Unit = { _, _ -> },
     tables: List<Outline.Table> = emptyList(),
@@ -1625,6 +1626,18 @@ fun EditorPane(
                                 // only when every held equation says the same thing.
                                 latex = selectedEquations.map { it.latex }.distinct().singleOrNull(),
                                 onEdit = { onEditEquation(held.equationIds, it) },
+                            )
+                        }
+                        // A picture's half: a colour behind it, which shows wherever it is
+                        // transparent. The shape's fill control, worded for what it does here.
+                        if (held.isImageOnly) {
+                            FillAction(
+                                fill = images.filter { it.id in held.imageIds }
+                                    .map { it.backgroundArgb }.distinct().singleOrNull(),
+                                noun = "background",
+                                glyph = MaterialSymbols.BackgroundReplace,
+                                noneGlyph = MaterialSymbols.BackgroundNone,
+                                onChange = { onSetImageBackground(held.imageIds, it) },
                             )
                         }
                         // The Table Class's half. The row and column

@@ -22,6 +22,9 @@ object MaterialSymbols {
     val ArrowOutward: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_outward)
     val ArrowSelectorTool: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_selector_tool)
     val Article: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_article)
+    val BackgroundReplace: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_background_replace)
+    /** Not a Google symbol: [BackgroundReplace] with an X cut into its corner — `ic_background_none.xml`. */
+    val BackgroundNone: ImageVector @Composable get() = symbol(R.drawable.ic_background_none)
     val Block: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_block)
     val Book: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_book)
     val Brush: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_brush)
