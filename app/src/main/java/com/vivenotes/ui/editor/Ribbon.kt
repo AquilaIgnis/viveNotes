@@ -1,5 +1,6 @@
 package com.vivenotes.ui.editor
 
+import android.content.pm.PackageManager
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
@@ -54,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -128,7 +130,13 @@ private const val CONFIRM_FLASH_MS = 650L
 internal object HomeTags {
     const val TEXT = "home-text-mode"
     const val PICTURE = "home-picture"
+    const val PICTURE_DEVICE = "home-picture-device"
+    const val PICTURE_ONLINE = "home-picture-online"
+    const val PICTURE_CAMERA = "home-picture-camera"
 }
+
+/** Where the Picture button's menu fetches a picture from. */
+enum class PictureSource { Device, Online, Camera }
 
 internal object FontTags {
     const val SIZE = "font-size-combo"
@@ -163,8 +171,8 @@ fun Ribbon(
     defaults: EditorDefaults,
     /** Makes a font or size the default. A deliberate gesture, never a side effect of picking one. */
     onSetDefault: (Mark) -> Unit,
-    /** Opens the photo picker. Home tab, feature E6 — see `HomeTab`'s Picture button. */
-    onInsertPicture: () -> Unit = {},
+    /** One of the Picture button's menu entries was picked. */
+    onInsertPicture: (PictureSource) -> Unit = {},
     /** The open page's appearance, which the View tab both shows and changes. */
     pageStyle: PageStyle,
     viewSettings: ViewSettings,
@@ -464,7 +472,7 @@ private fun HomeTab(
     onSetDefault: (Mark) -> Unit,
     textMode: Boolean,
     onTextMode: () -> Unit,
-    onInsertPicture: () -> Unit,
+    onInsertPicture: (PictureSource) -> Unit,
     pageOpen: Boolean,
 ) {
     ScrollingRow(
@@ -620,16 +628,56 @@ private fun HomeTab(
             onSubmit = { label, url -> onCommand(FormatCommand.InsertLink(label, url)) },
         )
 
-        Box(Modifier.testTag(HomeTags.PICTURE)) {
-            RibbonButton(
-                MaterialSymbols.Image,
-                "Picture",
-                enabled = pageOpen,
-                onClick = onInsertPicture,
-            )
+        PictureButton(enabled = pageOpen, onPick = onInsertPicture)
+
+
+    }
+}
+
+@Composable
+private fun PictureButton(enabled: Boolean, onPick: (PictureSource) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    // The photo is taken by whichever camera app is installed, so there is no camera of our own to
+    // check for — only whether the device has one at all.
+    val hasCamera = remember(context) {
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
+    }
+    val entries = buildList {
+        add(Triple(PictureSource.Device, "On device", HomeTags.PICTURE_DEVICE))
+        add(Triple(PictureSource.Online, "Search online", HomeTags.PICTURE_ONLINE))
+        if (hasCamera) add(Triple(PictureSource.Camera, "Camera", HomeTags.PICTURE_CAMERA))
+    }
+    Box(Modifier.testTag(HomeTags.PICTURE)) {
+        RibbonButton(
+            MaterialSymbols.Image,
+            "Picture",
+            active = open,
+            enabled = enabled,
+            onClick = { open = true },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            entries.forEach { (source, label, tag) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = when (source) {
+                                PictureSource.Device -> MaterialSymbols.PhotoLibrary
+                                PictureSource.Online -> MaterialSymbols.ImageSearch
+                                PictureSource.Camera -> MaterialSymbols.PhotoCamera
+                            },
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = {
+                        open = false
+                        onPick(source)
+                    },
+                    modifier = Modifier.testTag(tag),
+                )
+            }
         }
-
-
     }
 }
 

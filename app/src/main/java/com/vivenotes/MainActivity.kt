@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
                     app.syncAccounts,
                     app.managedSubscription,
                     app.pdfExporter,
+                    app.onlineImages,
                 )
             }
         }

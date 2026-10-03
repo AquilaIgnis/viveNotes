@@ -105,8 +105,14 @@ class AttachmentStore(
      * whose content has since gone, and a placeholder outline pointing at nothing would be worse than
      * nothing on the page.
      */
-    suspend fun import(uri: Uri): ImportedAttachment? = withContext(io) {
-        val decoded = decodeDownscaled(uri) ?: return@withContext null
+    suspend fun import(uri: Uri): ImportedAttachment? =
+        import(ImageDecoder.createSource(context.contentResolver, uri))
+
+    /** Imports a picture already in memory — one downloaded rather than picked. */
+    suspend fun import(bytes: ByteArray): ImportedAttachment? = import(ImageDecoder.createSource(bytes))
+
+    private suspend fun import(source: ImageDecoder.Source): ImportedAttachment? = withContext(io) {
+        val decoded = decodeDownscaled(source) ?: return@withContext null
         val bytes = decoded.compress()
         // Recycled here rather than left to the collector: this is a native allocation the size of
         // the whole picture, and the caller has no use for it — what goes on the page is drawn from
@@ -240,8 +246,8 @@ class AttachmentStore(
         }.getOrNull()
     }
 
-    private fun decodeDownscaled(uri: Uri): Bitmap? = runCatching {
-        ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
+    private fun decodeDownscaled(source: ImageDecoder.Source): Bitmap? = runCatching {
+        ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
             val longest = maxOf(info.size.width, info.size.height)
             if (longest > MAX_DIMENSION) {
                 val scale = MAX_DIMENSION.toFloat() / longest

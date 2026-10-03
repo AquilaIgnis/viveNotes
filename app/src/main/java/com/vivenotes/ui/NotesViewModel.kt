@@ -45,6 +45,7 @@ import com.vivenotes.data.ContentSearchIndex
 import com.vivenotes.data.ContentSearchOutcome
 import com.vivenotes.data.ContentSearchResults
 import com.vivenotes.data.ImageTextIndexer
+import com.vivenotes.data.ImportedAttachment
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.InkPageLoader
 import com.vivenotes.data.InkTextIndexer
@@ -2398,11 +2399,16 @@ class NotesViewModel(
      *
      * Sized to [Outline.Image.DEFAULT_WIDTH] at the file's own aspect ratio.
      */
-    fun insertImage(uri: Uri) {
+    fun insertImage(uri: Uri) = placeImage { attachments.import(uri) }
+
+    /** [insertImage] for a picture downloaded rather than picked — "Search online". */
+    fun insertImage(bytes: ByteArray) = placeImage { attachments.import(bytes) }
+
+    private fun placeImage(importer: suspend () -> ImportedAttachment?) {
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
         viewModelScope.launch {
-            val imported = attachments.import(uri) ?: return@launch
+            val imported = importer() ?: return@launch
             // Re-read: importing suspends, and the page may have been closed or changed underneath.
             if (_uiState.value.selectedPageId != pageId || readOnlyPageId == pageId) {
                 attachments.release(imported.id)

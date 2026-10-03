@@ -20,11 +20,11 @@ import kotlin.coroutines.coroutineContext
 /**
  * Video thumbnails for the editor's link previews.
  *
- * The only place in the app that talks to a host the user did not choose, so it is deliberately
- * narrow: one origin, one URL shape, keyed by an id [com.vivenotes.model.youTubeVideoId] has
- * already proved is eleven characters of `[A-Za-z0-9_-]`. No method here takes a URL, so nothing
- * upstream can turn it into a general fetcher, and the whole class is unreachable while the
- * Settings toggle is off.
+ * Talks to a host the user did not choose, and unlike [OnlineImageSearch] without the user asking,
+ * so it is deliberately narrow: one origin, one URL shape, keyed by an id
+ * [com.vivenotes.model.youTubeVideoId] has already proved is eleven characters of `[A-Za-z0-9_-]`.
+ * No method here takes a URL, so nothing upstream can turn it into a general fetcher, and the whole
+ * class is unreachable while the Settings toggle is off.
  *
  * Files live in `filesDir` rather than `cacheDir` and are still derived data: a thumbnail evicted
  * by the OS mid-flight would blank a card the writer has been looking at for a month, offline. They

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the FileProvider in AndroidManifest.xml may hand out: CameraCapture's one directory. -->
+<paths>
+    <cache-path name="camera" path="camera/" />
+</paths>

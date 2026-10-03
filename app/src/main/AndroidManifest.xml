@@ -27,6 +27,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!--
+            Lends the camera app a file to write the photo into - see data/CameraCapture.kt.
+            Not exported: access is granted per URI, for the one capture, by the TakePicture intent.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.camera"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/camera_paths" />
+        </provider>
     </application>
 
 </manifest>

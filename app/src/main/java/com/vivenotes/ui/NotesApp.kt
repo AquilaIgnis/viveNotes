@@ -1,5 +1,6 @@
 package com.vivenotes.ui
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -69,6 +70,7 @@ import com.vivenotes.data.db.SectionEntity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivenotes.data.AttachmentStore
+import com.vivenotes.data.CameraCapture
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
@@ -76,6 +78,7 @@ import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.InkTextProgress
 import com.vivenotes.data.NotebookTransferManager
+import com.vivenotes.data.OnlineImages
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
@@ -112,6 +115,8 @@ import com.vivenotes.ui.editor.EditorPane
 import com.vivenotes.ui.editor.ExportPdfDialog
 import com.vivenotes.ui.editor.FileActions
 import com.vivenotes.ui.editor.LocalVideoThumbnails
+import com.vivenotes.ui.editor.OnlineImageDialog
+import com.vivenotes.ui.editor.PictureSource
 import com.vivenotes.ui.editor.Ribbon
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
@@ -195,6 +200,7 @@ fun NotesApp(
     syncAccounts: SyncAccounts,
     managedSubscription: ManagedSubscriptionController,
     pdfExporter: PdfExporter,
+    onlineImages: OnlineImages,
 ) {
     // The app owns its small back stack, following Navigation 3's state model without taking on a
     // navigation dependency for two local destinations. Keeping the workspace composed preserves
@@ -353,6 +359,7 @@ fun NotesApp(
                     recognitionEngine = recognitionEngine,
                     mathEngine = mathEngine,
                     pdfExporter = pdfExporter,
+                    onlineImages = onlineImages,
                     onOpenAccount = {
                         if (backStack.lastOrNull() != AppDestination.Account) {
                             backStack.add(AppDestination.Account)
@@ -715,6 +722,7 @@ private fun NotesWorkspace(
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
     pdfExporter: PdfExporter,
+    onlineImages: OnlineImages,
     onOpenAccount: () -> Unit,
     onOpenClosedNotebooks: () -> Unit,
     accountConnected: Boolean,
@@ -756,6 +764,16 @@ private fun NotesWorkspace(
     val pickPicture = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri -> uri?.let(viewModel::insertImage) }
+    // `TakePicture` reports only whether the photo was written, so where it was written is held
+    // here. Saveable: the camera app in front is exactly when the system reclaims this process.
+    var cameraTarget by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val takePhoto = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { saved ->
+        val target = cameraTarget
+        cameraTarget = null
+        if (saved && target != null) viewModel.insertImage(target)
+    }
     // Storage Access Framework pickers grant access to exactly the document the user chose. No
     // broad storage permission is requested, and providers may be local, removable, or cloud-backed.
     val exportNotebook = rememberLauncherForActivityResult(
@@ -797,6 +815,7 @@ private fun NotesWorkspace(
     var pendingDialog by remember { mutableStateOf<NameDialog?>(null) }
     /** Export as PDF takes the screen while it is open — `ui/editor/ExportPdfDialog.kt`. */
     var exportPdfOpen by remember { mutableStateOf(false) }
+    var onlineImageSearchOpen by remember { mutableStateOf(false) }
     var pendingSectionDelete by remember { mutableStateOf<SectionEntity?>(null) }
     /** Null until the count has been read, which is what the dialog's vaguer wording covers. */
     var pendingSectionContents by remember { mutableStateOf<SectionContents?>(null) }
@@ -1044,10 +1063,27 @@ private fun NotesWorkspace(
                         onCommand = viewModel::send,
                         defaults = defaults,
                         onSetDefault = viewModel::setDefaultFont,
-                        onInsertPicture = {
-                            pickPicture.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                            )
+                        onInsertPicture = { source ->
+                            when (source) {
+                                PictureSource.Device -> pickPicture.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                )
+                                PictureSource.Online -> onlineImageSearchOpen = true
+                                PictureSource.Camera -> {
+                                    val target = CameraCapture.newTarget(context)
+                                    cameraTarget = target
+                                    try {
+                                        takePhoto.launch(target)
+                                    } catch (e: ActivityNotFoundException) {
+                                        // A camera with no app to drive it — disabled, or removed
+                                        // by a work profile.
+                                        cameraTarget = null
+                                        recognitionScope.launch {
+                                            snackbarHostState.showSnackbar("No camera app is available.")
+                                        }
+                                    }
+                                }
+                            }
                         },
                         pageStyle = state.pageStyle,
                         viewSettings = viewSettings,
@@ -1327,6 +1363,14 @@ private fun NotesWorkspace(
             pageTitle = state.title,
             sectionName = currentSection?.name.orEmpty(),
             onDismiss = { exportPdfOpen = false },
+        )
+    }
+
+    if (onlineImageSearchOpen) {
+        OnlineImageDialog(
+            images = onlineImages,
+            onInsert = viewModel::insertImage,
+            onDismiss = { onlineImageSearchOpen = false },
         )
     }
 

@@ -15,6 +15,7 @@ import com.vivenotes.data.ImageTextIndexer
 import com.vivenotes.data.InkTextIndexer
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.NotebookTransferManager
+import com.vivenotes.data.OnlineImageSearch
 import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.VideoThumbnailStore
 import com.vivenotes.data.ViewSettingsStore
@@ -65,6 +66,9 @@ class NotesApplication : Application() {
      * never creates the cache directory, and the process never opens a socket to Google.
      */
     val videoThumbnails: VideoThumbnailStore by lazy { VideoThumbnailStore(this) }
+
+    /** The Picture menu's "Search online" — `data/OnlineImages.kt`. */
+    val onlineImages: OnlineImageSearch by lazy { OnlineImageSearch() }
     val notebookTransfers: NotebookTransferManager by lazy {
         NotebookTransferManager(this, database, attachments)
     }
