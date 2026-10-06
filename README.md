@@ -28,7 +28,7 @@ and all AI features run entirely on-device.
         </a>
       </td>
       <td align="center">
-        <a href="#">
+        <a href="https://play.google.com/store/apps/details?id=com.vivenotes">
           <img src="repo/Google_Play_Store.svg" height="80" width="200" alt="Get it on Google Play">
         </a>
       </td>
@@ -37,11 +37,6 @@ and all AI features run entirely on-device.
           <img src="repo/apk.png" height="80" alt="Download APK">
         </a>
       </td>
-    </tr>
-    <tr>
-      <td align="center"><b>Available</b></td>
-      <td align="center"><b>Coming Soon!</b></td>
-      <td align="center">Available</td>
     </tr>
   </tbody>
 </table>
@@ -80,7 +75,7 @@ and all AI features run entirely on-device.
 # Road Map
 
 - [x] Fdroid release
-- [ ] Play Store
+- [x] Play Store
 - [ ] Linux & windows port
 - [ ] Apple
 - [ ] Web Client
