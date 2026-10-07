@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import com.vivenotes.ink.CanvasSelection
+import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.projectionKey
 import com.vivenotes.model.Outline
@@ -114,6 +115,29 @@ internal fun renderInkSelection(
         canvas.restoreToCount(checkpoint)
     }
     return bitmap
+}
+
+/**
+ * Renders every stroke given, as though a lasso had been drawn around all of them.
+ *
+ * The calculator's scratch pad has no page and no lasso — whatever is on it is the formula — so it
+ * builds the selection [renderInkSelection] would have been handed rather than a second renderer
+ * that could drift from the first on stem width, the one setting this pipeline's accuracy rests on.
+ */
+internal fun renderAllInk(strokes: List<PageStroke>): Bitmap {
+    val bounds = strokes.mapNotNull { it.pageBounds }
+    require(bounds.isNotEmpty()) { "Recognition requires ink" }
+    val selection = CanvasSelection(
+        inkIds = strokes.mapTo(mutableSetOf()) { it.id },
+        projections = strokes.mapTo(mutableSetOf()) { it.projectionKey },
+        bounds = InkBounds(
+            left = bounds.minOf { it.left },
+            top = bounds.minOf { it.top },
+            right = bounds.maxOf { it.right },
+            bottom = bounds.maxOf { it.bottom },
+        ),
+    )
+    return renderInkSelection(strokes, emptyList(), selection)
 }
 
 /** One contour as a path to stroke. Straight throughout on the kinds that reach here. */

@@ -197,6 +197,9 @@ fun Ribbon(
     notebookOpen: Boolean = pageOpen,
     canUndoCanvas: Boolean = false,
     canRedoCanvas: Boolean = false,
+    /** The Draw tab's calculator: offered once the formula model is installed, and whether it is up. */
+    calculatorAvailable: Boolean = false,
+    calculatorOpen: Boolean = false,
     showBack: Boolean = false,
     onBack: () -> Unit = {},
     showNavigationToggle: Boolean = false,
@@ -275,6 +278,8 @@ fun Ribbon(
                 pageOpen = pageOpen,
                 canUndo = canUndoCanvas,
                 canRedo = canRedoCanvas,
+                calculatorAvailable = calculatorAvailable,
+                calculatorOpen = calculatorOpen,
             )
             RibbonTab.RibonSettings -> SettingsTab(
                 ai = ai,

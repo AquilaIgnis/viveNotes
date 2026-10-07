@@ -68,6 +68,8 @@ data class DrawActions(
     val addPaletteColor: (Int) -> Unit = {},
     val undo: () -> Unit = {},
     val redo: () -> Unit = {},
+    /** Opens the experimental hand calculator, or closes it — see `CalculatorWindow.kt`. */
+    val toggleCalculator: () -> Unit = {},
 )
 
 /** Test tags for the tools, which show their state as a colour rather than as text. */
@@ -79,6 +81,7 @@ internal object DrawTags {
     const val LASSO = "draw-lasso"
     const val RULER = "draw-ruler"
     const val INSERT_SPACE = "draw-insert-space"
+    const val CALCULATOR = "draw-calculator"
     fun pen(index: Int) = "draw-pen-$index"
 }
 
@@ -123,6 +126,9 @@ internal fun DrawTab(
     ruler: RulerSettings = RulerSettings(),
     /** Whether the ruler is lying on the page. Not a tool — see [DrawActions.toggleRuler]. */
     rulerOut: Boolean = false,
+    /** Whether the formula model is installed. Without it the calculator has nothing to read with. */
+    calculatorAvailable: Boolean = false,
+    calculatorOpen: Boolean = false,
 ) {
     var openPenIndex by remember { mutableStateOf<Int?>(null) }
     var eraserSettingsOpen by remember { mutableStateOf(false) }
@@ -249,6 +255,20 @@ internal fun DrawTab(
             onDismiss = { rulerSettingsOpen = false },
             onChange = actions.updateRuler,
         )
+
+        // Absent rather than disabled without the formula model, as the lasso's Math button is:
+        // there is nothing to hand the ink to. Not a tool either — opening it leaves the pen in hand.
+        if (calculatorAvailable) {
+            Divider()
+            Box(Modifier.testTag(DrawTags.CALCULATOR)) {
+                RibbonButton(
+                    icon = MaterialSymbols.Calculate,
+                    label = if (calculatorOpen) "Close calculator" else "Calculator (experimental)",
+                    active = calculatorOpen,
+                    onClick = actions.toggleCalculator,
+                )
+            }
+        }
     }
 }
 

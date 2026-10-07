@@ -100,6 +100,7 @@ import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.AiModelsState
 import com.vivenotes.ai.FormulaEngine
 import com.vivenotes.ai.InkRecognitionEngine
+import com.vivenotes.ai.renderAllInk
 import com.vivenotes.ai.renderInkSelection
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.PageStroke
@@ -111,15 +112,18 @@ import com.vivenotes.pdf.PdfExporter
 import com.vivenotes.richtext.VideoThumbnails
 import com.vivenotes.ui.editor.DrawActions
 import com.vivenotes.ui.editor.AiActions
+import com.vivenotes.ui.editor.CalculatorAnswer
 import com.vivenotes.ui.editor.EditorPane
 import com.vivenotes.ui.editor.ExportPdfDialog
 import com.vivenotes.ui.editor.FileActions
+import com.vivenotes.ui.editor.FloatingCalculator
 import com.vivenotes.ui.editor.LocalVideoThumbnails
 import com.vivenotes.ui.editor.OnlineImageDialog
 import com.vivenotes.ui.editor.PictureSource
 import com.vivenotes.ui.editor.Ribbon
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.ViewActions
+import com.vivenotes.ui.editor.calculate
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.R
 import com.vivenotes.BuildConfig
@@ -187,7 +191,7 @@ private enum class AppDestination {
  *
  * Ids rather than labels: these are matched against the action list SymPy returns.
  */
-private val AUTOMATIC_MATH_ACTIONS = listOf("solve", "evaluate", "simplify")
+internal val AUTOMATIC_MATH_ACTIONS = listOf("solve", "evaluate", "simplify")
 
 @Composable
 fun NotesApp(
@@ -838,6 +842,9 @@ private fun NotesWorkspace(
     var recognition by remember { mutableStateOf<RecognitionPanelState?>(null) }
     var recognitionRunning by remember { mutableStateOf(false) }
     var formulaTools by remember { mutableStateOf(FormulaToolsState()) }
+    /** The experimental hand calculator. Not persisted, and its ink with it — see `CalculatorWindow`. */
+    var calculatorOpen by remember { mutableStateOf(false) }
+    val formulaInstalled = aiModels.formulaLatex == AiModelInstallState.Installed
 
     fun recognize(
         selection: com.vivenotes.ink.CanvasSelection,
@@ -950,6 +957,23 @@ private fun NotesWorkspace(
         if (automatic != null) executeMathAction(automatic)
     }
 
+    /**
+     * The calculator's =: the pad's ink through the same renderer, model and engine a lasso's goes
+     * through. The strokes are wrapped as page strokes only so the renderer can take them — they are
+     * never stored.
+     */
+    suspend fun calculateHandwriting(written: List<androidx.ink.strokes.Stroke>): CalculatorAnswer {
+        val pageStrokes = written.mapIndexed { index, stroke ->
+            PageStroke(id = "calculator-$index", stroke = stroke)
+        }
+        val bitmap = withContext(Dispatchers.Default) { renderAllInk(pageStrokes) }
+        return try {
+            calculate(recognitionEngine.recognizeFormula(bitmap).latex, mathEngine)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
     val viewActions = remember(viewModel) {
         ViewActions(
             setRuleLines = viewModel::setRuleLines,
@@ -989,6 +1013,7 @@ private fun NotesWorkspace(
             setDrawWithFinger = viewModel::setDrawWithFinger,
             undo = viewModel::undoCanvas,
             redo = viewModel::redoCanvas,
+            toggleCalculator = { calculatorOpen = !calculatorOpen },
         )
     }
 
@@ -1110,6 +1135,8 @@ private fun NotesWorkspace(
                         notebookOpen = state.selectedSectionId != null,
                         canUndoCanvas = canvasUndoState.canUndo,
                         canRedoCanvas = canvasUndoState.canRedo,
+                        calculatorAvailable = formulaInstalled,
+                        calculatorOpen = calculatorOpen,
                         showBack = !medium && pane != rootPane,
                         onBack = { viewModel.showCompactPane(paneBehind(pane)) },
                         // Only where there is something to collapse: a compact window shows one
@@ -1357,6 +1384,32 @@ private fun NotesWorkspace(
                         }
                     }
                 }
+            }
+
+            // Over the whole window, ribbon included, so it can be dragged anywhere a pen can reach.
+            // It writes in the pen in hand, or the first pen when the hand holds something else.
+            val calculatorPen = (tool as? DrawTool.Pen)?.let { themedPens.getOrNull(it.index) }
+                ?: themedPens.firstOrNull()
+            if (calculatorOpen && formulaInstalled && calculatorPen != null) {
+                // The topmost thing on screen, so back closes it before any pane under it.
+                BackHandler { calculatorOpen = false }
+                val calculatorBrush = remember(calculatorPen) { InkCodec.brushFor(calculatorPen) }
+                FloatingCalculator(
+                    brush = calculatorBrush,
+                    allowFinger = drawWithFinger,
+                    solve = { calculateHandwriting(it) },
+                    onOpenInPanel = { latex ->
+                        // A lasso's recognition still running would overwrite this when it lands.
+                        if (!recognitionRunning) {
+                            recognition = RecognitionPanelState(
+                                kind = RecognitionOutputKind.Formula,
+                                value = latex,
+                            )
+                            openPane = ToolPane.Recognition
+                        }
+                    },
+                    onClose = { calculatorOpen = false },
+                )
             }
         }
     }

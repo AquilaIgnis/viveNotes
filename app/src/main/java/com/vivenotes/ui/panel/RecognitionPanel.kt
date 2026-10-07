@@ -466,7 +466,7 @@ private fun MathGraphPreview(graph: MathGraph) {
 private fun Double.compact(): String = if (this == toLong().toDouble()) toLong().toString() else "%.2f".format(this)
 
 @Composable
-private fun EquationPreview(latex: String, scale: Float = 1f) {
+internal fun EquationPreview(latex: String, scale: Float = 1f) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val color = MaterialTheme.colorScheme.onSurface.toArgb()
