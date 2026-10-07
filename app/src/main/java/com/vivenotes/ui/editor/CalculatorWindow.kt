@@ -63,6 +63,7 @@ import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.panel.DecimalToggle
 import com.vivenotes.ui.panel.EquationPreview
 import com.vivenotes.ui.panel.PanelButton
 import com.vivenotes.ui.theme.LocalCanvasColors
@@ -77,6 +78,7 @@ internal object CalculatorTags {
     const val UNDO = "calculator-undo"
     const val CLEAR = "calculator-clear"
     const val EQUALS = "calculator-equals"
+    const val DECIMAL = "calculator-decimal"
     const val CLOSE = "calculator-close"
     const val PROGRESS = "calculator-progress"
     const val RESULT = "calculator-result"
@@ -165,6 +167,8 @@ private fun CalculatorWindow(
     var state by remember { mutableStateOf<CalculatorState>(CalculatorState.Idle) }
     val scope = rememberCoroutineScope()
     var job by remember { mutableStateOf<Job?>(null) }
+    /** Kept across answers and Clear: a run of sums is usually wanted in one form. */
+    var showDecimal by remember { mutableStateOf(false) }
     val currentOnDrag by rememberUpdatedState(onDrag)
 
     fun clear() {
@@ -266,6 +270,13 @@ private fun CalculatorWindow(
                     Text("Clear")
                 }
                 Spacer(Modifier.weight(1f))
+                // Before = as well as after it, so the form can be chosen ahead of the answer.
+                DecimalToggle(
+                    checked = showDecimal,
+                    onCheckedChange = { showDecimal = it },
+                    modifier = Modifier.testTag(CalculatorTags.DECIMAL),
+                )
+                Spacer(Modifier.width(4.dp))
                 // `tertiary`, as the recognition pane's math actions are: this is one of them.
                 PanelButton(
                     onClick = ::calculate,
@@ -295,7 +306,7 @@ private fun CalculatorWindow(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
-                is CalculatorState.Done -> AnswerContent(current.answer, onOpenInPanel)
+                is CalculatorState.Done -> AnswerContent(current.answer, showDecimal, onOpenInPanel)
             }
         }
     }
@@ -316,7 +327,11 @@ private fun ExperimentalLabel() {
 }
 
 @Composable
-private fun AnswerContent(answer: CalculatorAnswer, onOpenInPanel: (String) -> Unit) {
+private fun AnswerContent(
+    answer: CalculatorAnswer,
+    showDecimal: Boolean,
+    onOpenInPanel: (String) -> Unit,
+) {
     Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
         // What was read, smaller, above what it came to — a wrong answer is usually a misread, and
         // this is where that shows.
@@ -331,7 +346,9 @@ private fun AnswerContent(answer: CalculatorAnswer, onOpenInPanel: (String) -> U
                 modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
             )
             result.latex?.takeIf(String::isNotBlank)?.let { latex ->
-                Box(Modifier.testTag(CalculatorTags.RESULT)) { EquationPreview(latex) }
+                // An answer with no decimal form reads the same either way: 48 is 48.
+                val shown = if (showDecimal) result.decimal ?: latex else latex
+                Box(Modifier.testTag(CalculatorTags.RESULT)) { EquationPreview(shown) }
             }
             result.message?.takeIf(String::isNotBlank)?.let { message ->
                 Text(

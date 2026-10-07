@@ -32,12 +32,16 @@ import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonColors
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -491,6 +495,29 @@ fun PanelButton(
     Button(
         onClick = onClick,
         enabled = enabled,
+        colors = colors,
+        contentPadding = ButtonDefaults.contentPaddingFor(PANEL_BUTTON_HEIGHT),
+        modifier = modifier.heightIn(min = PANEL_BUTTON_HEIGHT),
+        content = content,
+    )
+}
+
+/** [PanelButton]'s size, for a choice that stays made: `ToggleButton` rather than `Button`. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun PanelToggleButton(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    colors: ToggleButtonColors = ToggleButtonDefaults.toggleButtonColors(),
+    content: @Composable RowScope.() -> Unit,
+) {
+    ToggleButton(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        enabled = enabled,
+        shapes = ToggleButtonDefaults.shapesFor(PANEL_BUTTON_HEIGHT),
         colors = colors,
         contentPadding = ButtonDefaults.contentPaddingFor(PANEL_BUTTON_HEIGHT),
         modifier = modifier.heightIn(min = PANEL_BUTTON_HEIGHT),

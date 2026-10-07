@@ -7,6 +7,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -154,6 +156,24 @@ class CalculatorWindowTest {
 
         compose.onNodeWithTag(CalculatorTags.ERROR).assertIsDisplayed()
         compose.onNodeWithTag(CalculatorTags.RESULT).assertDoesNotExist()
+    }
+
+    /** ≈ is a mode beside =, so it can be set before there is an answer and stays set after one. */
+    @Test
+    fun theDecimalToggleCanBeSetBeforeAndKeptAfterAnAnswer() {
+        setCalculator(
+            answer = CalculatorAnswer(
+                latex = "\\frac{1}{3}",
+                result = MathOperationResult(title = "Simplified", latex = "\\frac{1}{3}", decimal = "0.333333333333"),
+            ),
+        )
+
+        compose.onNodeWithTag(CalculatorTags.DECIMAL).assertIsOff().performClick()
+        write()
+        pressEquals()
+
+        compose.onNodeWithTag(CalculatorTags.RESULT).assertIsDisplayed()
+        compose.onNodeWithTag(CalculatorTags.DECIMAL).assertIsOn()
     }
 
     @Test

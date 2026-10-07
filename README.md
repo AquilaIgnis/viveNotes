@@ -158,4 +158,5 @@ Reports are written under `app/build/reports/androidTests/connected/`.
 - [SymPy](https://www.sympy.org/en/index.html) , powers the math engine
 - [Chaquopy](https://chaquo.com/chaquopy/), also the math engine
 - [PaddlePaddle](https://github.com/PADDLEPADDLE/PADDLEOCR) , using their local models
+- [UniMERNet](https://github.com/opendatalab/unimernet), using their math model
 - Claude & Codex

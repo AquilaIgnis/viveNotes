@@ -39,6 +39,8 @@ data class MathOperationResult(
     val message: String? = null,
     val graph: MathGraph? = null,
     val error: String? = null,
+    /** [latex] with every number evaluated to 12 significant digits; null where that reads the same. */
+    val decimal: String? = null,
 )
 
 data class FormulaToolsState(

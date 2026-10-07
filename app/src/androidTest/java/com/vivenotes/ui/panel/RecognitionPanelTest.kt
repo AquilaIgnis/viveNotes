@@ -5,6 +5,8 @@ import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -172,6 +174,37 @@ class RecognitionPanelTest {
 
         compose.onNodeWithTag(RecognitionPanelTags.RESULT).assertExists()
         compose.onNodeWithTag(RecognitionPanelTags.GRAPH).assertExists()
+    }
+
+    /** ≈ took Copy result's place under the answer, and appears only where it changes something. */
+    @Test
+    fun aResultWithADecimalFormOffersTheToggleInsteadOfCopy() {
+        val formula = RecognitionPanelState(kind = RecognitionOutputKind.Formula, value = "\\sqrt{2}")
+        val tools = FormulaToolsState(
+            sourceLatex = "\\sqrt{2}",
+            analysis = MathAnalysis(actions = listOf(MathAction("simplify", "Simplify"))),
+            result = MathOperationResult(title = "Simplified", latex = "\\sqrt{2}", decimal = "1.41421356237"),
+        )
+        setPanel(state = formula, formulaTools = tools)
+
+        compose.onNodeWithText("Copy result").assertDoesNotExist()
+        compose.onNodeWithTag(RecognitionPanelTags.DECIMAL).assertIsOff().performClick()
+        compose.onNodeWithTag(RecognitionPanelTags.DECIMAL).assertIsOn()
+    }
+
+    @Test
+    fun aResultWithNoDecimalFormHasNoToggle() {
+        setPanel(
+            state = RecognitionPanelState(kind = RecognitionOutputKind.Formula, value = "12 \\times 4"),
+            formulaTools = FormulaToolsState(
+                sourceLatex = "12 \\times 4",
+                analysis = MathAnalysis(actions = listOf(MathAction("simplify", "Simplify"))),
+                result = MathOperationResult(title = "Simplified", latex = "48"),
+            ),
+        )
+
+        compose.onNodeWithTag(RecognitionPanelTags.RESULT).assertExists()
+        compose.onNodeWithTag(RecognitionPanelTags.DECIMAL).assertDoesNotExist()
     }
 
     private fun setPanel(

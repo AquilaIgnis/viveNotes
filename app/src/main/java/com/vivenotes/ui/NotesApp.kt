@@ -844,7 +844,7 @@ private fun NotesWorkspace(
     var formulaTools by remember { mutableStateOf(FormulaToolsState()) }
     /** The experimental hand calculator. Not persisted, and its ink with it — see `CalculatorWindow`. */
     var calculatorOpen by remember { mutableStateOf(false) }
-    val formulaInstalled = aiModels.formulaLatex == AiModelInstallState.Installed
+    val formulaInstalled = aiModels.formulaReady
 
     fun recognize(
         selection: com.vivenotes.ink.CanvasSelection,
@@ -966,7 +966,7 @@ private fun NotesWorkspace(
         val pageStrokes = written.mapIndexed { index, stroke ->
             PageStroke(id = "calculator-$index", stroke = stroke)
         }
-        val bitmap = withContext(Dispatchers.Default) { renderAllInk(pageStrokes) }
+        val bitmap = withContext(Dispatchers.Default) { renderAllInk(pageStrokes, aiModels.formulaEngine.stemPx) }
         return try {
             calculate(recognitionEngine.recognizeFormula(bitmap).latex, mathEngine)
         } finally {
@@ -1254,9 +1254,6 @@ private fun NotesWorkspace(
                                         copyRecognizedText(context, label, value)
                                     },
                                     onMathAction = ::executeMathAction,
-                                    onCopyMathResult = { value ->
-                                        copyRecognizedText(context, "SymPy result", value)
-                                    },
                                     contentSearch = contentSearch,
                                     imageTextProgress = imageTextProgress,
                                     inkTextProgress = inkTextProgress,
@@ -1332,9 +1329,6 @@ private fun NotesWorkspace(
                                         copyRecognizedText(context, label, value)
                                     },
                                     onMathAction = ::executeMathAction,
-                                    onCopyMathResult = { value ->
-                                        copyRecognizedText(context, "SymPy result", value)
-                                    },
                                     contentSearch = contentSearch,
                                     imageTextProgress = imageTextProgress,
                                     inkTextProgress = inkTextProgress,
@@ -1575,7 +1569,6 @@ private fun ToolPaneHost(
     onRecognitionChange: (String) -> Unit,
     onCopyRecognition: (String) -> Unit,
     onMathAction: (String) -> Unit,
-    onCopyMathResult: (String) -> Unit,
     /** Content pane — the query, and what it found across the notebook. */
     contentSearch: ContentSearchState,
     /** How far reading this notebook's pictures has got. */
@@ -1668,7 +1661,6 @@ private fun ToolPaneHost(
                     onValueChange = onRecognitionChange,
                     onCopy = onCopyRecognition,
                     onMathAction = onMathAction,
-                    onCopyMathResult = onCopyMathResult,
                 )
             } ?: Text(
                 text = "Select ink and choose Recognize to see a result here.",

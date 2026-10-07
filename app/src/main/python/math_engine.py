@@ -19,7 +19,8 @@ import greeks
 
 
 #: What every operation hands back to Kotlin before it is serialized: ``title``, ``latex``, and
-#: optionally ``message`` or ``graph``. Values are mixed, so ``Any`` is honest rather than lazy here.
+#: optionally ``message``, ``graph`` or ``decimal``. Values are mixed, so ``Any`` is honest rather
+#: than lazy here.
 ResultPayload = dict[str, Any]
 
 #: One entry in the action list ``analyze`` returns — ``{"id": ..., "label": ...}``.
@@ -35,6 +36,8 @@ MAX_EXPRESSION_NODES = 700
 MAX_MATRIX_EDGE = 8
 MAX_PLOT_ABS_Y = 1_000_000.0
 PLOT_POINT_COUNT = 321
+#: Significant digits in every decimal form: the Decimal action's, and the ≈ toggle's.
+DECIMAL_DIGITS = 12
 
 
 def _action(action_id: str, label: str) -> Action:
@@ -356,13 +359,15 @@ def _execute(expression: ParsedInput, action_id: str) -> ResultPayload:
         result = sp.integrate(expression, variable)
         payload = _latex_result(f"Antiderivative with respect to {variable}", result)
         payload["latex"] += r" + C"
+        if payload["decimal"] is not None:
+            payload["decimal"] += r" + C"
         return payload
     if action_id == "evaluate":
         return _latex_result("Evaluated", sp.simplify(expression.doit()))
     if action_id == "series_convergence":
         return _series_convergence(expression)
     if action_id == "decimal":
-        return _latex_result("Decimal approximation", sp.N(expression, 12))
+        return _latex_result("Decimal approximation", sp.N(expression, DECIMAL_DIGITS))
     if action_id == "graph":
         return _graph_result(expression)
     raise MathInputError("That operation is not supported.")
@@ -480,7 +485,53 @@ def _stacked_latex(equations: list[sp.Equality]) -> str:
 
 
 def _latex_result(title: str, result: Any, message: str | None = None) -> ResultPayload:
-    return {"title": title, "latex": sp.latex(result), "message": message}
+    latex: str = sp.latex(result)
+    return {"title": title, "latex": latex, "message": message, "decimal": _decimal_latex(result, latex)}
+
+
+def _decimal_latex(result: Any, exact: str) -> str | None:
+    """``result`` with every number evaluated, for the ≈ toggle, or ``None`` when that changes nothing.
+
+    Sent with the exact form rather than asked for later, so the toggle is a swap on the screen and
+    not a second trip through SymPy. Best effort: a result that cannot be evaluated — a boolean, say —
+    keeps its exact form and only loses the toggle.
+    """
+    try:
+        decimal: str = sp.latex(_numeric(result))
+    except Exception:  # A failed approximation must never cost the exact answer.
+        return None
+    return decimal if decimal != exact else None
+
+
+def _numeric(value: Any) -> Any:
+    """``value`` evaluated to ``DECIMAL_DIGITS``, through the lists and dicts ``solve`` and
+    ``eigenvals`` answer in. Python ints — a rank, a multiplicity — are exact already and stay."""
+    if isinstance(value, (sp.Basic, MatrixBase)):
+        evaluated = value.evalf(DECIMAL_DIGITS)
+        return evaluated.xreplace(_whole_floats(evaluated))
+    if isinstance(value, list):
+        return [_numeric(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_numeric(item) for item in value)
+    if isinstance(value, dict):
+        return {_numeric(key): _numeric(item) for key, item in value.items()}
+    return value
+
+
+def _whole_floats(value: sp.Basic | MatrixBase) -> dict[sp.Float, sp.Integer]:
+    """Each float in ``value`` that is a whole number, mapped back to that integer.
+
+    ``evalf`` turns every number into a float, so ``x^2 + 2x`` comes back as ``x^2 + 2.0 x``: a
+    "decimal form" that says nothing new, and would offer the toggle for it. Only below
+    ``10^DECIMAL_DIGITS``, because past that a float is not known to be whole — ``2^{1000}`` reads
+    better as ``1.07 · 10^{301}`` than as the 302 digits ``int`` would invent for it.
+    """
+    limit: sp.Integer = sp.Integer(10) ** DECIMAL_DIGITS
+    return {
+        number: sp.Integer(int(number))
+        for number in value.atoms(sp.Float)
+        if number % 1 == 0 and abs(number) < limit
+    }
 
 
 def _solve_result(expression: ParsedInput, symbols: list[sp.Symbol]) -> ResultPayload:
@@ -492,7 +543,7 @@ def _solve_result(expression: ParsedInput, symbols: list[sp.Symbol]) -> ResultPa
     is how the pair is written by hand, and it is what the quadratic formula produced before SymPy
     split it in two.
 
-    **Only that shape is rewritten**, and [_plus_minus_latex] says exactly which. Everything else —
+    **Only that shape is rewritten**, and [_plus_minus_pair] says exactly which. Everything else —
     one root, three or more, a solution in several unknowns, roots that are plainly rational — prints
     as the list SymPy returned, because ± would then be a claim about the answer rather than a way of
     writing it down.
@@ -500,18 +551,24 @@ def _solve_result(expression: ParsedInput, symbols: list[sp.Symbol]) -> ResultPa
     solutions = sp.solve(expression, symbols, dict=True)
     if not solutions:
         return _latex_result("Solutions", solutions, "No symbolic solution was found.")
-    folded: str | None = _plus_minus_latex(solutions)
-    if folded is None:
+    pair: tuple[sp.Symbol, sp.Expr, sp.Expr] | None = _plus_minus_pair(solutions)
+    if pair is None:
         return _latex_result("Solutions", solutions)
+    symbol, centre, spread = pair
+    exact: str = _plus_minus_latex(symbol, centre, spread)
+    # Still folded: the decimal form is the same answer in other digits, so the message stays true.
+    decimal: str = _plus_minus_latex(symbol, _numeric(centre), _numeric(spread))
     return {
         "title": "Solutions",
-        "latex": folded,
+        "latex": exact,
         "message": "Two roots differing only in one sign, written as one.",
+        "decimal": decimal if decimal != exact else None,
     }
 
 
-def _plus_minus_latex(solutions: Any) -> str | None:
-    r"""``x = a \pm b`` when ``solutions`` is one pair worth writing that way, else ``None``.
+def _plus_minus_pair(solutions: Any) -> tuple[sp.Symbol, sp.Expr, sp.Expr] | None:
+    r"""The root's symbol, centre and spread when ``solutions`` is one pair worth writing as
+    ``x = a \pm b``, else ``None``.
 
     Every pair of roots can be *arranged* as ``a \pm b`` — halve their sum and their difference — so
     the question is only which pairs are better read that way. The test is the quadratic formula
@@ -556,7 +613,11 @@ def _plus_minus_latex(solutions: Any) -> str | None:
         return None
     if centre.is_rational is not True or spread.is_rational is True:
         return None
+    return symbol, centre, spread
 
+
+def _plus_minus_latex(symbol: sp.Symbol, centre: sp.Expr, spread: sp.Expr) -> str:
+    r"""``x = a \pm b``, or ``x = \pm b`` about zero."""
     # ``\pm`` binds tighter than ``+``, so a spread that is itself a sum has to be bracketed or
     # ``3 \pm 1 + \sqrt{2}`` reads as ``(3 \pm 1) + \sqrt{2}`` — a different pair of numbers.
     body: str = sp.latex(spread)

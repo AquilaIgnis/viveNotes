@@ -161,6 +161,20 @@ class SympyMathEngineTest {
         assertNotNull(engine.analyze("\\theta _ { 2 } ^ { \\circ }").error)
     }
 
+    /** What ≈ swaps in: every number evaluated, and nothing where that would read the same. */
+    @Test
+    fun resultsCarryADecimalFormOnlyWhereItSaysSomethingNew() = runBlocking {
+        assertEquals("0.583333333333", engine.execute("\\frac{1}{3}+\\frac{1}{4}", "simplify").decimal)
+        assertNull(engine.execute("12 \\times 4", "simplify").decimal)
+        // Whole floats go back to integers, so a polynomial is not offered as "2.0 x".
+        assertNull(engine.execute("x^2+2x", "expand").decimal)
+        // A folded pair stays folded, so its message still describes what is shown.
+        assertEquals("x = -5 \\pm 4.472135955", engine.execute("x^2+10x+5=0", "solve").decimal)
+        assertEquals("0.333333333333 x^{3} + x^{2} + C", engine.execute("x^2+2x", "integrate").decimal)
+        // The Decimal action's answer is already one.
+        assertNull(engine.execute("\\sqrt{2}", "decimal").decimal)
+    }
+
     @Test
     fun malformedLatexAndUnlistedOperationsFailClosed() = runBlocking {
         assertNotNull(engine.analyze("x -").error)

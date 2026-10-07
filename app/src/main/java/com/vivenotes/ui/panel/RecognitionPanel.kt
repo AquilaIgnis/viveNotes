@@ -24,6 +24,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +43,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -49,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import com.vivenotes.BuildConfig
 import com.vivenotes.math.FormulaToolsState
 import com.vivenotes.math.MathGraph
+import com.vivenotes.math.MathOperationResult
 import com.vivenotes.richtext.createEquationRenderer
 import com.vivenotes.richtext.fittedTo
 import io.ratex.RaTeXRenderer
@@ -73,6 +77,7 @@ internal object RecognitionPanelTags {
     const val INTERPRETATION = "recognition-interpretation"
     const val MATH_ERROR = "recognition-math-error"
     const val RESULT = "recognition-math-result"
+    const val DECIMAL = "recognition-math-decimal"
     const val GRAPH = "recognition-math-graph"
     fun action(id: String) = "recognition-math-action-$id"
 }
@@ -107,7 +112,6 @@ internal fun ColumnScope.RecognitionPanelContent(
     onValueChange: (String) -> Unit,
     onCopy: (String) -> Unit,
     onMathAction: (String) -> Unit = {},
-    onCopyMathResult: (String) -> Unit = {},
 ) {
     if (state.running) {
         Row(
@@ -177,7 +181,6 @@ internal fun ColumnScope.RecognitionPanelContent(
         FormulaToolsContent(
             state = formulaTools,
             onAction = onMathAction,
-            onCopyResult = onCopyMathResult,
         )
     }
 }
@@ -187,8 +190,9 @@ internal fun ColumnScope.RecognitionPanelContent(
 private fun ColumnScope.FormulaToolsContent(
     state: FormulaToolsState,
     onAction: (String) -> Unit,
-    onCopyResult: (String) -> Unit,
 ) {
+    // Above every early return, so the choice outlives the result it was made on.
+    var showDecimal by remember { mutableStateOf(false) }
     if (state.analyzing) {
         PanelSection("Math actions") {
             Row(
@@ -293,12 +297,13 @@ private fun ColumnScope.FormulaToolsContent(
     state.result?.let { result ->
         PanelSection(result.title) {
             result.latex?.takeIf(String::isNotBlank)?.let { latex ->
-                EquationPreview(latex)
-                PanelButton(
-                    onClick = { onCopyResult(latex) },
-                    modifier = Modifier.padding(top = 8.dp),
-                ) {
-                    Text("Copy result")
+                EquationPreview(if (showDecimal) result.decimal ?: latex else latex)
+                if (result.decimal != null) {
+                    DecimalToggle(
+                        checked = showDecimal,
+                        onCheckedChange = { showDecimal = it },
+                        modifier = Modifier.padding(top = 8.dp).testTag(RecognitionPanelTags.DECIMAL),
+                    )
                 }
             }
             result.message?.takeIf(String::isNotBlank)?.let { message ->
@@ -312,6 +317,35 @@ private fun ColumnScope.FormulaToolsContent(
             result.graph?.let { graph -> MathGraphPreview(graph) }
             Box(Modifier.testTag(RecognitionPanelTags.RESULT))
         }
+    }
+}
+
+/**
+ * ≈: shows a math result as [MathOperationResult.decimal] instead of its exact form.
+ *
+ * A toggle rather than an action, because it is a way of reading answers that holds until it is
+ * turned off. Tertiary, as the math actions are — in the calculator it sits beside =, one of them.
+ */
+@Composable
+internal fun DecimalToggle(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    PanelToggleButton(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        enabled = enabled,
+        colors = ToggleButtonDefaults.toggleButtonColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            checkedContainerColor = MaterialTheme.colorScheme.tertiary,
+            checkedContentColor = MaterialTheme.colorScheme.onTertiary,
+        ),
+        modifier = modifier.semantics { contentDescription = "Show as decimal" },
+    ) {
+        Text("≈", style = MaterialTheme.typography.titleMedium)
     }
 }
 

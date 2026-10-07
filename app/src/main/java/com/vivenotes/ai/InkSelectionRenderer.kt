@@ -123,8 +123,9 @@ internal fun renderInkSelection(
  * The calculator's scratch pad has no page and no lasso — whatever is on it is the formula — so it
  * builds the selection [renderInkSelection] would have been handed rather than a second renderer
  * that could drift from the first on stem width, the one setting this pipeline's accuracy rests on.
+ * [stemPx] is passed straight through, so it is the model's as there.
  */
-internal fun renderAllInk(strokes: List<PageStroke>): Bitmap {
+internal fun renderAllInk(strokes: List<PageStroke>, stemPx: Float = RECOGNITION_STEM_PX): Bitmap {
     val bounds = strokes.mapNotNull { it.pageBounds }
     require(bounds.isNotEmpty()) { "Recognition requires ink" }
     val selection = CanvasSelection(
@@ -137,7 +138,7 @@ internal fun renderAllInk(strokes: List<PageStroke>): Bitmap {
             bottom = bounds.maxOf { it.bottom },
         ),
     )
-    return renderInkSelection(strokes, emptyList(), selection)
+    return renderInkSelection(strokes, emptyList(), selection, stemPx)
 }
 
 /** One contour as a path to stroke. Straight throughout on the kinds that reach here. */
