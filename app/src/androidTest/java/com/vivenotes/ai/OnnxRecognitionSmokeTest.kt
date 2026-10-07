@@ -180,7 +180,7 @@ class OnnxRecognitionSmokeTest {
                 },
             )
         }
-        val engine = OnnxInkRecognitionEngine(models)
+        val engine = OnnxInkRecognitionEngine(models, formulaEngine = { FormulaEngine.FormulaNetS })
         try {
             val result = withTimeout(60_000) { engine.recognizeFormula(bitmap) }
             assertTrue("Formula recognition returned no LaTeX", result.latex.isNotBlank())
@@ -210,10 +210,59 @@ class OnnxRecognitionSmokeTest {
             models.state.value.formulaLatex == AiModelInstallState.Installed,
         )
 
+        val bitmap = pageTwoFormula(stemPx = FormulaEngine.FormulaNetS.stemPx)
+
+        val engine = OnnxInkRecognitionEngine(models, formulaEngine = { FormulaEngine.FormulaNetS })
+        try {
+            val latex = withTimeout(60_000) { engine.recognizeFormula(bitmap).latex }
+            assertEquals("x^{2}-4=0", latex.filterNot(Char::isWhitespace))
+        } finally {
+            engine.close()
+            bitmap.recycle()
+        }
+    }
+
+    /**
+     * The same formula through UniMERNet-T, on a debug build that carries it.
+     *
+     * This is the one test of the Kotlin half of the export: the greedy loop, the cache carried from
+     * one step's outputs into the next step's inputs, and the empty first-step cache. The desktop
+     * study ran the same graphs through Python and read this formula exactly on every raster.
+     */
+    @Test
+    fun savedPageTwoFormulaRunsThroughUniMerNet() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val models = AiModelStore(context, autoDownload = false)
+        withTimeout(60_000) {
+            models.state.first { it.formulaLatex !is AiModelInstallState.Verifying }
+        }
+        assumeTrue(
+            "this build does not carry UniMERNet-T — see app/src/debug/assets/ai/dev/",
+            models.state.value.uniMerNet == AiModelInstallState.Installed,
+        )
+
+        val bitmap = pageTwoFormula(stemPx = FormulaEngine.UniMerNetTiny.stemPx)
+
+        val engine = OnnxInkRecognitionEngine(models, formulaEngine = { FormulaEngine.UniMerNetTiny })
+        try {
+            val latex = withTimeout(60_000) { engine.recognizeFormula(bitmap).latex }
+            assertEquals("x^{2}-4=0", latex.filterNot(Char::isWhitespace))
+        } finally {
+            engine.close()
+            bitmap.recycle()
+        }
+    }
+
+    /**
+     * `x² - 4 = 0` from the seeded Recognition Test page: sequences 10..22 of
+     * `default_notebook/recognition_page_2.json`, rendered as the Math button renders a lasso.
+     */
+    private suspend fun pageTwoFormula(stemPx: Float): Bitmap {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = Room.inMemoryDatabaseBuilder(context, NotesDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        val bitmap = try {
+        return try {
             val repository = NotesRepository(
                 db,
                 starterInkPage = StarterInkPageFixture.load(context),
@@ -241,18 +290,10 @@ class OnnxRecognitionSmokeTest {
                     projections = formula.mapTo(mutableSetOf()) { it.projectionKey },
                     bounds = bounds,
                 ),
+                stemPx = stemPx,
             )
         } finally {
             db.close()
-        }
-
-        val engine = OnnxInkRecognitionEngine(models)
-        try {
-            val latex = withTimeout(60_000) { engine.recognizeFormula(bitmap).latex }
-            assertEquals("x^{2}-4=0", latex.filterNot(Char::isWhitespace))
-        } finally {
-            engine.close()
-            bitmap.recycle()
         }
     }
 

@@ -30,18 +30,22 @@ import kotlin.math.min
  *
  * [shapes] is the page's, filtered here rather than by the caller, so what is drawn is decided by
  * the same rule that decides whether the Math button appears — `CanvasSelection.isInkAndLines`.
+ *
+ * [stemPx] is the model's, not the renderer's: each formula model reads best at its own stroke width
+ * — see [FormulaEngine.stemPx].
  */
 internal fun renderInkSelection(
     strokes: List<PageStroke>,
     shapes: List<Outline.Shape>,
     selection: CanvasSelection,
+    stemPx: Float = RECOGNITION_STEM_PX,
 ): Bitmap {
     require(selection.inkIds.isNotEmpty()) { "Recognition requires ink" }
     val bounds = selection.bounds
     val pageWidth = (bounds.right - bounds.left).coerceAtLeast(1f)
     val pageHeight = (bounds.bottom - bounds.top).coerceAtLeast(1f)
     val longest = max(pageWidth, pageHeight)
-    val stemPageUnits = recognitionStemSize(longest)
+    val stemPageUnits = recognitionStemSize(longest, stemPx)
     val scale = min(MAX_SCALE, max(MIN_SCALE, TARGET_LONG_EDGE / longest))
     val padding = PADDING_PAGE_UNITS * scale
     val width = ceil(pageWidth * scale + padding * 2).toInt().coerceIn(1, MAX_BITMAP_EDGE)
@@ -69,10 +73,18 @@ internal fun renderInkSelection(
             // when the new brush needs a different one, so this is the stroke the user drew, inked
             // by a different pen. A projection carrying a resize divides the width back out, or a
             // stroke shrunk to a quarter would come out a quarter as thick as everything beside it.
+            //
+            // The tessellation tolerance is set from the bitmap rather than kept from the stroke.
+            // The stored 0.25 dp is fine at the width a stroke was written at. At UniMERNet's 4 px
+            // stem, though, the radius is under a page unit, so caps and curves came out as coarse
+            // polygons. UniMERNet then read the 4 in `x² - 4 = 0` as a 1, where the same ink drawn
+            // round read 4 every time.
+            val strokeScale = pageStroke.strokeScale()
             val highContrast = pageStroke.stroke.copy(
                 pageStroke.stroke.brush.copyWithColorIntArgb(
                     colorIntArgb = Color.BLACK,
-                    size = (stemPageUnits / pageStroke.strokeScale()).coerceAtLeast(MIN_STEM_SIZE),
+                    size = (stemPageUnits / strokeScale).coerceAtLeast(MIN_STEM_SIZE),
+                    epsilon = RECOGNITION_EPSILON_PX / (scale * strokeScale),
                 ),
             )
             renderer.draw(canvas, highContrast, strokeMatrix)
@@ -132,9 +144,12 @@ private fun ShapeContour.asPath(): Path = Path().apply {
  * 10 px was measured, not chosen: 2 px reads as noise and scored 0.617, 24 px blots the counters
  * shut and scored 0.437, and the curve between them is not monotonic. Nudge this only with the sweep
  * in `simulations/formula-render` in front of you.
+ *
+ * That is FormulaNet-S's number. Another model passes its own [target] in the same 384 frame — see
+ * [FormulaEngine.stemPx].
  */
-internal fun recognitionStemSize(longest: Float): Float =
-    RECOGNITION_STEM_PX * longest / (FORMULA_INPUT_PX - RECOGNITION_STEM_PX)
+internal fun recognitionStemSize(longest: Float, target: Float = RECOGNITION_STEM_PX): Float =
+    target * longest / (FORMULA_INPUT_PX - target)
 
 /** The page transform's average scale, for dividing a stem width back out of a resized stroke. */
 private fun PageStroke.strokeScale(): Float {
@@ -154,3 +169,6 @@ internal const val RECOGNITION_STEM_PX = 10f
 
 /** A brush size must be greater than zero, and a hairline is not worth rendering anyway. */
 private const val MIN_STEM_SIZE = 0.05f
+
+/** How far the mesh may stray from the true outline, in bitmap pixels: a tenth of one. */
+private const val RECOGNITION_EPSILON_PX = 0.1f

@@ -97,8 +97,8 @@ import com.vivenotes.data.sync.DisconnectResult
 import com.vivenotes.data.sync.SyncRunResult
 import com.vivenotes.data.sync.ConnectFailure
 import com.vivenotes.ai.AiModelStore
-import com.vivenotes.ai.AiModelInstallState
 import com.vivenotes.ai.AiModelsState
+import com.vivenotes.ai.FormulaEngine
 import com.vivenotes.ai.InkRecognitionEngine
 import com.vivenotes.ai.renderInkSelection
 import com.vivenotes.ink.InkCodec
@@ -851,11 +851,16 @@ private fun NotesWorkspace(
         // The rules the selection holds travel with the ink — see `renderInkSelection`. Read here
         // with the strokes so both are the page as it was when Math was pressed.
         val selectedShapes = state.shapes
+        // Each formula model reads best at its own stroke width; text keeps FormulaNet's.
+        val stemPx = when (kind) {
+            RecognitionOutputKind.Text -> FormulaEngine.FormulaNetS.stemPx
+            RecognitionOutputKind.Formula -> aiModels.formulaEngine.stemPx
+        }
         recognitionScope.launch {
             var bitmap: android.graphics.Bitmap? = null
             try {
                 val rendered = withContext(Dispatchers.Default) {
-                    renderInkSelection(selectedStrokes, selectedShapes, selection)
+                    renderInkSelection(selectedStrokes, selectedShapes, selection, stemPx)
                 }
                 bitmap = rendered
                 recognition = RecognitionPanelState(
@@ -1205,7 +1210,9 @@ private fun NotesWorkspace(
                                     allowFinger = drawWithFinger,
                                     stylusButtons = stylusButtons,
                                     aiModels = aiModels,
-                                    onDownloadFormula = aiModelStore::downloadFormula,
+                                    onDownloadFormula = aiModelStore::download,
+                                    onDeleteFormula = aiModelStore::delete,
+                                    onSelectFormulaEngine = aiModelStore::selectFormulaEngine,
                                     recognition = recognition,
                                     formulaTools = formulaTools,
                                     onRecognitionChange = { value ->
@@ -1281,7 +1288,9 @@ private fun NotesWorkspace(
                                     allowFinger = drawWithFinger,
                                     stylusButtons = stylusButtons,
                                     aiModels = aiModels,
-                                    onDownloadFormula = aiModelStore::downloadFormula,
+                                    onDownloadFormula = aiModelStore::download,
+                                    onDeleteFormula = aiModelStore::delete,
+                                    onSelectFormulaEngine = aiModelStore::selectFormulaEngine,
                                     recognition = recognition,
                                     formulaTools = formulaTools,
                                     onRecognitionChange = { value ->
@@ -1505,7 +1514,9 @@ private fun ToolPaneHost(
     /** Hardware pane, a property of the user. */
     stylusButtons: StylusButtonMap,
     aiModels: AiModelsState,
-    onDownloadFormula: () -> Unit,
+    onDownloadFormula: (FormulaEngine) -> Unit,
+    onDeleteFormula: (FormulaEngine) -> Unit,
+    onSelectFormulaEngine: (FormulaEngine) -> Unit,
     recognition: RecognitionPanelState?,
     formulaTools: FormulaToolsState,
     onRecognitionChange: (String) -> Unit,
@@ -1579,6 +1590,7 @@ private fun ToolPaneHost(
                 AiModelsPanelContent(
                     state = aiModels,
                     onDownloadFormula = onDownloadFormula,
+                    onDeleteFormula = onDeleteFormula,
                     pictureText = imageTextProgress,
                     picturesRead = picturesRead,
                     onSetPictureText = viewModel::setImageTextEnabled,
@@ -1587,6 +1599,7 @@ private fun ToolPaneHost(
                     inkPagesRead = inkPagesRead,
                     onSetInkText = viewModel::setInkTextEnabled,
                     onRebuildInkText = viewModel::rebuildInkText,
+                    onSelectFormulaEngine = onSelectFormulaEngine,
                 )
             }
             ToolPane.Hardware -> HardwarePanelContent(
@@ -1887,7 +1900,7 @@ private fun PageEditor(
         onRecolorInkSelection = viewModel::recolorInk,
         onGroupInkSelection = viewModel::groupInk,
         onUngroupInkSelection = viewModel::ungroupInk,
-        formulaRecognitionAvailable = aiModels.formulaLatex == AiModelInstallState.Installed,
+        formulaRecognitionAvailable = aiModels.formulaReady,
         recognitionRunning = recognitionRunning,
         onRecognizeFormula = onRecognizeFormula,
         showPrintMargins = showPrintMargins,

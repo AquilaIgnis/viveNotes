@@ -51,6 +51,22 @@ class RecognitionStemTest {
         }
     }
 
+    /** Each formula model's own width, in the same frame, whatever the selection's size. */
+    @Test
+    fun eachFormulaModelLandsAtItsOwnStemWidth() {
+        FormulaEngine.entries.forEach { engine ->
+            listOf(12f, 190f, 1000f).forEach { longest ->
+                assertEquals(
+                    "$engine at $longest units across",
+                    engine.stemPx,
+                    stemInModelFrame(longest, recognitionStemSize(longest, engine.stemPx)),
+                    0.01f,
+                )
+            }
+        }
+        assertEquals(RECOGNITION_STEM_PX, FormulaEngine.FormulaNetS.stemPx)
+    }
+
     @Test
     fun theWidthStaysPositiveForADegenerateSelection() {
         assertTrue(recognitionStemSize(0f) >= 0f)

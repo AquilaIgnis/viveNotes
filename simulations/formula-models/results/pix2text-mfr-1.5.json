@@ -1,0 +1,5282 @@
+[
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "1 \\sqrt { x ^ { 2 } + 1 }",
+  "score": 0.8888888888888888,
+  "exact": false,
+  "seconds": 0.08542353699886007
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08862641200175858
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.06577481099884608
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10213013400061755
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 7 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.07759500500105787
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14597725000203354
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16720386300221435
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { 0 0 } e ^ { - 7 N }",
+  "score": 0.736842105263158,
+  "exact": false,
+  "seconds": 0.12479104299927712
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "1 \\sqrt { x ^ { 2 } + 1 }",
+  "score": 0.8888888888888888,
+  "exact": false,
+  "seconds": 0.09190001000024495
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08561330800148426
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07037750500239781
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 7 } x ^ { 2 } d x",
+  "score": 0.9,
+  "exact": false,
+  "seconds": 0.09536485199714662
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 7 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.07029127100031474
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13627636199817061
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15369255599944154
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.10645658299836214
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "1 \\sqrt { x ^ { 2 } + 1 }",
+  "score": 0.8888888888888888,
+  "exact": false,
+  "seconds": 0.0924960230004217
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07690089699826785
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07124878000104218
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10753172600016114
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 3 7 ] ^ { 7 } = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.08323783499872661
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14233741499992902
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14770330900137196
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11212606400295044
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "y ^ { 2 } + 1",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.07016869800281711
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07989700899997842
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.06529695299832383
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10299828400093247
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} 7 7 7 ] \\\\ 3 6 \u3001",
+  "score": 0.4814814814814815,
+  "exact": false,
+  "seconds": 0.09184621900203638
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13402257999769063
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16004662799969083
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11603236399969319
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "1 \\sqrt { x ^ { 2 } + 1 }",
+  "score": 0.8888888888888888,
+  "exact": false,
+  "seconds": 0.0846873990012682
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07580709899775684
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07578569800170953
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0993944570000167
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 ] ^ { 7 } 7 ^ { 7 } ] ^ { 7 }",
+  "score": 0.03703703703703709,
+  "exact": false,
+  "seconds": 0.09901391500170575
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13898892500219517
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1562054799978796
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.1284118910007237
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08720253700084868
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07995278399903327
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07090731099742698
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0963834180001868
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 7 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.06925670499913394
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14208253100150614
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14800231699700817
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11631679400306894
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "1 \\sqrt { x ^ { 2 } + 1 }",
+  "score": 0.8888888888888888,
+  "exact": false,
+  "seconds": 0.08218936399862287
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07539081899813027
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07242367100116098
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10682464300043648
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 7 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.08239674699871102
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13964691499859327
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16084969299845397
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { 0 0 } e ^ { - 7 N }",
+  "score": 0.736842105263158,
+  "exact": false,
+  "seconds": 0.11943588999929489
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "1 \\sqrt { x ^ { 2 } + 1 }",
+  "score": 0.8888888888888888,
+  "exact": false,
+  "seconds": 0.08719434100203216
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07856495799933327
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.06798449800044182
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10124572400309262
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 7 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.06854577500052983
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.13105932100006612
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15830706199994893
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { 0 0 } e ^ { - 7 N }",
+  "score": 0.736842105263158,
+  "exact": false,
+  "seconds": 0.11892817599800765
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "1 \\sqrt { x ^ { 2 } + 1 }",
+  "score": 0.8888888888888888,
+  "exact": false,
+  "seconds": 0.08266266300051939
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07684600300126476
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.06925830900217989
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10381205899830093
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 3 ] ^ { 7 } 7 ^ { 7 } ]",
+  "score": 0.03703703703703709,
+  "exact": false,
+  "seconds": 0.09586507300264202
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13369754300219938
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13714768700083368
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.12172110100073041
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "1 \\sqrt { x ^ { 2 } + 1 }",
+  "score": 0.8888888888888888,
+  "exact": false,
+  "seconds": 0.08524762399974861
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08585097900140681
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.06952566700056195
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1096652880005422
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 7 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.08263118199829478
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.143233667997265
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15229392900073435
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11415556900101365
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "1 \\sqrt { x ^ { 2 } + 1 }",
+  "score": 0.8888888888888888,
+  "exact": false,
+  "seconds": 0.08114647200272884
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0742356139999174
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.06433086799734156
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0958616770003573
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 7 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.07638601899816422
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14250740799980122
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15481285500209196
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.12533835300200735
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08464622100291308
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08094015100141405
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08412645299904398
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10680977399897529
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 7 ] ^ { 7 } ] ^ { 7 } ] ^ { 2 }",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.1023525669988885
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13789195099889184
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15807479200157104
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11899918999915826
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07825160300126299
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.09126952299993718
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08482242600075551
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.11490230700292159
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 7 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06701979599893093
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1318649099994218
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15251610199993593
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11338668900134508
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0849550070015539
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08046835400091368
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07881414099756512
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0977212990001135
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06405120700219413
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13871659700089367
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1574656149969087
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11787439299951075
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08868801800053916
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07726247399841668
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08142562300054124
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10782968100102153
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06596821900166105
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.1413808990000689
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15598643400153378
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11516310300066834
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08332307700038655
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07815832599953865
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.06489533000058145
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.09435241900064284
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 7 ] = 5 7",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.07934977900004014
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13832759800061467
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15917362899926957
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11087928499910049
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.09090827699765214
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07791986300071585
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.09239058199818828
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10737993799921242
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 7 ] = 5 1",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06874396200146293
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13954481999826385
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1621552229989902
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11614789299710537
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08642129200234194
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08416145000228425
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08020517400291283
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0976447629982431
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 7 ] = 5",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06928513999810093
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.13262203900012537
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1554637310000544
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.12193334399853484
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08814805299698492
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07975766400340945
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07979008599795634
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10188628100149799
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 7 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06088652499965974
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.13560325300204568
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1513910149988078
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11221298899909016
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.09024455599865178
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08381795699824579
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08207088800190832
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.11374456799967447
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.05977309999798308
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13302574599947548
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15338570400126628
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11286077000113437
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08009867100190604
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07889024599717231
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08553845599817578
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10902455199902761
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 7 ] = 5 1",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06689078099952894
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14171691699812072
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15179422999790404
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.1100395200010098
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08069946300020092
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07798812299733981
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08132517200283473
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10384918000272592
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 7 ] = 5 7",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06766192599752685
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14949144599813735
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15744445400196128
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.10878824300016277
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08446051700229873
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.09472979699785355
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin { ( x ) }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 0.07486903699827963
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\, d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.11780568299946026
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.07551974300076836
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.1543056209993665
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1628928049976821
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.1165610989992274
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08893128099953174
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08769600400046329
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0739700090016413
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\, d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10704430999976466
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06438781600081711
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14086242399935145
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16004964300009306
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.1197769780010276
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.09105435400124406
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07895012999870232
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07718973599912715
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\, d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1036840859997028
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.07638080899778288
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.14429533500151592
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1480913560008048
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.10850365200167289
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08394220399713959
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07873319699865533
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0858285469985276
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10197478999907617
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.058814669002458686
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.14366063899797155
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15831711200007703
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11203562199807493
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07943436999994447
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08727357200041297
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08834624999872176
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1150070859985135
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06089405899911071
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.13238445800016052
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15760276500077453
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11342959000103292
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0867738820015802
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08032988099876093
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08444920699912473
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10303549399759504
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06872967399976915
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14305912599957082
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1668145839976205
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11973727300210157
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.09336271900247084
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07549044799816329
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07348515900230268
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10040310399926966
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06263448499885271
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13166042200100492
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15599629300049855
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11989496200112626
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08032414999979665
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07968985499974224
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin { ( x ) }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 0.06693957300012698
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10286142400218523
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06399551100184908
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.1432882109984348
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15786624500105972
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11389684800087707
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08245931600322365
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07726915600142092
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07647369500045897
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\, d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10960777899890672
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.07043863000217243
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1415116769967426
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16450040799827548
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11091238799781422
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07827029899999616
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07194402100139996
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07782217699786997
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.09722665899971616
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.06576918999780901
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13470617900020443
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15657656499752193
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.1140002439969976
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0843059840008209
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07987531699836836
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin \\left( x \\right)",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07238534900170635
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10490471499724663
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 7 ] = 5 5",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.07644426999831921
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.13648072000069078
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15739743500307668
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.12248021299819811
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.08487405299820239
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07209127000169246
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\int _ { i } n \\, ( \\chi )",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.08449322000160464
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } ~ d \\chi",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.10832172699883813
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} 1 & { 7 } \\\\ 3 & { 6 } \\\\ \\end{matrix} ]",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.12132523900072556
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.13312159799897927
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14179641800001264
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11324573100137059
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.09141396699851612
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07834729499882087
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\int _ { i } n ( x )",
+  "score": 0.4285714285714286,
+  "exact": false,
+  "seconds": 0.08162666499993065
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } ~ d x",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.11582316700150841
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} 1 & { 2 } \\\\ 3 & { 6 } \\\\ \\end{matrix} ]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.12303620999955456
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.14190500499898917
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15394364399980986
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.12157533400022658
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.08849772800022038
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07880678699802957
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\operatorname { s i n } { ( \\chi ) }",
+  "score": 0.19999999999999996,
+  "exact": false,
+  "seconds": 0.08669779800038668
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\, d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1106071179965511
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} 1 & { 7 } \\\\ 3 & { 6 } \\\\ \\end{matrix} ]",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.12548512099965592
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.14229162799892947
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1583365890001005
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11469472299722838
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.09140616299919202
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08663789500133134
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\operatorname { s i n } { ( \\chi ) }",
+  "score": 0.19999999999999996,
+  "exact": false,
+  "seconds": 0.08781788499982213
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } ~ d \\chi",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.11906967400136637
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} 1 & { 7 } \\\\ 3 & { 6 } \\\\ \\end{matrix} ]",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.11826953499985393
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.13874373900034698
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1598557540019101
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.12420936800117488
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.10054591500011156
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07656066100025782
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\int _ { i n } \\, ( x )",
+  "score": 0.33333333333333337,
+  "exact": false,
+  "seconds": 0.09296376099882764
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } \\chi ^ { 2 } ~ d \\chi",
+  "score": 0.7272727272727273,
+  "exact": false,
+  "seconds": 0.11230533400157583
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} 1 & { 7 } \\\\ 3 & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13577129099940066
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.14016354599880287
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15121780499976012
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11228903400115087
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.09595048499977565
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07656986900110496
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\int _ { i } n \\, ( \\chi )",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.08982461799678276
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } ~ d x",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.09860077000121237
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} 1 & { 2 } \\\\ 3 & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.13600713999767322
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.13503288900028565
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15921635000267997
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - \\tan",
+  "score": 0.8125,
+  "exact": false,
+  "seconds": 0.11651705500116805
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.09623110800021095
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08015591000003042
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\int _ { i } n \\, ( \\chi )",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.0904555969973444
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } ~ d x",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.09983030600051279
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} 1 & { 7 } \\\\ 3 & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.12953177899908042
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.13529996600118466
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15866856999855372
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11419800899966503
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { \\begin{array} { c } { x ^ { 2 } \\lor 1 } \\\\ \\end{array} }",
+  "score": 0.2592592592592593,
+  "exact": false,
+  "seconds": 0.13706793500023196
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08291586400082451
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\int _ { i } n ( x )",
+  "score": 0.4285714285714286,
+  "exact": false,
+  "seconds": 0.08285762299783528
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } ~ d x",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.10505237599863904
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} 1 & { 2 } \\\\ 3 & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.133420065001701
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14800743700106977
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1583411169995088
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11291316899951198
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.09109150400036015
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07664510199901997
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\operatorname { s i n } { ( \\chi ) }",
+  "score": 0.19999999999999996,
+  "exact": false,
+  "seconds": 0.08827189799922053
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } ~ d \\chi",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.11379761900025187
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} 1 & { 7 } \\\\ 3 & { 6 } \\\\ \\end{matrix} ]",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13118220400065184
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14291003299877048
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1381770920015697
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.12081428899909952
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.09240379800030496
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08594043000266538
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\int _ { i n } \\, ( x )",
+  "score": 0.33333333333333337,
+  "exact": false,
+  "seconds": 0.0767036229990481
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\, d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.09854868199909106
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} 1 & { 7 } \\\\ 3 & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.12374354299754486
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14211496300049475
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15498747600213392
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.1191723189986078
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.09054400499735493
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08571837799900095
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\int _ { i n } \\, ( x )",
+  "score": 0.33333333333333337,
+  "exact": false,
+  "seconds": 0.09408310800063191
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\, d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.10149923600329203
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} 1 & { 7 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} ]",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13314597499993397
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.14697138799965614
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos \\left( n \\right) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16257073299857439
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11686572799953865
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.08596400399983395
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07291886299935868
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "S _ { i } n \\left( \\chi \\right)",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.09287713800222264
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\arcsin",
+  "score": 0.8,
+  "exact": false,
+  "seconds": 0.10367602100086515
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { 1 } & { 2 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.14732505999927525
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.14237596900056815
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13917192199733108
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - \\pi N }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.11500966099993093
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.08966067700021085
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08113901799879386
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "S _ { i } n \\, ( \\chi )",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.09158840899908682
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\arcsin",
+  "score": 0.8,
+  "exact": false,
+  "seconds": 0.10368038999877172
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { 1 } & { 2 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.16138714399858145
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 0 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.142673835001915
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.14190892099941266
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - \\pi N }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.1257945399993332
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.09450328599996283
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.0882647350008483
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "S _ { i } n \\left( \\chi \\right)",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.0926744710013736
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\And",
+  "score": 0.8,
+  "exact": false,
+  "seconds": 0.10810871200010297
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { 1 } & { 2 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.15622140000050422
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.14039443399815354
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.13889580700197257
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11499382200054242
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.08750160500130733
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07784464900032617
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "S _ { i } n \\left( \\chi \\right)",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.09627357900171774
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\And",
+  "score": 0.8,
+  "exact": false,
+  "seconds": 0.10966880500200205
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { 1 } & { 7 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15630366600089474
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.13411010699928738
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1430527950033138
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11758145699786837
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor \\uparrow }",
+  "score": 0.75,
+  "exact": false,
+  "seconds": 0.09374868199665798
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07105506200241507
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\int _ { i } \\boldsymbol { n } \\, ( \\boldsymbol { \\chi } )",
+  "score": 0.2222222222222222,
+  "exact": false,
+  "seconds": 0.10936430700166966
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\linebreak [ 0 ] \\mathrm { d } x",
+  "score": 0.7142857142857143,
+  "exact": false,
+  "seconds": 0.14065288500205497
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { 1 } & { 2 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.14635188200190896
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 0 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.14128326300124172
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cot ( n ) } { n ^ { \\prime } }",
+  "score": 0.9047619047619048,
+  "exact": false,
+  "seconds": 0.14767259099971852
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11714344600113691
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor \\uparrow }",
+  "score": 0.75,
+  "exact": false,
+  "seconds": 0.09708668299936107
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07557812400045805
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\int _ { i } \\boldsymbol { n } \\, ( \\boldsymbol { x } )",
+  "score": 0.33333333333333337,
+  "exact": false,
+  "seconds": 0.10580324200054747
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\linebreak [ 0 ] \\mathrm { d } x",
+  "score": 0.7142857142857143,
+  "exact": false,
+  "seconds": 0.13585252600023523
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} { 1 } & { 2 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} ]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.1280786690003879
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.14629780900213518
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cot ( n ) } { n ^ { \\prime } }",
+  "score": 0.9047619047619048,
+  "exact": false,
+  "seconds": 0.1550797119998606
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11458819099789253
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor \\uparrow }",
+  "score": 0.75,
+  "exact": false,
+  "seconds": 0.09960761200272827
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08622485999876517
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "S _ { i } n \\, ( \\chi )",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.09666751799886697
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\arcsin",
+  "score": 0.8,
+  "exact": false,
+  "seconds": 0.1046774930000538
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} { 1 } & { 2 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} ]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.1392082809979911
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 0 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.14263835800011293
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15162499899815884
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - \\pi N }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.12055798199799028
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\downarrow \\tau }",
+  "score": 0.75,
+  "exact": false,
+  "seconds": 0.10310110900172731
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07717717200284824
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "S _ { i } n \\left( \\chi \\right)",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.0979406160004146
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\arcsin",
+  "score": 0.8,
+  "exact": false,
+  "seconds": 0.10837787299897172
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} { 1 } & { 2 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} ]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.13615723499970045
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 0 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.1435732639984053
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cot ( n ) } { n ^ { 2 } }",
+  "score": 0.9523809523809523,
+  "exact": false,
+  "seconds": 0.1483520910005609
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.10797283400097513
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.08870781599762267
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.08300915099971462
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "S i n \\left( \\chi \\right)",
+  "score": 0.33333333333333337,
+  "exact": false,
+  "seconds": 0.08892071100126486
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\linebreak [ 0 ] \\mathrm { d } x",
+  "score": 0.7142857142857143,
+  "exact": false,
+  "seconds": 0.13758194199908758
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { 1 } & { 2 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.15345892299956176
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.14590638500158093
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cot ( n ) } { n ^ { 2 } }",
+  "score": 0.9523809523809523,
+  "exact": false,
+  "seconds": 0.15137584499825607
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - \\pi N }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.11621971999920788
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor \\uparrow }",
+  "score": 0.75,
+  "exact": false,
+  "seconds": 0.0898380439975881
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07653054399997927
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\int _ { i } \\boldsymbol { n } \\, ( \\boldsymbol { \\chi } )",
+  "score": 0.2222222222222222,
+  "exact": false,
+  "seconds": 0.10655955900074332
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\linebreak [ 0 ] \\mathrm { d } x",
+  "score": 0.7142857142857143,
+  "exact": false,
+  "seconds": 0.14156684100089478
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { 1 } & { 2 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.14000026600115234
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 0 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.13781991300129448
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cot ( n ) } { n ^ { \\epsilon } }",
+  "score": 0.9047619047619048,
+  "exact": false,
+  "seconds": 0.1466587940012687
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11276477699720999
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { \\ x ^ { 2 } \\lor \\uparrow }",
+  "score": 0.75,
+  "exact": false,
+  "seconds": 0.09348718599721906
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.07705194399750326
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "S _ { i n } \\left( \\chi \\right)",
+  "score": 0.2222222222222222,
+  "exact": false,
+  "seconds": 0.09866168499866035
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } x ^ { 2 } \\linebreak [ 0 ] d x",
+  "score": 0.7142857142857143,
+  "exact": false,
+  "seconds": 0.11020315000132541
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { 1 } & { 2 } \\\\ { 3 } & { 6 } \\\\ \\end{matrix} \\right]",
+  "score": 0.962962962962963,
+  "exact": false,
+  "seconds": 0.14229675900060101
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 0 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.14225986800011015
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } \\frac { \\cot ( n ) } { n ^ { \\prime } }",
+  "score": 0.9047619047619048,
+  "exact": false,
+  "seconds": 0.15017830099895946
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.11786786099764868
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { \\textbf { x } ^ { \\textbf { s } } \\textbf { t } }",
+  "score": 0.41666666666666663,
+  "exact": false,
+  "seconds": 0.1150787529986701
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "\\pmb { x ^ { 2 } - 4 } \\approx \\pmb { 0 }",
+  "score": 0.5454545454545454,
+  "exact": false,
+  "seconds": 0.11222440100027598
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\mathbf { ( x ) }",
+  "score": 0.25,
+  "exact": false,
+  "seconds": 0.08949944000050891
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { \\imath } \\mathbf { x ^ { \\imath } \\; a _ { \\aleph } }",
+  "score": 0.4285714285714286,
+  "exact": false,
+  "seconds": 0.1361997260028147
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "{ \\imath \\atop 3 } \\arrowvert",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.07324475200221059
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { \\bullet \\times \\bullet \\bullet } { \\bullet \\phantom { \\infty } }",
+  "score": 0.6363636363636364,
+  "exact": false,
+  "seconds": 0.16046214699963457
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum _ { \\clubsuit } ^ { { \\clubsuit } } \\frac { \\spadesuit \\varpi } { \\pi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.13369126100224094
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 2 \\infty }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.11906379299762193
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { \\textbf { x } ^ { \\textbf { s } } \\textbf { t } }",
+  "score": 0.41666666666666663,
+  "exact": false,
+  "seconds": 0.11652157400021679
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "\\mathbf { x ^ { 2 } - 4 = 0 }",
+  "score": 0.7,
+  "exact": false,
+  "seconds": 0.08151786799862748
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\mathbf { ( x ) }",
+  "score": 0.25,
+  "exact": false,
+  "seconds": 0.0929055509986938
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } \\mathbf { x ^ { 2 } \\; a _ { 2 } }",
+  "score": 0.5714285714285714,
+  "exact": false,
+  "seconds": 0.12267476199849625
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { \\imath } & { \\sharp } \\\\ { \\imath } & { \\imath } \\\\ { \\imath } & { \\imath } \\\\ \\end{matrix} \\right]",
+  "score": 0.7419354838709677,
+  "exact": false,
+  "seconds": 0.19799812299970654
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { \\bullet \\bullet \\bullet \\bullet \\bullet } { \\bullet \\lefteqn { \\cdots \\bullet } }",
+  "score": 0.5185185185185186,
+  "exact": false,
+  "seconds": 0.18113277400334482
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum _ { \\clubsuit } ^ { { \\clubsuit } } \\frac { \\spadesuit \\varpi } { \\pi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.13197734499772196
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 2 \\infty }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.12057194800217985
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { \\textbf { x } ^ { \\textbf { s } } \\textbf { \\tau } }",
+  "score": 0.41666666666666663,
+  "exact": false,
+  "seconds": 0.1146754770015832
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "\\mathbf { x ^ { 2 } - 4 = 0 }",
+  "score": 0.7,
+  "exact": false,
+  "seconds": 0.08966727899678517
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\mathbf { ( x ) }",
+  "score": 0.25,
+  "exact": false,
+  "seconds": 0.09131879599954118
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } \\mathbf { x ^ { 2 } \\; a _ { 4 } }",
+  "score": 0.5714285714285714,
+  "exact": false,
+  "seconds": 0.1296112300005916
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "{ \\imath \\atop 3 } \\sharp _ { \\star }",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.10034629599977052
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { \\bullet \\times \\cdots } { \\bullet \\cdots \\bullet }",
+  "score": 0.6363636363636364,
+  "exact": false,
+  "seconds": 0.15290973999799462
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum _ { \\clubsuit } ^ { { \\clubsuit } } \\frac { \\spadesuit \\varpi } { \\pi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.1410196620017814
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 2 v }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.11044504000165034
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { \\textbf { x } ^ { \\textbf { s } } \\textbf { t } \\textbf { i } }",
+  "score": 0.3571428571428571,
+  "exact": false,
+  "seconds": 0.12466633599979104
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "\\mathbf { x ^ { 2 } - 4 = 0 }",
+  "score": 0.7,
+  "exact": false,
+  "seconds": 0.08950741599983303
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\left( \\mathbf { x } \\right)",
+  "score": 0.30000000000000004,
+  "exact": false,
+  "seconds": 0.10357041099996422
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } \\mathbf { x ^ { 2 } } \\mathbf { a _ { 4 } }",
+  "score": 0.47058823529411764,
+  "exact": false,
+  "seconds": 0.1360708819993306
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "{ \\imath \\atop 3 } \\overbrace { \\imath } ^ { \\prime } \\brack",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.11170850000053179
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { \\bullet \\times \\cdots } { \\bullet \\cdots \\bullet }",
+  "score": 0.6363636363636364,
+  "exact": false,
+  "seconds": 0.1552045790012926
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum _ { \\infty } ^ { { \\clubsuit } } \\frac { \\omega \\omega } { \\pi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.13292444399849046
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 2 \\pi }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.12767182500101626
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\of { x ^ { \\bullet } }",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.07988358300281106
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "\\pmb { x ^ { 2 } - 4 } = \\pmb { 0 }",
+  "score": 0.6363636363636364,
+  "exact": false,
+  "seconds": 0.10560845300278743
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\left( \\mathbf { x } \\right)",
+  "score": 0.30000000000000004,
+  "exact": false,
+  "seconds": 0.098776684000768
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { \\imath } \\mathbf { x ^ { z } \\; a _ { \\Psi } }",
+  "score": 0.4285714285714286,
+  "exact": false,
+  "seconds": 0.12977623299957486
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { \\imath } & { \\sharp } \\\\ { \\flat } & { \\sharp } \\\\ { \\imath } & { \\sharp } \\\\ \\end{matrix} \\right]",
+  "score": 0.7419354838709677,
+  "exact": false,
+  "seconds": 0.19165928199799964
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum _ { \\mathbf { k = 1 } } ^ { \\infty } \\frac { \\mathbf { 4 = 1 9 } } { \\mathbf { 8 = \\infty } }",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.1771992419999151
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum _ { \\clubsuit } ^ { { \\clubsuit } } \\frac { \\spadesuit \\varpi } { \\varpi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.12690282499897876
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - n \\vee }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.11022346900062985
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\of { x ^ { \\bullet } \\imath }",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.08857925299889757
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "\\mathbf { x ^ { 2 } - 4 = 0 }",
+  "score": 0.7,
+  "exact": false,
+  "seconds": 0.08071717700295267
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\mathbf { ( x ) }",
+  "score": 0.25,
+  "exact": false,
+  "seconds": 0.09812572699956945
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { \\imath } \\mathbf { x ^ { z } \\; a _ { \\aleph } }",
+  "score": 0.4285714285714286,
+  "exact": false,
+  "seconds": 0.13151407499753986
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ \\atop 3 \\brack \\star ]",
+  "score": 0.03703703703703709,
+  "exact": false,
+  "seconds": 0.08144912699935958
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { \\bullet \\cdot \\bullet \\cdot \\bullet } { \\bullet \\cdot \\cdot \\cdot \\bullet }",
+  "score": 0.5833333333333333,
+  "exact": false,
+  "seconds": 0.1788431450004282
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum _ { \\clubsuit } ^ { { \\clubsuit } } \\frac { \\spadesuit \\varpi } { \\pi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.13836472899856744
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - n \\vee }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.12122709199684323
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { \\textbf { x } ^ { \\textbf { s } } \\textbf { t } }",
+  "score": 0.41666666666666663,
+  "exact": false,
+  "seconds": 0.11667707900051028
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "\\pmb { x ^ { 2 } - 4 } \\approx \\pmb { 0 }",
+  "score": 0.5454545454545454,
+  "exact": false,
+  "seconds": 0.09478194499752135
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\mathbf { ( x ) }",
+  "score": 0.25,
+  "exact": false,
+  "seconds": 0.09010532100001001
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { ? } \\mathbf { x ^ { 2 } \\; a _ { 2 } }",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.12612662999890745
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} { \\imath } & { \\sharp } \\\\ { \\jmath } & { \\varsigma } \\\\ \\end{matrix} ]",
+  "score": 0.8518518518518519,
+  "exact": false,
+  "seconds": 0.14324410800327314
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { \\bullet \\times \\bullet \\bullet } { \\bullet \\lefteqn { \\cdots \\bullet } }",
+  "score": 0.5384615384615384,
+  "exact": false,
+  "seconds": 0.1673296629996912
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum _ { \\clubsuit } ^ { { \\clubsuit } } \\frac { \\spadesuit \\varpi } { \\pi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.13388319499790668
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - 2 \\infty }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.11596420500063687
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\of { x ^ { \\bullet \\imath } }",
+  "score": 0.4444444444444444,
+  "exact": false,
+  "seconds": 0.0863611180029693
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "\\mathbf { x ^ { 2 } - 4 = 0 }",
+  "score": 0.7,
+  "exact": false,
+  "seconds": 0.08786600700113922
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\mathbf { ( x ) }",
+  "score": 0.25,
+  "exact": false,
+  "seconds": 0.09184104900123202
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { \\imath } \\mathbf { x ^ { \\imath } \\; a _ { \\aleph } }",
+  "score": 0.4285714285714286,
+  "exact": false,
+  "seconds": 0.13316734599720803
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ \\begin{matrix} { \\imath } & { \\sharp } \\\\ { \\jmath } & { \\varsigma } \\\\ \\end{matrix} ]",
+  "score": 0.8518518518518519,
+  "exact": false,
+  "seconds": 0.15269343899853993
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { \\bullet \\cdot \\bullet \\bullet } { \\bullet \\cdot \\cdot \\cdot \\bullet }",
+  "score": 0.6086956521739131,
+  "exact": false,
+  "seconds": 0.17086579100214294
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum _ { \\clubsuit } ^ { { \\clubsuit } } \\frac { \\spadesuit \\varpi } { \\pi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.13760532599917497
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - n \\vee }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.12003333599932375
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { \\textbf { x } ^ { \\textbf { s } } \\textbf { \\tau } }",
+  "score": 0.41666666666666663,
+  "exact": false,
+  "seconds": 0.12225794099867926
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "\\mathbf { x ^ { 2 } - 4 = 0 }",
+  "score": 0.7,
+  "exact": false,
+  "seconds": 0.08154830500279786
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\mathbf { ( x ) }",
+  "score": 0.25,
+  "exact": false,
+  "seconds": 0.09328317900144611
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { 1 } \\mathbf { x ^ { 2 } \\; a _ { 2 } }",
+  "score": 0.5714285714285714,
+  "exact": false,
+  "seconds": 0.12565212899789913
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "{ \\imath \\atop 3 } \\overbrace { \\epsilon } ^ { \\prime } \\brack",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.10307502900104737
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { \\bullet \\times \\cdots } { \\bullet \\cdots \\bullet }",
+  "score": 0.6363636363636364,
+  "exact": false,
+  "seconds": 0.1516034979977121
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum _ { \\clubsuit } ^ { { \\clubsuit } } \\frac { \\spadesuit \\varpi } { \\pi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.14132495100056985
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - \\pi }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.12096665800345363
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\of { x ^ { \\bullet } }",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.08448758899976383
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "\\mathbf { x ^ { 2 } - 4 = 0 }",
+  "score": 0.7,
+  "exact": false,
+  "seconds": 0.09966220699789119
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\mathbf { ( x ) }",
+  "score": 0.25,
+  "exact": false,
+  "seconds": 0.10019436799848336
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { ? } \\mathbf { x ^ { z } \\; a _ { \\Psi } }",
+  "score": 0.4285714285714286,
+  "exact": false,
+  "seconds": 0.1336737780002295
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { \\imath } & { \\sharp } \\\\ { \\flat } & { \\sharp } \\\\ { \\imath } & { \\sharp } \\\\ \\end{matrix} \\right]",
+  "score": 0.7419354838709677,
+  "exact": false,
+  "seconds": 0.18886619600016274
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum _ { k = 1 } ^ { \\infty } \\frac { \\bullet \\cdot \\bullet \\cdot \\bullet } { \\bullet \\cdot \\cdot \\cdot \\bullet }",
+  "score": 0.5833333333333333,
+  "exact": false,
+  "seconds": 0.17667315200014855
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum _ { \\clubsuit } ^ { { \\clubsuit } } \\frac { \\spadesuit \\varpi } { \\varpi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.13714433999848552
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - n \\vee }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.11189098700197064
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\of { x ^ { \\bullet } \\imath }",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.08942553000088083
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "\\mathbf { x ^ { 2 } - 4 = 0 }",
+  "score": 0.7,
+  "exact": false,
+  "seconds": 0.0918129849997058
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\mathsf { S i n } \\mathrm { \\bf ~ ( x ) }",
+  "score": 0.23076923076923073,
+  "exact": false,
+  "seconds": 0.09413597800084972
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int _ { 0 } ^ { \\imath } \\mathbf { x ^ { z } \\; a _ { \\Psi } }",
+  "score": 0.4285714285714286,
+  "exact": false,
+  "seconds": 0.13047450999874854
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "\\left[ \\begin{matrix} { \\imath } & { \\sharp } \\\\ { \\flat } & { \\sharp } \\\\ { \\imath } & { \\sharp } \\\\ \\end{matrix} \\right]",
+  "score": 0.7419354838709677,
+  "exact": false,
+  "seconds": 0.19616438999946695
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum _ { \\mathbf { k = 1 } } ^ { \\infty } \\frac { \\mathbf { 4 = 1 9 } } { \\mathbf { 8 = \\infty } }",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.18369358900235966
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum _ { \\clubsuit } ^ { { \\clubsuit } } \\frac { \\spadesuit \\omega } { \\pi }",
+  "score": 0.2857142857142857,
+  "exact": false,
+  "seconds": 0.13797656099995947
+ },
+ {
+  "model": "pix2text-mfr-1.5",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum _ { n = 1 } ^ { \\infty } e ^ { - n \\vee }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.11686968499998329
+ }
+]

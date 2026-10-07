@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -14,6 +17,7 @@ import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.width
 import com.vivenotes.ai.AiModelInstallState
 import com.vivenotes.ai.AiModelsState
+import com.vivenotes.ai.FormulaEngine
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
@@ -33,7 +37,9 @@ class AiModelsPanelTest {
 
     private fun setPanel(
         state: AiModelsState,
-        onDownload: () -> Unit = {},
+        onDownload: (FormulaEngine) -> Unit = {},
+        onDelete: (FormulaEngine) -> Unit = {},
+        onUse: (FormulaEngine) -> Unit = {},
         pictureText: ImageTextProgress = ImageTextProgress(enabled = true),
         picturesRead: Int = 0,
         onSetPictureText: (Boolean) -> Unit = {},
@@ -48,6 +54,8 @@ class AiModelsPanelTest {
                     AiModelsPanelContent(
                         state = modelsState.value,
                         onDownloadFormula = onDownload,
+                        onDeleteFormula = onDelete,
+                        onSelectFormulaEngine = onUse,
                         pictureText = pictureTextState.value,
                         picturesRead = picturesReadState.value,
                         onSetPictureText = onSetPictureText,
@@ -68,52 +76,91 @@ class AiModelsPanelTest {
     private val installed = AiModelsState(
         handwritingText = AiModelInstallState.Installed,
         formulaLatex = AiModelInstallState.Installed,
+        uniMerNet = AiModelInstallState.Installed,
+        formulaEngine = FormulaEngine.UniMerNetTiny,
+    )
+
+    private val nothingDownloaded = AiModelsState(
+        handwritingText = AiModelInstallState.Installed,
+        formulaLatex = AiModelInstallState.NotInstalled,
+        uniMerNet = AiModelInstallState.NotInstalled,
     )
 
     @Test
-    fun bundledOcrIsShownAsInstalledAndFormulaCanDownload() {
-        var download = false
-        setPanel(
-            state = AiModelsState(
-                handwritingText = AiModelInstallState.Installed,
-                formulaLatex = AiModelInstallState.NotInstalled,
-            ),
-            onDownload = { download = true },
-        )
+    fun eachMathModelNotInstalledOffersItsOwnDownload() {
+        val downloads = mutableListOf<FormulaEngine>()
+        setPanel(nothingDownloaded, onDownload = { downloads += it })
 
         compose.onNodeWithTag(AiPanelTags.TEXT_MODEL).assertIsDisplayed()
-        compose.onNodeWithText("Download").performClick()
+        compose.onNodeWithTag(AiPanelTags.formulaDownload(FormulaEngine.FormulaNetS)).performClick()
+        compose.onNodeWithTag(AiPanelTags.formulaDownload(FormulaEngine.UniMerNetTiny)).performClick()
 
-        assertTrue(download)
+        assertEquals(listOf(FormulaEngine.FormulaNetS, FormulaEngine.UniMerNetTiny), downloads)
+        // Nothing to use or delete before there is something on the device.
+        FormulaEngine.entries.forEach { engine ->
+            compose.onNodeWithTag(AiPanelTags.formulaUse(engine)).assertDoesNotExist()
+            compose.onNodeWithTag(AiPanelTags.formulaDelete(engine)).assertDoesNotExist()
+        }
     }
 
     @Test
     fun downloadProgressUsesTheWholeFormulaPackage() {
-        setPanel(
-            AiModelsState(
-                handwritingText = AiModelInstallState.Installed,
-                formulaLatex = AiModelInstallState.Downloading(50, 100),
-            ),
-        )
+        setPanel(nothingDownloaded.copy(uniMerNet = AiModelInstallState.Downloading(50, 100)))
 
         compose.onNodeWithText("Downloading 50%").assertIsDisplayed()
     }
 
     @Test
     fun failedDownloadOffersRetry() {
-        var retried = false
+        val retried = mutableListOf<FormulaEngine>()
         setPanel(
-            state = AiModelsState(
-                handwritingText = AiModelInstallState.Installed,
-                formulaLatex = AiModelInstallState.Failed("Network unavailable"),
-            ),
-            onDownload = { retried = true },
+            nothingDownloaded.copy(uniMerNet = AiModelInstallState.Failed("Network unavailable")),
+            onDownload = { retried += it },
         )
 
         compose.onNodeWithText("Network unavailable").assertIsDisplayed()
         compose.onNodeWithText("Retry").performClick()
 
-        assertTrue(retried)
+        assertEquals(listOf(FormulaEngine.UniMerNetTiny), retried)
+    }
+
+    /** The model in use carries the check; the other installed one offers Use. */
+    @Test
+    fun theModelInUseIsCheckedAndTheOtherOffersUse() {
+        val used = mutableListOf<FormulaEngine>()
+        setPanel(installed, onUse = { used += it })
+
+        compose.onNodeWithTag(AiPanelTags.formulaUse(FormulaEngine.UniMerNetTiny))
+            .assertIsOn()
+            .assertTextContains("In use")
+        compose.onNodeWithTag(AiPanelTags.formulaUse(FormulaEngine.FormulaNetS))
+            .assertIsOff()
+            .assertTextContains("Use")
+            .performClick()
+        assertEquals(listOf(FormulaEngine.FormulaNetS), used)
+
+        // Pressing the model already in use chooses nothing.
+        compose.onNodeWithTag(AiPanelTags.formulaUse(FormulaEngine.UniMerNetTiny)).performClick()
+        assertEquals(listOf(FormulaEngine.FormulaNetS), used)
+    }
+
+    @Test
+    fun anInstalledModelCanBeDeleted() {
+        val deleted = mutableListOf<FormulaEngine>()
+        setPanel(installed, onDelete = { deleted += it })
+
+        compose.onNodeWithTag(AiPanelTags.formulaDelete(FormulaEngine.FormulaNetS)).performClick()
+
+        assertEquals(listOf(FormulaEngine.FormulaNetS), deleted)
+        compose.onNodeWithTag(AiPanelTags.formulaDownload(FormulaEngine.FormulaNetS)).assertDoesNotExist()
+    }
+
+    /** Selected but still downloading is not "in use": nothing can read with it yet. */
+    @Test
+    fun aSelectedModelThatIsNotInstalledShowsNoCheck() {
+        setPanel(nothingDownloaded.copy(uniMerNet = AiModelInstallState.Downloading(10, 100)))
+
+        compose.onNodeWithText("In use").assertDoesNotExist()
     }
 
     // --- text in pictures ---------------------------------------------------------------------

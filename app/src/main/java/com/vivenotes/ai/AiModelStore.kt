@@ -4,6 +4,12 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.util.Log
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +18,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -19,6 +27,8 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+
+private val Context.aiPreferences: DataStore<Preferences> by preferencesDataStore("ai")
 
 /** The two local recognizers deliberately exposed as separate capabilities. */
 enum class AiModelId {
@@ -37,25 +47,52 @@ sealed interface AiModelInstallState {
 
 data class AiModelsState(
     val handwritingText: AiModelInstallState = AiModelInstallState.Verifying,
+    /** PP-FormulaNet-S's package. */
     val formulaLatex: AiModelInstallState = AiModelInstallState.Verifying,
-)
+    /** UniMERNet-T's package. */
+    val uniMerNet: AiModelInstallState = AiModelInstallState.Verifying,
+    /** The model the Math button runs — see [startingFormulaEngine]. */
+    val formulaEngine: FormulaEngine = DEFAULT_FORMULA_ENGINE,
+) {
+    fun formula(engine: FormulaEngine): AiModelInstallState = when (engine) {
+        FormulaEngine.UniMerNetTiny -> uniMerNet
+        FormulaEngine.FormulaNetS -> formulaLatex
+    }
+
+    fun withFormula(engine: FormulaEngine, install: AiModelInstallState): AiModelsState =
+        when (engine) {
+            FormulaEngine.UniMerNetTiny -> copy(uniMerNet = install)
+            FormulaEngine.FormulaNetS -> copy(formulaLatex = install)
+        }
+
+    val installedFormulaEngines: Set<FormulaEngine>
+        get() = FormulaEngine.entries.filterTo(mutableSetOf()) {
+            formula(it) == AiModelInstallState.Installed
+        }
+
+    /** Whether the Math button has a model behind it: the selected one, installed. */
+    val formulaReady: Boolean
+        get() = formula(formulaEngine) == AiModelInstallState.Installed
+}
 
 /**
  * Owns private, checksum-verified recognition model files.
  *
- * OCR is an app asset, so it is already available offline. FormulaNet-S is more than 220 MB and is
- * installed as one package (graph plus tokenizer) only after every staged file verifies. State is
- * derived from those artifacts and their verification marker, never from a preference boolean.
+ * OCR is an app asset, so it is already available offline. Each formula model is a download of
+ * over 100 MB, installed as one package (graphs plus tokenizer) only after every staged file
+ * verifies. Which packages are installed is derived from those artifacts and their verification
+ * markers, never from a preference. The preferences hold only which model is in use and whether the
+ * user has ever deleted one.
  */
 class AiModelStore internal constructor(
     context: Context,
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val downloader: VerifiedArtifactDownloader = VerifiedArtifactDownloader(),
     /**
-     * Whether a first run fetches the formula package by itself.
+     * Whether a first run fetches the default formula model by itself.
      *
      * A parameter rather than a constant so a test can build a store that will never reach for the
-     * network. Debug builds do not reach it anyway — they carry the package in `ai/dev` and resolve
+     * network. Debug builds do not reach it anyway — they carry UniMERNet-T in `ai/dev` and resolve
      * to Installed before the question is asked.
      */
     private val autoDownload: Boolean = true,
@@ -64,41 +101,55 @@ class AiModelStore internal constructor(
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private val modelsRoot = File(appContext.filesDir, MODELS_DIRECTORY)
     private val formulaDirectory = File(modelsRoot, FORMULA_DIRECTORY)
+    private val uniMerNetDirectory = File(modelsRoot, UNIMERNET_DIRECTORY)
+    private val packages: Map<FormulaEngine, FormulaPackage> = mapOf(
+        FormulaEngine.UniMerNetTiny to FormulaPackage(uniMerNetDirectory, UNIMERNET_ARTIFACTS, "UniMERNet"),
+        FormulaEngine.FormulaNetS to FormulaPackage(formulaDirectory, FORMULA_ARTIFACTS, "FormulaNet"),
+    )
 
     private val _state = MutableStateFlow(AiModelsState())
     val state: StateFlow<AiModelsState> = _state.asStateFlow()
 
-    private var formulaDownload: Job? = null
+    private val downloads = mutableMapOf<FormulaEngine, Job>()
 
     init {
         scope.launch {
             cleanupStaleDownloads()
             val textState = verifyBundledTextModel()
-            val installedFormulaState = verifyInstalledFormulaPackage()
-            val formulaState = if (installedFormulaState == AiModelInstallState.Installed) {
-                installedFormulaState
-            } else {
-                installBundledFormulaPackageIfPresent() ?: installedFormulaState
-            }
-            _state.value = AiModelsState(textState, formulaState)
-            // Formula recognition is a headline feature, not an extra, so a first run fetches it
-            // rather than waiting to be asked — see [autoDownloadAllowed] for the one condition.
-            if (formulaState == AiModelInstallState.NotInstalled && autoDownloadAllowed()) {
-                downloadFormula()
+            val formula = FormulaEngine.entries.associateWith { resolvePackage(packages.getValue(it)) }
+            val preferences = runCatching { appContext.aiPreferences.data.first() }.getOrNull()
+            val stored = preferences?.get(FORMULA_ENGINE_KEY)
+                ?.let { name -> FormulaEngine.entries.firstOrNull { it.name == name } }
+            val installed = formula.filterValues { it == AiModelInstallState.Installed }.keys
+            _state.value = AiModelsState(
+                handwritingText = textState,
+                formulaLatex = formula.getValue(FormulaEngine.FormulaNetS),
+                uniMerNet = formula.getValue(FormulaEngine.UniMerNetTiny),
+                formulaEngine = startingFormulaEngine(stored, installed),
+            )
+            // Formula recognition is a headline feature, not an extra, so a first run fetches the
+            // default model rather than waiting to be asked. [formulaEngineToFetch] says when not
+            // to, and [autoDownloadAllowed] says when the network is fit for it.
+            val fetch = formulaEngineToFetch(installed, preferences?.get(FORMULA_DELETED_KEY) == true)
+            if (fetch != null &&
+                formula.getValue(fetch) == AiModelInstallState.NotInstalled &&
+                autoDownloadAllowed()
+            ) {
+                download(fetch)
             }
         }
     }
 
     /**
-     * Whether the formula package may be fetched without anyone asking for it.
+     * Whether a formula model may be fetched without anyone asking for it.
      *
-     * Unmetered connections only. 224 MB pulled onto a cellular allowance because an app opened is
-     * a real cost to somebody who never asked for it. On a metered connection the pane keeps its
+     * Unmetered connections only. Over 100 MB pulled onto a cellular allowance because an app opened
+     * is a real cost to somebody who never asked for it. On a metered connection the card keeps its
      * Download button, so the choice is still available.
      *
      * `VALIDATED` as well as `NOT_METERED`, because a captive-portal Wi-Fi reports unmetered and
-     * would start a 224 MB transfer that cannot succeed. A failed download leaves the package
-     * untouched and retries on the next launch.
+     * would start a transfer that cannot succeed. A failed download leaves the package untouched and
+     * retries on the next launch.
      */
     private fun autoDownloadAllowed(): Boolean {
         if (!autoDownload) return false
@@ -111,60 +162,119 @@ class AiModelStore internal constructor(
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
-    /** Starts the optional FormulaNet-S package download. Repeated taps share the active job. */
-    fun downloadFormula() {
-        if (formulaDownload?.isActive == true) return
-        formulaDownload = scope.launch {
-            val textState = _state.value.handwritingText
-            val staging = File(modelsRoot, ".$FORMULA_DIRECTORY-${System.nanoTime()}.part")
-            var completedBytes = 0L
-            try {
-                modelsRoot.mkdirsOrThrow()
-                staging.mkdirsOrThrow()
-                _state.value = AiModelsState(
-                    handwritingText = textState,
-                    formulaLatex = AiModelInstallState.Downloading(0, FORMULA_TOTAL_BYTES),
+    /** Downloads one formula model's package. Repeated taps share the active job. */
+    fun download(engine: FormulaEngine) {
+        synchronized(downloads) {
+            if (downloads[engine]?.isActive == true) return
+            downloads[engine] = scope.launch { fetch(engine, packages.getValue(engine)) }
+        }
+    }
+
+    private suspend fun fetch(engine: FormulaEngine, formulaPackage: FormulaPackage) {
+        val staging = File(modelsRoot, ".${formulaPackage.directory.name}-${System.nanoTime()}.part")
+        var completedBytes = 0L
+        try {
+            modelsRoot.mkdirsOrThrow()
+            staging.mkdirsOrThrow()
+            setPackageState(engine, AiModelInstallState.Downloading(0, formulaPackage.totalBytes))
+
+            formulaPackage.artifacts.forEach { artifact ->
+                downloader.download(
+                    artifact = artifact,
+                    destination = File(staging, artifact.fileName),
+                    onBytes = { currentFileBytes ->
+                        setPackageState(
+                            engine,
+                            AiModelInstallState.Downloading(
+                                downloadedBytes = completedBytes + currentFileBytes,
+                                totalBytes = formulaPackage.totalBytes,
+                            ),
+                        )
+                    },
                 )
+                completedBytes += artifact.bytes
+            }
 
-                FORMULA_ARTIFACTS.forEach { artifact ->
-                    downloader.download(
-                        artifact = artifact,
-                        destination = File(staging, artifact.fileName),
-                        onBytes = { currentFileBytes ->
-                            _state.value = AiModelsState(
-                                handwritingText = textState,
-                                formulaLatex = AiModelInstallState.Downloading(
-                                    downloadedBytes = completedBytes + currentFileBytes,
-                                    totalBytes = FORMULA_TOTAL_BYTES,
-                                ),
-                            )
-                        },
-                    )
-                    completedBytes += artifact.bytes
-                }
-
-                _state.value = AiModelsState(textState, AiModelInstallState.Verifying)
-                File(staging, VERIFIED_MARKER).writeText(FORMULA_MARKER)
-                installStagedDirectory(staging, formulaDirectory)
-                _state.value = AiModelsState(textState, AiModelInstallState.Installed)
-            } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                staging.deleteRecursively()
-                _state.value = AiModelsState(textState, AiModelInstallState.NotInstalled)
-                throw cancelled
-            } catch (failure: Exception) {
-                // The pane can only show one short line, and several of the ways this fails —
-                // a redirect refused, a TLS chain rejected, a digest mismatch — arrive with a
-                // message too terse to act on. The stack trace is the difference between
-                // "Download failed" and knowing which hop failed, so it goes to the log.
-                Log.w(TAG, "FormulaNet package download failed after $completedBytes bytes", failure)
-                staging.deleteRecursively()
-                _state.value = AiModelsState(
-                    handwritingText = textState,
-                    formulaLatex = AiModelInstallState.Failed(
-                        failure.message?.takeIf { it.isNotBlank() } ?: "Download failed",
+            setPackageState(engine, AiModelInstallState.Verifying)
+            File(staging, VERIFIED_MARKER).writeText(formulaPackage.marker)
+            installStagedDirectory(staging, formulaPackage.directory)
+            _state.update { current ->
+                val next = current.withFormula(engine, AiModelInstallState.Installed)
+                next.copy(
+                    formulaEngine = formulaEngineAfterInstall(
+                        selected = current.formulaEngine,
+                        justInstalled = engine,
+                        installed = next.installedFormulaEngines,
                     ),
                 )
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            staging.deleteRecursively()
+            setPackageState(engine, AiModelInstallState.NotInstalled)
+            throw cancelled
+        } catch (failure: Exception) {
+            // The pane can only show one short line, and several of the ways this fails — a
+            // redirect refused, a TLS chain rejected, a digest mismatch — arrive with a message
+            // too terse to act on. The stack trace is the difference between "Download failed"
+            // and knowing which hop failed, so it goes to the log.
+            Log.w(
+                TAG,
+                "${formulaPackage.name} package download failed after $completedBytes bytes",
+                failure,
+            )
+            staging.deleteRecursively()
+            setPackageState(
+                engine,
+                AiModelInstallState.Failed(
+                    failure.message?.takeIf { it.isNotBlank() } ?: "Download failed",
+                ),
+            )
+        }
+    }
+
+    /**
+     * One package's state alone. A copy, not a fresh [AiModelsState]: rebuilding the whole state
+     * from the fields one download knows about would reset the others on every progress tick.
+     */
+    private fun setPackageState(engine: FormulaEngine, install: AiModelInstallState) {
+        _state.update { it.withFormula(engine, install) }
+    }
+
+    /** Which model the Math button runs. Only an installed model can be chosen. */
+    fun selectFormulaEngine(engine: FormulaEngine) {
+        if (_state.value.formula(engine) != AiModelInstallState.Installed) return
+        _state.update { it.copy(formulaEngine = engine) }
+        scope.launch {
+            appContext.aiPreferences.edit { it[FORMULA_ENGINE_KEY] = engine.name }
+        }
+    }
+
+    /**
+     * Removes an installed formula model from this device.
+     *
+     * The state changes before any file goes, so no new recognition starts on a package being
+     * deleted. One already running holds its graphs open and finishes, which on Linux outlives the
+     * unlink. A deleted model in use hands the Math button to the other one if it is installed —
+     * [formulaEngineAfterDelete].
+     *
+     * The delete is remembered, and from then on no first run fetches a model unasked.
+     * In a debug build the bundled copy comes back on the next launch, as FormulaNet's always has.
+     */
+    fun delete(engine: FormulaEngine) {
+        if (_state.value.formula(engine) != AiModelInstallState.Installed) return
+        _state.update { current ->
+            val next = current.withFormula(engine, AiModelInstallState.NotInstalled)
+            next.copy(
+                formulaEngine = formulaEngineAfterDelete(
+                    selected = current.formulaEngine,
+                    deleted = engine,
+                    stillInstalled = next.installedFormulaEngines,
+                ),
+            )
+        }
+        scope.launch {
+            packages.getValue(engine).directory.deleteRecursively()
+            appContext.aiPreferences.edit { it[FORMULA_DELETED_KEY] = true }
         }
     }
 
@@ -174,6 +284,16 @@ class AiModelStore internal constructor(
         return FormulaModelFiles(
             model = File(formulaDirectory, FORMULA_MODEL.fileName),
             tokenizer = File(formulaDirectory, FORMULA_TOKENIZER.fileName),
+        )
+    }
+
+    /** UniMERNet-T's verified graphs and tokenizer, or null until the whole package exists. */
+    fun installedUniMerNetFiles(): UniMerNetFiles? {
+        if (_state.value.uniMerNet != AiModelInstallState.Installed) return null
+        return UniMerNetFiles(
+            encoder = File(uniMerNetDirectory, UNIMERNET_ENCODER.fileName),
+            decoder = File(uniMerNetDirectory, UNIMERNET_DECODER.fileName),
+            tokenizer = File(uniMerNetDirectory, FORMULA_TOKENIZER.fileName),
         )
     }
 
@@ -208,18 +328,22 @@ class AiModelStore internal constructor(
         AiModelInstallState.Failed("Bundled OCR model is unavailable")
     }
 
-    private fun verifyInstalledFormulaPackage(): AiModelInstallState {
-        if (!formulaDirectory.isDirectory) return AiModelInstallState.NotInstalled
+    private fun verifyInstalledPackage(
+        directory: File,
+        artifacts: List<ModelArtifact>,
+        expectedMarker: String,
+    ): AiModelInstallState {
+        if (!directory.isDirectory) return AiModelInstallState.NotInstalled
         return try {
-            val marker = File(formulaDirectory, VERIFIED_MARKER)
-            if (!marker.isFile || marker.readText() != FORMULA_MARKER) {
-                FORMULA_ARTIFACTS.forEach { artifact ->
-                    verifyFile(File(formulaDirectory, artifact.fileName), artifact)
+            val marker = File(directory, VERIFIED_MARKER)
+            if (!marker.isFile || marker.readText() != expectedMarker) {
+                artifacts.forEach { artifact ->
+                    verifyFile(File(directory, artifact.fileName), artifact)
                 }
-                marker.writeText(FORMULA_MARKER)
+                marker.writeText(expectedMarker)
             } else {
-                FORMULA_ARTIFACTS.forEach { artifact ->
-                    val file = File(formulaDirectory, artifact.fileName)
+                artifacts.forEach { artifact ->
+                    val file = File(directory, artifact.fileName)
                     require(file.isFile && file.length() == artifact.bytes) {
                         "${artifact.fileName} is incomplete"
                     }
@@ -231,41 +355,57 @@ class AiModelStore internal constructor(
         }
     }
 
+    /** An installed package, else a debug build's bundled copy of it, else NotInstalled. */
+    private fun resolvePackage(formulaPackage: FormulaPackage): AiModelInstallState {
+        val installed = verifyInstalledPackage(
+            formulaPackage.directory,
+            formulaPackage.artifacts,
+            formulaPackage.marker,
+        )
+        if (installed == AiModelInstallState.Installed) return installed
+        return hydrateBundledPackageIfPresent(formulaPackage) ?: installed
+    }
+
     /**
-     * Debug builds carry both optional files so a clean emulator install needs no network.
+     * Debug builds can carry a formula package so a clean emulator install needs no network.
      *
-     * All of them, or none. `pp-formulanet-s.onnx` is gitignored at 232 MB while the 2 MB tokenizer
-     * beside it is committed, so half a package is the ordinary state of a fresh clone. Half is
-     * therefore no bundled package at all: returning null leaves the caller on NotInstalled, which
-     * is the one state the first-run fetch acts on.
+     * All of its files, or none. The ONNX graphs are gitignored while the 2 MB tokenizer beside them
+     * is committed, so half a package is the ordinary state of a fresh clone. Half is therefore no
+     * bundled package at all: returning null leaves the caller on NotInstalled, which is the one
+     * state the first-run fetch acts on.
      *
      * Gating on "any file present" instead reported `Failed("Bundled FormulaNet model is
      * unavailable")` on every clone that had not hand-placed the ONNX — and because the eager fetch
      * fires only on NotInstalled, that false Failed also suppressed the download that would have
      * fixed it.
+     *
+     * Copied out of the APK rather than opened in place: ONNX Runtime opens a model by path without
+     * loading it onto the Java heap, and an 82 MB decoder read into a byte array, as the small OCR
+     * graphs are, is a large share of an app's heap.
      */
-    private fun installBundledFormulaPackageIfPresent(): AiModelInstallState? {
-        val bundledNames = appContext.assets.list(DEBUG_FORMULA_ASSETS_DIRECTORY)?.toSet().orEmpty()
-        if (!FORMULA_ARTIFACTS.all { it.fileName in bundledNames }) return null
+    private fun hydrateBundledPackageIfPresent(formulaPackage: FormulaPackage): AiModelInstallState? {
+        val bundled = appContext.assets.list(DEBUG_FORMULA_ASSETS_DIRECTORY)?.toSet().orEmpty()
+        if (!formulaPackage.artifacts.all { it.fileName in bundled }) return null
 
-        val staging = File(modelsRoot, ".$FORMULA_DIRECTORY-debug-${System.nanoTime()}.part")
+        val directory = formulaPackage.directory
+        val staging = File(modelsRoot, ".${directory.name}-debug-${System.nanoTime()}.part")
         return try {
             modelsRoot.mkdirsOrThrow()
             staging.mkdirsOrThrow()
-            FORMULA_ARTIFACTS.forEach { artifact ->
+            formulaPackage.artifacts.forEach { artifact ->
                 copyVerifiedAsset(
                     assetPath = "$DEBUG_FORMULA_ASSETS_DIRECTORY/${artifact.fileName}",
                     destination = File(staging, artifact.fileName),
                     artifact = artifact,
                 )
             }
-            File(staging, VERIFIED_MARKER).writeText(FORMULA_MARKER)
-            installStagedDirectory(staging, formulaDirectory)
+            File(staging, VERIFIED_MARKER).writeText(formulaPackage.marker)
+            installStagedDirectory(staging, directory)
             AiModelInstallState.Installed
         } catch (failure: Exception) {
-            Log.w(TAG, "Bundled FormulaNet package could not be hydrated", failure)
+            Log.w(TAG, "Bundled ${formulaPackage.name} package could not be hydrated", failure)
             staging.deleteRecursively()
-            AiModelInstallState.Failed("Bundled FormulaNet model is unavailable")
+            AiModelInstallState.Failed("Bundled ${formulaPackage.name} model is unavailable")
         }
     }
 
@@ -335,16 +475,31 @@ class AiModelStore internal constructor(
 
     /** A process kill cannot run the coroutine's cleanup block, so discard its private staging dir. */
     private fun cleanupStaleDownloads() {
+        val prefixes = packages.values.map { ".${it.directory.name}-" }
         modelsRoot.listFiles()
-            ?.filter { it.name.startsWith(".$FORMULA_DIRECTORY-") && it.name.endsWith(".part") }
+            ?.filter { file -> prefixes.any(file.name::startsWith) && file.name.endsWith(".part") }
             ?.forEach(File::deleteRecursively)
+        // UniMERNet-T's slot while it was a debug-only experiment. Nothing reads it any more, so
+        // without this it is 113 MB stranded on every device that ran one of those builds.
+        File(modelsRoot, LEGACY_UNIMERNET_DIRECTORY).deleteRecursively()
     }
 
     private fun File.mkdirsOrThrow() {
         require(isDirectory || mkdirs()) { "Cannot create model directory" }
     }
 
+    /** One formula model's files: where they install, what they are, and its name in a log line. */
+    private class FormulaPackage(
+        val directory: File,
+        val artifacts: List<ModelArtifact>,
+        val name: String,
+    ) {
+        val marker: String = artifacts.marker()
+        val totalBytes: Long = artifacts.sumOf(ModelArtifact::bytes)
+    }
+
     data class FormulaModelFiles(val model: File, val tokenizer: File)
+    data class UniMerNetFiles(val encoder: File, val decoder: File, val tokenizer: File)
 
     companion object {
         private const val TAG = "AiModelStore"
@@ -358,7 +513,7 @@ class AiModelStore internal constructor(
          * new package in, so reusing one path is what keeps exactly one copy on disk; a new name
          * would strand the old 231 MB in app-private storage on every device that had already
          * installed it, invisibly and for good. The name is a slot, not a description of its
-         * contents — [FORMULA_MARKER] is what says which model is in there.
+         * contents — the package's verification marker is what says which model is in there.
          */
         private const val FORMULA_DIRECTORY = "pp-formulanet-s-v1"
         private const val VERIFIED_MARKER = ".verified"
@@ -424,9 +579,52 @@ class AiModelStore internal constructor(
             url = FORMULA_TOKENIZER_URL,
         )
         private val FORMULA_ARTIFACTS = listOf(FORMULA_MODEL, FORMULA_TOKENIZER)
-        private val FORMULA_TOTAL_BYTES = FORMULA_ARTIFACTS.sumOf(ModelArtifact::bytes)
-        private val FORMULA_MARKER = FORMULA_ARTIFACTS.joinToString("\n") {
-            "${it.fileName}:${it.bytes}:${it.sha256}"
-        }
+
+        /** The slot, named for the package like FormulaNet's — see [FORMULA_DIRECTORY] on renaming. */
+        private const val UNIMERNET_DIRECTORY = "unimernet-tiny-v1"
+        private const val LEGACY_UNIMERNET_DIRECTORY = "unimernet-tiny-dev"
+        private val FORMULA_ENGINE_KEY = stringPreferencesKey("formula_engine")
+
+        /** Set the first time the user deletes a formula model — see [formulaEngineToFetch]. */
+        private val FORMULA_DELETED_KEY = booleanPreferencesKey("formula_model_deleted")
+
+        /**
+         * The project's own release of the two graphs below. A model release, tagged apart from the
+         * app's `v*` tags and never marked Latest.
+         */
+        internal const val UNIMERNET_RELEASE_URL =
+            "https://github.com/AquilaIgnis/viveNotes/releases/download/models-unimernet-tiny-v1/"
+
+        /**
+         * UniMERNet-T (`wanderkid/unimernet_tiny`, Apache-2.0) as `export_unimernet.py` and
+         * `quantize_unimernet.py` in `simulations/formula-models` write it: int8 weights in MatMul
+         * and Gather, float convolutions. The export is deterministic, and two runs give these bytes
+         * exactly, so a change here means the export changed and the README's parity check against
+         * PyTorch has to be re-run.
+         */
+        private val UNIMERNET_ENCODER = ModelArtifact(
+            fileName = "unimernet-tiny-encoder-int8.onnx",
+            bytes = 29_081_861L,
+            sha256 = "cf6cc98a54c97254adee4e251f56af2da045062503663b001a254303dab2aa97",
+            url = UNIMERNET_RELEASE_URL + "unimernet-tiny-encoder-int8.onnx",
+        )
+        private val UNIMERNET_DECODER = ModelArtifact(
+            fileName = "unimernet-tiny-decoder-int8.onnx",
+            bytes = 82_108_192L,
+            sha256 = "b765a9c522f43cff7dcc6379e9c39dfc441d6ee189822cb71be8f5e7cd703a69",
+            url = UNIMERNET_RELEASE_URL + "unimernet-tiny-decoder-int8.onnx",
+        )
+
+        /** UniMERNet's `tokenizer.json` is FormulaNet's byte for byte, bar one trailing newline. */
+        private val UNIMERNET_ARTIFACTS = listOf(UNIMERNET_ENCODER, UNIMERNET_DECODER, FORMULA_TOKENIZER)
+
+        /** A formula model's whole download, for its card. */
+        internal fun downloadBytes(engine: FormulaEngine): Long = when (engine) {
+            FormulaEngine.UniMerNetTiny -> UNIMERNET_ARTIFACTS
+            FormulaEngine.FormulaNetS -> FORMULA_ARTIFACTS
+        }.sumOf(ModelArtifact::bytes)
+
+        private fun List<ModelArtifact>.marker(): String =
+            joinToString("\n") { "${it.fileName}:${it.bytes}:${it.sha256}" }
     }
 }

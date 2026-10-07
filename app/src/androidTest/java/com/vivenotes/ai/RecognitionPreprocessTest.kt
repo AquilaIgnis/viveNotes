@@ -92,6 +92,41 @@ class RecognitionPreprocessTest {
         assertEquals(paper, tensor[20 * 384 + 192], 1e-4f)
     }
 
+    /**
+     * UniMERNet-T's frame: the same crop, scaled to fit 192×672, centred on **black**.
+     *
+     * The 60×20 rectangle is 3:1, so the height binds. It scales by 9.6 to 576×192 and sits 48
+     * columns in from either side. The padding is black and the rectangle's inside is still paper,
+     * which is the one way this differs from FormulaNet's frame.
+     */
+    @Test
+    fun uniMerNetInputIsCroppedScaledAndPaddedBlack() {
+        val bitmap = Bitmap.createBitmap(120, 60, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.WHITE)
+            for (x in 30 until 90) {
+                setPixel(x, 20, Color.BLACK)
+                setPixel(x, 39, Color.BLACK)
+            }
+            for (y in 20 until 40) {
+                setPixel(30, y, Color.BLACK)
+                setPixel(89, y, Color.BLACK)
+            }
+        }
+
+        val tensor = preprocessUniMerNet(bitmap)
+
+        assertEquals(192 * 672, tensor.size)
+        assertTrue(tensor.all(Float::isFinite))
+        val black = (0f - 0.7931f) / 0.1738f
+        val paper = (1f - 0.7931f) / 0.1738f
+        val middle = 96 * 672
+        assertEquals("corner is padding", black, tensor.first(), 1e-4f)
+        assertEquals("left of the crop is padding", black, tensor[middle + 20], 1e-4f)
+        assertEquals("right of the crop is padding", black, tensor[middle + 650], 1e-4f)
+        assertEquals("inside the rectangle is paper", paper, tensor[middle + 336], 1e-4f)
+        assertTrue("the left upright did not survive", tensor[middle + 50] < paper - 1f)
+    }
+
     @Test
     fun byteLevelTokenizerDecodesOnlyRequestedFormulaTokens() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

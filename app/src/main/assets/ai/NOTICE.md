@@ -21,6 +21,20 @@ viveNotes includes or downloads the following machine-learning artifacts for off
 - Bundled graph SHA-256:
   `1eb7b4f7ab657ebd1c66d5f79bca7497f29768a2e3c15e52daecbba1a8e4a039`
 
+## UniMERNet-T
+
+- Upstream model: <https://huggingface.co/wanderkid/unimernet_tiny>
+- Upstream project: <https://github.com/opendatalab/UniMERNet>
+- License: Apache License 2.0
+- ONNX conversion and int8 weight quantization: `simulations/formula-models` in the viveNotes
+  repository
+- ONNX download: <https://github.com/AquilaIgnis/viveNotes/releases/tag/models-unimernet-tiny-v1>
+- Tokenizer: shared with PP-FormulaNet-S, byte-identical apart from a trailing newline
+- Downloaded encoder SHA-256:
+  `cf6cc98a54c97254adee4e251f56af2da045062503663b001a254303dab2aa97`
+- Downloaded decoder SHA-256:
+  `b765a9c522f43cff7dcc6379e9c39dfc441d6ee189822cb71be8f5e7cd703a69`
+
 ## PP-FormulaNet-S
 
 - Upstream model: <https://huggingface.co/PaddlePaddle/PP-FormulaNet-S>

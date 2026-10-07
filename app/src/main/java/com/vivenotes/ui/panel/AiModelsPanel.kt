@@ -1,5 +1,6 @@
 package com.vivenotes.ui.panel
 
+import android.text.format.Formatter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -11,23 +12,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vivenotes.ai.AiModelInstallState
+import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.AiModelsState
+import com.vivenotes.ai.FormulaEngine
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.InkTextProgress
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -35,8 +42,10 @@ import kotlin.math.roundToInt
 
 internal object AiPanelTags {
     const val TEXT_MODEL = "ai-model-text"
-    const val FORMULA_MODEL = "ai-model-formula"
-    const val DOWNLOAD_FORMULA = "ai-download-formula"
+    fun formulaCard(engine: FormulaEngine) = "ai-formula-${engine.name}"
+    fun formulaDownload(engine: FormulaEngine) = "ai-formula-download-${engine.name}"
+    fun formulaDelete(engine: FormulaEngine) = "ai-formula-delete-${engine.name}"
+    fun formulaUse(engine: FormulaEngine) = "ai-formula-use-${engine.name}"
     const val PICTURE_TEXT = "ai-picture-text"
     const val PICTURE_TEXT_SWITCH = "ai-picture-text-switch"
     const val PICTURE_TEXT_REBUILD = "ai-picture-text-rebuild"
@@ -48,7 +57,9 @@ internal object AiPanelTags {
 @Composable
 fun ColumnScope.AiModelsPanelContent(
     state: AiModelsState,
-    onDownloadFormula: () -> Unit,
+    onDownloadFormula: (FormulaEngine) -> Unit,
+    onDeleteFormula: (FormulaEngine) -> Unit = {},
+    onSelectFormulaEngine: (FormulaEngine) -> Unit = {},
     pictureText: ImageTextProgress = ImageTextProgress(enabled = false),
     picturesRead: Int = 0,
     onSetPictureText: (Boolean) -> Unit = {},
@@ -58,32 +69,23 @@ fun ColumnScope.AiModelsPanelContent(
     onSetInkText: (Boolean) -> Unit = {},
     onRebuildInkText: () -> Unit = {},
 ) {
-    Text(
-        text = "Recognition runs on this device. Ink and results are not uploaded.",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    PanelSection("Math") {
+        FormulaEngine.entries.forEachIndexed { index, engine ->
+            if (index > 0) Spacer(Modifier.height(10.dp))
+            val install = state.formula(engine)
+            MathModelCard(
+                engine = engine,
+                install = install,
+                inUse = engine == state.formulaEngine && install == AiModelInstallState.Installed,
+                onDownload = { onDownloadFormula(engine) },
+                onDelete = { onDeleteFormula(engine) },
+                onUse = { onSelectFormulaEngine(engine) },
+            )
+        }
+    }
 
-    PanelSection("On-device models") {
-        ModelCard(
-            name = "PP-OCRv5 Mobile",
-            purpose = "Handwriting and pictures to searchable text",
-            size = "12.7 MB · included with ViveNotes",
-            state = state.handwritingText,
-            modifier = Modifier.testTag(AiPanelTags.TEXT_MODEL),
-        )
-        Spacer(Modifier.height(10.dp))
-        ModelCard(
-            name = "PP-FormulaNet-S",
-            purpose = "Handwritten formulas to LaTeX",
-            // Says *when* rather than "optional", because a first run on Wi-Fi fetches this by
-            // itself — and because on mobile data the Download button below is the whole
-            // explanation of why nothing has happened yet.
-            size = "224 MB · downloads by itself on Wi-Fi",
-            state = state.formulaLatex,
-            onDownload = onDownloadFormula,
-            modifier = Modifier.testTag(AiPanelTags.FORMULA_MODEL),
-        )
+    PanelSection("Text") {
+        TextModelCard(state.handwritingText)
     }
 
     PanelSection("Text in pictures") {
@@ -103,15 +105,174 @@ fun ColumnScope.AiModelsPanelContent(
             onRebuild = onRebuildInkText,
         )
     }
+    Spacer(Modifier.height(12.dp))
+}
 
-    Text(
-        text = "Formula recognition loads only when requested and can require substantially more " +
-            "working memory than its download size.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 12.dp),
+/**
+ * One formula model: what it is good at and its size, then what can be done with it.
+ *
+ * Not installed, it offers Download, and while downloading it shows how far. Installed, it offers
+ * Use and Delete. The model the Math button runs shows a checked "In use" in place of Use.
+ *
+ * Use is a [ToggleButton], as the Hardware pane picks its device: the two cards are one mutually
+ * exclusive choice, so pressing the model already in use is dropped rather than leaving none. The
+ * check and "In use" are the selected state itself, so they read as selected to TalkBack as well as
+ * on screen.
+ */
+@Composable
+private fun MathModelCard(
+    engine: FormulaEngine,
+    install: AiModelInstallState,
+    inUse: Boolean,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit,
+    onUse: () -> Unit,
+) {
+    val size = Formatter.formatShortFileSize(LocalContext.current, AiModelStore.downloadBytes(engine))
+    ModelCardFrame(Modifier.testTag(AiPanelTags.formulaCard(engine))) {
+        Text(
+            text = engine.displayName,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = "${engine.strength} · $size",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        when (install) {
+            AiModelInstallState.Installed -> Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ToggleButton(
+                    checked = inUse,
+                    onCheckedChange = { if (it) onUse() },
+                    modifier = Modifier.testTag(AiPanelTags.formulaUse(engine)),
+                ) {
+                    if (inUse) {
+                        Icon(
+                            imageVector = MaterialSymbols.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("In use")
+                    } else {
+                        Text("Use")
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(
+                    onClick = onDelete,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                    modifier = Modifier.testTag(AiPanelTags.formulaDelete(engine)),
+                ) {
+                    Icon(
+                        imageVector = MaterialSymbols.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text("Delete")
+                }
+            }
+            AiModelInstallState.NotInstalled -> DownloadButton("Download", engine, onDownload)
+            AiModelInstallState.Verifying -> {
+                Text("Verifying…", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(6.dp))
+                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            is AiModelInstallState.Downloading -> {
+                val fraction = if (install.totalBytes == 0L) {
+                    0f
+                } else {
+                    (install.downloadedBytes.toDouble() / install.totalBytes).toFloat().coerceIn(0f, 1f)
+                }
+                Text(
+                    text = "Downloading ${(fraction * 100).roundToInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Spacer(Modifier.height(6.dp))
+                LinearWavyProgressIndicator(
+                    progress = { fraction },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            is AiModelInstallState.Failed -> {
+                Text(
+                    text = install.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(8.dp))
+                DownloadButton("Retry", engine, onDownload)
+            }
+        }
+    }
+}
+
+/** The bundled OCR model. Nothing to download, delete or choose, so it only says what it is. */
+@Composable
+private fun TextModelCard(install: AiModelInstallState) {
+    ModelCardFrame(Modifier.testTag(AiPanelTags.TEXT_MODEL)) {
+        Text(
+            text = "PP-OCRv5 Mobile",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = "Handwriting and pictures · 12.7 MB · built in",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (install is AiModelInstallState.Failed) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = install.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelCardFrame(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(8.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+            .padding(12.dp),
+        content = content,
     )
 }
+
+private val FormulaEngine.displayName: String
+    get() = when (this) {
+        FormulaEngine.UniMerNetTiny -> "UniMERNet-T"
+        FormulaEngine.FormulaNetS -> "PP-FormulaNet-S"
+    }
+
+/** What each is measurably better at — `simulations/formula-models`. */
+private val FormulaEngine.strength: String
+    get() = when (this) {
+        FormulaEngine.UniMerNetTiny -> "Best on handwriting"
+        FormulaEngine.FormulaNetS -> "Reads matrices"
+    }
 
 @Composable
 private fun HandwritingTextCard(
@@ -282,105 +443,17 @@ private fun InkTextProgress.summaryLine(pagesRead: Int): String = when {
 }
 
 @Composable
-private fun ModelCard(
-    name: String,
-    purpose: String,
-    size: String,
-    state: AiModelInstallState,
-    modifier: Modifier = Modifier,
-    onDownload: (() -> Unit)? = null,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(8.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-            .padding(12.dp),
-    ) {
-        Text(
-            text = name,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = purpose,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = size,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(10.dp))
-
-        when (state) {
-            AiModelInstallState.Installed -> InstalledRow()
-            AiModelInstallState.NotInstalled -> DownloadButton("Download", onDownload)
-            AiModelInstallState.Verifying -> {
-                Text("Verifying…", style = MaterialTheme.typography.labelMedium)
-                Spacer(Modifier.height(6.dp))
-                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-            is AiModelInstallState.Downloading -> {
-                val fraction = if (state.totalBytes == 0L) {
-                    0f
-                } else {
-                    (state.downloadedBytes.toDouble() / state.totalBytes).toFloat().coerceIn(0f, 1f)
-                }
-                Text(
-                    text = "Downloading ${(fraction * 100).roundToInt()}%",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-                Spacer(Modifier.height(6.dp))
-                LinearWavyProgressIndicator(
-                    progress = { fraction },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            is AiModelInstallState.Failed -> {
-                Text(
-                    text = state.message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Spacer(Modifier.height(8.dp))
-                DownloadButton("Retry", onDownload)
-            }
-        }
-    }
-}
-
-@Composable
-private fun InstalledRow() {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+private fun DownloadButton(label: String, engine: FormulaEngine, onDownload: () -> Unit) {
+    Button(
+        onClick = onDownload,
+        modifier = Modifier.testTag(AiPanelTags.formulaDownload(engine)),
     ) {
         Icon(
-            imageVector = MaterialSymbols.Check,
+            imageVector = MaterialSymbols.CloudDownload,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(18.dp),
         )
-        Text(
-            text = "Installed",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-}
-
-@Composable
-private fun DownloadButton(label: String, onDownload: (() -> Unit)?) {
-    Button(
-        onClick = { onDownload?.invoke() },
-        enabled = onDownload != null,
-        modifier = Modifier.testTag(AiPanelTags.DOWNLOAD_FORMULA),
-    ) {
+        Spacer(Modifier.width(6.dp))
         Text(label)
     }
 }

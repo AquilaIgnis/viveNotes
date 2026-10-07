@@ -1,0 +1,5282 @@
+[
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\int X ^ { 2 } + 1",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.26637101999949664
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2821533009991981
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1679176389989152
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.43041265600186307
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.1840289460014901
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6541814750016783
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6660245839993877
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.506760693002434
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\int X ^ { 2 } + 1",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.24892174100023112
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.3862814210006036
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16125578399805818
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4283296489993518
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.17719603600198752
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6293778760009445
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.687890712000808
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.4979525599992485
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29000129899941385
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2681103040013113
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1604663750003965
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.427559897001629
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.17524089200014714
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6188069649979298
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6788321130006807
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5256343069995637
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2931389500008663
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.272371759001544
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1654751900023257
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4501113369988161
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18895193799835397
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6595305970004119
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6786659779972979
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5032881560000533
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2884323590005806
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2687102939999022
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1615795289981179
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4258154629969795
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.17726149000009173
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6255715560000681
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6591698509982962
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5095176300019375
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2860078129997419
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26581559400074184
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15788602300017374
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42700137499923585
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18238200700216112
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6238624090001395
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6554999999971187
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.505119495002873
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\int X ^ { 2 } + 1",
+  "score": 0.5,
+  "exact": false,
+  "seconds": 0.24748658500175225
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2712431460022344
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1608989969972754
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42689321000216296
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18391363699993235
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6309736980001617
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6858628190020681
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.49558015300135594
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\int x ^ { 2 } + 1",
+  "score": 0.625,
+  "exact": false,
+  "seconds": 0.23945637100041495
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26069145099972957
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1526438250002684
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.419947967002372
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.17665268299970194
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6174215729988646
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6479841919972387
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.49670898800104624
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28412245100116706
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2746050519999699
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1647735170008673
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.44970818100046017
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.17673958899831632
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6172942209996108
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6629159680014709
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5032013519994507
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2899895379996451
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26829570500194677
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1602385520018288
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4265112749999389
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18199176599955535
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6238747119969048
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6585632800015446
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5098738769993361
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2925176399985503
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2691261639993172
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16265620499689248
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.427261479999288
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18655588600086048
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6222104610023962
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6538656449993141
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5034403960016789
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2904649400006747
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2682963569968706
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16099501899952884
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42864472700239276
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18326323099972797
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6320023120024416
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6540481219999492
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.497226972001954
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28732451500036404
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2608770429978904
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15302364500166732
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4198650889993587
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.1753238400015107
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.615920300999278
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.695665742001438
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5050250459971721
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29003205700064427
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2712181569986569
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16453413199997158
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4351570790022379
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.1783003140008077
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.616692358002183
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6452811479975935
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.49710896800024784
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28373597799873096
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.261859459002153
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16114706799999112
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4270549270004267
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.1823231050002505
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6214440950025164
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6703782539989334
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5179203929983487
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2922449109973968
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26983790599842905
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15990371600128128
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.43274089899932733
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18604857200261904
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6539497849989857
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6858439930001623
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5011832780000987
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2902155470001162
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2693702069991559
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16124277999915648
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4266217840013269
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18284028800189844
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6229939990007551
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6562913140005548
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.504558979999274
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2907700700015994
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2675048040000547
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16150910500073223
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42615390599894454
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.1828483839999535
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6229176140004711
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6514251789994887
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5035472489980748
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29103875999862794
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2696865580001031
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16140855500270845
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4288859059997776
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18383413599804044
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6235890289972303
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6561952299998666
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5062098570015223
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29759433399885893
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2800778889977664
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15441504900081782
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.43222329600030207
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.182860917000653
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.62945221800328
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6700310750020435
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5006470890002674
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2949234299994714
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26333607400010806
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1553645329986466
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4199392699993041
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18036725999991177
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6160453590018733
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6777505290010595
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5287068840007123
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.3004146409984969
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28093240200178116
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16579441700014286
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4238586049978039
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.17590706699775183
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.616739246997895
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6462880600010976
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.49675636800020584
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2825351459978265
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26031565599987516
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15350143300020136
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.41867538900260115
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18193258300016169
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6233366500018747
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.665735524999036
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5047834670003795
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2900293730017438
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26859053599764593
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16022359400085406
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42628654800137156
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18217956299849902
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6218976860000112
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6731776820015511
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.521759816998383
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29261464400042314
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2723603769991314
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16114471399851027
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4236904860008508
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.17609206799897947
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6156214940019709
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6490392259984219
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.4988938889982819
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28392909499962116
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26135923900073976
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15387257899783435
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4212346809981682
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.1758767990031629
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6182850029981637
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6469979479988979
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5069773750001332
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29192714800228714
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26884593100112397
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16083565699955216
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42651458099862793
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.17971562200182234
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6157759170018835
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6517762959992979
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5056461960011802
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2926981919990794
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26784178399975644
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16569975699894712
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42995830300060334
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.1829941609976231
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6240458270003728
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6564407070000016
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.4984029460028978
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28350047999992967
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26550267999846255
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16079985899705207
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42849026400290313
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18404784200174618
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6238428709984873
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6543454570019094
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5037374300009105
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28949196100074914
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2681940330003272
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15982899299706332
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42818000499755726
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.17591005299982498
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6169128760011517
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6485648160014534
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.4993611060017429
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2840259779986809
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26147715199840604
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1529857040004572
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.41889119899860816
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.17542229600076098
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6269848410011036
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6990630649997911
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5273708249987976
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2996660900025745
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2788559369982977
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16478723299951525
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4445955289993435
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18724118799946154
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6436812280007871
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6722690960014006
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5034306779998587
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28830535799716017
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.268291116997716
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1600636699986353
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4253693859973282
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.18187016500087338
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6233123640013218
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6562801319996652
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.4978853220018209
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28292736200091895
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26173704599932535
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15366471400193404
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4203378870006418
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 3 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29216184400138445
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6209196279996831
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6563770559987461
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5104071200003091
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2916171690012561
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26771307899980457
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16083448399876943
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4266107330004161
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 3 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29730444300003
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6223750130011467
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.665315615999134
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5057869129996106
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29106517000036547
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26948445399830234
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16071930500038434
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4259888619999401
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29752686500069103
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6232125650021771
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6527157809978235
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5047840080005699
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2882128020028176
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2674038009972719
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16009361699980218
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42779655599952093
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29876943599811057
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6237883579997288
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6476446779997787
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.4986880079995899
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2833492520003347
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26705961799962097
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1594899690026068
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.43387471299865865
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 3 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.3007350600018981
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6311126820000936
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.662986651997926
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5075812420000148
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2919815610002843
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2694708380004158
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16171497699906467
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42718367199995555
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 3 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.30067934399994556
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.626089007997507
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6631010800010699
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.499921931001154
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29437577900171163
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2683303320009145
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16084815100111882
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42630347999875084
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 3 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29717398499997216
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6230877669986512
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6539745529989887
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.49914977500156965
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2837783180002589
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26167177200113656
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15441680200092378
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4220097530014755
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 3 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29290004699942074
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6186659669983783
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6502967150008772
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.4976495050032099
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28210244400179363
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2608670540030289
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15286837100211415
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.41894699499971466
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.28980803200101946
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6158354100007273
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6686113380019378
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.49889610299942433
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.282132050000655
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2641123190005601
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15434668899979442
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.41921333000209415
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 3 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.2947762999974657
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.6143226969979878
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6472429540008307
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.4968193879976752
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28281489799701376
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26025229600054445
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1527150600013556
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4185083209995355
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 3 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29157669200139935
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6188402279985894
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6566575590004504
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.49619453999912366
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2817267399987031
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2597605320006551
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1527563880008529
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.41881958299927646
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29059608899842715
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.6155040810008359
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6473936100010178
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.497971916996903
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28299690399944666
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2614054669975303
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1523284560025786
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4202391090002493
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.289848840002378
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.6158819580014097
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6965258059972257
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5109658210021735
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28325185799985775
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2618904480004858
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15560854599971208
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4198970500001451
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.2918011289984861
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.6185518500024045
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6475358510033402
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.510481522000191
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2950772820004204
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26861209599883296
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1602047680025862
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.43817777699950966
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.30074121199868387
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.6290903199987952
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6678199840025627
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5086341719979828
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2951718320000509
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.27201288799915346
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1617010410009243
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.44420959599665366
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.3024583439982962
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.6422632040012104
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6749958660002449
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - \\pi n }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.49832378499922925
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2898030229989672
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2695464019998326
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16081952499735053
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.43293944600009127
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.30421113400007016
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.624885852997977
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6537666370022635
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - z n }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.47527013099897886
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28264023600058863
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2620520950003993
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15326813999854494
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42440241900112596
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.2899314459973539
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.6214135370028089
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.68764184900283
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5279275430002599
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.30138871199960704
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2832482710000477
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1671587279997766
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.44671701900006155
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.3072338050005783
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.6608289330033585
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6782516909988772
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.520363775001897
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.3033842730001197
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26583820700034266
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15521895599886193
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4486393010010943
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.30869706600060454
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.6277184739992663
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6652368670002033
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 \\pi }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.5046409460010182
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29095837799832225
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2603888960002223
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.152923195000767
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4189085019970662
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.290989367000293
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 0.6204008829990926
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.6475233069977548
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - \\pi n }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.48709381200023927
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2824584199988749
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26085759500347194
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15537519400095334
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42626616900088266
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29837396400034777
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 0.6258545840028091
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.652476465998916
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - \\pi n }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.48858983399986755
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2835651230016083
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2758821880015603
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15658747600173228
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4219901159995061
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.3084348869997484
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 2 k + 3 } { x - 1 }",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.6320354349991248
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ! }",
+  "score": 0.9047619047619048,
+  "exact": false,
+  "seconds": 0.6145140700027696
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - x }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.4661663669976406
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.296319252000103
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2713451380004699
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1577010020009766
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.43704491600146866
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.3132474899975932
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 2 k + 3 } { x - 1 }",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.6226541430005454
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ! }",
+  "score": 0.9047619047619048,
+  "exact": false,
+  "seconds": 0.6544399060003343
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - x }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.4659082860016497
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29044839900234365
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2685849049994431
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16011660000003758
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42741562200171757
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29941751699880115
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 2 k + 3 } { x - 1 }",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.6313422380007978
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { m = 1 } ^ { \\infty } \\frac { \\cos ( x ) } { x ^ { 2 } }",
+  "score": 0.8571428571428572,
+  "exact": false,
+  "seconds": 0.662287835002644
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - x }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.4613556479998806
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2899314169990248
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2677517629999784
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16066202699948917
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42319159799808403
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29811212699860334
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 2 k + 3 } { x - 1 }",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.601007262001076
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { m = 1 } ^ { \\infty } \\frac { \\cos ( x ) } { x ^ { 2 } }",
+  "score": 0.8571428571428572,
+  "exact": false,
+  "seconds": 0.6541944990021875
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - \\pi n }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 0.495637922998867
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.28980405399852316
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26817587899859063
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16023114700146834
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42866492599932826
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.3062457790001645
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 2 k + 3 } { x - 1 }",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.6025859609981126
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { m = 1 } ^ { \\infty } \\frac { \\cos ( \\alpha ) } { m }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 0.5906096399994567
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - x }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.4846975799991924
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29537185200024396
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.27297741000074893
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1589358169985644
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.43933321299846284
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29857893500229693
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { a k + 3 } { x - 1 }",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.5943577199977881
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { m = 1 } ^ { \\infty } \\frac { \\cos ( x ) } { x ^ { 2 } }",
+  "score": 0.8571428571428572,
+  "exact": false,
+  "seconds": 0.6556216099997982
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - x }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.45663915799741517
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.283998065002379
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2621251129967277
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1540501060007955
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4210656100003689
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29264667499955976
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 2 k + 3 } { x - 1 }",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.5948234739989857
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ! }",
+  "score": 0.9047619047619048,
+  "exact": false,
+  "seconds": 0.5857007940030599
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - x }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.4565560100018047
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2837772060011048
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2615498300001491
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.15546974300013972
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4205941840009473
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.2928056269993249
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { x - 1 }",
+  "score": 0.8636363636363636,
+  "exact": false,
+  "seconds": 0.5954258189995016
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ! }",
+  "score": 0.9047619047619048,
+  "exact": false,
+  "seconds": 0.5876754550008627
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - x }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.4607028280006489
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.285217171000113
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.26271869099946343
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.1556280330005393
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.4240702079987386
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.2936587479998707
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 2 k + 3 } { x - 1 }",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.5968277009997109
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ! }",
+  "score": 0.9047619047619048,
+  "exact": false,
+  "seconds": 0.5982926840006257
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - x }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.45704361599928234
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.29099348399904557
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2684473139997863
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16062682900155778
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42858411300039734
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 _ { 3 } ^ { 7 } ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.30312300600053277
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { a k + 3 } { x - 1 }",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.5860065540000505
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { m = 1 } ^ { \\infty } \\frac { \\cos ( x ) } { x ^ { 2 } }",
+  "score": 0.8571428571428572,
+  "exact": false,
+  "seconds": 0.6517315220007731
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - x }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.46464340400052606
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.291741726003238
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.2683993329992518
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.16271381399928941
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.42662796700096806
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 \\frac { 7 } { 6 } ]",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.29941908000182593
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 2 k + 3 } { x - 1 }",
+  "score": 0.8181818181818181,
+  "exact": false,
+  "seconds": 0.6058723440000904
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { m = 1 } ^ { \\infty } \\frac { \\cos ( \\alpha ) } { m }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 0.5923588609985018
+ },
+ {
+  "model": "unimernet-tiny",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - x }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.46567576400047983
+ }
+]
