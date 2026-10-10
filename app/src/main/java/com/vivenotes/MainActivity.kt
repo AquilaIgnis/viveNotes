@@ -18,7 +18,7 @@ import com.vivenotes.ui.claimsStylusButton
 import com.vivenotes.ui.handleStylusButton
 import com.vivenotes.ui.shortcutGroups
 import com.vivenotes.ui.theme.ViveNotesTheme
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -69,10 +69,13 @@ class MainActivity : ComponentActivity() {
 
         // The 20th-session rating ask. STARTED rather than RESUMED: Play's sheet is its own
         // Activity, and pausing this one under it must not cancel the request that opened it.
+        // A sideloaded build's flow is a single false that then completes, so running out without
+        // a true means "never", not an error.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                app.reviewPrompt.sessionsReached.first { it }
-                app.reviewPrompt.askForSessions(this@MainActivity)
+                if (app.reviewPrompt.sessionsReached.firstOrNull { it } == true) {
+                    app.reviewPrompt.askForSessions(this@MainActivity)
+                }
             }
         }
     }

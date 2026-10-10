@@ -1,11 +1,14 @@
 package com.vivenotes.ui.editor
 
 import android.graphics.Matrix
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,9 +48,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -55,6 +62,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.ink.brush.Brush
@@ -72,6 +80,7 @@ import com.vivenotes.ui.theme.LocalCanvasColors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 internal object CalculatorTags {
@@ -98,6 +107,8 @@ internal object CalculatorTags {
  *
  * Placed by its own offset inside a box that fills the window. That box has no pointer input of its
  * own, so a touch outside the calculator falls through to whatever is under it.
+ *
+ * Two fingers anywhere on it carry it, and thrown it closes; let go slowly and it springs back.
  *
  * @param brush the pen in hand, so the pad writes in the ink the page would.
  * @param solve the pad's strokes, in dp, to an answer — see `NotesApp`.
@@ -127,6 +138,19 @@ internal fun FloatingCalculator(
         }
         val placed = Offset(origin.x.coerceIn(0f, maxX), origin.y.coerceIn(0f, maxY))
         val currentPlaced by rememberUpdatedState(placed)
+
+        // How far two fingers have carried it from where it is placed, and how much of it is left.
+        // Apart from `dragged`, because a throw that falls short springs back rather than moving it.
+        val scope = rememberCoroutineScope()
+        val carried = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+        val shown = remember { Animatable(1f) }
+        val spatial = MaterialTheme.motionScheme.fastSpatialSpec<Offset>()
+        val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+        val throwSpeed = with(density) { THROW_SPEED.toPx() }
+        // Far enough to leave any window from anywhere in it; the fade decides when it is gone.
+        val reach = hypot(constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())
+        val currentOnClose by rememberUpdatedState(onClose)
+
         CalculatorWindow(
             brush = brush,
             allowFinger = allowFinger,
@@ -142,8 +166,87 @@ internal fun FloatingCalculator(
             modifier = Modifier
                 .offset { IntOffset(placed.x.roundToInt(), placed.y.roundToInt()) }
                 .width(width)
-                .onSizeChanged { heightPx = it.height },
+                .onSizeChanged { heightPx = it.height }
+                // Outside the layer it moves: inside, every step would be measured against a window
+                // that the last step already shifted, and it would trail the fingers.
+                .pointerInput(throwSpeed, reach) {
+                    detectTwoFingerThrow(
+                        onCarry = { pan -> scope.launch { carried.snapTo(carried.value + pan) } },
+                        onRelease = { velocity ->
+                            val speed = hypot(velocity.x, velocity.y)
+                            val fling = Offset(velocity.x, velocity.y)
+                            scope.launch {
+                                if (speed < throwSpeed) {
+                                    carried.animateTo(Offset.Zero, spatial, initialVelocity = fling)
+                                } else {
+                                    launch {
+                                        carried.animateTo(
+                                            carried.value + fling / speed * reach,
+                                            spatial,
+                                            initialVelocity = fling,
+                                        )
+                                    }
+                                    shown.animateTo(0f, effects)
+                                    currentOnClose()
+                                }
+                            }
+                        },
+                    )
+                }
+                .graphicsLayer {
+                    translationX = carried.value.x
+                    translationY = carried.value.y
+                    alpha = shown.value
+                },
         )
+    }
+}
+
+/**
+ * Two fingers anywhere on the calculator: it follows them, and [onRelease] gets how fast they were
+ * going when the first of them lifted, in px/s.
+ *
+ * On the [PointerEventPass.Initial] pass, as `detectPinchZoom` is, because the pad, the buttons and
+ * the title bar are all beneath it and each would otherwise keep its own finger. Nothing is consumed
+ * until two fingers have moved past touch slop, so one finger still writes, taps and drags as
+ * before. Fingers only: a pen down with a palm beside it is someone writing.
+ */
+private suspend fun PointerInputScope.detectTwoFingerThrow(
+    onCarry: (Offset) -> Unit,
+    onRelease: (Velocity) -> Unit,
+) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        val tracker = VelocityTracker()
+        var carrying = false
+        // The fingers' pan summed, not their centroid: a third finger landing moves the centroid,
+        // and the tracker would read that jump as a throw.
+        var travel = Offset.Zero
+
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val pressed = event.changes.count { it.pressed }
+            if (event.changes.any { it.pressed && it.type != PointerType.Touch }) {
+                if (carrying) onRelease(Velocity.Zero)
+                return@awaitEachGesture
+            }
+            if (pressed < 2) {
+                // The first finger off ends the throw; the one left behind is not a new one.
+                if (carrying || pressed == 0) break
+                continue
+            }
+
+            val pan = event.calculatePan()
+            travel += pan
+            if (!carrying && travel.getDistance() > viewConfiguration.touchSlop) carrying = true
+            if (carrying) {
+                tracker.addPosition(event.changes.first().uptimeMillis, travel)
+                onCarry(pan)
+                event.changes.forEach { if (it.pressed) it.consume() }
+            }
+        }
+
+        if (carrying) onRelease(tracker.calculateVelocity())
     }
 }
 
@@ -431,7 +534,17 @@ private fun WritingPad(
                         writing.add(down.position / density, down.uptimeMillis, down.pressure)
                         live = writing.stroke()
                         while (true) {
-                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            // A second finger makes it the window's two-finger throw, and the
+                            // stroke the first one began was never meant as ink. Consumed covers a
+                            // second finger that landed off the pad, which this never sees.
+                            val secondFinger = down.type == PointerType.Touch &&
+                                event.changes.count { it.pressed } > 1
+                            if (secondFinger || change.isConsumed) {
+                                live = null
+                                return@awaitEachGesture
+                            }
                             change.historical.forEach {
                                 writing.add(it.position / density, it.uptimeMillis, change.pressure)
                             }
@@ -504,6 +617,9 @@ private class PadStroke(
 
 private val WINDOW_WIDTH = 380.dp
 private val WINDOW_MARGIN = 16.dp
+
+/** Per second: a flick clears it, a two-finger drag that slows before letting go does not. */
+private val THROW_SPEED = 1000.dp
 
 /** Below the ribbon on a tablet, so the first thing the window covers is page and not toolbar. */
 private val INITIAL_TOP = 140.dp

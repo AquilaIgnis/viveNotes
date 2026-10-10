@@ -185,6 +185,41 @@ class CalculatorWindowTest {
         assertEquals(1, closed)
     }
 
+    /** Two fingers on the pad, moved together [steps] times by [step], [frameMillis] apart. */
+    private fun twoFingerDrag(step: Offset, steps: Int, frameMillis: Long) {
+        compose.onNodeWithTag(CalculatorTags.PAD).performTouchInput {
+            down(0, Offset(width * 0.4f, height * 0.5f))
+            down(1, Offset(width * 0.6f, height * 0.5f))
+            repeat(steps) {
+                updatePointerBy(0, step)
+                updatePointerBy(1, step)
+                move(delayMillis = frameMillis)
+            }
+            up(0)
+            up(1)
+        }
+    }
+
+    @Test
+    fun throwingItWithTwoFingersClosesIt() {
+        setCalculator()
+
+        twoFingerDrag(step = Offset(60f, 0f), steps = 10, frameMillis = 8)
+        compose.waitUntil(timeoutMillis = 5_000) { closed == 1 }
+    }
+
+    /** Let go slowly and it is only a drag; and with finger drawing on, neither finger wrote. */
+    @Test
+    fun aSlowTwoFingerDragNeitherClosesItNorWrites() {
+        setCalculator()
+
+        twoFingerDrag(step = Offset(10f, 0f), steps = 10, frameMillis = 50)
+        compose.waitForIdle()
+
+        assertEquals(0, closed)
+        compose.onNodeWithTag(CalculatorTags.EQUALS).assertIsNotEnabled()
+    }
+
     /** Absent, not disabled, without the formula model — the lasso's Math button's rule. */
     @Test
     fun theRibbonOffersItOnlyWithTheFormulaModel() {
