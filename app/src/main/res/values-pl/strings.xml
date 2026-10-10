@@ -242,9 +242,7 @@
     <string name="ai_ink_text_description">Odczytuje narysowane słowa w tle i utrzymuje rozpoznawanie na tym urządzeniu.</string>
     <string name="ai_ink_text_rebuild">Odczytaj ponownie każdą stronę pisaną ręcznie</string>
     <string name="ai_ink_text_off">Wyłączone. Pismo odręczne nie jest odczytywane i nic nie jest zapisywane.</string>
-    <resources>
-        <!-- Polish plural rules: 1 -> one, ending in 2,3,4 except 12,13,14 -> few, others -> many -->
-    </resources>
+    <!-- Polish plural rules: 1 -> one, ending in 2,3,4 except 12,13,14 -> few, others -> many -->
     <plurals name="ai_ink_text_to_go">
         <item quantity="one">Odczytywanie… do końca 1 strona</item>
         <item quantity="few">Odczytywanie… do końca %d strony</item>
@@ -645,7 +643,6 @@
     <string name="calculator_open_in_panel">Otwórz w panelu</string>
     <string name="calculator_pad">Obszar pisania kalkulatora</string>
     <string name="calculator_pad_hint">Napisz obliczenie, a następnie naciśnij =</string>
-    <string name="calculator_recogn_failed" translatable="false">calculator_recognize_failed</string>
     <string name="calculator_recognize_failed">Nie udało się rozpoznać pisma odręcznego.</string>
 
     <string name="export_pdf_title">Eksportuj jako PDF</string>

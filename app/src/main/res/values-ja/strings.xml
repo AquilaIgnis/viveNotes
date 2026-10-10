@@ -119,8 +119,7 @@
     <string name="account_error_not_vive">そのアドレスで応答がありましたが、ViveNotesサーバーではありません。</string>
     <string name="account_error_revoked">このデバイスのアクセス権がサーバーで取り消されたため、切断されました。登録するには再度サインインしてください。</string>
     <string name="account_error_signup_closed">このサーバーは新規登録を受け付けていません。管理者にアカウントの作成を依頼してからサインインしてください。</string>
-    <string name="account_error_email_trust">このメールアドレスを使用しているアカウントがすでに存在します。代わりに「ログイン」を使用してください。</string>
-    <string name="account_error_email_taken">このメールアドレスはすでに使用されています。</string>
+    <string name="account_error_email_taken">このメールアドレスを使用しているアカウントがすでに存在します。代わりに「ログイン」を使用してください。</string>
     <string name="account_error_created_not_registered">アカウントは作成されましたが、このデバイスを接続できませんでした。「ログイン」を使用して接続を完了してください。</string>
     <string name="account_error_challenge">サインインに時間がかかりすぎたため、有効期限が切れました。もう一度お試しください。</string>
     <string name="account_error_google_token">サーバーがこのGoogleサインインを受け入れませんでした。GoogleクライアントIDとアプリのIDが一致しません。</string>
