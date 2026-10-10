@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
@@ -30,6 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -79,6 +82,7 @@ internal fun ColumnScope.ContentPanelHeader(
     imageProgress: ImageTextProgress = ImageTextProgress(enabled = false),
     inkProgress: InkTextProgress = InkTextProgress(enabled = false),
 ) {
+    val keyboard = LocalSoftwareKeyboardController.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -115,6 +119,7 @@ internal fun ColumnScope.ContentPanelHeader(
                 // Nothing to submit: results follow the typing, so the key that would submit them
                 // closes the keyboard instead of promising a second kind of search.
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag(ContentPanelTags.QUERY),
@@ -211,11 +216,21 @@ internal fun ColumnScope.ContentPanelContent(
     onOpenHit: (ContentHit) -> Unit,
 ) {
     val results = state.results ?: return
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Opening a result is leaving the search, so the keyboard goes with it rather than covering the
+    // page it was opened on. Focus is cleared too, or the caret left in the field would bring the
+    // keyboard straight back; hiding it as well covers a keyboard raised by a note's text box.
+    val open: (ContentHit) -> Unit = { hit ->
+        focusManager.clearFocus()
+        keyboard?.hide()
+        onOpenHit(hit)
+    }
     results.pages.forEach { page ->
-        PageHeading(page, onOpenHit)
+        PageHeading(page, open)
         val blocks = page.hits.filter { it.unit.kind != ContentKind.Title }
         blocks.take(HITS_PER_PAGE).forEach { hit ->
-            HitRow(hit, onOpenHit)
+            HitRow(hit, open)
         }
         val hidden = blocks.size - HITS_PER_PAGE
         if (hidden > 0) {

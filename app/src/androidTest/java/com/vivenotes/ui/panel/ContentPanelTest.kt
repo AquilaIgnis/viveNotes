@@ -1,16 +1,23 @@
 package com.vivenotes.ui.panel
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.SoftwareKeyboardController
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.requestFocus
 import com.vivenotes.data.ContentSearchResults
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.InkTextProgress
@@ -141,6 +148,33 @@ class ContentPanelTest {
     }
 
     @Test
+    fun theSearchKeyClosesTheKeyboard() {
+        var hides = 0
+        // A stand-in, because a real keyboard's visibility leaves nothing in the semantics tree.
+        val keyboard = object : SoftwareKeyboardController {
+            override fun show() = Unit
+            override fun hide() {
+                hides++
+            }
+        }
+        compose.setContent {
+            ViveNotesTheme {
+                CompositionLocalProvider(LocalSoftwareKeyboardController provides keyboard) {
+                    Column {
+                        ContentPanelHeader(
+                            state = ContentSearchState(query = "invoices"),
+                            onQueryChange = {},
+                        )
+                    }
+                }
+            }
+        }
+
+        compose.onNodeWithTag(ContentPanelTags.QUERY).requestFocus().performImeAction()
+        assertEquals(1, hides)
+    }
+
+    @Test
     fun matchesAreGroupedUnderTheirPageAndCounted() {
         setPanel(
             ContentSearchState(query = "invoices", results = results(titleHit, bodyHit)),
@@ -174,6 +208,21 @@ class ContentPanelTest {
 
         compose.onNodeWithTag(ContentPanelTags.page("page-1")).performClick()
         assertEquals(titleHit, opened)
+    }
+
+    @Test
+    fun openingAResultTakesTheKeyboardAwayFromTheQuery() {
+        setPanel(ContentSearchState(query = "invoices", results = results(titleHit, bodyHit)))
+
+        // Focus is the observable half: a hidden keyboard leaves no semantics behind, but a field
+        // that kept its focus would raise it again on the next keystroke.
+        compose.onNodeWithTag(ContentPanelTags.QUERY).requestFocus().assertIsFocused()
+        compose.onNodeWithTag(ContentPanelTags.hit("box-1", 2)).performClick()
+        compose.onNodeWithTag(ContentPanelTags.QUERY).assertIsNotFocused()
+
+        compose.onNodeWithTag(ContentPanelTags.QUERY).requestFocus().assertIsFocused()
+        compose.onNodeWithTag(ContentPanelTags.page("page-1")).performClick()
+        compose.onNodeWithTag(ContentPanelTags.QUERY).assertIsNotFocused()
     }
 
     @Test
