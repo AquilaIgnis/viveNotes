@@ -1398,6 +1398,12 @@ private fun NotesWorkspace(
             if (calculatorOpen && formulaInstalled && calculatorPen != null) {
                 // The topmost thing on screen, so back closes it before any pane under it.
                 BackHandler { calculatorOpen = false }
+                // So = finds both halves of its round trip ready: the formula model open, and kept
+                // open through the indexers' OCR, and Python past SymPy's import and first parse.
+                LaunchedEffect(recognitionEngine, mathEngine) {
+                    launch { mathEngine.warmUp() }
+                    recognitionEngine.keepFormulaModelLoaded()
+                }
                 val calculatorBrush = remember(calculatorPen) { InkCodec.brushFor(calculatorPen) }
                 FloatingCalculator(
                     brush = calculatorBrush,

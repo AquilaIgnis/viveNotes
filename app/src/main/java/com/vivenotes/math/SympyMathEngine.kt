@@ -1,6 +1,7 @@
 package com.vivenotes.math
 
 import android.content.Context
+import android.util.Log
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.CoroutineDispatcher
@@ -55,6 +56,24 @@ data class FormulaToolsState(
 interface MathEngine {
     suspend fun analyze(latex: String): MathAnalysis
     suspend fun execute(latex: String, actionId: String): MathOperationResult
+
+    /**
+     * Runs the first of [preferred] that applies to [latex], or returns null when none does.
+     *
+     * [analyze] then [execute], which is all this does unless an engine can do both in one pass.
+     */
+    suspend fun calculate(latex: String, preferred: List<String>): MathOperationResult? {
+        val analysis = analyze(latex)
+        analysis.error?.let { return MathOperationResult(error = it) }
+        val action = preferred.firstOrNull { id -> analysis.actions.any { it.id == id } } ?: return null
+        return execute(latex, action)
+    }
+
+    /**
+     * Pays the engine's first-use costs ahead of the first formula. Best effort: an engine that
+     * fails here fails again on the formula, where the error is shown.
+     */
+    suspend fun warmUp() {}
 }
 
 /** Lazy, serialized bridge to the allow-listed JSON API in `math_engine.py`. */
@@ -76,6 +95,24 @@ class SympyMathEngine(
             json.decodeFromString<MathOperationResult>(payload)
         }
 
+    /** One Python call, so the formula is parsed and classified once rather than once per step. */
+    override suspend fun calculate(latex: String, preferred: List<String>): MathOperationResult? =
+        withContext(dispatcher) {
+            val payload = module().callAttr("calculate", latex, *preferred.toTypedArray()).toString()
+            json.decodeFromString<MathOperationResult?>(payload)
+        }
+
+    /** Starts Python, imports SymPy and parses one throwaway formula — `warm_up` in the module. */
+    override suspend fun warmUp() {
+        withContext(dispatcher) {
+            try {
+                module().callAttr("warm_up")
+            } catch (e: Exception) {
+                Log.w(TAG, "SymPy warm-up failed", e)
+            }
+        }
+    }
+
     private fun module() = python().getModule(PYTHON_MODULE)
 
     private fun python(): Python {
@@ -89,5 +126,6 @@ class SympyMathEngine(
 
     private companion object {
         const val PYTHON_MODULE = "math_engine"
+        const val TAG = "SympyMathEngine"
     }
 }

@@ -87,6 +87,34 @@ def execute(source: str, action_id: str) -> str:
         return _json({"error": _friendly_error(error)})
 
 
+def calculate(source: str, *preferred: str) -> str:
+    """Run the first of ``preferred`` that applies, parsing ``source`` once.
+
+    What ``analyze`` and then ``execute`` do between them, for a caller that only ever takes the
+    first applicable action: the hand calculator's =. Made as two calls, the formula is parsed and
+    classified twice. ``null`` when none of ``preferred`` applies.
+    """
+    try:
+        expression = _parse(source)
+        available: set[str] = {item["id"] for item in _classify(expression)[1]}
+        for action_id in preferred:
+            if action_id in available:
+                return _json(_execute(expression, action_id))
+        return json.dumps(None)
+    except Exception as error:
+        return _json({"error": _friendly_error(error)})
+
+
+def warm_up() -> None:
+    """Pay this engine's first-use costs before anyone is waiting on an answer.
+
+    Importing the module has already imported SymPy. What is left is mostly the parser's: the first
+    ``parse_latex`` deserializes the ANTLR grammar, and costs dozens of times what a later one does.
+    Running one throwaway sum through ``execute`` pays that and the printers after it.
+    """
+    execute("1 + 1", "simplify")
+
+
 def _parse(source: str) -> ParsedInput:
     if not isinstance(source, str):
         raise MathInputError("The recognized formula is not text.")

@@ -2,15 +2,18 @@ package com.vivenotes.ai
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.util.Log
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
 import com.vivenotes.model.ocr.TextDetection
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -54,6 +57,15 @@ interface InkRecognitionEngine {
      * 48-pixel strip.
      */
     suspend fun recognizeImageText(image: Bitmap): ImageTextResult
+
+    /**
+     * Loads the selected formula model now and keeps it loaded until the caller is cancelled.
+     *
+     * For a screen whose next request is a formula: the hand calculator, while it is open. Without
+     * it the first formula opens the model, and any text recognition after that — the background
+     * indexers' — closes it again, so the next formula pays the load a second time.
+     */
+    suspend fun keepFormulaModelLoaded(): Nothing = awaitCancellation()
 }
 
 /**
@@ -90,6 +102,9 @@ class OnnxInkRecognitionEngine(
     private val exclusive = Mutex()
     private val sessions = mutableMapOf<ModelKind, OrtSession>()
 
+    /** Callers inside [keepFormulaModelLoaded]. Guarded by [sessions], under which [session] reads it. */
+    private var formulaHolds = 0
+
     override suspend fun recognizeText(image: Bitmap): TextRecognitionResult =
         withContext(inferenceDispatcher) { readLine(image) }
 
@@ -98,6 +113,44 @@ class OnnxInkRecognitionEngine(
             FormulaEngine.FormulaNetS -> recognizeWithFormulaNet(image)
             FormulaEngine.UniMerNetTiny -> recognizeWithUniMerNet(image)
         }
+
+    /**
+     * Ending the hold closes nothing. The model stays open until something else is used — the
+     * first OCR line after it, under [session]'s rule — exactly as it does after a formula.
+     */
+    override suspend fun keepFormulaModelLoaded(): Nothing {
+        synchronized(sessions) { formulaHolds++ }
+        try {
+            loadFormulaModel()
+            awaitCancellation()
+        } finally {
+            synchronized(sessions) { formulaHolds-- }
+        }
+    }
+
+    /**
+     * Opens the selected formula model's graphs, holding every lane as a formula run does.
+     *
+     * Best effort: a model that will not open fails the formula that needs it, where the error is
+     * shown, rather than the screen that only wanted it ready.
+     */
+    private suspend fun loadFormulaModel() {
+        val kinds = when (formulaEngine()) {
+            FormulaEngine.FormulaNetS -> listOf(ModelKind.Formula)
+            FormulaEngine.UniMerNetTiny -> listOf(ModelKind.UniMerNetEncoder, ModelKind.UniMerNetDecoder)
+        }
+        try {
+            withContext(inferenceDispatcher) { everyLane { kinds.forEach { session(it) } } }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "The formula model could not be loaded ahead of use", e)
+        }
+    }
+
+    /** Whether a formula model's graphs are open. For tests of [session]'s rule. */
+    internal val formulaModelOpen: Boolean
+        get() = synchronized(sessions) { sessions.keys.any { it.family != ModelFamily.Ocr } }
 
     private suspend fun recognizeWithFormulaNet(image: Bitmap): FormulaRecognitionResult =
         withContext(inferenceDispatcher) {
@@ -333,19 +386,30 @@ class OnnxInkRecognitionEngine(
      *
      * Eviction never closes a session in use: FormulaNet runs holding every lane, so no OCR `run` is
      * in flight when it evicts them, and an OCR lane evicting FormulaNet means FormulaNet is not
-     * running. The lock only stops two lanes opening the same graph at once.
+     * running. The lock stops two lanes opening the same graph at once, and guards [formulaHolds].
      *
-     * The rule is by [ModelKind.family]: opening a graph closes every graph of another family. OCR's
+     * The rule is by [ModelKind.family]: using a graph closes every graph of another family. OCR's
      * two graphs are one family and so are UniMERNet's encoder and decoder, so each pair stays
      * resident together, while either formula model evicts OCR and the other formula model.
+     *
+     * **While [keepFormulaModelLoaded] holds, OCR and the formula model leave each other open**, so
+     * the indexers can read text without costing the calculator its next formula. The two formula
+     * models still close each other. Applied on every use, not only on opening, so a model the hold
+     * kept open is closed by the first OCR line after the hold ends.
      */
     private fun session(kind: ModelKind): OrtSession = synchronized(sessions) {
+        sessions.keys.filter { closes(kind, it) }.forEach { sessions.remove(it)?.close() }
         sessions[kind] ?: open(kind)
     }
 
-    private fun open(kind: ModelKind): OrtSession {
-        sessions.keys.filter { it.family != kind.family }.forEach { sessions.remove(it)?.close() }
+    /** Whether using a [kind] graph closes an open [resident] one — the rule on [session]. */
+    private fun closes(kind: ModelKind, resident: ModelKind): Boolean {
+        if (kind.family == resident.family) return false
+        val ocrAndFormula = kind.family == ModelFamily.Ocr || resident.family == ModelFamily.Ocr
+        return !(ocrAndFormula && formulaHolds > 0)
+    }
 
+    private fun open(kind: ModelKind): OrtSession {
         val options = OrtSession.SessionOptions().apply {
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
             setIntraOpNumThreads(INFERENCE_THREADS)
@@ -404,6 +468,7 @@ class OnnxInkRecognitionEngine(
     }
 
     companion object {
+        private const val TAG = "InkRecognitionEngine"
         private const val TEXT_HEIGHT = 48
         private const val TEXT_BASE_WIDTH = 320
         private const val TEXT_MAX_WIDTH = 3200

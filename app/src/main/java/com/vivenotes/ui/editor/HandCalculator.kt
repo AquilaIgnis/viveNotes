@@ -22,11 +22,8 @@ internal data class CalculatorAnswer(
  */
 internal suspend fun calculate(recognized: String, engine: MathEngine): CalculatorAnswer {
     val latex = withoutTrailingEquals(recognized)
-    val analysis = engine.analyze(latex)
-    analysis.error?.let { return CalculatorAnswer(latex, error = it) }
-    val action = AUTOMATIC_MATH_ACTIONS.firstOrNull { id -> analysis.actions.any { it.id == id } }
+    val result = engine.calculate(latex, AUTOMATIC_MATH_ACTIONS)
         ?: return CalculatorAnswer(latex, error = NOTHING_TO_RUN)
-    val result = engine.execute(latex, action)
     return CalculatorAnswer(latex, result = result.takeIf { it.error == null }, error = result.error)
 }
 

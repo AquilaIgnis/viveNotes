@@ -16,11 +16,15 @@ import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.projectionKey
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -130,6 +134,55 @@ class OnnxRecognitionSmokeTest {
             serial.close()
             parallel.close()
             bitmap.recycle()
+        }
+    }
+
+    /**
+     * The calculator's hold: OCR leaves a held formula model open, and closes it once the hold ends.
+     *
+     * Unheld, the indexers' first line of text closes the model and the calculator's next = loads
+     * it again. Whichever formula model the device has selected, since the rule is the same for both.
+     */
+    @Test
+    fun heldFormulaModelOutlivesTextRecognitionUntilReleased() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val models = AiModelStore(context, autoDownload = false)
+        withTimeout(60_000) {
+            models.state.first {
+                it.handwritingText !is AiModelInstallState.Verifying &&
+                    it.formulaLatex !is AiModelInstallState.Verifying &&
+                    it.uniMerNet !is AiModelInstallState.Verifying
+            }
+        }
+        assumeTrue("no formula model is installed on this device", models.state.value.formulaReady)
+
+        val line = Bitmap.createBitmap(320, 64, Bitmap.Config.ARGB_8888)
+        Canvas(line).apply {
+            drawColor(Color.WHITE)
+            drawText(
+                "hello",
+                16f,
+                48f,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.BLACK
+                    textSize = 44f
+                },
+            )
+        }
+        val engine = OnnxInkRecognitionEngine(models)
+        val hold = launch { engine.keepFormulaModelLoaded() }
+        try {
+            withTimeout(60_000) { while (!engine.formulaModelOpen) delay(50) }
+            withTimeout(30_000) { engine.recognizeText(line) }
+            assertTrue("OCR closed the formula model while it was held", engine.formulaModelOpen)
+
+            hold.cancelAndJoin()
+            withTimeout(30_000) { engine.recognizeText(line) }
+            assertFalse("OCR after the hold left the formula model open", engine.formulaModelOpen)
+        } finally {
+            hold.cancel()
+            engine.close()
+            line.recycle()
         }
     }
 

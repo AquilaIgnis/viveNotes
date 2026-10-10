@@ -180,4 +180,20 @@ class SympyMathEngineTest {
         assertNotNull(engine.analyze("x -").error)
         assertNotNull(engine.execute("x^2", "matrix_inverse").error)
     }
+
+    /** The calculator's one call answers exactly as analyze and then execute would. */
+    @Test
+    fun calculateRunsTheFirstPreferredActionThatApplies() = runBlocking {
+        val preferred = listOf("solve", "evaluate", "simplify")
+
+        assertEquals(engine.execute("x^2-4=0", "solve"), engine.calculate("x^2-4=0", preferred))
+        assertEquals(
+            engine.execute("\\int_0^1 x^2 dx", "evaluate"),
+            engine.calculate("\\int_0^1 x^2 dx", preferred),
+        )
+        assertEquals(engine.execute("12 \\times 4", "simplify"), engine.calculate("12 \\times 4", preferred))
+        // A matrix offers only its own actions.
+        assertNull(engine.calculate("\\begin{bmatrix} 1 & 7 \\\\ 3 & 6 \\end{bmatrix}", preferred))
+        assertNotNull(engine.calculate("x -", preferred)?.error)
+    }
 }
