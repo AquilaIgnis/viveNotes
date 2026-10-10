@@ -41,6 +41,8 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.UUID
+import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicInteger
 
 @RunWith(AndroidJUnit4::class)
 class HierarchySyncTest {
@@ -252,6 +254,78 @@ class HierarchySyncTest {
         // The cursor stays put: the next run asks for the same delta instead of advancing past a row
         // this device could not place.
         assertEquals(0L, db.syncDao().state()!!.cursor)
+    }
+
+    @Test
+    fun aHeldRowIsNotLookedUpAgainOnEveryPage() = runBlocking {
+        val pageLookups = AtomicInteger()
+        val counted = Room.inMemoryDatabaseBuilder(
+            InstrumentationRegistry.getInstrumentation().targetContext,
+            NotesDatabase::class.java,
+        )
+            .addCallback(NotesDatabase.SYNC_TRIGGER_CALLBACK)
+            .setQueryCallback(
+                { sql, _ -> if (sql == PAGE_LOOKUP) pageLookups.incrementAndGet() },
+                Executor { it.run() },
+            )
+            .build()
+        try {
+            val changedAt = System.currentTimeMillis()
+            server.seed(notebookChange("n", "Notebook", changedAt))
+            server.seed(sectionChange("s", "n", "Section", changedAt))
+            // One stroke per page of the delta, every one waiting for a page that never comes.
+            repeat(HELD_STROKES) { index ->
+                server.seed(inkStrokeChange("stroke-$index", "absent-page", index, changedAt))
+            }
+            server.pageLimit = 1
+            val counting = HierarchySync(
+                counted,
+                server,
+                RemoteInkSignal(),
+                AttachmentBlobSync(counted, server, pictures),
+            )
+
+            val result = counting.run(account())
+
+            // Refused like any delta whose parent never arrives. What matters is the cost of
+            // getting there: Room is asked about the page once per page of the delta, not once for
+            // every stroke still waiting on it, which made a first pull quadratic in held rows.
+            assertTrue(result is SyncRunResult.Failed)
+            assertTrue(
+                "${pageLookups.get()} page lookups across $HELD_STROKES pages",
+                pageLookups.get() <= HELD_STROKES,
+            )
+        } finally {
+            counted.close()
+        }
+    }
+
+    @Test
+    fun aRowHeldOnTheStreamIsReleasedByALaterStreamPage() = runBlocking {
+        val changedAt = System.currentTimeMillis()
+        server.seed(sectionChange("s", "n", "Remote section", changedAt))
+        server.seed(pageChange("p", "s", "Remote page", changedAt))
+        server.seed(notebookChange("n", "Renamed last", changedAt + 1_000))
+        server.pageLimit = 1
+        val since = hierarchy.beginChangeStream(account().accountId)
+        val first = (server.pullChanges("", "", since, 512) as ServerResult.Success<PullChangesPage>).value
+        val second = (server.pullChanges("", "", first.cursor, 512) as ServerResult.Success<PullChangesPage>).value
+        val third = (server.pullChanges("", "", second.cursor, 512) as ServerResult.Success<PullChangesPage>).value
+
+        hierarchy.applyStreamPage(account(), first)
+        hierarchy.applyStreamPage(account(), second)
+
+        // Both waiting on the notebook: nothing written, and no cursor promising they were.
+        assertNull(db.sectionDao().byId("s"))
+        assertNull(db.pageDao().byId("p"))
+        assertEquals(0L, db.syncDao().state()!!.cursor)
+
+        val result = hierarchy.applyStreamPage(account(), third) as SyncRunResult.Succeeded
+
+        assertEquals(3, result.summary.pulled)
+        assertEquals("n", db.sectionDao().byId("s")!!.notebookId)
+        assertEquals("s", db.pageDao().byId("p")!!.sectionId)
+        assertEquals(3L, db.syncDao().state()!!.cursor)
     }
 
     @Test
@@ -2018,6 +2092,12 @@ class HierarchySyncTest {
         }
     }
 }
+
+/** `PageDao.byId` as Room hands it to SQLite, which is how a parent check reaches the database. */
+private const val PAGE_LOOKUP = "SELECT * FROM pages WHERE id = ?"
+
+/** Enough held rows that re-checking each on every page shows: 50 pages would cost 1,275 lookups. */
+private const val HELD_STROKES = 50
 
 private fun sha256(bytes: ByteArray): String =
     MessageDigest.getInstance("SHA-256").digest(bytes)

@@ -13,6 +13,8 @@ import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.ink.InkCodec
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
@@ -24,14 +26,16 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.Base64
 import java.util.UUID
 import java.util.zip.GZIPOutputStream
 
 /**
- * What the first upload of a drawn notebook costs.
+ * What the first upload of a drawn notebook costs, and the first download of one.
  *
  * Connecting an installation that has already been drawn on seeds every ink row into the outbox at
- * once, so the first push is by far the largest thing sync ever does.
+ * once, so the first push is by far the largest thing sync ever does. Its mirror is the first pull
+ * into an empty device, at its worst when the tree arrives after the ink hanging from it.
  *
  * The assertions are the invariants that hold whatever the numbers are — every row leaves exactly
  * once, no request exceeds the transport's cap, the outbox drains — and the numbers themselves are
@@ -144,6 +148,39 @@ class InkSyncCostTest {
               projected at the reference page's 565 B of points per stroke:
                                   ${envelopePerStroke + 4 * ((565 + 2) / 3)} B per stroke,
                                   ${(envelopePerStroke + 4 * ((565 + 2) / 3)) * 9_553L / 1_048_576} MiB for its 9,553
+            """.trimIndent(),
+        )
+    }
+
+    @Test
+    fun firstPullOfADrawnNotebookWhosePageArrivesLast() = runBlocking<Unit> {
+        val points = requireNotNull(sampleStroke(PULLED_PAGE).points)
+        val transport = ParentsLastTransport(PULLED_STROKES, points)
+        val pulling = HierarchySync(
+            db,
+            transport,
+            RemoteInkSignal(),
+            AttachmentBlobSync(db, transport, TemporaryAttachmentBytes(attachmentDirectory)),
+        )
+
+        val startedAt = System.nanoTime()
+        val result = pulling.run(account()) as SyncRunResult.Succeeded
+        val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+
+        assertEquals(PULLED_STROKES + PULLED_TREE_ROWS, result.summary.pulled)
+        assertEquals(PULLED_STROKES, db.inkStrokeDao().countForPages(listOf(PULLED_PAGE)))
+        assertEquals(
+            "the cursor must commit once nothing is held",
+            transport.finalCursor,
+            db.syncDao().state()!!.cursor,
+        )
+        Log.i(
+            TAG,
+            """
+            First pull of $PULLED_STROKES strokes (${points.size} B of points each), page last
+              pages               ${transport.finalCursor}, every stroke held until the last
+              elapsed             $elapsedMs ms, ${elapsedMs * 1_000 / PULLED_STROKES} µs per stroke,
+                                  in-memory Room and a transport that only serves
             """.trimIndent(),
         )
     }
@@ -262,8 +299,153 @@ class InkSyncCostTest {
         ): ServerResult<Boolean> = error("the ink cost measurement has no attachments")
     }
 
+    /**
+     * An account whose notebook, section and page were all last written after the ink on that page,
+     * served in the server's order: every stroke first, [PULL_PAGE] to a response, then the three
+     * rows they hang from.
+     *
+     * The worst case for a first pull, since this device has to hold every stroke until the end.
+     * Rows are built per request, so the transport holds nothing a real server's response would not.
+     */
+    private class ParentsLastTransport(
+        private val strokeCount: Int,
+        points: ByteArray,
+    ) : SyncTransport {
+        private val encodedPoints = JsonPrimitive(Base64.getEncoder().encodeToString(points))
+        private val strokePages = (strokeCount + PULL_PAGE - 1) / PULL_PAGE
+        val finalCursor = strokePages + 1L
+
+        override suspend fun getCursor(serverBaseUrl: String, token: String) =
+            ServerResult.Success(finalCursor)
+
+        override suspend fun pullChanges(
+            serverBaseUrl: String,
+            token: String,
+            since: Long,
+            limit: Int,
+        ): ServerResult<PullChangesPage> {
+            val served = since.toInt()
+            if (served >= strokePages) {
+                return ServerResult.Success(PullChangesPage(tree(), finalCursor, hasMore = false))
+            }
+            val first = served * PULL_PAGE
+            val strokes = (first until minOf(first + PULL_PAGE, strokeCount)).map(::stroke)
+            return ServerResult.Success(PullChangesPage(strokes, served + 1L, hasMore = true))
+        }
+
+        private fun tree(): List<JsonObject> = listOf(
+            row(
+                "notebook",
+                PULLED_NOTEBOOK,
+                "name" to JsonPrimitive("Drawn"),
+                "colorArgb" to JsonPrimitive(1),
+                "sortIndex" to JsonPrimitive(0),
+                "expanded" to JsonPrimitive(true),
+            ),
+            row(
+                "section",
+                PULLED_SECTION,
+                "notebookId" to JsonPrimitive(PULLED_NOTEBOOK),
+                "name" to JsonPrimitive("Section"),
+                "colorArgb" to JsonPrimitive(2),
+                "sortIndex" to JsonPrimitive(0),
+            ),
+            row(
+                "page",
+                PULLED_PAGE,
+                "sectionId" to JsonPrimitive(PULLED_SECTION),
+                "title" to JsonPrimitive("Page"),
+                "preview" to JsonPrimitive(""),
+                "sortIndex" to JsonPrimitive(0),
+            ),
+        )
+
+        private fun stroke(index: Int): JsonObject = row(
+            "inkStroke",
+            "stroke-$index",
+            "pageId" to JsonPrimitive(PULLED_PAGE),
+            "drawOrder" to JsonPrimitive(index),
+            "brushFamily" to JsonPrimitive("pressure-pen"),
+            "brushVersion" to JsonPrimitive(InkCodec.BRUSH_VERSION),
+            "sizeDp" to JsonPrimitive(2.5f),
+            "colorArgb" to JsonPrimitive(0xFF101010.toInt()),
+            "colorFollowsTheme" to JsonNull,
+            "epsilon" to JsonPrimitive(0.1f),
+            "stabilization" to JsonPrimitive(1),
+            "minX" to JsonPrimitive(0f),
+            "minY" to JsonPrimitive(0f),
+            "maxX" to JsonPrimitive(100f),
+            "maxY" to JsonPrimitive(100f),
+            "points" to encodedPoints,
+            "enc" to JsonPrimitive(InkCodec.ENCODING),
+            "groupId" to JsonNull,
+        )
+
+        /** The fields every kind carries, then [fields]. */
+        private fun row(kind: String, id: String, vararg fields: Pair<String, JsonElement>) =
+            JsonObject(
+                linkedMapOf<String, JsonElement>(
+                    "kind" to JsonPrimitive(kind),
+                    "id" to JsonPrimitive(id),
+                    "version" to JsonPrimitive(1),
+                    "deletedAt" to JsonNull,
+                    "updatedAt" to JsonPrimitive(1_000L),
+                    "createdAt" to JsonPrimitive(1_000L),
+                ).apply { putAll(fields) },
+            )
+
+        override suspend fun pushChanges(
+            serverBaseUrl: String,
+            token: String,
+            batchId: String,
+            changes: List<JsonObject>,
+        ): ServerResult<PushChangesReply> = error("a first pull into an empty device pushes nothing")
+
+        override suspend fun revokeDevice(
+            serverBaseUrl: String,
+            token: String,
+            deviceId: String,
+        ): ServerResult<Unit> = ServerResult.Success(Unit)
+
+        override suspend fun hasBlob(
+            serverBaseUrl: String,
+            token: String,
+            digest: String,
+        ): ServerResult<Boolean> = error("the ink cost measurement has no attachments")
+
+        override suspend fun uploadBlob(
+            serverBaseUrl: String,
+            token: String,
+            digest: String,
+            file: File,
+        ): ServerResult<Boolean> = error("the ink cost measurement has no attachments")
+
+        override suspend fun downloadBlob(
+            serverBaseUrl: String,
+            token: String,
+            digest: String,
+            target: File,
+        ): ServerResult<Boolean> = error("the ink cost measurement has no attachments")
+    }
+
     private companion object {
         const val TAG = "InkSyncCost"
+
+        /**
+         * Strokes on the one page the pull measurement downloads: forty responses of ink before
+         * the page they belong to, a scale at which holding them has a visible cost. The real
+         * account that prompted the measurement held 49,331 this way.
+         */
+        const val PULLED_STROKES = 20_000
+
+        /** Rows to a pull response, the server's default `limit`. */
+        const val PULL_PAGE = 512
+
+        /** The notebook, the section and the page, served after every stroke. */
+        const val PULLED_TREE_ROWS = 3
+        const val PULLED_NOTEBOOK = "pulled-notebook"
+        const val PULLED_SECTION = "pulled-section"
+        const val PULLED_PAGE = "pulled-page"
 
         /**
          * Enough strokes to cross the row cap several times and to make a per-stroke number mean

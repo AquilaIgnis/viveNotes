@@ -20,7 +20,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.File
+import java.io.IOException
 import java.net.InetSocketAddress
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Exercises the client against a real HTTP server on loopback rather than a fake connection.
@@ -415,6 +419,111 @@ class SyncServerClientTest {
         assertEquals("/v1/changes/watch", requestPath)
         assertEquals("since=40", requestQuery)
         assertEquals("Bearer vive_abc", authorization)
+    }
+
+    @Test
+    fun changeStreamDeliversAWholePageOnOneDataLine() = runBlocking {
+        // How both servers send a catch-up: the page JSON-encoded onto a single `data:` line. This
+        // one is about a megabyte, far past one read and the 4 KB lines the stream once refused.
+        val notebooks = (0 until 5_000).joinToString(",") { index ->
+            """{"kind":"notebook","id":"notebook-$index","name":"${"n".repeat(180)}"}"""
+        }
+        respond = { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { body ->
+                body.write(
+                    ("event: ready\ndata: {\"changes\":[$notebooks],\"purges\":[],\"cursor\":41," +
+                        "\"hasMore\":false}\n\n").encodeToByteArray(),
+                )
+                body.flush()
+            }
+        }
+
+        val ready = SyncServerClient().watchChanges(baseUrl, "vive_abc", since = 0).first()
+
+        val page = (ready as ChangeStreamEvent.Ready).page
+        assertEquals(5_000, page.changes.size)
+        assertEquals("notebook-4999", page.changes.last()["id"]?.jsonPrimitive?.content)
+        assertEquals(41L, page.cursor)
+    }
+
+    @Test
+    fun changeStreamHangsUpOnALineLongerThanAPullResponse() = runBlocking {
+        val line = ByteArray(64 * 1024) { 'x'.code.toByte() }
+
+        val taken = bytesTakenBeforeHangingUp("event: ready\ndata: ", line)
+
+        assertTrue("took $taken bytes of one endless line", taken < 32L * 1024 * 1024)
+    }
+
+    @Test
+    fun changeStreamHangsUpOnAnEventLongerThanAPullResponse() = runBlocking {
+        // Every line inside the bound; the event they add up to is not.
+        val line = ("data: " + "x".repeat(64 * 1024 - 7) + "\n").encodeToByteArray()
+
+        val taken = bytesTakenBeforeHangingUp("event: ready\n", line)
+
+        assertTrue("took $taken bytes of one endless event", taken < 32L * 1024 * 1024)
+    }
+
+    /**
+     * Streams [chunk] after [prefix] until the client hangs up, offering 64 MB in all, and returns
+     * how much the client took first.
+     *
+     * Measured from the server's side because the event alone cannot tell a bounded client from an
+     * unbounded one: both report the stream ended. Only the bounded one stops near ten megabytes.
+     */
+    private suspend fun bytesTakenBeforeHangingUp(prefix: String, chunk: ByteArray): Long {
+        val written = AtomicLong()
+        val finished = CountDownLatch(1)
+        respond = { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            try {
+                exchange.responseBody.use { body ->
+                    body.write(prefix.encodeToByteArray())
+                    repeat(64 * 1024 * 1024 / chunk.size) {
+                        body.write(chunk)
+                        body.flush()
+                        written.addAndGet(chunk.size.toLong())
+                    }
+                }
+            } catch (_: IOException) {
+                // The client hanging up part-way is the behaviour under test.
+            } finally {
+                finished.countDown()
+            }
+        }
+
+        assertEquals(
+            ChangeStreamEvent.Failed(ConnectFailure.Unreachable, retryable = true),
+            SyncServerClient().watchChanges(baseUrl, "vive_abc", since = 0).first(),
+        )
+        assertTrue(finished.await(10, TimeUnit.SECONDS))
+        return written.get()
+    }
+
+    @Test
+    fun changeStreamReadsCrLfLineEndingsLikeLf() = runBlocking {
+        respond = { exchange ->
+            exchange.responseHeaders.add("Content-Type", "text/event-stream")
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { body ->
+                body.write(
+                    ("event: ready\r\ndata: {\"changes\":[],\"purges\":[],\"cursor\":41," +
+                        "\"hasMore\":false}\r\n\r\n" +
+                        "event: changes\r\ndata: {\"changes\":[],\"purges\":[],\"cursor\":42," +
+                        "\"hasMore\":false}\r\n\r\n").encodeToByteArray(),
+                )
+                body.flush()
+            }
+        }
+
+        val events = SyncServerClient().watchChanges(baseUrl, "vive_abc", since = 40).take(2).toList()
+
+        assertEquals(41L, (events[0] as ChangeStreamEvent.Ready).page.cursor)
+        assertEquals(42L, (events[1] as ChangeStreamEvent.Changes).page.cursor)
     }
 
     @Test

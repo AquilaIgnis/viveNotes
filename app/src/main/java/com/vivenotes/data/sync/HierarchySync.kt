@@ -24,11 +24,14 @@ import com.vivenotes.data.db.SyncStateEntity
 import com.vivenotes.data.db.deferredNotebookContentKey
 import com.vivenotes.model.newId
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -113,6 +116,15 @@ class HierarchySync(
      * like a working sync from the outside.
      */
     private val blobs: AttachmentBlobSync,
+    /**
+     * Where every entry point runs, whoever calls it.
+     *
+     * Not the caller's thread, because the caller is often the main one: the account screen's Sync
+     * button launches from a composition scope. A pull decodes, validates and sorts each page on
+     * the thread it runs on and resumes there after every Room call, so on the main thread a first
+     * sync's work, and the garbage collection it causes, lands on the UI.
+     */
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
 
     private val sync = db.syncDao()
@@ -176,8 +188,8 @@ class HierarchySync(
      */
     private val pictureRecounts = mutableListOf<PictureRecount>()
 
-    /** Orphans carried between bounded pages on the currently open server-pushed stream. */
-    private var streamCarried: List<RemoteChange> = emptyList()
+    /** Rows held between bounded pages on the currently open server-pushed stream. */
+    private var streamHeld = HeldBack()
     private var streamAccountId: String? = null
 
     /**
@@ -190,16 +202,20 @@ class HierarchySync(
      */
     private var downloadsOutstanding = true
 
+    /** Runs [block] on [dispatcher], serialized against every other entry point by [mutex]. */
+    private suspend inline fun <T> serialized(crossinline block: suspend () -> T): T =
+        withContext(dispatcher) { mutex.withLock { block() } }
+
     /** Makes [accountId] the owner of this database's one hierarchy corpus. */
-    suspend fun activate(accountId: String) = mutex.withLock {
+    suspend fun activate(accountId: String) = serialized {
         activateLocked(accountId)
     }
 
     /** Starts one streamed catch-up and returns the last cursor already committed in Room. */
-    suspend fun beginChangeStream(accountId: String): Long = mutex.withLock {
+    suspend fun beginChangeStream(accountId: String): Long = serialized {
         activateLocked(accountId)
         streamAccountId = accountId
-        streamCarried = emptyList()
+        streamHeld = HeldBack()
         sync.state()?.cursor ?: error("sync state disappeared after activation")
     }
 
@@ -210,22 +226,21 @@ class HierarchySync(
      * delivery, not conflict handling, cursor transactions, purge semantics, or attachment rules.
      */
     suspend fun applyStreamPage(account: SyncAccount, page: PullChangesPage): SyncRunResult =
-        mutex.withLock {
+        serialized {
             try {
                 activateLocked(account.accountId)
                 if (streamAccountId != account.accountId) {
                     streamAccountId = account.accountId
-                    streamCarried = emptyList()
+                    streamHeld = HeldBack()
                 }
 
-                when (val applied = applyIncomingPage(page, streamCarried)) {
+                when (val applied = applyIncomingPage(page, streamHeld)) {
                     is IncomingPageResult.Stopped ->
                         SyncRunResult.Failed(applied.reason)
 
                     is IncomingPageResult.Applied -> {
-                        streamCarried = applied.carried
-                        if (!page.hasMore && streamCarried.isNotEmpty()) {
-                            return@withLock SyncRunResult.Failed(
+                        if (!page.hasMore && !streamHeld.isEmpty()) {
+                            return@serialized SyncRunResult.Failed(
                                 PermanentSyncFailure.InvalidServerResponse,
                             )
                         }
@@ -271,11 +286,11 @@ class HierarchySync(
      * push response is enough to acknowledge the exact outbox generations and record their server
      * versions; concurrent remote commits arrive through that already-open stream.
      */
-    suspend fun pushPending(account: SyncAccount): SyncRunResult = mutex.withLock {
+    suspend fun pushPending(account: SyncAccount): SyncRunResult = serialized {
         try {
             activateLocked(account.accountId)
             if (!hasCaughtUp(account.accountId)) {
-                return@withLock SyncRunResult.Succeeded(SyncSummary(0, 0, 0, 0))
+                return@serialized SyncRunResult.Succeeded(SyncSummary(0, 0, 0, 0))
             }
 
             forgetBlobVerdicts()
@@ -303,7 +318,7 @@ class HierarchySync(
     }
 
     /** Clears account-specific versions and queued work after the credential is intentionally gone. */
-    suspend fun deactivate(accountId: String) = mutex.withLock {
+    suspend fun deactivate(accountId: String) = serialized {
         db.withTransaction {
             if (sync.state()?.accountId != accountId) return@withTransaction
             // Turn the triggers off first; clearing their own tables never touches the hierarchy,
@@ -314,7 +329,7 @@ class HierarchySync(
             metadata.delete(PENDING_BATCH_KEY)
             metadata.delete(CAUGHT_UP_KEY)
             streamAccountId = null
-            streamCarried = emptyList()
+            streamHeld = HeldBack()
             DebugLog.i(DebugLog.DB) { "Sync: cleared state, outbox and versions for account $accountId" }
         }
     }
@@ -328,7 +343,7 @@ class HierarchySync(
      */
     suspend fun hasCaughtUp(accountId: String): Boolean = metadata.value(CAUGHT_UP_KEY) == accountId
 
-    suspend fun run(account: SyncAccount): SyncRunResult = mutex.withLock {
+    suspend fun run(account: SyncAccount): SyncRunResult = serialized {
         try {
             activateLocked(account.accountId)
             forgetBlobVerdicts()
@@ -341,7 +356,7 @@ class HierarchySync(
             when (val firstPull = pullIfNeeded(account)) {
                 is PhaseResult.Done -> pulled += firstPull.count
                 is PhaseResult.ConflictDone -> error("pull cannot return conflict count")
-                is PhaseResult.Stop -> return@withLock firstPull.result
+                is PhaseResult.Stop -> return@serialized firstPull.result
             }
             markCaughtUp(account.accountId)
             dropStarterSupersededByAccount()
@@ -353,7 +368,7 @@ class HierarchySync(
                     conflicts += push.conflicts
                     pictures += push.pictures
                 }
-                is PhaseResult.Stop -> return@withLock push.result
+                is PhaseResult.Stop -> return@serialized push.result
             }
 
             // The push cursor is explicitly not a pull cursor. Pull this device's accepted writes
@@ -367,7 +382,7 @@ class HierarchySync(
                 when (val finalPull = pullIfNeeded(account)) {
                     is PhaseResult.Done -> pulled += finalPull.count
                     is PhaseResult.ConflictDone -> error("pull cannot return conflict count")
-                    is PhaseResult.Stop -> return@withLock finalPull.result
+                    is PhaseResult.Stop -> return@serialized finalPull.result
                 }
             }
 
@@ -515,7 +530,7 @@ class HierarchySync(
     /** Applies one bounded pull-shaped page, whether HTTP pull or the live stream delivered it. */
     private suspend fun applyIncomingPage(
         page: PullChangesPage,
-        carried: List<RemoteChange>,
+        held: HeldBack,
     ): IncomingPageResult {
         val parsed = try {
             page.changes.mapNotNull(::parseRemoteChange)
@@ -542,19 +557,8 @@ class HierarchySync(
         }
 
         // Parent depth outranks sequence order locally. Rows whose parents are in a later bounded
-        // page stay in [carried] and the cursor does not move until they can be placed.
-        val ordered = (carried + parsed).sortedBy { change -> change.kind.rank }
-        val applicable = mutableListOf<RemoteChange>()
-        val orphans = mutableListOf<RemoteChange>()
-        val applying = HashSet<String>()
-        for (change in ordered) {
-            if (parentIsAvailable(change, applying)) {
-                applicable += change
-                applying += change.kind.wire + ":" + change.id
-            } else {
-                orphans += change
-            }
-        }
+        // page wait in [held] and the cursor does not move until they can be placed.
+        val applicable = admit(parsed, held)
 
         val discardedPictures = mutableListOf<String>()
         db.withTransaction {
@@ -563,14 +567,14 @@ class HierarchySync(
             invalidateInkText(remoteInkPages)
             applyPictureCounts()
             purged.forEach { (kind, id) -> discardedPictures += applyPurgeOrRemap(kind, id) }
-            if (orphans.isEmpty()) sync.setCursor(page.cursor)
+            if (held.isEmpty()) sync.setCursor(page.cursor)
             sync.setApplyingRemote(false)
         }
-        logApplied("streamed", applicable, purged.size, orphans.size, page.cursor)
+        logApplied("streamed", applicable, purged.size, held.size, page.cursor)
         if (discardedPictures.isNotEmpty()) blobs.discard(discardedPictures)
         publishRemoteInk()
 
-        return IncomingPageResult.Applied(applicable.size, orphans)
+        return IncomingPageResult.Applied(applicable.size)
     }
 
     private suspend fun pullIfNeeded(account: SyncAccount): PhaseResult {
@@ -586,8 +590,8 @@ class HierarchySync(
         var cursor = localCursor
         var pulled = 0
         var hasMore: Boolean
-        // Changes whose parent has not arrived yet, carried into the next page rather than applied.
-        var carried: List<RemoteChange> = emptyList()
+        // Changes whose parent has not arrived yet, waiting for it rather than applied.
+        val held = HeldBack()
         do {
             val page = when (
                 val result = client.pullChanges(account.serverUrl, account.token, cursor)
@@ -641,38 +645,7 @@ class HierarchySync(
                 return PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.UnsupportedKind))
             }
 
-            // Parents before children, which the stream order does not give.
-            //
-            // The server orders a delta by `(change_seq, kind_rank, id)`, but a row's `change_seq`
-            // is the seq of its last write, not of its creation. Rename a notebook after its
-            // sections were created and it moves above its own children, so a client pulling from
-            // below both receives the sections first and Room refuses them with a FOREIGN KEY
-            // failure — aborting the transaction, leaving the cursor uncommitted, and re-pulling the
-            // same delta for ever.
-            //
-            // A stable sort by kind is enough for a two-level hierarchy.
-            val ordered = (carried + parsed).sortedBy { change -> change.kind.rank }
-
-            // Sorting cannot help when a parent lands in a *later page* than its child, which needs
-            // more than a page of changes between the two writes but is not impossible. Such a row
-            // is held back rather than applied: Room would refuse it, and refusing it inside the
-            // transaction that commits the cursor is what turns one straddling row into a device
-            // that re-pulls the same delta for ever.
-            val applicable = mutableListOf<RemoteChange>()
-            val orphans = mutableListOf<RemoteChange>()
-            // Held back transitively: a page whose section is itself waiting for its notebook has to
-            // wait with it, or the page is written against a section Room does not have either.
-            // One pass is enough because the batch is already sorted parents-first.
-            val applying = HashSet<String>()
-            for (change in ordered) {
-                if (parentIsAvailable(change, applying)) {
-                    applicable += change
-                    applying += change.kind.wire + ":" + change.id
-                } else {
-                    orphans += change
-                }
-            }
-            carried = orphans
+            val applicable = admit(parsed, held)
 
             val discardedPictures = mutableListOf<String>()
             db.withTransaction {
@@ -688,10 +661,10 @@ class HierarchySync(
                 // Only when nothing is being held. The cursor is a promise that everything below it
                 // has been applied, so advancing it past a row still waiting for its parent would
                 // lose that row for good — the next pull starts above it.
-                if (orphans.isEmpty()) sync.setCursor(page.cursor)
+                if (held.isEmpty()) sync.setCursor(page.cursor)
                 sync.setApplyingRemote(false)
             }
-            logApplied("pulled", applicable, purged.size, orphans.size, page.cursor)
+            logApplied("pulled", applicable, purged.size, held.size, page.cursor)
             // Once the transaction has committed, for the reason the push phase discards there.
             if (discardedPictures.isNotEmpty()) blobs.discard(discardedPictures)
             // Per page of the delta rather than at the end of the run: a first reconcile can carry
@@ -709,7 +682,7 @@ class HierarchySync(
             }
         } while (hasMore)
 
-        if (carried.isNotEmpty()) {
+        if (!held.isEmpty()) {
             // The delta ended and a child's parent never arrived. The server rejects a push whose
             // parent it does not hold, so this cannot happen to a well-behaved pair — and leaving
             // the cursor where it is means the next run tries the same delta rather than skipping
@@ -721,49 +694,94 @@ class HierarchySync(
     }
 
     /**
-     * Whether a change can be written now: its parent is already in Room, or is one of the rows
-     * [applying] is about to write in the same transaction. A notebook has no parent and is
-     * therefore always applicable.
+     * Splits one page of the delta into the rows that can be written now, in the order to write
+     * them, and files the rest in [held] under the parent each one is waiting for.
+     *
+     * Parents before children, which the stream order does not give. The server orders a delta by
+     * `(change_seq, kind_rank, id)`, but a row's `change_seq` is the seq of its last write, not of
+     * its creation. Rename a notebook after its sections were created and it moves above its own
+     * children, so a client pulling from below both receives the sections first and Room refuses
+     * them with a FOREIGN KEY failure — aborting the transaction, leaving the cursor uncommitted,
+     * and re-pulling the same delta for ever. Within a page, a stable sort by kind is enough for a
+     * two-level hierarchy.
+     *
+     * Sorting cannot help when a parent lands in a *later page* than its child. Such a row is held
+     * back rather than applied: Room would refuse it, and refusing it inside the transaction that
+     * commits the cursor is what turns one straddling row into a device that re-pulls the same
+     * delta for ever. Held transitively — a page whose section is itself waiting for its notebook
+     * waits with it — and released breadth-first the moment its parent is admitted, in this page or
+     * a later one, so a section lands before its pages and they before their ink.
+     *
+     * Filed under the parent rather than kept in a list because of what a first pull into an empty
+     * device can hold: everything under a notebook, section or page last written after its ink. One
+     * account held 49,331 strokes across 97 pages of its delta that way, and checking every held row
+     * against Room again on each of them came to 2.4 million lookups about 58 notebook pages. A held
+     * row now costs nothing until its parent arrives, and Room is asked about each parent once per
+     * page of the delta.
      */
-    private suspend fun parentIsAvailable(change: RemoteChange, applying: Set<String>): Boolean {
-        val parentKind = when (change.kind) {
-            // Neither has a parent: a notebook is the root, and a picture belongs to no one page.
-            SyncKind.Notebook, SyncKind.Attachment -> return true
-            SyncKind.Section -> SyncKind.Notebook
-            SyncKind.Page -> SyncKind.Section
-            SyncKind.PageContent,
-            SyncKind.InkStroke,
-            SyncKind.InkErase,
-            SyncKind.InkMove,
-            -> SyncKind.Page
+    private suspend fun admit(parsed: List<RemoteChange>, held: HeldBack): List<RemoteChange> {
+        val admitted = mutableListOf<RemoteChange>()
+        val admittedKeys = HashSet<String>()
+        val stored = HashMap<String, Boolean>()
+        for (change in parsed.sortedBy { it.kind.rank }) {
+            val parent = parentOf(change)
+            if (parent != null) {
+                val (parentKind, parentId) = parent
+                val parentKey = keyOf(parentKind, parentId)
+                val available = parentKey in admittedKeys ||
+                    stored.getOrPut(parentKey) { isStored(parentKind, parentId) }
+                if (!available) {
+                    held.hold(parentKey, change)
+                    continue
+                }
+            }
+            val ready = ArrayDeque(listOf(change))
+            while (ready.isNotEmpty()) {
+                val next = ready.removeFirst()
+                admitted += next
+                val key = keyOf(next.kind, next.id)
+                admittedKeys += key
+                ready += held.release(key)
+            }
         }
-        val parentID = when (change.kind) {
-            SyncKind.Notebook, SyncKind.Attachment -> return true
-            SyncKind.Section -> change.raw.requiredString("notebookId")
-            SyncKind.Page -> change.raw.requiredString("sectionId")
-            SyncKind.PageContent,
-            SyncKind.InkStroke,
-            SyncKind.InkErase,
-            SyncKind.InkMove,
-            -> change.raw.requiredString("pageId")
-        }
-        if (applying.contains(parentKind.wire + ":" + parentID)) return true
-        return when (parentKind) {
-            SyncKind.Notebook -> notebooks.byId(parentID) != null
-            SyncKind.Section -> sections.byId(parentID) != null
-            SyncKind.Page -> pages.byId(parentID) != null
-            // A stroke is never a parent. An operation's targets are ids it replays against, and one
-            // naming nothing stored is normal: the stroke may arrive later, or have been purged
-            // after seven days on the device that made the operation. Waiting for it would stall the
-            // cursor on a row that can never come.
-            SyncKind.PageContent,
-            SyncKind.InkStroke,
-            SyncKind.InkErase,
-            SyncKind.InkMove,
-            SyncKind.Attachment,
-            -> false
-        }
+        return admitted
     }
+
+    /**
+     * The row [change] cannot be written without, or null for the two kinds that hang from
+     * nothing: a notebook is the root, and a picture belongs to no one page.
+     *
+     * A stroke is never a parent. An operation's targets are ids it replays against, and one naming
+     * nothing stored is normal: the stroke may arrive later, or have been purged after seven days on
+     * the device that made the operation. Waiting for it would stall the cursor on a row that can
+     * never come.
+     */
+    private fun parentOf(change: RemoteChange): Pair<SyncKind, String>? = when (change.kind) {
+        SyncKind.Notebook, SyncKind.Attachment -> null
+        SyncKind.Section -> SyncKind.Notebook to change.raw.requiredString("notebookId")
+        SyncKind.Page -> SyncKind.Section to change.raw.requiredString("sectionId")
+        SyncKind.PageContent,
+        SyncKind.InkStroke,
+        SyncKind.InkErase,
+        SyncKind.InkMove,
+        -> SyncKind.Page to change.raw.requiredString("pageId")
+    }
+
+    /** Whether Room already holds the [kind] row [id]; only ever asked of a kind [parentOf] names. */
+    private suspend fun isStored(kind: SyncKind, id: String): Boolean = when (kind) {
+        SyncKind.Notebook -> notebooks.byId(id) != null
+        SyncKind.Section -> sections.byId(id) != null
+        SyncKind.Page -> pages.byId(id) != null
+        SyncKind.PageContent,
+        SyncKind.InkStroke,
+        SyncKind.InkErase,
+        SyncKind.InkMove,
+        SyncKind.Attachment,
+        -> false
+    }
+
+    /** How [admit] names a row. The kind is part of it because a page and its body share an id. */
+    private fun keyOf(kind: SyncKind, id: String): String = kind.wire + ":" + id
 
     private suspend fun applyPulledChange(remote: RemoteChange) {
         sync.putEntityState(remote.asEntityState())
@@ -1992,7 +2010,7 @@ class HierarchySync(
             documentJson = documentJson,
             inkPoints = inkPoints,
             targetIds = targetIds,
-            raw = raw,
+            raw = if (inkPoints == null) raw else JsonObject(raw - "points"),
         )
     }
 
@@ -2009,15 +2027,14 @@ class HierarchySync(
         val inkPoints: ByteArray?,
         /** The ids an ink operation names, empty for every other kind. */
         val targetIds: List<String>,
+        /**
+         * The server's row, less `points` for the three ink kinds: those are [inkPoints], decoded.
+         *
+         * In memory, because a row can wait in [HeldBack] for the rest of a pull, and the base64
+         * would hold its points a second time for all of that wait.
+         */
         val raw: JsonObject,
     ) {
-        fun asEntityState() = SyncEntityStateEntity(
-            kind = kind.wire,
-            entityId = id,
-            serverVersion = version,
-            serverJson = strippedServerJson(),
-        )
-
         /**
          * The stored copy of the server's row, without the one field that would double the size of
          * the database.
@@ -2028,11 +2045,12 @@ class HierarchySync(
          * as base64 would store every stroke twice at a third again the size — on a page of 9,553
          * strokes that is 7 MB of duplicate, and a notebook may hold 500,000.
          */
-        private fun strippedServerJson(): String = when (kind) {
-            SyncKind.InkStroke, SyncKind.InkErase, SyncKind.InkMove ->
-                JsonObject(raw.filterKeys { it != "points" }).toString()
-            else -> raw.toString()
-        }
+        fun asEntityState() = SyncEntityStateEntity(
+            kind = kind.wire,
+            entityId = id,
+            serverVersion = version,
+            serverJson = raw.toString(),
+        )
     }
 
     @Serializable
@@ -2098,12 +2116,35 @@ class HierarchySync(
     }
 
     private sealed interface IncomingPageResult {
-        data class Applied(
-            val count: Int,
-            val carried: List<RemoteChange>,
-        ) : IncomingPageResult
+        data class Applied(val count: Int) : IncomingPageResult
 
         data class Stopped(val reason: PermanentSyncFailure) : IncomingPageResult
+    }
+
+    /**
+     * Pulled rows whose parent has not reached Room yet, filed under the parent each one waits for,
+     * so a waiting row costs nothing until that parent is admitted — see [admit].
+     */
+    private class HeldBack {
+        private val byParent = HashMap<String, MutableList<RemoteChange>>()
+
+        /** How many rows are waiting. */
+        var size = 0
+            private set
+
+        fun isEmpty(): Boolean = size == 0
+
+        fun hold(parentKey: String, change: RemoteChange) {
+            byParent.getOrPut(parentKey) { mutableListOf() } += change
+            size++
+        }
+
+        /** Takes out every row waiting for [parentKey], in the order they were held. */
+        fun release(parentKey: String): List<RemoteChange> {
+            val released = byParent.remove(parentKey) ?: return emptyList()
+            size -= released.size
+            return released
+        }
     }
 
     /** What making the server hold this batch's pictures did to the batch. */
@@ -2224,7 +2265,7 @@ class HierarchySync(
      *
      * What goes: `page_content`, `page_revisions`, the three ink tables, the derived handwriting
      * cache, and the `attachments` rows and files nothing else on this device reaches. What stays:
-     * the notebook, its sections and its pages — [parentIsAvailable] holds back a pulled row whose
+     * the notebook, its sections and its pages — [admit] holds back a pulled row whose
      * parent is missing and [pullIfNeeded] will not advance the cursor while anything is held, so a
      * deleted `sections` row would stop this device syncing at all, silently. The payload is
      * effectively all of the bytes anyway.
@@ -2238,9 +2279,9 @@ class HierarchySync(
      * devices learn. Second, so the eviction is free to fail without leaving a notebook claiming its
      * bytes are somewhere they are not.
      */
-    suspend fun evictToCloud(notebookId: String): CloudArchiveResult = mutex.withLock {
+    suspend fun evictToCloud(notebookId: String): CloudArchiveResult = serialized {
         val notebook = notebooks.byId(notebookId)
-            ?: return@withLock CloudArchiveResult.UnknownNotebook
+            ?: return@serialized CloudArchiveResult.UnknownNotebook
         evictToCloudLocked(notebook)
     }
 
@@ -2377,15 +2418,15 @@ class HierarchySync(
     suspend fun restoreFromCloud(
         account: SyncAccount,
         notebookId: String,
-    ): CloudArchiveResult = mutex.withLock {
+    ): CloudArchiveResult = serialized {
         val notebook = notebooks.byId(notebookId)
-            ?: return@withLock CloudArchiveResult.UnknownNotebook
-        if (notebook.deletedAt != null) return@withLock CloudArchiveResult.UnknownNotebook
+            ?: return@serialized CloudArchiveResult.UnknownNotebook
+        if (notebook.deletedAt != null) return@serialized CloudArchiveResult.UnknownNotebook
         val deferredLocally = metadata.value(deferredNotebookContentKey(notebookId)) != null
         if (notebook.cloudOnlyAt == null && !deferredLocally) {
-            return@withLock CloudArchiveResult.AlreadyDone
+            return@serialized CloudArchiveResult.AlreadyDone
         }
-        if (sync.state() == null) return@withLock CloudArchiveResult.NoAccount
+        if (sync.state() == null) return@serialized CloudArchiveResult.NoAccount
 
         val wanted = pages.allInNotebook(notebookId).map { it.id }.toSet()
         val pictureRows = mutableMapOf<String, RemoteChange>()
@@ -2401,9 +2442,9 @@ class HierarchySync(
             ) {
                 is ServerResult.Success -> result.value
                 ServerResult.Unauthorized ->
-                    return@withLock CloudArchiveResult.Failed(SyncRunResult.Revoked)
+                    return@serialized CloudArchiveResult.Failed(SyncRunResult.Revoked)
                 is ServerResult.Failed ->
-                    return@withLock CloudArchiveResult.Failed(result.asSyncResult())
+                    return@serialized CloudArchiveResult.Failed(result.asSyncResult())
             }
 
             val parsed = try {
@@ -2413,7 +2454,7 @@ class HierarchySync(
                 // nothing. The next ordinary run still refuses to advance past it, loudly.
                 page.changes.mapNotNull(::parseRemoteChange)
             } catch (malformed: IllegalArgumentException) {
-                return@withLock CloudArchiveResult.Failed(
+                return@serialized CloudArchiveResult.Failed(
                     SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
                 )
             }
@@ -2457,7 +2498,7 @@ class HierarchySync(
                 throw cancelled
             } catch (failed: Exception) {
                 Log.e(TAG, "Could not write a replayed change for notebook $notebookId", failed)
-                return@withLock CloudArchiveResult.Failed(
+                return@serialized CloudArchiveResult.Failed(
                     SyncRunResult.Failed(PermanentSyncFailure.LocalData),
                 )
             }
@@ -2466,7 +2507,7 @@ class HierarchySync(
             cursor = page.cursor
             hasMore = page.hasMore
             if (hasMore && page.changes.isEmpty()) {
-                return@withLock CloudArchiveResult.Failed(
+                return@serialized CloudArchiveResult.Failed(
                     SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
                 )
             }
@@ -2474,7 +2515,7 @@ class HierarchySync(
 
         if (hasMore) {
             Log.e(TAG, "Replay for notebook $notebookId did not finish in $MAX_REPLAY_PAGES pages")
-            return@withLock CloudArchiveResult.Failed(
+            return@serialized CloudArchiveResult.Failed(
                 SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
             )
         }
@@ -2495,7 +2536,7 @@ class HierarchySync(
             throw cancelled
         } catch (failed: Exception) {
             Log.e(TAG, "Could not write the pictures replayed for notebook $notebookId", failed)
-            return@withLock CloudArchiveResult.Failed(
+            return@serialized CloudArchiveResult.Failed(
                 SyncRunResult.Failed(PermanentSyncFailure.LocalData),
             )
         }
