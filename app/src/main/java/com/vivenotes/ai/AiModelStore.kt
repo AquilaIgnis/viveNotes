@@ -6,9 +6,9 @@ import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -51,7 +51,7 @@ data class AiModelsState(
     val formulaLatex: AiModelInstallState = AiModelInstallState.Verifying,
     /** UniMERNet-T's package. */
     val uniMerNet: AiModelInstallState = AiModelInstallState.Verifying,
-    /** The model the Math button runs — see [startingFormulaEngine]. */
+    /** The model the Math button runs — see [formulaEngineInUse]. */
     val formulaEngine: FormulaEngine = DEFAULT_FORMULA_ENGINE,
 ) {
     fun formula(engine: FormulaEngine): AiModelInstallState = when (engine) {
@@ -81,15 +81,15 @@ data class AiModelsState(
  * OCR is an app asset, so it is already available offline. Each formula model is a download of
  * over 100 MB, installed as one package (graphs plus tokenizer) only after every staged file
  * verifies. Which packages are installed is derived from those artifacts and their verification
- * markers, never from a preference. The preferences hold only which model is in use and whether the
- * user has ever deleted one.
+ * markers, never from a preference. The preferences hold only which model the user picked, if they
+ * ever did, and which ones they have deleted.
  */
 class AiModelStore internal constructor(
     context: Context,
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val downloader: VerifiedArtifactDownloader = VerifiedArtifactDownloader(),
     /**
-     * Whether a first run fetches the default formula model by itself.
+     * Whether a launch without the default formula model fetches it by itself.
      *
      * A parameter rather than a constant so a test can build a store that will never reach for the
      * network. Debug builds do not reach it anyway — they carry UniMERNet-T in `ai/dev` and resolve
@@ -112,25 +112,32 @@ class AiModelStore internal constructor(
 
     private val downloads = mutableMapOf<FormulaEngine, Job>()
 
+    /** The model the user tapped Use on, if they ever did — [formulaEngineInUse]'s `chosen`. */
+    @Volatile
+    private var chosenFormulaEngine: FormulaEngine? = null
+
     init {
         scope.launch {
             cleanupStaleDownloads()
             val textState = verifyBundledTextModel()
             val formula = FormulaEngine.entries.associateWith { resolvePackage(packages.getValue(it)) }
             val preferences = runCatching { appContext.aiPreferences.data.first() }.getOrNull()
-            val stored = preferences?.get(FORMULA_ENGINE_KEY)
-                ?.let { name -> FormulaEngine.entries.firstOrNull { it.name == name } }
+            val chosen = preferences?.get(FORMULA_ENGINE_KEY)?.let(::formulaEngineNamed)
+            val deleted = preferences?.get(DELETED_FORMULA_ENGINES_KEY).orEmpty()
+                .mapNotNullTo(mutableSetOf(), ::formulaEngineNamed)
             val installed = formula.filterValues { it == AiModelInstallState.Installed }.keys
+            chosenFormulaEngine = chosen
             _state.value = AiModelsState(
                 handwritingText = textState,
                 formulaLatex = formula.getValue(FormulaEngine.FormulaNetS),
                 uniMerNet = formula.getValue(FormulaEngine.UniMerNetTiny),
-                formulaEngine = startingFormulaEngine(stored, installed),
+                formulaEngine = formulaEngineInUse(chosen, installed),
             )
-            // Formula recognition is a headline feature, not an extra, so a first run fetches the
-            // default model rather than waiting to be asked. [formulaEngineToFetch] says when not
-            // to, and [autoDownloadAllowed] says when the network is fit for it.
-            val fetch = formulaEngineToFetch(installed, preferences?.get(FORMULA_DELETED_KEY) == true)
+            // Formula recognition is a headline feature, not an extra, so a launch without the
+            // default model fetches it rather than waiting to be asked — an upgrade that has only
+            // FormulaNet-S included. [formulaEngineToFetch] says when not to, and
+            // [autoDownloadAllowed] says when the network is fit for it.
+            val fetch = formulaEngineToFetch(installed, deleted)
             if (fetch != null &&
                 formula.getValue(fetch) == AiModelInstallState.NotInstalled &&
                 autoDownloadAllowed()
@@ -201,11 +208,7 @@ class AiModelStore internal constructor(
             _state.update { current ->
                 val next = current.withFormula(engine, AiModelInstallState.Installed)
                 next.copy(
-                    formulaEngine = formulaEngineAfterInstall(
-                        selected = current.formulaEngine,
-                        justInstalled = engine,
-                        installed = next.installedFormulaEngines,
-                    ),
+                    formulaEngine = formulaEngineInUse(chosenFormulaEngine, next.installedFormulaEngines),
                 )
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -243,6 +246,7 @@ class AiModelStore internal constructor(
     /** Which model the Math button runs. Only an installed model can be chosen. */
     fun selectFormulaEngine(engine: FormulaEngine) {
         if (_state.value.formula(engine) != AiModelInstallState.Installed) return
+        chosenFormulaEngine = engine
         _state.update { it.copy(formulaEngine = engine) }
         scope.launch {
             appContext.aiPreferences.edit { it[FORMULA_ENGINE_KEY] = engine.name }
@@ -257,7 +261,7 @@ class AiModelStore internal constructor(
      * unlink. A deleted model in use hands the Math button to the other one if it is installed —
      * [formulaEngineAfterDelete].
      *
-     * The delete is remembered, and from then on no first run fetches a model unasked.
+     * The delete is remembered, and from then on no launch fetches that model unasked.
      * In a debug build the bundled copy comes back on the next launch, as FormulaNet's always has.
      */
     fun delete(engine: FormulaEngine) {
@@ -274,7 +278,9 @@ class AiModelStore internal constructor(
         }
         scope.launch {
             packages.getValue(engine).directory.deleteRecursively()
-            appContext.aiPreferences.edit { it[FORMULA_DELETED_KEY] = true }
+            appContext.aiPreferences.edit {
+                it[DELETED_FORMULA_ENGINES_KEY] = it[DELETED_FORMULA_ENGINES_KEY].orEmpty() + engine.name
+            }
         }
     }
 
@@ -585,8 +591,11 @@ class AiModelStore internal constructor(
         private const val LEGACY_UNIMERNET_DIRECTORY = "unimernet-tiny-dev"
         private val FORMULA_ENGINE_KEY = stringPreferencesKey("formula_engine")
 
-        /** Set the first time the user deletes a formula model — see [formulaEngineToFetch]. */
-        private val FORMULA_DELETED_KEY = booleanPreferencesKey("formula_model_deleted")
+        /** Every formula model the user has deleted, by name — see [formulaEngineToFetch]. */
+        private val DELETED_FORMULA_ENGINES_KEY = stringSetPreferencesKey("deleted_formula_models")
+
+        private fun formulaEngineNamed(name: String): FormulaEngine? =
+            FormulaEngine.entries.firstOrNull { it.name == name }
 
         /**
          * The project's own release of the two graphs below. A model release, tagged apart from the

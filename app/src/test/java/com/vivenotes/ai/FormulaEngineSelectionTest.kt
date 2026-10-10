@@ -16,28 +16,44 @@ class FormulaEngineSelectionTest {
 
     @Test
     fun aFreshInstallStartsOnTheDefaultAndFetchesIt() {
-        assertEquals(uniMerNet, startingFormulaEngine(stored = null, installed = emptySet()))
-        assertEquals(uniMerNet, formulaEngineToFetch(installed = emptySet(), userDeletedOne = false))
+        assertEquals(uniMerNet, formulaEngineInUse(chosen = null, installed = emptySet()))
+        assertEquals(uniMerNet, formulaEngineToFetch(installed = emptySet(), deleted = emptySet()))
     }
 
-    /** Someone who had FormulaNet-S before UniMERNet-T existed keeps reading with it. */
+    /**
+     * Someone who had FormulaNet-S before UniMERNet-T existed reads with it only until the default
+     * arrives, then moves to it. FormulaNet-S stays installed, as the optional model.
+     */
     @Test
-    fun anUpgradeWithFormulaNetKeepsItAndFetchesNothing() {
-        assertEquals(formulaNet, startingFormulaEngine(stored = null, installed = setOf(formulaNet)))
-        assertNull(formulaEngineToFetch(installed = setOf(formulaNet), userDeletedOne = false))
+    fun anUpgradeWithFormulaNetFetchesTheDefaultAndMovesToIt() {
+        assertEquals(formulaNet, formulaEngineInUse(chosen = null, installed = setOf(formulaNet)))
+        assertEquals(uniMerNet, formulaEngineToFetch(installed = setOf(formulaNet), deleted = emptySet()))
+        assertEquals(uniMerNet, formulaEngineInUse(chosen = null, installed = setOf(uniMerNet, formulaNet)))
     }
 
     @Test
-    fun aStoredChoiceWinsOnlyWhileItsModelIsInstalled() {
+    fun anInstalledDefaultIsNotFetchedAgain() {
+        assertNull(formulaEngineToFetch(installed = setOf(uniMerNet), deleted = emptySet()))
+    }
+
+    @Test
+    fun aChoiceWinsOnlyWhileItsModelIsInstalled() {
         val both = setOf(uniMerNet, formulaNet)
-        assertEquals(formulaNet, startingFormulaEngine(stored = formulaNet, installed = both))
-        assertEquals(uniMerNet, startingFormulaEngine(stored = formulaNet, installed = setOf(uniMerNet)))
+        assertEquals(formulaNet, formulaEngineInUse(chosen = formulaNet, installed = both))
+        assertEquals(uniMerNet, formulaEngineInUse(chosen = formulaNet, installed = setOf(uniMerNet)))
     }
 
-    /** A delete is a no, and the next Wi-Fi launch must not undo it. */
+    /** Deleting the default is a no, and the next Wi-Fi launch must not undo it. */
     @Test
-    fun nothingIsFetchedAfterTheUserDeletesAModel() {
-        assertNull(formulaEngineToFetch(installed = emptySet(), userDeletedOne = true))
+    fun theDefaultIsNotFetchedAfterTheUserDeletesIt() {
+        assertNull(formulaEngineToFetch(installed = emptySet(), deleted = setOf(uniMerNet)))
+        assertNull(formulaEngineToFetch(installed = setOf(formulaNet), deleted = setOf(uniMerNet)))
+    }
+
+    /** FormulaNet-S is the optional model, so deleting it says nothing about the default. */
+    @Test
+    fun deletingFormulaNetDoesNotStopTheDefault() {
+        assertEquals(uniMerNet, formulaEngineToFetch(installed = emptySet(), deleted = setOf(formulaNet)))
     }
 
     @Test
@@ -57,20 +73,12 @@ class FormulaEngineSelectionTest {
         )
     }
 
+    /** A model that finishes installing is in use unless the user picked the other one. */
     @Test
-    fun aFinishedDownloadTakesOverOnlyWhenTheSelectionHasNothingBehindIt() {
-        assertEquals(
-            formulaNet,
-            formulaEngineAfterInstall(selected = uniMerNet, justInstalled = formulaNet, installed = setOf(formulaNet)),
-        )
-        assertEquals(
-            uniMerNet,
-            formulaEngineAfterInstall(
-                selected = uniMerNet,
-                justInstalled = formulaNet,
-                installed = setOf(uniMerNet, formulaNet),
-            ),
-        )
+    fun aFinishedDownloadTakesOverUnlessTheUserPickedTheOther() {
+        assertEquals(formulaNet, formulaEngineInUse(chosen = null, installed = setOf(formulaNet)))
+        assertEquals(formulaNet, formulaEngineInUse(chosen = formulaNet, installed = setOf(uniMerNet, formulaNet)))
+        assertEquals(uniMerNet, formulaEngineInUse(chosen = uniMerNet, installed = setOf(uniMerNet, formulaNet)))
     }
 
     @Test

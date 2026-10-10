@@ -21,7 +21,7 @@ import java.util.Collections
  *
  * An install fetches the default model by itself on an unmetered connection, because formula
  * recognition is a headline feature rather than an extra. The mistake that can make is fetching
- * over 100 MB for somebody whose Math button already works, so that is what this pins. The rules
+ * over 100 MB for somebody who already has the default, so that is what this pins. The rules
  * themselves are `FormulaEngineSelectionTest`'s.
  */
 @RunWith(AndroidJUnit4::class)
@@ -48,13 +48,13 @@ class AiModelStoreTest {
     }
 
     /**
-     * A device with a formula model installed is never fetched for again.
+     * A device with the default formula model installed is never fetched for again.
      *
      * A debug build carries UniMERNet-T in the `debug` source set, so the store hydrates it and
      * resolves to Installed — the state the eager download must decline to act on. If it stops
      * declining, this test spends 113 MB finding out.
      *
-     * Having a model is a precondition, not the claim: the `.onnx` files in
+     * Having the default is a precondition, not the claim: the `.onnx` files in
      * `app/src/debug/assets/ai/dev/` are gitignored, so a fresh clone reaches this with nothing to
      * hydrate. The subject is the line below it.
      */
@@ -66,10 +66,10 @@ class AiModelStoreTest {
         val state = settle(store)
 
         assumeTrue(
-            "no bundled formula package on this machine — see app/src/debug/assets/ai/dev/",
-            state.installedFormulaEngines.isNotEmpty(),
+            "no bundled UniMERNet-T package on this machine — see app/src/debug/assets/ai/dev/",
+            state.formula(DEFAULT_FORMULA_ENGINE) == AiModelInstallState.Installed,
         )
-        assertTrue("reached for $attempted despite a model being installed", attempted.isEmpty())
+        assertTrue("reached for $attempted despite the default being installed", attempted.isEmpty())
     }
 
     /**

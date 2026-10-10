@@ -2,7 +2,7 @@ package com.vivenotes.ai
 
 /**
  * Which graph turns a formula bitmap into LaTeX. Listed best first, which is the order the AI pane
- * shows them in and the order [startingFormulaEngine] falls back through.
+ * shows them in and the order [formulaEngineInUse] falls back through.
  *
  * `simulations/formula-models` measured both on the Recognition Test page. UniMERNet-T read
  * ordinary handwriting exactly more often, 66 of 88 rasters against 54. It never read the
@@ -22,43 +22,38 @@ enum class FormulaEngine(val stemPx: Float) {
 /** UniMERNet-T's measured best stem; see [FormulaEngine]. */
 internal const val UNIMERNET_STEM_PX = 4f
 
-/** The model a fresh install uses, and the one its first run fetches unasked. */
+/** The model everyone ends up on unless they pick another, and the one a launch fetches unasked. */
 internal val DEFAULT_FORMULA_ENGINE = FormulaEngine.UniMerNetTiny
 
 /**
- * The model the Math button starts on.
+ * The model the Math button runs, at launch and again after every install.
  *
- * That is the stored choice if that model is still installed. Otherwise it is the best installed
- * model, and otherwise the default, which the first run then fetches. Someone upgrading with
- * FormulaNet-S installed and no stored choice keeps reading with it.
+ * That is the user's own choice while its model is installed. A choice is made only by tapping Use,
+ * never by a default. Otherwise it is the best installed model, and otherwise the default, which the
+ * launch then fetches. So someone upgrading with only FormulaNet-S keeps reading with it until
+ * UniMERNet-T arrives, then moves to it. Someone who picked FormulaNet-S stays on it.
  */
-internal fun startingFormulaEngine(
-    stored: FormulaEngine?,
+internal fun formulaEngineInUse(
+    chosen: FormulaEngine?,
     installed: Set<FormulaEngine>,
 ): FormulaEngine =
-    stored?.takeIf { it in installed }
+    chosen?.takeIf { it in installed }
         ?: FormulaEngine.entries.firstOrNull { it in installed }
         ?: DEFAULT_FORMULA_ENGINE
 
 /**
- * What a first run fetches without being asked: the default, and only while no formula model is
- * installed at all and the user has never deleted one.
+ * What a launch fetches without being asked: the default, whenever it is not installed and the
+ * user has never deleted it.
  *
- * Installed-at-all because someone already reading formulas with FormulaNet-S has a working Math
- * button, and 113 MB they did not ask for is a cost. Never-deleted because a delete is the user
- * saying no. Fetching the model again on the next Wi-Fi launch would undo it.
+ * FormulaNet-S being installed does not stop it. FormulaNet-S is the optional model, and someone
+ * who had it from before UniMERNet-T existed belongs on the default like everyone else. Only
+ * deleting the default itself is a no — deleting FormulaNet-S says nothing about UniMERNet-T — and
+ * fetching it again on the next Wi-Fi launch would undo that no.
  */
 internal fun formulaEngineToFetch(
     installed: Set<FormulaEngine>,
-    userDeletedOne: Boolean,
-): FormulaEngine? = DEFAULT_FORMULA_ENGINE.takeIf { installed.isEmpty() && !userDeletedOne }
-
-/** A model that finishes installing takes over only if the selected one is not installed. */
-internal fun formulaEngineAfterInstall(
-    selected: FormulaEngine,
-    justInstalled: FormulaEngine,
-    installed: Set<FormulaEngine>,
-): FormulaEngine = if (selected in installed) selected else justInstalled
+    deleted: Set<FormulaEngine>,
+): FormulaEngine? = DEFAULT_FORMULA_ENGINE.takeIf { it !in installed && it !in deleted }
 
 /**
  * Deleting the model in use hands the Math button to the best one still installed. With none
