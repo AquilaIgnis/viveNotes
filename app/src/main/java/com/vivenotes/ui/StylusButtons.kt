@@ -58,10 +58,10 @@ private fun NotesViewModel.boundStylusAction(keyCode: Int): StylusAction? =
         ?.takeUnless { it == StylusAction.None }
 
 /** What the pen said it was — already counted, never inferred from timing here. */
-enum class StylusPress(val label: String) {
-    Single("Single click"),
-    Double("Double click"),
-    Triple("Triple click"),
+enum class StylusPress {
+    Single,
+    Double,
+    Triple,
 }
 
 /** Which of the three bindings a press reads. */

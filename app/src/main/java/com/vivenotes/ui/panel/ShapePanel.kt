@@ -1,5 +1,6 @@
 package com.vivenotes.ui.panel
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,11 +42,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.automaticInkFor
@@ -120,7 +123,7 @@ fun ColumnScope.ShapePanelContent(
     Spacer(Modifier.height(4.dp))
     PanelSlider(
         field = "Border width",
-        label = "Border width",
+        label = stringResource(R.string.panel_border_width),
         value = shape.borderWidth,
         range = ShapeSettings.MIN_BORDER_WIDTH..ShapeSettings.MAX_BORDER_WIDTH,
         onChange = { onChange(shape.copy(borderWidth = it)) },
@@ -129,7 +132,7 @@ fun ColumnScope.ShapePanelContent(
 
     Spacer(Modifier.height(2.dp))
     Text(
-        text = "Border color",
+        text = stringResource(R.string.panel_border_color),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.padding(vertical = 2.dp),
@@ -158,7 +161,7 @@ fun ColumnScope.ShapePanelContent(
     // One button, not a button and a row (2026-08-07, by request). The palette row that used to sit
     // under this is gone: a fill is one value and the control shows it, the way the object toolkit's
     // fill button already did. Everything the row could reach is a tap further in, on the wheel.
-    PanelSetting(label = "Fill color") {
+    PanelSetting(label = stringResource(R.string.panel_fill_color)) {
         FillSwatch(
             fill = shape.fillArgb,
             // Where the wheel opens when there is no fill to open on. The border is the only other
@@ -198,6 +201,8 @@ internal fun FillSwatch(
     noFillTag: String = ShapePanelTags.NO_FILL,
 ) {
     var wheelOpen by remember { mutableStateOf(false) }
+    val fillColor = stringResource(R.string.panel_fill_color)
+    val swatchDescription = if (fill == null) stringResource(R.string.panel_no_fill) else fillColor
     // What the wheel has been left on, as in [ColorSwatches]: null until it is touched, which is what
     // makes opening the picker and thinking better of it cost nothing.
     var mixed by remember { mutableStateOf<Int?>(null) }
@@ -224,7 +229,7 @@ internal fun FillSwatch(
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp))
                 .clickable { wheelOpen = true }
                 .semantics {
-                    contentDescription = if (fill == null) "No fill" else "Fill color"
+                    contentDescription = swatchDescription
                 },
             contentAlignment = Alignment.Center,
         ) {
@@ -245,7 +250,7 @@ internal fun FillSwatch(
         FloatingSettingsPanel(
             expanded = wheelOpen,
             onDismissRequest = { closeWheel() },
-            title = "Fill color",
+            title = fillColor,
         ) {
             NoFillEntry(selected = fill == null, tag = noFillTag, onClick = { clearFill() })
             Spacer(Modifier.height(10.dp))
@@ -284,7 +289,7 @@ private fun NoFillEntry(selected: Boolean, tag: String, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(10.dp))
         Text(
-            text = "No fill",
+            text = stringResource(R.string.panel_no_fill),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -410,6 +415,7 @@ private fun ShapeChip(kind: ShapeKind, selected: Boolean, onPick: () -> Unit) {
     val stroke = with(LocalDensity.current) { CHIP_STROKE.toPx() }
     val inset = with(LocalDensity.current) { CHIP_INSET.toPx() }
     val extent = with(LocalDensity.current) { CHIP_SIZE.toPx() } - inset * 2f
+    val description = stringResource(kind.label)
     // Traced once per kind and size rather than on every draw: the grid redraws whenever the
     // selection moves, and re-deriving every shape on the page for a highlight change is work for
     // nothing.
@@ -425,7 +431,7 @@ private fun ShapeChip(kind: ShapeKind, selected: Boolean, onPick: () -> Unit) {
             )
             .selectable(selected = selected, onClick = onPick)
             .semantics {
-                contentDescription = kind.label
+                contentDescription = description
                 this.selected = selected
             },
     ) {
@@ -445,6 +451,7 @@ private fun PageDots(current: Int, count: Int, onPick: (Int) -> Unit) {
     ) {
         repeat(count) { index ->
             val active = index == current
+            val description = stringResource(R.string.shape_page, index + 1)
             Box(
                 modifier = Modifier
                     .padding(horizontal = 5.dp)
@@ -460,7 +467,7 @@ private fun PageDots(current: Int, count: Int, onPick: (Int) -> Unit) {
                     )
                     .clickable { onPick(index) }
                     .semantics {
-                        contentDescription = "Shape page ${index + 1}"
+                        contentDescription = description
                         selected = active
                     },
             )
@@ -539,3 +546,25 @@ private val SWIPE_THRESHOLD: Dp = 28.dp
 private val CHIP_SIZE: Dp = 44.dp
 private val CHIP_INSET: Dp = 9.dp
 private val CHIP_STROKE: Dp = 1.6.dp
+
+@get:StringRes
+private val ShapeKind.label: Int
+    get() = when (this) {
+        ShapeKind.Line -> R.string.shape_line
+        ShapeKind.Arrow -> R.string.shape_arrow
+        ShapeKind.Rectangle -> R.string.shape_rectangle
+        ShapeKind.RoundedRectangle -> R.string.shape_rounded_rectangle
+        ShapeKind.Ellipse -> R.string.shape_ellipse
+        ShapeKind.Triangle -> R.string.shape_triangle
+        ShapeKind.RightTriangle -> R.string.shape_right_triangle
+        ShapeKind.Diamond -> R.string.shape_diamond
+        ShapeKind.Pentagon -> R.string.shape_pentagon
+        ShapeKind.Hexagon -> R.string.shape_hexagon
+        ShapeKind.L -> R.string.shape_l
+        ShapeKind.Cube -> R.string.shape_cube
+        ShapeKind.Pyramid -> R.string.shape_pyramid
+        ShapeKind.Wedge -> R.string.shape_wedge
+        ShapeKind.Sphere -> R.string.shape_sphere
+        ShapeKind.Cone -> R.string.shape_cone
+        ShapeKind.Cylinder -> R.string.shape_cylinder
+    }

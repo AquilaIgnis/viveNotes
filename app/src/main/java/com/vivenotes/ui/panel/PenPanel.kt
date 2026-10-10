@@ -1,5 +1,6 @@
 package com.vivenotes.ui.panel
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,10 +40,12 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.PenKind
@@ -120,10 +123,8 @@ fun ColumnScope.PenPanelContent(
     Spacer(Modifier.height(4.dp))
 
     PanelSetting(
-        label = "Hold for straight line",
-        info = "Draw a line and pause with the pen still down for a second: the stroke is " +
-            "replaced by a straight line you can move and resize. Lift without pausing and the " +
-            "freehand stroke stays. Nearly horizontal and nearly vertical lines are levelled.",
+        label = stringResource(R.string.pen_hold_for_straight_line),
+        info = stringResource(R.string.pen_hold_for_straight_line_info),
     ) {
         PanelToggle("Hold for straight line", pen.holdForStraightLine) {
             onChange(pen.copy(holdForStraightLine = it))
@@ -132,7 +133,7 @@ fun ColumnScope.PenPanelContent(
    
     PanelSlider(
         field = "Thickness",
-        label = "Thickness",
+        label = stringResource(R.string.panel_thickness),
         value = pen.thickness,
         range = PenPreset.MIN_THICKNESS..PenPreset.MAX_THICKNESS,
         onChange = { onChange(pen.copy(thickness = it)) },
@@ -147,9 +148,8 @@ fun ColumnScope.PenPanelContent(
     // a pressure control on it is not a setting turned off, it is a setting that does not exist.
     if (pen.kind != PenKind.Fountain) {
         PanelSetting(
-            label = "Pressure sensitivity",
-            info = "How much harder pressing thickens the line. 0 turns off pressure response; " +
-                "the broad nib still makes downstrokes and cross-strokes different.",
+            label = stringResource(R.string.pen_pressure),
+            info = stringResource(R.string.pen_pressure_info),
         ) {
             PanelStepper("Pressure sensitivity", pen.pressure, 0..PenPreset.MAX_PRESSURE) {
                 onChange(pen.copy(pressure = it))
@@ -157,9 +157,8 @@ fun ColumnScope.PenPanelContent(
         }
     }
     PanelSetting(
-        label = "Stabilization",
-        info = "Smooths out shake. A little goes a long way — high settings make the ink lag behind " +
-            "the pen.",
+        label = stringResource(R.string.pen_stabilization),
+        info = stringResource(R.string.pen_stabilization_info),
     ) {
         PanelStepper("Stabilization", pen.stabilization, 0..PenPreset.MAX_STABILIZATION) {
             onChange(pen.copy(stabilization = it))
@@ -175,13 +174,13 @@ fun ColumnScope.PenPanelContent(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
-            text = "Color",
+            text = stringResource(R.string.panel_color),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Icon(
             imageVector = MaterialSymbols.Add,
-            contentDescription = "Add color",
+            contentDescription = stringResource(R.string.pen_add_color),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .size(20.dp)
@@ -226,6 +225,7 @@ internal fun LineTypePicker(
     ) {
         LineType.entries.forEach { lineType ->
             val selected = current == lineType
+            val description = stringResource(R.string.line_type_description, stringResource(lineType.label))
             val lineColor = if (selected) {
                 MaterialTheme.colorScheme.primary
             } else {
@@ -241,7 +241,7 @@ internal fun LineTypePicker(
                     )
                     .selectable(selected = selected, onClick = { onPick(lineType) })
                     .semantics {
-                        contentDescription = "${lineType.label} line"
+                        contentDescription = description
                         this.selected = selected
                     },
                 contentAlignment = Alignment.Center,
@@ -350,7 +350,7 @@ private fun PenKindCard(
     ) {
         Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
         Spacer(Modifier.height(3.dp))
-        Text(text = kind.label, style = MaterialTheme.typography.labelMedium, color = content)
+        Text(text = stringResource(kind.label), style = MaterialTheme.typography.labelMedium, color = content)
     }
 }
 
@@ -411,7 +411,7 @@ internal fun ColorSwatches(
                 // to mark it.
                 selected = current !in palette,
                 tag = customTag,
-                description = "Custom color",
+                description = stringResource(R.string.panel_custom_color),
                 onClick = { wheelOpen = true },
             ) {
                 drawRect(Brush.sweepGradient(HUE_STOPS, center))
@@ -430,7 +430,7 @@ internal fun ColorSwatches(
             FloatingSettingsPanel(
                 expanded = wheelOpen,
                 onDismissRequest = { closeWheel() },
-                title = "Custom color",
+                title = stringResource(R.string.panel_custom_color),
             ) {
                 ColorWheelContent(
                     initialArgb = current,
@@ -494,3 +494,18 @@ internal val SWATCH_SIZE = 26.dp
 
 /** Placed but not wired, so it holds the reference's layout without pretending to work. */
 internal const val INERT_ALPHA = 0.42f
+
+@get:StringRes
+private val PenKind.label: Int
+    get() = when (this) {
+        PenKind.Fountain -> R.string.pen_kind_fountain
+        PenKind.Calligraphy -> R.string.pen_kind_calligraphy
+    }
+
+@get:StringRes
+private val LineType.label: Int
+    get() = when (this) {
+        LineType.Solid -> R.string.line_type_solid
+        LineType.Dashed -> R.string.line_type_dashed
+        LineType.Dotted -> R.string.line_type_dotted
+    }

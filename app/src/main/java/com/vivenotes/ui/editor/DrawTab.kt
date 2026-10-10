@@ -23,7 +23,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
@@ -141,13 +143,13 @@ internal fun DrawTab(
     ) {
         RibbonButton(
             icon = MaterialSymbols.Undo,
-            label = "Undo",
+            label = stringResource(R.string.draw_undo),
             enabled = canUndo,
             onClick = actions.undo,
         )
         RibbonButton(
             icon = MaterialSymbols.Redo,
-            label = "Redo",
+            label = stringResource(R.string.draw_redo),
             enabled = canRedo,
             onClick = actions.redo,
         )
@@ -194,7 +196,7 @@ internal fun DrawTab(
         Box(Modifier.testTag(DrawTags.LASSO)) {
             RibbonButton(
                 icon = MaterialSymbols.LassoSelect,
-                label = "Lasso",
+                label = stringResource(R.string.draw_lasso),
                 active = tool == DrawTool.Lasso,
                 onClick = { actions.selectTool(DrawTool.Lasso) },
             )
@@ -207,7 +209,7 @@ internal fun DrawTab(
         Box(Modifier.testTag(DrawTags.INSERT_SPACE)) {
             RibbonButton(
                 icon = MaterialSymbols.Expand,
-                label = "Insert space",
+                label = stringResource(R.string.draw_insert_space),
                 active = tool == DrawTool.InsertSpace,
                 enabled = pageOpen,
                 onClick = { actions.selectTool(DrawTool.InsertSpace) },
@@ -240,7 +242,7 @@ internal fun DrawTab(
             enabled = pageOpen,
             active = tool == DrawTool.Equation,
             tag = EquationTags.OBJECT,
-            label = "Equation",
+            label = stringResource(R.string.draw_equation),
             onSubmit = { latex, measured -> actions.armEquation(latex, measured) },
         )
 
@@ -263,7 +265,7 @@ internal fun DrawTab(
             Box(Modifier.testTag(DrawTags.CALCULATOR)) {
                 RibbonButton(
                     icon = MaterialSymbols.Calculate,
-                    label = if (calculatorOpen) "Close calculator" else "Calculator (experimental)",
+                    label = stringResource(if (calculatorOpen) R.string.draw_calculator_close else R.string.draw_calculator),
                     active = calculatorOpen,
                     onClick = actions.toggleCalculator,
                 )
@@ -299,7 +301,7 @@ private fun HighlighterButton(
 
     val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        HoverLabel("Highlighter") {
+        HoverLabel(stringResource(R.string.draw_highlighter)) {
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -320,7 +322,7 @@ private fun HighlighterButton(
             ) {
                 Icon(
                     imageVector = marker,
-                    contentDescription = "Highlighter",
+                    contentDescription = stringResource(R.string.draw_highlighter),
                     tint = swatch,
                     modifier = Modifier
                         .size(19.dp)
@@ -332,7 +334,7 @@ private fun HighlighterButton(
         FloatingSettingsPanel(
             expanded = settingsOpen,
             onDismissRequest = onDismiss,
-            title = "Highlighter",
+            title = stringResource(R.string.draw_highlighter),
         ) {
             HighlighterPanelContent(settings = settings, onChange = onChange)
         }
@@ -358,8 +360,9 @@ private fun RulerButton(
     onDismiss: () -> Unit,
     onChange: (RulerSettings) -> Unit,
 ) {
+    val rulerLabel = stringResource(if (out) R.string.draw_ruler_put_away else R.string.draw_ruler)
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        HoverLabel(if (out) "Put the ruler away" else "Ruler") {
+        HoverLabel(rulerLabel) {
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -382,7 +385,7 @@ private fun RulerButton(
             ) {
                 Icon(
                     imageVector = MaterialSymbols.Straighten,
-                    contentDescription = if (out) "Put the ruler away" else "Ruler",
+                    contentDescription = rulerLabel,
                     tint = if (out) {
                         MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
@@ -396,7 +399,7 @@ private fun RulerButton(
         FloatingSettingsPanel(
             expanded = settingsOpen,
             onDismissRequest = onDismiss,
-            title = "Ruler",
+            title = stringResource(R.string.draw_ruler),
         ) {
             RulerPanelContent(settings = settings, onChange = onChange)
         }
@@ -418,7 +421,7 @@ private fun EraserButton(
     val icons = LocalRibbonIcons.current
     val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        HoverLabel("Eraser") {
+        HoverLabel(stringResource(R.string.draw_eraser)) {
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -439,7 +442,7 @@ private fun EraserButton(
             ) {
                 Icon(
                     imageVector = if (selected) icons.active.eraser else icons.idle.eraser,
-                    contentDescription = "Eraser",
+                    contentDescription = stringResource(R.string.draw_eraser),
                     tint = Color.Unspecified,
                     modifier = Modifier.size(18.dp),
                 )
@@ -449,7 +452,7 @@ private fun EraserButton(
         FloatingSettingsPanel(
             expanded = settingsOpen,
             onDismissRequest = onDismiss,
-            title = "Eraser",
+            title = stringResource(R.string.draw_eraser),
         ) {
             EraserPanelContent(settings = settings, onChange = onChange)
         }
@@ -478,10 +481,11 @@ private fun PenButton(
 ) {
     val swatch = Color(pen.colorArgb)
     val stylus = MaterialSymbols.Stylus
+    val penLabel = stringResource(R.string.draw_pen, index + 1)
 
     val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        HoverLabel("Pen ${index + 1}") {
+        HoverLabel(penLabel) {
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -504,7 +508,7 @@ private fun PenButton(
             ) {
                 Icon(
                     imageVector = stylus,
-                    contentDescription = "Pen ${index + 1}",
+                    contentDescription = penLabel,
                     tint = swatch,
                     modifier = Modifier
                         .size(19.dp)
@@ -516,7 +520,7 @@ private fun PenButton(
         FloatingSettingsPanel(
             expanded = settingsOpen,
             onDismissRequest = onDismiss,
-            title = "Pen ${index + 1}",
+            title = penLabel,
         ) {
             PenPanelContent(
                 pen = pen,

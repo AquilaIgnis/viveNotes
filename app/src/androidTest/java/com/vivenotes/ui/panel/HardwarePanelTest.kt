@@ -89,7 +89,7 @@ class HardwarePanelTest {
         setPanel()
 
         StylusPress.entries.forEach { press ->
-            compose.onNodeWithTag(PanelTags.field(press.label)).assertIsDisplayed()
+            compose.onNodeWithTag(PanelTags.field(press.name)).assertIsDisplayed()
         }
     }
 
@@ -103,9 +103,9 @@ class HardwarePanelTest {
         )
         setPanel()
 
-        compose.onNodeWithText(StylusAction.Pen2.label).assertIsDisplayed()
-        compose.onNodeWithText(StylusAction.Highlighter.label).assertIsDisplayed()
-        compose.onNodeWithText(StylusAction.Undo.label).assertIsDisplayed()
+        compose.onNodeWithText("Pen 2").assertIsDisplayed()
+        compose.onNodeWithText("Highlighter").assertIsDisplayed()
+        compose.onNodeWithText("Undo").assertIsDisplayed()
     }
 
     /**
@@ -116,8 +116,8 @@ class HardwarePanelTest {
     fun pickingAnActionRebindsThatClickCountAndOnlyThatOne() {
         setPanel()
 
-        compose.onNodeWithTag(PanelTags.field(StylusPress.Double.label)).performClick()
-        compose.onNodeWithText(StylusAction.Undo.label).performClick()
+        compose.onNodeWithTag(PanelTags.field(StylusPress.Double.name)).performClick()
+        compose.onNodeWithText("Undo").performClick()
 
         assertEquals(StylusAction.Undo, buttons.double)
         assertEquals(StylusButtonMap().single, buttons.single)
@@ -129,8 +129,8 @@ class HardwarePanelTest {
     fun theUnboundThirdClickCanBeGivenAnAction() {
         setPanel()
 
-        compose.onNodeWithTag(PanelTags.field(StylusPress.Triple.label)).performClick()
-        compose.onNodeWithText(StylusAction.Redo.label).performClick()
+        compose.onNodeWithTag(PanelTags.field(StylusPress.Triple.name)).performClick()
+        compose.onNodeWithText("Redo").performClick()
 
         assertEquals(StylusAction.Redo, buttons.triple)
     }

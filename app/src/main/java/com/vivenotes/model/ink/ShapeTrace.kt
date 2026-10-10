@@ -20,10 +20,10 @@ import kotlinx.serialization.Serializable
  * split. A pen's line type is the same enum used the other way round, as a user preference.
  */
 @Serializable
-enum class LineType(val label: String) {
-    Solid("Solid"),
-    Dashed("Dashed"),
-    Dotted("Dotted"),
+enum class LineType {
+    Solid,
+    Dashed,
+    Dotted,
 }
 
 /** Page 1 of the picker: flat shapes. */
@@ -42,25 +42,25 @@ const val PAGE_SOLID = 1
  * is geometry, and how it is painted belongs to the `Outline.Shape` that carries it.
  */
 @Serializable
-enum class ShapeKind(val label: String, val page: Int) {
-    Line("Line", PAGE_BASIC),
-    Arrow("Arrow", PAGE_BASIC),
-    Rectangle("Rectangle", PAGE_BASIC),
-    RoundedRectangle("Rounded rectangle", PAGE_BASIC),
-    Ellipse("Ellipse", PAGE_BASIC),
-    Triangle("Triangle", PAGE_BASIC),
-    RightTriangle("Right triangle", PAGE_BASIC),
-    Diamond("Diamond", PAGE_BASIC),
-    Pentagon("Pentagon", PAGE_BASIC),
-    Hexagon("Hexagon", PAGE_BASIC),
-    L("L shape", PAGE_BASIC),
+enum class ShapeKind(val page: Int) {
+    Line(PAGE_BASIC),
+    Arrow(PAGE_BASIC),
+    Rectangle(PAGE_BASIC),
+    RoundedRectangle(PAGE_BASIC),
+    Ellipse(PAGE_BASIC),
+    Triangle(PAGE_BASIC),
+    RightTriangle(PAGE_BASIC),
+    Diamond(PAGE_BASIC),
+    Pentagon(PAGE_BASIC),
+    Hexagon(PAGE_BASIC),
+    L(PAGE_BASIC),
 
-    Cube("Cube", PAGE_SOLID),
-    Pyramid("Pyramid", PAGE_SOLID),
-    Wedge("Wedge", PAGE_SOLID),
-    Sphere("Sphere", PAGE_SOLID),
-    Cone("Cone", PAGE_SOLID),
-    Cylinder("Cylinder", PAGE_SOLID),
+    Cube(PAGE_SOLID),
+    Pyramid(PAGE_SOLID),
+    Wedge(PAGE_SOLID),
+    Sphere(PAGE_SOLID),
+    Cone(PAGE_SOLID),
+    Cylinder(PAGE_SOLID),
     ;
 
     val isSolid: Boolean get() = page == PAGE_SOLID

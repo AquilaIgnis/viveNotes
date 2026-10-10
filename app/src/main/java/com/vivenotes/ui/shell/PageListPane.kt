@@ -1,5 +1,6 @@
 package com.vivenotes.ui.shell
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,21 +40,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.db.PageEntity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-enum class PageSort(val label: String) {
-    Manual("Section order"),
-    Alphabetical("By title"),
-    Recent("By date modified"),
+enum class PageSort(@StringRes val label: Int) {
+    Manual(R.string.pages_sort_manual),
+    Alphabetical(R.string.pages_sort_title),
+    Recent(R.string.pages_sort_modified),
 }
 
 internal object PageListTags {
@@ -149,7 +153,7 @@ fun PageListPane(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Add Page",
+                        text = stringResource(R.string.pages_add),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -159,7 +163,7 @@ fun PageListPane(
                     IconButton(onClick = { sortMenuOpen = true }, modifier = Modifier.size(30.dp)) {
                         Icon(
                             imageVector = MaterialSymbols.Sort,
-                            contentDescription = "Sort pages",
+                            contentDescription = stringResource(R.string.pages_sort),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(17.dp),
                         )
@@ -167,7 +171,7 @@ fun PageListPane(
                     DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
                         PageSort.entries.forEach { option ->
                             DropdownMenuItem(
-                                text = { Text(option.label) },
+                                text = { Text(stringResource(option.label)) },
                                 onClick = {
                                     sort = option
                                     sortMenuOpen = false
@@ -191,7 +195,10 @@ fun PageListPane(
                     handle = if (sort == PageSort.Manual) {
                         {
                             DragHandle(
-                                description = "Reorder ${page.title.ifBlank { "Untitled page" }}",
+                                description = stringResource(
+                                    R.string.rail_reorder,
+                                    page.title.ifBlank { stringResource(R.string.pages_untitled) },
+                                ),
                                 modifier = Modifier
                                     .testTag(PageListTags.dragHandle(page.id))
                                     .reorderHandle(reorder, page.id),
@@ -274,7 +281,7 @@ private fun PageRow(
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = page.title.ifBlank { "Untitled page" },
+                    text = page.title.ifBlank { stringResource(R.string.pages_untitled) },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (page.title.isBlank()) {
@@ -307,7 +314,7 @@ private fun PageRow(
         // Long-press opens the per-page menu; the ribbon owns the primary actions.
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(
-                text = { Text("Delete page") },
+                text = { Text(stringResource(R.string.pages_delete)) },
                 leadingIcon = { Icon(MaterialSymbols.Delete, contentDescription = null) },
                 onClick = {
                     menuOpen = false
@@ -321,12 +328,15 @@ private fun PageRow(
 private val dayFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
 private val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
 
+@Composable
 private fun relativeDate(timestamp: Long): String {
     val now = System.currentTimeMillis()
     val elapsed = now - timestamp
     return when {
-        elapsed < 60_000 -> "Just now"
-        elapsed < 3_600_000 -> "${elapsed / 60_000} min ago"
+        elapsed < 60_000 -> stringResource(R.string.pages_edited_just_now)
+        elapsed < 3_600_000 -> (elapsed / 60_000).toInt().let {
+            pluralStringResource(R.plurals.pages_edited_minutes_ago, it, it)
+        }
         elapsed < 86_400_000 -> timeFormat.format(Date(timestamp))
         else -> dayFormat.format(Date(timestamp))
     }

@@ -1,6 +1,7 @@
 package com.vivenotes.ui.editor
 
 import android.content.pm.PackageManager
+import androidx.annotation.StringRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.background
@@ -57,8 +58,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import kotlinx.coroutines.delay
 import com.vivenotes.BuildConfig
 import com.vivenotes.data.DrawTool
@@ -97,12 +100,12 @@ import com.vivenotes.ui.panel.FloatingSettingsPanel
  * into a sentence. Its Table button had already moved to Draw. A tab whose every control is a
  * duplicate is a tab that costs a tap and teaches nothing.
  */
-enum class RibbonTab(val label: String) {
-    File("File"),
-    Draw("Draw"),
-    Document("Document"),
-    View("View"),
-    RibonSettings("Settings"),
+enum class RibbonTab(@StringRes val label: Int) {
+    File(R.string.ribbon_tab_file),
+    Draw(R.string.ribbon_tab_draw),
+    Document(R.string.ribbon_tab_document),
+    View(R.string.ribbon_tab_view),
+    RibonSettings(R.string.ribbon_tab_settings),
 }
 
 private val TEXT_COLORS = listOf(
@@ -313,7 +316,7 @@ private fun TabStrip(
         when {
             showBack -> RibbonNavigationButton(
                 icon = MaterialSymbols.ArrowBack,
-                contentDescription = "Back",
+                contentDescription = stringResource(R.string.ribbon_back),
                 onClick = onBack,
             )
             showNavigationToggle -> RibbonNavigationButton(
@@ -321,9 +324,9 @@ private fun TabStrip(
                 // that the canvas can reveal them again.
                 icon = if (navigationVisible) MaterialSymbols.Menu else MaterialSymbols.MenuOpen,
                 contentDescription = if (navigationVisible) {
-                    "Hide notebooks and pages"
+                    stringResource(R.string.ribbon_hide_navigation)
                 } else {
-                    "Show notebooks and pages"
+                    stringResource(R.string.ribbon_show_navigation)
                 },
                 onClick = onToggleNavigation,
             )
@@ -343,7 +346,7 @@ private fun TabStrip(
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                 ) {
                     Text(
-                        text = tab.label,
+                        text = stringResource(tab.label),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                         color = if (active) {
@@ -362,7 +365,7 @@ private fun TabStrip(
         // tab list like the two buttons after it, so it holds its place while the tabs scroll.
         RibbonButton(
             icon = MaterialSymbols.ArrowSelectorTool,
-            label = "No tool",
+            label = stringResource(R.string.ribbon_no_tool),
             active = tool == DrawTool.None,
             onClick = onSelectPointer,
             modifier = Modifier
@@ -400,9 +403,9 @@ private fun TabStrip(
                 // rather than left to a coloured dot nobody can hear. Three states, because a
                 // reader who cannot see the badge has no other way to learn the third one.
                 label = when {
-                    serverUnreachable -> "Account, server unreachable"
-                    accountConnected -> "Account, connected to a server"
-                    else -> "Account"
+                    serverUnreachable -> stringResource(R.string.ribbon_account_unreachable)
+                    accountConnected -> stringResource(R.string.ribbon_account_connected)
+                    else -> stringResource(R.string.ribbon_account)
                 },
                 onClick = onOpenAccount,
                 modifier = Modifier.testTag(RibbonTags.ACCOUNT),
@@ -489,20 +492,20 @@ private fun HomeTab(
         // starts a container exactly as it always did. A mode rather than a one-shot insert,
         // because "where does it go" is a question only a tap can answer.
         Box(Modifier.testTag(HomeTags.TEXT)) {
-            TwoToneRibbonButton({ it.insertText }, "Text", textMode, onTextMode)
+            TwoToneRibbonButton({ it.insertText }, stringResource(R.string.ribbon_text), textMode, onTextMode)
         }
 
 
 
         Divider()
 
-        RibbonButton(MaterialSymbols.ContentPaste, "Paste") {
+        RibbonButton(MaterialSymbols.ContentPaste, stringResource(R.string.ribbon_paste)) {
             onCommand(FormatCommand.Clipboard(ClipboardAction.Paste))
         }
-        RibbonButton(MaterialSymbols.ContentCut, "Cut") {
+        RibbonButton(MaterialSymbols.ContentCut, stringResource(R.string.ribbon_cut)) {
             onCommand(FormatCommand.Clipboard(ClipboardAction.Cut))
         }
-        RibbonButton(MaterialSymbols.ContentCopy, "Copy") {
+        RibbonButton(MaterialSymbols.ContentCopy, stringResource(R.string.ribbon_copy)) {
             onCommand(FormatCommand.Clipboard(ClipboardAction.Copy))
         }
 
@@ -528,22 +531,22 @@ private fun HomeTab(
 
         Divider()
 
-        RibbonButton(MaterialSymbols.FormatBold, "Bold", selection.has(Mark.Bold)) {
+        RibbonButton(MaterialSymbols.FormatBold, stringResource(R.string.ribbon_bold), selection.has(Mark.Bold)) {
             onCommand(FormatCommand.ToggleMark(Mark.Bold))
         }
-        RibbonButton(MaterialSymbols.FormatItalic, "Italic", selection.has(Mark.Italic)) {
+        RibbonButton(MaterialSymbols.FormatItalic, stringResource(R.string.ribbon_italic), selection.has(Mark.Italic)) {
             onCommand(FormatCommand.ToggleMark(Mark.Italic))
         }
-        RibbonButton(MaterialSymbols.FormatUnderlined, "Underline", selection.has(Mark.Underline)) {
+        RibbonButton(MaterialSymbols.FormatUnderlined, stringResource(R.string.ribbon_underline), selection.has(Mark.Underline)) {
             onCommand(FormatCommand.ToggleMark(Mark.Underline))
         }
-        RibbonButton(MaterialSymbols.FormatStrikethrough, "Strikethrough", selection.has(Mark.Strikethrough)) {
+        RibbonButton(MaterialSymbols.FormatStrikethrough, stringResource(R.string.ribbon_strikethrough), selection.has(Mark.Strikethrough)) {
             onCommand(FormatCommand.ToggleMark(Mark.Strikethrough))
         }
 
         ColorPicker(
             glyph = ::fontColorGlyph,
-            label = "Font colour",
+            label = stringResource(R.string.ribbon_font_color),
             colors = TEXT_COLORS,
             current = selection.textColor,
             onPick = { onCommand(FormatCommand.SetMark(Mark.TextColor(it))) },
@@ -551,20 +554,20 @@ private fun HomeTab(
         )
         ColorPicker(
             symbol = MaterialSymbols.StylusHighlighter,
-            label = "Highlight",
+            label = stringResource(R.string.ribbon_highlight),
             colors = HIGHLIGHT_COLORS,
             current = selection.highlight,
             onPick = { onCommand(FormatCommand.SetMark(Mark.Highlight(it))) },
             onClear = { onCommand(FormatCommand.ClearMark(Mark.Highlight(0))) },
         )
 
-        TwoToneRibbonButton({ it.subscript }, "Subscript", selection.has(Mark.Subscript)) {
+        TwoToneRibbonButton({ it.subscript }, stringResource(R.string.ribbon_subscript), selection.has(Mark.Subscript)) {
             onCommand(FormatCommand.ToggleMark(Mark.Subscript))
         }
-        TwoToneRibbonButton({ it.superscript }, "Superscript", selection.has(Mark.Superscript)) {
+        TwoToneRibbonButton({ it.superscript }, stringResource(R.string.ribbon_superscript), selection.has(Mark.Superscript)) {
             onCommand(FormatCommand.ToggleMark(Mark.Superscript))
         }
-        RibbonButton(MaterialSymbols.FormatClear, "Clear formatting") {
+        RibbonButton(MaterialSymbols.FormatClear, stringResource(R.string.ribbon_clear_formatting)) {
             onCommand(FormatCommand.ClearFormatting)
         }
 
@@ -572,24 +575,24 @@ private fun HomeTab(
 
         TwoToneRibbonButton(
             { it.bulletList },
-            "Bulleted list",
+            stringResource(R.string.ribbon_bulleted_list),
             selection.blockType == BlockType.Bullet,
         ) { onCommand(FormatCommand.SetBlockType(BlockType.Bullet)) }
         TwoToneRibbonButton(
             { it.numberedList },
-            "Numbered list",
+            stringResource(R.string.ribbon_numbered_list),
             selection.blockType == BlockType.Numbered,
         ) { onCommand(FormatCommand.SetBlockType(BlockType.Numbered)) }
         TwoToneRibbonButton(
             { it.todoList },
-            "To-do",
+            stringResource(R.string.ribbon_todo_list),
             selection.blockType == BlockType.Todo,
         ) { onCommand(FormatCommand.SetBlockType(BlockType.Todo)) }
 
-        RibbonButton(MaterialSymbols.FormatIndentDecrease, "Decrease indent") {
+        RibbonButton(MaterialSymbols.FormatIndentDecrease, stringResource(R.string.ribbon_decrease_indent)) {
             onCommand(FormatCommand.Indent(-1))
         }
-        RibbonButton(MaterialSymbols.FormatIndentIncrease, "Increase indent") {
+        RibbonButton(MaterialSymbols.FormatIndentIncrease, stringResource(R.string.ribbon_increase_indent)) {
             onCommand(FormatCommand.Indent(1))
         }
 
@@ -597,17 +600,17 @@ private fun HomeTab(
 
         RibbonButton(
             MaterialSymbols.FormatAlignLeft,
-            "Align left",
+            stringResource(R.string.ribbon_align_left),
             selection.align == Align.Start,
         ) { onCommand(FormatCommand.SetAlign(Align.Start)) }
         RibbonButton(
             MaterialSymbols.FormatAlignCenter,
-            "Align centre",
+            stringResource(R.string.ribbon_align_center),
             selection.align == Align.Center,
         ) { onCommand(FormatCommand.SetAlign(Align.Center)) }
         RibbonButton(
             MaterialSymbols.FormatAlignRight,
-            "Align right",
+            stringResource(R.string.ribbon_align_right),
             selection.align == Align.End,
         ) { onCommand(FormatCommand.SetAlign(Align.End)) }
 
@@ -649,14 +652,14 @@ private fun PictureButton(enabled: Boolean, onPick: (PictureSource) -> Unit) {
         context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
     }
     val entries = buildList {
-        add(Triple(PictureSource.Device, "On device", HomeTags.PICTURE_DEVICE))
-        add(Triple(PictureSource.Online, "Search online", HomeTags.PICTURE_ONLINE))
-        if (hasCamera) add(Triple(PictureSource.Camera, "Camera", HomeTags.PICTURE_CAMERA))
+        add(Triple(PictureSource.Device, stringResource(R.string.ribbon_picture_device), HomeTags.PICTURE_DEVICE))
+        add(Triple(PictureSource.Online, stringResource(R.string.ribbon_picture_online), HomeTags.PICTURE_ONLINE))
+        if (hasCamera) add(Triple(PictureSource.Camera, stringResource(R.string.ribbon_picture_camera), HomeTags.PICTURE_CAMERA))
     }
     Box(Modifier.testTag(HomeTags.PICTURE)) {
         RibbonButton(
             MaterialSymbols.Image,
-            "Picture",
+            stringResource(R.string.ribbon_picture),
             active = open,
             enabled = enabled,
             dropdown = true,
@@ -706,7 +709,7 @@ private fun LinkButton(
     Box {
         RibbonButton(
             icon = MaterialSymbols.Link,
-            label = "Link",
+            label = stringResource(R.string.ribbon_link),
             active = expanded,
             enabled = enabled || expanded,
             modifier = Modifier.testTag("insert-link"),
@@ -722,12 +725,12 @@ private fun LinkButton(
             onDismissRequest = {
                 expanded = false
             },
-            title = if (selection.linkUrl == null) "Insert link" else "Edit link",
+            title = stringResource(if (selection.linkUrl == null) R.string.ribbon_link_insert else R.string.ribbon_link_edit),
         ) {
             OutlinedTextField(
                 value = label,
                 onValueChange = { label = it },
-                label = { Text("Text to display") },
+                label = { Text(stringResource(R.string.ribbon_link_text)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().testTag("link-text"),
             )
@@ -735,10 +738,10 @@ private fun LinkButton(
             OutlinedTextField(
                 value = address,
                 onValueChange = { address = it },
-                label = { Text("Web address") },
+                label = { Text(stringResource(R.string.ribbon_link_address)) },
                 singleLine = true,
                 isError = address.isNotBlank() && normalizedLinkUrl(address) == null,
-                supportingText = { Text("https://example.com") },
+                supportingText = { Text(stringResource(R.string.ribbon_link_address_example)) },
                 modifier = Modifier.fillMaxWidth().testTag("link-address"),
             )
             Row(
@@ -748,7 +751,7 @@ private fun LinkButton(
             ) {
                 TextButton(onClick = {
                     expanded = false
-                }) { Text("Cancel") }
+                }) { Text(stringResource(R.string.ribbon_link_cancel)) }
                 Button(
                     enabled = normalizedLinkUrl(address) != null,
                     onClick = {
@@ -757,7 +760,7 @@ private fun LinkButton(
                         expanded = false
                     },
                     modifier = Modifier.testTag("link-submit"),
-                ) { Text("Apply") }
+                ) { Text(stringResource(R.string.ribbon_link_apply)) }
             }
         }
     }
@@ -983,7 +986,7 @@ private fun FontFamilyPicker(
         width = 148.dp,
         tag = FontTags.FAMILY,
         onSetDefault = { shown?.let(onSetDefault) },
-        hint = "Hold a font to type in it by default",
+        hint = stringResource(R.string.ribbon_font_hint),
     ) { dismiss ->
         FONT_FAMILIES.forEach { family ->
             MenuRow(
@@ -1015,7 +1018,7 @@ private fun FontSizePicker(
         width = 58.dp,
         tag = FontTags.SIZE,
         onSetDefault = { shown?.let(onSetDefault) },
-        hint = "Hold a size to start new text at it",
+        hint = stringResource(R.string.ribbon_font_size_hint),
     ) { dismiss ->
         FONT_SIZES.forEach { size ->
             MenuRow(
@@ -1058,7 +1061,7 @@ internal fun MenuRow(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
-                onLongClickLabel = "Make default",
+                onLongClickLabel = stringResource(R.string.ribbon_make_default),
             )
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1166,7 +1169,7 @@ internal fun DefaultHint(text: String) {
 @Composable
 private fun DefaultTag() {
     Text(
-        text = "Default",
+        text = stringResource(R.string.ribbon_default),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.primary,
     )
@@ -1262,7 +1265,7 @@ private fun ColorPicker(
                     }
                 }
                 DropdownMenuItem(
-                    text = { Text("None") },
+                    text = { Text(stringResource(R.string.ribbon_color_none)) },
                     onClick = {
                         open = false
                         onClear()
@@ -1277,12 +1280,12 @@ private fun ColorPicker(
 private fun StylesPicker(current: BlockType, onPick: (BlockType) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val styles = listOf(
-        BlockType.Paragraph to "Normal",
-        BlockType.Heading1 to "Heading 1",
-        BlockType.Heading2 to "Heading 2",
-        BlockType.Heading3 to "Heading 3",
-        BlockType.Quote to "Quote",
-        BlockType.Code to "Code",
+        BlockType.Paragraph to stringResource(R.string.ribbon_style_normal),
+        BlockType.Heading1 to stringResource(R.string.ribbon_style_heading_1),
+        BlockType.Heading2 to stringResource(R.string.ribbon_style_heading_2),
+        BlockType.Heading3 to stringResource(R.string.ribbon_style_heading_3),
+        BlockType.Quote to stringResource(R.string.ribbon_style_quote),
+        BlockType.Code to stringResource(R.string.ribbon_style_code),
     )
     Box {
         Row(
@@ -1306,9 +1309,9 @@ private fun StylesPicker(current: BlockType, onPick: (BlockType) -> Unit) {
                 // plain text is the default state, so reading "Normal" back is noise. The menu
                 // still offers "Normal" as the way to clear a heading.
                 text = when (current) {
-                    BlockType.Paragraph -> "Styles"
-                    else -> styles.firstOrNull { it.first == current }?.second ?: "Styles"
-                },
+                    BlockType.Paragraph -> null
+                    else -> styles.firstOrNull { it.first == current }?.second
+                } ?: stringResource(R.string.ribbon_styles),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )

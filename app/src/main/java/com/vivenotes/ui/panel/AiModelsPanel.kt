@@ -1,6 +1,7 @@
 package com.vivenotes.ui.panel
 
 import android.text.format.Formatter
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -29,8 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.ai.AiModelInstallState
 import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.AiModelsState
@@ -69,7 +73,7 @@ fun ColumnScope.AiModelsPanelContent(
     onSetInkText: (Boolean) -> Unit = {},
     onRebuildInkText: () -> Unit = {},
 ) {
-    PanelSection("Math") {
+    PanelSection(stringResource(R.string.ai_section_math)) {
         FormulaEngine.entries.forEachIndexed { index, engine ->
             if (index > 0) Spacer(Modifier.height(10.dp))
             val install = state.formula(engine)
@@ -84,11 +88,11 @@ fun ColumnScope.AiModelsPanelContent(
         }
     }
 
-    PanelSection("Text") {
+    PanelSection(stringResource(R.string.ai_section_text)) {
         TextModelCard(state.handwritingText)
     }
 
-    PanelSection("Text in pictures") {
+    PanelSection(stringResource(R.string.ai_section_text_in_pictures)) {
         PictureTextCard(
             progress = pictureText,
             picturesRead = picturesRead,
@@ -97,7 +101,7 @@ fun ColumnScope.AiModelsPanelContent(
         )
     }
 
-    PanelSection("Handwriting in search") {
+    PanelSection(stringResource(R.string.ai_section_handwriting_in_search)) {
         HandwritingTextCard(
             progress = inkText,
             pagesRead = inkPagesRead,
@@ -131,14 +135,14 @@ private fun MathModelCard(
     val size = Formatter.formatShortFileSize(LocalContext.current, AiModelStore.downloadBytes(engine))
     ModelCardFrame(Modifier.testTag(AiPanelTags.formulaCard(engine))) {
         Text(
-            text = engine.displayName,
+            text = stringResource(engine.displayName),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            text = "${engine.strength} · $size",
+            text = stringResource(R.string.panel_separated, stringResource(engine.strength), size),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -162,9 +166,9 @@ private fun MathModelCard(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("In use")
+                        Text(stringResource(R.string.ai_model_in_use))
                     } else {
-                        Text("Use")
+                        Text(stringResource(R.string.ai_model_use))
                     }
                 }
                 Spacer(Modifier.weight(1f))
@@ -181,12 +185,12 @@ private fun MathModelCard(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("Delete")
+                    Text(stringResource(R.string.ai_model_delete))
                 }
             }
-            AiModelInstallState.NotInstalled -> DownloadButton("Download", engine, onDownload)
+            AiModelInstallState.NotInstalled -> DownloadButton(stringResource(R.string.ai_model_download), engine, onDownload)
             AiModelInstallState.Verifying -> {
-                Text("Verifying…", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.ai_model_verifying), style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(6.dp))
                 LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
@@ -197,7 +201,7 @@ private fun MathModelCard(
                     (install.downloadedBytes.toDouble() / install.totalBytes).toFloat().coerceIn(0f, 1f)
                 }
                 Text(
-                    text = "Downloading ${(fraction * 100).roundToInt()}%",
+                    text = stringResource(R.string.ai_model_downloading, (fraction * 100).roundToInt()),
                     style = MaterialTheme.typography.labelMedium,
                 )
                 Spacer(Modifier.height(6.dp))
@@ -213,7 +217,7 @@ private fun MathModelCard(
                     color = MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.height(8.dp))
-                DownloadButton("Retry", engine, onDownload)
+                DownloadButton(stringResource(R.string.ai_model_retry), engine, onDownload)
             }
         }
     }
@@ -224,14 +228,14 @@ private fun MathModelCard(
 private fun TextModelCard(install: AiModelInstallState) {
     ModelCardFrame(Modifier.testTag(AiPanelTags.TEXT_MODEL)) {
         Text(
-            text = "PP-OCRv5 Mobile",
+            text = stringResource(R.string.ai_model_ocr_name),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            text = "Handwriting and pictures · 12.7 MB · built in",
+            text = stringResource(R.string.ai_model_ocr_detail),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -261,17 +265,19 @@ private fun ModelCardFrame(
     )
 }
 
-private val FormulaEngine.displayName: String
+@get:StringRes
+private val FormulaEngine.displayName: Int
     get() = when (this) {
-        FormulaEngine.UniMerNetTiny -> "UniMERNet-T"
-        FormulaEngine.FormulaNetS -> "PP-FormulaNet-S"
+        FormulaEngine.UniMerNetTiny -> R.string.ai_model_unimernet_name
+        FormulaEngine.FormulaNetS -> R.string.ai_model_formulanet_name
     }
 
 /** What each is measurably better at — `simulations/formula-models`. */
-private val FormulaEngine.strength: String
+@get:StringRes
+private val FormulaEngine.strength: Int
     get() = when (this) {
-        FormulaEngine.UniMerNetTiny -> "Best on handwriting"
-        FormulaEngine.FormulaNetS -> "Reads matrices"
+        FormulaEngine.UniMerNetTiny -> R.string.ai_model_unimernet_strength
+        FormulaEngine.FormulaNetS -> R.string.ai_model_formulanet_strength
     }
 
 @Composable
@@ -296,13 +302,13 @@ private fun HandwritingTextCard(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Search handwriting",
+                    text = stringResource(R.string.ai_ink_text_title),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "Reads drawn words in the background and keeps recognition on this device.",
+                    text = stringResource(R.string.ai_ink_text_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -330,7 +336,7 @@ private fun HandwritingTextCard(
             enabled = progress.enabled && !progress.running,
             modifier = Modifier.testTag(AiPanelTags.INK_TEXT_REBUILD),
         ) {
-            Text("Read every handwritten page again")
+            Text(stringResource(R.string.ai_ink_text_rebuild))
         }
     }
 }
@@ -365,14 +371,14 @@ private fun PictureTextCard(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Search text in pictures",
+                    text = stringResource(R.string.ai_picture_text_title),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "Reads pasted screenshots and photos so the Content panel can find them.",
+                    text = stringResource(R.string.ai_picture_text_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -406,7 +412,7 @@ private fun PictureTextCard(
             enabled = progress.enabled && !progress.running,
             modifier = Modifier.testTag(AiPanelTags.PICTURE_TEXT_REBUILD),
         ) {
-            Text("Read every picture again")
+            Text(stringResource(R.string.ai_picture_text_rebuild))
         }
     }
 }
@@ -426,20 +432,20 @@ private val SWITCH_GAP = 16.dp
  */
 private const val SWITCH_SCALE = 0.9f
 
+@Composable
 private fun ImageTextProgress.summaryLine(picturesRead: Int): String = when {
-    !enabled -> "Off. Pictures are not read and nothing is stored."
-    running -> "Reading… ${pending.coerceAtLeast(0)} to go"
-    failed > 0 -> "$picturesRead read · $failed could not be read"
-    picturesRead == 1 -> "1 picture read"
-    else -> "$picturesRead pictures read"
+    !enabled -> stringResource(R.string.ai_picture_text_off)
+    running -> stringResource(R.string.ai_picture_text_to_go, pending.coerceAtLeast(0))
+    failed > 0 -> stringResource(R.string.ai_picture_text_failed, picturesRead, failed)
+    else -> pluralStringResource(R.plurals.ai_picture_text_read, picturesRead, picturesRead)
 }
 
+@Composable
 private fun InkTextProgress.summaryLine(pagesRead: Int): String = when {
-    !enabled -> "Off. Handwriting is not read and nothing is stored."
-    running -> "Reading… ${pending.coerceAtLeast(0)} pages to go"
-    failed > 0 -> "$pagesRead pages read · $failed could not be read"
-    pagesRead == 1 -> "1 page read"
-    else -> "$pagesRead pages read"
+    !enabled -> stringResource(R.string.ai_ink_text_off)
+    running -> pending.coerceAtLeast(0).let { pluralStringResource(R.plurals.ai_ink_text_to_go, it, it) }
+    failed > 0 -> stringResource(R.string.ai_ink_text_failed, pagesRead, failed)
+    else -> pluralStringResource(R.plurals.ai_ink_text_read, pagesRead, pagesRead)
 }
 
 @Composable

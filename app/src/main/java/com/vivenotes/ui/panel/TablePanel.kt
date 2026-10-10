@@ -19,7 +19,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.TableSettings
 import com.vivenotes.model.Outline
 
@@ -66,8 +68,8 @@ fun ColumnScope.TablePanelContent(
     // and every field under it means the same thing either way. Off gives the typed table that used
     // to be the Insert tab's own button, folded in here.
     PanelSetting(
-        label = "Write in with a pen",
-        info = "Off, each cell is a text field you type into."
+        label = stringResource(R.string.table_write_with_pen),
+        info = stringResource(R.string.table_write_with_pen_info),
     ) {
         PanelToggle(
             field = "Write in with a pen",
@@ -76,21 +78,21 @@ fun ColumnScope.TablePanelContent(
         )
     }
 
-    PanelSetting(label = "Header column") {
+    PanelSetting(label = stringResource(R.string.table_header_column)) {
         PanelToggle(
             field = "Header column",
             checked = table.headerColumn,
             onCheckedChange = { onChange(table.copy(headerColumn = it)) },
         )
     }
-    PanelSetting(label = "Header row") {
+    PanelSetting(label = stringResource(R.string.table_header_row)) {
         PanelToggle(
             field = "Header row",
             checked = table.headerRow,
             onCheckedChange = { onChange(table.copy(headerRow = it)) },
         )
     }
-    PanelSetting(label = "Column count") {
+    PanelSetting(label = stringResource(R.string.table_column_count)) {
         PanelStepper(
             field = "Column count",
             value = table.columns,
@@ -98,7 +100,7 @@ fun ColumnScope.TablePanelContent(
             onPick = { onChange(table.copy(columns = it)) },
         )
     }
-    PanelSetting(label = "Row count") {
+    PanelSetting(label = stringResource(R.string.table_row_count)) {
         PanelStepper(
             field = "Row count",
             value = table.rows,
@@ -118,7 +120,7 @@ fun ColumnScope.TablePanelContent(
     Spacer(Modifier.height(4.dp))
     PanelSlider(
         field = "Border width",
-        label = "Border width",
+        label = stringResource(R.string.panel_border_width),
         value = table.borderWidth,
         range = TableSettings.MIN_BORDER_WIDTH..TableSettings.MAX_BORDER_WIDTH,
         onChange = { onChange(table.copy(borderWidth = it)) },
@@ -127,7 +129,7 @@ fun ColumnScope.TablePanelContent(
 
     Spacer(Modifier.height(2.dp))
     Text(
-        text = "Border color",
+        text = stringResource(R.string.panel_border_color),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.padding(vertical = 2.dp),
@@ -143,7 +145,7 @@ fun ColumnScope.TablePanelContent(
     )
 
     Spacer(Modifier.height(6.dp))
-    PanelSetting(label = "Fill color") {
+    PanelSetting(label = stringResource(R.string.panel_fill_color)) {
         FillSwatch(
             fill = table.fillArgb,
             seedArgb = table.borderColorArgb,

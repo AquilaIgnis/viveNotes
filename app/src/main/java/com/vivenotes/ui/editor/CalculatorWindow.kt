@@ -51,6 +51,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
@@ -62,6 +63,7 @@ import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
+import com.vivenotes.R
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.DecimalToggle
 import com.vivenotes.ui.panel.EquationPreview
@@ -170,6 +172,8 @@ private fun CalculatorWindow(
     /** Kept across answers and Clear: a run of sums is usually wanted in one form. */
     var showDecimal by remember { mutableStateOf(false) }
     val currentOnDrag by rememberUpdatedState(onDrag)
+    val recognizeFailed = stringResource(R.string.calculator_recognize_failed)
+    val calculateDescription = stringResource(R.string.calculator_calculate)
 
     fun clear() {
         job?.cancel()
@@ -190,7 +194,7 @@ private fun CalculatorWindow(
                 CalculatorState.Done(
                     CalculatorAnswer(
                         latex = "",
-                        error = failure.message ?: "The handwriting could not be recognized.",
+                        error = failure.message ?: recognizeFailed,
                     ),
                 )
             }
@@ -226,7 +230,7 @@ private fun CalculatorWindow(
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = "Calculator",
+                    text = stringResource(R.string.calculator_title),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -236,7 +240,7 @@ private fun CalculatorWindow(
                 IconButton(onClick = onClose, modifier = Modifier.testTag(CalculatorTags.CLOSE)) {
                     Icon(
                         imageVector = MaterialSymbols.Close,
-                        contentDescription = "Close calculator",
+                        contentDescription = stringResource(R.string.calculator_close),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )
@@ -260,14 +264,14 @@ private fun CalculatorWindow(
                     enabled = strokes.isNotEmpty() && state != CalculatorState.Working,
                     modifier = Modifier.testTag(CalculatorTags.UNDO),
                 ) {
-                    Icon(MaterialSymbols.Undo, contentDescription = "Undo last stroke")
+                    Icon(MaterialSymbols.Undo, contentDescription = stringResource(R.string.calculator_undo_stroke))
                 }
                 TextButton(
                     onClick = ::clear,
                     enabled = strokes.isNotEmpty() || state != CalculatorState.Idle,
                     modifier = Modifier.testTag(CalculatorTags.CLEAR),
                 ) {
-                    Text("Clear")
+                    Text(stringResource(R.string.calculator_clear))
                 }
                 Spacer(Modifier.weight(1f))
                 // Before = as well as after it, so the form can be chosen ahead of the answer.
@@ -287,7 +291,7 @@ private fun CalculatorWindow(
                     ),
                     modifier = Modifier
                         .testTag(CalculatorTags.EQUALS)
-                        .semantics { contentDescription = "Calculate" },
+                        .semantics { contentDescription = calculateDescription },
                 ) {
                     Text("=", style = MaterialTheme.typography.titleMedium)
                 }
@@ -302,7 +306,7 @@ private fun CalculatorWindow(
                 ) {
                     LoadingIndicator(Modifier.size(32.dp).testTag(CalculatorTags.PROGRESS))
                     Text(
-                        text = "Reading your handwriting…",
+                        text = stringResource(R.string.calculator_reading),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -316,7 +320,7 @@ private fun CalculatorWindow(
 @Composable
 private fun ExperimentalLabel() {
     Text(
-        text = "Experimental",
+        text = stringResource(R.string.calculator_experimental),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onTertiaryContainer,
         modifier = Modifier
@@ -372,7 +376,7 @@ private fun AnswerContent(
                 onClick = { onOpenInPanel(answer.latex) },
                 modifier = Modifier.testTag(CalculatorTags.OPEN_IN_PANEL),
             ) {
-                Text("Open in panel")
+                Text(stringResource(R.string.calculator_open_in_panel))
             }
         }
     }
@@ -396,19 +400,20 @@ private fun WritingPad(
     val canvas = LocalCanvasColors.current
     val renderer = remember { CanvasStrokeRenderer.create() }
     var live by remember { mutableStateOf<Stroke?>(null) }
+    val padDescription = stringResource(R.string.calculator_pad)
 
     Box(
         modifier = modifier
             .clip(MaterialTheme.shapes.large)
             .background(canvas.background)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large)
-            .semantics { contentDescription = "Calculator writing area" }
+            .semantics { contentDescription = padDescription }
             .testTag(CalculatorTags.PAD),
         contentAlignment = Alignment.Center,
     ) {
         if (strokes.isEmpty() && live == null) {
             Text(
-                text = "Write a calculation, then press =",
+                text = stringResource(R.string.calculator_pad_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = canvas.secondaryText,
             )

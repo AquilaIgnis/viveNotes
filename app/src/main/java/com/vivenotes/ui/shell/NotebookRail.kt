@@ -37,9 +37,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.NotebookWithSections
@@ -154,7 +156,7 @@ fun NotebookRail(
                             modifier = Modifier.reorderable(reorder, section.id),
                             handle = {
                                 DragHandle(
-                                    description = "Reorder ${section.name}",
+                                    description = stringResource(R.string.rail_reorder, section.name),
                                     modifier = Modifier
                                         .testTag(RailTags.sectionDrag(section.id))
                                         .reorderHandle(reorder, section.id) {
@@ -165,13 +167,13 @@ fun NotebookRail(
                         )
                     }
                     item(key = "add-${entry.notebook.id}") {
-                        AddRow(label = "New Section") { onAddSection(entry.notebook.id) }
+                        AddRow(label = stringResource(R.string.rail_new_section)) { onAddSection(entry.notebook.id) }
                     }
                 }
             }
         }
 
-        AddRow(label = "New Notebook", modifier = Modifier.padding(bottom = 8.dp), onClick = onAddNotebook)
+        AddRow(label = stringResource(R.string.rail_new_notebook), modifier = Modifier.padding(bottom = 8.dp), onClick = onAddNotebook)
     }
 }
 
@@ -195,11 +197,10 @@ private fun NotebookHeader(
         ) {
             Icon(
                 imageVector = if (notebook.expanded) MaterialSymbols.ExpandLess else MaterialSymbols.ExpandMore,
-                contentDescription = if (notebook.expanded) {
-                    "Collapse ${notebook.name}"
-                } else {
-                    "Expand ${notebook.name}"
-                },
+                contentDescription = stringResource(
+                    if (notebook.expanded) R.string.rail_collapse else R.string.rail_expand,
+                    notebook.name,
+                ),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
@@ -222,7 +223,7 @@ private fun NotebookHeader(
 
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(
-                text = { Text("Rename notebook") },
+                text = { Text(stringResource(R.string.rail_rename_notebook)) },
                 leadingIcon = { Icon(MaterialSymbols.Edit, contentDescription = null) },
                 modifier = Modifier.testTag(RailTags.notebookRename(notebook.id)),
                 onClick = {
@@ -293,7 +294,7 @@ private fun SectionRow(
         // wide spends more on two permanent buttons than the names they sit next to can afford.
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(
-                text = { Text("Rename section") },
+                text = { Text(stringResource(R.string.rail_rename_section)) },
                 leadingIcon = { Icon(MaterialSymbols.Edit, contentDescription = null) },
                 modifier = Modifier.testTag(RailTags.sectionRename(section.id)),
                 onClick = {
@@ -302,7 +303,7 @@ private fun SectionRow(
                 },
             )
             DropdownMenuItem(
-                text = { Text("Delete section") },
+                text = { Text(stringResource(R.string.rail_delete_section)) },
                 leadingIcon = {
                     Icon(
                         MaterialSymbols.Delete,

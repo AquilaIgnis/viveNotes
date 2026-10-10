@@ -51,11 +51,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.vivenotes.R
 import com.vivenotes.model.Orientation
 import com.vivenotes.model.PaperSize
 import com.vivenotes.model.PrintMargins
@@ -71,6 +75,7 @@ import com.vivenotes.ui.panel.PanelRow
 import com.vivenotes.ui.panel.PanelSection
 import com.vivenotes.ui.panel.PanelSetting
 import com.vivenotes.ui.panel.PanelToggle
+import com.vivenotes.ui.panel.label
 import kotlinx.coroutines.launch
 
 internal object ExportPdfTags {
@@ -119,6 +124,8 @@ internal fun ExportPdfDialog(
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val layoutFailed = stringResource(R.string.export_pdf_layout_failed)
+    val writeFailed = stringResource(R.string.export_pdf_write_failed)
 
     val name = if (options.scope == PdfExportScope.Section) sectionName else pageTitle
 
@@ -142,7 +149,7 @@ internal fun ExportPdfDialog(
             plan = it
         }.onFailure {
             plan = null
-            message = it.message ?: "This page could not be laid out for printing."
+            message = it.message ?: layoutFailed
         }
     }
 
@@ -161,7 +168,7 @@ internal fun ExportPdfDialog(
             busy = false
             written
                 .onSuccess { onDismiss() }
-                .onFailure { message = it.message ?: "The PDF could not be written." }
+                .onFailure { message = it.message ?: writeFailed }
         }
     }
 
@@ -250,14 +257,14 @@ private fun ExportPdfBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onClose, modifier = Modifier.testTag(ExportPdfTags.CLOSE)) {
-            Icon(MaterialSymbols.Close, contentDescription = "Close")
+            Icon(MaterialSymbols.Close, contentDescription = stringResource(R.string.export_pdf_close))
         }
         Spacer(Modifier.width(4.dp))
         Column(Modifier.weight(1f)) {
-            Text("Export as PDF", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.export_pdf_title), style = MaterialTheme.typography.titleMedium)
             if (sheetCount > 0) {
                 Text(
-                    text = if (sheetCount == 1) "1 sheet" else "$sheetCount sheets",
+                    text = pluralStringResource(R.plurals.export_pdf_sheets, sheetCount, sheetCount),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -272,7 +279,7 @@ private fun ExportPdfBar(
             enabled = ready && sheetCount > 0,
             modifier = Modifier.testTag(ExportPdfTags.EXPORT),
         ) {
-            Text("Export")
+            Text(stringResource(R.string.export_pdf_export))
         }
     }
 }
@@ -306,7 +313,7 @@ private fun SheetStack(
                 LoadingIndicator()
             } else {
                 Text(
-                    text = "Nothing to preview.",
+                    text = stringResource(R.string.export_pdf_nothing),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -384,7 +391,7 @@ private fun Sheet(
             } else {
                 Image(
                     bitmap = sheet.asImageBitmap(),
-                    contentDescription = "Sheet ${index + 1}",
+                    contentDescription = stringResource(R.string.export_pdf_sheet, index + 1),
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -392,7 +399,7 @@ private fun Sheet(
         }
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "${index + 1} / ${plan.sheetCount}",
+            text = stringResource(R.string.export_pdf_sheet_of, index + 1, plan.sheetCount),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -406,14 +413,15 @@ private fun ExportPdfOptions(
     onChange: (PdfExportOptions) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val resources = LocalResources.current
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
             .padding(bottom = 20.dp),
     ) {
-        PanelSection("What to export") {
-            PanelRow("Range") {
+        PanelSection(stringResource(R.string.export_pdf_what)) {
+            PanelRow(stringResource(R.string.export_pdf_range)) {
                 PanelChoice(
                     field = "Range",
                     current = options.scope,
@@ -424,8 +432,8 @@ private fun ExportPdfOptions(
                     },
                     label = { scope ->
                         when (scope) {
-                            PdfExportScope.Page -> "This page"
-                            PdfExportScope.Section -> "Whole section"
+                            PdfExportScope.Page -> resources.getString(R.string.export_pdf_range_page)
+                            PdfExportScope.Section -> resources.getString(R.string.export_pdf_range_section)
                         }
                     },
                     onPick = { onChange(options.copy(scope = it)) },
@@ -433,8 +441,8 @@ private fun ExportPdfOptions(
             }
         }
 
-        PanelSection("Paper") {
-            PanelRow("Size") {
+        PanelSection(stringResource(R.string.export_pdf_paper)) {
+            PanelRow(stringResource(R.string.paper_size)) {
                 PanelChoice(
                     field = "Size",
                     current = options.paper,
@@ -442,16 +450,16 @@ private fun ExportPdfOptions(
                     // than to an export — both are set in the View tab's Paper Size pane, and what
                     // a page chooses there is what this opens on.
                     options = EXPORT_PAPER_SIZES,
-                    label = { it.name },
+                    label = { it.label?.let(resources::getString) ?: it.name },
                     onPick = { onChange(options.copy(paper = it)) },
                 )
             }
-            PanelRow("Orientation") {
+            PanelRow(stringResource(R.string.paper_orientation)) {
                 PanelChoice(
                     field = "Orientation",
                     current = options.orientation,
                     options = Orientation.entries,
-                    label = { it.name },
+                    label = { resources.getString(it.label) },
                     onPick = { onChange(options.copy(orientation = it)) },
                 )
             }
@@ -459,7 +467,7 @@ private fun ExportPdfOptions(
             // Paper Size pane, and an export that opens on such a page shows the widest of them —
             // but four fields here would be four fields nobody came to this window to fill in, and
             // the question being asked is how much of the sheet the printer cannot reach.
-            PanelRow("Margins") {
+            PanelRow(stringResource(R.string.export_pdf_margins)) {
                 PanelMeasure(
                     field = "Margins",
                     value = options.margins.widestInches,
@@ -469,11 +477,10 @@ private fun ExportPdfOptions(
             }
         }
 
-        PanelSection("Layout") {
+        PanelSection(stringResource(R.string.export_pdf_layout)) {
             PanelSetting(
-                label = "Fit content to pages",
-                info = "Content that would be cut by a page edge is moved back onto the page it " +
-                    "starts on. Anything larger than a page is left where it is.",
+                label = stringResource(R.string.export_pdf_fit),
+                info = stringResource(R.string.export_pdf_fit_info),
             ) {
                 PanelToggle(
                     field = "Fit content to pages",
@@ -482,8 +489,8 @@ private fun ExportPdfOptions(
                 )
             }
             PanelSetting(
-                label = "Page ruling",
-                info = "Prints the lines, squares or dots the page is written on.",
+                label = stringResource(R.string.export_pdf_ruling),
+                info = stringResource(R.string.export_pdf_ruling_info),
             ) {
                 PanelToggle(
                     field = "Page ruling",

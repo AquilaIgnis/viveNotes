@@ -1,7 +1,11 @@
 package com.vivenotes.ui.panel
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import com.vivenotes.R
 import com.vivenotes.model.Orientation
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.PaperDimensions
@@ -30,29 +34,30 @@ fun ColumnScope.PaperSizePanelContent(
     val inches = style.paperInches ?: PaperDimensions.DEFAULT
     val paperRange = PaperDimensions.MIN_INCHES..PaperDimensions.MAX_INCHES
     val marginRange = 0f..PrintMargins.MAX_INCHES
+    val resources = LocalResources.current
 
-    PanelSection("Paper size") {
-        PanelRow("Size") {
+    PanelSection(stringResource(R.string.paper_section_size)) {
+        PanelRow(stringResource(R.string.paper_size)) {
             PanelChoice(
                 field = "Size",
                 current = style.paper,
                 options = PaperSize.entries,
-                label = { it.name },
+                label = { it.label?.let(resources::getString) ?: it.name },
                 onPick = onPickSize,
             )
         }
-        PanelRow("Orientation") {
+        PanelRow(stringResource(R.string.paper_orientation)) {
             PanelChoice(
                 field = "Orientation",
                 current = style.orientation,
                 options = Orientation.entries,
-                label = { it.name },
+                label = { resources.getString(it.label) },
                 onPick = onPickOrientation,
                 // An unbounded page has no orientation to turn; the canvas grows either way.
                 enabled = style.paper != PaperSize.Auto,
             )
         }
-        PanelRow("Width") {
+        PanelRow(stringResource(R.string.paper_width)) {
             PanelMeasure(
                 field = "Width",
                 value = inches.widthInches,
@@ -61,7 +66,7 @@ fun ColumnScope.PaperSizePanelContent(
                 range = paperRange,
             )
         }
-        PanelRow("Height") {
+        PanelRow(stringResource(R.string.paper_height)) {
             PanelMeasure(
                 field = "Height",
                 value = inches.heightInches,
@@ -72,8 +77,8 @@ fun ColumnScope.PaperSizePanelContent(
         }
     }
 
-    PanelSection("Print margins") {
-        PanelRow("Top") {
+    PanelSection(stringResource(R.string.paper_section_margins)) {
+        PanelRow(stringResource(R.string.paper_margin_top)) {
             PanelMeasure(
                 field = "Top",
                 value = style.margins.topInches,
@@ -81,7 +86,7 @@ fun ColumnScope.PaperSizePanelContent(
                 range = marginRange,
             )
         }
-        PanelRow("Bottom") {
+        PanelRow(stringResource(R.string.paper_margin_bottom)) {
             PanelMeasure(
                 field = "Bottom",
                 value = style.margins.bottomInches,
@@ -89,7 +94,7 @@ fun ColumnScope.PaperSizePanelContent(
                 range = marginRange,
             )
         }
-        PanelRow("Left") {
+        PanelRow(stringResource(R.string.paper_margin_left)) {
             PanelMeasure(
                 field = "Left",
                 value = style.margins.leftInches,
@@ -97,7 +102,7 @@ fun ColumnScope.PaperSizePanelContent(
                 range = marginRange,
             )
         }
-        PanelRow("Right") {
+        PanelRow(stringResource(R.string.paper_margin_right)) {
             PanelMeasure(
                 field = "Right",
                 value = style.margins.rightInches,
@@ -107,3 +112,21 @@ fun ColumnScope.PaperSizePanelContent(
         }
     }
 }
+
+/** Null for the ISO sizes, whose names are the same in every language. */
+@get:StringRes
+internal val PaperSize.label: Int?
+    get() = when (this) {
+        PaperSize.Auto -> R.string.paper_size_auto
+        PaperSize.Billfold -> R.string.paper_size_billfold
+        PaperSize.Custom -> R.string.paper_size_custom
+        PaperSize.A3, PaperSize.A4, PaperSize.A5, PaperSize.A6,
+        PaperSize.B4, PaperSize.B5, PaperSize.B6 -> null
+    }
+
+@get:StringRes
+internal val Orientation.label: Int
+    get() = when (this) {
+        Orientation.Portrait -> R.string.paper_orientation_portrait
+        Orientation.Landscape -> R.string.paper_orientation_landscape
+    }

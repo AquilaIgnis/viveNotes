@@ -1,5 +1,6 @@
 package com.vivenotes.ui.panel
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,8 +29,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.StylusAction
 import com.vivenotes.data.StylusButtonMap
 import com.vivenotes.ui.StylusPress
@@ -48,9 +52,9 @@ import com.vivenotes.ui.shortcutRows
  * Deliberately not persisted, for the reason the open pane is not: which one you are *looking at* is
  * where you are in a panel, not something about you. Reopening Hardware starting on Stylus is right.
  */
-enum class HardwareKind(val label: String) {
-    Stylus("Stylus"),
-    Keyboard("Keyboard"),
+enum class HardwareKind(@StringRes val label: Int) {
+    Stylus(R.string.hardware_stylus),
+    Keyboard(R.string.hardware_keyboard),
 }
 
 internal object HardwareTags {
@@ -146,7 +150,7 @@ private fun HardwareTab(
             modifier = Modifier.size(20.dp),
         )
         Spacer(Modifier.width(6.dp))
-        Text(text = kind.label, style = MaterialTheme.typography.labelMedium)
+        Text(text = stringResource(kind.label), style = MaterialTheme.typography.labelMedium)
     }
 }
 
@@ -161,7 +165,7 @@ private fun ColumnScope.StylusSettings(
     // of release by `BuildConfig.DEBUG` — see `TabStrip` in `ui/editor/Ribbon.kt` — so this row is
     // the setting rather than a second copy of a control already on screen.
     PanelSetting(
-        label = "Let a finger draw"
+        label = stringResource(R.string.hardware_finger_draws)
     ) {
         PanelToggle("Let a finger draw", allowFinger, onSetDrawWithFinger)
     }
@@ -186,8 +190,8 @@ private fun ColumnScope.PenButtonSettings(
     onSetButtons: (StylusButtonMap) -> Unit,
 ) {
     PanelSection(
-        title = "Pen button",
-        info = "Your pen firmware counts its own clicks "
+        title = stringResource(R.string.hardware_pen_button),
+        info = stringResource(R.string.hardware_pen_button_info),
     ) {
         PenButtonRow(StylusPress.Single, buttons.single) { onSetButtons(buttons.copy(single = it)) }
         PenButtonRow(StylusPress.Double, buttons.double) { onSetButtons(buttons.copy(double = it)) }
@@ -207,12 +211,13 @@ private fun PenButtonRow(
     action: StylusAction,
     onPick: (StylusAction) -> Unit,
 ) {
-    PanelRow(press.label, labelWidth = WIDE_LABEL_WIDTH) {
+    val resources = LocalResources.current
+    PanelRow(stringResource(press.label), labelWidth = WIDE_LABEL_WIDTH) {
         PanelChoice(
-            field = press.label,
+            field = press.name,
             current = action,
             options = StylusAction.entries,
-            label = { it.label },
+            label = { resources.getString(it.label) },
             onPick = onPick,
         )
     }
@@ -230,7 +235,7 @@ private fun ColumnScope.KeyboardSettings() {
     Column(Modifier.fillMaxWidth().testTag(HardwareTags.SHORTCUTS)) {
         shortcutRows().forEach { (group, shortcuts) ->
             Text(
-                text = group,
+                text = stringResource(group),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
@@ -242,7 +247,7 @@ private fun ColumnScope.KeyboardSettings() {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = shortcut.label,
+                        text = stringResource(shortcut.label),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -263,3 +268,27 @@ private fun ColumnScope.KeyboardSettings() {
         }
     }
 }
+
+@get:StringRes
+private val StylusPress.label: Int
+    get() = when (this) {
+        StylusPress.Single -> R.string.stylus_press_single
+        StylusPress.Double -> R.string.stylus_press_double
+        StylusPress.Triple -> R.string.stylus_press_triple
+    }
+
+@get:StringRes
+private val StylusAction.label: Int
+    get() = when (this) {
+        StylusAction.None -> R.string.stylus_action_none
+        StylusAction.TogglePenEraser -> R.string.stylus_action_toggle_pen_eraser
+        StylusAction.CyclePens -> R.string.stylus_action_cycle_pens
+        StylusAction.Pen1 -> R.string.stylus_action_pen_1
+        StylusAction.Pen2 -> R.string.stylus_action_pen_2
+        StylusAction.Pen3 -> R.string.stylus_action_pen_3
+        StylusAction.Highlighter -> R.string.stylus_action_highlighter
+        StylusAction.Eraser -> R.string.stylus_action_eraser
+        StylusAction.Lasso -> R.string.stylus_action_lasso
+        StylusAction.Undo -> R.string.stylus_action_undo
+        StylusAction.Redo -> R.string.stylus_action_redo
+    }

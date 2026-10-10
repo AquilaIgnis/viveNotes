@@ -30,8 +30,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.vivenotes.R
 import com.vivenotes.richtext.createEquationRenderer
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.FloatingSettingsPanel
@@ -87,7 +89,7 @@ internal fun EquationButton(
     modifier: Modifier = Modifier,
     existing: String? = null,
     tag: String = EquationTags.INLINE,
-    label: String = "Equation",
+    label: String = stringResource(R.string.equation_button),
     /** Marks the button as armed. The Draw tab's tool stays in hand after the panel closes. */
     active: Boolean = false,
     onRetainTarget: () -> Unit = {},
@@ -170,6 +172,7 @@ internal fun EquationSourceDialog(
     val context = LocalContext.current
     val density = LocalDensity.current
     val equationColor = MaterialTheme.colorScheme.onSurface.toArgb()
+    val parseFailed = stringResource(R.string.equation_parse_failed)
 
     LaunchedEffect(source) {
         previewError = null
@@ -179,13 +182,13 @@ internal fun EquationSourceDialog(
     FloatingSettingsPanel(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        title = if (editing) "Edit equation" else "Insert equation",
+        title = stringResource(if (editing) R.string.equation_edit else R.string.equation_insert),
     ) {
         OutlinedTextField(
             value = source,
             onValueChange = { source = it },
-            label = { Text("LaTeX") },
-            supportingText = { Text("Enter LaTeX without \$ delimiters.") },
+            label = { Text(stringResource(R.string.recognition_source_latex)) },
+            supportingText = { Text(stringResource(R.string.equation_source_hint)) },
             minLines = 2,
             maxLines = 5,
             modifier = Modifier
@@ -195,7 +198,7 @@ internal fun EquationSourceDialog(
 
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Preview",
+            text = stringResource(R.string.equation_preview),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -235,7 +238,7 @@ internal fun EquationSourceDialog(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onDismiss, enabled = !submitting) { Text("Cancel") }
+            TextButton(onClick = onDismiss, enabled = !submitting) { Text(stringResource(R.string.equation_cancel)) }
             Button(
                 enabled = source.isNotBlank() && !submitting,
                 onClick = {
@@ -264,7 +267,7 @@ internal fun EquationSourceDialog(
                             submitting = false
                         } catch (error: Throwable) {
                             if (error is CancellationException) throw error
-                            submitError = error.message ?: "This equation could not be parsed."
+                            submitError = error.message ?: parseFailed
                             submitting = false
                         }
                     }
@@ -277,7 +280,7 @@ internal fun EquationSourceDialog(
                     // inside a button is a container in a container.
                     LoadingIndicator(Modifier.size(18.dp))
                 } else {
-                    Text(if (editing) "Update" else "Insert")
+                    Text(stringResource(if (editing) R.string.equation_update else R.string.equation_submit))
                 }
             }
         }

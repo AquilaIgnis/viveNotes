@@ -29,9 +29,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.SectionEntity
@@ -126,7 +128,7 @@ private fun NotebookChooser(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = current?.notebook?.name ?: "No notebook",
+                text = current?.notebook?.name ?: stringResource(R.string.tabs_no_notebook),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -134,7 +136,7 @@ private fun NotebookChooser(
             )
             Icon(
                 imageVector = MaterialSymbols.ArrowDropDown,
-                contentDescription = "Choose notebook",
+                contentDescription = stringResource(R.string.tabs_choose_notebook),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp),
             )
@@ -160,7 +162,7 @@ private fun NotebookChooser(
                 )
             }
             DropdownMenuItem(
-                text = { Text("New Notebook") },
+                text = { Text(stringResource(R.string.rail_new_notebook)) },
                 leadingIcon = {
                     Icon(
                         imageVector = MaterialSymbols.Add,
@@ -222,7 +224,7 @@ private fun AddTab(onClick: () -> Unit) {
     ) {
         Icon(
             imageVector = MaterialSymbols.Add,
-            contentDescription = "New section",
+            contentDescription = stringResource(R.string.tabs_new_section),
             tint = LocalIconAccents.current.green,
             modifier = Modifier.size(16.dp),
         )

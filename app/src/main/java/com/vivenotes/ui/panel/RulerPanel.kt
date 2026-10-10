@@ -1,5 +1,6 @@
 package com.vivenotes.ui.panel
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,9 +26,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.RulerKind
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.model.PageStyle
@@ -68,17 +72,18 @@ fun ColumnScope.RulerPanelContent(
     // action a kind cannot perform is missing for it rather than shown and dead — the rule the
     // object toolkit already follows for a line's fill.
     if (settings.kind == RulerKind.Protractor) {
+        val resources = LocalResources.current
         Spacer(Modifier.height(6.dp))
         PanelSlider(
             field = "Ruler size",
-            label = "Diameter",
+            label = stringResource(R.string.ruler_diameter),
             value = settings.diameterDp,
             range = RulerSettings.MIN_DIAMETER..RulerSettings.MAX_DIAMETER,
             onChange = { onChange(settings.copy(diameterDp = it)) },
             showTicks = false,
             // The page is laid out at 160dp to the inch, so this is a real measurement rather than
             // a number — the whole reason the ruler is placed in page units.
-            format = { "%.1f in".format(it / PageStyle.DP_PER_INCH) },
+            format = { resources.getString(R.string.ruler_diameter_inches, it / PageStyle.DP_PER_INCH) },
             // A ruler spans hundreds of dp, so stepping by one would make these buttons ornamental.
             step = 40,
         )
@@ -131,7 +136,7 @@ private fun RulerKindButton(
         }
         Spacer(Modifier.height(3.dp))
         Text(
-            text = kind.label,
+            text = stringResource(kind.label),
             style = MaterialTheme.typography.labelSmall,
             color = ink,
         )
@@ -204,3 +209,10 @@ private fun DrawScope.drawProtractorSample(ink: Color) {
         )
     }
 }
+
+@get:StringRes
+private val RulerKind.label: Int
+    get() = when (this) {
+        RulerKind.Straight -> R.string.ruler_kind_straight
+        RulerKind.Protractor -> R.string.ruler_kind_protractor
+    }

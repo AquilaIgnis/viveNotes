@@ -28,7 +28,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.ui.icons.MaterialSymbols
 
 private val EDGE_WIDTH = 30.dp
@@ -83,7 +85,7 @@ fun ScrollingRow(
                 alignment = Alignment.CenterStart,
                 visible = !atStart,
                 icon = MaterialSymbols.KeyboardDoubleArrowLeft,
-                label = "More to the left",
+                label = stringResource(R.string.scroll_more_left),
                 tag = ScrollEdgeTags.START,
                 background = background,
             )
@@ -92,7 +94,7 @@ fun ScrollingRow(
                 alignment = Alignment.CenterEnd,
                 visible = !atEnd,
                 icon = MaterialSymbols.KeyboardDoubleArrowRight,
-                label = "More to the right",
+                label = stringResource(R.string.scroll_more_right),
                 tag = ScrollEdgeTags.END,
                 background = background,
             )

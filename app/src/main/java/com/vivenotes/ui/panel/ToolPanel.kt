@@ -1,5 +1,6 @@
 package com.vivenotes.ui.panel
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
@@ -60,12 +61,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.shell.swipeRight
 import kotlin.math.floor
@@ -78,16 +81,16 @@ private val LABEL_WIDTH = 96.dp
 private val FIELD_HEIGHT = 32.dp
 
 /** The panes the ribbon can open. */
-enum class ToolPane(val title: String) {
-    VersionHistory("Version History"),
-    DeletedItems("Deleted Items"),
-    PaperSize("Paper Size"),
-    AiModels("Integrated AI"),
-    Recognition("Recognition"),
-    Hardware("Hardware"),
+enum class ToolPane(@StringRes val title: Int) {
+    VersionHistory(R.string.pane_version_history),
+    DeletedItems(R.string.pane_deleted_items),
+    PaperSize(R.string.pane_paper_size),
+    AiModels(R.string.pane_ai_models),
+    Recognition(R.string.pane_recognition),
+    Hardware(R.string.pane_hardware),
 
     /** Fuzzy search over the notebook's text boxes and fields. */
-    Content("Content"),
+    Content(R.string.pane_content),
 }
 
 /** A pane's fields are addressable by the label beside them. */
@@ -136,6 +139,7 @@ fun ToolPanel(
             .swipeRight(onClose)
             .testTag(PanelTags.PANE),
     ) {
+        val title = stringResource(pane.title)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -144,14 +148,14 @@ fun ToolPanel(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = pane.title,
+                text = title,
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             IconButton(onClick = onClose, modifier = Modifier.size(34.dp)) {
                 Icon(
                     imageVector = MaterialSymbols.Close,
-                    contentDescription = "Close ${pane.title}",
+                    contentDescription = stringResource(R.string.panel_close, title),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp),
                 )
@@ -234,7 +238,7 @@ fun ColumnScope.PanelSection(
 private fun InfoIcon(label: String, onClick: () -> Unit) {
     Icon(
         imageVector = MaterialSymbols.Info,
-        contentDescription = "About $label",
+        contentDescription = stringResource(R.string.panel_about, label),
         tint = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier
             .size(17.dp)
@@ -273,7 +277,7 @@ fun PanelRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "$label:",
+            text = stringResource(R.string.panel_row_label, label),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.width(labelWidth),
@@ -393,7 +397,7 @@ fun PanelMeasure(
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = "in",
+            text = stringResource(R.string.panel_inches_unit),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -556,7 +560,7 @@ fun PanelStepper(field: String, value: Int, range: IntRange, onPick: (Int) -> Un
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             range.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(if (option == 0) "0 — off" else option.toString()) },
+                    text = { Text(if (option == 0) stringResource(R.string.panel_stepper_off) else option.toString()) },
                     onClick = {
                         open = false
                         onPick(option)
@@ -617,7 +621,7 @@ fun ColumnScope.PanelSlider(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StepButton(MaterialSymbols.Remove, "Decrease $label", value > range.start) {
+        StepButton(MaterialSymbols.Remove, stringResource(R.string.panel_decrease, label), value > range.start) {
             onChange((value - step).coerceAtLeast(range.start))
         }
         Box(
@@ -674,7 +678,7 @@ fun ColumnScope.PanelSlider(
                 )
             }
         }
-        StepButton(MaterialSymbols.Add, "Increase $label", value < range.endInclusive) {
+        StepButton(MaterialSymbols.Add, stringResource(R.string.panel_increase, label), value < range.endInclusive) {
             onChange((value + step).coerceAtMost(range.endInclusive))
         }
     }

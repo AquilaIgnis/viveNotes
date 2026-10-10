@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vivenotes.BuildConfig
+import com.vivenotes.R
 import com.vivenotes.math.FormulaToolsState
 import com.vivenotes.math.MathGraph
 import com.vivenotes.math.MathOperationResult
@@ -122,13 +124,13 @@ internal fun ColumnScope.RecognitionPanelContent(
             ContainedLoadingIndicator(
                 modifier = Modifier.testTag(RecognitionPanelTags.PROGRESS),
             )
-            Text("Processing selected ink on this device…")
+            Text(stringResource(R.string.recognition_processing))
         }
         return
     }
 
     state.error?.let { message ->
-        PanelSection("Recognition failed") {
+        PanelSection(stringResource(R.string.recognition_failed)) {
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
@@ -139,7 +141,9 @@ internal fun ColumnScope.RecognitionPanelContent(
     }
 
     var copied by remember(state.kind) { mutableStateOf(false) }
-    val sourceLabel = if (state.kind == RecognitionOutputKind.Formula) "LaTeX" else "Text"
+    val sourceLabel = stringResource(
+        if (state.kind == RecognitionOutputKind.Formula) R.string.recognition_source_latex else R.string.recognition_source_text,
+    )
     PanelSection(sourceLabel) {
         SourceField(
             value = state.value,
@@ -161,11 +165,11 @@ internal fun ColumnScope.RecognitionPanelContent(
                 enabled = state.value.isNotBlank(),
                 modifier = Modifier.testTag(RecognitionPanelTags.COPY),
             ) {
-                Text("Copy")
+                Text(stringResource(R.string.recognition_copy))
             }
             if (copied) {
                 Text(
-                    text = "Copied to clipboard",
+                    text = stringResource(R.string.recognition_copied),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.testTag(RecognitionPanelTags.COPIED),
@@ -175,7 +179,7 @@ internal fun ColumnScope.RecognitionPanelContent(
     }
 
     if (state.kind == RecognitionOutputKind.Formula) {
-        PanelSection("Preview") {
+        PanelSection(stringResource(R.string.recognition_preview)) {
             EquationPreview(state.value)
         }
         FormulaToolsContent(
@@ -194,21 +198,21 @@ private fun ColumnScope.FormulaToolsContent(
     // Above every early return, so the choice outlives the result it was made on.
     var showDecimal by remember { mutableStateOf(false) }
     if (state.analyzing) {
-        PanelSection("Math actions") {
+        PanelSection(stringResource(R.string.recognition_math_actions)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.testTag(RecognitionPanelTags.MATH_ANALYZING),
             ) {
                 ContainedLoadingIndicator()
-                Text("Understanding the LaTeX with SymPy…")
+                Text(stringResource(R.string.recognition_analyzing))
             }
         }
         return
     }
 
     state.error?.takeIf { state.analysis == null }?.let { message ->
-        PanelSection("Math actions") {
+        PanelSection(stringResource(R.string.recognition_math_actions)) {
             Text(
                 text = message,
                 color = MaterialTheme.colorScheme.error,
@@ -251,7 +255,7 @@ private fun ColumnScope.FormulaToolsContent(
         }
     }
 
-    PanelSection("Actions") {
+    PanelSection(stringResource(R.string.recognition_actions)) {
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -284,7 +288,7 @@ private fun ColumnScope.FormulaToolsContent(
     }
 
     state.error?.let { message ->
-        PanelSection("Operation failed") {
+        PanelSection(stringResource(R.string.recognition_operation_failed)) {
             Text(
                 text = message,
                 color = MaterialTheme.colorScheme.error,
@@ -333,6 +337,7 @@ internal fun DecimalToggle(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
+    val description = stringResource(R.string.recognition_show_decimal)
     PanelToggleButton(
         checked = checked,
         onCheckedChange = onCheckedChange,
@@ -343,7 +348,7 @@ internal fun DecimalToggle(
             checkedContainerColor = MaterialTheme.colorScheme.tertiary,
             checkedContentColor = MaterialTheme.colorScheme.onTertiary,
         ),
-        modifier = modifier.semantics { contentDescription = "Show as decimal" },
+        modifier = modifier.semantics { contentDescription = description },
     ) {
         Text("≈", style = MaterialTheme.typography.titleMedium)
     }
@@ -510,6 +515,7 @@ internal fun EquationPreview(latex: String, scale: Float = 1f) {
     val minHeight = PREVIEW_MIN_HEIGHT * scale
     val verticalPadding = PREVIEW_PADDING * scale
     var preview by remember { mutableStateOf<EquationPreviewState>(EquationPreviewState.Empty) }
+    val renderFailed = stringResource(R.string.recognition_render_failed)
 
     LaunchedEffect(latex, color, fontSizePx) {
         preview = if (latex.isBlank()) {
@@ -521,7 +527,7 @@ internal fun EquationPreview(latex: String, scale: Float = 1f) {
                 )
             } catch (failure: Exception) {
                 EquationPreviewState.Failed(
-                    failure.message?.takeIf(String::isNotBlank) ?: "LaTeX could not be rendered",
+                    failure.message?.takeIf(String::isNotBlank) ?: renderFailed,
                 )
             }
         }
@@ -549,7 +555,7 @@ internal fun EquationPreview(latex: String, scale: Float = 1f) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Enter LaTeX to preview it",
+                    text = stringResource(R.string.recognition_preview_empty),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

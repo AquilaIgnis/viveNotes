@@ -20,7 +20,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.FloatingSettingsPanel
@@ -57,7 +59,7 @@ internal fun ShapeButton(
 
     val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        HoverLabel("Shapes") {
+        HoverLabel(stringResource(R.string.shape_button)) {
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -85,7 +87,7 @@ internal fun ShapeButton(
             ) {
                 Icon(
                     imageVector = MaterialSymbols.Category,
-                    contentDescription = "Shapes",
+                    contentDescription = stringResource(R.string.shape_button),
                     tint = if (selected) {
                         MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
@@ -99,7 +101,7 @@ internal fun ShapeButton(
         FloatingSettingsPanel(
             expanded = settingsOpen,
             onDismissRequest = { settingsOpen = false },
-            title = "Shape",
+            title = stringResource(R.string.shape_button_panel),
         ) {
             ShapePanelContent(
                 shape = shape,

@@ -61,6 +61,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
@@ -793,6 +795,7 @@ private fun NotesWorkspace(
     val focusManager = LocalFocusManager.current
     val recognitionScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val undoLabel = stringResource(R.string.workspace_undo)
 
     // Immediate Undo is a convenience over the durable Deleted Items pane. collectLatest keeps the
     // newest destructive action visible; older ones remain recoverable from the pane even when a
@@ -803,7 +806,7 @@ private fun NotesWorkspace(
             // nothing to put back.
             val result = snackbarHostState.showSnackbar(
                 message = notice.message,
-                actionLabel = notice.key?.let { "Undo" },
+                actionLabel = notice.key?.let { undoLabel },
                 withDismissAction = true,
                 duration = SnackbarDuration.Long,
             )
@@ -880,7 +883,7 @@ private fun NotesWorkspace(
             } catch (failure: Exception) {
                 recognition = RecognitionPanelState(
                     kind = kind,
-                    error = failure.message ?: "The selected ink could not be recognized.",
+                    error = failure.message ?: context.getString(R.string.workspace_recognize_failed),
                 )
             } finally {
                 bitmap?.recycle()
@@ -908,7 +911,7 @@ private fun NotesWorkspace(
         } catch (failure: Exception) {
             FormulaToolsState(
                 sourceLatex = formulaLatex,
-                error = failure.message ?: "The local math engine could not start.",
+                error = failure.message ?: context.getString(R.string.workspace_math_engine_failed),
             )
         }
     }
@@ -925,7 +928,7 @@ private fun NotesWorkspace(
                     if (formulaLatex == source) {
                         formulaTools = formulaTools.copy(
                             executingActionId = null,
-                            error = failure.message ?: "The math operation failed.",
+                            error = failure.message ?: context.getString(R.string.workspace_math_failed),
                         )
                     }
                 }
@@ -1020,7 +1023,8 @@ private fun NotesWorkspace(
     val aiActions = remember {
         AiActions(openIntegrated = { openPane = ToolPane.AiModels })
     }
-    val exportFileName = viewModel.selectedNotebookName()?.viveFileName()
+    val exportFileName = viewModel.selectedNotebookName()
+        ?.viveFileName(fallback = stringResource(R.string.workspace_export_file_fallback))
     // The notebook the ribbon acts on is the one holding the open section — the same rule the export
     // name follows, read from the tree here because the dialog needs the row, not just the name.
     val currentNotebook = state.tree
@@ -1109,7 +1113,7 @@ private fun NotesWorkspace(
                                         // by a work profile.
                                         cameraTarget = null
                                         recognitionScope.launch {
-                                            snackbarHostState.showSnackbar("No camera app is available.")
+                                            snackbarHostState.showSnackbar(context.getString(R.string.workspace_no_camera))
                                         }
                                     }
                                 }
@@ -1246,11 +1250,13 @@ private fun NotesWorkspace(
                                         recognition = recognition?.copy(value = value)
                                     },
                                     onCopyRecognition = { value ->
-                                        val label = if (recognition?.kind == RecognitionOutputKind.Formula) {
-                                            "Recognized LaTeX"
-                                        } else {
-                                            "Recognized text"
-                                        }
+                                        val label = context.getString(
+                                            if (recognition?.kind == RecognitionOutputKind.Formula) {
+                                                R.string.workspace_clip_latex
+                                            } else {
+                                                R.string.workspace_clip_text
+                                            },
+                                        )
                                         copyRecognizedText(context, label, value)
                                     },
                                     onMathAction = ::executeMathAction,
@@ -1321,11 +1327,13 @@ private fun NotesWorkspace(
                                         recognition = recognition?.copy(value = value)
                                     },
                                     onCopyRecognition = { value ->
-                                        val label = if (recognition?.kind == RecognitionOutputKind.Formula) {
-                                            "Recognized LaTeX"
-                                        } else {
-                                            "Recognized text"
-                                        }
+                                        val label = context.getString(
+                                            if (recognition?.kind == RecognitionOutputKind.Formula) {
+                                                R.string.workspace_clip_latex
+                                            } else {
+                                                R.string.workspace_clip_text
+                                            },
+                                        )
                                         copyRecognizedText(context, label, value)
                                     },
                                     onMathAction = ::executeMathAction,
@@ -1432,16 +1440,20 @@ private fun NotesWorkspace(
 
     pendingDialog?.let { dialog ->
         NameEntryDialog(
-            title = when (dialog) {
-                is NameDialog.Notebook -> "New notebook"
-                is NameDialog.Section -> "New section"
-                is NameDialog.RenameNotebook -> "Rename notebook"
-                is NameDialog.RenameSection -> "Rename section"
-            },
-            confirmLabel = when (dialog) {
-                is NameDialog.Notebook, is NameDialog.Section -> "Create"
-                is NameDialog.RenameNotebook, is NameDialog.RenameSection -> "Rename"
-            },
+            title = stringResource(
+                when (dialog) {
+                    is NameDialog.Notebook -> R.string.name_dialog_new_notebook
+                    is NameDialog.Section -> R.string.name_dialog_new_section
+                    is NameDialog.RenameNotebook -> R.string.name_dialog_rename_notebook
+                    is NameDialog.RenameSection -> R.string.name_dialog_rename_section
+                },
+            ),
+            confirmLabel = stringResource(
+                when (dialog) {
+                    is NameDialog.Notebook, is NameDialog.Section -> R.string.name_dialog_create
+                    is NameDialog.RenameNotebook, is NameDialog.RenameSection -> R.string.name_dialog_rename
+                },
+            ),
             initial = when (dialog) {
                 is NameDialog.RenameNotebook -> dialog.current
                 is NameDialog.RenameSection -> dialog.current
@@ -1504,12 +1516,12 @@ private fun NotesWorkspace(
     }
 }
 
-private fun String.viveFileName(): String {
+private fun String.viveFileName(fallback: String): String {
     val safe = replace(Regex("[\\\\/:*?\"<>|\\u0000-\\u001F]"), "_")
         .trim()
         .trim('.')
         .take(100)
-        .ifBlank { "Notebook" }
+        .ifBlank { fallback }
     return "$safe${NotebookTransferManager.EXTENSION}"
 }
 
@@ -1522,25 +1534,27 @@ private fun NotebookTransferDialog(
         onDismissRequest = { if (!state.running) onDismiss() },
         title = {
             Text(
-                when {
-                    state.running -> "Working with notebook"
-                    state.error != null -> "Notebook transfer failed"
-                    else -> "Notebook transfer complete"
-                },
+                stringResource(
+                    when {
+                        state.running -> R.string.transfer_running
+                        state.error != null -> R.string.transfer_failed
+                        else -> R.string.transfer_complete
+                    },
+                ),
             )
         },
         text = {
             if (state.running) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                    Text("Checking and preparing the notebook…", Modifier.padding(start = 12.dp))
+                    Text(stringResource(R.string.transfer_preparing), Modifier.padding(start = 12.dp))
                 }
             } else {
                 Text(state.error ?: state.message.orEmpty())
             }
         },
         confirmButton = {
-            if (!state.running) TextButton(onClick = onDismiss) { Text("OK") }
+            if (!state.running) TextButton(onClick = onDismiss) { Text(stringResource(R.string.transfer_ok)) }
         },
     )
 }
@@ -1663,7 +1677,7 @@ private fun ToolPaneHost(
                     onMathAction = onMathAction,
                 )
             } ?: Text(
-                text = "Select ink and choose Recognize to see a result here.",
+                text = stringResource(R.string.workspace_recognition_empty),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ToolPane.Content -> ContentPanelContent(
@@ -1716,7 +1730,7 @@ private fun EditorSurface(
         if (state.selectedPageId == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    text = if (state.loading) "" else "No page selected",
+                    text = if (state.loading) "" else stringResource(R.string.workspace_no_page),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1788,7 +1802,7 @@ private fun SearchAffordance(open: Boolean, onClick: () -> Unit, modifier: Modif
     ) {
         Icon(
             imageVector = MaterialSymbols.Search,
-            contentDescription = if (open) "Close search" else "Search this notebook",
+            contentDescription = stringResource(if (open) R.string.workspace_close_search else R.string.content_search_hint),
             tint = if (open) {
                 MaterialTheme.colorScheme.onPrimaryContainer
             } else {
@@ -2016,7 +2030,7 @@ private fun NameEntryDialog(
                         Box(Modifier.padding(vertical = 6.dp)) {
                             if (value.text.isEmpty()) {
                                 Text(
-                                    "Name",
+                                    stringResource(R.string.name_dialog_hint),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -2040,7 +2054,7 @@ private fun NameEntryDialog(
             TextButton(onClick = { onConfirm(value.text) }) { Text(confirmLabel) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) }
         },
     )
 }
@@ -2062,30 +2076,22 @@ private fun DeleteSectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete ${section.name}?") },
+        title = { Text(stringResource(R.string.delete_title, section.name)) },
         text = {
+            val pages = contents?.pages ?: 0
             Text(
-                if (contents?.blank == true) {
-                    NOTHING_TO_KEEP
-                } else {
-                    buildString {
-                        append(
-                            when (contents?.pages) {
-                                null, 0 -> "This section will be removed."
-                                1 -> "Its 1 page will go with it."
-                                else -> "Its ${contents.pages} pages will go with it."
-                            },
-                        )
-                        append(" You can restore it later from Deleted Items.")
-                    }
+                when {
+                    contents?.blank == true -> stringResource(R.string.delete_nothing_to_keep)
+                    pages == 0 -> stringResource(R.string.delete_section_empty)
+                    else -> pluralStringResource(R.plurals.delete_section_pages, pages, pages)
                 },
             )
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Delete") }
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.delete_confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) }
         },
     )
 }
@@ -2108,49 +2114,29 @@ private fun DeleteNotebookDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete ${notebook.name}?") },
+        title = { Text(stringResource(R.string.delete_title, notebook.name)) },
         text = {
             Text(
-                if (contents?.blank == true) {
-                    NOTHING_TO_KEEP
-                } else {
-                    buildString {
-                        append(
-                            when {
-                                contents == null || (contents.sections == 0 && contents.pages == 0) ->
-                                    "This notebook will be removed."
-                                else ->
-                                    "Its ${countOf(contents.sections, "section")} and " +
-                                        "${countOf(contents.pages, "page")} will go with it."
-                            },
-                        )
-                        append(" You can restore it later from Deleted Items.")
-                    }
+                when {
+                    contents?.blank == true -> stringResource(R.string.delete_nothing_to_keep)
+                    contents == null || (contents.sections == 0 && contents.pages == 0) ->
+                        stringResource(R.string.delete_notebook_empty)
+                    else -> stringResource(
+                        R.string.delete_notebook_contents,
+                        sectionCount(contents.sections),
+                        pageCount(contents.pages),
+                    )
                 },
             )
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Delete") }
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.delete_confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) }
         },
     )
 }
-
-/**
- * What both delete confirmations say instead when there is nothing in the thing being deleted.
- *
- * A blank notebook or section is flushed rather than tombstoned, so the usual promise of Deleted
- * Items would be a lie — and it is the last sentence somebody reads before pressing Delete, which
- * makes it the only place the difference can still change their mind. It replaces the count as well
- * as the promise: "its 2 pages will go with it" is true and useless when both pages are empty.
- *
- * A notebook whose contents have not been read yet keeps the ordinary wording, because a delete that
- * turns out to be recoverable after a dialog said nothing about recovery disappoints nobody.
- */
-private const val NOTHING_TO_KEEP =
-    "There is nothing in it, so it will be deleted for good rather than kept in Deleted Items."
 
 /**
  * Confirms closing the notebook the ribbon's File tab is pointed at.
@@ -2174,32 +2160,32 @@ private fun CloseNotebookDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Close ${notebook.name}?") },
+        title = { Text(stringResource(R.string.close_notebook_title, notebook.name)) },
         text = {
             Text(
-                buildString {
-                    append("Nothing is deleted. ")
-                    if (contents != null && (contents.sections > 0 || contents.pages > 0)) {
-                        append(
-                            "Its ${countOf(contents.sections, "section")} and " +
-                                "${countOf(contents.pages, "page")} stay where they are, and the ",
-                        )
-                    } else {
-                        append("The ")
-                    }
-                    append("notebook leaves the panel until you open it again from Closed Notebooks.")
+                if (contents != null && (contents.sections > 0 || contents.pages > 0)) {
+                    stringResource(
+                        R.string.close_notebook_contents,
+                        sectionCount(contents.sections),
+                        pageCount(contents.pages),
+                    )
+                } else {
+                    stringResource(R.string.close_notebook_empty)
                 },
             )
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Close") }
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.close_notebook_confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) }
         },
     )
 }
 
 /** "1 section" / "3 sections" — the counts in a delete confirmation are read, so they are spelled. */
-private fun countOf(value: Int, noun: String): String =
-    if (value == 1) "1 $noun" else "$value ${noun}s"
+@Composable
+private fun sectionCount(value: Int): String = pluralStringResource(R.plurals.count_sections, value, value)
+
+@Composable
+private fun pageCount(value: Int): String = pluralStringResource(R.plurals.count_pages, value, value)

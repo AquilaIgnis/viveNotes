@@ -51,7 +51,7 @@ class ToolPanelDismissTest {
     fun theCloseButtonStillWorks() {
         setPanel()
 
-        compose.onNodeWithContentDescription("Close ${ToolPane.Hardware.title}").performClick()
+        compose.onNodeWithContentDescription("Close Hardware").performClick()
 
         assertEquals(1, closed)
     }

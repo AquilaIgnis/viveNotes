@@ -20,7 +20,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.TableSettings
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.FloatingSettingsPanel
@@ -55,10 +57,11 @@ internal fun TableButton(
     onAddColor: (Int) -> Unit = {},
 ) {
     var settingsOpen by remember { mutableStateOf(false) }
+    val label = stringResource(if (table.inkOnly) R.string.table_button_ink else R.string.table_button)
 
     val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Box(modifier = Modifier.padding(horizontal = 1.dp)) {
-        HoverLabel(if (table.inkOnly) "Table to write in" else "Table") {
+        HoverLabel(label) {
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -89,7 +92,7 @@ internal fun TableButton(
                     // Named for what it will make, not for what it is. One glyph now covers both
                     // kinds, so the label is all a screen reader gets to tell them apart — and it
                     // has to follow the setting, because the setting is what decides.
-                    contentDescription = if (table.inkOnly) "Table to write in" else "Table",
+                    contentDescription = label,
                     tint = if (selected) {
                         MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
@@ -103,7 +106,7 @@ internal fun TableButton(
         FloatingSettingsPanel(
             expanded = settingsOpen,
             onDismissRequest = { settingsOpen = false },
-            title = "Table",
+            title = stringResource(R.string.table_button),
         ) {
             TablePanelContent(
                 table = table,

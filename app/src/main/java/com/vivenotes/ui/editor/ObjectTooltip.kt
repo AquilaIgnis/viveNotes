@@ -1,6 +1,7 @@
 package com.vivenotes.ui.editor
 
 import android.graphics.RectF
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
@@ -47,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.vivenotes.R
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.LineTypePicker
@@ -85,16 +88,16 @@ internal object TableActionTags {
 }
 
 private val INK_COLORS = listOf(
-    "White" to 0xFFFFFFFF.toInt(),
-    "Black" to 0xFF000000.toInt(),
-    "Gray" to 0xFF6B7280.toInt(),
-    "Red" to 0xFFEF4444.toInt(),
-    "Orange" to 0xFFF59E0B.toInt(),
-    "Green" to 0xFF22C55E.toInt(),
-    "Cyan" to 0xFF06B6D4.toInt(),
-    "Blue" to 0xFF3B82F6.toInt(),
-    "Purple" to 0xFF8B5CF6.toInt(),
-    "Pink" to 0xFFEC4899.toInt(),
+    R.string.color_white to 0xFFFFFFFF.toInt(),
+    R.string.color_black to 0xFF000000.toInt(),
+    R.string.color_gray to 0xFF6B7280.toInt(),
+    R.string.color_red to 0xFFEF4444.toInt(),
+    R.string.color_orange to 0xFFF59E0B.toInt(),
+    R.string.color_green to 0xFF22C55E.toInt(),
+    R.string.color_cyan to 0xFF06B6D4.toInt(),
+    R.string.color_blue to 0xFF3B82F6.toInt(),
+    R.string.color_purple to 0xFF8B5CF6.toInt(),
+    R.string.color_pink to 0xFFEC4899.toInt(),
 )
 
 /*
@@ -177,13 +180,14 @@ internal fun ObjectTooltip(
             // Absent, not disabled, for a kind with no colour of its own — and the divider goes
             // with it, or the bar opens on a rule with nothing to its left.
             if (swatch != null) {
+                val recolorDescription = stringResource(R.string.tooltip_recolor_ink)
                 Box {
                     IconButton(
                         onClick = { paletteOpen = true },
                         modifier = Modifier
                             .size(32.dp)
                             .testTag(OBJECT_COLOR_TAG)
-                            .semantics { contentDescription = "Change selected ink color" },
+                            .semantics { contentDescription = recolorDescription },
                     ) {
                         Box(
                             Modifier
@@ -199,13 +203,14 @@ internal fun ObjectTooltip(
                         INK_COLORS.chunked(5).forEach { row ->
                             Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
                                 row.forEach { (name, argb) ->
+                                    val colorName = stringResource(name)
                                     Box(
                                         Modifier
                                             .padding(4.dp)
                                             .size(40.dp)
                                             .clip(CircleShape)
                                             .background(Color(argb))
-                                            .semantics { contentDescription = name }
+                                            .semantics { contentDescription = colorName }
                                             .clickable {
                                                 paletteOpen = false
                                                 onRecolor(argb)
@@ -232,7 +237,7 @@ internal fun ObjectTooltip(
             ) {
                 Icon(
                     MaterialSymbols.ContentCopy,
-                    contentDescription = "Copy selected ink",
+                    contentDescription = stringResource(R.string.tooltip_copy_ink),
                     modifier = Modifier.size(18.dp),
                 )
             }
@@ -249,7 +254,7 @@ internal fun ObjectTooltip(
                         if (locked) MaterialSymbols.Lock else MaterialSymbols.LockOpen,
                         // The action, not the state — what this tap will do is what a screen reader
                         // has to announce before it is tapped.
-                        contentDescription = if (locked) "Unlock selection" else "Lock selection",
+                        contentDescription = stringResource(if (locked) R.string.tooltip_unlock else R.string.tooltip_lock),
                         modifier = Modifier.size(18.dp),
                     )
                 }
@@ -263,7 +268,7 @@ internal fun ObjectTooltip(
             ) {
                 Icon(
                     MaterialSymbols.Delete,
-                    contentDescription = "Delete selected ink",
+                    contentDescription = stringResource(R.string.tooltip_delete_ink),
                     tint = Color(0xFFFFA8A8),
                     modifier = Modifier.size(18.dp),
                 )
@@ -290,7 +295,7 @@ internal fun RowScope.GroupAction(
         modifier = Modifier.height(32.dp).testTag(OBJECT_GROUP_TAG),
     ) {
         Text(
-            text = if (isOneGroup) "Ungroup" else "Group",
+            text = stringResource(if (isOneGroup) R.string.tooltip_ungroup else R.string.tooltip_group),
             color = Color(0xFFE8EAED),
             style = MaterialTheme.typography.labelSmall,
         )
@@ -333,7 +338,7 @@ internal fun RowScope.RecognitionAction(
         )
         Spacer(Modifier.width(5.dp))
         Text(
-            text = "Math",
+            text = stringResource(R.string.tooltip_math),
             color = tint,
             style = MaterialTheme.typography.labelSmall,
         )
@@ -354,7 +359,7 @@ internal fun RowScope.SelectAllAction(onSelectAll: () -> Unit) {
         modifier = Modifier.height(32.dp).testTag(OBJECT_SELECT_ALL_TAG),
     ) {
         Text(
-            text = "Select all",
+            text = stringResource(R.string.tooltip_select_all),
             color = Color(0xFFE8EAED),
             style = MaterialTheme.typography.labelSmall,
         )
@@ -377,13 +382,14 @@ internal fun RowScope.SelectAllAction(onSelectAll: () -> Unit) {
 internal fun RowScope.EquationEditAction(latex: String?, onEdit: (String) -> Unit) {
     if (latex == null) return
     var open by remember { mutableStateOf(false) }
+    val description = stringResource(R.string.tooltip_edit_equation)
     Box {
         IconButton(
             onClick = { open = true },
             modifier = Modifier
                 .size(32.dp)
                 .testTag(OBJECT_EQUATION_EDIT_TAG)
-                .semantics { contentDescription = "Edit equation" },
+                .semantics { contentDescription = description },
         ) {
             Icon(
                 imageVector = MaterialSymbols.Function,
@@ -425,13 +431,15 @@ internal fun RowScope.ThicknessAction(
     onChange: (Int) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+    val borderWidth = stringResource(R.string.panel_border_width)
+    val description = stringResource(R.string.tooltip_change_border_width)
     Box {
         IconButton(
             onClick = { open = true },
             modifier = Modifier
                 .size(32.dp)
                 .testTag(OBJECT_THICKNESS_TAG)
-                .semantics { contentDescription = "Change border width" },
+                .semantics { contentDescription = description },
         ) {
             Box(
                 Modifier
@@ -445,7 +453,7 @@ internal fun RowScope.ThicknessAction(
             Column(Modifier.width(220.dp).padding(horizontal = 12.dp, vertical = 4.dp)) {
                 PanelSlider(
                     field = "Border width",
-                    label = "Border width",
+                    label = borderWidth,
                     value = width,
                     range = range,
                     onChange = onChange,
@@ -478,10 +486,10 @@ internal fun RowScope.TableRowAction(
     GridMenu(
         tag = TableActionTags.ROW,
         icon = MaterialSymbols.TableRows,
-        label = "Rows",
+        label = stringResource(R.string.tooltip_rows),
         entries = listOfNotNull(
-            GridMenuEntry("Insert below", TableActionTags.ROW_BELOW, onInsertBelow),
-            GridMenuEntry("Delete row", TableActionTags.ROW_DELETE, onDelete).takeIf { canDelete },
+            GridMenuEntry(stringResource(R.string.tooltip_insert_below), TableActionTags.ROW_BELOW, onInsertBelow),
+            GridMenuEntry(stringResource(R.string.tooltip_delete_row), TableActionTags.ROW_DELETE, onDelete).takeIf { canDelete },
         ),
     )
 }
@@ -495,10 +503,10 @@ internal fun RowScope.TableColumnAction(
     GridMenu(
         tag = TableActionTags.COLUMN,
         icon = MaterialSymbols.ViewColumn,
-        label = "Columns",
+        label = stringResource(R.string.tooltip_columns),
         entries = listOfNotNull(
-            GridMenuEntry("Insert right", TableActionTags.COLUMN_RIGHT, onInsertRight),
-            GridMenuEntry("Delete column", TableActionTags.COLUMN_DELETE, onDelete).takeIf { canDelete },
+            GridMenuEntry(stringResource(R.string.tooltip_insert_right), TableActionTags.COLUMN_RIGHT, onInsertRight),
+            GridMenuEntry(stringResource(R.string.tooltip_delete_column), TableActionTags.COLUMN_DELETE, onDelete).takeIf { canDelete },
         ),
     )
 }
@@ -522,12 +530,12 @@ internal fun RowScope.HeldRowActions(
     onInsertBelow: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    AxisButton(TableActionTags.ROW_BELOW, MaterialSymbols.AddRowBelow, "Insert row below", onInsertBelow)
+    AxisButton(TableActionTags.ROW_BELOW, MaterialSymbols.AddRowBelow, stringResource(R.string.tooltip_insert_row_below), onInsertBelow)
     if (canDelete) {
         AxisButton(
             tag = TableActionTags.ROW_DELETE,
             icon = MaterialSymbols.Remove,
-            label = "Delete row",
+            label = stringResource(R.string.tooltip_delete_row),
             tint = Color(0xFFFFA8A8),
             onClick = onDelete,
         )
@@ -544,14 +552,14 @@ internal fun RowScope.HeldColumnActions(
     AxisButton(
         tag = TableActionTags.COLUMN_RIGHT,
         icon = MaterialSymbols.AddColumnRight,
-        label = "Insert column right",
+        label = stringResource(R.string.tooltip_insert_column_right),
         onClick = onInsertRight,
     )
     if (canDelete) {
         AxisButton(
             tag = TableActionTags.COLUMN_DELETE,
             icon = MaterialSymbols.Remove,
-            label = "Delete column",
+            label = stringResource(R.string.tooltip_delete_column),
             tint = Color(0xFFFFA8A8),
             onClick = onDelete,
         )
@@ -625,13 +633,13 @@ private fun GridMenu(
  * one value that cannot be mixed — an absent fill is not a transparent one, and a chequer of the
  * surface behind it is how you say so without a word.
  *
- * A picture's background is the same control in its own words and glyphs: [noun], and the
+ * A picture's background is the same control in its own words and glyphs: [words], and the
  * [glyph] / [noneGlyph] pair standing in for the swatch and the Block icon.
  */
 @Composable
 internal fun RowScope.FillAction(
     fill: Int?,
-    noun: String = "fill",
+    words: FillWords = FillWords.Fill,
     /** What the button wears once a colour is set. Null shows the colour itself, as a swatch. */
     glyph: ImageVector? = null,
     /** What it wears with no colour, also leading the "No …" entry. Null is the shape's Block icon. */
@@ -639,13 +647,14 @@ internal fun RowScope.FillAction(
     onChange: (Int?) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+    val description = stringResource(words.change)
     Box {
         IconButton(
             onClick = { open = true },
             modifier = Modifier
                 .size(32.dp)
                 .testTag(OBJECT_FILL_TAG)
-                .semantics { contentDescription = "Change $noun color" },
+                .semantics { contentDescription = description },
         ) {
             if (fill == null) {
                 Icon(
@@ -677,19 +686,20 @@ internal fun RowScope.FillAction(
                         Icon(it, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
                         Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                     }
-                    Text("No $noun", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(words.none), style = MaterialTheme.typography.labelLarge)
                 }
             }
             INK_COLORS.chunked(5).forEach { row ->
                 Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
                     row.forEach { (name, argb) ->
+                        val swatchDescription = stringResource(words.swatch, stringResource(name))
                         Box(
                             Modifier
                                 .padding(4.dp)
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color(argb))
-                                .semantics { contentDescription = "$name $noun" }
+                                .semantics { contentDescription = swatchDescription }
                                 .clickable {
                                     open = false
                                     onChange(argb)
@@ -700,6 +710,17 @@ internal fun RowScope.FillAction(
             }
         }
     }
+}
+
+/** How [FillAction] words itself: a shape's fill, or a picture's background. */
+internal enum class FillWords(
+    @StringRes val change: Int,
+    @StringRes val none: Int,
+    /** Takes the colour's name: "Red fill". */
+    @StringRes val swatch: Int,
+) {
+    Fill(R.string.tooltip_change_fill, R.string.tooltip_no_fill, R.string.tooltip_fill_swatch),
+    Background(R.string.tooltip_change_background, R.string.tooltip_no_background, R.string.tooltip_background_swatch),
 }
 
 /**
@@ -715,13 +736,14 @@ internal fun RowScope.FillAction(
 @Composable
 internal fun RowScope.LineTypeAction(current: LineType, onChange: (LineType) -> Unit) {
     var open by remember { mutableStateOf(false) }
+    val description = stringResource(R.string.tooltip_change_line_type)
     Box {
         IconButton(
             onClick = { open = true },
             modifier = Modifier
                 .size(32.dp)
                 .testTag(OBJECT_LINE_TYPE_TAG)
-                .semantics { contentDescription = "Change line type" },
+                .semantics { contentDescription = description },
         ) {
             Canvas(Modifier.size(width = 18.dp, height = 18.dp)) {
                 val stroke = 2.dp.toPx()

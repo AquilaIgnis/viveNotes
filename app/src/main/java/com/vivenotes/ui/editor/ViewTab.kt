@@ -30,7 +30,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.TabsLayout
@@ -80,13 +82,13 @@ private val PAGE_COLORS = listOf(
 ).map { it.toInt() }
 
 private val RULE_LINE_LABELS = listOf(
-    RuleLines.None to "None",
-    RuleLines.Standard to "Standard Ruled",
-    RuleLines.Wide to "Wide Ruled",
-    RuleLines.Dotted to "Dotted Paper",
-    RuleLines.Hexagonal to "Hexagonal Paper",
-    RuleLines.GridMedium to "Medium Grid",
-    RuleLines.GridLarge to "Large Grid",
+    RuleLines.None to R.string.view_paper_none,
+    RuleLines.Standard to R.string.view_paper_standard_ruled,
+    RuleLines.Wide to R.string.view_paper_wide_ruled,
+    RuleLines.Dotted to R.string.view_paper_dotted,
+    RuleLines.Hexagonal to R.string.view_paper_hexagonal,
+    RuleLines.GridMedium to R.string.view_paper_grid_medium,
+    RuleLines.GridLarge to R.string.view_paper_grid_large,
 )
 
 /**
@@ -120,21 +122,21 @@ internal fun ViewTab(
         Divider()
 
         Text(
-            text = "Zoom:",
+            text = stringResource(R.string.view_zoom_label),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
         ZoomPicker(settings.zoom, actions.setZoom)
-        RibbonButton(MaterialSymbols.ZoomIn, "Zoom in", onClick = actions.zoomIn)
-        RibbonButton(MaterialSymbols.ZoomOut, "Zoom out", onClick = actions.zoomOut)
+        RibbonButton(MaterialSymbols.ZoomIn, stringResource(R.string.view_zoom_in), onClick = actions.zoomIn)
+        RibbonButton(MaterialSymbols.ZoomOut, stringResource(R.string.view_zoom_out), onClick = actions.zoomOut)
         RibbonCommand(
-            label = "100%",
+            label = stringResource(R.string.view_zoom_percent, 100),
             onClick = { actions.setZoom(1f) },
             icon = { MonoIcon(MaterialSymbols.Article) },
         )
         RibbonCommand(
-            label = "Page Width",
+            label = stringResource(R.string.view_page_width),
             onClick = actions.zoomToPageWidth,
             icon = { active -> TwoToneIcon({ it.pageWidth }, active) },
         )
@@ -150,7 +152,7 @@ internal fun ViewTab(
         )
         PageColorMenu(style.backgroundArgb, pageOpen, actions.setPageColor)
         RibbonCommand(
-            label = "Paper Size",
+            label = stringResource(R.string.view_paper_size),
             // A pane rather than a menu: this one is six fields in two groups, and it has to stay
             // open while the page changes shape underneath it.
             onClick = { actions.openPane(ToolPane.PaperSize) },
@@ -159,14 +161,14 @@ internal fun ViewTab(
             icon = { active -> TwoToneIcon({ it.paperSize }, active) },
         )
         RibbonCommand(
-            label = "Hide Page Title",
+            label = stringResource(R.string.view_hide_page_title),
             onClick = { actions.setHideTitle(!style.hideTitle) },
             active = style.hideTitle,
             enabled = pageOpen,
             icon = { active -> TwoToneIcon({ it.hidePageTitle }, active) },
         )
         RibbonCommand(
-            label = "Switch Background",
+            label = stringResource(R.string.view_switch_background),
             // Reads the canvas rather than the theme: once this has been used the two differ, and
             // what the button flips is what the user is actually looking at.
             onClick = { actions.setCanvasDark(!canvas.isDark) },
@@ -215,11 +217,11 @@ private fun ZoomPicker(zoom: Float, onPick: (Float) -> Unit) {
     Box {
         // Rounded for display only: Page Width lands on whatever fits, and showing 86% while the
         // page is at 0.857 is the truth at the precision anyone cares about.
-        ComboBox(text = "${(zoom * 100).roundToInt()}%", width = 74.dp) { open = true }
+        ComboBox(text = stringResource(R.string.view_zoom_percent, (zoom * 100).roundToInt()), width = 74.dp) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             ViewSettings.ZOOM_STEPS.forEach { step ->
                 DropdownMenuItem(
-                    text = { Text("${(step * 100).roundToInt()}%") },
+                    text = { Text(stringResource(R.string.view_zoom_percent, (step * 100).roundToInt())) },
                     onClick = {
                         open = false
                         onPick(step)
@@ -235,17 +237,17 @@ private fun TabsLayoutMenu(current: TabsLayout, onPick: (TabsLayout) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         RibbonCommand(
-            label = "Tabs Layout",
+            label = stringResource(R.string.view_tabs_layout),
             onClick = { open = true },
             dropdown = true,
             icon = { active -> TwoToneIcon({ it.tabsLayout }, active) },
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            CheckableItem("Vertical Tabs", current == TabsLayout.Vertical) {
+            CheckableItem(stringResource(R.string.view_tabs_vertical), current == TabsLayout.Vertical) {
                 open = false
                 onPick(TabsLayout.Vertical)
             }
-            CheckableItem("Horizontal Tabs", current == TabsLayout.Horizontal) {
+            CheckableItem(stringResource(R.string.view_tabs_horizontal), current == TabsLayout.Horizontal) {
                 open = false
                 onPick(TabsLayout.Horizontal)
             }
@@ -270,7 +272,7 @@ private fun RuleLinesMenu(
     var open by remember { mutableStateOf(false) }
     Box {
         RibbonCommand(
-            label = "Paper",
+            label = stringResource(R.string.view_paper),
             onClick = { open = true },
             active = current != RuleLines.None,
             enabled = pageOpen,
@@ -278,12 +280,12 @@ private fun RuleLinesMenu(
             icon = { active -> TwoToneIcon({ it.ruleLines }, active) },
         )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DefaultHint("Hold a paper to start new pages on it")
+            DefaultHint(stringResource(R.string.view_paper_hint))
             HorizontalDivider()
             RULE_LINE_LABELS.forEach { (rule, label) ->
                 if (rule == RuleLines.Dotted) HorizontalDivider()
                 MenuRow(
-                    label = label,
+                    label = stringResource(label),
                     isDefault = rule == default,
                     onClick = {
                         open = false
@@ -305,7 +307,7 @@ private fun PageColorMenu(current: Int?, pageOpen: Boolean, onPick: (Int?) -> Un
     val icon = remember(neutral, swatch) { pageColorGlyph(neutral, swatch) }
     Box {
         RibbonCommand(
-            label = "Page Color",
+            label = stringResource(R.string.view_page_color),
             onClick = { open = true },
             enabled = pageOpen,
             dropdown = true,
@@ -346,7 +348,7 @@ private fun PageColorMenu(current: Int?, pageOpen: Boolean, onPick: (Int?) -> Un
                         }
                     }
                 }
-                CheckableItem("No Color", current == null) {
+                CheckableItem(stringResource(R.string.view_page_color_none), current == null) {
                     open = false
                     onPick(null)
                 }

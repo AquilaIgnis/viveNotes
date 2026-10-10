@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -79,7 +80,7 @@ internal fun AboutDialog(onDismiss: () -> Unit) {
                     modifier = Modifier.size(96.dp),
                 )
                 Text(
-                    text = "ViveNotes",
+                    text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -90,8 +91,7 @@ internal fun AboutDialog(onDismiss: () -> Unit) {
                     modifier = Modifier.testTag(AboutTags.VERSION),
                 )
                 Text(
-                    text = "An open-source OneNote alternative, " +
-                            "licensed under Source First License 1.1",
+                    text = stringResource(R.string.about_description),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -118,7 +118,7 @@ internal fun AboutDialog(onDismiss: () -> Unit) {
                         modifier = Modifier.size(18.dp),
                     )
                     Text(
-                        text = "View on GitHub",
+                        text = stringResource(R.string.about_source),
                         modifier = Modifier.padding(start = 10.dp),
                     )
                 }
@@ -141,7 +141,7 @@ internal fun AboutDialog(onDismiss: () -> Unit) {
                         modifier = Modifier.size(20.dp),
                     )
                     Text(
-                        text = "Donate to project",
+                        text = stringResource(R.string.about_donate),
                         modifier = Modifier.padding(start = 10.dp),
                     )
                 }
@@ -152,7 +152,7 @@ internal fun AboutDialog(onDismiss: () -> Unit) {
             TextButton(
                 onClick = onDismiss,
                 modifier = Modifier.testTag(AboutTags.CLOSE),
-            ) { Text("Close") }
+            ) { Text(stringResource(R.string.about_close)) }
         },
         modifier = Modifier.testTag(AboutTags.DIALOG),
     )
@@ -188,8 +188,8 @@ private fun rememberAppVersion(): String {
     return remember(context) {
         runCatching {
             val info = context.packageManager.getPackageInfo(context.packageName, 0)
-            "Version ${info.versionName}"
-        }.getOrDefault("Version unknown")
+            context.getString(R.string.about_version, info.versionName)
+        }.getOrDefault(context.getString(R.string.about_version_unknown))
     }
 }
 

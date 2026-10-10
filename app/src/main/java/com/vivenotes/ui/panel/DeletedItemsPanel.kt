@@ -1,5 +1,6 @@
 package com.vivenotes.ui.panel
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -20,8 +22,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.DeletedItem
 import com.vivenotes.data.DeletedItemKind
 import com.vivenotes.ui.DeletedItemsState
@@ -43,8 +48,7 @@ internal fun DeletedItemsPanelContent(
     onClearStatus: () -> Unit,
 ) {
     Text(
-        text = "Restore deleted notebooks, sections, and pages from anywhere in the app. " +
-            "Items are permanently deleted after 7 days.",
+        text = stringResource(R.string.deleted_items_intro),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -66,15 +70,15 @@ internal fun DeletedItemsPanelContent(
                 color = if (state.error != null) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.primary,
             )
-            TextButton(onClick = onClearStatus) { Text("Dismiss") }
+            TextButton(onClick = onClearStatus) { Text(stringResource(R.string.deleted_items_dismiss)) }
         }
         Spacer(Modifier.height(8.dp))
     }
 
     when {
-        state.loading -> RecoveryStatus("Loading deleted items…", progress = true)
+        state.loading -> RecoveryStatus(stringResource(R.string.deleted_items_loading), progress = true)
         state.items.isEmpty() -> RecoveryStatus(
-            text = "Deleted Items is empty",
+            text = stringResource(R.string.deleted_items_empty),
             modifier = Modifier.testTag(DeletedItemsPanelTags.EMPTY),
         )
         else -> state.items.forEach { item ->
@@ -108,7 +112,7 @@ private fun DeletedItemCard(
     ) {
         Column(Modifier.padding(12.dp)) {
             Text(
-                text = item.key.kind.label,
+                text = stringResource(item.key.kind.label),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -119,12 +123,12 @@ private fun DeletedItemCard(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = item.details,
+                text = item.details(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "Deleted ${formatter.format(Date(item.deletedAt))}",
+                text = stringResource(R.string.deleted_items_deleted_at, formatter.format(Date(item.deletedAt))),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -142,37 +146,42 @@ private fun DeletedItemCard(
                         strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
-                    Text("  Restoring…")
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.deleted_items_restoring))
                 } else {
-                    Text("Restore")
+                    Text(stringResource(R.string.deleted_items_restore))
                 }
             }
         }
     }
 }
 
-private val DeletedItemKind.label: String
+@get:StringRes
+private val DeletedItemKind.label: Int
     get() = when (this) {
-        DeletedItemKind.Notebook -> "NOTEBOOK"
-        DeletedItemKind.Section -> "SECTION"
-        DeletedItemKind.Page -> "PAGE"
+        DeletedItemKind.Notebook -> R.string.deleted_items_kind_notebook
+        DeletedItemKind.Section -> R.string.deleted_items_kind_section
+        DeletedItemKind.Page -> R.string.deleted_items_kind_page
     }
 
-private val DeletedItem.details: String
-    get() = when (key.kind) {
-        DeletedItemKind.Notebook -> listOf(
-            counted(sectionCount, "section"),
-            counted(pageCount, "page"),
-        ).joinToString(" · ")
-        DeletedItemKind.Section -> buildString {
-            append("In ${notebookName ?: "notebook"}")
-            append(" · ${counted(pageCount, "page")}")
-        }
-        DeletedItemKind.Page -> "In ${sectionName ?: "section"} · ${notebookName ?: "notebook"}"
+@Composable
+private fun DeletedItem.details(): String {
+    val notebook = notebookName ?: stringResource(R.string.deleted_items_unknown_notebook)
+    val pages = pluralStringResource(R.plurals.deleted_items_pages, pageCount, pageCount)
+    return when (key.kind) {
+        DeletedItemKind.Notebook -> stringResource(
+            R.string.panel_separated,
+            pluralStringResource(R.plurals.deleted_items_sections, sectionCount, sectionCount),
+            pages,
+        )
+        DeletedItemKind.Section -> stringResource(R.string.deleted_items_section_details, notebook, pages)
+        DeletedItemKind.Page -> stringResource(
+            R.string.deleted_items_page_details,
+            sectionName ?: stringResource(R.string.deleted_items_unknown_section),
+            notebook,
+        )
     }
-
-private fun counted(value: Int, noun: String): String =
-    if (value == 1) "1 $noun" else "$value ${noun}s"
+}
 
 @Composable
 private fun RecoveryStatus(

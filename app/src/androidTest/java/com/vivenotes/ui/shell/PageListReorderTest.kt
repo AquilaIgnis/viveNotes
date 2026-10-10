@@ -94,7 +94,7 @@ class PageListReorderTest {
         compose.onNodeWithTag(PageListTags.dragHandle("a"), useUnmergedTree = true).assertIsDisplayed()
 
         compose.onNodeWithContentDescription("Sort pages").performClick()
-        compose.onNodeWithText(PageSort.Alphabetical.label).performClick()
+        compose.onNodeWithText("By title").performClick()
         compose.waitForIdle()
 
         compose.onNodeWithTag(PageListTags.dragHandle("a"), useUnmergedTree = true).assertDoesNotExist()

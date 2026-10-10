@@ -1,8 +1,11 @@
 package com.vivenotes.ui
 
+import android.content.res.Resources
 import android.view.KeyEvent
 import android.view.KeyboardShortcutGroup
 import android.view.KeyboardShortcutInfo
+import androidx.annotation.StringRes
+import com.vivenotes.R
 
 /**
  * The app's hardware-keyboard shortcuts.
@@ -22,9 +25,9 @@ import android.view.KeyboardShortcutInfo
  */
 internal data class AppShortcut(
     /** How the helper panel names it. */
-    val label: String,
+    @StringRes val label: Int,
     /** The helper panel's heading this sits under. */
-    val group: String,
+    @StringRes val group: Int,
     val keyCode: Int,
     /**
      * Modifiers that must be held, and *only* these — matched with [KeyEvent.hasModifiers], which is
@@ -45,37 +48,44 @@ internal data class AppShortcut(
 private const val CTRL = KeyEvent.META_CTRL_ON
 private const val CTRL_SHIFT = KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON
 
+private val PAGES = R.string.shortcut_group_pages
+private val EDIT = R.string.shortcut_group_edit
+private val VIEW = R.string.shortcut_group_view
+private val FORMATTING = R.string.shortcut_group_formatting
+private val PARAGRAPH = R.string.shortcut_group_paragraph
+private val TABLE = R.string.shortcut_group_table
+
 internal val APP_SHORTCUTS: List<AppShortcut> = listOf(
-    AppShortcut("New page", "Pages", KeyEvent.KEYCODE_N, CTRL) { it.addPage() },
+    AppShortcut(R.string.shortcut_new_page, PAGES, KeyEvent.KEYCODE_N, CTRL) { it.addPage() },
 
-    AppShortcut("Undo", "Edit", KeyEvent.KEYCODE_Z, CTRL, repeatable = true) { it.undoCanvas() },
-    AppShortcut("Redo", "Edit", KeyEvent.KEYCODE_Z, CTRL_SHIFT, repeatable = true) { it.redoCanvas() },
+    AppShortcut(R.string.shortcut_undo, EDIT, KeyEvent.KEYCODE_Z, CTRL, repeatable = true) { it.undoCanvas() },
+    AppShortcut(R.string.shortcut_redo, EDIT, KeyEvent.KEYCODE_Z, CTRL_SHIFT, repeatable = true) { it.redoCanvas() },
 
-    AppShortcut("Zoom in", "View", KeyEvent.KEYCODE_EQUALS, CTRL, repeatable = true) { it.zoomIn() },
-    AppShortcut("Zoom out", "View", KeyEvent.KEYCODE_MINUS, CTRL, repeatable = true) { it.zoomOut() },
-    AppShortcut("Actual size", "View", KeyEvent.KEYCODE_0, CTRL) { it.setZoom(1f) },
+    AppShortcut(R.string.shortcut_zoom_in, VIEW, KeyEvent.KEYCODE_EQUALS, CTRL, repeatable = true) { it.zoomIn() },
+    AppShortcut(R.string.shortcut_zoom_out, VIEW, KeyEvent.KEYCODE_MINUS, CTRL, repeatable = true) { it.zoomOut() },
+    AppShortcut(R.string.shortcut_actual_size, VIEW, KeyEvent.KEYCODE_0, CTRL) { it.setZoom(1f) },
 
     // The same three keys as most people actually press them. A keyboard's "+" is Shift+= on the
     // main block and a key of its own on the numpad, and neither reaches the row above: matching is
     // exact, so Ctrl+Shift+= is a different chord from Ctrl+=. Unlisted, because the panel should
     // name one way to zoom in rather than three.
-    AppShortcut("Zoom in", "View", KeyEvent.KEYCODE_EQUALS, CTRL_SHIFT, repeatable = true, listed = false) { it.zoomIn() },
-    AppShortcut("Zoom in", "View", KeyEvent.KEYCODE_NUMPAD_ADD, CTRL, repeatable = true, listed = false) { it.zoomIn() },
-    AppShortcut("Zoom out", "View", KeyEvent.KEYCODE_NUMPAD_SUBTRACT, CTRL, repeatable = true, listed = false) { it.zoomOut() },
-    AppShortcut("Actual size", "View", KeyEvent.KEYCODE_NUMPAD_0, CTRL, listed = false) { it.setZoom(1f) },
+    AppShortcut(R.string.shortcut_zoom_in, VIEW, KeyEvent.KEYCODE_EQUALS, CTRL_SHIFT, repeatable = true, listed = false) { it.zoomIn() },
+    AppShortcut(R.string.shortcut_zoom_in, VIEW, KeyEvent.KEYCODE_NUMPAD_ADD, CTRL, repeatable = true, listed = false) { it.zoomIn() },
+    AppShortcut(R.string.shortcut_zoom_out, VIEW, KeyEvent.KEYCODE_NUMPAD_SUBTRACT, CTRL, repeatable = true, listed = false) { it.zoomOut() },
+    AppShortcut(R.string.shortcut_actual_size, VIEW, KeyEvent.KEYCODE_NUMPAD_0, CTRL, listed = false) { it.setZoom(1f) },
 
     // Handled by the focused editor, listed here so the panel tells the whole truth — see the KDoc.
-    AppShortcut("Bold", "Formatting", KeyEvent.KEYCODE_B, CTRL),
-    AppShortcut("Italic", "Formatting", KeyEvent.KEYCODE_I, CTRL),
-    AppShortcut("Underline", "Formatting", KeyEvent.KEYCODE_U, CTRL),
-    AppShortcut("Indent", "Paragraph", KeyEvent.KEYCODE_TAB, modifiers = 0),
-    AppShortcut("Outdent", "Paragraph", KeyEvent.KEYCODE_TAB, KeyEvent.META_SHIFT_ON),
+    AppShortcut(R.string.shortcut_bold, FORMATTING, KeyEvent.KEYCODE_B, CTRL),
+    AppShortcut(R.string.shortcut_italic, FORMATTING, KeyEvent.KEYCODE_I, CTRL),
+    AppShortcut(R.string.shortcut_underline, FORMATTING, KeyEvent.KEYCODE_U, CTRL),
+    AppShortcut(R.string.shortcut_indent, PARAGRAPH, KeyEvent.KEYCODE_TAB, modifiers = 0),
+    AppShortcut(R.string.shortcut_outdent, PARAGRAPH, KeyEvent.KEYCODE_TAB, KeyEvent.META_SHIFT_ON),
 
     // The same key, listed twice on purpose. Inside a table Tab walks the
     // grid and only indents where the walk runs out, so a panel that named one meaning would be
     // wrong wherever the caret actually was.
-    AppShortcut("Next cell", "Table", KeyEvent.KEYCODE_TAB, modifiers = 0),
-    AppShortcut("Previous cell", "Table", KeyEvent.KEYCODE_TAB, KeyEvent.META_SHIFT_ON),
+    AppShortcut(R.string.shortcut_next_cell, TABLE, KeyEvent.KEYCODE_TAB, modifiers = 0),
+    AppShortcut(R.string.shortcut_previous_cell, TABLE, KeyEvent.KEYCODE_TAB, KeyEvent.META_SHIFT_ON),
 )
 
 /**
@@ -122,18 +132,18 @@ private fun keyLabel(keyCode: Int): String = when (keyCode) {
  * Shares [APP_SHORTCUTS] and its `listed` flag with [shortcutGroups] for the reason given in the
  * KDoc above — a third hand-kept list of shortcuts is a third thing to fall out of date.
  */
-internal fun shortcutRows(): List<Pair<String, List<AppShortcut>>> =
+internal fun shortcutRows(): List<Pair<Int, List<AppShortcut>>> =
     APP_SHORTCUTS.filter { it.listed }
         .groupBy { it.group }
         .map { (group, shortcuts) -> group to shortcuts }
 
 /** The same table as the system's Meta + / panel wants it — grouped, in declaration order. */
-internal fun shortcutGroups(): List<KeyboardShortcutGroup> =
+internal fun shortcutGroups(resources: Resources): List<KeyboardShortcutGroup> =
     APP_SHORTCUTS.filter { it.listed }
         .groupBy { it.group }
         .map { (group, shortcuts) ->
             KeyboardShortcutGroup(
-                group,
-                shortcuts.map { KeyboardShortcutInfo(it.label, it.keyCode, it.modifiers) },
+                resources.getString(group),
+                shortcuts.map { KeyboardShortcutInfo(resources.getString(it.label), it.keyCode, it.modifiers) },
             )
         }

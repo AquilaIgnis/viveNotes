@@ -28,8 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.db.PageRevisionSummary
 import com.vivenotes.ui.VersionHistoryState
 import java.text.DateFormat
@@ -53,22 +55,22 @@ internal fun VersionHistoryPanelContent(
     onSelect: (String) -> Unit,
 ) {
     Text(
-        text = "Earlier saved versions of this page, newest first.",
+        text = stringResource(R.string.version_history_intro),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(6.dp))
     Text(
-        text = "A restore returns the whole page state",
+        text = stringResource(R.string.version_history_restore_note),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(12.dp))
 
     when {
-        state.loading -> Status("Loading versions…", progress = true)
+        state.loading -> Status(stringResource(R.string.version_history_loading), progress = true)
         state.revisions.isEmpty() && state.error == null -> Status(
-            "No earlier versions yet",
+            stringResource(R.string.version_history_empty),
         )
         else -> state.revisions.forEach { revision ->
             RevisionRow(
@@ -108,20 +110,19 @@ internal fun VersionHistoryPanelFooter(
                 .fillMaxWidth()
                 .testTag(VersionHistoryPanelTags.RESTORE),
         ) {
-            Text(if (state.restoring) "Restoring…" else "Restore this version")
+            Text(
+                stringResource(
+                    if (state.restoring) R.string.version_history_restoring else R.string.version_history_restore_version,
+                ),
+            )
         }
     }
 
     if (confirmingRestore) {
         AlertDialog(
             onDismissRequest = { if (!state.restoring) confirmingRestore = false },
-            title = { Text("Restore this version?") },
-            text = {
-                Text(
-                    "The selected version will replace the page's saved state " +
-                        "Your current version will be kept in history"
-                )
-            },
+            title = { Text(stringResource(R.string.version_history_confirm_title)) },
+            text = { Text(stringResource(R.string.version_history_confirm_body)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -131,7 +132,7 @@ internal fun VersionHistoryPanelFooter(
                     enabled = !state.restoring,
                     modifier = Modifier.testTag(VersionHistoryPanelTags.CONFIRM),
                 ) {
-                    Text("Restore")
+                    Text(stringResource(R.string.version_history_confirm))
                 }
             },
             dismissButton = {
@@ -139,7 +140,7 @@ internal fun VersionHistoryPanelFooter(
                     onClick = { confirmingRestore = false },
                     enabled = !state.restoring,
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.version_history_cancel))
                 }
             },
         )
@@ -218,8 +219,9 @@ private fun Status(text: String, progress: Boolean = false) {
     }
 }
 
+@Composable
 private fun formatBytes(bytes: Int): String = when {
-    bytes < 1_000 -> "$bytes B"
-    bytes < 1_000_000 -> "${(bytes / 100.0).roundToInt() / 10.0} KB"
-    else -> "${(bytes / 100_000.0).roundToInt() / 10.0} MB"
+    bytes < 1_000 -> stringResource(R.string.panel_size_bytes, bytes)
+    bytes < 1_000_000 -> stringResource(R.string.panel_size_kilobytes, "${(bytes / 100.0).roundToInt() / 10.0}")
+    else -> stringResource(R.string.panel_size_megabytes, "${(bytes / 100_000.0).roundToInt() / 10.0}")
 }

@@ -1,5 +1,7 @@
 package com.vivenotes.ui.panel
 
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -34,6 +36,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -44,6 +48,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.model.search.ContentHit
 import com.vivenotes.model.search.ContentKind
 import com.vivenotes.model.search.MatchSpan
@@ -102,7 +107,7 @@ internal fun ColumnScope.ContentPanelHeader(
         Box(Modifier.weight(1f)) {
             if (state.query.isEmpty()) {
                 Text(
-                    text = "Search this notebook",
+                    text = stringResource(R.string.content_search_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -128,7 +133,7 @@ internal fun ColumnScope.ContentPanelHeader(
         if (state.query.isNotEmpty()) {
             Icon(
                 imageVector = MaterialSymbols.Close,
-                contentDescription = "Clear search",
+                contentDescription = stringResource(R.string.content_clear_search),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .size(24.dp)
@@ -185,20 +190,38 @@ internal fun ColumnScope.ContentPanelHeader(
 }
 
 /** "Reading 3 pictures and 2 handwritten pages…", naming only what is actually running. */
+@Composable
 private fun readingLine(pictures: ImageTextProgress, ink: InkTextProgress): String {
     val parts = buildList {
-        if (pictures.running) add(counted(pictures.pending, "picture", "pictures"))
-        if (ink.running) add(counted(ink.pending, "handwritten page", "handwritten pages"))
+        if (pictures.running) {
+            add(
+                counted(
+                    pictures.pending,
+                    R.plurals.content_reading_pictures,
+                    R.string.content_reading_pictures_unnumbered,
+                ),
+            )
+        }
+        if (ink.running) {
+            add(
+                counted(
+                    ink.pending,
+                    R.plurals.content_reading_handwritten_pages,
+                    R.string.content_reading_handwritten_pages_unnumbered,
+                ),
+            )
+        }
     }
-    return "Reading ${parts.joinToString(" and ")}…"
+    return when (parts.size) {
+        2 -> stringResource(R.string.content_reading_both, parts[0], parts[1])
+        else -> stringResource(R.string.content_reading, parts.firstOrNull().orEmpty())
+    }
 }
 
 /** A pass between batches has nothing pending yet and is still running; it gets no number. */
-private fun counted(count: Int, one: String, many: String): String = when {
-    count <= 0 -> many
-    count == 1 -> "1 $one"
-    else -> "$count $many"
-}
+@Composable
+private fun counted(count: Int, @PluralsRes numbered: Int, @StringRes unnumbered: Int): String =
+    if (count <= 0) stringResource(unnumbered) else pluralStringResource(numbered, count, count)
 
 /**
  * The results, grouped by the page they were found on.
@@ -235,7 +258,7 @@ internal fun ColumnScope.ContentPanelContent(
         val hidden = blocks.size - HITS_PER_PAGE
         if (hidden > 0) {
             Text(
-                text = "+$hidden more on this page",
+                text = pluralStringResource(R.plurals.content_more_on_page, hidden, hidden),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 10.dp, top = 2.dp, bottom = 4.dp),
@@ -248,7 +271,7 @@ internal fun ColumnScope.ContentPanelContent(
 @Composable
 private fun PageHeading(page: PageResults, onOpenHit: (ContentHit) -> Unit) {
     val titleHit = page.hits.firstOrNull { it.unit.kind == ContentKind.Title }
-    val title = page.title.ifBlank { "Untitled page" }
+    val title = page.title.ifBlank { stringResource(R.string.content_untitled_page) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -295,7 +318,7 @@ private fun HitRow(hit: ContentHit, onOpenHit: (ContentHit) -> Unit) {
         when (hit.unit.kind) {
             ContentKind.Cell -> Icon(
                 imageVector = MaterialSymbols.Table,
-                contentDescription = "In a table",
+                contentDescription = stringResource(R.string.content_hit_in_table),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(top = 2.dp)
@@ -303,7 +326,7 @@ private fun HitRow(hit: ContentHit, onOpenHit: (ContentHit) -> Unit) {
             )
             ContentKind.Image -> Icon(
                 imageVector = MaterialSymbols.Image,
-                contentDescription = "Read from a picture",
+                contentDescription = stringResource(R.string.content_hit_from_picture),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(top = 2.dp)
@@ -311,7 +334,7 @@ private fun HitRow(hit: ContentHit, onOpenHit: (ContentHit) -> Unit) {
             )
             ContentKind.Ink -> Icon(
                 imageVector = MaterialSymbols.Stylus,
-                contentDescription = "Read from handwriting",
+                contentDescription = stringResource(R.string.content_hit_from_handwriting),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .padding(top = 2.dp)
@@ -353,18 +376,19 @@ private fun highlighted(text: String, spans: List<MatchSpan>): AnnotatedString {
     }
 }
 
+@Composable
 private fun ContentSearchState.statusLine(): String = when {
-    query.isBlank() -> "Text, handwriting, pictures and page titles across this notebook."
+    query.isBlank() -> stringResource(R.string.content_status_idle)
     // While a query is in flight the list below is still the previous one's, so the line says what
     // is happening rather than counting an answer to a question that has changed.
-    running -> "Searching…"
+    running -> stringResource(R.string.content_status_searching)
     results == null -> ""
-    results.hitCount == 0 -> "No matches."
+    results.hitCount == 0 -> stringResource(R.string.content_status_no_matches)
     else -> {
-        val matches = if (results.hitCount == 1) "1 match" else "${results.hitCount} matches"
-        val pages = if (results.pages.size == 1) "1 page" else "${results.pages.size} pages"
-        val counted = if (results.truncated) "First $matches" else matches
-        "$counted on $pages"
+        val matches = pluralStringResource(R.plurals.content_status_matches, results.hitCount, results.hitCount)
+        val pages = pluralStringResource(R.plurals.content_status_pages, results.pages.size, results.pages.size)
+        val counted = if (results.truncated) stringResource(R.string.content_status_first, matches) else matches
+        stringResource(R.string.content_status_found, counted, pages)
     }
 }
 

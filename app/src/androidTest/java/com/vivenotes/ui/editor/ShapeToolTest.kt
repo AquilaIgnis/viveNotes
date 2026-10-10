@@ -927,7 +927,7 @@ class ShapeToolTest {
         setToolkit {
             FillAction(
                 fill = null,
-                noun = "background",
+                words = FillWords.Background,
                 glyph = MaterialSymbols.BackgroundReplace,
                 noneGlyph = MaterialSymbols.BackgroundNone,
             ) { fill = it }

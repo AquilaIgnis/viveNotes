@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +48,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.ink.PageBounds
 import com.vivenotes.model.Block
@@ -258,7 +260,7 @@ internal fun TableContainer(
                     if (selected) {
                         Icon(
                             imageVector = MaterialSymbols.DragIndicator,
-                            contentDescription = "Move table",
+                            contentDescription = stringResource(R.string.table_move),
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(TABLE_GUTTER - 2.dp),
                         )

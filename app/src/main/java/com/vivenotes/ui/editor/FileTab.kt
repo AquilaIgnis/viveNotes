@@ -6,7 +6,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.ui.ScrollingRow
 
 @Immutable
@@ -48,7 +50,7 @@ internal fun FileTab(
         // wants rather than its owner, which is why it is the one the eye reaches first.
         Box(Modifier.testTag(FileTags.EXPORT_PDF)) {
             RibbonCommand(
-                label = "Export PDF",
+                label = stringResource(R.string.file_export_pdf),
                 onClick = actions.exportPdf,
                 enabled = pageOpen,
                 icon = { active -> TwoToneIcon({ it.exportPdf }, active) },
@@ -58,7 +60,7 @@ internal fun FileTab(
 
         Box(Modifier.testTag(FileTags.VERSION_HISTORY)) {
             RibbonCommand(
-                label = "Version History",
+                label = stringResource(R.string.file_version_history),
                 onClick = actions.openVersionHistory,
                 enabled = pageOpen,
                 icon = { active -> TwoToneIcon({ it.versionHistory }, active) },
@@ -66,7 +68,7 @@ internal fun FileTab(
         }
         Box(Modifier.testTag(FileTags.DELETED_ITEMS)) {
             RibbonCommand(
-                label = "Deleted Items",
+                label = stringResource(R.string.file_deleted_items),
                 onClick = actions.openDeletedItems,
                 icon = { active -> TwoToneIcon({ it.deletedItems }, active) },
             )
@@ -76,7 +78,7 @@ internal fun FileTab(
         // notebook they cannot see will look at whichever of them they find first.
         Box(Modifier.testTag(FileTags.CLOSED_NOTEBOOKS)) {
             RibbonCommand(
-                label = "Closed Notebooks",
+                label = stringResource(R.string.file_closed_notebooks),
                 onClick = actions.openClosedNotebooks,
                 icon = { active -> TwoToneIcon({ it.closedNotebooks }, active) },
             )
@@ -87,7 +89,7 @@ internal fun FileTab(
         // none of them takes anything away. The divider below is what separates the one that does.
         Box(Modifier.testTag(FileTags.CLOSE_NOTEBOOK)) {
             RibbonCommand(
-                label = "Close Notebook",
+                label = stringResource(R.string.file_close_notebook),
                 onClick = actions.closeNotebook,
                 enabled = notebookOpen,
                 // The cross in the accent, not the warning red — see `closeNotebookGlyph`. Closing
@@ -97,7 +99,7 @@ internal fun FileTab(
         }
         Box(Modifier.testTag(FileTags.EXPORT_NOTEBOOK)) {
             RibbonCommand(
-                label = "Export Notebook",
+                label = stringResource(R.string.file_export_notebook),
                 onClick = actions.exportNotebook,
                 enabled = notebookOpen,
                 // The bookmark takes the accent, answering the accented arrow inside Import's glyph
@@ -108,7 +110,7 @@ internal fun FileTab(
         }
         Box(Modifier.testTag(FileTags.IMPORT_NOTEBOOK)) {
             RibbonCommand(
-                label = "Import",
+                label = stringResource(R.string.file_import),
                 onClick = actions.importNotebook,
                 // The plain book beside it is Export; the arrow is the only thing telling the two
                 // apart, so this one is two-tone — see `icons/RibbonGlyphs.kt`.
@@ -123,7 +125,7 @@ internal fun FileTab(
         Divider()
         Box(Modifier.testTag(FileTags.DELETE_NOTEBOOK)) {
             RibbonCommand(
-                label = "Delete Notebook",
+                label = stringResource(R.string.file_delete_notebook),
                 onClick = actions.deleteNotebook,
                 enabled = notebookOpen,
                 // The bin's contents in the warning red — `IconAccents.red` is "what a glyph

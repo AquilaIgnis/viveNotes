@@ -36,23 +36,23 @@ private val automaticPenPresetsMigrated = booleanPreferencesKey("automatic_pen_p
  * handling the View tab gives Dock to Desktop and the rest of the crossed-out list.
  */
 @Serializable
-enum class PenKind(val label: String) {
-    Fountain("Fountain"),
-    Calligraphy("Calligraphy"),
+enum class PenKind {
+    Fountain,
+    Calligraphy,
 }
 
 /** Whether the eraser cuts through ink or removes a complete stroke at the first contact. */
 @Serializable
-enum class EraserMode(val label: String) {
-    Normal("Normal"),
-    Object("Object"),
+enum class EraserMode {
+    Normal,
+    Object,
 }
 
 /** The two rulers. A straightedge, and a semicircle for arcs. */
 @Serializable
-enum class RulerKind(val label: String) {
-    Straight("Straight"),
-    Protractor("Semicircle"),
+enum class RulerKind {
+    Straight,
+    Protractor,
 }
 
 /**
@@ -454,20 +454,20 @@ sealed interface DrawTool {
  * that used to exist decodes to the field's default rather than to its replacement.
  */
 @Serializable
-enum class StylusAction(val label: String) {
+enum class StylusAction {
     /** Unbound. The keycode is left unclaimed so it falls through, and it is the default for a
      * press nothing has asked for. */
-    None("Nothing"),
-    TogglePenEraser("Pen / eraser"),
-    CyclePens("Next pen"),
-    Pen1("Pen 1"),
-    Pen2("Pen 2"),
-    Pen3("Pen 3"),
-    Highlighter("Highlighter"),
-    Eraser("Eraser"),
-    Lasso("Lasso select"),
-    Undo("Undo"),
-    Redo("Redo"),
+    None,
+    TogglePenEraser,
+    CyclePens,
+    Pen1,
+    Pen2,
+    Pen3,
+    Highlighter,
+    Eraser,
+    Lasso,
+    Undo,
+    Redo,
 }
 
 /**

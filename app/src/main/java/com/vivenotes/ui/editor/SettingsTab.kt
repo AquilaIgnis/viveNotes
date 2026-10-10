@@ -10,7 +10,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.ui.ScrollingRow
 import com.vivenotes.ui.panel.ToolPane
@@ -61,7 +63,7 @@ internal fun SettingsTab(
         // the ring — which is the rule the whole two-tone set follows.
         Box(Modifier.testTag(SettingsTags.INTEGRATED)) {
             RibbonCommand(
-                label = "Integrated",
+                label = stringResource(R.string.settings_integrated_ai),
                 onClick = ai.openIntegrated,
                 icon = { active -> TwoToneIcon({ it.integrated }, active) },
             )
@@ -69,7 +71,7 @@ internal fun SettingsTab(
 
         Box(Modifier.testTag(SettingsTags.HARDWARE)) {
             RibbonCommand(
-                label = "Hardware",
+                label = stringResource(R.string.settings_hardware),
                 onClick = { openPane(ToolPane.Hardware) },
                 icon = { active -> TwoToneIcon({ it.hardware }, active) },
             )
@@ -77,7 +79,7 @@ internal fun SettingsTab(
 
         Box(Modifier.testTag(SettingsTags.LINK_PREVIEWS)) {
             RibbonCommand(
-                label = "Link Previews",
+                label = stringResource(R.string.settings_link_previews),
                 onClick = { onSetLinkPreviews(!viewSettings.linkPreviews) },
                 active = viewSettings.linkPreviews,
                 icon = { active -> TwoToneIcon({ it.linkPreview }, active) },
@@ -86,7 +88,7 @@ internal fun SettingsTab(
 
         Box(Modifier.testTag(SettingsTags.ABOUT)) {
             RibbonCommand(
-                label = "About",
+                label = stringResource(R.string.settings_about),
                 onClick = { aboutOpen = true },
                 icon = { active -> TwoToneIcon({ it.about }, active) },
             )

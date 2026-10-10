@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
@@ -342,6 +344,7 @@ private fun rememberPageAssets(
     // The size actually needed, quantised so that dragging a corner does not re-decode every frame.
     val target = images.maxOfOrNull { targetPixelsFor(it, density) } ?: 0
     val arrivals by attachments.arrivals.collectAsState()
+    val resources = LocalResources.current
 
     LaunchedEffect(ids, target, arrivals) {
         ids.forEach { id ->
@@ -353,8 +356,9 @@ private fun rememberPageAssets(
                 bitmap != null -> ImageAsset.Ready(bitmap.asImageBitmap())
                 // Two different failures arrive as the same null, and they send the user to two
                 // different places — hence the extra stat, only ever on the path that already failed.
-                !attachments.hasFile(id) -> ImageAsset.Broken("Error: ${id.asFileName()} not found")
-                else -> ImageAsset.Broken("Error: ${id.asFileName()} could not be read")
+                !attachments.hasFile(id) ->
+                    ImageAsset.Broken(resources.getString(R.string.image_missing, id.asFileName()))
+                else -> ImageAsset.Broken(resources.getString(R.string.image_unreadable, id.asFileName()))
             }
         }
         val live = ids.toSet()

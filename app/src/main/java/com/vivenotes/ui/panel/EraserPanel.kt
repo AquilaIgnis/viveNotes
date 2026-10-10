@@ -1,5 +1,6 @@
 package com.vivenotes.ui.panel
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -23,8 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.ui.icons.LocalRibbonIcons
@@ -72,7 +75,7 @@ fun ColumnScope.EraserPanelContent(
     Spacer(Modifier.height(6.dp))
     PanelSlider(
         field = "Eraser size",
-        label = "Size",
+        label = stringResource(R.string.eraser_size),
         value = settings.size,
         range = EraserSettings.MIN_SIZE..EraserSettings.MAX_SIZE,
         onChange = { onChange(settings.copy(size = it)) },
@@ -125,7 +128,7 @@ private fun EraserModeButton(
         }
         Spacer(Modifier.height(3.dp))
         Text(
-            text = mode.label,
+            text = stringResource(mode.label),
             style = MaterialTheme.typography.labelSmall,
             color = if (selected) {
                 MaterialTheme.colorScheme.primary
@@ -135,3 +138,10 @@ private fun EraserModeButton(
         )
     }
 }
+
+@get:StringRes
+private val EraserMode.label: Int
+    get() = when (this) {
+        EraserMode.Normal -> R.string.eraser_mode_normal
+        EraserMode.Object -> R.string.eraser_mode_object
+    }

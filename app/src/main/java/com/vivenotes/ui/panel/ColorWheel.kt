@@ -37,9 +37,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -93,6 +95,7 @@ fun ColumnScope.ColorWheelContent(
     fun commit() = latestPick(argbOf(hue, saturation, brightness))
 
     val current = Color.hsvSafe(hue, saturation, brightness)
+    val wheelDescription = stringResource(R.string.color_wheel)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -102,7 +105,7 @@ fun ColumnScope.ColorWheelContent(
             modifier = Modifier
                 .size(WHEEL_DIAMETER)
                 .testTag(PenPanelTags.WHEEL)
-                .semantics { contentDescription = "Color wheel" }
+                .semantics { contentDescription = wheelDescription }
                 .pointerInput(Unit) {
                     trackPointer(
                         onSample = { position ->
@@ -176,7 +179,7 @@ fun ColumnScope.ColorWheelContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = onDone) { Text("Done") }
+            TextButton(onClick = onDone) { Text(stringResource(R.string.color_wheel_done)) }
         }
     }
 }
@@ -199,13 +202,14 @@ private fun BrightnessBar(
     val latestEnd by rememberUpdatedState(onEnd)
     val lit = Color.hsvSafe(hue, saturation, 1f)
     val thumbOutline = MaterialTheme.colorScheme.outlineVariant
+    val brightnessDescription = stringResource(R.string.color_wheel_brightness)
 
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
             .height(BAR_HEIGHT)
             .testTag(PenPanelTags.BRIGHTNESS)
-            .semantics { contentDescription = "Brightness" }
+            .semantics { contentDescription = brightnessDescription }
             .pointerInput(Unit) {
                 trackPointer(
                     onSample = { position ->

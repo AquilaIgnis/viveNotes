@@ -20,7 +20,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.vivenotes.R
 import com.vivenotes.data.HIGHLIGHTER_COLORS
 import com.vivenotes.data.HighlighterSettings
 
@@ -51,7 +53,7 @@ fun ColumnScope.HighlighterPanelContent(
     Spacer(Modifier.height(10.dp))
     PanelSlider(
         field = "Thickness",
-        label = "Thickness",
+        label = stringResource(R.string.panel_thickness),
         value = settings.thickness,
         range = HighlighterSettings.MIN_THICKNESS..HighlighterSettings.MAX_THICKNESS,
         onChange = { onChange(settings.copy(thickness = it)) },
@@ -63,7 +65,7 @@ fun ColumnScope.HighlighterPanelContent(
 
     Spacer(Modifier.height(8.dp))
     Text(
-        text = "Color",
+        text = stringResource(R.string.panel_color),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurface,
     )
@@ -118,7 +120,7 @@ private fun BandPreview(settings: HighlighterSettings) {
             )
         }
         Text(
-            text = "Highlighted text",
+            text = stringResource(R.string.highlighter_sample),
             style = MaterialTheme.typography.bodyMedium,
             color = INK,
         )

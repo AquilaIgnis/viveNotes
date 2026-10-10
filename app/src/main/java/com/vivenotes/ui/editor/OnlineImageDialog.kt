@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.vivenotes.R
 import com.vivenotes.data.ImageSource
 import com.vivenotes.data.OnlineImage
 import com.vivenotes.data.OnlineImageSearchResult
@@ -124,6 +126,9 @@ internal fun OnlineImageDialog(
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = remember { FocusRequester() }
     val grid = rememberLazyStaggeredGridState()
+    val rateLimited = stringResource(R.string.online_image_rate_limited)
+    val unreachable = stringResource(R.string.online_image_unreachable)
+    val downloadFailed = stringResource(R.string.online_image_download_failed)
 
     fun load(term: String, from: SearchCursor?) {
         loading = true
@@ -141,11 +146,11 @@ internal fun OnlineImageDialog(
                 }
                 OnlineImageSearchResult.RateLimited -> {
                     next = null
-                    message = "Too many searches from this connection. Try again in a minute."
+                    message = rateLimited
                 }
                 OnlineImageSearchResult.Unreachable -> {
                     next = null
-                    message = "Couldn’t reach the picture search. Check the connection and try again."
+                    message = unreachable
                 }
             }
         }
@@ -172,7 +177,7 @@ internal fun OnlineImageDialog(
             val bytes = images.download(image)
             downloading = null
             if (bytes == null) {
-                message = "That picture couldn’t be downloaded. Try another one."
+                message = downloadFailed
             } else {
                 onInsert(bytes)
                 onDismiss()
@@ -216,13 +221,13 @@ internal fun OnlineImageDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onDismiss, modifier = Modifier.testTag(OnlineImageTags.CLOSE)) {
-                        Icon(MaterialSymbols.Close, contentDescription = "Close")
+                        Icon(MaterialSymbols.Close, contentDescription = stringResource(R.string.online_image_close))
                     }
                     Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Search online", style = MaterialTheme.typography.titleLarge)
+                        Text(stringResource(R.string.online_image_title), style = MaterialTheme.typography.titleLarge)
                         Text(
-                            text = "Openly licensed pictures from Wikimedia Commons and Openverse",
+                            text = stringResource(R.string.online_image_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -232,12 +237,12 @@ internal fun OnlineImageDialog(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("Search pictures") },
+                    placeholder = { Text(stringResource(R.string.online_image_search_hint)) },
                     leadingIcon = { Icon(MaterialSymbols.Search, contentDescription = null) },
                     trailingIcon = if (query.isNotEmpty()) {
                         {
                             IconButton(onClick = { query = "" }) {
-                                Icon(MaterialSymbols.Close, contentDescription = "Clear search")
+                                Icon(MaterialSymbols.Close, contentDescription = stringResource(R.string.online_image_clear))
                             }
                         }
                     } else {
@@ -303,7 +308,7 @@ internal fun OnlineImageDialog(
                                 tiles(results.take(handOver))
                                 item(key = SOURCE_HEADER_KEY, span = StaggeredGridItemSpan.FullLine) {
                                     Text(
-                                        text = "More from Openverse",
+                                        text = stringResource(R.string.online_image_more_openverse),
                                         style = MaterialTheme.typography.titleSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier
@@ -330,8 +335,8 @@ internal fun OnlineImageDialog(
                         loading -> LoadingIndicator()
                         else -> Text(
                             text = message
-                                ?: searched?.let { "No pictures found for “$it”." }
-                                ?: "Search for photos and illustrations you can put on the page.",
+                                ?: searched?.let { stringResource(R.string.online_image_no_results, it) }
+                                ?: stringResource(R.string.online_image_empty),
                             style = MaterialTheme.typography.bodyLarge,
                             color = if (message != null) {
                                 MaterialTheme.colorScheme.error
@@ -376,14 +381,14 @@ private fun ResultTile(
     } else {
         1f
     }
-    val description = image.title.ifBlank { "Untitled picture" }
+    val description = image.title.ifBlank { stringResource(R.string.online_image_untitled) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(ratio)
             .clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(enabled = enabled, onClickLabel = "Insert", role = Role.Button, onClick = onPick)
+            .clickable(enabled = enabled, onClickLabel = stringResource(R.string.online_image_insert), role = Role.Button, onClick = onPick)
             .semantics { contentDescription = description }
             .testTag(OnlineImageTags.RESULT),
         contentAlignment = Alignment.Center,

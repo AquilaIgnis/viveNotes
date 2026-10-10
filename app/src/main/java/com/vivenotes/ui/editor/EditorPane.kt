@@ -71,6 +71,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
@@ -86,6 +87,7 @@ import androidx.ink.strokes.Stroke as InkStroke
 import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.DecayAnimationSpec
 import androidx.compose.animation.core.animateDecay
+import com.vivenotes.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1634,7 +1636,7 @@ fun EditorPane(
                             FillAction(
                                 fill = images.filter { it.id in held.imageIds }
                                     .map { it.backgroundArgb }.distinct().singleOrNull(),
-                                noun = "background",
+                                words = FillWords.Background,
                                 glyph = MaterialSymbols.BackgroundReplace,
                                 noneGlyph = MaterialSymbols.BackgroundNone,
                                 onChange = { onSetImageBackground(held.imageIds, it) },
@@ -2057,7 +2059,7 @@ private fun BoxScope.ObjectPastePopup(
             modifier = Modifier.testTag(PageTags.PASTE_MENU),
         ) {
             DropdownMenuItem(
-                text = { Text("Paste") },
+                text = { Text(stringResource(R.string.editor_paste)) },
                 leadingIcon = { Icon(MaterialSymbols.ContentPaste, contentDescription = null) },
                 onClick = onPaste,
                 modifier = Modifier.testTag(PageTags.PASTE),
@@ -2315,7 +2317,7 @@ private fun PageHeader(
                 Box {
                     if (title.isEmpty()) {
                         Text(
-                            text = "Untitled page",
+                            text = stringResource(R.string.editor_untitled_page),
                             style = LocalTextStyle.current.copy(
                                 color = canvas.secondaryText,
                                 fontSize = 26.sp,

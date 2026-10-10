@@ -217,4 +217,603 @@
     <string name="closed_notebook_gone">That notebook is no longer here.</string>
     <string name="closed_notebook_failed">The notebook could not be moved. Nothing was removed from this device.</string>
     <string name="closed_notebook_restore_failed">The notebook could not be brought back. It is still on the server.</string>
+    <!-- The panes the ribbon opens, and the controls they share. -->
+    <string name="pane_version_history">Version History</string>
+    <string name="pane_deleted_items">Deleted Items</string>
+    <string name="pane_paper_size">Paper Size</string>
+    <string name="pane_ai_models">Integrated AI</string>
+    <string name="pane_recognition">Recognition</string>
+    <string name="pane_hardware">Hardware</string>
+    <string name="pane_content">Content</string>
+    <string name="panel_close">Close %1$s</string>
+    <string name="panel_about">About %1$s</string>
+    <string name="panel_row_label">%1$s:</string>
+    <string name="panel_inches_unit">in</string>
+    <string name="panel_stepper_off">0 — off</string>
+    <string name="panel_decrease">Decrease %1$s</string>
+    <string name="panel_increase">Increase %1$s</string>
+    <string name="panel_separated">%1$s · %2$s</string>
+    <string name="panel_thickness">Thickness</string>
+    <string name="panel_color">Color</string>
+    <string name="panel_custom_color">Custom color</string>
+    <string name="panel_border_width">Border width</string>
+    <string name="panel_border_color">Border color</string>
+    <string name="panel_fill_color">Fill color</string>
+    <string name="panel_no_fill">No fill</string>
+    <string name="panel_size_bytes">%1$d B</string>
+    <string name="panel_size_kilobytes">%1$s KB</string>
+    <string name="panel_size_megabytes">%1$s MB</string>
+    <string name="color_wheel">Color wheel</string>
+    <string name="color_wheel_brightness">Brightness</string>
+    <string name="color_wheel_done">Done</string>
+    <string name="line_type_solid">Solid</string>
+    <string name="line_type_dashed">Dashed</string>
+    <string name="line_type_dotted">Dotted</string>
+    <!-- Content description for a line-type chip, which draws the line rather than naming it. -->
+    <string name="line_type_description">%1$s line</string>
+
+    <string name="ai_section_math">Math</string>
+    <string name="ai_section_text">Text</string>
+    <string name="ai_section_text_in_pictures">Text in pictures</string>
+    <string name="ai_section_handwriting_in_search">Handwriting in search</string>
+    <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
+    <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
+    <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
+    <string name="ai_model_unimernet_strength">Best on algebra</string>
+    <string name="ai_model_formulanet_strength">Reads matrices</string>
+    <string name="ai_model_ocr_detail">Handwriting and pictures · 12.7 MB · built in</string>
+    <string name="ai_model_in_use">In use</string>
+    <string name="ai_model_use">Use</string>
+    <string name="ai_model_delete">Delete</string>
+    <string name="ai_model_download">Download</string>
+    <string name="ai_model_retry">Retry</string>
+    <string name="ai_model_verifying">Verifying…</string>
+    <string name="ai_model_downloading">Downloading %1$d%%</string>
+    <string name="ai_ink_text_title">Search handwriting</string>
+    <string name="ai_ink_text_description">Reads drawn words in the background and keeps recognition on this device.</string>
+    <string name="ai_ink_text_rebuild">Read every handwritten page again</string>
+    <string name="ai_ink_text_off">Off. Handwriting is not read and nothing is stored.</string>
+    <plurals name="ai_ink_text_to_go">
+        <item quantity="one">Reading… %d page to go</item>
+        <item quantity="other">Reading… %d pages to go</item>
+    </plurals>
+    <string name="ai_ink_text_failed">%1$d pages read · %2$d could not be read</string>
+    <plurals name="ai_ink_text_read">
+        <item quantity="one">%d page read</item>
+        <item quantity="other">%d pages read</item>
+    </plurals>
+    <string name="ai_picture_text_title">Search text in pictures</string>
+    <string name="ai_picture_text_description">Reads pasted screenshots and photos so the Content panel can find them.</string>
+    <string name="ai_picture_text_rebuild">Read every picture again</string>
+    <string name="ai_picture_text_off">Off. Pictures are not read and nothing is stored.</string>
+    <string name="ai_picture_text_to_go">Reading… %1$d to go</string>
+    <string name="ai_picture_text_failed">%1$d read · %2$d could not be read</string>
+    <plurals name="ai_picture_text_read">
+        <item quantity="one">%d picture read</item>
+        <item quantity="other">%d pictures read</item>
+    </plurals>
+
+    <string name="content_search_hint">Search this notebook</string>
+    <string name="content_clear_search">Clear search</string>
+    <string name="content_status_idle">Text, handwriting, pictures and page titles across this notebook.</string>
+    <string name="content_status_searching">Searching…</string>
+    <string name="content_status_no_matches">No matches.</string>
+    <plurals name="content_status_matches">
+        <item quantity="one">%d match</item>
+        <item quantity="other">%d matches</item>
+    </plurals>
+    <plurals name="content_status_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <!-- Results were capped: "First 50 matches". -->
+    <string name="content_status_first">First %1$s</string>
+    <!-- "12 matches on 3 pages" -->
+    <string name="content_status_found">%1$s on %2$s</string>
+    <string name="content_reading">Reading %1$s…</string>
+    <string name="content_reading_both">Reading %1$s and %2$s…</string>
+    <plurals name="content_reading_pictures">
+        <item quantity="one">%d picture</item>
+        <item quantity="other">%d pictures</item>
+    </plurals>
+    <!-- A pass between batches, which has nothing pending yet and so gets no number. -->
+    <string name="content_reading_pictures_unnumbered">pictures</string>
+    <plurals name="content_reading_handwritten_pages">
+        <item quantity="one">%d handwritten page</item>
+        <item quantity="other">%d handwritten pages</item>
+    </plurals>
+    <string name="content_reading_handwritten_pages_unnumbered">handwritten pages</string>
+    <plurals name="content_more_on_page">
+        <item quantity="one">+%d more on this page</item>
+        <item quantity="other">+%d more on this page</item>
+    </plurals>
+    <string name="content_untitled_page">Untitled page</string>
+    <string name="content_hit_in_table">In a table</string>
+    <string name="content_hit_from_picture">Read from a picture</string>
+    <string name="content_hit_from_handwriting">Read from handwriting</string>
+
+    <string name="deleted_items_intro">Restore deleted notebooks, sections, and pages from anywhere in the app. Items are permanently deleted after 7 days.</string>
+    <string name="deleted_items_dismiss">Dismiss</string>
+    <string name="deleted_items_loading">Loading deleted items…</string>
+    <string name="deleted_items_empty">Deleted Items is empty</string>
+    <string name="deleted_items_deleted_at">Deleted %1$s</string>
+    <string name="deleted_items_restore">Restore</string>
+    <string name="deleted_items_restoring">Restoring…</string>
+    <string name="deleted_items_kind_notebook">NOTEBOOK</string>
+    <string name="deleted_items_kind_section">SECTION</string>
+    <string name="deleted_items_kind_page">PAGE</string>
+    <plurals name="deleted_items_sections">
+        <item quantity="one">%d section</item>
+        <item quantity="other">%d sections</item>
+    </plurals>
+    <plurals name="deleted_items_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <!-- A deleted section: "In Work · 4 pages". -->
+    <string name="deleted_items_section_details">In %1$s · %2$s</string>
+    <!-- A deleted page: "In Meetings · Work", its section then its notebook. -->
+    <string name="deleted_items_page_details">In %1$s · %2$s</string>
+    <!-- Stand-ins for a parent whose name is no longer known. -->
+    <string name="deleted_items_unknown_notebook">notebook</string>
+    <string name="deleted_items_unknown_section">section</string>
+
+    <string name="eraser_size">Size</string>
+    <string name="eraser_mode_normal">Normal</string>
+    <string name="eraser_mode_object">Object</string>
+
+    <string name="hardware_stylus">Stylus</string>
+    <string name="hardware_keyboard">Keyboard</string>
+    <string name="hardware_finger_draws">Let a finger draw</string>
+    <string name="hardware_pen_button">Pen button</string>
+    <string name="hardware_pen_button_info">Your pen firmware counts its own clicks</string>
+    <string name="stylus_press_single">Single click</string>
+    <string name="stylus_press_double">Double click</string>
+    <string name="stylus_press_triple">Triple click</string>
+    <string name="stylus_action_none">Nothing</string>
+    <string name="stylus_action_toggle_pen_eraser">Pen / eraser</string>
+    <string name="stylus_action_cycle_pens">Next pen</string>
+    <string name="stylus_action_pen_1">Pen 1</string>
+    <string name="stylus_action_pen_2">Pen 2</string>
+    <string name="stylus_action_pen_3">Pen 3</string>
+    <string name="stylus_action_highlighter">Highlighter</string>
+    <string name="stylus_action_eraser">Eraser</string>
+    <string name="stylus_action_lasso">Lasso select</string>
+    <string name="stylus_action_undo">Undo</string>
+    <string name="stylus_action_redo">Redo</string>
+    <!-- Keyboard shortcuts, as the Hardware pane and the system's Meta + / panel both list them. -->
+    <string name="shortcut_group_pages">Pages</string>
+    <string name="shortcut_group_edit">Edit</string>
+    <string name="shortcut_group_view">View</string>
+    <string name="shortcut_group_formatting">Formatting</string>
+    <string name="shortcut_group_paragraph">Paragraph</string>
+    <string name="shortcut_group_table">Table</string>
+    <string name="shortcut_new_page">New page</string>
+    <string name="shortcut_undo">Undo</string>
+    <string name="shortcut_redo">Redo</string>
+    <string name="shortcut_zoom_in">Zoom in</string>
+    <string name="shortcut_zoom_out">Zoom out</string>
+    <string name="shortcut_actual_size">Actual size</string>
+    <string name="shortcut_bold">Bold</string>
+    <string name="shortcut_italic">Italic</string>
+    <string name="shortcut_underline">Underline</string>
+    <string name="shortcut_indent">Indent</string>
+    <string name="shortcut_outdent">Outdent</string>
+    <string name="shortcut_next_cell">Next cell</string>
+    <string name="shortcut_previous_cell">Previous cell</string>
+
+    <string name="highlighter_sample">Highlighted text</string>
+
+    <string name="paper_section_size">Paper size</string>
+    <string name="paper_size">Size</string>
+    <string name="paper_orientation">Orientation</string>
+    <string name="paper_width">Width</string>
+    <string name="paper_height">Height</string>
+    <string name="paper_section_margins">Print margins</string>
+    <string name="paper_margin_top">Top</string>
+    <string name="paper_margin_bottom">Bottom</string>
+    <string name="paper_margin_left">Left</string>
+    <string name="paper_margin_right">Right</string>
+    <string name="paper_size_auto">Auto</string>
+    <string name="paper_size_billfold">Billfold</string>
+    <string name="paper_size_custom">Custom</string>
+    <string name="paper_orientation_portrait">Portrait</string>
+    <string name="paper_orientation_landscape">Landscape</string>
+
+    <string name="pen_kind_fountain">Fountain</string>
+    <string name="pen_kind_calligraphy">Calligraphy</string>
+    <string name="pen_hold_for_straight_line">Hold for straight line</string>
+    <string name="pen_hold_for_straight_line_info">Draw a line and pause with the pen still down for a second: the stroke is replaced by a straight line you can move and resize. Lift without pausing and the freehand stroke stays. Nearly horizontal and nearly vertical lines are levelled.</string>
+    <string name="pen_pressure">Pressure sensitivity</string>
+    <string name="pen_pressure_info">How much harder pressing thickens the line. 0 turns off pressure response; the broad nib still makes downstrokes and cross-strokes different.</string>
+    <string name="pen_stabilization">Stabilization</string>
+    <string name="pen_stabilization_info">Smooths out shake. A little goes a long way — high settings make the ink lag behind the pen.</string>
+    <string name="pen_add_color">Add color</string>
+
+    <string name="recognition_processing">Processing selected ink on this device…</string>
+    <string name="recognition_failed">Recognition failed</string>
+    <string name="recognition_source_latex" translatable="false">LaTeX</string>
+    <string name="recognition_source_text">Text</string>
+    <string name="recognition_copy">Copy</string>
+    <string name="recognition_copied">Copied to clipboard</string>
+    <string name="recognition_preview">Preview</string>
+    <string name="recognition_preview_empty">Enter LaTeX to preview it</string>
+    <string name="recognition_render_failed">LaTeX could not be rendered</string>
+    <string name="recognition_math_actions">Math actions</string>
+    <string name="recognition_analyzing">Understanding the LaTeX with SymPy…</string>
+    <string name="recognition_actions">Actions</string>
+    <string name="recognition_operation_failed">Operation failed</string>
+    <string name="recognition_show_decimal">Show as decimal</string>
+
+    <string name="ruler_kind_straight">Straight</string>
+    <string name="ruler_kind_protractor">Semicircle</string>
+    <string name="ruler_diameter">Diameter</string>
+    <string name="ruler_diameter_inches">%1$.1f in</string>
+
+    <string name="shape_page">Shape page %1$d</string>
+    <string name="shape_line">Line</string>
+    <string name="shape_arrow">Arrow</string>
+    <string name="shape_rectangle">Rectangle</string>
+    <string name="shape_rounded_rectangle">Rounded rectangle</string>
+    <string name="shape_ellipse">Ellipse</string>
+    <string name="shape_triangle">Triangle</string>
+    <string name="shape_right_triangle">Right triangle</string>
+    <string name="shape_diamond">Diamond</string>
+    <string name="shape_pentagon">Pentagon</string>
+    <string name="shape_hexagon">Hexagon</string>
+    <string name="shape_l">L shape</string>
+    <string name="shape_cube">Cube</string>
+    <string name="shape_pyramid">Pyramid</string>
+    <string name="shape_wedge">Wedge</string>
+    <string name="shape_sphere">Sphere</string>
+    <string name="shape_cone">Cone</string>
+    <string name="shape_cylinder">Cylinder</string>
+
+    <string name="table_write_with_pen">Write in with a pen</string>
+    <string name="table_write_with_pen_info">Off, each cell is a text field you type into.</string>
+    <string name="table_header_column">Header column</string>
+    <string name="table_header_row">Header row</string>
+    <string name="table_column_count">Column count</string>
+    <string name="table_row_count">Row count</string>
+
+    <string name="version_history_intro">Earlier saved versions of this page, newest first.</string>
+    <string name="version_history_restore_note">A restore returns the whole page state</string>
+    <string name="version_history_loading">Loading versions…</string>
+    <string name="version_history_empty">No earlier versions yet</string>
+    <string name="version_history_restore_version">Restore this version</string>
+    <string name="version_history_restoring">Restoring…</string>
+    <string name="version_history_confirm_title">Restore this version?</string>
+    <string name="version_history_confirm_body">The selected version will replace the page\'s saved state. Your current version will be kept in history</string>
+    <string name="version_history_confirm">Restore</string>
+    <string name="version_history_cancel">Cancel</string>
+
+    <!-- The ribbon. -->
+    <string name="ribbon_tab_file">File</string>
+    <string name="ribbon_tab_draw">Draw</string>
+    <string name="ribbon_tab_document">Document</string>
+    <string name="ribbon_tab_view">View</string>
+    <string name="ribbon_tab_settings">Settings</string>
+    <string name="ribbon_back">Back</string>
+    <string name="ribbon_hide_navigation">Hide notebooks and pages</string>
+    <string name="ribbon_show_navigation">Show notebooks and pages</string>
+    <string name="ribbon_no_tool">No tool</string>
+    <!-- The account button's content description, which is how the connection state is announced. -->
+    <string name="ribbon_account">Account</string>
+    <string name="ribbon_account_connected">Account, connected to a server</string>
+    <string name="ribbon_account_unreachable">Account, server unreachable</string>
+    <string name="ribbon_text">Text</string>
+    <string name="ribbon_paste">Paste</string>
+    <string name="ribbon_cut">Cut</string>
+    <string name="ribbon_copy">Copy</string>
+    <string name="ribbon_bold">Bold</string>
+    <string name="ribbon_italic">Italic</string>
+    <string name="ribbon_underline">Underline</string>
+    <string name="ribbon_strikethrough">Strikethrough</string>
+    <string name="ribbon_font_color">Font colour</string>
+    <string name="ribbon_highlight">Highlight</string>
+    <string name="ribbon_subscript">Subscript</string>
+    <string name="ribbon_superscript">Superscript</string>
+    <string name="ribbon_clear_formatting">Clear formatting</string>
+    <string name="ribbon_bulleted_list">Bulleted list</string>
+    <string name="ribbon_numbered_list">Numbered list</string>
+    <string name="ribbon_todo_list">To-do</string>
+    <string name="ribbon_decrease_indent">Decrease indent</string>
+    <string name="ribbon_increase_indent">Increase indent</string>
+    <string name="ribbon_align_left">Align left</string>
+    <string name="ribbon_align_center">Align centre</string>
+    <string name="ribbon_align_right">Align right</string>
+    <string name="ribbon_picture">Picture</string>
+    <string name="ribbon_picture_device">On device</string>
+    <string name="ribbon_picture_online">Search online</string>
+    <string name="ribbon_picture_camera">Camera</string>
+    <string name="ribbon_link">Link</string>
+    <string name="ribbon_link_insert">Insert link</string>
+    <string name="ribbon_link_edit">Edit link</string>
+    <string name="ribbon_link_text">Text to display</string>
+    <string name="ribbon_link_address">Web address</string>
+    <string name="ribbon_link_address_example" translatable="false">https://example.com</string>
+    <string name="ribbon_link_cancel">Cancel</string>
+    <string name="ribbon_link_apply">Apply</string>
+    <string name="ribbon_font_hint">Hold a font to type in it by default</string>
+    <string name="ribbon_font_size_hint">Hold a size to start new text at it</string>
+    <string name="ribbon_make_default">Make default</string>
+    <string name="ribbon_default">Default</string>
+    <string name="ribbon_color_none">None</string>
+    <string name="ribbon_styles">Styles</string>
+    <string name="ribbon_style_normal">Normal</string>
+    <string name="ribbon_style_heading_1">Heading 1</string>
+    <string name="ribbon_style_heading_2">Heading 2</string>
+    <string name="ribbon_style_heading_3">Heading 3</string>
+    <string name="ribbon_style_quote">Quote</string>
+    <string name="ribbon_style_code">Code</string>
+
+    <!-- Draw tab. -->
+    <string name="draw_undo">Undo</string>
+    <string name="draw_redo">Redo</string>
+    <string name="draw_lasso">Lasso</string>
+    <string name="draw_insert_space">Insert space</string>
+    <string name="draw_equation">Equation</string>
+    <string name="draw_calculator">Calculator (experimental)</string>
+    <string name="draw_calculator_close">Close calculator</string>
+    <string name="draw_highlighter">Highlighter</string>
+    <string name="draw_ruler">Ruler</string>
+    <string name="draw_ruler_put_away">Put the ruler away</string>
+    <string name="draw_eraser">Eraser</string>
+    <string name="draw_pen">Pen %1$d</string>
+
+    <!-- View tab. -->
+    <string name="view_zoom_label">Zoom:</string>
+    <string name="view_zoom_in">Zoom in</string>
+    <string name="view_zoom_out">Zoom out</string>
+    <string name="view_zoom_percent">%1$d%%</string>
+    <string name="view_page_width">Page Width</string>
+    <string name="view_paper_size">Paper Size</string>
+    <string name="view_hide_page_title">Hide Page Title</string>
+    <string name="view_switch_background">Switch Background</string>
+    <string name="view_tabs_layout">Tabs Layout</string>
+    <string name="view_tabs_vertical">Vertical Tabs</string>
+    <string name="view_tabs_horizontal">Horizontal Tabs</string>
+    <string name="view_paper">Paper</string>
+    <string name="view_paper_hint">Hold a paper to start new pages on it</string>
+    <string name="view_paper_none">None</string>
+    <string name="view_paper_standard_ruled">Standard Ruled</string>
+    <string name="view_paper_wide_ruled">Wide Ruled</string>
+    <string name="view_paper_dotted">Dotted Paper</string>
+    <string name="view_paper_hexagonal">Hexagonal Paper</string>
+    <string name="view_paper_grid_medium">Medium Grid</string>
+    <string name="view_paper_grid_large">Large Grid</string>
+    <string name="view_page_color">Page Color</string>
+    <string name="view_page_color_none">No Color</string>
+
+    <!-- File tab. -->
+    <string name="file_export_pdf">Export PDF</string>
+    <string name="file_version_history">Version History</string>
+    <string name="file_deleted_items">Deleted Items</string>
+    <string name="file_closed_notebooks">Closed Notebooks</string>
+    <string name="file_close_notebook">Close Notebook</string>
+    <string name="file_export_notebook">Export Notebook</string>
+    <string name="file_import">Import</string>
+    <string name="file_delete_notebook">Delete Notebook</string>
+
+    <!-- Settings tab. -->
+    <string name="settings_integrated_ai">Integrated</string>
+    <string name="settings_hardware">Hardware</string>
+    <string name="settings_link_previews">Link Previews</string>
+    <string name="settings_about">About</string>
+
+    <!-- The toolkit that floats over a selection. -->
+    <string name="tooltip_recolor_ink">Change selected ink color</string>
+    <string name="tooltip_copy_ink">Copy selected ink</string>
+    <string name="tooltip_lock">Lock selection</string>
+    <string name="tooltip_unlock">Unlock selection</string>
+    <string name="tooltip_delete_ink">Delete selected ink</string>
+    <string name="tooltip_group">Group</string>
+    <string name="tooltip_ungroup">Ungroup</string>
+    <string name="tooltip_math">Math</string>
+    <string name="tooltip_select_all">Select all</string>
+    <string name="tooltip_edit_equation">Edit equation</string>
+    <string name="tooltip_change_border_width">Change border width</string>
+    <string name="tooltip_change_line_type">Change line type</string>
+    <string name="tooltip_rows">Rows</string>
+    <string name="tooltip_columns">Columns</string>
+    <string name="tooltip_insert_below">Insert below</string>
+    <string name="tooltip_insert_right">Insert right</string>
+    <string name="tooltip_insert_row_below">Insert row below</string>
+    <string name="tooltip_insert_column_right">Insert column right</string>
+    <string name="tooltip_delete_row">Delete row</string>
+    <string name="tooltip_delete_column">Delete column</string>
+    <string name="tooltip_change_fill">Change fill color</string>
+    <string name="tooltip_no_fill">No fill</string>
+    <!-- A fill swatch's content description, given the colour's name: "Red fill". -->
+    <string name="tooltip_fill_swatch">%1$s fill</string>
+    <string name="tooltip_change_background">Change background color</string>
+    <string name="tooltip_no_background">No background</string>
+    <string name="tooltip_background_swatch">%1$s background</string>
+    <string name="color_white">White</string>
+    <string name="color_black">Black</string>
+    <string name="color_gray">Gray</string>
+    <string name="color_red">Red</string>
+    <string name="color_orange">Orange</string>
+    <string name="color_green">Green</string>
+    <string name="color_cyan">Cyan</string>
+    <string name="color_blue">Blue</string>
+    <string name="color_purple">Purple</string>
+    <string name="color_pink">Pink</string>
+
+    <!-- The page editor. -->
+    <string name="editor_paste">Paste</string>
+    <string name="editor_untitled_page">Untitled page</string>
+
+    <string name="equation_button">Equation</string>
+    <string name="equation_insert">Insert equation</string>
+    <string name="equation_edit">Edit equation</string>
+    <string name="equation_source_hint">Enter LaTeX without $ delimiters.</string>
+    <string name="equation_preview">Preview</string>
+    <string name="equation_cancel">Cancel</string>
+    <string name="equation_submit">Insert</string>
+    <string name="equation_update">Update</string>
+    <string name="equation_parse_failed">This equation could not be parsed.</string>
+    <string name="shape_button">Shapes</string>
+    <string name="shape_button_panel">Shape</string>
+    <string name="table_button">Table</string>
+    <string name="table_button_ink">Table to write in</string>
+    <string name="table_move">Move table</string>
+
+    <!-- The handwriting calculator. -->
+    <string name="calculator_title">Calculator</string>
+    <string name="calculator_experimental">Experimental</string>
+    <string name="calculator_close">Close calculator</string>
+    <string name="calculator_undo_stroke">Undo last stroke</string>
+    <string name="calculator_clear">Clear</string>
+    <string name="calculator_calculate">Calculate</string>
+    <string name="calculator_reading">Reading your handwriting…</string>
+    <string name="calculator_open_in_panel">Open in panel</string>
+    <string name="calculator_pad">Calculator writing area</string>
+    <string name="calculator_pad_hint">Write a calculation, then press =</string>
+    <string name="calculator_recognize_failed">The handwriting could not be recognized.</string>
+
+    <!-- Export as PDF. -->
+    <string name="export_pdf_title">Export as PDF</string>
+    <string name="export_pdf_close">Close</string>
+    <plurals name="export_pdf_sheets">
+        <item quantity="one">%d sheet</item>
+        <item quantity="other">%d sheets</item>
+    </plurals>
+    <string name="export_pdf_export">Export</string>
+    <string name="export_pdf_nothing">Nothing to preview.</string>
+    <string name="export_pdf_sheet">Sheet %1$d</string>
+    <!-- Under each previewed sheet: "2 / 5". -->
+    <string name="export_pdf_sheet_of">%1$d / %2$d</string>
+    <string name="export_pdf_what">What to export</string>
+    <string name="export_pdf_range">Range</string>
+    <string name="export_pdf_range_page">This page</string>
+    <string name="export_pdf_range_section">Whole section</string>
+    <string name="export_pdf_paper">Paper</string>
+    <string name="export_pdf_margins">Margins</string>
+    <string name="export_pdf_layout">Layout</string>
+    <string name="export_pdf_fit">Fit content to pages</string>
+    <string name="export_pdf_fit_info">Content that would be cut by a page edge is moved back onto the page it starts on. Anything larger than a page is left where it is.</string>
+    <string name="export_pdf_ruling">Page ruling</string>
+    <string name="export_pdf_ruling_info">Prints the lines, squares or dots the page is written on.</string>
+    <string name="export_pdf_layout_failed">This page could not be laid out for printing.</string>
+    <string name="export_pdf_write_failed">The PDF could not be written.</string>
+
+    <!-- Search online for a picture. -->
+    <string name="online_image_title">Search online</string>
+    <string name="online_image_subtitle">Openly licensed pictures from Wikimedia Commons and Openverse</string>
+    <string name="online_image_close">Close</string>
+    <string name="online_image_search_hint">Search pictures</string>
+    <string name="online_image_clear">Clear search</string>
+    <string name="online_image_more_openverse">More from Openverse</string>
+    <string name="online_image_no_results">No pictures found for “%1$s”.</string>
+    <string name="online_image_empty">Search for photos and illustrations you can put on the page.</string>
+    <string name="online_image_untitled">Untitled picture</string>
+    <string name="online_image_insert">Insert</string>
+    <string name="online_image_rate_limited">Too many searches from this connection. Try again in a minute.</string>
+    <string name="online_image_unreachable">Couldn’t reach the picture search. Check the connection and try again.</string>
+    <string name="online_image_download_failed">That picture couldn’t be downloaded. Try another one.</string>
+
+    <!-- About. -->
+    <string name="about_description">An open-source OneNote alternative, licensed under Source First License 1.1</string>
+    <string name="about_source">View on GitHub</string>
+    <string name="about_donate">Donate to project</string>
+    <string name="about_close">Close</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_version_unknown">Version unknown</string>
+
+    <!-- Painted on a picture whose file is gone or broken, and its content description. -->
+    <string name="image_missing">Error: %1$s not found</string>
+    <string name="image_unreadable">Error: %1$s could not be read</string>
+
+    <!-- The notebook rail. -->
+    <string name="rail_new_notebook">New Notebook</string>
+    <string name="rail_new_section">New Section</string>
+    <!-- A drag handle's content description, given the section or page it moves. -->
+    <string name="rail_reorder">Reorder %1$s</string>
+    <string name="rail_collapse">Collapse %1$s</string>
+    <string name="rail_expand">Expand %1$s</string>
+    <string name="rail_rename_notebook">Rename notebook</string>
+    <string name="rail_rename_section">Rename section</string>
+    <string name="rail_delete_section">Delete section</string>
+
+    <!-- The page list. -->
+    <string name="pages_add">Add Page</string>
+    <string name="pages_sort">Sort pages</string>
+    <string name="pages_sort_manual">Section order</string>
+    <string name="pages_sort_title">By title</string>
+    <string name="pages_sort_modified">By date modified</string>
+    <string name="pages_untitled">Untitled page</string>
+    <string name="pages_delete">Delete page</string>
+    <string name="pages_edited_just_now">Just now</string>
+    <plurals name="pages_edited_minutes_ago">
+        <item quantity="one">%d min ago</item>
+        <item quantity="other">%d min ago</item>
+    </plurals>
+
+    <!-- The horizontal section tabs. -->
+    <string name="tabs_no_notebook">No notebook</string>
+    <string name="tabs_choose_notebook">Choose notebook</string>
+    <string name="tabs_new_section">New section</string>
+    <string name="scroll_more_left">More to the left</string>
+    <string name="scroll_more_right">More to the right</string>
+
+    <!-- The workspace: snackbars, empty states and fallbacks for failures that carry no message. -->
+    <string name="workspace_undo">Undo</string>
+    <string name="workspace_no_camera">No camera app is available.</string>
+    <string name="workspace_recognize_failed">The selected ink could not be recognized.</string>
+    <string name="workspace_math_engine_failed">The local math engine could not start.</string>
+    <string name="workspace_math_failed">The math operation failed.</string>
+    <!-- Clipboard labels for a copied recognition result. -->
+    <string name="workspace_clip_latex">Recognized LaTeX</string>
+    <string name="workspace_clip_text">Recognized text</string>
+    <string name="workspace_recognition_empty">Select ink and choose Recognize to see a result here.</string>
+    <string name="workspace_no_page">No page selected</string>
+    <string name="workspace_close_search">Close search</string>
+    <!-- The exported file's name when the notebook's own name leaves nothing usable. -->
+    <string name="workspace_export_file_fallback">Notebook</string>
+    <string name="dialog_cancel">Cancel</string>
+
+    <string name="name_dialog_new_notebook">New notebook</string>
+    <string name="name_dialog_new_section">New section</string>
+    <string name="name_dialog_rename_notebook">Rename notebook</string>
+    <string name="name_dialog_rename_section">Rename section</string>
+    <string name="name_dialog_create">Create</string>
+    <string name="name_dialog_rename">Rename</string>
+    <string name="name_dialog_hint">Name</string>
+
+    <string name="transfer_running">Working with notebook</string>
+    <string name="transfer_failed">Notebook transfer failed</string>
+    <string name="transfer_complete">Notebook transfer complete</string>
+    <string name="transfer_preparing">Checking and preparing the notebook…</string>
+    <string name="transfer_ok">OK</string>
+
+    <plurals name="count_sections">
+        <item quantity="one">%d section</item>
+        <item quantity="other">%d sections</item>
+    </plurals>
+    <plurals name="count_pages">
+        <item quantity="one">%d page</item>
+        <item quantity="other">%d pages</item>
+    </plurals>
+    <string name="delete_title">Delete %1$s?</string>
+    <string name="delete_confirm">Delete</string>
+    <!--
+        Said instead of the count when the thing being deleted holds nothing. A blank notebook or
+        section is flushed rather than tombstoned, so the usual promise of Deleted Items would be a
+        lie, and this is the last sentence somebody reads before pressing Delete. A notebook whose
+        contents have not been read yet keeps the ordinary wording.
+    -->
+    <string name="delete_nothing_to_keep">There is nothing in it, so it will be deleted for good rather than kept in Deleted Items.</string>
+    <string name="delete_section_empty">This section will be removed. You can restore it later from Deleted Items.</string>
+    <plurals name="delete_section_pages">
+        <item quantity="one">Its %d page will go with it. You can restore it later from Deleted Items.</item>
+        <item quantity="other">Its %d pages will go with it. You can restore it later from Deleted Items.</item>
+    </plurals>
+    <string name="delete_notebook_empty">This notebook will be removed. You can restore it later from Deleted Items.</string>
+    <!-- "Its 2 sections and 9 pages will go with it. …" -->
+    <string name="delete_notebook_contents">Its %1$s and %2$s will go with it. You can restore it later from Deleted Items.</string>
+    <string name="close_notebook_title">Close %1$s?</string>
+    <string name="close_notebook_confirm">Close</string>
+    <string name="close_notebook_contents">Nothing is deleted. Its %1$s and %2$s stay where they are, and the notebook leaves the panel until you open it again from Closed Notebooks.</string>
+    <string name="close_notebook_empty">Nothing is deleted. The notebook leaves the panel until you open it again from Closed Notebooks.</string>
 </resources>

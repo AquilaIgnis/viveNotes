@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
         menu: Menu?,
         deviceId: Int,
     ) {
-        data?.addAll(shortcutGroups())
+        data?.addAll(shortcutGroups(resources))
         super.onProvideKeyboardShortcuts(data, menu, deviceId)
     }
 }
