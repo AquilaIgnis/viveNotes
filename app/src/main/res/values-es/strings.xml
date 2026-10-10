@@ -1,0 +1,780 @@
+<resources>
+    <!--[cite: 1] -->
+    <string name="app_name">ViveNotes</string>
+    <string name="account">Cuenta</string>
+    <string name="navigate_back">Volver</string>
+    <string name="account_title">Tus notas, dondequiera que escribas</string>
+    <string name="account_supporting_text">Inicia sesión para sincronizar tus cuadernos en todos tus dispositivos, o conecta ViveNotes a un servidor que controles.</string>
+    <string name="account_log_in">Iniciar sesión</string>
+    <string name="account_sign_up">Registrarse</string>
+    <string name="account_self_host">Servidor propio</string>
+    <string name="account_google_sign_in">Continuar con Google</string>
+    <string name="account_google_signing_in">Iniciando sesión con Google</string>
+    <string name="account_google_unconfigured">Iniciar sesión con Google no está disponible en esta compilación.</string>
+    <string name="account_link_title">Terminar de conectar esta cuenta</string>
+    <string name="account_link_body">Ya hay una cuenta que usa esta dirección de correo electrónico. Introduce su contraseña una vez y tu inicio de sesión con Google quedará vinculado a ella a partir de ahora.</string>
+    <string name="account_link_email">Correo electrónico de la cuenta</string>
+    <string name="account_link_password">Contraseña de la cuenta</string>
+    <string name="account_link_confirm">Vincular cuenta</string>
+    <string name="account_link_cancel">Cancelar</string>
+    <string name="account_linking">Vinculando tu cuenta</string>
+    <string name="account_connected_created">Cuenta creada</string>
+    <string name="account_self_host_description">Conéctate a tu propio servidor de ViveNotes.</string>
+    <string name="account_server_url">URL del servidor</string>
+    <string name="account_server_url_example" translatable="false">https://notes.example.com</string>
+    <string name="account_email">Correo electrónico</string>
+    <string name="account_password">Contraseña</string>
+    <string name="account_connect">Conectar</string>
+    <string name="account_create">Crear cuenta</string>
+    <string name="account_creating">Creando tu cuenta</string>
+    <string name="account_password_minimum">Al menos 8 caracteres</string>
+    <string name="account_confirm_password">Confirmar contraseña</string>
+    <string name="account_password_mismatch">Las contraseñas no coinciden.</string>
+    <string name="account_connecting">Conectando al servidor</string>
+    <string name="account_connected_title">Conectado</string>
+    <string name="account_provider_google">Google</string>
+    <string name="account_provider_password">Correo electrónico y contraseña</string>
+    <string name="account_connected_server">Servidor de sincronización</string>
+    <string name="account_settings">Configuración de la cuenta</string>
+    <string name="account_disconnect_account">Desconectar cuenta</string>
+    <string name="account_subscription_title">Almacenamiento en la nube</string>
+    <string name="account_subscription_checking">Comprobando tu plan de almacenamiento</string>
+    <string name="account_subscription_badge_active">Activo</string>
+    <string name="account_subscription_badge_pending">Pendiente</string>
+    <string name="account_subscription_badge_on_hold">En espera</string>
+    <string name="account_subscription_badge_paused">Pausado</string>
+    <string name="account_subscription_badge_none">No suscrito</string>
+    <string name="account_subscription_active_headline">Tu almacenamiento está activo</string>
+    
+    <!-- Only when the server reports auto-renewal on; an expiry date alone does not mean a renewal. -->
+    <string name="account_subscription_renews">Se renueva el %1$s</string>
+    <string name="account_subscription_available_until">Tu almacenamiento está disponible hasta el %1$s.</string>
+    <string name="account_subscription_renewal_off">La renovación automática está desactivada.</string>
+    <string name="account_subscription_coupon_no_renewal">Acceso por cupón. No se renueva.</string>
+    <string name="account_subscription_promotion">El acceso por cupón es válido hasta el %1$s.</string>
+    <string name="account_subscription_pitch">Activa el almacenamiento en la nube para sincronizar tus notas entre dispositivos.</string>
+    <string name="account_subscription_price">%1$s al mes</string>
+    <string name="account_subscription_price_short">%1$s / mes</string>
+    <string name="account_subscription_subscribe">Suscribirse con Google Play</string>
+    <string name="account_subscription_buying">Abriendo Google Play</string>
+    <string name="account_subscription_manage">Administrar en Google Play</string>
+    <string name="account_subscription_manage_link">Administrar suscripción</string>
+    <string name="account_subscription_renew">Renovar suscripción</string>
+    <string name="account_subscription_fix_payment">Actualizar método de pago</string>
+    <string name="account_subscription_pending">El pago está pendiente. El almacenamiento comenzará una vez que Google Play lo confirme.</string>
+    <string name="account_subscription_confirmed">Suscripción confirmada. El acceso al almacenamiento está listo.</string>
+    <string name="account_subscription_paid_grace">Google Play está reintentando el pago. El almacenamiento sigue disponible durante el periodo de gracia.</string>
+    <string name="account_subscription_paid_on_hold">Google Play ha suspendido temporalmente la suscripción hasta que se corrija el método de pago.</string>
+    <string name="account_subscription_paid_paused">La suscripción de Google Play está pausada.</string>
+    <string name="account_subscription_paid_expired">La suscripción de Google Play ha caducado.</string>
+    <string name="account_subscription_coupon_prompt">¿Tienes un código de cupón? Canjéalo aquí</string>
+    <string name="account_subscription_coupon_label">Código de cupón</string>
+    <string name="account_subscription_coupon_redeem">Canjear</string>
+    <string name="account_subscription_coupon_redeeming">Canjeando cupón</string>
+    <string name="account_subscription_coupon_applied">Se han añadido %1$d meses de almacenamiento promocional.</string>
+    <string name="account_subscription_error_play_unavailable">La facturación de Google Play no está disponible en este dispositivo.</string>
+    <string name="account_subscription_error_play_network">No se pudo contactar con Google Play. Comprueba la conexión e inténtalo de nuevo.</string>
+    <string name="account_subscription_error_product">El plan mensual todavía no está disponible para esta cuenta de Play.</string>
+    <string name="account_subscription_error_configuration">Esta compilación no está configurada para la suscripción de Play.</string>
+    <string name="account_subscription_error_coupon">Ese código de cupón no es válido.</string>
+    <string name="account_subscription_error_coupon_expired">Ese cupón ha caducado.</string>
+    <string name="account_subscription_error_coupon_used">Esta cuenta ya ha canjeado ese cupón.</string>
+    <string name="account_subscription_error_purchase">Google Play no pudo verificar esa compra.</string>
+    <string name="account_subscription_error_purchase_owner">Ese compra ya pertenece a otra cuenta de ViveNotes.</string>
+    <string name="account_subscription_error_server_billing">Las suscripciones no están disponibles temporalmente en el servidor. Inténtalo de nuevo en breve.</string>
+    <string name="account_subscription_error_request">No se aceptó la solicitud de suscripción. Inténtalo de nuevo.</string>
+    <string name="account_subscription_error_server_unreachable">No se pudo contactar con el servidor en la nube. Tu compra de Play está segura y se restaurará cuando se vuelva a conectar.</string>
+    <string name="account_subscription_error_server">El servidor en la nube no pudo actualizar la suscripción. Inténtalo de nuevo.</string>
+    <string name="account_subscription_required_state">Se requiere suscripción para sincronizar</string>
+    <string name="account_sync_now">Sincronizar ahora</string>
+    <string name="account_syncing">Sincronizando cuadernos</string>
+    <string name="account_sync_up_to_date">Actualizado</string>
+    <string name="account_sync_summary">Actualizado · Obtenidos: %1$d · Enviados: %2$d</string>
+    
+    <!-- The ambient sync line. -->
+    <string name="account_sync_just_now">Sincronizado hace un momento</string>
+    <string name="account_sync_relative">Sincronizado el %1$s</string>
+    <string name="account_sync_counts"> · Obtenidos %1$d · Enviados %2$d</string>
+    <string name="account_sync_pictures"> · %1$d imágenes</string>
+    <string name="account_sync_never">Aún no se ha sincronizado</string>
+    <string name="account_sync_will_retry">%1$s La sincronización se reintentará automáticamente.</string>
+    <string name="account_sync_error_response">El servidor devolvió datos de sincronización que esta versión no puede leer.</string>
+    <string name="account_sync_membership_required">Adquiere una suscripción para sincronizar.</string>
+    <string name="account_sync_storage_full">El almacenamiento en la nube está lleno. Elimina elementos o actualiza tu plan para seguir sincronizando.</string>
+    <string name="account_sync_error_local">No se pudo leer la cola de sincronización local. Las notas siguen almacenadas localmente.</string>
+    <string name="account_sync_error_large">Un cambio en la jerarquía local es más grande de lo que acepta el servidor.</string>
+    <string name="account_sync_error_malformed">El servidor rechazó un cambio en la jerarquía local por estar mal formado.</string>
+    <string name="account_sync_error_unsupported">Esta cuenta contiene cambios realizados por una versión más reciente de la aplicación. Actualiza ViveNotes para seguir sincronizando.</string>
+    <string name="account_sync_error_parent">No se pudo enviar una sección o página porque falta su elemento superior.</string>
+    <string name="account_disconnect_failed">No se pudo revocar el dispositivo. Se conservó su token para que puedas intentarlo de nuevo.</string>
+    
+    <!-- Offered only after a revoke has already failed. -->
+    <string name="account_disconnect_anyway_note">El servidor no respondió</string>
+    <string name="account_disconnect_anyway">Olvidar servidor</string>
+    <string name="account_disconnecting">Revocando este dispositivo</string>
+    <string name="account_disconnect">Desconectar</string>
+    <string name="account_disconnect_title">¿Desconectar de este servidor?</string>
+    
+    <!-- Says what cannot be undone -->
+    <string name="account_disconnect_body">El servidor revocará este dispositivo. Las notas que ya están en este dispositivo permanecerán aquí.</string>
+    <string name="account_disconnect_cancel">Cancelar</string>
+    
+    <!-- One message per ConnectFailure. -->
+    <string name="account_error_address">Esa no es una dirección de servidor válida. Prueba con algo como https://notes.example.com.</string>
+    <string name="account_error_unreachable">No hubo respuesta en esa dirección. Comprueba la dirección y el puerto.</string>
+    <string name="account_error_credentials">El correo electrónico y la contraseña no coinciden con ninguna cuenta en este servidor.</string>
+    <string name="account_error_request">El servidor no aceptó esos datos. Comprueba la dirección de correo y asegúrate de que la contraseña tenga al menos 8 caracteres.</string>
+    <string name="account_error_too_large">Esos datos son más largos de lo que acepta el servidor.</string>
+    <string name="account_error_server">El servidor no pudo completar la solicitud. Comprueba sus registros e inténtalo de nuevo.</string>
+    <string name="account_error_not_vive">Hubo una respuesta en esa dirección, pero no es un servidor de ViveNotes.</string>
+    <string name="account_error_revoked">El acceso de este dispositivo fue revocado en el servidor, por lo que se ha desconectado. Inicia sesión de nuevo para registrarlo.</string>
+    <string name="account_error_signup_closed">Este servidor no acepta nuevos registros. Pide al administrador que cree tu cuenta y luego inicia sesión.</string>
+    <string name="account_error_email_taken">Ya existe una cuenta con esa dirección de correo electrónico. Usa Iniciar sesión en su lugar.</string>
+    <string name="account_error_created_not_registered">Tu cuenta fue creada, pero este dispositivo no pudo conectarse a ella. Usa Iniciar sesión para terminar de conectar.</string>
+    <string name="account_error_challenge">El inicio de sesión ha tardado demasiado y ha caducado. Inténtalo de nuevo.</string>
+    <string name="account_error_google_token">El servidor no aceptó este inicio de sesión con Google. El ID de cliente de Google del servidor y el de la aplicación no coinciden.</string>
+    <string name="account_error_google_unavailable">El inicio de sesión con Google no está disponible en el servidor en este momento. Inténtalo de nuevo en un momento.</string>
+    <string name="account_error_identity_conflict">Esta cuenta de Google ya está vinculada a una cuenta de ViveNotes diferente.</string>
+    <string name="account_error_idempotency">No se pudo completar el inicio de sesión. Inténtalo de nuevo.</string>
+    <string name="account_error_account_unavailable">Esta cuenta no está disponible. Contacta con soporte si no esperabas esto.</string>
+    <string name="account_error_no_google_account">No hay ninguna cuenta de Google disponible en este dispositivo. Añade una en Ajustes e inténtalo de nuevo.</string>
+    <string name="account_error_google_unconfigured">El inicio de sesión con Google no está configurado en esta compilación. Usa tu propio servidor en su lugar.</string>
+    <string name="account_error_link_credentials">La contraseña no coincide, o el correo no es la dirección de Google que acabas de usar.</string>
+    <string name="account_error_not_stored">Este dispositivo se registró en el servidor, pero su token no se pudo guardar, por lo que no se puede usar. Libera algo de almacenamiento y conéctate de nuevo; el dispositivo sin usar se puede eliminar desde el panel del servidor.</string>
+
+    <string name="account_forgot_password">¿Has olvidado tu contraseña?</string>
+    <string name="account_reset_title">Restablecer contraseña</string>
+    <string name="account_reset_email_heading">Encuentra tu cuenta</string>
+    <string name="account_reset_email_body">Introduce el correo electrónico de tu cuenta. Si está registrado, te enviaremos un código de recuperación de 8 dígitos.</string>
+    <string name="account_reset_send_code">Enviar código de recuperación</string>
+    <string name="account_reset_sending">Enviando código de recuperación</string>
+    <string name="account_reset_code_heading">Introduce tu código de recuperación</string>
+    <string name="account_reset_code_body">Introduce el código enviado para %1$s y luego elige una nueva contraseña.</string>
+    <string name="account_reset_code">Código de 8 dígitos</string>
+    <string name="account_reset_new_password">Nueva contraseña</string>
+    <string name="account_reset_change_password">Cambiar contraseña</string>
+    <string name="account_reset_changing">Cambiando contraseña</string>
+    <string name="account_reset_complete_title">Contraseña cambiada</string>
+    <string name="account_reset_complete_body">Tu nueva contraseña está lista. Vuelve a Iniciar sesión y úsala en este dispositivo.</string>
+    <string name="account_reset_back_to_login">Volver a Iniciar sesión</string>
+    <string name="account_reset_error_request">Comprueba los datos de correo electrónico y contraseña, e inténtalo de nuevo.</string>
+    <string name="account_reset_error_code">Ese código de recuperación no es válido o ha caducado. Solicita un nuevo código e inténtalo de nuevo.</string>
+    <string name="account_reset_error_unavailable">La recuperación de contraseña no está disponible temporalmente. Inténtalo más tarde.</string>
+    <string name="account_reset_error_too_large">Esos datos de recuperación son más largos de lo que acepta el servidor.</string>
+    <string name="account_reset_error_unreachable">No se pudo contactar con el servidor en la nube. Comprueba la conexión e inténtalo de nuevo.</string>
+    <string name="account_reset_error_server">El servidor en la nube no pudo restablecer la contraseña. Inténtalo de nuevo.</string>
+    <string name="account_reset_error_not_vive">El servicio en la nube devolvió una respuesta inesperada de recuperación de contraseña.</string>
+
+    <string name="account_delete_action">Eliminar cuenta</string>
+    <string name="account_delete_title">¿Eliminar tu cuenta?</string>
+    <string name="account_delete_body">Esto eliminará tu cuenta de ViveNotes y todos los datos en la nube asociados a ella.</string>
+    <string name="account_delete_irreversible">Esta acción no se puede deshacer.</string>
+    <string name="account_delete_email">Correo electrónico</string>
+    <string name="account_delete_confirm">Eliminar mi cuenta y todos los datos</string>
+    <string name="account_delete_cancel">Conservar mi cuenta</string>
+    <string name="account_delete_requesting">Solicitando la eliminación de la cuenta</string>
+    <string name="account_delete_error_not_connected">Este dispositivo ya no está conectado a ninguna cuenta.</string>
+    <string name="account_delete_error_not_managed">La eliminación de cuenta solo está disponible para cuentas en la nube de ViveNotes.</string>
+    <string name="account_delete_error_request">El servidor no aceptó ese correo electrónico de la cuenta.</string>
+    <string name="account_delete_error_unavailable">La eliminación de cuenta aún no está disponible en el servidor.</string>
+    <string name="account_delete_error_unreachable">No se pudo contactar con el servidor en la nube. Tu cuenta no ha sido eliminada.</string>
+    <string name="account_delete_error_server">El servidor en la nube no pudo aceptar la solicitud de eliminación. Tu cuenta no ha sido eliminada.</string>
+    <string name="account_delete_error_not_vive">El servicio en la nube devolvió una respuesta inesperada de eliminación de cuenta.</string>
+    <string name="account_delete_error_revoked">La sesión de este dispositivo ha caducado. Inicia sesión de nuevo antes de solicitar la eliminación.</string>
+    
+    <!-- The closed-notebook shelf. -->
+    <string name="closed_notebooks">Cuadernos cerrados</string>
+    <string name="closed_notebooks_empty">No hay cuadernos cerrados. Cerrar uno lo quita del panel sin eliminar nada.</string>
+    <string name="closed_notebooks_on_device">En este dispositivo</string>
+    <string name="closed_notebooks_in_cloud">En la nube</string>
+    <string name="closed_notebooks_in_cloud_supporting">Las páginas de estos cuadernos están en tu servidor y no en este dispositivo, por lo que no se pueden buscar ni abrir hasta que recuperes uno.</string>
+    <string name="closed_notebooks_no_account">Conecta una cuenta en la pantalla de Cuenta para recuperarlos.</string>
+    <string name="closed_notebook_contents">%1$d secciones · %2$d páginas</string>
+    <string name="closed_notebook_open">Abrir</string>
+    <string name="closed_notebook_move_to_cloud">Mover a la nube</string>
+    <string name="closed_notebook_bring_back">Traer de vuelta a este dispositivo</string>
+    <string name="closed_notebook_needs_account">Conecta primero un servidor en la pantalla de Cuenta. Mover un cuaderno a la nube requiere un lugar donde guardarlo.</string>
+    <string name="closed_notebook_not_uploaded">Este dispositivo todavía tiene %1$d cambios por subir. No se ha eliminado nada; inténtalo de nuevo cuando la sincronización esté al día.</string>
+    <string name="closed_notebook_gone">Ese cuaderno ya no está aquí.</string>
+    <string name="closed_notebook_failed">No se pudo mover el cuaderno. No se ha eliminado nada de este dispositivo.</string>
+    <string name="closed_notebook_restore_failed">No se pudo recuperar el cuaderno. Sigue estando en el servidor.</string>
+    
+    <!-- The panes the ribbon opens -->
+    <string name="pane_version_history">Historial de versiones</string>
+    <string name="pane_deleted_items">Elementos eliminados</string>
+    <string name="pane_paper_size">Tamaño de papel</string>
+    <string name="pane_ai_models">IA integrada</string>
+    <string name="pane_recognition">Reconocimiento</string>
+    <string name="pane_hardware">Hardware</string>
+    <string name="pane_content">Contenido</string>
+    <string name="panel_close">Cerrar %1$s</string>
+    <string name="panel_about">Acerca de %1$s</string>
+    <string name="panel_row_label">%1$s:</string>
+    <string name="panel_inches_unit">pulg</string>
+    <string name="panel_stepper_off">0 — desactivado</string>
+    <string name="panel_decrease">Disminuir %1$s</string>
+    <string name="panel_increase">Aumentar %1$s</string>
+    <string name="panel_separated">%1$s · %2$s</string>
+    <string name="panel_thickness">Grosor</string>
+    <string name="panel_color">Color</string>
+    <string name="panel_custom_color">Color personalizado</string>
+    <string name="panel_border_width">Ancho de borde</string>
+    <string name="panel_border_color">Color de borde</string>
+    <string name="panel_fill_color">Color de relleno</string>
+    <string name="panel_no_fill">Sin relleno</string>
+    <string name="panel_size_bytes">%1$d B</string>
+    <string name="panel_size_kilobytes">%1$s KB</string>
+    <string name="panel_size_megabytes">%1$s MB</string>
+    <string name="color_wheel">Círculo cromático</string>
+    <string name="color_wheel_brightness">Brillo</string>
+    <string name="color_wheel_done">Listo</string>
+    <string name="line_type_solid">Sólida</string>
+    <string name="line_type_dashed">Discontinua</string>
+    <string name="line_type_dotted">Punteada</string>
+    <string name="line_type_description">Línea %1$s</string>
+
+    <string name="ai_section_math">Matemáticas</string>
+    <string name="ai_section_text">Texto</string>
+    <string name="ai_section_text_in_pictures">Texto en imágenes</string>
+    <string name="ai_section_handwriting_in_search">Escritura a mano en la búsqueda</string>
+    <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
+    <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
+    <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
+    <string name="ai_model_unimernet_strength">Ideal para álgebra</string>
+    <string name="ai_model_formulanet_strength">Lee matrices</string>
+    <string name="ai_model_ocr_detail">Escritura a mano e imágenes · 12.7 MB · integrado</string>
+    <string name="ai_model_in_use">En uso</string>
+    <string name="ai_model_use">Usar</string>
+    <string name="ai_model_delete">Eliminar</string>
+    <string name="ai_model_download">Descargar</string>
+    <string name="ai_model_retry">Reintentar</string>
+    <string name="ai_model_verifying">Verificando…</string>
+    <string name="ai_model_downloading">Descargando %1$d%%</string>
+    <string name="ai_ink_text_title">Buscar escritura a mano</string>
+    <string name="ai_ink_text_description">Lee las palabras trazadas en segundo plano y mantiene el reconocimiento en este dispositivo.</string>
+    <string name="ai_ink_text_rebuild">Volver a leer cada página escrita a mano</string>
+    <string name="ai_ink_text_off">Desactivado. No se lee la escritura a mano ni se almacena nada.</string>
+    <plurals name="ai_ink_text_to_go">
+        <item quantity="one">Leyendo… falta %d página</item>
+        <item quantity="other">Leyendo… faltan %d páginas</item>
+    </plurals>
+    <string name="ai_ink_text_failed">%1$d páginas leídas · %2$d no se pudieron leer</string>
+    <plurals name="ai_ink_text_read">
+        <item quantity="one">%d página leída</item>
+        <item quantity="other">%d páginas leídas</item>
+    </plurals>
+    <string name="ai_picture_text_title">Buscar texto en imágenes</string>
+    <string name="ai_picture_text_description">Lee capturas de pantalla y fotos pegadas para que el panel Contenido pueda encontrarlas.</string>
+    <string name="ai_picture_text_rebuild">Volver a leer cada imagen</string>
+    <string name="ai_picture_text_off">Desactivado. No se leen las imágenes ni se almacena nada.</string>
+    <string name="ai_picture_text_to_go">Leyendo… falta %1$d</string>
+    <string name="ai_picture_text_failed">%1$d leídas · %2$d no se pudieron leer</string>
+    <plurals name="ai_picture_text_read">
+        <item quantity="one">%d imagen leída</item>
+        <item quantity="other">%d imágenes leídas</item>
+    </plurals>
+
+    <string name="content_search_hint">Buscar en este cuaderno</string>
+    <string name="content_clear_search">Borrar búsqueda</string>
+    <string name="content_status_idle">Texto, escritura a mano, imágenes y títulos de página en este cuaderno.</string>
+    <string name="content_status_searching">Buscando…</string>
+    <string name="content_status_no_matches">No hay coincidencias.</string>
+    <plurals name="content_status_matches">
+        <item quantity="one">%d coincidencia</item>
+        <item quantity="other">%d coincidencias</item>
+    </plurals>
+    <plurals name="content_status_pages">
+        <item quantity="one">%d página</item>
+        <item quantity="other">%d páginas</item>
+    </plurals>
+    <string name="content_status_first">Primeros %1$s</string>
+    <string name="content_status_found">%1$s en %2$s</string>
+    <string name="content_reading">Leyendo %1$s…</string>
+    <string name="content_reading_both">Leyendo %1$s y %2$s…</string>
+    <plurals name="content_reading_pictures">
+        <item quantity="one">%d imagen</item>
+        <item quantity="other">%d imágenes</item>
+    </plurals>
+    <string name="content_reading_pictures_unnumbered">imágenes</string>
+    <plurals name="content_reading_handwritten_pages">
+        <item quantity="one">%d página escrita a mano</item>
+        <item quantity="other">%d páginas escritas a mano</item>
+    </plurals>
+    <string name="content_reading_handwritten_pages_unnumbered">páginas escritas a mano</string>
+    <plurals name="content_more_on_page">
+        <item quantity="one">+%d más en esta página</item>
+        <item quantity="other">+%d más en esta página</item>
+    </plurals>
+    <string name="content_untitled_page">Página sin título</string>
+    <string name="content_hit_in_table">En una tabla</string>
+    <string name="content_hit_from_picture">Leído de una imagen</string>
+    <string name="content_hit_from_handwriting">Leído de escritura a mano</string>
+
+    <string name="deleted_items_intro">Restaura cuadernos, secciones y páginas eliminados desde cualquier lugar de la aplicación. Los elementos se eliminan permanentemente después de 7 días.</string>
+    <string name="deleted_items_dismiss">Descartar</string>
+    <string name="deleted_items_loading">Cargando elementos eliminados…</string>
+    <string name="deleted_items_empty">Elementos eliminados está vacío</string>
+    <string name="deleted_items_deleted_at">Eliminado el %1$s</string>
+    <string name="deleted_items_restore">Restaurar</string>
+    <string name="deleted_items_restoring">Restaurando…</string>
+    <string name="deleted_items_kind_notebook">CUADERNO</string>
+    <string name="deleted_items_kind_section">SECCIÓN</string>
+    <string name="deleted_items_kind_page">PÁGINA</string>
+    <plurals name="deleted_items_sections">
+        <item quantity="one">%d sección</item>
+        <item quantity="other">%d secciones</item>
+    </plurals>
+    <plurals name="deleted_items_pages">
+        <item quantity="one">%d página</item>
+        <item quantity="other">%d páginas</item>
+    </plurals>
+    <string name="deleted_items_section_details">En %1$s · %2$s</string>
+    <string name="deleted_items_page_details">En %1$s · %2$s</string>
+    <string name="deleted_items_unknown_notebook">cuaderno</string>
+    <string name="deleted_items_unknown_section">sección</string>
+
+    <string name="eraser_size">Tamaño</string>
+    <string name="eraser_mode_normal">Normal</string>
+    <string name="eraser_mode_object">Objeto</string>
+
+    <string name="hardware_stylus">Lápiz táctil</string>
+    <string name="hardware_keyboard">Teclado</string>
+    <string name="hardware_finger_draws">Permitir dibujar con el dedo</string>
+    <string name="hardware_pen_button">Botón del lápiz</string>
+    <string name="hardware_pen_button_info">El firmware de tu lápiz cuenta sus propios clics</string>
+    <string name="stylus_press_single">Un clic</string>
+    <string name="stylus_press_double">Doble clic</string>
+    <string name="stylus_press_triple">Triple clic</string>
+    <string name="stylus_action_none">Nada</string>
+    <string name="stylus_action_toggle_pen_eraser">Lápiz / borrador</string>
+    <string name="stylus_action_cycle_pens">Siguiente lápiz</string>
+    <string name="stylus_action_pen_1">Lápiz 1</string>
+    <string name="stylus_action_pen_2">Lápiz 2</string>
+    <string name="stylus_action_pen_3">Lápiz 3</string>
+    <string name="stylus_action_highlighter">Resaltador</string>
+    <string name="stylus_action_eraser">Borrador</string>
+    <string name="stylus_action_lasso">Selección con lazo</string>
+    <string name="stylus_action_undo">Deshacer</string>
+    <string name="stylus_action_redo">Rehacer</string>
+    
+    <string name="shortcut_group_pages">Páginas</string>
+    <string name="shortcut_group_edit">Editar</string>
+    <string name="shortcut_group_view">Ver</string>
+    <string name="shortcut_group_formatting">Formato</string>
+    <string name="shortcut_group_paragraph">Párrafo</string>
+    <string name="shortcut_group_table">Tabla</string>
+    <string name="shortcut_new_page">Nueva página</string>
+    <string name="shortcut_undo">Deshacer</string>
+    <string name="shortcut_redo">Rehacer</string>
+    <string name="shortcut_zoom_in">Acercar</string>
+    <string name="shortcut_zoom_out">Alejar</string>
+    <string name="shortcut_actual_size">Tamaño real</string>
+    <string name="shortcut_bold">Negrita</string>
+    <string name="shortcut_italic">Cursiva</string>
+    <string name="shortcut_underline">Subrayado</string>
+    <string name="shortcut_indent">Aumentar sangría</string>
+    <string name="shortcut_outdent">Disminuir sangría</string>
+    <string name="shortcut_next_cell">Siguiente celda</string>
+    <string name="shortcut_previous_cell">Celda anterior</string>
+
+    <string name="highlighter_sample">Texto resaltado</string>
+
+    <string name="paper_section_size">Tamaño de papel</string>
+    <string name="paper_size">Tamaño</string>
+    <string name="paper_orientation">Orientación</string>
+    <string name="paper_width">Ancho</string>
+    <string name="paper_height">Alto</string>
+    <string name="paper_section_margins">Márgenes de impresión</string>
+    <string name="paper_margin_top">Superior</string>
+    <string name="paper_margin_bottom">Inferior</string>
+    <string name="paper_margin_left">Izquierdo</string>
+    <string name="paper_margin_right">Derecho</string>
+    <string name="paper_size_auto">Automático</string>
+    <string name="paper_size_billfold">Cartera</string>
+    <string name="paper_size_custom">Personalizado</string>
+    <string name="paper_orientation_portrait">Vertical</string>
+    <string name="paper_orientation_landscape">Horizontal</string>
+
+    <string name="pen_kind_fountain">Pluma estilográfica</string>
+    <string name="pen_kind_calligraphy">Caligrafía</string>
+    <string name="pen_hold_for_straight_line">Mantener presionado para línea recta</string>
+    <string name="pen_hold_for_straight_line_info">Dibuja una línea y haz una pausa con el lápiz apoyado durante un segundo: el trazo se sustituye por una línea recta que puedes mover y cambiar de tamaño. Si levantas el lápiz sin hacer una pausa, el trazo a mano alzada permanece. Las líneas casi horizontales y casi verticales se nivelan.</string>
+    <string name="pen_pressure">Sensibilidad a la presión</string>
+    <string name="pen_pressure_info">Indica cuánto engrosa la línea al presionar más fuerte. 0 desactiva la respuesta a la presión; la punta ancha sigue diferenciando los trazos hacia abajo y los transversales.</string>
+    <string name="pen_stabilization">Estabilización</string>
+    <string name="pen_stabilization_info">Suaviza el temblor. Un poco es suficiente; los valores altos hacen que la tinta vaya rezagada respecto al lápiz.</string>
+    <string name="pen_add_color">Añadir color</string>
+
+    <string name="recognition_processing">Procesando la tinta seleccionada en este dispositivo…</string>
+    <string name="recognition_failed">Error en el reconocimiento</string>
+    <string name="recognition_source_latex" translatable="false">LaTeX</string>
+    <string name="recognition_source_text">Texto</string>
+    <string name="recognition_copy">Copiar</string>
+    <string name="recognition_copied">Copiado al portapapeles</string>
+    <string name="recognition_preview">Vista previa</string>
+    <string name="recognition_preview_empty">Introduce código LaTeX para previsualizarlo</string>
+    <string name="recognition_render_failed">No se pudo renderizar el código LaTeX</string>
+    <string name="recognition_math_actions">Acciones matemáticas</string>
+    <string name="recognition_analyzing">Analizando el código LaTeX con SymPy…</string>
+    <string name="recognition_actions">Acciones</string>
+    <string name="recognition_operation_failed">La operación ha fallado</string>
+    <string name="recognition_show_decimal">Mostrar como decimal</string>
+
+    <string name="ruler_kind_straight">Recta</string>
+    <string name="ruler_kind_protractor">Semicírculo</string>
+    <string name="ruler_diameter">Diámetro</string>
+    <string name="ruler_diameter_inches">%1$.1f pulg</string>
+
+    <string name="shape_page">Forma de la página %1$d</string>
+    <string name="shape_line">Línea</string>
+    <string name="shape_arrow">Flecha</string>
+    <string name="shape_rectangle">Rectángulo</string>
+    <string name="shape_rounded_rectangle">Rectángulo redondeado</string>
+    <string name="shape_ellipse">Elipse</string>
+    <string name="shape_triangle">Triángulo</string>
+    <string name="shape_right_triangle">Triángulo rectángulo</string>
+    <string name="shape_diamond">Rombo</string>
+    <string name="shape_pentagon">Pentágono</string>
+    <string name="shape_hexagon">Hexágono</string>
+    <string name="shape_l">Forma de L</string>
+    <string name="shape_cube">Cubo</string>
+    <string name="shape_pyramid">Pirámide</string>
+    <string name="shape_wedge">Cuña</string>
+    <string name="shape_sphere">Esfera</string>
+    <string name="shape_cone">Cono</string>
+    <string name="shape_cylinder">Cilindro</string>
+
+    <string name="table_write_with_pen">Escribir con un lápiz</string>
+    <string name="table_write_with_pen_info">Desactivado, cada celda es un campo de texto en el que se escribe con el teclado.</string>
+    <string name="table_header_column">Columna de encabezado</string>
+    <string name="table_header_row">Fila de encabezado</string>
+    <string name="table_column_count">Número de columnas</string>
+    <string name="table_row_count">Número de filas</string>
+
+    <string name="version_history_intro">Versiones guardadas anteriores de esta página, de la más reciente a la más antigua.</string>
+    <string name="version_history_restore_note">Una restauración devuelve el estado completo de la página</string>
+    <string name="version_history_loading">Cargando versiones…</string>
+    <string name="version_history_empty">Todavía no hay versiones anteriores</string>
+    <string name="version_history_restore_version">Restaurar esta versión</string>
+    <string name="version_history_restoring">Restaurando…</string>
+    <string name="version_history_confirm_title">¿Restaurar esta versión?</string>
+    <string name="version_history_confirm_body">La versión seleccionada reemplazará el estado guardado de la página. Tu versión actual se conservará en el historial</string>
+    <string name="version_history_confirm">Restaurar</string>
+    <string name="version_history_cancel">Cancelar</string>
+
+    <!-- The ribbon. -->
+    <string name="ribbon_tab_file">Archivo</string>
+    <string name="ribbon_tab_draw">Dibujar</string>
+    <string name="ribbon_tab_document">Documento</string>
+    <string name="ribbon_tab_view">Ver</string>
+    <string name="ribbon_tab_settings">Ajustes</string>
+    <string name="ribbon_back">Volver</string>
+    <string name="ribbon_hide_navigation">Ocultar cuadernos y páginas</string>
+    <string name="ribbon_show_navigation">Mostrar cuadernos y páginas</string>
+    <string name="ribbon_no_tool">Ninguna herramienta</string>
+    <string name="ribbon_account">Cuenta</string>
+    <string name="ribbon_account_connected">Cuenta, conectada a un servidor</string>
+    <string name="ribbon_account_unreachable">Cuenta, servidor inaccesible</string>
+    <string name="ribbon_text">Texto</string>
+    <string name="ribbon_paste">Pegar</string>
+    <string name="ribbon_cut">Cortar</string>
+    <string name="ribbon_copy">Copiar</string>
+    <string name="ribbon_bold">Negrita</string>
+    <string name="ribbon_italic">Cursiva</string>
+    <string name="ribbon_underline">Subrayado</string>
+    <string name="ribbon_strikethrough">Tachado</string>
+    <string name="ribbon_font_color">Color de fuente</string>
+    <string name="ribbon_highlight">Resaltar</string>
+    <string name="ribbon_subscript">Subíndice</string>
+    <string name="ribbon_superscript">Superíndice</string>
+    <string name="ribbon_clear_formatting">Borrar formato</string>
+    <string name="ribbon_bulleted_list">Lista con viñetas</string>
+    <string name="ribbon_numbered_list">Lista numerada</string>
+    <string name="ribbon_todo_list">Tareas pendientes</string>
+    <string name="ribbon_decrease_indent">Disminuir sangría</string>
+    <string name="ribbon_increase_indent">Aumentar sangría</string>
+    <string name="ribbon_align_left">Alinear a la izquierda</string>
+    <string name="ribbon_align_center">Centrar</string>
+    <string name="ribbon_align_right">Alinear a la derecha</string>
+    <string name="ribbon_picture">Imagen</string>
+    <string name="ribbon_picture_device">En el dispositivo</string>
+    <string name="ribbon_picture_online">Buscar en línea</string>
+    <string name="ribbon_picture_camera">Cámara</string>
+    <string name="ribbon_link">Enlace</string>
+    <string name="ribbon_link_insert">Insertar enlace</string>
+    <string name="ribbon_link_edit">Editar enlace</string>
+    <string name="ribbon_link_text">Texto a mostrar</string>
+    <string name="ribbon_link_address">Dirección web</string>
+    <string name="ribbon_link_address_example" translatable="false">https://example.com</string>
+    <string name="ribbon_link_cancel">Cancelar</string>
+    <string name="ribbon_link_apply">Aplicar</string>
+    <string name="ribbon_font_hint">Mantén presionada una fuente para escribir en ella de forma predeterminada</string>
+    <string name="ribbon_font_size_hint">Mantén presionado un tamaño para iniciar el texto nuevo con él</string>
+    <string name="ribbon_make_default">Predeterminar</string>
+    <string name="ribbon_default">Predeterminado</string>
+    <string name="ribbon_color_none">Ninguno</string>
+    <string name="ribbon_styles">Estilos</string>
+    <string name="ribbon_style_normal">Normal</string>
+    <string name="ribbon_style_heading_1">Título 1</string>
+    <string name="ribbon_style_heading_2">Título 2</string>
+    <string name="ribbon_style_heading_3">Título 3</string>
+    <string name="ribbon_style_quote">Cita</string>
+    <string name="ribbon_style_code">Código</string>
+
+    <!-- Draw tab. -->
+    <string name="draw_undo">Deshacer</string>
+    <string name="draw_redo">Rehacer</string>
+    <string name="draw_lasso">Lazo</string>
+    <string name="draw_insert_space">Insertar espacio</string>
+    <string name="draw_equation">Ecuación</string>
+    <string name="draw_calculator">Calculadora (experimental)</string>
+    <string name="draw_calculator_close">Cerrar calculadora</string>
+    <string name="draw_highlighter">Resaltador</string>
+    <string name="draw_ruler">Regla</string>
+    <string name="draw_ruler_put_away">Guardar la regla</string>
+    <string name="draw_eraser">Borrador</string>
+    <string name="draw_pen">Lápiz %1$d</string>
+
+    <!-- View tab. -->
+    <string name="view_zoom_label">Zoom:</string>
+    <string name="view_zoom_in">Acercar</string>
+    <string name="view_zoom_out">Alejar</string>
+    <string name="view_zoom_percent">%1$d%%</string>
+    <string name="view_page_width">Ancho de página</string>
+    <string name="view_paper_size">Tamaño de papel</string>
+    <string name="view_hide_page_title">Ocultar título de página</string>
+    <string name="view_switch_background">Cambiar fondo</string>
+    <string name="view_tabs_layout">Diseño de pestañas</string>
+    <string name="view_tabs_vertical">Pestañas verticales</string>
+    <string name="view_tabs_horizontal">Pestañas horizontales</string>
+    <string name="view_paper">Papel</string>
+    <string name="view_paper_hint">Mantén presionado un tipo de papel para iniciar las nuevas páginas con él</string>
+    <string name="view_paper_none">Ninguno</string>
+    <string name="view_paper_standard_ruled">Rayado estándar</string>
+    <string name="view_paper_wide_ruled">Rayado ancho</string>
+    <string name="view_paper_dotted">Papel punteado</string>
+    <string name="view_paper_hexagonal">Papel hexagonal</string>
+    <string name="view_paper_grid_medium">Cuadrícula mediana</string>
+    <string name="view_paper_grid_large">Cuadrícula grande</string>
+    <string name="view_page_color">Color de página</string>
+    <string name="view_page_color_none">Sin color</string>
+
+    <!-- File tab. -->
+    <string name="file_export_pdf">Exportar como PDF</string>
+    <string name="file_version_history">Historial de versiones</string>
+    <string name="file_deleted_items">Elementos eliminados</string>
+    <string name="file_closed_notebooks">Cuadernos cerrados</string>
+    <string name="file_close_notebook">Cerrar cuaderno</string>
+    <string name="file_export_notebook">Exportar cuaderno</string>
+    <string name="file_import">Importar</string>
+    <string name="file_delete_notebook">Eliminar cuaderno</string>
+
+    <!-- Settings tab. -->
+    <string name="settings_integrated_ai">Integrada</string>
+    <string name="settings_hardware">Hardware</string>
+    <string name="settings_link_previews">Vista previa de enlaces</string>
+    <string name="settings_about">Acerca de</string>
+
+    <!-- The toolkit that floats over a selection. -->
+    <string name="tooltip_recolor_ink">Cambiar el color de la tinta seleccionada</string>
+    <string name="tooltip_copy_ink">Copiar tinta seleccionada</string>
+    <string name="tooltip_lock">Bloquear selección</string>
+    <string name="tooltip_unlock">Desbloquear selección</string>
+    <string name="tooltip_delete_ink">Eliminar tinta seleccionada</string>
+    <string name="tooltip_group">Agrupar</string>
+    <string name="tooltip_ungroup">Desagrupar</string>
+    <string name="tooltip_math">Matemáticas</string>
+    <string name="tooltip_select_all">Seleccionar todo</string>
+    <string name="tooltip_edit_equation">Editar ecuación</string>
+    <string name="tooltip_change_border_width">Cambiar ancho de borde</string>
+    <string name="tooltip_change_line_type">Cambiar tipo de línea</string>
+    <string name="tooltip_rows">Filas</string>
+    <string name="tooltip_columns">Columnas</string>
+    <string name="tooltip_insert_below">Insertar debajo</string>
+    <string name="tooltip_insert_right">Insertar a la derecha</string>
+    <string name="tooltip_insert_row_below">Insertar fila debajo</string>
+    <string name="tooltip_insert_column_right">Insertar columna a la derecha</string>
+    <string name="tooltip_delete_row">Eliminar fila</string>
+    <string name="tooltip_delete_column">Eliminar columna</string>
+    <string name="tooltip_change_fill">Cambiar color de relleno</string>
+    <string name="tooltip_no_fill">Sin relleno</string>
+    <string name="tooltip_fill_swatch">Relleno %1$s</string>
+    <string name="tooltip_change_background">Cambiar color de fondo</string>
+    <string name="tooltip_no_background">Sin fondo</string>
+    <string name="tooltip_background_swatch">Fondo %1$s</string>
+    <string name="color_white">Blanco</string>
+    <string name="color_black">Negro</string>
+    <string name="color_gray">Gris</string>
+    <string name="color_red">Rojo</string>
+    <string name="color_orange">Naranja</string>
+    <string name="color_green">Verde</string>
+    <string name="color_cyan">Cian</string>
+    <string name="color_blue">Azul</string>
+    <string name="color_purple">Morado</string>
+    <string name="color_pink">Rosa</string>
+
+    <!-- The page editor. -->
+    <string name="editor_paste">Pegar</string>
+    <string name="editor_untitled_page">Página sin título</string>
+
+    <string name="equation_button">Ecuación</string>
+    <string name="equation_insert">Insertar ecuación</string>
+    <string name="equation_edit">Editar ecuación</string>
+    <string name="equation_source_hint">Introduce código LaTeX sin delimitadores $.</string>
+    <string name="equation_preview">Vista previa</string>
+    <string name="equation_cancel">Cancelar</string>
+    <string name="equation_submit">Insertar</string>
+    <string name="equation_update">Actualizar</string>
+    <string name="equation_parse_failed">No se pudo analizar esta ecuación.</string>
+    <string name="shape_button">Formas</string>
+    <string name="shape_button_panel">Forma</string>
+    <string name="table_button">Tabla</string>
+    <string name="table_button_ink">Tabla para escribir a mano</string>
+    <string name="table_move">Mover tabla</string>
+
+    <!-- The handwriting calculator. -->
+    <string name="calculator_title">Calculadora</string>
+    <string name="calculator_experimental">Experimental</string>
+    <string name="calculator_close">Cerrar calculadora</string>
+    <string name="calculator_undo_stroke">Deshacer último trazo</string>
+    <string name="calculator_clear">Borrar</string>
+    <string name="calculator_calculate">Calcular</string>
+    <string name="calculator_reading">Leyendo tu escritura a mano…</string>
+    <string name="calculator_open_in_panel">Abrir en el panel</string>
+    <string name="calculator_pad">Área de escritura de la calculadora</string>
+    <string name="calculator_pad_hint">Escribe un cálculo y luego presiona =</string>
+    <string name="calculator_recognize_failed">No se pudo reconocer la escritura a mano.</string>
+
+    <!-- Export as PDF. -->
+    <string name="export_pdf_title">Exportar como PDF</string>
+    <string name="export_pdf_close">Cerrar</string>
+    <plurals name="export_pdf_sheets">
+        <item quantity="one">%d hoja</item>
+        <item quantity="other">%d hojas</item>
+    </plurals>
+    <string name="export_pdf_export">Exportar</string>
+    <string name="export_pdf_nothing">No hay nada que previsualizar.</string>
+    <string name="export_pdf_sheet">Hoja %1$d</string>
+    <string name="export_pdf_sheet_of">%1$d / %2$d</string>
+    <string name="export_pdf_what">Qué exportar</string>
+    <string name="export_pdf_range">Rango</string>
+    <string name="export_pdf_range_page">Esta página</string>
+    <string name="export_pdf_range_section">Toda la sección</string>
+    <string name="export_pdf_paper">Papel</string>
+    <string name="export_pdf_margins">Márgenes</string>
+    <string name="export_pdf_layout">Diseño</string>
+    <string name="export_pdf_fit">Ajustar contenido a las páginas</string>
+    <string name="export_pdf_fit_info">El contenido que sería cortado por el borde de una página se devuelve a la página en la que comienza. Todo lo que sea mayor que una página se deja donde está.</string>
+    <string name="export_pdf_ruling">Rayado de página</string>
+    <string name="export_pdf_ruling_info">Imprime las líneas, cuadrados o puntos sobre los que está escrita la página.</string>
+    <string name="export_pdf_layout_failed">No se pudo diseñar esta página para imprimir.</string>
+    <string name="export_pdf_write_failed">No se pudo escribir el archivo PDF.</string>
+
+    <!-- Search online for a picture. -->
+    <string name="online_image_title">Buscar en línea</string>
+    <string name="online_image_subtitle">Imágenes con licencia abierta de Wikimedia Commons y Openverse</string>
+    <string name="online_image_close">Cerrar</string>
+    <string name="online_image_search_hint">Buscar imágenes</string>
+    <string name="online_image_clear">Borrar búsqueda</string>
+    <string name="online_image_more_openverse">Más de Openverse</string>
+    <string name="online_image_no_results">No se encontraron imágenes para “%1$s”.</string>
+    <string name="online_image_empty">Busca fotos e ilustraciones para colocar en la página.</string>
+    <string name="online_image_untitled">Imagen sin título</string>
+    <string name="online_image_insert">Insertar</string>
+    <string name="online_image_rate_limited">Demasiadas búsquedas desde esta conexión. Inténtalo de nuevo en un minuto.</string>
+    <string name="online_image_unreachable">No se pudo contactar con la búsqueda de imágenes. Comprueba la conexión e inténtalo de nuevo.</string>
+    <string name="online_image_download_failed">No se pudo descargar esa imagen. Prueba con otra.</string>
+
+    <!-- About. -->
+    <string name="about_description">Una alternativa a OneNote de código abierto, con licencia Source First License 1.1</string>
+    <string name="about_source">Ver en GitHub</string>
+    <string name="about_donate">Donar al proyecto</string>
+    <string name="about_close">Cerrar</string>
+    <string name="about_version">Versión %1$s</string>
+    <string name="about_version_unknown">Versión desconocida</string>
+
+    <string name="image_missing">Error: no se encontró %1$s</string>
+    <string name="image_unreadable">Error: no se pudo leer %1$s</string>
+
+    <!-- The notebook rail. -->
+    <string name="rail_new_notebook">Nuevo cuaderno</string>
+    <string name="rail_new_section">Nueva sección</string>
+    <string name="rail_reorder">Reordenar %1$s</string>
+    <string name="rail_collapse">Contraer %1$s</string>
+    <string name="rail_expand">Expandir %1$s</string>
+    <string name="rail_rename_notebook">Cambiar nombre del cuaderno</string>
+    <string name="rail_rename_section">Cambiar nombre de la sección</string>
+    <string name="rail_delete_section">Eliminar sección</string>
+
+    <!-- The page list. -->
+    <string name="pages_add">Añadir página</string>
+    <string name="pages_sort">Ordenar páginas</string>
+    <string name="pages_sort_manual">Orden de la sección</string>
+    <string name="pages_sort_title">Por título</string>
+    <string name="pages_sort_modified">Por fecha de modificación</string>
+    <string name="pages_untitled">Página sin título</string>
+    <string name="pages_delete">Eliminar página</string>
+    <string name="pages_edited_just_now">Hace un momento</string>
+    <plurals name="pages_edited_minutes_ago">
+        <item quantity="one">Hace %d min</item>
+        <item quantity="other">Hace %d min</item>
+    </plurals>
+
+    <!-- The horizontal section tabs. -->
+    <string name="tabs_no_notebook">Ningún cuaderno</string>
+    <string name="tabs_choose_notebook">Elegir cuaderno</string>
+    <string name="tabs_new_section">Nueva sección</string>
+    <string name="scroll_more_left">Más a la izquierda</string>
+    <string name="scroll_more_right">Más a la derecha</string>
+
+    <!-- The workspace -->
+    <string name="workspace_undo">Deshacer</string>
+    <string name="workspace_no_camera">No hay ninguna aplicación de cámara disponible.</string>
+    <string name="workspace_recognize_failed">No se pudo reconocer la tinta seleccionada.</string>
+    <string name="workspace_math_engine_failed">El motor matemático local no pudo iniciarse.</string>
+    <string name="workspace_math_failed">La operación matemática ha fallado.</string>
+    <string name="workspace_clip_latex">LaTeX reconocido</string>
+    <string name="workspace_clip_text">Texto reconocido</string>
+    <string name="workspace_recognition_empty">Selecciona tinta y elige Reconocer para ver un resultado aquí.</string>
+    <string name="workspace_no_page">Ninguna página seleccionada</string>
+    <string name="workspace_close_search">Cerrar búsqueda</string>
+    <string name="workspace_export_file_fallback">Cuaderno</string>
+    <string name="dialog_cancel">Cancelar</string>
+
+    <string name="name_dialog_new_notebook">Nuevo cuaderno</string>
+    <string name="name_dialog_new_section">Nueva sección</string>
+    <string name="name_dialog_rename_notebook">Cambiar nombre del cuaderno</string>
+    <string name="name_dialog_rename_section">Cambiar nombre de la sección</string>
+    <string name="name_dialog_create">Crear</string>
+    <string name="name_dialog_rename">Cambiar nombre</string>
+    <string name="name_dialog_hint">Nombre</string>
+
+    <string name="transfer_running">Trabajando con el cuaderno</string>
+    <string name="transfer_failed">Error en la transferencia del cuaderno</string>
+    <string name="transfer_complete">Transferencia del cuaderno completada</string>
+    <string name="transfer_preparing">Comprobando y preparando el cuaderno…</string>
+    <string name="transfer_ok">Aceptar</string>
+
+    <plurals name="count_sections">
+        <item quantity="one">%d sección</item>
+        <item quantity="other">%d secciones</item>
+    </plurals>
+    <plurals name="count_pages">
+        <item quantity="one">%d página</item>
+        <item quantity="other">%d páginas</item>
+    </plurals>
+    <string name="delete_title">¿Eliminar %1$s?</string>
+    <string name="delete_confirm">Eliminar</string>
+    <string name="delete_nothing_to_keep">No contiene nada, por lo que se eliminará definitivamente en lugar de guardarse en Elementos eliminados.</string>
+    <string name="delete_section_empty">Esta sección se eliminará. Puedes restaurarla más tarde desde Elementos eliminados.</string>
+    <plurals name="delete_section_pages">
+        <item quantity="one">Su %d página se eliminará con ella. Puedes restaurarla más tarde desde Elementos eliminados.</item>
+        <item quantity="other">Sus %d páginas se eliminarán con ella. Puedes restaurarlas más tarde desde Elementos eliminados.</item>
+    </plurals>
+    <string name="delete_notebook_empty">Este cuaderno se eliminará. Puedes restaurarlo más tarde desde Elementos eliminados.</string>
+    <string name="delete_notebook_contents">Sus %1$s y %2$s se eliminarán con él. Puedes restaurarlos más tarde desde Elementos eliminados.</string>
+    <string name="close_notebook_title">¿Cerrar %1$s?</string>
+    <string name="close_notebook_confirm">Cerrar</string>
+    <string name="close_notebook_contents">No se elimina nada. Sus %1$s y %2$s se quedan donde están, y el cuaderno desaparece del panel hasta que lo vuelvas a abrir desde Cuadernos cerrados.</string>
+    <string name="close_notebook_empty">No se elimina nada. El cuaderno desaparece del panel hasta que lo vuelvas a abrir desde Cuadernos cerrados.</string>
+</resources>
