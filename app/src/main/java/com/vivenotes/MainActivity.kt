@@ -7,7 +7,10 @@ import android.view.Menu
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.vivenotes.ui.NotesApp
 import com.vivenotes.ui.NotesViewModel
 import com.vivenotes.ui.handleShortcut
@@ -15,6 +18,8 @@ import com.vivenotes.ui.claimsStylusButton
 import com.vivenotes.ui.handleStylusButton
 import com.vivenotes.ui.shortcutGroups
 import com.vivenotes.ui.theme.ViveNotesTheme
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -55,7 +60,19 @@ class MainActivity : ComponentActivity() {
                     app.managedSubscription,
                     app.pdfExporter,
                     app.onlineImages,
+                    onNotebookClosed = {
+                        lifecycleScope.launch { app.reviewPrompt.afterNotebookClosed(this@MainActivity) }
+                    },
                 )
+            }
+        }
+
+        // The 20th-session rating ask. STARTED rather than RESUMED: Play's sheet is its own
+        // Activity, and pausing this one under it must not cancel the request that opened it.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                app.reviewPrompt.sessionsReached.first { it }
+                app.reviewPrompt.askForSessions(this@MainActivity)
             }
         }
     }

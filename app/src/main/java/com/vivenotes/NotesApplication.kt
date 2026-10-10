@@ -17,6 +17,7 @@ import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.OnlineImageSearch
 import com.vivenotes.data.PenSettingsStore
+import com.vivenotes.data.ReviewPrompt
 import com.vivenotes.data.VideoThumbnailStore
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
@@ -116,6 +117,9 @@ class NotesApplication : Application() {
         ManagedSubscriptionController(this, syncAccounts, appScope)
     }
 
+    /** Counts sessions and asks Play for a rating once enough of them have passed. */
+    val reviewPrompt: ReviewPrompt by lazy { ReviewPrompt(this, appScope) }
+
     /** Local outbox and remote change events while the process is visible. */
     private val foregroundSync: ForegroundSyncScheduler by lazy {
         ForegroundSyncScheduler(
@@ -138,6 +142,7 @@ class NotesApplication : Application() {
         // Registered here rather than from the Activity: the stream belongs to the process, and
         // this owner reports the first Activity's start, so every screen shares one connection.
         ProcessLifecycleOwner.get().lifecycle.addObserver(foregroundSync)
+        ProcessLifecycleOwner.get().lifecycle.addObserver(reviewPrompt)
         // Start collecting the managed-account flow at process launch so a completed/pending Play
         // purchase is reconciled even when the Account destination has not been opened yet.
         managedSubscription

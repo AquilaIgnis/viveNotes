@@ -308,6 +308,9 @@ dependencies {
     // Billing rather than Google Pay. Purchase tokens are verified and acknowledged by the managed
     // backend before access is granted; this dependency only owns the Play Store UI and discovery.
     implementation(libs.google.play.billing)
+    // The in-app rating sheet. Asked for only on a Play install; a sideloaded or F-Droid APK
+    // carries the library but never calls it.
+    implementation(libs.google.play.review.ktx)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

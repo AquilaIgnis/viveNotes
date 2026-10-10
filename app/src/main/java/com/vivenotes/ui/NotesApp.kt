@@ -207,6 +207,7 @@ fun NotesApp(
     managedSubscription: ManagedSubscriptionController,
     pdfExporter: PdfExporter,
     onlineImages: OnlineImages,
+    onNotebookClosed: () -> Unit,
 ) {
     // The app owns its small back stack, following Navigation 3's state model without taking on a
     // navigation dependency for two local destinations. Keeping the workspace composed preserves
@@ -366,6 +367,7 @@ fun NotesApp(
                     mathEngine = mathEngine,
                     pdfExporter = pdfExporter,
                     onlineImages = onlineImages,
+                    onNotebookClosed = onNotebookClosed,
                     onOpenAccount = {
                         if (backStack.lastOrNull() != AppDestination.Account) {
                             backStack.add(AppDestination.Account)
@@ -729,6 +731,7 @@ private fun NotesWorkspace(
     mathEngine: MathEngine,
     pdfExporter: PdfExporter,
     onlineImages: OnlineImages,
+    onNotebookClosed: () -> Unit,
     onOpenAccount: () -> Unit,
     onOpenClosedNotebooks: () -> Unit,
     accountConnected: Boolean,
@@ -1505,6 +1508,7 @@ private fun NotesWorkspace(
             onConfirm = {
                 viewModel.closeNotebook(notebook.id)
                 pendingNotebookClose = null
+                onNotebookClosed()
             },
         )
     }
