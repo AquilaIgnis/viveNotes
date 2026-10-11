@@ -74,12 +74,12 @@ object SpannableCodec {
         }
 
         blockRanges.forEach { (span, start, end) ->
-            out.setSpan(span, start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            out.setSpan(span, start, end, paragraphFlags(start, end))
         }
         markRanges.forEach { (mark, start, end) -> applyMark(out, mark, start, end) }
 
         if (blocks.isEmpty()) {
-            out.setSpan(BlockSpan(newId(), BlockType.Paragraph, 0, Align.Start, null), 0, 0, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            out.setSpan(BlockSpan(newId(), BlockType.Paragraph, 0, Align.Start, null), 0, 0, paragraphFlags(0, 0))
         }
         applyDerived(out, style)
         return out
@@ -126,11 +126,28 @@ object SpannableCodec {
                 inherited != null -> BlockSpan(newId(), inherited.type, inherited.indent, inherited.align, inherited.checked?.let { false })
                 else -> BlockSpan(newId(), BlockType.Paragraph, 0, Align.Start, null)
             }
-            editable.setSpan(meta, start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            editable.setSpan(meta, start, end, paragraphFlags(start, end))
             inherited = meta
         }
 
         applyDerived(editable, style)
+    }
+
+    /**
+     * Forgets the empty paragraphs an edit is about to delete, given the range it removes.
+     *
+     * Their [BlockSpan]s are the only ones the text does not take with it. Android discards a span
+     * exclusive at both ends once everything under it is deleted, but the inclusive span an empty
+     * paragraph needs (see [paragraphFlags]) survives as a zero-length span at the edit point, and
+     * spreads over whatever is typed there: replacing a selection that held an empty to-do line made
+     * the new text a to-do. An empty paragraph is gone when the newline on either side of it is,
+     * which is exactly when its span sits in [start]..[end]. Must run before the edit lands.
+     */
+    fun forgetDeletedEmptyParagraphs(text: Spannable, start: Int, end: Int) {
+        text.getSpans(start, end, BlockSpan::class.java).forEach { span ->
+            val at = text.getSpanStart(span)
+            if (at == text.getSpanEnd(span) && at in start..end) text.removeSpan(span)
+        }
     }
 
     /** Replaces the [BlockSpan] on every paragraph intersecting [selStart]..[selEnd]. */
@@ -147,7 +164,7 @@ object SpannableCodec {
                 .firstOrNull { editable.getSpanStart(it) <= start && editable.getSpanEnd(it) >= end }
                 ?: BlockSpan(newId(), BlockType.Paragraph, 0, Align.Start, null)
             editable.removeSpan(current)
-            editable.setSpan(transform(current), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            editable.setSpan(transform(current), start, end, paragraphFlags(start, end))
         }
         applyDerived(editable, style)
     }
@@ -454,7 +471,7 @@ object SpannableCodec {
             val meta = text.getSpans(start, end, BlockSpan::class.java)
                 .firstOrNull { text.getSpanStart(it) <= start && text.getSpanEnd(it) >= end }
                 ?: continue
-            val flags = Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            val flags = paragraphFlags(start, end)
 
             // Numbering restarts whenever a run of numbered blocks is interrupted.
             if (meta.type == BlockType.Numbered) {
@@ -501,6 +518,19 @@ object SpannableCodec {
             }
         }
     }
+
+    /**
+     * The flags a span covering the paragraph [start]..[end] is set with.
+     *
+     * Exclusive at both ends, so text typed beside a paragraph does not join it — except on an
+     * empty paragraph, where Android refuses that combination outright: it logs
+     * "SPAN_EXCLUSIVE_EXCLUSIVE spans cannot have a zero length" and drops the span, and the line
+     * lost its [BlockSpan] and with it its id, type, indent, alignment and tick. Inclusive there
+     * instead, which is also what typing into the line wants: the first character lands inside the
+     * span rather than beside it, and [normalize] narrows it back to exclusive.
+     */
+    private fun paragraphFlags(start: Int, end: Int): Int =
+        if (start == end) Spannable.SPAN_INCLUSIVE_INCLUSIVE else Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
 
     @Suppress("FunctionName")
     private fun BulletSpanCompat(style: EditorStyle, extraIndent: Int): BulletSpan =

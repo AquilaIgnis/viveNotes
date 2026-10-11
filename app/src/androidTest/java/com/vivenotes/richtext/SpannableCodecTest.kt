@@ -305,6 +305,20 @@ class SpannableCodecTest {
     }
 
     @Test
+    fun anEmptyBlockKeepsItsIdAndAttributes() {
+        // An empty line gives its span nothing to cover, and Android drops a zero-length span that
+        // is exclusive at both ends — "SPAN_EXCLUSIVE_EXCLUSIVE spans cannot have a zero length" —
+        // so a line like these used to come back as a fresh plain paragraph.
+        val blank = Block(id = "blank", type = BlockType.Todo, indent = 2, align = Align.Center, checked = true)
+        val trailing = Block(id = "trailing", type = BlockType.Bullet)
+
+        val result = roundTrip(listOf(Block.of("first"), blank, trailing))
+
+        assertEquals(blank, result[1])
+        assertEquals(trailing, result[2])
+    }
+
+    @Test
     fun headingStylingDoesNotLeakIntoInlineMarks() {
         // Headings are drawn with bold; that must not read back as a user-applied Bold mark,
         // or removing the heading would leave the text stuck bold.

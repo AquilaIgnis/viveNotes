@@ -3,6 +3,7 @@ package com.vivenotes.richtext
 import android.content.Context
 import android.graphics.Rect
 import android.text.Editable
+import android.text.Spannable
 import android.text.Spanned
 import android.text.TextWatcher
 import android.text.style.AbsoluteSizeSpan
@@ -212,6 +213,11 @@ class OutlineEditText @JvmOverloads constructor(
                 SpannableCodec.inheritedMarks(s, start)
             } else {
                 emptySet()
+            }
+            // Even while suppressed: an empty line deleted by a programmatic replace, such as an
+            // equation inserted over a selection, must not hand its style to the replacement.
+            if (count > 0 && s is Spannable) {
+                SpannableCodec.forgetDeletedEmptyParagraphs(s, start, start + count)
             }
         }
 

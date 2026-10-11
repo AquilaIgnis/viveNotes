@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import com.vivenotes.model.Block
+import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
 import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
 import com.vivenotes.model.Run
@@ -128,6 +129,62 @@ class OutlineEditTextTest {
             assertEquals(2, equationRuns.size)
             assertTrue(equationRuns.all { Mark.FontSize(36) in it.marks })
             assertTrue(view.blocks().single().runs.all { Mark.FontSize(36) in it.marks })
+        }
+    }
+
+    @Test
+    fun aListStyleSetOnAnEmptyLineIsKept() {
+        withEditor { view ->
+            view.setBlocks(listOf(Block(id = "b")))
+            view.setSelection(0)
+
+            view.apply(FormatCommand.SetBlockType(BlockType.Bullet))
+
+            assertEquals(BlockType.Bullet, view.blocks().single().type)
+        }
+    }
+
+    @Test
+    fun enterInAListStartsAnotherItemOfIt() {
+        withEditor { view ->
+            view.setBlocks(listOf(Block(id = "b", type = BlockType.Bullet, runs = listOf(Run("item")))))
+            view.setSelection(4)
+
+            view.text?.insert(4, "\n")
+
+            assertEquals(listOf(BlockType.Bullet, BlockType.Bullet), view.blocks().map { it.type })
+        }
+    }
+
+    @Test
+    fun typingOverASelectionDoesNotInheritADeletedEmptyLine() {
+        withEditor { view ->
+            view.setBlocks(
+                listOf(
+                    Block.of("first"),
+                    Block(id = "todo", type = BlockType.Todo, checked = false),
+                    Block.of("third"),
+                ),
+            )
+            val editable = requireNotNull(view.text)
+
+            editable.replace(0, editable.length, "x")
+
+            assertEquals(BlockType.Paragraph, view.blocks().single().type)
+        }
+    }
+
+    @Test
+    fun anEmptyListItemDrawsItsMarker() {
+        withEditor { view ->
+            // The empty line comes first: Android lays out no paragraph spans at all on an empty
+            // last line, whatever they are.
+            view.setBlocks(listOf(Block(id = "a"), Block.of("text")))
+            val plain = renderToBitmap(view)
+            view.setBlocks(listOf(Block(id = "a", type = BlockType.Bullet), Block.of("text")))
+            val bulleted = renderToBitmap(view)
+
+            assertTrue("an empty bullet line drew no bullet", !plain.sameAs(bulleted))
         }
     }
 
