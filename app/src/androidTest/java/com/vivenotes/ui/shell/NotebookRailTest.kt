@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
@@ -15,7 +16,9 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.vivenotes.data.db.NotebookEntity
@@ -23,6 +26,7 @@ import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
@@ -75,25 +79,47 @@ class NotebookRailTest {
             section("c", "Charlie", 2),
         ),
         others: List<NotebookWithSections> = emptyList(),
+        /** The system font size, as a multiple; the device's own is left alone. */
+        fontScale: Float = 1f,
     ) {
         compose.setContent {
             density = LocalDensity.current
-            ViveNotesTheme {
-                Box(Modifier.width(232.dp).height(500.dp)) {
-                    NotebookRail(
-                        tree = listOf(NotebookWithSections(notebook, sections)) + others,
-                        selectedSectionId = sections.firstOrNull()?.id,
-                        onSelectSection = { selected = it },
-                        onToggleNotebook = { id, expanded -> toggled = id to expanded },
-                        onAddSection = {},
-                        onAddNotebook = {},
-                        onRenameNotebook = { renamedNotebook = it },
-                        onRenameSection = { renamedSection = it },
-                        onDeleteSection = { deletedSection = it },
-                        onReorderSections = { id, order -> reordered = id to order },
-                    )
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+                ViveNotesTheme {
+                    Box(Modifier.width(232.dp).height(500.dp)) {
+                        NotebookRail(
+                            tree = listOf(NotebookWithSections(notebook, sections)) + others,
+                            selectedSectionId = sections.firstOrNull()?.id,
+                            onSelectSection = { selected = it },
+                            onToggleNotebook = { id, expanded -> toggled = id to expanded },
+                            onAddSection = {},
+                            onAddNotebook = {},
+                            onRenameNotebook = { renamedNotebook = it },
+                            onRenameSection = { renamedSection = it },
+                            onDeleteSection = { deletedSection = it },
+                            onReorderSections = { id, order -> reordered = id to order },
+                        )
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * At twice the system font size "New Notebook" no longer fits one line. The row has to grow to
+     * show the second, where a fixed height showed only "New".
+     */
+    @Test
+    fun theAddRowsShowTheirWholeLabelAtTwiceTheFontSize() {
+        setRail(fontScale = 2f)
+
+        listOf("New Notebook", "New Section").forEach { label ->
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(label, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            // Height only. The layout semantics hands over is redone at the row's full width, so a
+            // label narrower than that reads as overflowing it; the bug was a hidden second line.
+            assertFalse("\"$label\" is cut off", layouts.single().didOverflowHeight)
         }
     }
 

@@ -20,10 +20,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -987,7 +989,7 @@ private fun FontFamilyPicker(
     val shown = if (mixed) null else current ?: default
     DefaultableCombo(
         text = shown?.let(FontRegistry::displayName).orEmpty(),
-        width = 148.dp,
+        minWidth = 148.dp,
         tag = FontTags.FAMILY,
         onSetDefault = { shown?.let(onSetDefault) },
         hint = stringResource(R.string.ribbon_font_hint),
@@ -1019,7 +1021,7 @@ private fun FontSizePicker(
     val shown = if (mixed) null else current ?: default
     DefaultableCombo(
         text = shown?.toString().orEmpty(),
-        width = 58.dp,
+        minWidth = 58.dp,
         tag = FontTags.SIZE,
         onSetDefault = { shown?.let(onSetDefault) },
         hint = stringResource(R.string.ribbon_font_size_hint),
@@ -1104,7 +1106,7 @@ internal fun MenuRow(
 @Composable
 private fun DefaultableCombo(
     text: String,
-    width: androidx.compose.ui.unit.Dp,
+    minWidth: androidx.compose.ui.unit.Dp,
     tag: String,
     onSetDefault: () -> Unit,
     hint: String,
@@ -1130,7 +1132,7 @@ private fun DefaultableCombo(
     Box {
         ComboBox(
             text = text,
-            width = width,
+            minWidth = minWidth,
             modifier = Modifier.testTag(tag),
             borderColor = border,
             onClick = { open = true },
@@ -1182,7 +1184,7 @@ private fun DefaultTag() {
 @Composable
 internal fun ComboBox(
     text: String,
-    width: androidx.compose.ui.unit.Dp,
+    minWidth: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier,
     borderColor: Color = MaterialTheme.colorScheme.outline,
     onLongClick: (() -> Unit)? = null,
@@ -1191,8 +1193,10 @@ internal fun ComboBox(
     Row(
         modifier = modifier
             .padding(horizontal = 2.dp)
-            .width(width)
-            .height(28.dp)
+            // Floors, not a fixed size: at a large system font size the text outgrows them, and a
+            // fixed box cut the text off mid-word and squeezed the arrow out.
+            .widthIn(min = minWidth)
+            .heightIn(min = 28.dp)
             .clip(RoundedCornerShape(4.dp))
             .border(1.dp, borderColor, RoundedCornerShape(4.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)

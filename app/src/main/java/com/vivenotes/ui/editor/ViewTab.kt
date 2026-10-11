@@ -233,7 +233,7 @@ private fun ZoomPicker(zoom: Float, onPick: (Float) -> Unit) {
     Box {
         // Rounded for display only: Page Width lands on whatever fits, and showing 86% while the
         // page is at 0.857 is the truth at the precision anyone cares about.
-        ComboBox(text = stringResource(R.string.view_zoom_percent, (zoom * 100).roundToInt()), width = 74.dp) { open = true }
+        ComboBox(text = stringResource(R.string.view_zoom_percent, (zoom * 100).roundToInt()), minWidth = 74.dp) { open = true }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             ViewSettings.ZOOM_STEPS.forEach { step ->
                 DropdownMenuItem(

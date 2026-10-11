@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -342,7 +343,9 @@ private fun AddRow(
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(start = 28.dp, end = 10.dp)
-            .height(32.dp),
+            // A floor, not a height: at a large system font size the label wraps, and a fixed
+            // height showed only its first line — "New Notebook" read as "New".
+            .heightIn(min = 32.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start,
     ) {

@@ -1,14 +1,20 @@
 package com.vivenotes.ui.editor
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import com.vivenotes.data.DrawTool
@@ -44,36 +50,54 @@ class FontPickerTest {
     private fun setRibbon(
         selection: SelectionState,
         defaults: EditorDefaults = EditorDefaults(),
+        /** The system font size, as a multiple; the device's own is left alone. */
+        fontScale: Float = 1f,
     ) {
         compose.setContent {
-            ViveNotesTheme {
-                Ribbon(
-                    selection = selection,
-                    activeTab = RibbonTab.Document,
-                    onTabChange = {},
-                    onCommand = { picked = (it as? FormatCommand.SetMark)?.mark },
-                    defaults = defaults,
-                    onSetDefault = { madeDefault = it },
-                    pageStyle = PageStyle(),
-                    viewSettings = ViewSettings(),
-                    view = noopViewActions(),
-                    pens = List(PenPreset.COUNT) { PenPreset.starting(it) },
-                    palette = PEN_COLORS,
-                    eraser = EraserSettings(),
-                    highlighter = HighlighterSettings(),
-                    shape = ShapeSettings(),
-                    tool = DrawTool.None,
-                    allowFinger = false,
-                    draw = DrawActions(
-                        selectTool = {},
-                        updatePen = { _, _ -> },
-                        updateEraser = {},
-                        setDrawWithFinger = {},
-                    ),
-                    pageOpen = true,
-                )
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+                ViveNotesTheme {
+                    Ribbon(
+                        selection = selection,
+                        activeTab = RibbonTab.Document,
+                        onTabChange = {},
+                        onCommand = { picked = (it as? FormatCommand.SetMark)?.mark },
+                        defaults = defaults,
+                        onSetDefault = { madeDefault = it },
+                        pageStyle = PageStyle(),
+                        viewSettings = ViewSettings(),
+                        view = noopViewActions(),
+                        pens = List(PenPreset.COUNT) { PenPreset.starting(it) },
+                        palette = PEN_COLORS,
+                        eraser = EraserSettings(),
+                        highlighter = HighlighterSettings(),
+                        shape = ShapeSettings(),
+                        tool = DrawTool.None,
+                        allowFinger = false,
+                        draw = DrawActions(
+                            selectTool = {},
+                            updatePen = { _, _ -> },
+                            updateEraser = {},
+                            setDrawWithFinger = {},
+                        ),
+                        pageOpen = true,
+                    )
+                }
             }
         }
+    }
+
+    /**
+     * At twice the system font size the font box grows to hold the whole name and its arrow, where a
+     * fixed box cut the name off mid-word and squeezed the arrow out.
+     */
+    @Test
+    fun aLongFontNameKeepsItsArrowAtTwiceTheFontSize() {
+        setRibbon(SelectionState(fontFamily = "jetbrains_mono", hasSelection = true), fontScale = 2f)
+
+        val box = compose.onNodeWithTag(FontTags.FAMILY).getUnclippedBoundsInRoot()
+        val name = compose.onNodeWithText("JetBrains Mono", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertTrue("the arrow lost its room", box.right - name.right >= 16.dp)
     }
 
     @Test
