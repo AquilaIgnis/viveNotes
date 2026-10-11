@@ -4,3 +4,9 @@
 # The whole bridge is only ~120 KiB of bytecode and this package-level boundary also covers output
 # types added by future ONNX Runtime updates.
 -keep class ai.onnxruntime.** { *; }
+
+# review-ktx 2.0.2's `OnSuccessListener` SAM wrapper carries a runtime parameter annotation copied
+# from an internal Play services build. No published play-services-basement defines the class, and
+# R8 fails the release on the missing reference. ART skips annotations it cannot resolve, so the
+# missing class costs nothing at runtime.
+-dontwarn com.google.android.gms.common.annotation.NoNullnessRewrite
