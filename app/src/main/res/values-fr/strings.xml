@@ -243,7 +243,7 @@
     <string name="ai_ink_text_rebuild">Relire chaque page manuscrite</string>
     <string name="ai_ink_text_off">Désactivé. L\'écriture manuscrite n\'est pas lue et rien n\'est stocké.</string>
     <plurals name="ai_ink_text_to_go">
-        <item quantity="one">Lecture… reste 1 page</item>
+        <item quantity="one">Lecture… reste %d page</item>
         <item quantity="other">Lecture… restent %d pages</item>
     </plurals>
     <string name="ai_ink_text_failed">%1$d pages lues · %2$d n\'ont pas pu être lues</string>
@@ -631,8 +631,8 @@
     </plurals>
     <string name="export_pdf_export">Exporter</string>
     <string name="export_pdf_nothing">Rien à prévisualiser.</string>
-    <string name="export_pdf_sheet">Feuille %1$s</string>
-    <string name="export_pdf_sheet_of">%1$s / %2$s</string>
+    <string name="export_pdf_sheet">Feuille %1$d</string>
+    <string name="export_pdf_sheet_of">%1$d / %2$d</string>
     <string name="export_pdf_what">Éléments à exporter</string>
     <string name="export_pdf_range">Plage</string>
     <string name="export_pdf_range_page">Cette page</string>

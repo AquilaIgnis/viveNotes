@@ -245,7 +245,7 @@
     <plurals name="ai_ink_text_to_go">
         <item quantity="other">読み取り中… 残り%dページ</item>
     </plurals>
-    <string name="ai_ink_text_failed">%1$sページ読み取り · %2$sページを読み込めませんでした</string>
+    <string name="ai_ink_text_failed">%1$dページ読み取り · %2$dページを読み込めませんでした</string>
     <plurals name="ai_ink_text_read">
         <item quantity="other">%dページ読み取り済み</item>
     </plurals>

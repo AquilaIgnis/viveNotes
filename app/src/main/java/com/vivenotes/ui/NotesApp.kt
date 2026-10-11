@@ -58,6 +58,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -795,6 +796,7 @@ private fun NotesWorkspace(
     val inkReadyPageId by viewModel.inkReadyPageId.collectAsStateWithLifecycle()
     val aiModels by aiModelStore.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val focusManager = LocalFocusManager.current
     val recognitionScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -886,7 +888,7 @@ private fun NotesWorkspace(
             } catch (failure: Exception) {
                 recognition = RecognitionPanelState(
                     kind = kind,
-                    error = failure.message ?: context.getString(R.string.workspace_recognize_failed),
+                    error = failure.message ?: resources.getString(R.string.workspace_recognize_failed),
                 )
             } finally {
                 bitmap?.recycle()
@@ -914,7 +916,7 @@ private fun NotesWorkspace(
         } catch (failure: Exception) {
             FormulaToolsState(
                 sourceLatex = formulaLatex,
-                error = failure.message ?: context.getString(R.string.workspace_math_engine_failed),
+                error = failure.message ?: resources.getString(R.string.workspace_math_engine_failed),
             )
         }
     }
@@ -931,7 +933,7 @@ private fun NotesWorkspace(
                     if (formulaLatex == source) {
                         formulaTools = formulaTools.copy(
                             executingActionId = null,
-                            error = failure.message ?: context.getString(R.string.workspace_math_failed),
+                            error = failure.message ?: resources.getString(R.string.workspace_math_failed),
                         )
                     }
                 }
@@ -1116,7 +1118,7 @@ private fun NotesWorkspace(
                                         // by a work profile.
                                         cameraTarget = null
                                         recognitionScope.launch {
-                                            snackbarHostState.showSnackbar(context.getString(R.string.workspace_no_camera))
+                                            snackbarHostState.showSnackbar(resources.getString(R.string.workspace_no_camera))
                                         }
                                     }
                                 }
@@ -1253,7 +1255,7 @@ private fun NotesWorkspace(
                                         recognition = recognition?.copy(value = value)
                                     },
                                     onCopyRecognition = { value ->
-                                        val label = context.getString(
+                                        val label = resources.getString(
                                             if (recognition?.kind == RecognitionOutputKind.Formula) {
                                                 R.string.workspace_clip_latex
                                             } else {
@@ -1330,7 +1332,7 @@ private fun NotesWorkspace(
                                         recognition = recognition?.copy(value = value)
                                     },
                                     onCopyRecognition = { value ->
-                                        val label = context.getString(
+                                        val label = resources.getString(
                                             if (recognition?.kind == RecognitionOutputKind.Formula) {
                                                 R.string.workspace_clip_latex
                                             } else {
