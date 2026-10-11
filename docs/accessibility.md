@@ -7,6 +7,7 @@
 - Font size: nothing in the app overrides the system size.
 - TalkBack, Voice Access, Switch Access and Select to Speak: all controls are labelled, and every icon button has a name.
 - Every color swatch has a name, and pages and sections can be moved with TalkBack or Switch Access.
+- Screen reader reads text through ocr on pictures.
 
 ## App specific
 
@@ -17,4 +18,4 @@
 - zoom and undo/redo as buttons and keyboard shortcuts, not just gestures
 - a keyboard shortcuts list
 - labels when the pen hovers
-- page color
+- page colors

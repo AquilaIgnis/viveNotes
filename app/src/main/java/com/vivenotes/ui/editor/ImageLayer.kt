@@ -3,7 +3,6 @@ package com.vivenotes.ui.editor
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,7 +25,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -318,21 +316,15 @@ internal fun ImageLayer(
                 } else {
                     stringResource(R.string.image_description_text, text)
                 }
-                Box(Modifier.overFrame(image, density).semantics { contentDescription = description })
+                Box(
+                    Modifier
+                        .overPageRect(image.x, image.y, image.x + image.width, image.y + image.height, density)
+                        .semantics { contentDescription = description },
+                )
             }
         }
     }
 }
-
-/** Exactly over [image]'s frame, in this layer's coordinates — the ones it is drawn in. */
-private fun Modifier.overFrame(image: Outline.Image, density: Float): Modifier =
-    offset { IntOffset((image.x * density).roundToInt(), (image.y * density).roundToInt()) }
-        .layout { measurable, _ ->
-            val width = (image.width * density).roundToInt().coerceAtLeast(0)
-            val height = (image.height * density).roundToInt().coerceAtLeast(0)
-            val placeable = measurable.measure(Constraints.fixed(width, height))
-            layout(width, height) { placeable.place(0, 0) }
-        }
 
 /**
  * What the page knows about one picture's bytes.

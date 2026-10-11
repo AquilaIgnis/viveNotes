@@ -1873,8 +1873,9 @@ private fun PageEditor(
     pendingEquation: PendingEquation?,
 ) {
     val pictureText by viewModel.pictureText.collectAsStateWithLifecycle()
+    val inkDescriptions by viewModel.inkDescriptions.collectAsStateWithLifecycle()
     val accessibilityOn = rememberAccessibilityServiceOn()
-    LaunchedEffect(accessibilityOn) { viewModel.setDescribingPictures(accessibilityOn) }
+    LaunchedEffect(accessibilityOn) { viewModel.setDescribingPage(accessibilityOn) }
 
     EditorPane(
         title = state.title,
@@ -1941,6 +1942,7 @@ private fun PageEditor(
         images = state.images,
         attachments = attachments,
         pictureText = pictureText,
+        inkRegions = inkDescriptions,
         onMoveImages = viewModel::moveImages,
         onResizeImages = viewModel::resizeImages,
         onDeleteImages = viewModel::deleteImages,

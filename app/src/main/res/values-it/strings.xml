@@ -679,6 +679,8 @@
     <string name="image_unreadable">Errore: impossibile leggere %1$s</string>
     <string name="image_description">Immagine</string>
     <string name="image_description_text">Immagine: %1$s</string>
+    <string name="ink_description">Scrittura manuale</string>
+    <string name="ink_description_text">Scrittura manuale: %1$s</string>
 
     <string name="rail_new_notebook">Nuovo notebook</string>
     <string name="rail_new_section">Nuova sezione</string>

@@ -94,6 +94,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
+import com.vivenotes.ai.InkTextRegion
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
@@ -344,6 +345,8 @@ fun EditorPane(
     attachments: AttachmentStore? = null,
     /** The text read out of each picture, by attachment id — see [ImageLayer.pictureText]. */
     pictureText: Map<String, String> = emptyMap(),
+    /** The handwriting's recognized lines, for a screen reader — see [InkDescriptions]. */
+    inkRegions: List<InkTextRegion> = emptyList(),
     onMoveImages: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeImages: (Set<String>, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     onDeleteImages: (Set<String>) -> Unit = {},
@@ -1432,6 +1435,13 @@ fun EditorPane(
                             )
                         }
                     }
+
+                    // Last of the page's layers, as the ink is drawn over all of them.
+                    InkDescriptions(
+                        regions = inkRegions,
+                        density = density.density,
+                        modifier = Modifier.documentExtent(canvasSize),
+                    )
                 }
             }
 

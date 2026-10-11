@@ -702,6 +702,8 @@
     <string name="image_unreadable">Błąd: nie można odczytać %1$s</string>
     <string name="image_description">Zdjęcie</string>
     <string name="image_description_text">Zdjęcie: %1$s</string>
+    <string name="ink_description">Pismo odręczne</string>
+    <string name="ink_description_text">Pismo odręczne: %1$s</string>
 
     <string name="rail_new_notebook">Nowy notes</string>
     <string name="rail_new_section">Nowa sekcja</string>

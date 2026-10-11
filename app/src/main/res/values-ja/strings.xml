@@ -668,6 +668,8 @@
     <string name="image_unreadable">エラー: %1$sを読み込めませんでした</string>
     <string name="image_description">画像</string>
     <string name="image_description_text">画像: %1$s</string>
+    <string name="ink_description">手書き</string>
+    <string name="ink_description_text">手書き: %1$s</string>
 
     <string name="rail_new_notebook">新しいノートブック</string>
     <string name="rail_new_section">新しいセクション</string>

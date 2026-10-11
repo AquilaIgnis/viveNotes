@@ -40,12 +40,18 @@ import com.vivenotes.FlakyOnEmulator
 import com.vivenotes.ai.FormulaRecognitionResult
 import com.vivenotes.ai.ImageTextResult
 import com.vivenotes.ai.InkRecognitionEngine
+import com.vivenotes.ai.InkTextRegion
+import com.vivenotes.ai.InkTextRegionsCodec
 import com.vivenotes.ai.TextRecognitionResult
+import com.vivenotes.ai.inkPageLayout
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.ImageTextIndexer
+import com.vivenotes.data.InkTextIndexer
 import com.vivenotes.data.db.AttachmentEntity
 import com.vivenotes.data.db.AttachmentTextEntity
 import com.vivenotes.data.db.ImageTextStatus
+import com.vivenotes.data.db.InkTextEntity
+import com.vivenotes.data.db.InkTextStatus
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.DeletedItemKind
 import com.vivenotes.data.EditorDefaults
@@ -571,11 +577,7 @@ class NotesViewModelTest {
      */
     private suspend fun seedPicture(attachmentId: String) {
         seedStarterText()
-        val pageId = db.query("SELECT id FROM pages ORDER BY sortIndex LIMIT 1", emptyArray())
-            .use { cursor ->
-                cursor.moveToFirst()
-                cursor.getString(0)
-            }
+        val pageId = firstPageId()
         db.attachmentDao().insert(
             AttachmentEntity(
                 id = attachmentId,
@@ -651,7 +653,7 @@ class NotesViewModelTest {
         indexer.awaitPass()
         assertTrue("read with nothing listening", repository.imageTextFor(listOf("sha-unread")).isEmpty())
 
-        vm.setDescribingPictures(true)
+        vm.setDescribingPage(true)
         advanceUntilIdle()
         indexer.awaitPass()
 
@@ -659,6 +661,107 @@ class NotesViewModelTest {
         // all the same, which is the proof the open page asked for it.
         val row = repository.imageTextFor(listOf("sha-unread"))["sha-unread"]
         assertEquals(ImageTextStatus.Failed, row?.status)
+        collecting.cancel()
+    }
+
+    /** The seeded page, which is the one a new view model opens on. */
+    private fun firstPageId(): String =
+        db.query("SELECT id FROM pages ORDER BY sortIndex LIMIT 1", emptyArray()).use { cursor ->
+            cursor.moveToFirst()
+            cursor.getString(0)
+        }
+
+    private val handwrittenLine = InkTextRegion(
+        id = "line-1",
+        text = "Athor the mutant",
+        confidence = 0.9f,
+        left = 10f,
+        top = 20f,
+        right = 200f,
+        bottom = 50f,
+        strokeIds = listOf("stroke-1"),
+    )
+
+    /** Stores a reading of [pageId]'s handwriting, over the seeded page's layout: no ink tables. */
+    private suspend fun saveHandwritingReading(
+        pageId: String,
+        regions: List<InkTextRegion>,
+        engine: String = InkTextIndexer.ENGINE,
+    ) {
+        val saved = repository.saveInkText(
+            InkTextEntity(
+                pageId = pageId,
+                regionsJson = InkTextRegionsCodec.encode(regions),
+                regionCount = regions.size,
+                confidence = 0.9f,
+                layoutHash = inkPageLayout(emptyList()).hash,
+                engine = engine,
+                status = InkTextStatus.Read,
+                durationMs = 0,
+                updatedAt = 0,
+            ),
+            repository.inkTextGeneration(pageId),
+        )
+        assertTrue("the reading was refused", saved)
+    }
+
+    private fun viewModelWith(inkText: InkTextIndexer? = null): NotesViewModel =
+        NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+            inkText = inkText,
+        )
+
+    /** A screen reader is given the open page's handwriting line by line; a blank line says nothing. */
+    @Test
+    fun theOpenPagesHandwritingIsDescribedLineByLine() = runTest(dispatcher) {
+        seedStarterText()
+        saveHandwritingReading(firstPageId(), listOf(handwrittenLine, handwrittenLine.copy(id = "line-2", text = " ")))
+        val vm = viewModelWith()
+        val collecting = launch { vm.inkDescriptions.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(listOf(handwrittenLine), vm.inkDescriptions.value)
+        collecting.cancel()
+    }
+
+    /** A reading by another engine is stale: it is read again, never described. */
+    @Test
+    fun aStaleHandwritingReadingIsNotDescribed() = runTest(dispatcher) {
+        seedStarterText()
+        saveHandwritingReading(firstPageId(), listOf(handwrittenLine), engine = "an-older-engine/0")
+        val vm = viewModelWith()
+        val collecting = launch { vm.inkDescriptions.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(emptyList<InkTextRegion>(), vm.inkDescriptions.value)
+        collecting.cancel()
+    }
+
+    /** As for pictures: the open page's handwriting is read as it is shown only for a screen reader. */
+    @Test
+    fun theOpenPagesHandwritingIsReadOnlyWhileAnAccessibilityServiceIsOn() = runTest(dispatcher) {
+        seedStarterText()
+        val pageId = firstPageId()
+        val indexer = InkTextIndexer(repository, NoReadingEngine)
+        val vm = viewModelWith(inkText = indexer)
+        val collecting = launch { vm.inkDescriptions.collect {} }
+        advanceUntilIdle()
+        indexer.awaitPass()
+        assertTrue("read with nothing listening", repository.inkTextFor(listOf(pageId)).isEmpty())
+
+        vm.setDescribingPage(true)
+        // Past the settle delay, which is virtual time here.
+        advanceUntilIdle()
+        indexer.awaitPass()
+
+        // The page has no ink, so the reading is Empty — written down all the same, which is the
+        // proof the open page asked for it.
+        assertNotNull("the open page was not read", repository.inkTextFor(listOf(pageId))[pageId])
         collecting.cancel()
     }
 

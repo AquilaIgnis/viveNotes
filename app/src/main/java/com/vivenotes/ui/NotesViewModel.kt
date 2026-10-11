@@ -49,6 +49,7 @@ import com.vivenotes.data.ImportedAttachment
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.InkPageLoader
 import com.vivenotes.data.InkTextIndexer
+import com.vivenotes.data.InkTextPageRequest
 import com.vivenotes.data.InkTextProgress
 import com.vivenotes.data.DatabaseBackupManager
 import com.vivenotes.data.DeletedItem
@@ -79,6 +80,7 @@ import com.vivenotes.data.ViewSettings
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.ClosedNotebook
 import com.vivenotes.data.db.ImageTextStatus
+import com.vivenotes.data.db.InkTextStatus
 import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
@@ -135,6 +137,8 @@ import com.vivenotes.model.search.ContentUnit
 import com.vivenotes.model.search.ImagePlacement
 import com.vivenotes.model.search.blockUnits
 import com.vivenotes.model.search.titleUnit
+import com.vivenotes.ai.InkTextRegion
+import com.vivenotes.ai.InkTextRegionsCodec
 import com.vivenotes.ai.inkPageLayout
 import com.vivenotes.model.withCellBlocks
 import com.vivenotes.model.withColumnInserted
@@ -1549,16 +1553,16 @@ class NotesViewModel(
         viewModelScope.launch { imageText?.clear() }
     }
 
-    /** Whether an accessibility service is on, which is when the open page's pictures are worth reading. */
-    private val describingPictures = MutableStateFlow(false)
+    /** Whether an accessibility service is on, which is when the open page is worth reading. */
+    private val describingPage = MutableStateFlow(false)
 
     /**
-     * Turns on reading the open page's pictures as it is shown, for a screen reader to describe
-     * them. Off, pictures are read only when a search asks, as they always were: reading one costs a
-     * hundred searches, and nobody else hears the result.
+     * Turns on reading the open page's pictures and handwriting as it is shown, for a screen reader
+     * to describe them. Off, both are read only when a search asks, as they always were: a reading
+     * costs a hundred searches, and nobody else hears the result.
      */
-    fun setDescribingPictures(on: Boolean) {
-        describingPictures.value = on
+    fun setDescribingPage(on: Boolean) {
+        describingPage.value = on
     }
 
     /**
@@ -1572,7 +1576,7 @@ class NotesViewModel(
     val pictureText: StateFlow<Map<String, String>> = combine(
         _uiState.map { state -> state.images.mapTo(mutableSetOf()) { it.attachmentId } }
             .distinctUntilChanged(),
-        describingPictures,
+        describingPage,
         imageText?.version ?: MutableStateFlow(0L),
     ) { ids, describing, _ -> ids to describing }
         .mapLatest { (ids, describing) ->
@@ -1583,6 +1587,43 @@ class NotesViewModel(
                 .mapValues { it.value.text }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * The handwriting on the open page as a screen reader reads it: each recognized line, with its
+     * text and its bounds in page units. Empty until the page has a current reading — one by the
+     * engine this build ships, over the table layout the page has now.
+     *
+     * Every ink edit deletes the page's reading in the same transaction, so this empties while
+     * someone writes. With a screen reader on, the page is read again once the writing has paused
+     * for [INK_DESCRIBE_SETTLE_MS]: each stroke would otherwise start a read the next one discards.
+     */
+    val inkDescriptions: StateFlow<List<InkTextRegion>> = combine(
+        _uiState.map { state ->
+            state.selectedPageId?.let { InkTextPageRequest(it, inkPageLayout(state.tables)) }
+        }.distinctUntilChanged(),
+        describingPage,
+        inkText?.version ?: MutableStateFlow(0L),
+        repository.observeInkTextStamps(),
+    ) { page, describing, _, _ -> page to describing }
+        .transformLatest { (page, describing) ->
+            if (page == null) {
+                emit(emptyList())
+                return@transformLatest
+            }
+            val reading = repository.inkTextFor(listOf(page.pageId))[page.pageId]
+                ?.takeIf { it.engine == InkTextIndexer.ENGINE && it.layoutHash == page.layout.hash }
+            emit(
+                reading?.takeIf { it.status == InkTextStatus.Read }
+                    ?.let { InkTextRegionsCodec.decode(it.regionsJson) }
+                    ?.filter { it.text.isNotBlank() }
+                    .orEmpty(),
+            )
+            if (reading == null && describing) {
+                delay(INK_DESCRIBE_SETTLE_MS)
+                inkText?.request(listOf(page))
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val inkTextProgress: StateFlow<InkTextProgress> =
         inkText?.progress ?: MutableStateFlow(InkTextProgress(enabled = false))
@@ -4148,6 +4189,12 @@ class NotesViewModel(
          * time the fingers stop.
          */
         private const val SEARCH_DEBOUNCE_MS = 180L
+
+        /**
+         * How long the open page's ink has to stay still before a screen reader's copy of it is read
+         * again. Long enough to span the gap between words; reading a page takes about half a second.
+         */
+        private const val INK_DESCRIBE_SETTLE_MS = 1_500L
 
         /** Far enough that a duplicate is not mistaken for the original not having copied. */
         private const val DUPLICATE_OFFSET = 16f

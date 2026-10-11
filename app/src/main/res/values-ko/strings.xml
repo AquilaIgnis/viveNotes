@@ -668,6 +668,8 @@
     <string name="image_unreadable">오류: %1$s을(를) 읽을 수 없음</string>
     <string name="image_description">사진</string>
     <string name="image_description_text">사진: %1$s</string>
+    <string name="ink_description">손글씨</string>
+    <string name="ink_description_text">손글씨: %1$s</string>
 
     <string name="rail_new_notebook">새 노트북</string>
     <string name="rail_new_section">새 섹션</string>
