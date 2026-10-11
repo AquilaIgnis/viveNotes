@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -139,6 +140,17 @@ class ViewTabTest {
         compose.onNodeWithText("No Color").performClick()
 
         assertTrue("clearing the page colour must hand the page back to the theme", pageColorCleared)
+    }
+
+    /** The tints are too pale to name by hue, so each is named outright — and the name picks it. */
+    @Test
+    fun pageColorsAreNamed() {
+        setTab()
+
+        compose.onNodeWithText("Page Color").performClick()
+        compose.onNodeWithContentDescription("Beige").performClick()
+
+        assertEquals(0xFFF7F3EC.toInt(), pageColor)
     }
 
     /** Paper Size is a pane, not a menu — six fields in two groups do not belong in a drop-down. */

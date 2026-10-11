@@ -614,6 +614,13 @@
     <string name="color_blue">Niebieski</string>
     <string name="color_purple">Fioletowy</string>
     <string name="color_pink">Różowy</string>
+    <string name="color_yellow">Żółty</string>
+    <string name="color_light_gray">Jasnoszary</string>
+    <string name="color_brown">Brązowy</string>
+    <string name="color_beige">Beżowy</string>
+    <string name="color_dark_blue">Ciemnoniebieski</string>
+    <string name="color_dark_green">Ciemnozielony</string>
+    <string name="color_dark_purple">Ciemnofioletowy</string>
 
     <string name="editor_paste">Wklej</string>
     <string name="editor_untitled_page">Strona bez tytułu</string>
@@ -697,6 +704,8 @@
     <string name="rail_new_notebook">Nowy notes</string>
     <string name="rail_new_section">Nowa sekcja</string>
     <string name="rail_reorder">Zmień kolejność %1$s</string>
+    <string name="reorder_move_up">Przenieś w górę</string>
+    <string name="reorder_move_down">Przenieś w dół</string>
     <string name="rail_collapse">Zwiń %1$s</string>
     <string name="rail_expand">Rozwiń %1$s</string>
     <string name="rail_rename_notebook">Zmień nazwę notesu</string>

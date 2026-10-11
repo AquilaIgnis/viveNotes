@@ -2,7 +2,6 @@ package com.vivenotes.ui.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -31,6 +31,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -74,12 +76,26 @@ data class ViewActions(
     val openPane: (ToolPane) -> Unit,
 )
 
-/** Page colours, and the "no colour" that hands the page back to the theme. */
+/**
+ * Page colours, and the "no colour" that hands the page back to the theme.
+ *
+ * Named outright rather than by `colorName`: these tints are too pale, and the dark ones too dark,
+ * for their hue to tell them apart — by hue alone eight of them are white and four are black.
+ */
 private val PAGE_COLORS = listOf(
-    0xFFFFFFFF, 0xFFFFF8E7, 0xFFFDF1F4, 0xFFEFF5FC,
-    0xFFEFF7EF, 0xFFF5F0FA, 0xFFF7F3EC, 0xFFECF6F6,
-    0xFF1F1F1F, 0xFF17232E, 0xFF1D2A1D, 0xFF2A1E2A,
-).map { it.toInt() }
+    R.string.color_white to 0xFFFFFFFF.toInt(),
+    R.string.color_yellow to 0xFFFFF8E7.toInt(),
+    R.string.color_pink to 0xFFFDF1F4.toInt(),
+    R.string.color_blue to 0xFFEFF5FC.toInt(),
+    R.string.color_green to 0xFFEFF7EF.toInt(),
+    R.string.color_purple to 0xFFF5F0FA.toInt(),
+    R.string.color_beige to 0xFFF7F3EC.toInt(),
+    R.string.color_cyan to 0xFFECF6F6.toInt(),
+    R.string.color_black to 0xFF1F1F1F.toInt(),
+    R.string.color_dark_blue to 0xFF17232E.toInt(),
+    R.string.color_dark_green to 0xFF1D2A1D.toInt(),
+    R.string.color_dark_purple to 0xFF2A1E2A.toInt(),
+)
 
 private val RULE_LINE_LABELS = listOf(
     RuleLines.None to R.string.view_paper_none,
@@ -324,7 +340,8 @@ private fun PageColorMenu(current: Int?, pageOpen: Boolean, onPick: (Int?) -> Un
             Column(Modifier.padding(8.dp)) {
                 PAGE_COLORS.chunked(4).forEach { row ->
                     Row {
-                        row.forEach { argb ->
+                        row.forEach { (name, argb) ->
+                            val colorName = stringResource(name)
                             Box(
                                 modifier = Modifier
                                     .padding(3.dp)
@@ -340,10 +357,11 @@ private fun PageColorMenu(current: Int?, pageOpen: Boolean, onPick: (Int?) -> Un
                                         },
                                         shape = RoundedCornerShape(3.dp),
                                     )
-                                    .clickable {
+                                    .selectable(selected = argb == current) {
                                         open = false
                                         onPick(argb)
-                                    },
+                                    }
+                                    .semantics { contentDescription = colorName },
                             )
                         }
                     }

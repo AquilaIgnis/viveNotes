@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
@@ -42,7 +42,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -184,13 +186,15 @@ fun PageListPane(
         }
 
         LazyColumn(state = listState, contentPadding = PaddingValues(bottom = 8.dp)) {
-            items(shown, key = { it.id }) { page ->
+            itemsIndexed(shown, key = { _, page -> page.id }) { index, page ->
                 PageRow(
                     page = page,
                     selected = page.id == selectedPageId,
                     dragging = reorder.draggedKey == page.id,
                     onClick = { onSelectPage(page.id) },
                     onDelete = { onDeletePage(page.id) },
+                    // Under the same sort as the handle, and for the same reason.
+                    actions = if (sort == PageSort.Manual) reorder.moveActions(index, shown.size) else emptyList(),
                     modifier = Modifier.reorderable(reorder, page.id),
                     handle = if (sort == PageSort.Manual) {
                         {
@@ -249,6 +253,7 @@ private fun PageRow(
     dragging: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    actions: List<CustomAccessibilityAction>,
     modifier: Modifier = Modifier,
     handle: @Composable (RowScope.() -> Unit)? = null,
 ) {
@@ -270,6 +275,7 @@ private fun PageRow(
                 .clip(RoundedCornerShape(4.dp))
                 .background(background)
                 .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
+                .semantics { if (actions.isNotEmpty()) customActions = actions }
                 .padding(start = if (handle == null) 12.dp else 4.dp, end = 12.dp)
                 .padding(vertical = 8.dp)
                 .testTag(PageListTags.row(page.id)),

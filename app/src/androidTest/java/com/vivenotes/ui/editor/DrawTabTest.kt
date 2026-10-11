@@ -12,8 +12,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -524,6 +527,28 @@ class DrawTabTest {
 
         compose.onNodeWithTag(PenPanelTags.lineType(LineType.Dashed)).performClick()
         assertEquals(LineType.Dashed, changed?.lineType)
+    }
+
+    /** TalkBack reads a swatch by its colour, and hears which one the pen is using. */
+    @Test
+    fun theSwatchesAreNamedAndTheCurrentOneIsSelected() {
+        val green = 0xFF00C853.toInt()
+        setPanel(PenPreset.starting(0).copy(colorArgb = green))
+
+        compose.onNodeWithTag(PenPanelTags.color(green))
+            .assertContentDescriptionEquals("Green")
+            .assertIsSelected()
+        compose.onNodeWithTag(PenPanelTags.color(0xFFE53935.toInt()))
+            .assertContentDescriptionEquals("Red")
+            .assertIsNotSelected()
+    }
+
+    @Test
+    fun theHighlighterSwatchesAreNamed() {
+        setHighlighterPanel()
+
+        compose.onNodeWithTag(HighlighterPanelTags.color(HIGHLIGHTER_COLORS.first()))
+            .assertContentDescriptionEquals("Yellow")
     }
 
     @Test

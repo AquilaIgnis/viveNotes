@@ -639,6 +639,13 @@
     <string name="color_blue">Blue</string>
     <string name="color_purple">Purple</string>
     <string name="color_pink">Pink</string>
+    <string name="color_yellow">Yellow</string>
+    <string name="color_light_gray">Light gray</string>
+    <string name="color_brown">Brown</string>
+    <string name="color_beige">Beige</string>
+    <string name="color_dark_blue">Dark blue</string>
+    <string name="color_dark_green">Dark green</string>
+    <string name="color_dark_purple">Dark purple</string>
 
     <!-- The page editor. -->
     <string name="editor_paste">Paste</string>
@@ -729,6 +736,9 @@
     <string name="rail_new_section">New Section</string>
     <!-- A drag handle's content description, given the section or page it moves. -->
     <string name="rail_reorder">Reorder %1$s</string>
+    <!-- Screen-reader actions on a page or section row, for whoever cannot drag its handle. -->
+    <string name="reorder_move_up">Move up</string>
+    <string name="reorder_move_down">Move down</string>
     <string name="rail_collapse">Collapse %1$s</string>
     <string name="rail_expand">Expand %1$s</string>
     <string name="rail_rename_notebook">Rename notebook</string>

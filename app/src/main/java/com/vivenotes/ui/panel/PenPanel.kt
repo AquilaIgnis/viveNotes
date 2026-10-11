@@ -398,6 +398,7 @@ internal fun ColorSwatches(
             Swatch(
                 selected = argb == current,
                 tag = colorTag(argb),
+                description = stringResource(colorName(argb)),
                 onClick = { onPick(argb) },
             ) {
                 drawRect(Color(argb))
@@ -451,12 +452,15 @@ internal fun ColorSwatches(
  * The paint is a draw lambda rather than a colour because the last swatch is a gradient, and a
  * background modifier that took only a solid would have forced the wheel to be a different control
  * sitting beside the palette instead of the last member of it.
+ *
+ * Which is also why [description] is the caller's to give, and required: a swatch is the one control
+ * whose whole meaning is a colour, so without a name a screen reader can only call it a button.
  */
 @Composable
 internal fun Swatch(
     selected: Boolean,
     tag: String,
-    description: String? = null,
+    description: String,
     onClick: () -> Unit,
     fill: DrawScope.() -> Unit,
 ) {
@@ -475,14 +479,9 @@ internal fun Swatch(
             // the hairline outline over it — the same layering the solid swatches had.
             .drawBehind(fill)
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(50))
-            .clickable(onClick = onClick)
-            .then(
-                if (description == null) {
-                    Modifier
-                } else {
-                    Modifier.semantics { contentDescription = description }
-                },
-            ),
+            // Selectable, so the ring is announced as well as drawn.
+            .selectable(selected = selected, onClick = onClick)
+            .semantics { contentDescription = description },
     )
 }
 

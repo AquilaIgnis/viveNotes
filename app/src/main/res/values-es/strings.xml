@@ -612,6 +612,13 @@
     <string name="color_blue">Azul</string>
     <string name="color_purple">Morado</string>
     <string name="color_pink">Rosa</string>
+    <string name="color_yellow">Amarillo</string>
+    <string name="color_light_gray">Gris claro</string>
+    <string name="color_brown">Marrón</string>
+    <string name="color_beige">Beige</string>
+    <string name="color_dark_blue">Azul oscuro</string>
+    <string name="color_dark_green">Verde oscuro</string>
+    <string name="color_dark_purple">Morado oscuro</string>
 
     <!-- The page editor. -->
     <string name="editor_paste">Pegar</string>
@@ -699,6 +706,8 @@
     <string name="rail_new_notebook">Nuevo cuaderno</string>
     <string name="rail_new_section">Nueva sección</string>
     <string name="rail_reorder">Reordenar %1$s</string>
+    <string name="reorder_move_up">Mover hacia arriba</string>
+    <string name="reorder_move_down">Mover hacia abajo</string>
     <string name="rail_collapse">Contraer %1$s</string>
     <string name="rail_expand">Expandir %1$s</string>
     <string name="rail_rename_notebook">Cambiar nombre del cuaderno</string>

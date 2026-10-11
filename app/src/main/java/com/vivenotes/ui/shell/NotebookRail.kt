@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
@@ -38,6 +38,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -145,7 +148,8 @@ fun NotebookRail(
                     )
                 }
                 if (entry.notebook.expanded) {
-                    items(sectionsOf(entry), key = { it.id }) { section ->
+                    val sections = sectionsOf(entry)
+                    itemsIndexed(sections, key = { _, section -> section.id }) { index, section ->
                         SectionRow(
                             section = section,
                             selected = section.id == selectedSectionId,
@@ -153,6 +157,9 @@ fun NotebookRail(
                             onClick = { onSelectSection(section.id) },
                             onRename = { onRenameSection(section) },
                             onDelete = { onDeleteSection(section) },
+                            actions = reorder.moveActions(index, sections.size) {
+                                grabbedNotebookId = entry.notebook.id
+                            },
                             modifier = Modifier.reorderable(reorder, section.id),
                             handle = {
                                 DragHandle(
@@ -244,6 +251,7 @@ private fun SectionRow(
     onClick: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    actions: List<CustomAccessibilityAction>,
     modifier: Modifier = Modifier,
     handle: @Composable () -> Unit,
 ) {
@@ -264,6 +272,7 @@ private fun SectionRow(
                 .clip(RoundedCornerShape(4.dp))
                 .background(background)
                 .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
+                .semantics { if (actions.isNotEmpty()) customActions = actions }
                 .padding(horizontal = 2.dp)
                 .height(SECTION_ROW_HEIGHT)
                 .testTag(RailTags.section(section.id)),

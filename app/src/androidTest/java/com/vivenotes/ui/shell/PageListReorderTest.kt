@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -23,7 +25,7 @@ import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 
-/** Dragging in the page list, and the sorts where dragging is not on offer. */
+/** Dragging in the page list, its Move up and Move down, and the sorts where neither is on offer. */
 class PageListReorderTest {
 
     @get:Rule
@@ -99,6 +101,58 @@ class PageListReorderTest {
 
         compose.onNodeWithTag(PageListTags.dragHandle("a"), useUnmergedTree = true).assertDoesNotExist()
         assertNull("switching sorts is not itself a reorder", reordered)
+    }
+
+    /** What TalkBack and Switch Access do in place of the drag, which neither can make. */
+    @Test
+    fun moveDownTradesAPageWithTheOneBelow() {
+        setList()
+
+        performMove(PageListTags.row("a"), "Move down")
+
+        assertEquals(listOf("b", "a", "c"), reordered)
+    }
+
+    @Test
+    fun moveUpTradesAPageWithTheOneAbove() {
+        setList()
+
+        performMove(PageListTags.row("c"), "Move up")
+
+        assertEquals(listOf("a", "c", "b"), reordered)
+    }
+
+    @Test
+    fun theEndPagesOfferOnlyTheWayTheyCanGo() {
+        setList()
+
+        assertEquals(listOf("Move down"), moveLabels(PageListTags.row("a")))
+        assertEquals(listOf("Move up", "Move down"), moveLabels(PageListTags.row("b")))
+        assertEquals(listOf("Move up"), moveLabels(PageListTags.row("c")))
+    }
+
+    /** Offered where the handle is and nowhere else, for the handle's reason. */
+    @Test
+    fun theMovesAreOnlyOfferedUnderSectionOrder() {
+        setList()
+
+        compose.onNodeWithContentDescription("Sort pages").performClick()
+        compose.onNodeWithText("By title").performClick()
+        compose.waitForIdle()
+
+        assertEquals(emptyList<String>(), moveLabels(PageListTags.row("b")))
+    }
+
+    /** The row's own actions: TalkBack never offers ones merged up into it from the handle. */
+    private fun moveLabels(tag: String): List<String> =
+        compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode()
+            .config.getOrNull(SemanticsActions.CustomActions).orEmpty().map { it.label }
+
+    private fun performMove(tag: String, label: String) {
+        val action = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode()
+            .config[SemanticsActions.CustomActions].single { it.label == label }
+        compose.runOnIdle { action.action() }
+        compose.waitForIdle()
     }
 
     private fun dragPage(pageId: String, rows: Float) {

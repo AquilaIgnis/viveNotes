@@ -593,6 +593,13 @@
     <string name="color_blue">Blu</string>
     <string name="color_purple">Viola</string>
     <string name="color_pink">Rosa</string>
+    <string name="color_yellow">Giallo</string>
+    <string name="color_light_gray">Grigio chiaro</string>
+    <string name="color_brown">Marrone</string>
+    <string name="color_beige">Beige</string>
+    <string name="color_dark_blue">Blu scuro</string>
+    <string name="color_dark_green">Verde scuro</string>
+    <string name="color_dark_purple">Viola scuro</string>
 
     <string name="editor_paste">Incolla</string>
     <string name="editor_untitled_page">Pagina senza titolo</string>
@@ -674,6 +681,8 @@
     <string name="rail_new_notebook">Nuovo notebook</string>
     <string name="rail_new_section">Nuova sezione</string>
     <string name="rail_reorder">Riordina %1$s</string>
+    <string name="reorder_move_up">Sposta su</string>
+    <string name="reorder_move_down">Sposta giù</string>
     <string name="rail_collapse">Comprimi %1$s</string>
     <string name="rail_expand">Espandi %1$s</string>
     <string name="rail_rename_notebook">Rinomina notebook</string>

@@ -583,6 +583,13 @@
     <string name="color_blue">青</string>
     <string name="color_purple">紫</string>
     <string name="color_pink">ピンク</string>
+    <string name="color_yellow">黄</string>
+    <string name="color_light_gray">ライトグレー</string>
+    <string name="color_brown">茶</string>
+    <string name="color_beige">ベージュ</string>
+    <string name="color_dark_blue">濃い青</string>
+    <string name="color_dark_green">濃い緑</string>
+    <string name="color_dark_purple">濃い紫</string>
 
     <string name="editor_paste">貼り付け</string>
     <string name="editor_untitled_page">無題のページ</string>
@@ -663,6 +670,8 @@
     <string name="rail_new_notebook">新しいノートブック</string>
     <string name="rail_new_section">新しいセクション</string>
     <string name="rail_reorder">%1$sを並べ替え</string>
+    <string name="reorder_move_up">上に移動</string>
+    <string name="reorder_move_down">下に移動</string>
     <string name="rail_collapse">%1$sを折りたたむ</string>
     <string name="rail_expand">%1$sを展開</string>
     <string name="rail_rename_notebook">ノートブックの名前を変更</string>

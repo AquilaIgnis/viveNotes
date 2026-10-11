@@ -593,6 +593,13 @@
     <string name="color_blue">Blau</string>
     <string name="color_purple">Lila</string>
     <string name="color_pink">Rosa</string>
+    <string name="color_yellow">Gelb</string>
+    <string name="color_light_gray">Hellgrau</string>
+    <string name="color_brown">Braun</string>
+    <string name="color_beige">Beige</string>
+    <string name="color_dark_blue">Dunkelblau</string>
+    <string name="color_dark_green">Dunkelgrün</string>
+    <string name="color_dark_purple">Dunkellila</string>
 
     <string name="editor_paste">Einfügen</string>
     <string name="editor_untitled_page">Unbenannte Seite</string>
@@ -674,6 +681,8 @@
     <string name="rail_new_notebook">Neues Notizbuch</string>
     <string name="rail_new_section">Neuer Abschnitt</string>
     <string name="rail_reorder">%1$s neu anordnen</string>
+    <string name="reorder_move_up">Nach oben verschieben</string>
+    <string name="reorder_move_down">Nach unten verschieben</string>
     <string name="rail_collapse">%1$s einklappen</string>
     <string name="rail_expand">%1$s ausklappen</string>
     <string name="rail_rename_notebook">Notizbuch umbenennen</string>

@@ -79,6 +79,7 @@ fun ColumnScope.HighlighterPanelContent(
             Swatch(
                 selected = argb == settings.colorArgb,
                 tag = HighlighterPanelTags.color(argb),
+                description = stringResource(colorName(argb)),
                 onClick = { onChange(settings.copy(colorArgb = argb)) },
             ) {
                 // Over paper, not over the panel. These inks are translucent, so on a dark surface

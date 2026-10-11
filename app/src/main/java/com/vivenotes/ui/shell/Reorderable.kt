@@ -18,8 +18,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.vivenotes.R
 
 /**
  * Drag-to-reorder for rows of a [androidx.compose.foundation.lazy.LazyColumn].
@@ -79,6 +82,13 @@ internal class ReorderState internal constructor(
         if (draggedKey == null) return
         draggedKey = null
         travelled = 0f
+        onSettle()
+    }
+
+    /** The row at [from] to [to] and written down at once: a one-row drag and drop, without the drag. */
+    fun step(from: Int, to: Int) {
+        if (draggedKey != null) return
+        onMove(from, to)
         onSettle()
     }
 
@@ -217,6 +227,33 @@ internal fun Modifier.reorderHandle(
             },
         )
     }
+
+/**
+ * Move up and Move down for the row at [index] of [count]: the reorder TalkBack and Switch Access
+ * can make, since neither can drag. An end row offers only the way it can go.
+ *
+ * Handed back for the row to set on its own clickable node, not put on the handle. The handle merges
+ * into that row, and a node's merged-in actions are not offered — only its own are.
+ *
+ * [onGrabbed] is [reorderHandle]'s, and runs before the move for the same reason.
+ */
+@Composable
+internal fun ReorderState.moveActions(
+    index: Int,
+    count: Int,
+    onGrabbed: () -> Unit = {},
+): List<CustomAccessibilityAction> {
+    val up = stringResource(R.string.reorder_move_up)
+    val down = stringResource(R.string.reorder_move_down)
+    return buildList {
+        if (index > 0) {
+            add(CustomAccessibilityAction(up) { onGrabbed(); step(index, index - 1); true })
+        }
+        if (index < count - 1) {
+            add(CustomAccessibilityAction(down) { onGrabbed(); step(index, index + 1); true })
+        }
+    }
+}
 
 private fun LazyListState.itemInfo(key: Any): LazyListItemInfo? =
     layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }

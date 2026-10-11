@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
@@ -59,6 +60,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
@@ -89,6 +92,7 @@ import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.icons.fontColorGlyph
 import com.vivenotes.ui.theme.LocalIconAccents
 import com.vivenotes.ui.panel.FloatingSettingsPanel
+import com.vivenotes.ui.panel.colorName
 
 /**
  * Ribbon tabs from the reference UI. Each tab owns commands with the same scope as its name: File
@@ -108,13 +112,13 @@ enum class RibbonTab(@param:StringRes val label: Int) {
     RibonSettings(R.string.ribbon_tab_settings),
 }
 
-private val TEXT_COLORS = listOf(
+internal val TEXT_COLORS = listOf(
     0xFFFFFFFF, 0xFFE6E6E6, 0xFF9A9A9A, 0xFF000000,
     0xFFE53935, 0xFFFB8C00, 0xFFFDD835, 0xFF43A047,
     0xFF1E88E5, 0xFF8E24AA, 0xFF00ACC1, 0xFFD81B60,
 ).map { it.toInt() }
 
-private val HIGHLIGHT_COLORS = listOf(
+internal val HIGHLIGHT_COLORS = listOf(
     0x66FFEB3B, 0x6676FF03, 0x6640C4FF, 0x66FF4081,
     0x66FF9100, 0x66B388FF, 0x66FFFFFF, 0x00000000,
 ).map { it.toInt() }
@@ -1249,6 +1253,8 @@ private fun ColorPicker(
                 colors.chunked(4).forEach { row ->
                     Row {
                         row.forEach { argb ->
+                            // The clear swatch that ends the highlights has no colour to be named for.
+                            val name = stringResource(if (argb == 0) R.string.ribbon_color_none else colorName(argb))
                             Box(
                                 modifier = Modifier
                                     .padding(3.dp)
@@ -1256,10 +1262,11 @@ private fun ColorPicker(
                                     .clip(RoundedCornerShape(3.dp))
                                     .background(Color(argb))
                                     .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(3.dp))
-                                    .clickable {
+                                    .selectable(selected = argb == current) {
                                         open = false
                                         onPick(argb)
-                                    },
+                                    }
+                                    .semantics { contentDescription = name },
                             )
                         }
                     }

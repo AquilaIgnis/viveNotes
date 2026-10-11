@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
@@ -24,7 +26,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The rail's per-row commands and its section drag.
+ * The rail's per-row commands, its section drag, and the Move up and Move down that stand in for it.
  *
  * The drag tests are the ones that matter. Reordering is written against the live layout — row
  * heights and offsets read back from the lazy list as it reflows — so none of it can be checked by
@@ -70,13 +72,14 @@ class NotebookRailTest {
             section("b", "Bravo", 1),
             section("c", "Charlie", 2),
         ),
+        others: List<NotebookWithSections> = emptyList(),
     ) {
         compose.setContent {
             density = LocalDensity.current
             ViveNotesTheme {
                 Box(Modifier.width(232.dp).height(500.dp)) {
                     NotebookRail(
-                        tree = listOf(NotebookWithSections(notebook, sections)),
+                        tree = listOf(NotebookWithSections(notebook, sections)) + others,
                         selectedSectionId = sections.firstOrNull()?.id,
                         onSelectSection = { selected = it },
                         onToggleNotebook = { id, expanded -> toggled = id to expanded },
@@ -176,6 +179,60 @@ class NotebookRailTest {
         compose.waitForIdle()
 
         assertNull(reordered)
+    }
+
+    /** What TalkBack and Switch Access do in place of the drag, which neither can make. */
+    @Test
+    fun moveUpTradesASectionWithTheOneAbove() {
+        setRail()
+
+        performMove(RailTags.section("c"), "Move up")
+
+        assertEquals("nb" to listOf("a", "c", "b"), reordered)
+    }
+
+    @Test
+    fun theEndSectionsOfferOnlyTheWayTheyCanGo() {
+        setRail()
+
+        assertEquals(listOf("Move down"), moveLabels(RailTags.section("a")))
+        assertEquals(listOf("Move up", "Move down"), moveLabels(RailTags.section("b")))
+        assertEquals(listOf("Move up"), moveLabels(RailTags.section("c")))
+    }
+
+    /**
+     * Sections move within their own notebook, as a drag keeps them: the first section of the second
+     * notebook is first in its list, whatever the rail shows above it.
+     */
+    @Test
+    fun theMovesStayInsideTheSectionsNotebook() {
+        val second = notebook.copy(id = "nb2", name = "Recipes", sortIndex = 1)
+        setRail(
+            others = listOf(
+                NotebookWithSections(
+                    second,
+                    listOf(section("x", "X-ray", 0), section("y", "Yankee", 1))
+                        .map { it.copy(notebookId = second.id) },
+                ),
+            ),
+        )
+
+        assertEquals(listOf("Move down"), moveLabels(RailTags.section("x")))
+        performMove(RailTags.section("y"), "Move up")
+
+        assertEquals("nb2" to listOf("y", "x"), reordered)
+    }
+
+    /** The row's own actions: TalkBack never offers ones merged up into it from the handle. */
+    private fun moveLabels(tag: String): List<String> =
+        compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode()
+            .config.getOrNull(SemanticsActions.CustomActions).orEmpty().map { it.label }
+
+    private fun performMove(tag: String, label: String) {
+        val action = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode()
+            .config[SemanticsActions.CustomActions].single { it.label == label }
+        compose.runOnIdle { action.action() }
+        compose.waitForIdle()
     }
 
     /**
