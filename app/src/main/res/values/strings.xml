@@ -730,6 +730,9 @@
     <!-- Painted on a picture whose file is gone or broken, and its content description. -->
     <string name="image_missing">Error: %1$s not found</string>
     <string name="image_unreadable">Error: %1$s could not be read</string>
+    <!-- What a screen reader says for a picture on the page, given the text read out of it. -->
+    <string name="image_description">Picture</string>
+    <string name="image_description_text">Picture: %1$s</string>
 
     <!-- The notebook rail. -->
     <string name="rail_new_notebook">New Notebook</string>

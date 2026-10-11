@@ -342,6 +342,8 @@ fun EditorPane(
      */
     images: List<Outline.Image> = emptyList(),
     attachments: AttachmentStore? = null,
+    /** The text read out of each picture, by attachment id — see [ImageLayer.pictureText]. */
+    pictureText: Map<String, String> = emptyMap(),
     onMoveImages: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeImages: (Set<String>, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     onDeleteImages: (Set<String>) -> Unit = {},
@@ -1331,6 +1333,7 @@ fun EditorPane(
                                     onResizeImages(setOf(id), anchorX, anchorY, scaleX, scaleY)
                                 },
                                 density = density.density,
+                                pictureText = pictureText,
                                 canvasExtent = canvasSize,
                                 beneath = shapesAndFormulas,
                             )

@@ -677,6 +677,8 @@
 
     <string name="image_missing">Erreur : %1$s introuvable</string>
     <string name="image_unreadable">Erreur : impossible de lire %1$s</string>
+    <string name="image_description">Image</string>
+    <string name="image_description_text">Image : %1$s</string>
 
     <string name="rail_new_notebook">Nouveau carnet</string>
     <string name="rail_new_section">Nouvelle section</string>

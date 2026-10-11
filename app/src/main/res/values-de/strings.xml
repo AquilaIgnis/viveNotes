@@ -677,6 +677,8 @@
 
     <string name="image_missing">Fehler: %1$s nicht gefunden</string>
     <string name="image_unreadable">Fehler: %1$s konnte nicht gelesen werden</string>
+    <string name="image_description">Bild</string>
+    <string name="image_description_text">Bild: %1$s</string>
 
     <string name="rail_new_notebook">Neues Notizbuch</string>
     <string name="rail_new_section">Neuer Abschnitt</string>

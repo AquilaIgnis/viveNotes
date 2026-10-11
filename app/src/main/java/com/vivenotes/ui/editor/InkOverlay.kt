@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
@@ -580,7 +582,11 @@ internal fun InkOverlay(
                 }
             },
             onRelease = { wetView = null },
-            modifier = Modifier.fillMaxSize(),
+            // Hidden from accessibility, or the page is. An AndroidView is one merged node, and
+            // Compose drops every node an important node lies over — this one lies over the whole
+            // page, so its title, text and pictures never reached a screen reader. It shows only
+            // wet ink, which has nothing to say.
+            modifier = Modifier.fillMaxSize().semantics { hideFromAccessibility() },
         )
 
         if (armed) {

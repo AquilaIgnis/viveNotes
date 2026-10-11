@@ -78,6 +78,7 @@ import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.ClosedNotebook
+import com.vivenotes.data.db.ImageTextStatus
 import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.NotebookWithSections
 import com.vivenotes.data.db.PageEntity
@@ -1547,6 +1548,41 @@ class NotesViewModel(
     fun rebuildImageText() {
         viewModelScope.launch { imageText?.clear() }
     }
+
+    /** Whether an accessibility service is on, which is when the open page's pictures are worth reading. */
+    private val describingPictures = MutableStateFlow(false)
+
+    /**
+     * Turns on reading the open page's pictures as it is shown, for a screen reader to describe
+     * them. Off, pictures are read only when a search asks, as they always were: reading one costs a
+     * hundred searches, and nobody else hears the result.
+     */
+    fun setDescribingPictures(on: Boolean) {
+        describingPictures.value = on
+    }
+
+    /**
+     * The text read out of each picture on the open page, by attachment id — what a screen reader
+     * says for it. Pictures with no reading yet, or nothing legible in them, are absent.
+     *
+     * Re-run on the indexer's version, so a picture's description arrives when its reading does.
+     * That is also when a page whose request was dropped asks again: a pass already running ignores
+     * new requests, and the bump that ends it is the next chance.
+     */
+    val pictureText: StateFlow<Map<String, String>> = combine(
+        _uiState.map { state -> state.images.mapTo(mutableSetOf()) { it.attachmentId } }
+            .distinctUntilChanged(),
+        describingPictures,
+        imageText?.version ?: MutableStateFlow(0L),
+    ) { ids, describing, _ -> ids to describing }
+        .mapLatest { (ids, describing) ->
+            if (ids.isEmpty()) return@mapLatest emptyMap()
+            if (describing) imageText?.request(ids)
+            repository.imageTextFor(ids)
+                .filterValues { it.status == ImageTextStatus.Read && it.text.isNotBlank() }
+                .mapValues { it.value.text }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     val inkTextProgress: StateFlow<InkTextProgress> =
         inkText?.progress ?: MutableStateFlow(InkTextProgress(enabled = false))

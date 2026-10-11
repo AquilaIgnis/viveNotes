@@ -3,6 +3,7 @@ package com.vivenotes.ui
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.view.accessibility.AccessibilityManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -43,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
@@ -1825,6 +1827,23 @@ private fun SearchAffordance(open: Boolean, onClick: () -> Unit, modifier: Modif
     }
 }
 
+/**
+ * Whether any accessibility service is on — TalkBack, Select to Speak, Switch Access — kept current
+ * as one is switched on or off.
+ */
+@Composable
+private fun rememberAccessibilityServiceOn(): Boolean {
+    val context = LocalContext.current
+    val manager = remember(context) { context.getSystemService(AccessibilityManager::class.java) }
+    var on by remember(manager) { mutableStateOf(manager?.isEnabled == true) }
+    DisposableEffect(manager) {
+        val listener = AccessibilityManager.AccessibilityStateChangeListener { on = it }
+        manager?.addAccessibilityStateChangeListener(listener)
+        onDispose { manager?.removeAccessibilityStateChangeListener(listener) }
+    }
+    return on
+}
+
 /** The page itself, split out so [EditorSurface] can float the magnifier over it. */
 @Composable
 private fun PageEditor(
@@ -1853,6 +1872,10 @@ private fun PageEditor(
     onRecognizeFormula: (com.vivenotes.ink.CanvasSelection) -> Unit,
     pendingEquation: PendingEquation?,
 ) {
+    val pictureText by viewModel.pictureText.collectAsStateWithLifecycle()
+    val accessibilityOn = rememberAccessibilityServiceOn()
+    LaunchedEffect(accessibilityOn) { viewModel.setDescribingPictures(accessibilityOn) }
+
     EditorPane(
         title = state.title,
         createdAt = state.createdAt,
@@ -1917,6 +1940,7 @@ private fun PageEditor(
         onDeleteEquations = viewModel::deleteEquations,
         images = state.images,
         attachments = attachments,
+        pictureText = pictureText,
         onMoveImages = viewModel::moveImages,
         onResizeImages = viewModel::resizeImages,
         onDeleteImages = viewModel::deleteImages,

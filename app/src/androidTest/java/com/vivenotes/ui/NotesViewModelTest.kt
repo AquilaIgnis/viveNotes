@@ -1,5 +1,6 @@
 package com.vivenotes.ui
 
+import android.graphics.Bitmap
 import androidx.ink.brush.InputToolType
 import androidx.ink.geometry.ImmutableBox
 import androidx.ink.geometry.ImmutableVec
@@ -36,7 +37,15 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import com.vivenotes.FlakyOnEmulator
+import com.vivenotes.ai.FormulaRecognitionResult
+import com.vivenotes.ai.ImageTextResult
+import com.vivenotes.ai.InkRecognitionEngine
+import com.vivenotes.ai.TextRecognitionResult
 import com.vivenotes.data.AttachmentStore
+import com.vivenotes.data.ImageTextIndexer
+import com.vivenotes.data.db.AttachmentEntity
+import com.vivenotes.data.db.AttachmentTextEntity
+import com.vivenotes.data.db.ImageTextStatus
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.DeletedItemKind
 import com.vivenotes.data.EditorDefaults
@@ -547,6 +556,110 @@ class NotesViewModelTest {
         advanceUntilIdle()
 
         assertFalse("the delete left the 20-step history", "sha-held" in attachments.heldPictures())
+    }
+
+    /** Never reached: the pictures below have no bytes behind them, so a read fails before it. */
+    private object NoReadingEngine : InkRecognitionEngine {
+        override suspend fun recognizeText(image: Bitmap) = TextRecognitionResult("", 0f)
+        override suspend fun recognizeFormula(image: Bitmap) = FormulaRecognitionResult("")
+        override suspend fun recognizeImageText(image: Bitmap) = ImageTextResult(emptyList(), 0f)
+    }
+
+    /**
+     * Puts one picture on the seeded page. Its attachment has a row, which the reading table's
+     * foreign key needs, and no file: these tests are about what is said, not what is drawn.
+     */
+    private suspend fun seedPicture(attachmentId: String) {
+        seedStarterText()
+        val pageId = db.query("SELECT id FROM pages ORDER BY sortIndex LIMIT 1", emptyArray())
+            .use { cursor ->
+                cursor.moveToFirst()
+                cursor.getString(0)
+            }
+        db.attachmentDao().insert(
+            AttachmentEntity(
+                id = attachmentId,
+                mimeType = "image/webp",
+                pixelWidth = 64,
+                pixelHeight = 64,
+                byteCount = 0,
+                createdAt = 0,
+            ),
+        )
+        val picture = Outline.Image(
+            id = "picture-1",
+            x = 40f,
+            y = 200f,
+            width = 120f,
+            height = 80f,
+            attachmentId = attachmentId,
+        )
+        val loaded = repository.loadDoc(pageId) as PageLoad.Loaded
+        repository.saveDoc(pageId, loaded.doc.copy(outlines = loaded.doc.outlines + picture))
+    }
+
+    /** A screen reader describes a picture on the open page by the text read out of it. */
+    @Test
+    fun aPictureOnTheOpenPageIsDescribedByTheTextReadOutOfIt() = runTest(dispatcher) {
+        seedPicture("sha-described")
+        repository.saveImageText(
+            AttachmentTextEntity(
+                attachmentId = "sha-described",
+                text = "Quarterly totals",
+                lineCount = 1,
+                confidence = 0.9f,
+                engine = ImageTextIndexer.ENGINE,
+                status = ImageTextStatus.Read,
+                durationMs = 0,
+                updatedAt = 0,
+            ),
+        )
+        val vm = NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+        )
+        val collecting = launch { vm.pictureText.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(mapOf("sha-described" to "Quarterly totals"), vm.pictureText.value)
+        collecting.cancel()
+    }
+
+    /**
+     * The open page's pictures are read as it is shown only while an accessibility service is on.
+     * Reading one costs a hundred searches, and with nothing listening nobody hears the result.
+     */
+    @Test
+    fun theOpenPagesPicturesAreReadOnlyWhileAnAccessibilityServiceIsOn() = runTest(dispatcher) {
+        seedPicture("sha-unread")
+        val indexer = ImageTextIndexer(repository, attachments, NoReadingEngine)
+        val vm = NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+            imageText = indexer,
+        )
+        val collecting = launch { vm.pictureText.collect {} }
+        advanceUntilIdle()
+        indexer.awaitPass()
+        assertTrue("read with nothing listening", repository.imageTextFor(listOf("sha-unread")).isEmpty())
+
+        vm.setDescribingPictures(true)
+        advanceUntilIdle()
+        indexer.awaitPass()
+
+        // No bytes are behind the picture, so the read fails — and a failed read is written down
+        // all the same, which is the proof the open page asked for it.
+        val row = repository.imageTextFor(listOf("sha-unread"))["sha-unread"]
+        assertEquals(ImageTextStatus.Failed, row?.status)
+        collecting.cancel()
     }
 
     /**

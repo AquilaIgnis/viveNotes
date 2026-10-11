@@ -701,6 +701,8 @@
 
     <string name="image_missing">Error: no se encontró %1$s</string>
     <string name="image_unreadable">Error: no se pudo leer %1$s</string>
+    <string name="image_description">Imagen</string>
+    <string name="image_description_text">Imagen: %1$s</string>
 
     <!-- The notebook rail. -->
     <string name="rail_new_notebook">Nuevo cuaderno</string>

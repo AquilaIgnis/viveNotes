@@ -3,11 +3,13 @@ package com.vivenotes.ui.editor
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,8 +26,10 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextMeasurer
@@ -98,6 +102,11 @@ internal fun ImageLayer(
     ) -> Unit = { _, _, _, _, _ -> },
     density: Float,
     modifier: Modifier = Modifier,
+    /**
+     * The text read out of each picture, by attachment id: what a screen reader says for it. A
+     * picture with nothing here is still announced, as a picture.
+     */
+    pictureText: Map<String, String> = emptyMap(),
     /** Null in standalone uses; the document extent when hosted by the unbounded page. */
     canvasExtent: DpSize? = null,
     /**
@@ -297,8 +306,33 @@ internal fun ImageLayer(
                 ?.singleOrNull { selection?.isImageOnly == true && it.id in heldIds }
                 ?.let { drawImageSelection(previewOf(it), accent, handleFill, density) }
         }
+
+        // One node over each frame, for a screen reader to find by touch or by swiping: the canvas
+        // paints every picture and gives none of them a node. Pointer input stays the layer's — a
+        // node with nothing but semantics takes no touch.
+        images.forEach { image ->
+            key(image.id) {
+                val text = pictureText[image.attachmentId]
+                val description = if (text.isNullOrBlank()) {
+                    stringResource(R.string.image_description)
+                } else {
+                    stringResource(R.string.image_description_text, text)
+                }
+                Box(Modifier.overFrame(image, density).semantics { contentDescription = description })
+            }
+        }
     }
 }
+
+/** Exactly over [image]'s frame, in this layer's coordinates — the ones it is drawn in. */
+private fun Modifier.overFrame(image: Outline.Image, density: Float): Modifier =
+    offset { IntOffset((image.x * density).roundToInt(), (image.y * density).roundToInt()) }
+        .layout { measurable, _ ->
+            val width = (image.width * density).roundToInt().coerceAtLeast(0)
+            val height = (image.height * density).roundToInt().coerceAtLeast(0)
+            val placeable = measurable.measure(Constraints.fixed(width, height))
+            layout(width, height) { placeable.place(0, 0) }
+        }
 
 /**
  * What the page knows about one picture's bytes.
