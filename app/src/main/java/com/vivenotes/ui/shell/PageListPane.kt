@@ -42,7 +42,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
@@ -194,7 +193,7 @@ fun PageListPane(
                     onClick = { onSelectPage(page.id) },
                     onDelete = { onDeletePage(page.id) },
                     // Under the same sort as the handle, and for the same reason.
-                    actions = if (sort == PageSort.Manual) reorder.moveActions(index, shown.size) else emptyList(),
+                    moves = if (sort == PageSort.Manual) reorder.moves(index, shown.size) else RowMoves.None,
                     modifier = Modifier.reorderable(reorder, page.id),
                     handle = if (sort == PageSort.Manual) {
                         {
@@ -245,6 +244,34 @@ internal fun DragHandle(description: String, modifier: Modifier = Modifier) {
 private val HANDLE_TOUCH = 20.dp
 private val HANDLE_GLYPH = 15.dp
 
+/**
+ * Move up and Move down as long-press menu entries, for a hand that can open the menu but cannot hold
+ * a drag. Shared like the handle, so the two lists offer them alike. [onPicked] closes the menu.
+ */
+@Composable
+internal fun MoveMenuItems(moves: RowMoves, onPicked: () -> Unit) {
+    moves.up?.let { up ->
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.reorder_move_up)) },
+            leadingIcon = { Icon(MaterialSymbols.ArrowUpward, contentDescription = null) },
+            onClick = {
+                onPicked()
+                up()
+            },
+        )
+    }
+    moves.down?.let { down ->
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.reorder_move_down)) },
+            leadingIcon = { Icon(MaterialSymbols.ArrowDownward, contentDescription = null) },
+            onClick = {
+                onPicked()
+                down()
+            },
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PageRow(
@@ -253,11 +280,12 @@ private fun PageRow(
     dragging: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    actions: List<CustomAccessibilityAction>,
+    moves: RowMoves,
     modifier: Modifier = Modifier,
     handle: @Composable (RowScope.() -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    val actions = moves.accessibilityActions()
     // A lifted row is drawn over its neighbours, so it cannot keep the transparent background an
     // unselected row normally has — they would show through it.
     val background = if (selected || dragging) {
@@ -319,6 +347,7 @@ private fun PageRow(
 
         // Long-press opens the per-page menu; the ribbon owns the primary actions.
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            MoveMenuItems(moves) { menuOpen = false }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.pages_delete)) },
                 leadingIcon = { Icon(MaterialSymbols.Delete, contentDescription = null) },

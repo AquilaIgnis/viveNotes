@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -141,6 +142,41 @@ class PageListReorderTest {
         compose.waitForIdle()
 
         assertEquals(emptyList<String>(), moveLabels(PageListTags.row("b")))
+    }
+
+    /** The same moves in the long-press menu, for a hand that can open it but cannot hold a drag. */
+    @Test
+    fun theLongPressMenuMovesAPage() {
+        setList()
+
+        compose.onNodeWithTag(PageListTags.row("b")).performTouchInput { longClick() }
+        compose.onNodeWithText("Move down").performClick()
+
+        assertEquals(listOf("a", "c", "b"), reordered)
+    }
+
+    @Test
+    fun theFirstPagesMenuOffersNoMoveUp() {
+        setList()
+
+        compose.onNodeWithTag(PageListTags.row("a")).performTouchInput { longClick() }
+
+        compose.onNodeWithText("Move down").assertIsDisplayed()
+        compose.onNodeWithText("Move up").assertDoesNotExist()
+    }
+
+    @Test
+    fun theMenuOffersNoMovesOutsideSectionOrder() {
+        setList()
+        compose.onNodeWithContentDescription("Sort pages").performClick()
+        compose.onNodeWithText("By title").performClick()
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(PageListTags.row("b")).performTouchInput { longClick() }
+
+        compose.onNodeWithText("Delete page").assertIsDisplayed()
+        compose.onNodeWithText("Move up").assertDoesNotExist()
+        compose.onNodeWithText("Move down").assertDoesNotExist()
     }
 
     /** The row's own actions: TalkBack never offers ones merged up into it from the handle. */

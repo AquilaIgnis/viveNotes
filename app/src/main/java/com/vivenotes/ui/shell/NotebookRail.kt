@@ -38,7 +38,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -157,7 +156,7 @@ fun NotebookRail(
                             onClick = { onSelectSection(section.id) },
                             onRename = { onRenameSection(section) },
                             onDelete = { onDeleteSection(section) },
-                            actions = reorder.moveActions(index, sections.size) {
+                            moves = reorder.moves(index, sections.size) {
                                 grabbedNotebookId = entry.notebook.id
                             },
                             modifier = Modifier.reorderable(reorder, section.id),
@@ -251,11 +250,12 @@ private fun SectionRow(
     onClick: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
-    actions: List<CustomAccessibilityAction>,
+    moves: RowMoves,
     modifier: Modifier = Modifier,
     handle: @Composable () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    val actions = moves.accessibilityActions()
     // A lifted row is drawn over its neighbours, so it cannot keep the transparent background an
     // unselected row normally has — they would show through it.
     val background = if (selected || dragging) {
@@ -311,6 +311,7 @@ private fun SectionRow(
                     onRename()
                 },
             )
+            MoveMenuItems(moves) { menuOpen = false }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.rail_delete_section)) },
                 leadingIcon = {

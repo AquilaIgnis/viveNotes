@@ -8,10 +8,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.Density
@@ -221,6 +223,27 @@ class NotebookRailTest {
         performMove(RailTags.section("y"), "Move up")
 
         assertEquals("nb2" to listOf("y", "x"), reordered)
+    }
+
+    /** The same moves in the long-press menu, for a hand that can open it but cannot hold a drag. */
+    @Test
+    fun theLongPressMenuMovesASection() {
+        setRail()
+
+        compose.onNodeWithTag(RailTags.section("a")).performTouchInput { longClick() }
+        compose.onNodeWithText("Move down").performClick()
+
+        assertEquals("nb" to listOf("b", "a", "c"), reordered)
+    }
+
+    @Test
+    fun theLastSectionsMenuOffersNoMoveDown() {
+        setRail()
+
+        compose.onNodeWithTag(RailTags.section("c")).performTouchInput { longClick() }
+
+        compose.onNodeWithText("Move up").assertIsDisplayed()
+        compose.onNodeWithText("Move down").assertDoesNotExist()
     }
 
     /** The row's own actions: TalkBack never offers ones merged up into it from the handle. */

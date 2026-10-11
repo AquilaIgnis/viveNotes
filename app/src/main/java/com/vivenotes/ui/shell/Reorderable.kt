@@ -229,30 +229,48 @@ internal fun Modifier.reorderHandle(
     }
 
 /**
- * Move up and Move down for the row at [index] of [count]: the reorder TalkBack and Switch Access
- * can make, since neither can drag. An end row offers only the way it can go.
- *
- * Handed back for the row to set on its own clickable node, not put on the handle. The handle merges
- * into that row, and a node's merged-in actions are not offered — only its own are.
+ * Move up and Move down for one row, the reorder for whoever cannot drag: a screen reader, a switch,
+ * or a hand that cannot hold a drag. Each is the drag and drop of one row, and null at the end of
+ * the list it cannot pass.
+ */
+internal class RowMoves(val up: (() -> Unit)?, val down: (() -> Unit)?) {
+    companion object {
+        /** For a row that cannot move at all, such as a page under a sort derived from the pages. */
+        val None = RowMoves(up = null, down = null)
+    }
+}
+
+/**
+ * The moves for the row at [index] of [count].
  *
  * [onGrabbed] is [reorderHandle]'s, and runs before the move for the same reason.
  */
-@Composable
-internal fun ReorderState.moveActions(
-    index: Int,
-    count: Int,
-    onGrabbed: () -> Unit = {},
-): List<CustomAccessibilityAction> {
-    val up = stringResource(R.string.reorder_move_up)
-    val down = stringResource(R.string.reorder_move_down)
-    return buildList {
-        if (index > 0) {
-            add(CustomAccessibilityAction(up) { onGrabbed(); step(index, index - 1); true })
-        }
-        if (index < count - 1) {
-            add(CustomAccessibilityAction(down) { onGrabbed(); step(index, index + 1); true })
-        }
+internal fun ReorderState.moves(index: Int, count: Int, onGrabbed: () -> Unit = {}): RowMoves {
+    fun moveTo(target: Int) {
+        onGrabbed()
+        step(index, target)
     }
+    return RowMoves(
+        up = if (index > 0) ({ moveTo(index - 1) }) else null,
+        down = if (index < count - 1) ({ moveTo(index + 1) }) else null,
+    )
+}
+
+/**
+ * The same moves as accessibility actions, which TalkBack and Switch Access offer without opening
+ * the menu.
+ *
+ * For the row to set on its own clickable node, not on the handle. The handle merges into that row,
+ * and a node's merged-in actions are not offered — only its own are.
+ */
+@Composable
+internal fun RowMoves.accessibilityActions(): List<CustomAccessibilityAction> {
+    val upLabel = stringResource(R.string.reorder_move_up)
+    val downLabel = stringResource(R.string.reorder_move_down)
+    return listOfNotNull(
+        up?.let { move -> CustomAccessibilityAction(upLabel) { move(); true } },
+        down?.let { move -> CustomAccessibilityAction(downLabel) { move(); true } },
+    )
 }
 
 private fun LazyListState.itemInfo(key: Any): LazyListItemInfo? =

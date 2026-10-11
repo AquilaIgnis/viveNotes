@@ -18,9 +18,11 @@ object MaterialSymbols {
     val AddColumnRight: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_column_right)
     val AddRowBelow: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_row_below)
     val ArrowBack: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_back)
+    val ArrowDownward: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_downward)
     val ArrowDropDown: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_drop_down)
     val ArrowOutward: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_outward)
     val ArrowSelectorTool: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_selector_tool)
+    val ArrowUpward: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_upward)
     val Article: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_article)
     val BackgroundReplace: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_background_replace)
     /** Not a Google symbol: [BackgroundReplace] with an X cut into its corner — `ic_background_none.xml`. */
