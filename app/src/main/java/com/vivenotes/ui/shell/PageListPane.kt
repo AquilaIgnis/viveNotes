@@ -54,7 +54,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-enum class PageSort(@StringRes val label: Int) {
+enum class PageSort(@param:StringRes val label: Int) {
     Manual(R.string.pages_sort_manual),
     Alphabetical(R.string.pages_sort_title),
     Recent(R.string.pages_sort_modified),

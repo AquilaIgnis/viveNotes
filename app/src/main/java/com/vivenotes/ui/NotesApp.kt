@@ -848,7 +848,7 @@ private fun NotesWorkspace(
     var recognition by remember { mutableStateOf<RecognitionPanelState?>(null) }
     var recognitionRunning by remember { mutableStateOf(false) }
     var formulaTools by remember { mutableStateOf(FormulaToolsState()) }
-    /** The experimental hand calculator. Not persisted, and its ink with it — see `CalculatorWindow`. */
+    /** The hand calculator. Not persisted, and its ink with it — see `CalculatorWindow`. */
     var calculatorOpen by remember { mutableStateOf(false) }
     val formulaInstalled = aiModels.formulaReady
 

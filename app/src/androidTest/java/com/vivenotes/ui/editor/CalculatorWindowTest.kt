@@ -29,7 +29,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The experimental hand calculator: what reaches = and what comes back from it.
+ * The hand calculator: what reaches = and what comes back from it.
  *
  * Recognition and SymPy are faked by [solve] — `HandCalculatorTest` covers the action choice and
  * `SympyMathEngineTest` the engine. What is left is the pad: that a stroke written on it is the one

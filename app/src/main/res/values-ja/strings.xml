@@ -502,7 +502,7 @@
     <string name="draw_lasso">なげなわ</string>
     <string name="draw_insert_space">スペースを挿入</string>
     <string name="draw_equation">数式</string>
-    <string name="draw_calculator">電卓（実験的）</string>
+    <string name="draw_calculator">電卓</string>
     <string name="draw_calculator_close">電卓を閉じる</string>
     <string name="draw_highlighter">蛍光ペン</string>
     <string name="draw_ruler">定規</string>
@@ -603,7 +603,6 @@
     <string name="table_move">テーブルを移動</string>
 
     <string name="calculator_title">電卓</string>
-    <string name="calculator_experimental">実験的</string>
     <string name="calculator_close">電卓を閉じる</string>
     <string name="calculator_undo_stroke">最後のストロークを取り消す</string>
     <string name="calculator_clear">クリア</string>

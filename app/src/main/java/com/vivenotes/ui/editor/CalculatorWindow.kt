@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -98,7 +97,7 @@ internal object CalculatorTags {
 }
 
 /**
- * The experimental hand calculator: a scratch pad floating over the workspace, and = to solve it.
+ * The hand calculator: a scratch pad floating over the workspace, and = to solve it.
  *
  * Everything written on the pad is the formula, so there is nothing to lasso. Its ink belongs to the
  * pad alone — never to the page, never synced, gone with Clear or with the window — which is why it
@@ -337,8 +336,6 @@ private fun CalculatorWindow(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Spacer(Modifier.width(8.dp))
-                ExperimentalLabel()
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onClose, modifier = Modifier.testTag(CalculatorTags.CLOSE)) {
                     Icon(
@@ -417,20 +414,6 @@ private fun CalculatorWindow(
             }
         }
     }
-}
-
-/** A small tertiary pill, so nobody mistakes a trial for a finished feature. */
-@Composable
-private fun ExperimentalLabel() {
-    Text(
-        text = stringResource(R.string.calculator_experimental),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onTertiaryContainer,
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.tertiaryContainer)
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-    )
 }
 
 @Composable

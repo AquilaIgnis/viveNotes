@@ -25,9 +25,9 @@ import com.vivenotes.R
  */
 internal data class AppShortcut(
     /** How the helper panel names it. */
-    @StringRes val label: Int,
+    @param:StringRes val label: Int,
     /** The helper panel's heading this sits under. */
-    @StringRes val group: Int,
+    @param:StringRes val group: Int,
     val keyCode: Int,
     /**
      * Modifiers that must be held, and *only* these — matched with [KeyEvent.hasModifiers], which is

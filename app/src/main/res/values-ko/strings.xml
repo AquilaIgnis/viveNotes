@@ -502,7 +502,7 @@
     <string name="draw_lasso">올라소</string>
     <string name="draw_insert_space">간격 삽입</string>
     <string name="draw_equation">수식</string>
-    <string name="draw_calculator">계산기 (실험실)</string>
+    <string name="draw_calculator">계산기</string>
     <string name="draw_calculator_close">계산기 닫기</string>
     <string name="draw_highlighter">형광펜</string>
     <string name="draw_ruler">자</string>
@@ -603,7 +603,6 @@
     <string name="table_move">표 이동</string>
 
     <string name="calculator_title">계산기</string>
-    <string name="calculator_experimental">실험실</string>
     <string name="calculator_close">계산기 닫기</string>
     <string name="calculator_undo_stroke">마지막 스트로크 실행 취소</string>
     <string name="calculator_clear">지우기</string>

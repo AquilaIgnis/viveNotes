@@ -533,7 +533,7 @@
     <string name="draw_lasso">Lasso</string>
     <string name="draw_insert_space">Wstaw odstęp</string>
     <string name="draw_equation">Równanie</string>
-    <string name="draw_calculator">Kalkulator (eksperymentalny)</string>
+    <string name="draw_calculator">Kalkulator</string>
     <string name="draw_calculator_close">Zamknij kalkulator</string>
     <string name="draw_highlighter">Zakreślacz</string>
     <string name="draw_ruler">Linijka</string>
@@ -634,7 +634,6 @@
     <string name="table_move">Przesuń tabelę</string>
 
     <string name="calculator_title">Kalkulator</string>
-    <string name="calculator_experimental">Eksperymentalny</string>
     <string name="calculator_close">Zamknij kalkulator</string>
     <string name="calculator_undo_stroke">Cofnij ostatnie pociągnięcie</string>
     <string name="calculator_clear">Wyczyść</string>

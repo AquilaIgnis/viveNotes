@@ -553,7 +553,7 @@
     <string name="draw_lasso">Lasso</string>
     <string name="draw_insert_space">Insert space</string>
     <string name="draw_equation">Equation</string>
-    <string name="draw_calculator">Calculator (experimental)</string>
+    <string name="draw_calculator">Calculator</string>
     <string name="draw_calculator_close">Close calculator</string>
     <string name="draw_highlighter">Highlighter</string>
     <string name="draw_ruler">Ruler</string>
@@ -661,7 +661,6 @@
 
     <!-- The handwriting calculator. -->
     <string name="calculator_title">Calculator</string>
-    <string name="calculator_experimental">Experimental</string>
     <string name="calculator_close">Close calculator</string>
     <string name="calculator_undo_stroke">Undo last stroke</string>
     <string name="calculator_clear">Clear</string>

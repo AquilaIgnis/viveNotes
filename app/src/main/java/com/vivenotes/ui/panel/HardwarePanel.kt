@@ -52,7 +52,7 @@ import com.vivenotes.ui.shortcutRows
  * Deliberately not persisted, for the reason the open pane is not: which one you are *looking at* is
  * where you are in a panel, not something about you. Reopening Hardware starting on Stylus is right.
  */
-enum class HardwareKind(@StringRes val label: Int) {
+enum class HardwareKind(@param:StringRes val label: Int) {
     Stylus(R.string.hardware_stylus),
     Keyboard(R.string.hardware_keyboard),
 }

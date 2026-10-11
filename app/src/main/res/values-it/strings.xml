@@ -512,7 +512,7 @@
     <string name="draw_lasso">Lazo</string>
     <string name="draw_insert_space">Inserisci spazio</string>
     <string name="draw_equation">Equazione</string>
-    <string name="draw_calculator">Calcolatrice (sperimentale)</string>
+    <string name="draw_calculator">Calcolatrice</string>
     <string name="draw_calculator_close">Chiudi calcolatrice</string>
     <string name="draw_highlighter">Evidenziatore</string>
     <string name="draw_ruler">Righello</string>
@@ -613,7 +613,6 @@
     <string name="table_move">Sposta tabella</string>
 
     <string name="calculator_title">Calcolatrice</string>
-    <string name="calculator_experimental">Sperimentale</string>
     <string name="calculator_close">Chiudi calcolatrice</string>
     <string name="calculator_undo_stroke">Annulla ultimo tratto</string>
     <string name="calculator_clear">Cancella</string>

@@ -81,7 +81,7 @@ private val LABEL_WIDTH = 96.dp
 private val FIELD_HEIGHT = 32.dp
 
 /** The panes the ribbon can open. */
-enum class ToolPane(@StringRes val title: Int) {
+enum class ToolPane(@param:StringRes val title: Int) {
     VersionHistory(R.string.pane_version_history),
     DeletedItems(R.string.pane_deleted_items),
     PaperSize(R.string.pane_paper_size),

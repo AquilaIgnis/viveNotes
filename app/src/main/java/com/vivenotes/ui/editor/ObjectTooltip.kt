@@ -714,10 +714,10 @@ internal fun RowScope.FillAction(
 
 /** How [FillAction] words itself: a shape's fill, or a picture's background. */
 internal enum class FillWords(
-    @StringRes val change: Int,
-    @StringRes val none: Int,
+    @param:StringRes val change: Int,
+    @param:StringRes val none: Int,
     /** Takes the colour's name: "Red fill". */
-    @StringRes val swatch: Int,
+    @param:StringRes val swatch: Int,
 ) {
     Fill(R.string.tooltip_change_fill, R.string.tooltip_no_fill, R.string.tooltip_fill_swatch),
     Background(R.string.tooltip_change_background, R.string.tooltip_no_background, R.string.tooltip_background_swatch),

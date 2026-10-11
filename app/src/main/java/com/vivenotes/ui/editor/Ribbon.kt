@@ -100,7 +100,7 @@ import com.vivenotes.ui.panel.FloatingSettingsPanel
  * into a sentence. Its Table button had already moved to Draw. A tab whose every control is a
  * duplicate is a tab that costs a tap and teaches nothing.
  */
-enum class RibbonTab(@StringRes val label: Int) {
+enum class RibbonTab(@param:StringRes val label: Int) {
     File(R.string.ribbon_tab_file),
     Draw(R.string.ribbon_tab_draw),
     Document(R.string.ribbon_tab_document),

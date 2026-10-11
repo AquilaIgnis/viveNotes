@@ -140,8 +140,10 @@ class InkTextIndexerTest {
             if (call == 1) {
                 entered.complete(Unit)
                 release.await()
+                TextRecognitionResult("stale", 0.95f)
+            } else {
+                TextRecognitionResult("fresh", 0.95f)
             }
-            TextRecognitionResult("reading $call", 0.95f)
         }
         val indexer = InkTextIndexer(repository, engine)
         val request = InkTextPageRequest(pageId, inkPageLayout(emptyList()))
@@ -158,9 +160,8 @@ class InkTextIndexerTest {
         indexer.awaitIdle()
         val reading = repository.inkTextFor(listOf(pageId)).getValue(pageId)
         val texts = InkTextRegionsCodec.decode(reading.regionsJson).map { it.text }
-        assertTrue(texts.isNotEmpty())
-        assertFalse("reading 1" in texts)
-        assertEquals("reading 2", texts.first())
+        // The edit splits the page into two regions, read side by side, so call order is a race.
+        assertEquals(setOf("fresh"), texts.toSet())
     }
 
     @Test

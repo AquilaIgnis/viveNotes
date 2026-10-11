@@ -512,7 +512,7 @@
     <string name="draw_lasso">Lasso</string>
     <string name="draw_insert_space">Insérer de l\'espace</string>
     <string name="draw_equation">Équation</string>
-    <string name="draw_calculator">Calculatrice (expérimental)</string>
+    <string name="draw_calculator">Calculatrice</string>
     <string name="draw_calculator_close">Fermer la calculatrice</string>
     <string name="draw_highlighter">Surligneur</string>
     <string name="draw_ruler">Règle</string>
@@ -613,7 +613,6 @@
     <string name="table_move">Déplacer le tableau</string>
 
     <string name="calculator_title">Calculatrice</string>
-    <string name="calculator_experimental">Expérimental</string>
     <string name="calculator_close">Fermer la calculatrice</string>
     <string name="calculator_undo_stroke">Annuler le dernier tracé</string>
     <string name="calculator_clear">Effacer</string>

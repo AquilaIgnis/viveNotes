@@ -70,7 +70,7 @@ data class DrawActions(
     val addPaletteColor: (Int) -> Unit = {},
     val undo: () -> Unit = {},
     val redo: () -> Unit = {},
-    /** Opens the experimental hand calculator, or closes it — see `CalculatorWindow.kt`. */
+    /** Opens the hand calculator, or closes it — see `CalculatorWindow.kt`. */
     val toggleCalculator: () -> Unit = {},
 )
 

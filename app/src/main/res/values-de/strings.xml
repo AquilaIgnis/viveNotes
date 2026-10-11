@@ -512,7 +512,7 @@
     <string name="draw_lasso">Lasso</string>
     <string name="draw_insert_space">Leereraum einfügen</string>
     <string name="draw_equation">Gleichung</string>
-    <string name="draw_calculator">Taschenrechner (experimentell)</string>
+    <string name="draw_calculator">Taschenrechner</string>
     <string name="draw_calculator_close">Taschenrechner schließen</string>
     <string name="draw_highlighter">Textmarker</string>
     <string name="draw_ruler">Lineal</string>
@@ -613,7 +613,6 @@
     <string name="table_move">Tabelle verschieben</string>
 
     <string name="calculator_title">Taschenrechner</string>
-    <string name="calculator_experimental">Experimentell</string>
     <string name="calculator_close">Taschenrechner schließen</string>
     <string name="calculator_undo_stroke">Letzten Strich rückgängig machen</string>
     <string name="calculator_clear">Löschen</string>
