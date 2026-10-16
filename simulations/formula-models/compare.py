@@ -19,7 +19,7 @@ from typing import Protocol, Sequence
 import numpy as np
 from PIL import Image
 
-from models import HERE, FormulaNetS, Pix2TextMfr, UniMerNetTiny, UniMerNetTinyOnnx, inksim
+from models import HERE, FormulaNet, Pix2TextMfr, UniMerNetTiny, UniMerNetTinyOnnx, inksim
 from replay import replay
 
 import runner  # formula-render's, for `perturb`; on the path via models
@@ -116,9 +116,12 @@ def render(strokes: Sequence[inksim.Stroke], stem: float) -> np.ndarray:
 
 def build_models(args: argparse.Namespace) -> list[Model]:
     built: list[Model] = []
+    graphs: dict[str, str] = {Path(path).stem: path for path in args.formulanet or []}
     for name in args.models:
-        if name == FormulaNetS.name:
-            built.append(FormulaNetS(args.formulanet, args.formulanet_tokenizer))
+        if name.startswith(FormulaNet.prefix):
+            if name not in graphs:
+                raise SystemExit(f"{name} needs --formulanet <dir>/{name}.onnx")
+            built.append(FormulaNet(graphs[name], args.formulanet_tokenizer))
         elif name == Pix2TextMfr.name:
             built.append(Pix2TextMfr(args.pix2text))
         elif name == UniMerNetTiny.name:
@@ -134,7 +137,9 @@ def build_models(args: argparse.Namespace) -> list[Model]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--models", nargs="+", required=True)
-    parser.add_argument("--formulanet")
+    parser.add_argument(
+        "--formulanet", nargs="+", help="PP-FormulaNet graphs, each named by its file's stem"
+    )
     parser.add_argument("--formulanet-tokenizer")
     parser.add_argument("--pix2text")
     parser.add_argument("--unimernet-config")

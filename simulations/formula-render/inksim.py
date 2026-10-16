@@ -409,7 +409,10 @@ MEAN: float = 0.7931
 STD: float = 0.1738
 
 
-def preprocess_formula(image: np.ndarray, pad_value: float, keep_aspect: bool = True) -> np.ndarray:
+def preprocess_formula(
+    image: np.ndarray, pad_value: float, keep_aspect: bool = True, size: int = FORMULA_SIZE
+) -> np.ndarray:
+    """The crop scaled to fit a `size` square. 384 is FormulaNet-S's; the larger models take 768."""
     from PIL import Image
 
     low, high = float(image.min()), float(image.max())
@@ -427,11 +430,11 @@ def preprocess_formula(image: np.ndarray, pad_value: float, keep_aspect: bool = 
 
     height, width = cropped.shape
     if keep_aspect:
-        scale = FORMULA_SIZE / max(height, width)
-        target_w = max(1, min(FORMULA_SIZE, int(width * scale)))
-        target_h = max(1, min(FORMULA_SIZE, int(height * scale)))
+        scale = size / max(height, width)
+        target_w = max(1, min(size, int(width * scale)))
+        target_h = max(1, min(size, int(height * scale)))
     else:
-        target_w = target_h = FORMULA_SIZE
+        target_w = target_h = size
 
     resized = np.asarray(
         Image.fromarray(cropped.astype(np.uint8)).resize(
@@ -440,9 +443,9 @@ def preprocess_formula(image: np.ndarray, pad_value: float, keep_aspect: bool = 
         dtype=np.float32,
     )
 
-    canvas = np.full((FORMULA_SIZE, FORMULA_SIZE), pad_value, dtype=np.float32)
-    y_offset = (FORMULA_SIZE - target_h) // 2
-    x_offset = (FORMULA_SIZE - target_w) // 2
+    canvas = np.full((size, size), pad_value, dtype=np.float32)
+    y_offset = (size - target_h) // 2
+    x_offset = (size - target_w) // 2
     canvas[y_offset : y_offset + target_h, x_offset : x_offset + target_w] = resized
     return ((canvas / 255.0) - MEAN) / STD
 
@@ -465,6 +468,8 @@ class FormulaModel:
             model_path, options, providers=["CPUExecutionProvider"]
         )
         self.input_name = self.session.get_inputs()[0].name
+        # The graph's own square: 384 for -S and _plus-M, 768 for -L.
+        self.size: int = int(self.session.get_inputs()[0].shape[-1])
         with open(tokenizer_path, encoding="utf-8") as handle:
             tokenizer = json.load(handle)
         vocabulary: dict[str, int] = tokenizer["model"]["vocab"]
@@ -475,7 +480,7 @@ class FormulaModel:
         self.byte_decoder: dict[str, int] = _byte_decoder()
 
     def run(self, batch: np.ndarray) -> list[str]:
-        tensor = batch.reshape(-1, 1, FORMULA_SIZE, FORMULA_SIZE).astype(np.float32)
+        tensor = batch.reshape(-1, 1, self.size, self.size).astype(np.float32)
         ids = self.session.run(None, {self.input_name: tensor})[0]
         return [self.decode(row) for row in ids]
 

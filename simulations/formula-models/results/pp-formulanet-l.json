@@ -1,0 +1,5282 @@
+[
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { \\frac { 2 } { x ^ { 2 } + 1 } }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 1.2054648829980579
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0737677119977889
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9403101069983677
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0678932019982312
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "\\begin{array} { r l } { } & { [ 1 , 1 , 7 ] } \\\\ { } & { { } 3 , 6 } \\\\ { } & { { } } \\end{array}",
+  "score": 0.27450980392156865,
+  "exact": false,
+  "seconds": 1.365117379998992
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1973649150022538
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1840746080015379
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1140878559999692
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { \\frac { 2 } { x ^ { 2 } + 1 } }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 1.0729240190012206
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0023739270000078
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9422302849998232
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0740956450026715
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "\\begin{array} { r l } { } & { [ 1 , 1 , 7 ] } \\\\ { } & { { } 3 , 6 } \\\\ { } & { { } } \\end{array}",
+  "score": 0.27450980392156865,
+  "exact": false,
+  "seconds": 1.3403253830001631
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1897034409994376
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2260302500035323
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1003190000010363
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { \\frac { 2 } { x ^ { 2 } + 1 } }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 1.073501776001649
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.997660523000377
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9258282760019938
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.070103531001223
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "\\begin{array} { r l } { } & { \\boxed { 1 } \\frac { 7 } { 7 } } \\\\ { } & { \\overline { 3 } \\overline { 6 } \\overline { 6 } \\overline { 6 } \\overline { \\overline { \\frac { 1 } { 7 } } } } \\end{array}",
+  "score": 0.26415094339622647,
+  "exact": false,
+  "seconds": 1.7287295119967894
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2019965939980466
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2374831260021892
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1157673570014595
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { \\sum X ^ { 2 } + 1 }",
+  "score": 0.7777777777777778,
+  "exact": false,
+  "seconds": 1.0678541480010608
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.993543121003313
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9455313149992435
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.080356247999589
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "1 1 7",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9245841629999632
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.201039244999265
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.189001538001321
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1077439549990231
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { \\frac { 2 } { x ^ { 2 } + 1 } }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 1.0949842070003797
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9840863770004944
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9321493940005894
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0971472950004681
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "\\begin{array} { r l } { } & { [ 1 , 2 , ] } \\\\ { } & { { } 3 6 } \\\\ { } & { { } } \\end{array}",
+  "score": 0.26530612244897955,
+  "exact": false,
+  "seconds": 1.3678190319988062
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1988012939982582
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2099400040024193
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1241211970009317
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { \\frac { 2 } { x ^ { 2 } + 1 } }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 1.0802400969987502
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0155483849994198
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9374305359997379
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.143187626999861
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "\\begin{array} { r l } { } & { [ 1 , 1 , 7 ] } \\\\ { } & { { } 3 6 } \\\\ { } & { { } } \\end{array}",
+  "score": 0.28,
+  "exact": false,
+  "seconds": 1.3715367339973454
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1241193640016718
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1858238210006675
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0678454619992408
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { \\frac { 2 } { x ^ { 2 } + 1 } }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 0.9744004870008212
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8817192440001236
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8626807870023185
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0579669659964566
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "\\begin{array} { r l } { } & { [ 1 , 1 , 7 ] } \\\\ { } & { { } 3 6 } \\\\ { } & { { } } \\end{array}",
+  "score": 0.28,
+  "exact": false,
+  "seconds": 1.2367604239989305
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1648970170026587
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.125965510000242
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0318039849989873
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { \\frac { 2 } { x ^ { 2 } + 1 } }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 1.014705514000525
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9040064520013402
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8738945490003971
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0397748379982659
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "\\begin{array} { r l } { } & { [ 1 , 1 , 2 ] } \\\\ { } & { { } 3 , 6 } \\\\ { } & { { } } \\end{array}",
+  "score": 0.2549019607843137,
+  "exact": false,
+  "seconds": 1.1927750109971385
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0409630089998245
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.04912622700067
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0161047849978786
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { \\frac { 2 } { x ^ { 2 } + 1 } }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 1.0374146579997614
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9183196099984343
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8690685959991242
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9631232840001758
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "\\begin{array} { r l } { } & { [ 1 , 1 , 7 ] } \\\\ { } & { { } 3 6 } \\\\ { } & { { } } \\end{array}",
+  "score": 0.28,
+  "exact": false,
+  "seconds": 1.184636308997142
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0489276189982775
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.065568952999456
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9997807030013064
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { \\frac { 2 } { x ^ { 2 } + 1 } }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 0.9670972840031027
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8988144549985009
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8539094270017813
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9891724410008464
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "\\begin{array} { r l } { } & { [ 1 , 7 ] } \\\\ { } & { { } 3 6 } \\end{array}",
+  "score": 0.32499999999999996,
+  "exact": false,
+  "seconds": 1.0888643879989104
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0363833689989406
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0502334300035727
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9900931990014215
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { \\frac { 2 } { x ^ { 2 } + 1 } }",
+  "score": 0.6666666666666667,
+  "exact": false,
+  "seconds": 0.9684790690007503
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8799741540024115
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8952600720003829
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9524975390013424
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "\\begin{array} { r l } { } & { [ 1 , 2 ] } \\\\ { } & { { } 3 6 } \\end{array}",
+  "score": 0.30000000000000004,
+  "exact": false,
+  "seconds": 1.0638418620001175
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.218098559002101
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.277450020003016
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 2.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0523031020020426
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9046156160002283
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.886294159998215
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8331700789967726
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9539969569996174
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.8700870609973208
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1365256419994694
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1529670570016606
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0130090240018035
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8940884270014067
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9042101650011318
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9249385140028608
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9509850850008661
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.8940399950006395
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2998779070003366
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.115788708000764
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1182905610003218
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.9564194089980447
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.926455705997796
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9138555290010117
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9906684630004747
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "\\boxed { \\begin{array} { c c } { 1 } & { 7 } \\\\ { 3 } & { 6 } \\end{array} }",
+  "score": 0.4666666666666667,
+  "exact": false,
+  "seconds": 1.0984371539998392
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0993366330003482
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1753586340018956
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1024777499987977
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.9564213830017252
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9135654780002369
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.8564975940025761
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1145604250014003
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ] _ { - } ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 1.0299113640030555
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2334989759983728
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1932571260003897
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1375162139993336
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0407493829989107
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.01670116799869
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9410078010005236
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0708786710019922
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9382758100000501
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1820917149998422
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1888904009974794
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.133878583998012
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0055487120007456
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.001417452996975
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9240088170008676
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1230761420010822
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9724565349970362
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1843497049994767
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.280371411001397
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1292949060007231
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0339693729983992
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0577019289994496
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.912759727001685
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0807043669992709
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.9793434179991891
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1793161829991732
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2039262050020625
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1173456850010552
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9934672099989257
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9652611259989499
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9190823579992866
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.085313702998974
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ] = 3 6",
+  "score": 0.11111111111111116,
+  "exact": false,
+  "seconds": 0.9696249760017963
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.186403365998558
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1999644989991793
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1038293080018775
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.9957381339991116
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9859619510025368
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9319123019995459
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0792791789972398
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "\\boxed { \\begin{array} { c c } { 1 } & { 7 } \\\\ { 3 } & { 6 } \\\\ \\end{array} }",
+  "score": 0.4666666666666667,
+  "exact": false,
+  "seconds": 1.267986632999964
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.184628535000229
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.18227065499741
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1100628499989398
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0051081749988953
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0464812019999954
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.983427887000289
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1495012329978636
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9818492679987685
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2496337269985816
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.5971115009997447
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.9935322429992084
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2709477280004648
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0192257140006404
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9181971870020789
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0768351560000156
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9185676800007059
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1823456380006974
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.189607945001626
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 3.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.102443214997038
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.0031379309984914
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0102907599975879
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9001549419990624
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1036085579980863
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9726391719996172
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1838194880001538
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2090135390026262
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1364015970029868
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.0049827260008897
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9854081799967389
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9217579920004937
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1000455799985502
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9464601590007078
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2143192489966168
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2203644030014402
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1452562980011862
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.0283861060015624
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0050125529996876
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9262727380009892
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1003394680010388
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9287523790007981
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2062882520003768
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2099970679992111
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1248425879966817
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.0161165970021102
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9984239360019274
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9263798419997329
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.07420229499985
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 7 ] _ { 3 }",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9785256450013549
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2253396250016522
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2173043399998278
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.119239462997939
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0151221990017802
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.982815996001591
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9470309239986818
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0858796780012199
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9451567030009755
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2006167079998704
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2241026449992205
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1248038439989614
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9988090280021424
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.001005770998745
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9344713329992373
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.097549768997851
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 7 ] 7",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9456926410020969
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1831356680013414
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2216859230029513
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1153831869996793
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.001714196998364
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9848364730023604
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9277224619982007
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0888937439995061
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 7 ] 7",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9346999070003221
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1938940370018827
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2396327180031221
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.107926081000187
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.9997587620018749
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9863019580006949
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9279544229975727
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0665730920009082
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 7 ] 7",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9576348379996489
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2088341490016319
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2218227539997315
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1394920370003092
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.0096390920007252
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9811982719984371
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9276238550010021
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0782351959969674
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9491988119989401
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1922879759986245
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.208701898001891
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.106043112999032
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0152910180004255
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.000223934999667
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.924232502002269
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0901712809973105
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9498659989985754
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2025812600004429
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.209417537000263
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1200445430004038
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9968744030011294
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0000627900008112
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.941832788001193
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1143594029999804
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 , 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9452500709994638
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1925484909988882
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.200913019998552
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 4.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1313997350007412
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.0122069099998043
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9779739160003373
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9306738089981081
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0848027729989553
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9531929299992044
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1936834359985369
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2126773290001438
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.122757275999902
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.983695736998925
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9810581749989069
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.929632760999084
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.099736733998725
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9144740740011912
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1984922720002942
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.204156593001244
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.115391292001732
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 0.9914640140013944
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9883780119998846
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9316602830003831
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.075084861000505
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9259755029997905
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2090654989988252
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2076878620027856
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1313708999987284
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.0151621039985912
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9974538429996755
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9238155499988352
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0712037579978642
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9307102489983663
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2063253320011427
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2042762799974298
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1061384249987896
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9967163420005818
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9893405309994705
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9321557040020707
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0619362130018999
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9109750870011339
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1997416159974819
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2260604040020553
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0974012770020636
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0125188329984667
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9902045919989177
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9321426790011174
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0899486580019584
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9248965139995562
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1952973730003578
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2227790809993166
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.130228278998402
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.0014537520000886
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9810146629970404
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9256028160016285
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0751400560002367
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9344506740017096
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2047863689986116
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2201126250001835
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.101141851999273
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.012975951001863
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9756082630010496
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9391093349986477
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0737565880008333
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9126679729997704
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1910013509987039
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2137791329987522
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.106447191999905
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { X ^ { 2 } + 1 }",
+  "score": 0.875,
+  "exact": false,
+  "seconds": 1.0099654420009756
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9944015649998619
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9110146419989178
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0979937119991519
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9094727720002993
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.186479361000238
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2017130310014181
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1285975909995614
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0070643399994879
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9872580139999627
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.91615690099934
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0859023919983883
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9324608550014091
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2016016590023355
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2084157940007572
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1191324499995972
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.001019045997964
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9911459800023295
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9442117780017725
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0657659979988239
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9156718189988169
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 5 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1821431030002714
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.193844312998408
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 6.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1076485930025228
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0010252590000164
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9867181680019712
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9286989969987189
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0725256500008982
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9168557890006923
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.1818343170016306
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2220507160018315
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1088289360013732
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9948110730001645
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9827759600011632
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.933774049000931
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0766179540005396
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9289903810022224
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.18015586799811
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2126900539988128
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.108539775999816
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0153014799980156
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9997776269992755
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9237665769978776
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0863854099989112
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9455202240023937
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.1958979240007466
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2099923590030812
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1320202830029302
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.001596383001015
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9815614219987765
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9408164569977089
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0720084169988695
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9349573959989357
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.2104617509976379
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1990632170018216
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.0871302739979
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9944101809996937
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9900035299979209
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9141407710012572
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.089691249999305
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9285697520026588
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.1871860930004914
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2309208780025074
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1229688080020424
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0071566459992027
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9864091310009826
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9323659140027303
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0689868360022956
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9271799510024721
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.2073742460015637
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2148453690024326
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.114807853999082
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0049865929977386
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.979516737999802
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9291286739971838
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0653891420006403
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9132353410022915
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.1911979950018576
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2188782900011574
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1293290099965816
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9831731539998145
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.989331091997883
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9305003490007948
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.085804245001782
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9415545400006522
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.1916355459979968
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1937609939996037
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0982709290001367
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9864081990017439
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9747225199971581
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9396837050007889
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1095633909972094
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9257942799995362
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.206140891998075
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2496421729993017
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1472179140000662
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.010427470002469
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.011202782003238
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9503543980026734
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1267447610007366
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9531865069984633
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.2217249479981547
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2105302800009667
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1201186440011952
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0203788250000798
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9891417530016042
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9269208289988455
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.068877548997989
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9084904769988498
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 4 k + 3 } { 3 k - 6 }",
+  "score": 0.9545454545454546,
+  "exact": false,
+  "seconds": 1.1717049030012276
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2365350129985018
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 10.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.124341534999985
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9994583819971012
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9853144619992236
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9196097900021414
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.075963611001498
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9281036970023706
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 0 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.1977076420007506
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2294628880008531
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 0,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1085733899999468
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.992564043001039
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9913532639984624
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9229237569998077
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0750663360013277
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9287604239980283
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 0 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.1972211270003754
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2183812650000618
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 1,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1198622269985208
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0007027560022834
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9775738570024259
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9068474759988021
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0686449379973055
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9294240149974939
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 0 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.1764137389982352
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } { \\frac { \\cos ( n ) } { n ^ { 2 } } }",
+  "score": 0.9130434782608696,
+  "exact": false,
+  "seconds": 1.2200058419984998
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 2,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1272265260013228
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9983207199984463
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0019241659974796
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9290399960009381
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0840265180013375
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9167642850006814
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.178070005000336
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } { \\frac { \\cos ( n ) } { n ^ { 3 } } }",
+  "score": 0.8695652173913043,
+  "exact": false,
+  "seconds": 1.2188557379995473
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 3,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1251201939994644
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0061785079997208
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9723428390025219
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9084905570016417
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.069395312002598
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.91817425300178
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.1780743429990252
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\omega ( n ) } { n ^ { 2 } }",
+  "score": 0.9523809523809523,
+  "exact": false,
+  "seconds": 1.2064054350012157
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 4,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 3 n }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1261559919985302
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9912070860009408
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.968995219001954
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9299105490026705
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0665092199997162
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9392882039974211
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 0 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.1884582900020177
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\omega ( n ) } { n ^ { 2 } }",
+  "score": 0.9523809523809523,
+  "exact": false,
+  "seconds": 1.208809943000233
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 5,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1099358789979306
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0203987630011397
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9856090510002105
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9152148510002007
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0813608540011046
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9280202580011974
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 0 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.1698410719982348
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2254818949986657
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 6,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.0963434670011338
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9985713659989415
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9812767410003289
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9414399820016115
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0856467960002192
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9285615160006273
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 0 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.1910420179992798
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 2 } }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.2037484280008357
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 7,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 n }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.1184051880009065
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9946387260024494
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9989923960019951
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9391785059997346
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0863439810018463
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9261199380016478
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.186948010999913
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\cos ( n ) } { n ^ { 3 } }",
+  "score": 0.9523809523809523,
+  "exact": false,
+  "seconds": 1.2038281280001684
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 8,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 7 N }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1206519160004973
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0060080839975853
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9829834830015898
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.914667802000622
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0665832310005499
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9139894540021487
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.1823149299998477
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } { \\frac { \\omega ( n ) } { n ^ { 2 } } }",
+  "score": 0.8695652173913043,
+  "exact": false,
+  "seconds": 1.2408132609998574
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 9,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 3 n }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1177902599993104
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 1,
+  "prediction": "\\sqrt { x ^ { 2 } + 1 }",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9978134859993588
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 2,
+  "prediction": "x ^ { 2 } - 4 = 0",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9910692839985131
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 3,
+  "prediction": "\\sin ( x )",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 0.9236764470006165
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 4,
+  "prediction": "\\int \\limits _ { 0 } ^ { 1 } x ^ { 2 } d x",
+  "score": 1.0,
+  "exact": true,
+  "seconds": 1.0835598909980035
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 5,
+  "prediction": "[ 1 7 ]",
+  "score": 0.07407407407407407,
+  "exact": false,
+  "seconds": 0.9257856529984565
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 6,
+  "prediction": "\\sum \\limits _ { k = 1 } ^ { \\infty } \\frac { 9 k + 3 } { 3 k - 6 }",
+  "score": 0.9090909090909091,
+  "exact": false,
+  "seconds": 1.1944868530008534
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 7,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } \\frac { \\omega ( n ) } { n ^ { 2 } }",
+  "score": 0.9523809523809523,
+  "exact": false,
+  "seconds": 1.2089550079981564
+ },
+ {
+  "model": "pp-formulanet-l",
+  "stem": 16.0,
+  "seed": 10,
+  "expression": 8,
+  "prediction": "\\sum \\limits _ { n = 1 } ^ { \\infty } e ^ { - 3 n }",
+  "score": 0.9375,
+  "exact": false,
+  "seconds": 1.1041830690010102
+ }
+]

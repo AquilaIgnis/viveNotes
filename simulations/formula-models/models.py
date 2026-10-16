@@ -18,16 +18,24 @@ sys.path.insert(0, str(HERE.parent / "formula-render"))
 import inksim  # noqa: E402
 
 
-class FormulaNetS:
-    """The shipped model, through the app's own `preprocessFormula` (white pad, 384 square)."""
+class FormulaNet:
+    """Any PP-FormulaNet graph, through the app's own `preprocessFormula` (white pad, square).
 
-    name = "pp-formulanet-s"
+    Named after its file as oar-ocr publishes it: `pp-formulanet-s`, `pp-formulanet-l`,
+    `pp-formulanet_plus-m` and so on. They share one tokenizer. The square is the graph's own, so
+    -L gets 768 where the shipped -S gets 384.
+    """
+
+    prefix = "pp-formulanet"
 
     def __init__(self, model_path: str, tokenizer_path: str) -> None:
+        self.name: str = Path(model_path).stem
         self.model = inksim.FormulaModel(model_path, tokenizer_path)
 
     def read(self, raster: np.ndarray) -> str:
-        tensor = inksim.preprocess_formula(raster, pad_value=255.0, keep_aspect=True)
+        tensor = inksim.preprocess_formula(
+            raster, pad_value=255.0, keep_aspect=True, size=self.model.size
+        )
         return self.model.run(tensor[None, ...])[0]
 
 

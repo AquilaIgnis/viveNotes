@@ -13,6 +13,7 @@ import sympy as sp
 from sympy.core.relational import Relational
 from sympy.matrices.matrixbase import MatrixBase
 from sympy.parsing.latex import parse_latex
+from sympy.solvers.solveset import NonlinearError
 
 import degrees
 import greeks
@@ -28,8 +29,9 @@ Action = dict[str, str]
 
 #: What ``_parse`` can hand back. A matrix is **not** an ``Expr`` in SymPy — ``MatrixBase`` sits
 #: outside that hierarchy — which is exactly why so many helpers below branch on ``isinstance``.
-#: Spelling the union out makes those branches look deliberate instead of defensive.
-ParsedInput = sp.Expr | MatrixBase
+#: Spelling the union out makes those branches look deliberate instead of defensive. A system of
+#: equations is a ``Tuple`` of relations, one per written line; nothing else produces a ``Tuple``.
+ParsedInput = sp.Expr | MatrixBase | sp.Tuple
 
 MAX_SOURCE_CHARS = 1200
 MAX_EXPRESSION_NODES = 700
@@ -65,7 +67,11 @@ def analyze(source: str) -> str:
         summary, actions = _classify(expression)
         return _json(
             {
-                "normalizedLatex": sp.latex(expression),
+                "normalizedLatex": (
+                    _stacked_latex(list(expression))
+                    if isinstance(expression, sp.Tuple)
+                    else sp.latex(expression)
+                ),
                 "summary": summary,
                 "variables": _variables(expression),
                 "actions": actions,
@@ -125,7 +131,11 @@ def _parse(source: str) -> ParsedInput:
         raise MathInputError("This formula is too long to evaluate safely on this device.")
     source = _normalize_latex(source)
 
-    expression = _parse_matrix(source)
+    # The system goes first: its lines may sit in an ``array``, which _parse_matrix would otherwise
+    # take for a one-column matrix of equations.
+    expression = _parse_system(source)
+    if expression is None:
+        expression = _parse_matrix(source)
     if expression is None:
         # strict=True prevents the ANTLR backend from accepting only a valid prefix such as `x -`.
         expression = parse_latex(source, backend="antlr", strict=True)
@@ -274,6 +284,74 @@ def _split_top_level(source: str, delimiter: str) -> list[str]:
     return parts
 
 
+#: The brace drawn in front of a system, closed by TeX's empty ``\right.`` or by a matching brace.
+_SYSTEM_BRACE = re.compile(
+    r"(?:\\left\s*)?\\\{(?P<body>.*?)(?:\\right\s*(?:\.|\\\})|\\\})?", re.DOTALL
+)
+#: The environments a system's lines are set in. Only ``array`` takes a column specification, and it
+#: is restricted to column letters so it can never swallow a braced first line.
+_LINE_ENVIRONMENT = re.compile(
+    r"\\begin\{(?P<env>cases|aligned|gathered|array)\}(?:\s*\{[lcr|\s]*\})?"
+    r"(?P<body>.*?)\\end\{(?P=env)\}",
+    re.DOTALL,
+)
+#: Every relation the grammar parses. ``\le`` must not match the start of ``\left``.
+_RELATION = re.compile(r"[=<>]|\\(?:neq|leqq|leqslant|leq|le|geqq|geqslant|geq|ge)(?![A-Za-z])")
+_LINE_END_PUNCTUATION = re.compile(r"(?<!\\)[,;]\s*$")
+#: An alignment point. The grammar takes one only beside ``=``, and ``aligned`` puts it anywhere —
+#: PP-FormulaNet_plus-M starts every line with one.
+_ALIGNMENT = re.compile(r"(?<!\\)&")
+
+
+def _parse_system(source: str) -> sp.Tuple | None:
+    """Parse two or more equations written one per line, or ``None`` if ``source`` is not that.
+
+    ``parse_latex`` reads one expression and its grammar has no ``\\\\``, so before this every system
+    failed to parse. The lines may be bare, wrapped in a brace, set in a line environment, or each
+    wrapped in its own group as PP-FormulaNet writes them: ``{x - 4y = -18} \\\\ {-x + 3 = 74}``.
+    Lines without a relation are a matrix's rows, and are left to ``_parse_matrix``.
+    """
+    brace = _SYSTEM_BRACE.fullmatch(source)
+    body: str = brace.group("body").strip() if brace else source
+    environment = _LINE_ENVIRONMENT.fullmatch(body)
+    if environment:
+        body = environment.group("body")
+    elif r"\begin" in body:
+        # A ``\\`` inside some other environment, a matrix, is not a line break of this formula.
+        return None
+
+    rows: list[str] = _split_matrix_rows(body)
+    if len(rows) < 2 or not any(_RELATION.search(row) for row in rows):
+        return None
+    if len(rows) > MAX_MATRIX_EDGE:
+        raise MathInputError(f"Systems are limited to {MAX_MATRIX_EDGE} equations.")
+    lines: list[sp.Basic] = [
+        parse_latex(_system_line(row), backend="antlr", strict=True) for row in rows
+    ]
+    if not all(isinstance(line, Relational) for line in lines):
+        raise MathInputError("Every line of a system must be an equation or an inequality.")
+    return sp.Tuple(*lines)
+
+
+def _system_line(row: str) -> str:
+    """``row`` without alignment points, its trailing comma, and the one group wrapped around all
+    of it, if any."""
+    row = _LINE_END_PUNCTUATION.sub("", _ALIGNMENT.sub("", row)).strip()
+    if row.startswith("{") and row.endswith("}"):
+        depth: int = 0
+        for index, character in enumerate(row):
+            if character == "{":
+                depth += 1
+            elif character == "}":
+                depth -= 1
+                if depth == 0:
+                    # Only when this brace closes the first one: ``{a} = {b}`` keeps both groups.
+                    if index == len(row) - 1:
+                        row = _LINE_END_PUNCTUATION.sub("", row[1:-1]).strip()
+                    break
+    return row
+
+
 def _check_complexity(expression: ParsedInput) -> None:
     values: list[sp.Expr] = list(expression) if isinstance(expression, MatrixBase) else [expression]
     nodes: int = sum(1 for value in values for _ in sp.preorder_traversal(value))
@@ -326,6 +404,8 @@ def _classify(expression: ParsedInput) -> tuple[str, list[Action]]:
                 actions.append(_action("matrix_eigenvalues", "Eigenvalues"))
         actions.append(_action("matrix_nullspace", "Null space"))
         return f"Matrix · {rows} × {columns}", actions
+    if isinstance(expression, sp.Tuple):
+        return _classify_system(expression)
 
     symbols: list[sp.Symbol] = _symbols(expression)
     if isinstance(expression, sp.Integral):
@@ -372,6 +452,8 @@ def _classify(expression: ParsedInput) -> tuple[str, list[Action]]:
 def _execute(expression: ParsedInput, action_id: str) -> ResultPayload:
     if isinstance(expression, MatrixBase):
         return _execute_matrix(expression, action_id)
+    if isinstance(expression, sp.Tuple):
+        return _execute_system(expression, action_id)
 
     symbols: list[sp.Symbol] = _symbols(expression)
     if action_id == "solve":
@@ -489,6 +571,107 @@ def _linear_system(matrix: MatrixBase) -> ResultPayload:
     }
 
 
+def _classify_system(system: sp.Tuple) -> tuple[str, list[Action]]:
+    symbols: list[sp.Symbol] = _symbols(system)
+    linear: bool = _augmented_matrix(system, symbols) is not None
+    actions: list[Action] = []
+    # A linear system is cheap at any size the parser admits. A nonlinear one gets the single
+    # relation's limit, because SymPy's nonlinear solver grows quickly with the number of unknowns.
+    if symbols and len(symbols) <= (MAX_MATRIX_EDGE if linear else 3):
+        actions.append(_action("solve", "Solve"))
+    # Only while the augmented matrix still fits the matrix limit, so the result can be parsed back.
+    if linear and len(symbols) < MAX_MATRIX_EDGE:
+        actions.append(_action("system_matrix", "Convert to matrix"))
+    relations: str = (
+        "equations" if all(isinstance(line, sp.Equality) for line in system) else "relations"
+    )
+    return f"System · {len(system)} {relations}", actions
+
+
+def _execute_system(system: sp.Tuple, action_id: str) -> ResultPayload:
+    symbols: list[sp.Symbol] = _symbols(system)
+    if action_id == "solve":
+        return _solve_system(system, symbols)
+    if action_id == "system_matrix":
+        return _system_matrix(system, symbols)
+    raise MathInputError("That operation is not supported.")
+
+
+def _augmented_matrix(system: sp.Tuple, symbols: list[sp.Symbol]) -> MatrixBase | None:
+    """``[A | b]`` for a system of equations linear in ``symbols``, else ``None``."""
+    if not symbols or not all(isinstance(line, sp.Equality) for line in system):
+        return None
+    try:
+        coefficients, constants = sp.linear_eq_to_matrix(list(system), symbols)
+    except NonlinearError:
+        return None
+    return coefficients.row_join(constants)
+
+
+def _system_matrix(system: sp.Tuple, symbols: list[sp.Symbol]) -> ResultPayload:
+    """The augmented matrix of a linear system: what ``matrix_linear_system`` reads back.
+
+    Constants move to the right first, so ``-x + 3 = 74`` is the row ``[-1, 0, 71]``. The columns are
+    named in the message because their order is SymPy's sort, not the order on the page. Only a
+    square system comes back through Convert to linear as these same equations; with fewer equations
+    than unknowns the matrix is not ``n × (n+1)`` and would be read as coefficients.
+    """
+    matrix: MatrixBase | None = _augmented_matrix(system, symbols)
+    if matrix is None:
+        raise MathInputError("Only a linear system of equations can be written as a matrix.")
+    names: str = ", ".join(_plain_name(symbol) for symbol in symbols)
+    return _latex_result(
+        "Augmented matrix", matrix, f"Columns {names}, then the constants on the right."
+    )
+
+
+def _solve_system(system: sp.Tuple, symbols: list[sp.Symbol]) -> ResultPayload:
+    """Every line at once, with a single solution written one unknown per line.
+
+    SymPy answers ``[{x: -71, y: -53/4}]``; ``x = -71`` above ``y = -\\frac{53}{4}`` is how the answer
+    is written by hand. Several solutions — a line crossing a circle — keep SymPy's list, where
+    stacking would run them together.
+    """
+    equations: bool = all(isinstance(line, sp.Equality) for line in system)
+    if equations and system.has(sp.Abs):
+        solutions = _solve_over_reals(system, symbols)
+    else:
+        solutions = sp.solve(list(system), symbols, dict=True)
+    if not isinstance(solutions, list):
+        # Inequalities in one unknown come back as the condition they confine it to.
+        return _latex_result("Solutions", solutions)
+    if not solutions:
+        message: str = (
+            "These equations contradict each other, so there is no solution."
+            if _augmented_matrix(system, symbols) is not None
+            else "No symbolic solution was found."
+        )
+        return _latex_result("Solutions", solutions, message)
+    if len(solutions) > 1:
+        return _latex_result("Solutions", solutions)
+
+    solution: dict[sp.Symbol, sp.Expr] = solutions[0]
+    solved: list[sp.Symbol] = [symbol for symbol in symbols if symbol in solution]
+    free: list[str] = [_plain_name(symbol) for symbol in symbols if symbol not in solution]
+    exact: str = _stacked_latex(
+        [sp.Eq(symbol, solution[symbol], evaluate=False) for symbol in solved]
+    )
+    decimal: str = _stacked_latex(
+        [sp.Eq(symbol, _numeric(solution[symbol]), evaluate=False) for symbol in solved]
+    )
+    return {
+        "title": "Solution",
+        "latex": exact,
+        "message": f"{', '.join(free)} can take any value." if free else None,
+        "decimal": decimal if decimal != exact else None,
+    }
+
+
+def _plain_name(symbol: sp.Symbol) -> str:
+    """``symbol`` as a message names it. Messages are plain text, where ``x_{1}`` reads as ``x_1``."""
+    return str(symbol).replace("{", "").replace("}", "")
+
+
 def _unknown_names(count: int, matrix: MatrixBase) -> list[str]:
     """Name the unknowns without colliding with symbols the matrix already contains.
 
@@ -509,7 +692,7 @@ def _unknown_names(count: int, matrix: MatrixBase) -> list[str]:
     return [f"v_{{{index + 1}}}" for index in range(count)]
 
 
-def _stacked_latex(equations: list[sp.Equality]) -> str:
+def _stacked_latex(equations: list[Relational]) -> str:
     """One equation per line.
 
     ``\\begin{matrix}`` rather than ``cases`` or ``aligned`` on purpose: it is the one multi-line
@@ -606,9 +789,10 @@ def _solve_result(expression: ParsedInput, symbols: list[sp.Symbol]) -> ResultPa
 
 
 def _solve_over_reals(
-    equation: sp.Equality, symbols: list[sp.Symbol]
+    equation: sp.Equality | sp.Tuple, symbols: list[sp.Symbol]
 ) -> list[dict[sp.Symbol, sp.Expr]]:
-    """Solve ``equation`` as if every unknown were real, keyed by the original symbols.
+    """Solve ``equation``, or a system of them, as if every unknown were real, keyed by the
+    original symbols.
 
     ``parse_latex`` makes every unknown complex, and over the complex numbers ``|x - 3| = 5`` is a
     circle, so SymPy refuses it outright instead of answering ``x = -2`` and ``x = 8``. A written

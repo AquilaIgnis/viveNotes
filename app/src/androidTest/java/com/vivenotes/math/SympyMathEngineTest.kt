@@ -152,6 +152,49 @@ class SympyMathEngineTest {
     }
 
     @Test
+    fun aSystemWrittenOnePerLineSolvesAndBecomesItsAugmentedMatrix() = runBlocking {
+        // PP-FormulaNet's own spelling, each line in a group, and the brace-and-array form.
+        val pair = "{ x - 4 y = - 1 8 } \\\\ { - x + 3 = 7 4 }"
+        val analysis = engine.analyze(pair)
+        assertNull(analysis.error)
+        assertEquals("System · 2 equations", analysis.summary)
+        assertEquals(listOf("x", "y"), analysis.variables)
+
+        val solution = engine.execute(pair, "solve")
+        assertNull(solution.error)
+        assertEquals("\\begin{matrix}x = -71 \\\\ y = - \\frac{53}{4}\\end{matrix}", solution.latex)
+
+        val triple = "\\left\\{ \\begin{array} { l } { x + y + z = 6 } \\\\ { 2 x - y + z = 3 } \\\\ " +
+            "{ x + 2 y - z = 2 } \\\\ \\end{array} \\right."
+        assertEquals(
+            "\\begin{matrix}x = 1 \\\\ y = 2 \\\\ z = 3\\end{matrix}",
+            engine.execute(triple, "solve").latex,
+        )
+        val augmented = engine.execute(triple, "system_matrix")
+        assertNull(augmented.error)
+        assertTrue(augmented.latex.orEmpty().contains("1 & 1 & 1 & 6"))
+        // Convert to linear reads the matrix back as the same three equations.
+        assertEquals(
+            "\\begin{matrix}x + y + z = 6 \\\\ 2 x - y + z = 3 \\\\ x + 2 y - z = 2\\end{matrix}",
+            engine.execute(augmented.latex.orEmpty(), "matrix_linear_system").latex,
+        )
+
+        // PP-FormulaNet_plus-M starts every aligned line with its alignment point.
+        assertEquals(
+            "\\begin{matrix}x = 10 \\\\ y = 7\\end{matrix}",
+            engine.execute(
+                "\\begin{aligned} &x - 4 y = - 1 8 \\\\&- x + 3 y = 1 1\\\\ \\end{aligned}",
+                "solve",
+            ).latex,
+        )
+
+        // A nonlinear system solves, but has no matrix to become.
+        val circle = engine.analyze("x^2 + y^2 = 25 \\\\ x - y = 1")
+        assertTrue(circle.actions.any { it.id == "solve" })
+        assertTrue(circle.actions.none { it.id == "system_matrix" })
+    }
+
+    @Test
     fun greekFunctionNamesEvaluateOnlyAtTheArityWhichMakesThemFunctions() = runBlocking {
         // parse_latex leaves every name outside its grammar as an undefined function, so before
         // greeks.py these evaluated to themselves and the Simplify button silently did nothing.

@@ -15,7 +15,8 @@ from sympy.core.function import AppliedUndef
 from sympy.matrices.matrixbase import MatrixBase
 
 #: Mirrors ``math_engine.ParsedInput``. Spelled out again rather than imported so this module stays
-ParsedInput = sp.Expr | MatrixBase
+#: free of an import cycle: ``math_engine`` imports it.
+ParsedInput = sp.Expr | MatrixBase | sp.Tuple
 
 _BOUND_FUNCTIONS: dict[tuple[str, int], sp.FunctionClass] = {
     ("Gamma", 1): sp.gamma,

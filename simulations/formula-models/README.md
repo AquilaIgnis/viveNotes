@@ -43,6 +43,52 @@ What it says:
   Treat it as a hard case for the handwriting rather than evidence against any one model.
 - Eight expressions in one hand is a small corpus; the formula-render warning applies.
 
+## PP-FormulaNet-L and PP-FormulaNet_plus-M, 2026-10-16
+
+Same page, rasters and scoring; FormulaNet-S re-run alongside reproduced its row above exactly.
+There is no plain -M: Paddle publishes M only in the `_plus` line. -L takes a **768** square where
+-S and `_plus-M` take 384; stems are still given in the 384 frame, so a stem means the same relative
+thickness for every model.
+
+| Model | Shipped size | Best stem | Token score | Exact | Median |
+|---|---:|---:|---:|---:|---:|
+| PP-FormulaNet-S | 232 MB | 10 | 0.958 | 54/88 | 45 ms |
+| PP-FormulaNet_plus-M | 592 MB | 3–4 | **0.973** | 62/88 | 250 ms |
+| PP-FormulaNet-L | 730 MB | 3 | 0.891 | **74/88** | 1060 ms |
+
+Per expression, exact readings out of 11:
+
+| # | Truth | S @10 | plus-M @4 | L @3 |
+|---|---|---|---|---|
+| 1 | `\sqrt{x^2+1}` | 0 — `X` | 11 | 8 — `X` |
+| 2 | `x^2-4=0` | 11 | **0 — `x^2-1=0`** | 11 |
+| 3 | `\sin(x)` | 11 | 11 | 11 |
+| 4 | `\int_0^1 x^2 dx` | 8 | 11 | 11 |
+| 5 | 2×2 bmatrix | 9 | 7 — `[1 2; 3 6]` | 0 — `[1, 7]` |
+| 6 | `\sum \frac{4k+3}{3k-5}` | 4 | 11 | 11 |
+| 7 | `\sum \frac{\cos n}{n^2}` | 11 | 11 | 11 |
+| 8 | `\sum e^{-7n}` | 0 | 0 — `-jn` | **11** |
+
+- **L reads the most exactly of any model studied**, and is the only one to read #8. It still loses
+  the matrix's second row, as UniMERNet-T does, and still capitalises the `x` in #1 on some rasters.
+  It costs about 24× S's time and 8× UniMERNet-T int8's on this CPU.
+- **plus-M has the best token score but a silent wrong answer**: it reads #2 as `x^2-1=0` on every
+  raster, which solves without complaint. Its readings are otherwise close to UniMERNet-T's.
+- Both larger models want thin strokes, 3–4 px like UniMERNet and Pix2Text, not S's 10.
+
+```bash
+# Pinned by the release's own SHA-256 (e408f1d4… for -l, 9e3539c2… for _plus-m)
+curl -LO https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-formulanet-l.onnx
+curl -LO https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-formulanet_plus-m.onnx
+env/bin/python compare.py --models pp-formulanet-s pp-formulanet_plus-m pp-formulanet-l \
+  --formulanet pp-formulanet-s.onnx pp-formulanet_plus-m.onnx pp-formulanet-l.onnx \
+  --formulanet-tokenizer ../../app/src/debug/assets/ai/dev/pp-formulanet-tokenizer.json \
+  --stems 2 3 4 6 10 16
+```
+
+`--formulanet` names each graph by its file's stem, so keep oar-ocr's file names. All of them share
+the -S tokenizer.
+
 ## UniMERNet-T in the app
 
 UniMERNet-T is the app's default formula model, downloaded on first run (`FormulaEngine` and
