@@ -163,6 +163,10 @@ def _bind_constants(expression: ParsedInput) -> ParsedInput:
 
 _LIMIT_PLACEMENT_DIRECTIVE = re.compile(r"\\(?:no)?limits(?![A-Za-z])\s*")
 
+#: A vertical bar in any spelling a recognizer emits, with the sizing command in front of it if any.
+#: ``\Vert`` and ``\|`` are a norm's double bar and deliberately do not match.
+_VERTICAL_BAR = re.compile(r"(?:\\(?:left|right|[bB]igg?[lmr]?)\s*)?(?:\\[lr]?vert(?![A-Za-z])|\|)")
+
 
 def _normalize_latex(source: str) -> str:
     """Rewrite notation the ANTLR grammar rejects into the mathematics it stands for."""
@@ -170,6 +174,10 @@ def _normalize_latex(source: str) -> str:
     # TeX draws an operator's bounds, but SymPy's ANTLR grammar rejects them. Keeping the integral,
     # sum, or other operator and its following bounds is therefore a semantics-preserving adapter.
     source = _LIMIT_PLACEMENT_DIRECTIVE.sub("", source)
+    # The grammar builds an absolute value only from two bare ``|``. Every recognition model writes
+    # the bar as ``\vert``, which it reads as a variable named vert, so ``\vert x-3\vert=5`` was
+    # solved as a product. ``\left|`` and ``\right|`` lex as bra-ket halves instead, and fail.
+    source = _VERTICAL_BAR.sub("|", source)
     source = degrees.to_radians(source)
     if degrees.has_stray_mark(source):
         raise MathInputError("A degree mark must follow a number, a variable, or a bracketed group.")
@@ -576,7 +584,10 @@ def _solve_result(expression: ParsedInput, symbols: list[sp.Symbol]) -> ResultPa
     as the list SymPy returned, because ± would then be a claim about the answer rather than a way of
     writing it down.
     """
-    solutions = sp.solve(expression, symbols, dict=True)
+    if isinstance(expression, sp.Equality) and expression.has(sp.Abs):
+        solutions = _solve_over_reals(expression, symbols)
+    else:
+        solutions = sp.solve(expression, symbols, dict=True)
     if not solutions:
         return _latex_result("Solutions", solutions, "No symbolic solution was found.")
     pair: tuple[sp.Symbol, sp.Expr, sp.Expr] | None = _plus_minus_pair(solutions)
@@ -592,6 +603,29 @@ def _solve_result(expression: ParsedInput, symbols: list[sp.Symbol]) -> ResultPa
         "message": "Two roots differing only in one sign, written as one.",
         "decimal": decimal if decimal != exact else None,
     }
+
+
+def _solve_over_reals(
+    equation: sp.Equality, symbols: list[sp.Symbol]
+) -> list[dict[sp.Symbol, sp.Expr]]:
+    """Solve ``equation`` as if every unknown were real, keyed by the original symbols.
+
+    ``parse_latex`` makes every unknown complex, and over the complex numbers ``|x - 3| = 5`` is a
+    circle, so SymPy refuses it outright instead of answering ``x = -2`` and ``x = 8``. A written
+    absolute value means a real unknown. Inequalities need none of this: SymPy already solves them
+    over the reals.
+    """
+    real: dict[sp.Symbol, sp.Symbol] = {
+        symbol: sp.Symbol(symbol.name, real=True) for symbol in symbols
+    }
+    original: dict[sp.Symbol, sp.Symbol] = {value: key for key, value in real.items()}
+    solutions: list[dict[sp.Symbol, sp.Expr]] = sp.solve(
+        equation.xreplace(real), list(real.values()), dict=True
+    )
+    return [
+        {original[symbol]: value.xreplace(original) for symbol, value in solution.items()}
+        for solution in solutions
+    ]
 
 
 def _plus_minus_pair(solutions: Any) -> tuple[sp.Symbol, sp.Expr, sp.Expr] | None:

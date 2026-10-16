@@ -129,6 +129,29 @@ class SympyMathEngineTest {
     }
 
     @Test
+    fun everySpellingOfTheAbsoluteValueBarSolvesOverTheReals() = runBlocking {
+        // The recognition models write the bar as \vert, which parse_latex read as a variable named
+        // vert, and SymPy refused even the bare | form while its unknown was complex.
+        listOf(
+            "|x-3|=5",
+            "\\vert x - 3 \\vert = 5",
+            "\\lvert x-3\\rvert=5",
+            "\\left|x-3\\right|=5",
+            "\\left\\vert x-3\\right\\vert=5",
+            "\\big|x-3\\big|=5",
+        ).forEach { latex ->
+            val analysis = engine.analyze(latex)
+            assertNull("$latex did not parse: ${analysis.error}", analysis.error)
+            assertEquals(listOf("x"), analysis.variables)
+
+            val result = engine.execute(latex, "solve")
+            assertNull("$latex did not solve: ${result.error}", result.error)
+            assertTrue(result.latex.orEmpty().contains("x : -2"))
+            assertTrue(result.latex.orEmpty().contains("x : 8"))
+        }
+    }
+
+    @Test
     fun greekFunctionNamesEvaluateOnlyAtTheArityWhichMakesThemFunctions() = runBlocking {
         // parse_latex leaves every name outside its grammar as an undefined function, so before
         // greeks.py these evaluated to themselves and the Simplify button silently did nothing.
