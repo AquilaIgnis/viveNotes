@@ -53,6 +53,10 @@ import com.vivenotes.ui.theme.LocalIconAccents
 
 private val SECTION_ROW_HEIGHT = 32.dp
 
+// A notebook's name and book icon are drawn this much larger than their base sizes, so the header
+// reads as the parent of its sections rather than one more row among them.
+private const val NOTEBOOK_HEADER_SCALE = 1.3f
+
 internal object RailTags {
     fun notebook(notebookId: String) = "rail-notebook-$notebookId"
     fun section(sectionId: String) = "rail-section-$sectionId"
@@ -196,7 +200,7 @@ private fun NotebookHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(38.dp)
+                .heightIn(min = 38.dp)
                 .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
                 .padding(horizontal = 10.dp)
                 .testTag(RailTags.notebook(notebook.id)),
@@ -216,12 +220,14 @@ private fun NotebookHeader(
                 imageVector = MaterialSymbols.Book,
                 contentDescription = null,
                 tint = Color(notebook.colorArgb),
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(16.dp * NOTEBOOK_HEADER_SCALE),
             )
             Spacer(Modifier.width(8.dp))
             Text(
                 text = notebook.name,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleSmall.let {
+                    it.copy(fontSize = it.fontSize * NOTEBOOK_HEADER_SCALE)
+                },
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
