@@ -69,7 +69,9 @@ class AiModelStoreTest {
             "no bundled UniMERNet-T package on this machine — see app/src/debug/assets/ai/dev/",
             state.formula(DEFAULT_FORMULA_ENGINE) == AiModelInstallState.Installed,
         )
-        assertTrue("reached for $attempted despite the default being installed", attempted.isEmpty())
+        // UniMERNet-S may be fetched: on a chip listed as running it smoothly, that is the rule.
+        val defaultFetches = attempted.filter { it.startsWith(AiModelStore.UNIMERNET_RELEASE_URL) }
+        assertTrue("reached for $defaultFetches despite the default being installed", defaultFetches.isEmpty())
     }
 
     /**

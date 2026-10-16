@@ -1,7 +1,6 @@
 package com.vivenotes.ai
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -12,12 +11,19 @@ import org.junit.Test
  */
 class FormulaEngineSelectionTest {
     private val uniMerNet = FormulaEngine.UniMerNetTiny
+    private val small = FormulaEngine.UniMerNetSmall
     private val formulaNet = FormulaEngine.FormulaNetS
+
+    private fun toFetch(
+        installed: Set<FormulaEngine>,
+        deleted: Set<FormulaEngine> = emptySet(),
+        fit: SmallModelFit? = null,
+    ): List<FormulaEngine> = formulaEnginesToFetch(installed, deleted, fit)
 
     @Test
     fun aFreshInstallStartsOnTheDefaultAndFetchesIt() {
         assertEquals(uniMerNet, formulaEngineInUse(chosen = null, installed = emptySet()))
-        assertEquals(uniMerNet, formulaEngineToFetch(installed = emptySet(), deleted = emptySet()))
+        assertEquals(listOf(uniMerNet), toFetch(installed = emptySet()))
     }
 
     /**
@@ -27,13 +33,13 @@ class FormulaEngineSelectionTest {
     @Test
     fun anUpgradeWithFormulaNetFetchesTheDefaultAndMovesToIt() {
         assertEquals(formulaNet, formulaEngineInUse(chosen = null, installed = setOf(formulaNet)))
-        assertEquals(uniMerNet, formulaEngineToFetch(installed = setOf(formulaNet), deleted = emptySet()))
+        assertEquals(listOf(uniMerNet), toFetch(installed = setOf(formulaNet)))
         assertEquals(uniMerNet, formulaEngineInUse(chosen = null, installed = setOf(uniMerNet, formulaNet)))
     }
 
     @Test
     fun anInstalledDefaultIsNotFetchedAgain() {
-        assertNull(formulaEngineToFetch(installed = setOf(uniMerNet), deleted = emptySet()))
+        assertEquals(emptyList<FormulaEngine>(), toFetch(installed = setOf(uniMerNet)))
     }
 
     @Test
@@ -46,14 +52,51 @@ class FormulaEngineSelectionTest {
     /** Deleting the default is a no, and the next Wi-Fi launch must not undo it. */
     @Test
     fun theDefaultIsNotFetchedAfterTheUserDeletesIt() {
-        assertNull(formulaEngineToFetch(installed = emptySet(), deleted = setOf(uniMerNet)))
-        assertNull(formulaEngineToFetch(installed = setOf(formulaNet), deleted = setOf(uniMerNet)))
+        assertEquals(emptyList<FormulaEngine>(), toFetch(installed = emptySet(), deleted = setOf(uniMerNet)))
+        assertEquals(emptyList<FormulaEngine>(), toFetch(installed = setOf(formulaNet), deleted = setOf(uniMerNet)))
     }
 
     /** FormulaNet-S is the optional model, so deleting it says nothing about the default. */
     @Test
     fun deletingFormulaNetDoesNotStopTheDefault() {
-        assertEquals(uniMerNet, formulaEngineToFetch(installed = emptySet(), deleted = setOf(formulaNet)))
+        assertEquals(listOf(uniMerNet), toFetch(installed = emptySet(), deleted = setOf(formulaNet)))
+    }
+
+    /** Only a tablet measured to run UniMERNet-S smoothly fetches it unasked. */
+    @Test
+    fun onlyASmoothTabletFetchesTheSmallModel() {
+        assertEquals(listOf(small), toFetch(installed = setOf(uniMerNet), fit = SmallModelFit.Smooth))
+        SmallModelFit.entries.filter { it != SmallModelFit.Smooth }.forEach { fit ->
+            assertEquals(emptyList<FormulaEngine>(), toFetch(installed = setOf(uniMerNet), fit = fit))
+        }
+        assertEquals(emptyList<FormulaEngine>(), toFetch(installed = setOf(uniMerNet), fit = null))
+    }
+
+    /** Deleting UniMERNet-S is a no too, and installing it leaves UniMERNet-T where it is. */
+    @Test
+    fun theSmallModelIsNotFetchedAgainOnceDeletedOrInstalled() {
+        assertEquals(
+            emptyList<FormulaEngine>(),
+            toFetch(installed = setOf(uniMerNet), deleted = setOf(small), fit = SmallModelFit.Smooth),
+        )
+        assertEquals(
+            emptyList<FormulaEngine>(),
+            toFetch(installed = setOf(uniMerNet, small), fit = SmallModelFit.Smooth),
+        )
+    }
+
+    /**
+     * UniMERNet-S is listed first, so once installed it takes over the Math button whichever way
+     * it arrived, unless the user picked another model with Use.
+     */
+    @Test
+    fun anInstalledSmallModelTakesOverUnlessTheUserPickedAnother() {
+        assertEquals(small, formulaEngineInUse(chosen = null, installed = setOf(uniMerNet, small)))
+        assertEquals(uniMerNet, formulaEngineInUse(chosen = uniMerNet, installed = setOf(uniMerNet, small)))
+        assertEquals(
+            uniMerNet,
+            formulaEngineAfterDelete(selected = small, deleted = small, stillInstalled = setOf(uniMerNet, formulaNet)),
+        )
     }
 
     @Test

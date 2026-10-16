@@ -102,6 +102,31 @@ which at a 4 px stem turned caps and curves into polygons, and UniMERNet read pa
 matches `results/plates/expr2-stem4.png`. Before trusting a new number from here, dump an app
 bitmap and compare it with the plate.
 
+## UniMERNet-S against UniMERNet-T: time per formula
+
+`speed_ratio.py` times each int8 pair over the same fixed work: the encoder on a blank 192×672
+input, then N decoder steps that do not stop at `</s>`. Neither graph's cost depends on what it
+reads, so this is a formula's cost. Ryzen 9 7900X, ONNX Runtime 1.27.0, median of 7 runs after a
+warm-up:
+
+| Threads | Steps | UniMERNet-T | UniMERNet-S | Ratio |
+|---:|---:|---:|---:|---:|
+| 4 | 0 | 52.2 ms | 88.1 ms | 1.69 |
+| 4 | 12 | 80.5 ms | 133.6 ms | 1.66 |
+| 4 | 24 | 106.1 ms | 171.4 ms | 1.61 |
+| 4 | 48 | 153.5 ms | 250.9 ms | 1.63 |
+| 1 | 24 | 236.8 ms | 418.0 ms | 1.77 |
+
+So UniMERNet-S takes about 1.7× UniMERNet-T's time on the same CPU, which is what the app's chip
+tiers (`SmallModelFit`) are set against. Loaded and running, UniMERNet-S peaks at about 440 MB and
+UniMERNet-T at 270 MB. UniMERNet-S's graphs are the release `models-unimernet-small-v1`, not an
+export from here.
+
+```bash
+env/bin/python speed_ratio.py --tiny <dir with unimernet-tiny-*-int8.onnx> \
+  --small <dir with unimernet-small-*-int8.onnx> --steps 0 12 24 48 --threads 4
+```
+
 ## Scoring
 
 `compare.score` is token edit similarity after normalising what cannot change the formula:
@@ -127,6 +152,7 @@ models.py             one adapter per model, each with its own project's preproc
 compare.py            segment, render, read, score; writes results/<model>.json
 export_unimernet.py   UniMERNet-T → two ONNX graphs, greedy loop left to the caller
 quantize_unimernet.py int8 weights for the pair the dev build bundles
+speed_ratio.py        UniMERNet-S's time per formula against UniMERNet-T's
 results/         page.png, erased.png, plates/ (seed-0 rasters), per-model readings
 ```
 

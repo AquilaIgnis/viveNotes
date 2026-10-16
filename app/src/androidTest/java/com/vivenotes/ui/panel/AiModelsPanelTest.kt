@@ -3,6 +3,7 @@ package com.vivenotes.ui.panel
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.width
 import com.vivenotes.ai.AiModelInstallState
 import com.vivenotes.ai.AiModelsState
 import com.vivenotes.ai.FormulaEngine
+import com.vivenotes.ai.SmallModelFit
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
@@ -77,6 +79,7 @@ class AiModelsPanelTest {
         handwritingText = AiModelInstallState.Installed,
         formulaLatex = AiModelInstallState.Installed,
         uniMerNet = AiModelInstallState.Installed,
+        uniMerNetSmall = AiModelInstallState.NotInstalled,
         formulaEngine = FormulaEngine.UniMerNetTiny,
     )
 
@@ -84,6 +87,7 @@ class AiModelsPanelTest {
         handwritingText = AiModelInstallState.Installed,
         formulaLatex = AiModelInstallState.NotInstalled,
         uniMerNet = AiModelInstallState.NotInstalled,
+        uniMerNetSmall = AiModelInstallState.NotInstalled,
     )
 
     @Test
@@ -101,6 +105,45 @@ class AiModelsPanelTest {
             compose.onNodeWithTag(AiPanelTags.formulaUse(engine)).assertDoesNotExist()
             compose.onNodeWithTag(AiPanelTags.formulaDelete(engine)).assertDoesNotExist()
         }
+    }
+
+    /** A tablet that would run UniMERNet-S slowly still may download it, and is told why it is orange. */
+    @Test
+    fun aSlowTabletIsWarnedButMayStillDownloadTheSmallModel() {
+        val downloads = mutableListOf<FormulaEngine>()
+        setPanel(installed.copy(smallModelFit = SmallModelFit.NotRecommended), onDownload = { downloads += it })
+
+        compose.onNodeWithText("May be slow on this tablet").assertIsDisplayed()
+        compose.onNodeWithTag(AiPanelTags.formulaDownload(FormulaEngine.UniMerNetSmall))
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals(listOf(FormulaEngine.UniMerNetSmall), downloads)
+    }
+
+    /** A tablet that cannot run it gets a disabled Download and the reason beside it. */
+    @Test
+    fun aTabletThatCannotRunTheSmallModelCannotDownloadIt() {
+        setPanel(installed.copy(smallModelFit = SmallModelFit.Unsupported))
+
+        compose.onNodeWithText("Too demanding for this tablet").assertIsDisplayed()
+        compose.onNodeWithTag(AiPanelTags.formulaDownload(FormulaEngine.UniMerNetSmall)).assertIsNotEnabled()
+        // The verdict is UniMERNet-S's alone; the other models' buttons are untouched by it.
+        compose.onNodeWithTag(AiPanelTags.formulaDelete(FormulaEngine.UniMerNetTiny)).assertIsEnabled()
+    }
+
+    /** A tablet that runs it well, or one not yet measured, sees an ordinary Download and no note. */
+    @Test
+    fun aCapableTabletSeesAnOrdinaryDownload() {
+        setPanel(installed.copy(smallModelFit = SmallModelFit.Good))
+
+        compose.onNodeWithTag(AiPanelTags.formulaDownload(FormulaEngine.UniMerNetSmall)).assertIsEnabled()
+        compose.onNodeWithText("May be slow on this tablet").assertDoesNotExist()
+        compose.onNodeWithText("Too demanding for this tablet").assertDoesNotExist()
+
+        compose.runOnUiThread { modelsState.value = installed.copy(smallModelFit = null) }
+        compose.onNodeWithTag(AiPanelTags.formulaDownload(FormulaEngine.UniMerNetSmall)).assertIsEnabled()
+        compose.onNodeWithText("Too demanding for this tablet").assertDoesNotExist()
     }
 
     @Test

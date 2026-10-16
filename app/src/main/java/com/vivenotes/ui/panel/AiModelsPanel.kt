@@ -39,6 +39,7 @@ import com.vivenotes.ai.AiModelInstallState
 import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.AiModelsState
 import com.vivenotes.ai.FormulaEngine
+import com.vivenotes.ai.SmallModelFit
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.InkTextProgress
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -80,6 +81,7 @@ fun ColumnScope.AiModelsPanelContent(
             MathModelCard(
                 engine = engine,
                 install = install,
+                fit = if (engine == FormulaEngine.UniMerNetSmall) state.smallModelFit else null,
                 inUse = engine == state.formulaEngine && install == AiModelInstallState.Installed,
                 onDownload = { onDownloadFormula(engine) },
                 onDelete = { onDeleteFormula(engine) },
@@ -118,6 +120,11 @@ fun ColumnScope.AiModelsPanelContent(
  * Not installed, it offers Download, and while downloading it shows how far. Installed, it offers
  * Use and Delete. The model the Math button runs shows a checked "In use" in place of Use.
  *
+ * [fit] is UniMERNet-S's alone, and null for the others or until it is measured. It colours the
+ * Download button: the ordinary primary for a tablet that runs the model well, the theme's warning
+ * orange for one that would be slow, and disabled for one that cannot. Orange and disabled each come
+ * with a line saying why, so the colour is never the only signal.
+ *
  * Use is a [ToggleButton], as the Hardware pane picks its device: the two cards are one mutually
  * exclusive choice, so pressing the model already in use is dropped rather than leaving none. The
  * check and "In use" are the selected state itself, so they read as selected to TalkBack as well as
@@ -127,6 +134,7 @@ fun ColumnScope.AiModelsPanelContent(
 private fun MathModelCard(
     engine: FormulaEngine,
     install: AiModelInstallState,
+    fit: SmallModelFit?,
     inUse: Boolean,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
@@ -188,7 +196,10 @@ private fun MathModelCard(
                     Text(stringResource(R.string.ai_model_delete))
                 }
             }
-            AiModelInstallState.NotInstalled -> DownloadButton(stringResource(R.string.ai_model_download), engine, onDownload)
+            AiModelInstallState.NotInstalled -> {
+                FitNote(fit)
+                DownloadButton(stringResource(R.string.ai_model_download), engine, fit, onDownload)
+            }
             AiModelInstallState.Verifying -> {
                 Text(stringResource(R.string.ai_model_verifying), style = MaterialTheme.typography.labelMedium)
                 Spacer(Modifier.height(6.dp))
@@ -217,7 +228,8 @@ private fun MathModelCard(
                     color = MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.height(8.dp))
-                DownloadButton(stringResource(R.string.ai_model_retry), engine, onDownload)
+                FitNote(fit)
+                DownloadButton(stringResource(R.string.ai_model_retry), engine, fit, onDownload)
             }
         }
     }
@@ -268,6 +280,7 @@ private fun ModelCardFrame(
 @get:StringRes
 private val FormulaEngine.displayName: Int
     get() = when (this) {
+        FormulaEngine.UniMerNetSmall -> R.string.ai_model_unimernet_small_name
         FormulaEngine.UniMerNetTiny -> R.string.ai_model_unimernet_name
         FormulaEngine.FormulaNetS -> R.string.ai_model_formulanet_name
     }
@@ -276,6 +289,7 @@ private val FormulaEngine.displayName: Int
 @get:StringRes
 private val FormulaEngine.strength: Int
     get() = when (this) {
+        FormulaEngine.UniMerNetSmall -> R.string.ai_model_unimernet_small_strength
         FormulaEngine.UniMerNetTiny -> R.string.ai_model_unimernet_strength
         FormulaEngine.FormulaNetS -> R.string.ai_model_formulanet_strength
     }
@@ -448,10 +462,40 @@ private fun InkTextProgress.summaryLine(pagesRead: Int): String = when {
     else -> pluralStringResource(R.plurals.ai_ink_text_read, pagesRead, pagesRead)
 }
 
+/** Why the Download below is orange or disabled; nothing when it is neither. */
 @Composable
-private fun DownloadButton(label: String, engine: FormulaEngine, onDownload: () -> Unit) {
+private fun FitNote(fit: SmallModelFit?) {
+    val note = when (fit) {
+        SmallModelFit.NotRecommended -> R.string.ai_model_fit_slow
+        SmallModelFit.Unsupported -> R.string.ai_model_fit_unsupported
+        SmallModelFit.Smooth, SmallModelFit.Good, null -> return
+    }
+    Text(
+        text = stringResource(note),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(8.dp))
+}
+
+@Composable
+private fun DownloadButton(
+    label: String,
+    engine: FormulaEngine,
+    fit: SmallModelFit?,
+    onDownload: () -> Unit,
+) {
     Button(
         onClick = onDownload,
+        enabled = fit != SmallModelFit.Unsupported,
+        colors = if (fit == SmallModelFit.NotRecommended) {
+            ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.tertiary,
+                contentColor = MaterialTheme.colorScheme.onTertiary,
+            )
+        } else {
+            ButtonDefaults.buttonColors()
+        },
         modifier = Modifier.testTag(AiPanelTags.formulaDownload(engine)),
     ) {
         Icon(

@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.os.Build
+import android.util.Log
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -307,6 +309,77 @@ class OnnxRecognitionSmokeTest {
     }
 
     /**
+     * The same formula through UniMERNet-S, on a device that has downloaded it.
+     *
+     * The decode loop is UniMERNet-T's, unchanged: the 768-wide memory and the cache shapes come
+     * from the graphs. This is the check that they really do.
+     */
+    @Test
+    fun savedPageTwoFormulaRunsThroughUniMerNetSmall() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val models = AiModelStore(context, autoDownload = false)
+        withTimeout(60_000) {
+            models.state.first { it.uniMerNetSmall !is AiModelInstallState.Verifying }
+        }
+        assumeTrue(
+            "UniMERNet-S is not installed on this device",
+            models.state.value.uniMerNetSmall == AiModelInstallState.Installed,
+        )
+
+        val bitmap = pageTwoFormula(stemPx = FormulaEngine.UniMerNetSmall.stemPx)
+
+        val engine = OnnxInkRecognitionEngine(models, formulaEngine = { FormulaEngine.UniMerNetSmall })
+        try {
+            val latex = withTimeout(60_000) { engine.recognizeFormula(bitmap).latex }
+            assertEquals("x^{2}-4=0", latex.filterNot(Char::isWhitespace))
+        } finally {
+            engine.close()
+            bitmap.recycle()
+        }
+    }
+
+    /**
+     * Logs the device's chip beside each installed UniMERNet's time for page two's formula: the
+     * median of three readings after a warm-up. `SmallModelFit` tiers chips by their cores without
+     * timing them, and this is how to check where a tablet really falls.
+     */
+    @Test
+    fun uniMerNetTimingsAreLoggedWithTheChip() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val models = AiModelStore(context, autoDownload = false)
+        withTimeout(60_000) {
+            models.state.first { state ->
+                FormulaEngine.entries.none { state.formula(it) is AiModelInstallState.Verifying }
+            }
+        }
+        val engines = listOf(FormulaEngine.UniMerNetTiny, FormulaEngine.UniMerNetSmall)
+            .filter { models.state.value.formula(it) == AiModelInstallState.Installed }
+        assumeTrue("no UniMERNet is installed on this device", engines.isNotEmpty())
+
+        val bitmap = pageTwoFormula(stemPx = FormulaEngine.UniMerNetTiny.stemPx)
+        try {
+            engines.forEach { formulaEngine ->
+                val engine = OnnxInkRecognitionEngine(models, formulaEngine = { formulaEngine })
+                try {
+                    withTimeout(120_000) { engine.recognizeFormula(bitmap) }
+                    val readings = List(3) {
+                        val start = System.nanoTime()
+                        withTimeout(60_000) { engine.recognizeFormula(bitmap) }
+                        (System.nanoTime() - start) / 1_000_000
+                    }
+                    val median = readings.sorted()[1]
+                    Log.i(TAG, "chip=${Build.SOC_MODEL} $formulaEngine $median ms (readings $readings)")
+                    assertTrue("$formulaEngine took $median ms", median in 1..60_000)
+                } finally {
+                    engine.close()
+                }
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    /**
      * `x² - 4 = 0` from the seeded Recognition Test page: sequences 10..22 of
      * `default_notebook/recognition_page_2.json`, rendered as the Math button renders a lasso.
      */
@@ -363,6 +436,7 @@ class OnnxRecognitionSmokeTest {
     }
 
     private companion object {
+        const val TAG = "OnnxRecognitionSmokeTest"
         val PAGE_TWO_FORMULA_SEQUENCES = 10..22
     }
 }

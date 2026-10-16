@@ -22,6 +22,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.Closeable
+import java.io.File
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 import kotlin.math.ceil
@@ -70,8 +71,7 @@ interface InkRecognitionEngine {
 
 /**
  * Offline PP-OCRv5 and formula inference through Android ONNX Runtime. Formulas go to
- * PP-FormulaNet-S, or to UniMERNet-T in a debug build that carries it — whichever [formulaEngine]
- * names.
+ * PP-FormulaNet-S, UniMERNet-T or UniMERNet-S — whichever [formulaEngine] names.
  *
  * **Inference runs in [parallelism] lanes, and the work around it runs beside them.** An OCR `run`
  * holds one lane, and the OCR sessions are shared between lanes — `OrtSession.run` is thread-safe,
@@ -109,9 +109,9 @@ class OnnxInkRecognitionEngine(
         withContext(inferenceDispatcher) { readLine(image) }
 
     override suspend fun recognizeFormula(image: Bitmap): FormulaRecognitionResult =
-        when (formulaEngine()) {
+        when (val engine = formulaEngine()) {
             FormulaEngine.FormulaNetS -> recognizeWithFormulaNet(image)
-            FormulaEngine.UniMerNetTiny -> recognizeWithUniMerNet(image)
+            FormulaEngine.UniMerNetTiny, FormulaEngine.UniMerNetSmall -> recognizeWithUniMerNet(image, engine)
         }
 
     /**
@@ -135,9 +135,9 @@ class OnnxInkRecognitionEngine(
      * shown, rather than the screen that only wanted it ready.
      */
     private suspend fun loadFormulaModel() {
-        val kinds = when (formulaEngine()) {
+        val kinds = when (val engine = formulaEngine()) {
             FormulaEngine.FormulaNetS -> listOf(ModelKind.Formula)
-            FormulaEngine.UniMerNetTiny -> listOf(ModelKind.UniMerNetEncoder, ModelKind.UniMerNetDecoder)
+            FormulaEngine.UniMerNetTiny, FormulaEngine.UniMerNetSmall -> uniMerNetGraphs(engine).toList()
         }
         try {
             withContext(inferenceDispatcher) { everyLane { kinds.forEach { session(it) } } }
@@ -175,16 +175,19 @@ class OnnxInkRecognitionEngine(
             }
         }
 
-    private suspend fun recognizeWithUniMerNet(image: Bitmap): FormulaRecognitionResult =
+    private suspend fun recognizeWithUniMerNet(
+        image: Bitmap,
+        engine: FormulaEngine,
+    ): FormulaRecognitionResult =
         withContext(inferenceDispatcher) {
-            val files = models.installedUniMerNetFiles() ?: error("UniMERNet-T is not installed")
+            val files = models.installedUniMerNetFiles(engine) ?: error("$engine is not installed")
             val input = preprocessUniMerNet(image)
-            val ids = everyLane { decodeUniMerNet(input) }
+            val ids = everyLane { decodeUniMerNet(input, engine) }
             FormulaRecognitionResult(latex = FormulaTokenizerDecoder.decode(files.tokenizer, ids))
         }
 
     /**
-     * Greedy decoding over UniMERNet-T's two graphs, with the decoder's cache carried by hand.
+     * Greedy decoding over a UniMERNet's two graphs, with the decoder's cache carried by hand.
      *
      * FormulaNet-S's export has the generation loop inside its graph. This one does not, so the loop
      * is here. The encoder runs once. Each decoder step takes the last token and the self-attention
@@ -193,11 +196,14 @@ class OnnxInkRecognitionEngine(
      * result is closed only once the step after it has finished reading it.
      *
      * The cache shapes come from the graph, with its one dynamic axis, the prefix length, set to
-     * zero for the first step. Keys are half as wide as values in this decoder.
+     * zero for the first step. Keys are half as wide as values in both decoders. That is also why
+     * UniMERNet-S needs no code of its own: its 768-wide memory and its cache come out of one step
+     * and go into the next without being looked at.
      */
-    private fun decodeUniMerNet(pixels: FloatArray): List<Long> {
-        val encoder = session(ModelKind.UniMerNetEncoder)
-        val decoder = session(ModelKind.UniMerNetDecoder)
+    private fun decodeUniMerNet(pixels: FloatArray, engine: FormulaEngine): List<Long> {
+        val (encoderKind, decoderKind) = uniMerNetGraphs(engine)
+        val encoder = session(encoderKind)
+        val decoder = session(decoderKind)
         val ids = ArrayList<Long>()
         OnnxTensor.createTensor(
             environment,
@@ -244,6 +250,13 @@ class OnnxInkRecognitionEngine(
             }
         }
         return ids
+    }
+
+    /** A UniMERNet's encoder and decoder. */
+    private fun uniMerNetGraphs(engine: FormulaEngine): Pair<ModelKind, ModelKind> = when (engine) {
+        FormulaEngine.UniMerNetTiny -> ModelKind.UniMerNetTinyEncoder to ModelKind.UniMerNetTinyDecoder
+        FormulaEngine.UniMerNetSmall -> ModelKind.UniMerNetSmallEncoder to ModelKind.UniMerNetSmallDecoder
+        FormulaEngine.FormulaNetS -> error("FormulaNet-S is one graph, not a UniMERNet pair")
     }
 
     private fun emptyCache(decoder: OrtSession, input: String): OnnxTensor {
@@ -389,8 +402,8 @@ class OnnxInkRecognitionEngine(
      * running. The lock stops two lanes opening the same graph at once, and guards [formulaHolds].
      *
      * The rule is by [ModelKind.family]: using a graph closes every graph of another family. OCR's
-     * two graphs are one family and so are UniMERNet's encoder and decoder, so each pair stays
-     * resident together, while either formula model evicts OCR and the other formula model.
+     * two graphs are one family and so are each UniMERNet's encoder and decoder, so each pair stays
+     * resident together, while any formula model evicts OCR and the other formula models.
      *
      * **While [keepFormulaModelLoaded] holds, OCR and the formula model leave each other open**, so
      * the indexers can read text without costing the calculator its next formula. The two formula
@@ -429,16 +442,28 @@ class OnnxInkRecognitionEngine(
                         ?: error("PP-FormulaNet-S is not installed")
                     environment.createSession(file.absolutePath, options)
                 }
-                ModelKind.UniMerNetEncoder, ModelKind.UniMerNetDecoder -> {
-                    val files = models.installedUniMerNetFiles()
-                        ?: error("UniMERNet-T is not installed")
-                    val file = if (kind == ModelKind.UniMerNetEncoder) files.encoder else files.decoder
-                    environment.createSession(file.absolutePath, options)
-                }
+                ModelKind.UniMerNetTinyEncoder ->
+                    openUniMerNet(FormulaEngine.UniMerNetTiny, AiModelStore.UniMerNetFiles::encoder, options)
+                ModelKind.UniMerNetTinyDecoder ->
+                    openUniMerNet(FormulaEngine.UniMerNetTiny, AiModelStore.UniMerNetFiles::decoder, options)
+                ModelKind.UniMerNetSmallEncoder ->
+                    openUniMerNet(FormulaEngine.UniMerNetSmall, AiModelStore.UniMerNetFiles::encoder, options)
+                ModelKind.UniMerNetSmallDecoder ->
+                    openUniMerNet(FormulaEngine.UniMerNetSmall, AiModelStore.UniMerNetFiles::decoder, options)
             }
         }
         sessions[kind] = opened
         return opened
+    }
+
+    /** One graph of an installed UniMERNet, opened by path. */
+    private fun openUniMerNet(
+        engine: FormulaEngine,
+        graph: (AiModelStore.UniMerNetFiles) -> File,
+        options: OrtSession.SessionOptions,
+    ): OrtSession {
+        val files = models.installedUniMerNetFiles(engine) ?: error("$engine is not installed")
+        return environment.createSession(graph(files).absolutePath, options)
     }
 
     /**
@@ -457,14 +482,16 @@ class OnnxInkRecognitionEngine(
     }
 
     /** The graphs that stay resident together — see [session]. */
-    private enum class ModelFamily { Ocr, FormulaNet, UniMerNet }
+    private enum class ModelFamily { Ocr, FormulaNet, UniMerNetTiny, UniMerNetSmall }
 
     private enum class ModelKind(val family: ModelFamily) {
         Text(ModelFamily.Ocr),
         Detect(ModelFamily.Ocr),
         Formula(ModelFamily.FormulaNet),
-        UniMerNetEncoder(ModelFamily.UniMerNet),
-        UniMerNetDecoder(ModelFamily.UniMerNet),
+        UniMerNetTinyEncoder(ModelFamily.UniMerNetTiny),
+        UniMerNetTinyDecoder(ModelFamily.UniMerNetTiny),
+        UniMerNetSmallEncoder(ModelFamily.UniMerNetSmall),
+        UniMerNetSmallDecoder(ModelFamily.UniMerNetSmall),
     }
 
     companion object {
@@ -594,7 +621,7 @@ internal fun preprocessFormula(image: Bitmap): FloatArray {
 }
 
 /**
- * UniMERNet-T's input. It uses the same margin crop, then one bilinear scale to fit 192×672,
+ * UniMERNet's input, T and S alike. It uses the same margin crop, then one bilinear scale to fit 192×672,
  * centred on **black**, then FormulaNet's normalization, because UniMERNet's eval processor uses
  * the same mean and deviation.
  *
@@ -701,7 +728,7 @@ private const val TEXT_BASE_WIDTH_FOR_PREPROCESS = 320
 private const val TEXT_MAX_WIDTH_FOR_PREPROCESS = 3200
 private const val FORMULA_SIZE_FOR_PREPROCESS = 384
 
-/** UniMERNet-T's fixed input, the size its eval processor pads every formula to. */
+/** UniMERNet's fixed input, the size its eval processor pads every formula to. */
 private const val UNIMERNET_HEIGHT = 192
 private const val UNIMERNET_WIDTH = 672
 

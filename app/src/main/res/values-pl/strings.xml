@@ -228,8 +228,11 @@
     <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
     <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
     <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
-    <string name="ai_model_unimernet_strength">Najlepszy w algebrze</string>
+    <string name="ai_model_unimernet_strength">Szybszy</string>
     <string name="ai_model_formulanet_strength">Odczytuje macierze</string>
+    <string name="ai_model_unimernet_small_strength">Najdokładniejszy</string>
+    <string name="ai_model_fit_slow">Na tym tablecie może działać wolno</string>
+    <string name="ai_model_fit_unsupported">Zbyt wymagający dla tego tabletu</string>
     <string name="ai_model_ocr_detail">Pismo odręczne i zdjęcia · 12,7 MB · wbudowany</string>
     <string name="ai_model_in_use">Używany</string>
     <string name="ai_model_use">Użyj</string>

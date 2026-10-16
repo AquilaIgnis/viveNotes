@@ -1,8 +1,10 @@
 package com.vivenotes.ai
 
+import android.app.ActivityManager
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -10,6 +12,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.vivenotes.BuildConfig
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,16 +54,25 @@ data class AiModelsState(
     val formulaLatex: AiModelInstallState = AiModelInstallState.Verifying,
     /** UniMERNet-T's package. */
     val uniMerNet: AiModelInstallState = AiModelInstallState.Verifying,
+    /** UniMERNet-S's package. */
+    val uniMerNetSmall: AiModelInstallState = AiModelInstallState.Verifying,
     /** The model the Math button runs — see [formulaEngineInUse]. */
     val formulaEngine: FormulaEngine = DEFAULT_FORMULA_ENGINE,
+    /**
+     * How well this tablet would run UniMERNet-S. Null only for an unlisted chip in a debug build —
+     * see [smallModelFit].
+     */
+    val smallModelFit: SmallModelFit? = null,
 ) {
     fun formula(engine: FormulaEngine): AiModelInstallState = when (engine) {
+        FormulaEngine.UniMerNetSmall -> uniMerNetSmall
         FormulaEngine.UniMerNetTiny -> uniMerNet
         FormulaEngine.FormulaNetS -> formulaLatex
     }
 
     fun withFormula(engine: FormulaEngine, install: AiModelInstallState): AiModelsState =
         when (engine) {
+            FormulaEngine.UniMerNetSmall -> copy(uniMerNetSmall = install)
             FormulaEngine.UniMerNetTiny -> copy(uniMerNet = install)
             FormulaEngine.FormulaNetS -> copy(formulaLatex = install)
         }
@@ -89,11 +101,12 @@ class AiModelStore internal constructor(
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val downloader: VerifiedArtifactDownloader = VerifiedArtifactDownloader(),
     /**
-     * Whether a launch without the default formula model fetches it by itself.
+     * Whether a launch fetches the formula models [formulaEnginesToFetch] names by itself.
      *
      * A parameter rather than a constant so a test can build a store that will never reach for the
-     * network. Debug builds do not reach it anyway — they carry UniMERNet-T in `ai/dev` and resolve
-     * to Installed before the question is asked.
+     * network. Debug builds do not reach it for the default — they carry UniMERNet-T in `ai/dev` and
+     * resolve to Installed before the question is asked — but on a chip listed as
+     * [SmallModelFit.Smooth] they fetch UniMERNet-S unless its graphs are in `ai/dev` too.
      */
     private val autoDownload: Boolean = true,
 ) {
@@ -102,7 +115,10 @@ class AiModelStore internal constructor(
     private val modelsRoot = File(appContext.filesDir, MODELS_DIRECTORY)
     private val formulaDirectory = File(modelsRoot, FORMULA_DIRECTORY)
     private val uniMerNetDirectory = File(modelsRoot, UNIMERNET_DIRECTORY)
+    private val uniMerNetSmallDirectory = File(modelsRoot, UNIMERNET_SMALL_DIRECTORY)
     private val packages: Map<FormulaEngine, FormulaPackage> = mapOf(
+        FormulaEngine.UniMerNetSmall to
+            FormulaPackage(uniMerNetSmallDirectory, UNIMERNET_SMALL_ARTIFACTS, "UniMERNet-S"),
         FormulaEngine.UniMerNetTiny to FormulaPackage(uniMerNetDirectory, UNIMERNET_ARTIFACTS, "UniMERNet"),
         FormulaEngine.FormulaNetS to FormulaPackage(formulaDirectory, FORMULA_ARTIFACTS, "FormulaNet"),
     )
@@ -126,25 +142,37 @@ class AiModelStore internal constructor(
             val deleted = preferences?.get(DELETED_FORMULA_ENGINES_KEY).orEmpty()
                 .mapNotNullTo(mutableSetOf(), ::formulaEngineNamed)
             val installed = formula.filterValues { it == AiModelInstallState.Installed }.keys
+            val fit = deviceSmallModelFit()
             chosenFormulaEngine = chosen
             _state.value = AiModelsState(
                 handwritingText = textState,
                 formulaLatex = formula.getValue(FormulaEngine.FormulaNetS),
                 uniMerNet = formula.getValue(FormulaEngine.UniMerNetTiny),
+                uniMerNetSmall = formula.getValue(FormulaEngine.UniMerNetSmall),
                 formulaEngine = formulaEngineInUse(chosen, installed),
+                smallModelFit = fit,
             )
             // Formula recognition is a headline feature, not an extra, so a launch without the
             // default model fetches it rather than waiting to be asked — an upgrade that has only
-            // FormulaNet-S included. [formulaEngineToFetch] says when not to, and
-            // [autoDownloadAllowed] says when the network is fit for it.
-            val fetch = formulaEngineToFetch(installed, deleted)
-            if (fetch != null &&
-                formula.getValue(fetch) == AiModelInstallState.NotInstalled &&
-                autoDownloadAllowed()
-            ) {
-                download(fetch)
-            }
+            // FormulaNet-S included — and so does a chip listed as running UniMERNet-S smoothly.
+            // [formulaEnginesToFetch] says when not to, and [autoDownloadAllowed] says when the
+            // network is fit for it.
+            val fetch = formulaEnginesToFetch(installed, deleted, fit)
+                .filter { formula.getValue(it) == AiModelInstallState.NotInstalled }
+            if (fetch.isNotEmpty() && autoDownloadAllowed()) fetch.forEach(::download)
         }
+    }
+
+    /** [smallModelFit] for this device's chip and memory. */
+    private fun deviceSmallModelFit(): SmallModelFit? {
+        val activity = appContext.getSystemService(ActivityManager::class.java)
+        val memory = ActivityManager.MemoryInfo().also { activity?.getMemoryInfo(it) }
+        return smallModelFit(
+            socModel = Build.SOC_MODEL,
+            totalMemoryBytes = memory.totalMem,
+            lowRamDevice = activity?.isLowRamDevice == true,
+            unlistedChip = if (BuildConfig.DEBUG) null else SmallModelFit.Unsupported,
+        )
     }
 
     /**
@@ -293,13 +321,22 @@ class AiModelStore internal constructor(
         )
     }
 
-    /** UniMERNet-T's verified graphs and tokenizer, or null until the whole package exists. */
-    fun installedUniMerNetFiles(): UniMerNetFiles? {
-        if (_state.value.uniMerNet != AiModelInstallState.Installed) return null
+    /**
+     * A UniMERNet's verified graphs and tokenizer — [engine] is UniMERNet-T or UniMERNet-S — or null
+     * until its whole package exists.
+     */
+    fun installedUniMerNetFiles(engine: FormulaEngine): UniMerNetFiles? {
+        if (_state.value.formula(engine) != AiModelInstallState.Installed) return null
+        val (directory, encoder, decoder) = when (engine) {
+            FormulaEngine.UniMerNetTiny -> Triple(uniMerNetDirectory, UNIMERNET_ENCODER, UNIMERNET_DECODER)
+            FormulaEngine.UniMerNetSmall ->
+                Triple(uniMerNetSmallDirectory, UNIMERNET_SMALL_ENCODER, UNIMERNET_SMALL_DECODER)
+            FormulaEngine.FormulaNetS -> return null
+        }
         return UniMerNetFiles(
-            encoder = File(uniMerNetDirectory, UNIMERNET_ENCODER.fileName),
-            decoder = File(uniMerNetDirectory, UNIMERNET_DECODER.fileName),
-            tokenizer = File(uniMerNetDirectory, FORMULA_TOKENIZER.fileName),
+            encoder = File(directory, encoder.fileName),
+            decoder = File(directory, decoder.fileName),
+            tokenizer = File(directory, FORMULA_TOKENIZER.fileName),
         )
     }
 
@@ -591,7 +628,7 @@ class AiModelStore internal constructor(
         private const val LEGACY_UNIMERNET_DIRECTORY = "unimernet-tiny-dev"
         private val FORMULA_ENGINE_KEY = stringPreferencesKey("formula_engine")
 
-        /** Every formula model the user has deleted, by name — see [formulaEngineToFetch]. */
+        /** Every formula model the user has deleted, by name — see [formulaEnginesToFetch]. */
         private val DELETED_FORMULA_ENGINES_KEY = stringSetPreferencesKey("deleted_formula_models")
 
         private fun formulaEngineNamed(name: String): FormulaEngine? =
@@ -627,8 +664,43 @@ class AiModelStore internal constructor(
         /** UniMERNet's `tokenizer.json` is FormulaNet's byte for byte, bar one trailing newline. */
         private val UNIMERNET_ARTIFACTS = listOf(UNIMERNET_ENCODER, UNIMERNET_DECODER, FORMULA_TOKENIZER)
 
+        /** UniMERNet-S's slot — see [FORMULA_DIRECTORY] on renaming. */
+        private const val UNIMERNET_SMALL_DIRECTORY = "unimernet-small-v1"
+
+        /** UniMERNet-S's model release, tagged and published like [UNIMERNET_RELEASE_URL]. */
+        internal const val UNIMERNET_SMALL_RELEASE_URL =
+            "https://github.com/AquilaIgnis/viveNotes/releases/download/models-unimernet-small-v1/"
+
+        /**
+         * UniMERNet-S (`wanderkid/unimernet_small` @ `82cb854`, Apache-2.0), exported and quantized
+         * the same way as UniMERNet-T: two graphs at opset 17, int8 weights in MatMul and Gather,
+         * float convolutions. The release's `manifest.json` has the same sizes and digests. Its
+         * encoder writes `memory [1,126,768]` where UniMERNet-T's writes 512 wide, which the decode
+         * loop reads from the graph rather than assuming.
+         */
+        private val UNIMERNET_SMALL_ENCODER = ModelArtifact(
+            fileName = "unimernet-small-encoder-int8.onnx",
+            bytes = 61_983_109L,
+            sha256 = "4982c38cbed338e5bdc24420322128c63bef7199415eb8662c74a32fbdf665d8",
+            url = UNIMERNET_SMALL_RELEASE_URL + "unimernet-small-encoder-int8.onnx",
+        )
+        private val UNIMERNET_SMALL_DECODER = ModelArtifact(
+            fileName = "unimernet-small-decoder-int8.onnx",
+            bytes = 144_912_813L,
+            sha256 = "6fb715a5e9b840b0e4b8f9cb98dbe815f5563c18c49ed8938d630e145820140e",
+            url = UNIMERNET_SMALL_RELEASE_URL + "unimernet-small-decoder-int8.onnx",
+        )
+
+        /**
+         * The release's own `unimernet-small-tokenizer.json` is UniMERNet-T's, so FormulaNet's again
+         * bar the trailing newline. The pinned FormulaNet file serves all three.
+         */
+        private val UNIMERNET_SMALL_ARTIFACTS =
+            listOf(UNIMERNET_SMALL_ENCODER, UNIMERNET_SMALL_DECODER, FORMULA_TOKENIZER)
+
         /** A formula model's whole download, for its card. */
         internal fun downloadBytes(engine: FormulaEngine): Long = when (engine) {
+            FormulaEngine.UniMerNetSmall -> UNIMERNET_SMALL_ARTIFACTS
             FormulaEngine.UniMerNetTiny -> UNIMERNET_ARTIFACTS
             FormulaEngine.FormulaNetS -> FORMULA_ARTIFACTS
         }.sumOf(ModelArtifact::bytes)

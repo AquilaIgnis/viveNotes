@@ -228,8 +228,11 @@
     <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
     <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
     <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
-    <string name="ai_model_unimernet_strength">代数に最適</string>
+    <string name="ai_model_unimernet_strength">高速</string>
     <string name="ai_model_formulanet_strength">行列を読み取る</string>
+    <string name="ai_model_unimernet_small_strength">最も高精度</string>
+    <string name="ai_model_fit_slow">このタブレットでは遅くなる場合があります</string>
+    <string name="ai_model_fit_unsupported">このタブレットには負荷が大きすぎます</string>
     <string name="ai_model_ocr_detail">手書き文字と画像 · 12.7 MB · 内蔵</string>
     <string name="ai_model_in_use">使用中</string>
     <string name="ai_model_use">使用</string>

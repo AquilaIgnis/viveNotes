@@ -257,10 +257,16 @@
     <string name="ai_section_text_in_pictures">Text in pictures</string>
     <string name="ai_section_handwriting_in_search">Handwriting in search</string>
     <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
+    <string name="ai_model_unimernet_small_name" translatable="false">UniMERNet-S</string>
     <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
     <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
-    <string name="ai_model_unimernet_strength">Best on algebra</string>
+    <string name="ai_model_unimernet_strength">Faster</string>
     <string name="ai_model_formulanet_strength">Reads matrices</string>
+    <string name="ai_model_unimernet_small_strength">Most accurate</string>
+    <!-- UniMERNet-S's card, above its warning-orange Download: this tablet would run the model slowly. -->
+    <string name="ai_model_fit_slow">May be slow on this tablet</string>
+    <!-- UniMERNet-S's card, above its disabled Download: this tablet is too slow or has too little memory. -->
+    <string name="ai_model_fit_unsupported">Too demanding for this tablet</string>
     <string name="ai_model_ocr_detail">Handwriting and pictures · 12.7 MB · built in</string>
     <string name="ai_model_in_use">In use</string>
     <string name="ai_model_use">Use</string>

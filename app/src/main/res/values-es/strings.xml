@@ -240,8 +240,11 @@
     <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
     <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
     <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
-    <string name="ai_model_unimernet_strength">Ideal para álgebra</string>
+    <string name="ai_model_unimernet_strength">Más rápido</string>
     <string name="ai_model_formulanet_strength">Lee matrices</string>
+    <string name="ai_model_unimernet_small_strength">El más preciso</string>
+    <string name="ai_model_fit_slow">Puede ir lento en esta tableta</string>
+    <string name="ai_model_fit_unsupported">Demasiado exigente para esta tableta</string>
     <string name="ai_model_ocr_detail">Escritura a mano e imágenes · 12.7 MB · integrado</string>
     <string name="ai_model_in_use">En uso</string>
     <string name="ai_model_use">Usar</string>
