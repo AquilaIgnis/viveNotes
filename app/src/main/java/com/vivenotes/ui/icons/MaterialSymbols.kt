@@ -40,6 +40,7 @@ object MaterialSymbols {
     val CloudDownload: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_cloud_download)
     val CloudOff: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_cloud_off)
     val ContentCopy: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_content_copy)
+    val CreditCard: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_credit_card)
     val ContentCut: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_content_cut)
     val ContentPaste: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_content_paste)
     val Delete: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_delete)

@@ -8,6 +8,9 @@ kotlin = "2.2.10"
 ksp = "2.3.6"
 
 activityCompose = "1.10.1"
+# Custom Tabs, which open Stripe Checkout and the customer portal over the app. 1.10.0 is the newest
+# stable on Google's maven as of 2026-10-19; it asks for no newer core or activity than these.
+browser = "1.10.0"
 composeBom = "2025.09.00"
 
 # M3 Expressive, on purpose and on pre-release — decided 2026-08-09, `memory/plan.md` §1a.
@@ -64,6 +67,7 @@ work = "2.11.2"
 
 [libraries]
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 androidx-compose-material3-window-size = { group = "androidx.compose.material3", name = "material3-window-size-class", version.ref = "material3" }

@@ -58,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalResources
@@ -74,6 +75,8 @@ import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.SectionEntity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.CameraCapture
 import com.vivenotes.data.DrawTool
@@ -101,6 +104,7 @@ import com.vivenotes.data.sync.SyncAccounts
 import com.vivenotes.data.sync.DisconnectResult
 import com.vivenotes.data.sync.SyncRunResult
 import com.vivenotes.data.sync.ConnectFailure
+import com.vivenotes.data.sync.PaidProvider
 import com.vivenotes.ai.AiModelStore
 import com.vivenotes.ai.AiModelsState
 import com.vivenotes.ai.FormulaEngine
@@ -136,6 +140,7 @@ import com.vivenotes.data.sync.CloudArchiveResult
 import com.vivenotes.ui.account.AccountScreen
 import com.vivenotes.ui.account.AccountDeletionUiState
 import com.vivenotes.ui.account.PasswordResetUiState
+import com.vivenotes.ui.account.openStripePage
 import com.vivenotes.ui.closed.ClosedNotebooksScreen
 import com.vivenotes.ui.panel.AiModelsPanelContent
 import com.vivenotes.ui.panel.ContentPanelContent
@@ -275,6 +280,18 @@ fun NotesApp(
     // Application-scoped and refreshed when the process/account starts. Account navigation only
     // observes this cache; purchase and coupon actions update it through their explicit flows.
     val subscriptionState by managedSubscription.state.collectAsStateWithLifecycle()
+
+    // Stripe Checkout and the customer portal open over the app in a Custom Tab. Closing it resumes
+    // this Activity, which is when the controller asks the server what happened there.
+    val customTabToolbarColor = MaterialTheme.colorScheme.surfaceContainer.toArgb()
+    LaunchedEffect(managedSubscription, activity) {
+        managedSubscription.browserPages.collect { url ->
+            if (activity == null || !openStripePage(activity, url, customTabToolbarColor)) {
+                managedSubscription.onBrowserUnavailable()
+            }
+        }
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { managedSubscription.onForeground() }
 
     // A revocation delivered by the stream or an automatic run still has to reach the screen. The
     // token is already gone by the time this runs, so this is only about saying why the form came
@@ -517,16 +534,22 @@ fun NotesApp(
                     if (activity != null) managedSubscription.purchase(activity)
                 },
                 onManageSubscription = {
-                    context.startActivity(
-                        Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse(
-                                "https://play.google.com/store/account/subscriptions" +
-                                    "?sku=${BuildConfig.CLOUD_STORAGE_SUBSCRIPTION_ID}" +
-                                    "&package=${BuildConfig.APPLICATION_ID}",
+                    // Each paid plan is managed where it was bought: Stripe's portal for a card plan,
+                    // Play's subscription centre for everything else.
+                    if (subscriptionState.status?.paidProvider == PaidProvider.Stripe) {
+                        managedSubscription.manageCardSubscription()
+                    } else {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(
+                                    "https://play.google.com/store/account/subscriptions" +
+                                        "?sku=${BuildConfig.CLOUD_STORAGE_SUBSCRIPTION_ID}" +
+                                        "&package=${BuildConfig.APPLICATION_ID}",
+                                ),
                             ),
-                        ),
-                    )
+                        )
+                    }
                 },
                 onRedeemCoupon = managedSubscription::redeemCoupon,
                 onConnect = { serverUrl, email, password ->

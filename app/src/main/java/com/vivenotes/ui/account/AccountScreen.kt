@@ -87,8 +87,10 @@ import com.vivenotes.data.sync.ServerConnection
 import com.vivenotes.data.sync.SyncRunResult
 import com.vivenotes.data.sync.SyncStatus
 import com.vivenotes.data.sync.SyncSummary
+import com.vivenotes.data.billing.CheckoutProvider
 import com.vivenotes.data.billing.ManagedSubscriptionFailure
 import com.vivenotes.data.billing.ManagedSubscriptionState
+import com.vivenotes.data.sync.PaidProvider
 import com.vivenotes.data.sync.PaidSubscriptionState
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.theme.LocalIconAccents
@@ -151,6 +153,9 @@ internal object AccountTags {
     const val SUBSCRIBE = "account-subscribe"
     const val MANAGE_SUBSCRIPTION = "account-manage-subscription"
     const val GOOGLE_PLAY_MARK = "account-google-play-mark"
+
+    /** The card glyph on Subscribe when this install sells through Stripe instead of Play. */
+    const val CARD_CHECKOUT_MARK = "account-card-checkout-mark"
     const val COUPON = "account-coupon"
     const val REDEEM_COUPON = "account-redeem-coupon"
     const val SUBSCRIPTION_STATUS = "account-subscription-status"
@@ -1670,8 +1675,10 @@ internal fun storagePlan(state: ManagedSubscriptionState): StoragePlan {
 /**
  * Managed-service plan card; never composed for a self-hosted registration.
  *
- * Buying and coupon entry appear only while no Play subscription stands behind the storage. Every
- * other state offers at most one action, and it opens Google Play rather than a purchase.
+ * Buying and coupon entry appear only while no paid subscription stands behind the storage. Every
+ * other state offers at most one action, and it opens the paid plan's own page — Google Play's, or
+ * Stripe's customer portal for a card plan — rather than a purchase. Which checkout Subscribe opens
+ * is [ManagedSubscriptionState.checkout]'s decision, not this card's.
  */
 @Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -1686,16 +1693,40 @@ private fun ManagedSubscriptionPanel(
     var couponOpen by rememberSaveable { mutableStateOf(false) }
     val checkingDescription = stringResource(R.string.account_subscription_checking)
     val buyingDescription = stringResource(R.string.account_subscription_buying)
+    val openingCheckoutDescription = stringResource(R.string.account_subscription_opening_checkout)
     val spatialMotion = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
     val effectsMotion = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     val status = state.status
     val plan = storagePlan(state)
+    val sellsByCard = state.checkout == CheckoutProvider.Stripe
+    // The paid plan's wording and page follow whoever bills it, not whichever checkout this install
+    // would offer: a card plan seen from a Play install is still a card plan.
+    val paidByCard = status?.paidProvider == PaidProvider.Stripe
+    // A card plan's page is Stripe's portal, which only a non-Play install may open.
+    val canManage = !paidByCard || state.cardManagementAvailable
+    val offerPrice = if (sellsByCard) state.cardPrice else state.formattedPrice
+    val paidPrice = if (paidByCard) state.cardPrice else state.formattedPrice
 
     @Composable
     fun PurchaseAction(filled: Boolean) {
-        // Play already holds a purchase the server has not accepted; buying again would only
-        // return "already owned", and the failure line below says why it was not accepted.
-        if (state.playPurchaseOwned) {
+        if (sellsByCard) {
+            CardCheckoutButton(
+                onClick = onSubscribe,
+                enabled = !state.purchasing && !state.loading,
+                filled = filled,
+                loading = state.purchasing,
+                loadingDescription = openingCheckoutDescription,
+                requiredForSync = membershipRequired,
+                modifier = Modifier.testTag(AccountTags.SUBSCRIBE),
+            )
+            Text(
+                text = stringResource(R.string.account_subscription_card_processor),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (state.playPurchaseOwned) {
+            // Play already holds a purchase the server has not accepted; buying again would only
+            // return "already owned", and the failure line below says why it was not accepted.
             GooglePlayActionButton(
                 label = stringResource(R.string.account_subscription_manage),
                 onClick = onManageSubscription,
@@ -1802,26 +1833,29 @@ private fun ManagedSubscriptionPanel(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = state.formattedPrice?.let {
+                            text = paidPrice?.let {
                                 stringResource(R.string.account_subscription_price_short, it)
                             }.orEmpty(),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
                         )
-                        TextButton(
-                            onClick = onManageSubscription,
-                            modifier = Modifier.testTag(AccountTags.MANAGE_SUBSCRIPTION),
-                        ) {
-                            Text(stringResource(R.string.account_subscription_manage_link))
-                            Spacer(Modifier.width(4.dp))
-                            Icon(
-                                imageVector = MaterialSymbols.ArrowOutward,
-                                // The label already names the action; the arrow only says it
-                                // leaves the app.
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
+                        if (canManage) {
+                            TextButton(
+                                onClick = onManageSubscription,
+                                enabled = !state.purchasing,
+                                modifier = Modifier.testTag(AccountTags.MANAGE_SUBSCRIPTION),
+                            ) {
+                                Text(stringResource(R.string.account_subscription_manage_link))
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = MaterialSymbols.ArrowOutward,
+                                    // The label already names the action; the arrow only says it
+                                    // leaves the app.
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                         }
                     }
                 }
@@ -1829,42 +1863,91 @@ private fun ManagedSubscriptionPanel(
                 StoragePlan.EndingWithoutRenewal -> {
                     PlanHeadline(availableUntilText(status?.validUntil))
                     PlanDetail(stringResource(R.string.account_subscription_renewal_off))
-                    // Play has no in-app "resubscribe" for a subscription that is still owned; its
-                    // subscription centre is where auto-renewal is turned back on.
-                    PlayManagementButton(
-                        label = R.string.account_subscription_renew,
-                        onClick = onManageSubscription,
-                    )
+                    // Neither provider offers an in-app "resubscribe" for a subscription that is
+                    // still running; Play's subscription centre and Stripe's portal are where
+                    // auto-renewal is turned back on.
+                    if (canManage) {
+                        ProviderManagementButton(
+                            label = R.string.account_subscription_renew,
+                            onClick = onManageSubscription,
+                            enabled = !state.purchasing,
+                        )
+                    }
                 }
 
                 StoragePlan.PaymentRetrying -> {
                     PlanHeadline(stringResource(R.string.account_subscription_active_headline))
-                    PlanDetail(stringResource(R.string.account_subscription_paid_grace))
-                    PlayManagementButton(
-                        label = R.string.account_subscription_fix_payment,
-                        onClick = onManageSubscription,
+                    PlanDetail(
+                        stringResource(
+                            if (paidByCard) {
+                                R.string.account_subscription_card_grace
+                            } else {
+                                R.string.account_subscription_paid_grace
+                            },
+                        ),
                     )
+                    if (canManage) {
+                        ProviderManagementButton(
+                            label = R.string.account_subscription_fix_payment,
+                            onClick = onManageSubscription,
+                            enabled = !state.purchasing,
+                        )
+                    }
                 }
 
                 StoragePlan.OnHold -> {
-                    PlanHeadline(stringResource(R.string.account_subscription_paid_on_hold))
-                    PlayManagementButton(
-                        label = R.string.account_subscription_fix_payment,
-                        onClick = onManageSubscription,
-                        filled = status?.active != true,
+                    PlanHeadline(
+                        stringResource(
+                            if (paidByCard) {
+                                R.string.account_subscription_card_on_hold
+                            } else {
+                                R.string.account_subscription_paid_on_hold
+                            },
+                        ),
                     )
+                    if (canManage) {
+                        ProviderManagementButton(
+                            label = R.string.account_subscription_fix_payment,
+                            onClick = onManageSubscription,
+                            enabled = !state.purchasing,
+                            filled = status?.active != true,
+                        )
+                    }
                 }
 
                 StoragePlan.Paused -> {
-                    PlanHeadline(stringResource(R.string.account_subscription_paid_paused))
-                    PlayManagementButton(
-                        label = R.string.account_subscription_manage,
-                        onClick = onManageSubscription,
+                    PlanHeadline(
+                        stringResource(
+                            if (paidByCard) {
+                                R.string.account_subscription_card_paused
+                            } else {
+                                R.string.account_subscription_paid_paused
+                            },
+                        ),
                     )
+                    if (canManage) {
+                        ProviderManagementButton(
+                            label = if (paidByCard) {
+                                R.string.account_subscription_manage_card
+                            } else {
+                                R.string.account_subscription_manage
+                            },
+                            onClick = onManageSubscription,
+                            enabled = !state.purchasing,
+                        )
+                    }
                 }
 
                 StoragePlan.PaymentPending ->
-                    PlanHeadline(stringResource(R.string.account_subscription_pending))
+                    PlanHeadline(
+                        stringResource(
+                            if (paidByCard) {
+                                R.string.account_subscription_card_pending
+                            } else {
+                                R.string.account_subscription_pending
+                            },
+                        ),
+                    )
 
                 StoragePlan.Coupon -> {
                     PlanHeadline(availableUntilText(status?.validUntil))
@@ -1875,11 +1958,19 @@ private fun ManagedSubscriptionPanel(
 
                 StoragePlan.NotSubscribed -> {
                     PlanHeadline(stringResource(R.string.account_subscription_pitch))
-                    state.formattedPrice?.let {
+                    offerPrice?.let {
                         PlanDetail(stringResource(R.string.account_subscription_price, it))
                     }
                     if (status?.paidState == PaidSubscriptionState.Expired) {
-                        PlanDetail(stringResource(R.string.account_subscription_paid_expired))
+                        PlanDetail(
+                            stringResource(
+                                if (paidByCard) {
+                                    R.string.account_subscription_card_expired
+                                } else {
+                                    R.string.account_subscription_paid_expired
+                                },
+                            ),
+                        )
                     }
                     if (state.purchasePending) {
                         Text(
@@ -2003,20 +2094,84 @@ private fun StoragePlanBadge(plan: StoragePlan, active: Boolean) {
     }
 }
 
-/** Renew, fix payment, or resume: each only opens Google Play's page for this subscription. */
+/**
+ * Renew, fix payment, or resume: each only opens the paid plan's own page — Google Play's for a Play
+ * subscription, Stripe's customer portal for a card one.
+ */
 @Composable
-private fun PlayManagementButton(
+private fun ProviderManagementButton(
     @StringRes label: Int,
     onClick: () -> Unit,
+    enabled: Boolean = true,
     filled: Boolean = false,
 ) {
     val modifier = Modifier
         .fillMaxWidth()
         .testTag(AccountTags.MANAGE_SUBSCRIPTION)
     if (filled) {
-        Button(onClick = onClick, modifier = modifier) { Text(stringResource(label)) }
+        Button(onClick = onClick, enabled = enabled, modifier = modifier) { Text(stringResource(label)) }
     } else {
-        OutlinedButton(onClick = onClick, modifier = modifier) { Text(stringResource(label)) }
+        OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) {
+            Text(stringResource(label))
+        }
+    }
+}
+
+/**
+ * Subscribe on an install that sells through Stripe Checkout. It mirrors [GooglePlayActionButton]
+ * so the card keeps one shape whichever checkout it offers, with the card glyph in place of Google's
+ * mark: nothing about this payment involves Google.
+ */
+@Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun CardCheckoutButton(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    filled: Boolean,
+    modifier: Modifier = Modifier,
+    loading: Boolean = false,
+    loadingDescription: String,
+    /** Sync has been refused for want of a plan; said to accessibility, since the colour cannot. */
+    requiredForSync: Boolean = false,
+) {
+    val requiredDescription = stringResource(R.string.account_subscription_required_state)
+    val buttonModifier = modifier
+        .fillMaxWidth()
+        .then(
+            if (requiredForSync) {
+                Modifier.semantics { stateDescription = requiredDescription }
+            } else {
+                Modifier
+            },
+        )
+    val content: @Composable RowScope.() -> Unit = {
+        if (loading) {
+            LoadingIndicator(
+                Modifier
+                    .size(18.dp)
+                    .semantics { contentDescription = loadingDescription },
+            )
+        } else {
+            Icon(
+                imageVector = MaterialSymbols.CreditCard,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(ButtonDefaults.IconSize)
+                    .testTag(AccountTags.CARD_CHECKOUT_MARK),
+            )
+            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+            Text(stringResource(R.string.account_subscription_subscribe_card))
+        }
+    }
+    if (filled) {
+        Button(onClick = onClick, enabled = enabled, modifier = buttonModifier, content = content)
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = buttonModifier,
+            content = content,
+        )
     }
 }
 
@@ -2167,9 +2322,12 @@ private fun subscriptionFailureMessage(failure: ManagedSubscriptionFailure): Int
     ManagedSubscriptionFailure.CouponAlreadyRedeemed -> R.string.account_subscription_error_coupon_used
     ManagedSubscriptionFailure.InvalidPurchase -> R.string.account_subscription_error_purchase
     ManagedSubscriptionFailure.PurchaseAlreadyClaimed -> R.string.account_subscription_error_purchase_owner
+    ManagedSubscriptionFailure.AlreadySubscribed -> R.string.account_subscription_error_already_subscribed
     ManagedSubscriptionFailure.ServerBillingUnavailable -> R.string.account_subscription_error_server_billing
     ManagedSubscriptionFailure.InvalidRequest -> R.string.account_subscription_error_request
     ManagedSubscriptionFailure.ServerUnreachable -> R.string.account_subscription_error_server_unreachable
+    ManagedSubscriptionFailure.CardServerUnreachable -> R.string.account_subscription_error_card_unreachable
+    ManagedSubscriptionFailure.BrowserUnavailable -> R.string.account_subscription_error_browser
     ManagedSubscriptionFailure.ServerError -> R.string.account_subscription_error_server
 }
 
