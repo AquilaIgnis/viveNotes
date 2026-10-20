@@ -53,9 +53,10 @@ import com.vivenotes.ui.theme.LocalIconAccents
 
 private val SECTION_ROW_HEIGHT = 32.dp
 
-// A notebook's name and book icon are drawn this much larger than their base sizes, so the header
-// reads as the parent of its sections rather than one more row among them.
-private const val NOTEBOOK_HEADER_SCALE = 1.3f
+// A notebook's book icon and name are drawn larger than their base sizes, so the header reads as the
+// parent of its sections rather than one more row among them — the name at 85% of the icon's scale.
+private const val NOTEBOOK_ICON_SCALE = 1.3f
+private const val NOTEBOOK_NAME_SCALE = NOTEBOOK_ICON_SCALE * 0.85f
 
 internal object RailTags {
     fun notebook(notebookId: String) = "rail-notebook-$notebookId"
@@ -220,13 +221,13 @@ private fun NotebookHeader(
                 imageVector = MaterialSymbols.Book,
                 contentDescription = null,
                 tint = Color(notebook.colorArgb),
-                modifier = Modifier.size(16.dp * NOTEBOOK_HEADER_SCALE),
+                modifier = Modifier.size(16.dp * NOTEBOOK_ICON_SCALE),
             )
             Spacer(Modifier.width(8.dp))
             Text(
                 text = notebook.name,
                 style = MaterialTheme.typography.titleSmall.let {
-                    it.copy(fontSize = it.fontSize * NOTEBOOK_HEADER_SCALE)
+                    it.copy(fontSize = it.fontSize * NOTEBOOK_NAME_SCALE)
                 },
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
