@@ -84,9 +84,8 @@
     <string name="account_subscription_error_server_unreachable">Nie można połączyć się z serwerem w chmurze. Twój zakup w Play jest bezpieczny i zostanie przywrócony po ponownym połączeniu.</string>
     <string name="account_subscription_error_server">Serwer w chmurze nie mógł zaktualizować subskrypcji. Spróbuj ponownie.</string>
     <string name="account_subscription_required_state">Do synchronizacji wymagana jest subskrypcja</string>
-    <string name="account_subscription_subscribe_card">Subskrybuj kartą</string>
+    <string name="account_subscription_subscribe_card">Subskrybuj</string>
     <string name="account_subscription_opening_checkout">Otwieranie bezpiecznej płatności</string>
-    <string name="account_subscription_card_processor">Płatności obsługuje Stripe.</string>
     <string name="account_subscription_manage_card">Zarządzaj płatnościami</string>
     <string name="account_subscription_card_grace">Płatność kartą nie powiodła się. Stripe ponawia próbę, a pamięć pozostaje w tym czasie dostępna.</string>
     <string name="account_subscription_card_on_hold">Subskrypcja kartą jest wstrzymana do momentu zaktualizowania metody płatności.</string>

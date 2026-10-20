@@ -1719,11 +1719,6 @@ private fun ManagedSubscriptionPanel(
                 requiredForSync = membershipRequired,
                 modifier = Modifier.testTag(AccountTags.SUBSCRIBE),
             )
-            Text(
-                text = stringResource(R.string.account_subscription_card_processor),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         } else if (state.playPurchaseOwned) {
             // Play already holds a purchase the server has not accepted; buying again would only
             // return "already owned", and the failure line below says why it was not accepted.

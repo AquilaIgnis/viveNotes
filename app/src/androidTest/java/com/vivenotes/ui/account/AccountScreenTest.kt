@@ -674,9 +674,6 @@ class AccountScreenTest {
             .assertIsEnabled()
         compose.onNodeWithTag(AccountTags.CARD_CHECKOUT_MARK, useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag(AccountTags.GOOGLE_PLAY_MARK, useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithText(context.getString(R.string.account_subscription_card_processor))
-            .performScrollTo()
-            .assertIsDisplayed()
         purchase.performScrollTo().performClick()
 
         assertEquals(1, subscriptions)

@@ -84,9 +84,8 @@
     <string name="account_subscription_error_server_unreachable">Impossibile raggiungere il server cloud. Il tuo acquisto su Play è al sicuro e verrà ripristinato alla riconnessione.</string>
     <string name="account_subscription_error_server">Il server cloud non è riuscito ad aggiornare l\'abbonamento. Riprova.</string>
     <string name="account_subscription_required_state">Abbonamento richiesto per la sincronizzazione</string>
-    <string name="account_subscription_subscribe_card">Abbonati con carta</string>
+    <string name="account_subscription_subscribe_card">Abbonati</string>
     <string name="account_subscription_opening_checkout">Apertura del pagamento sicuro in corso</string>
-    <string name="account_subscription_card_processor">I pagamenti sono elaborati da Stripe.</string>
     <string name="account_subscription_manage_card">Gestisci fatturazione</string>
     <string name="account_subscription_card_grace">Il pagamento con carta non è andato a buon fine. Stripe sta riprovando e lo spazio rimane disponibile nel frattempo.</string>
     <string name="account_subscription_card_on_hold">L\'abbonamento con carta è in attesa finché non viene aggiornato il metodo di pagamento.</string>

@@ -84,9 +84,8 @@
     <string name="account_subscription_error_server_unreachable">クラウドサーバーに接続できませんでした。Playでの購入は保護されており、再接続時に復元されます。</string>
     <string name="account_subscription_error_server">クラウドサーバーでサブスクリプションを更新できませんでした。もう一度お試しください。</string>
     <string name="account_subscription_required_state">同期にはサブスクリプションが必要です</string>
-    <string name="account_subscription_subscribe_card">カードで登録</string>
+    <string name="account_subscription_subscribe_card">登録</string>
     <string name="account_subscription_opening_checkout">安全な決済ページを開いています</string>
-    <string name="account_subscription_card_processor">お支払いはStripeによって処理されます。</string>
     <string name="account_subscription_manage_card">請求を管理</string>
     <string name="account_subscription_card_grace">カードでのお支払いが完了しませんでした。Stripeが再試行しており、その間もストレージは引き続きご利用いただけます。</string>
     <string name="account_subscription_card_on_hold">お支払い方法が更新されるまで、カードのサブスクリプションは保留されています。</string>
