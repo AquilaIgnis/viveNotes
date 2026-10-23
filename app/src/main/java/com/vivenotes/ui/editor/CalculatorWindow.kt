@@ -75,6 +75,7 @@ import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.DecimalToggle
 import com.vivenotes.ui.panel.EquationPreview
 import com.vivenotes.ui.panel.PanelButton
+import com.vivenotes.ui.theme.LocalCalculatorContainer
 import com.vivenotes.ui.theme.LocalCanvasColors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -305,7 +306,8 @@ private fun CalculatorWindow(
 
     Surface(
         shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = LocalCalculatorContainer.current,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 3.dp,
         shadowElevation = 6.dp,
         modifier = modifier.testTag(CalculatorTags.WINDOW),

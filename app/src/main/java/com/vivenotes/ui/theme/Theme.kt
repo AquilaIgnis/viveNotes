@@ -101,6 +101,8 @@ private val LightAccents = IconAccents(
 
 val LocalIconAccents = staticCompositionLocalOf { DarkAccents }
 
+/** The pocket calculator's pane, kept on the grey it had before the dark surfaces turned blue. */
+val LocalCalculatorContainer = staticCompositionLocalOf { Color(0xFF303030) }
 
 /**
  * Colours the note canvas rather than the app chrome. The View tab exposes these separately from
@@ -201,6 +203,7 @@ fun ViveNotesTheme(
     CompositionLocalProvider(
         LocalCanvasColors provides canvas,
         LocalIconAccents provides accents,
+        LocalCalculatorContainer provides if (darkTheme) Color(0xFF303030) else Color(0xFFEDEDED), // #303030
         LocalRibbonIcons provides ribbonIcons,
     ) {
         MaterialExpressiveTheme(
