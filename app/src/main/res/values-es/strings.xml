@@ -377,6 +377,7 @@
     <string name="shortcut_underline">Subrayado</string>
     <string name="shortcut_indent">Aumentar sangría</string>
     <string name="shortcut_outdent">Disminuir sangría</string>
+    <string name="shortcut_exit_list">Salir de la lista</string>
     <string name="shortcut_next_cell">Siguiente celda</string>
     <string name="shortcut_previous_cell">Celda anterior</string>
 

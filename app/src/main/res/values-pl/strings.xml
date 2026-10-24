@@ -385,6 +385,7 @@
     <string name="shortcut_underline">Podkreślenie</string>
     <string name="shortcut_indent">Zwiększ wcięcie</string>
     <string name="shortcut_outdent">Zmniejsz wcięcie</string>
+    <string name="shortcut_exit_list">Wyjdź z listy</string>
     <string name="shortcut_next_cell">Następna komórka</string>
     <string name="shortcut_previous_cell">Poprzednia komórka</string>
 

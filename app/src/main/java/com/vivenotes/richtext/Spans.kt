@@ -5,12 +5,15 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.Layout
 import android.text.Spanned
+import android.text.TextPaint
 import android.text.style.BackgroundColorSpan
+import android.text.style.CharacterStyle
 import android.text.style.LeadingMarginSpan
 import android.text.style.ReplacementSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
+import android.text.style.UpdateAppearance
 import com.vivenotes.model.Align
 import com.vivenotes.model.BlockType
 import io.ratex.RaTeXRenderer
@@ -134,6 +137,27 @@ class TodoSpan(
 class HeadingBoldSpan : StyleSpan(Typeface.BOLD), Derived
 
 class HeadingSizeSpan(scale: Float) : RelativeSizeSpan(scale), Derived
+
+/**
+ * Headings 1–3 are drawn in this blue, unless their text was given a colour of its own.
+ *
+ * Set at [PRIORITY], above every mark's span: a `SpannableStringBuilder` hands its spans to the
+ * text layout highest priority first, and each colour paints over the one before it, so a colour or
+ * link on the heading's text wins wherever it lies — including one applied after the heading was.
+ *
+ * Not a `ForegroundColorSpan`: that one is parcelable, so TextView's Copy would carry it to the
+ * clipboard and a paste would read it back as a colour mark the text never had.
+ */
+class HeadingColorSpan : CharacterStyle(), UpdateAppearance, Derived {
+    override fun updateDrawState(paint: TextPaint) {
+        paint.color = HEADING_COLOR
+    }
+
+    companion object {
+        const val HEADING_COLOR: Int = 0xFF0071E3.toInt()
+        const val PRIORITY: Int = 1 shl Spanned.SPAN_PRIORITY_SHIFT
+    }
+}
 
 class CodeTypefaceSpan : TypefaceSpan("monospace"), Derived
 

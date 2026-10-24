@@ -61,7 +61,9 @@ sealed interface FormatCommand {
 
     /**
      * Delegated to the platform widget's own handlers, which already move styled text through the
-     * clipboard. Reimplementing cut/copy/paste would lose that for no gain.
+     * clipboard. Reimplementing cut/copy/paste would lose that for no gain. The one addition is
+     * Paste of another app's HTML, which the editor reads as headings, lists and marks first — see
+     * `OutlineEditText.onTextContextMenuItem`.
      */
     data class Clipboard(val action: ClipboardAction) : FormatCommand
 

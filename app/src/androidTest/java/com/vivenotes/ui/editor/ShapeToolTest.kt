@@ -27,6 +27,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -71,6 +73,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.abs
 
 /**
  * Insert Shape.
@@ -891,7 +894,7 @@ class ShapeToolTest {
         setToolkit {
             ThicknessAction(width = 3) { borderWidth = it }
             LineTypeAction(current = LineType.Solid) { lineType = it }
-            FillAction(fill = null) { fill = it }
+            FillAction(fill = null, paintBucket = true) { fill = it }
         }
 
         compose.onNodeWithTag(OBJECT_THICKNESS_TAG).assertIsDisplayed()
@@ -907,6 +910,67 @@ class ShapeToolTest {
         compose.onNodeWithTag(ObjectLineTypeTags.lineType(LineType.Dashed)).performClick()
 
         assertEquals(LineType.Dashed, lineType)
+    }
+
+    @Test
+    fun theLineStyleIconOpensTheThreeTypesWithTheCurrentOneSelected() {
+        var current by mutableStateOf(LineType.Solid)
+        setToolkit {
+            LineTypeAction(current = current) {
+                current = it
+                lineType = it
+            }
+        }
+
+        compose.onNodeWithTag(OBJECT_LINE_TYPE_TAG).assertContentDescriptionEquals("Change line type").performClick()
+        LineType.entries.forEach { compose.onNodeWithTag(ObjectLineTypeTags.lineType(it)).assertIsDisplayed() }
+        compose.onNodeWithTag(ObjectLineTypeTags.lineType(LineType.Solid)).assertIsSelected()
+        compose.onNodeWithTag(ObjectLineTypeTags.lineType(LineType.Dashed)).assertIsNotSelected().performClick()
+        assertEquals(LineType.Dashed, lineType)
+        compose.onNodeWithTag(ObjectLineTypeTags.lineType(LineType.Dashed)).assertDoesNotExist()
+
+        compose.onNodeWithTag(OBJECT_LINE_TYPE_TAG).performClick()
+        compose.onNodeWithTag(ObjectLineTypeTags.lineType(LineType.Dashed)).assertIsSelected()
+        compose.onNodeWithTag(ObjectLineTypeTags.lineType(LineType.Dotted)).performClick()
+        assertEquals(LineType.Dotted, lineType)
+    }
+
+    /** A shape's fill button is format_color_fill, whose bar is painted in the fill it would change. */
+    @Test
+    fun theShapeFillIconPaintsItsBarInTheCurrentFill() {
+        var current by mutableStateOf<Int?>(null)
+        setToolkit {
+            FillAction(fill = current, paintBucket = true) {
+                current = it
+                fill = it
+            }
+        }
+        val button = compose.onNodeWithTag(OBJECT_FILL_TAG).assertContentDescriptionEquals("Change fill color")
+        // The 18 dp glyph is centred in its button, and its bar is the glyph's bottom sixth: 7.5 dp
+        // below the middle.
+        val barOffset = with(compose.density) { 7.5.dp.toPx() }
+        fun bar(): Color = button.captureToImage().let { image ->
+            image.toPixelMap()[image.width / 2, (image.height / 2f + barOffset).toInt()]
+        }
+
+        fun Color.isGrey() = abs(red - green) < .1f && abs(green - blue) < .1f
+
+        val empty = bar()
+        assertTrue("no fill leaves a faint grey bar, not a coloured one: $empty", empty.isGrey())
+        compose.onNodeWithTag(OBJECT_FILL_TAG).performClick()
+        compose.onNodeWithContentDescription("Red fill").performClick()
+        compose.waitForIdle()
+        assertEquals(0xFFEF4444.toInt(), fill)
+        val red = bar()
+        assertTrue("the bar shows the red fill: $red", red.red > .75f && red.green < .4f && red.blue < .4f)
+
+        compose.onNodeWithTag(OBJECT_FILL_TAG).performClick()
+        compose.onNodeWithTag(OBJECT_FILL_NONE_TAG).performClick()
+        compose.waitForIdle()
+        assertNull(fill)
+        // Grey again rather than equal to [empty]: the closed menu leaves the button a state layer.
+        val cleared = bar()
+        assertTrue("clearing the fill greys the bar again: $cleared", cleared.isGrey())
     }
 
     @Test

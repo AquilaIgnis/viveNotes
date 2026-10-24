@@ -1626,6 +1626,7 @@ fun EditorPane(
                             if (selectedShapes.any { it.canFill }) {
                                 FillAction(
                                     fill = selectedShapes.map { it.fillArgb }.distinct().singleOrNull(),
+                                    paintBucket = true,
                                     onChange = { onSetShapeFill(held.shapeIds, it) },
                                 )
                             }

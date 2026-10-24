@@ -80,6 +80,7 @@ internal val APP_SHORTCUTS: List<AppShortcut> = listOf(
     AppShortcut(R.string.shortcut_underline, FORMATTING, KeyEvent.KEYCODE_U, CTRL),
     AppShortcut(R.string.shortcut_indent, PARAGRAPH, KeyEvent.KEYCODE_TAB, modifiers = 0),
     AppShortcut(R.string.shortcut_outdent, PARAGRAPH, KeyEvent.KEYCODE_TAB, KeyEvent.META_SHIFT_ON),
+    AppShortcut(R.string.shortcut_exit_list, PARAGRAPH, KeyEvent.KEYCODE_ENTER, CTRL),
 
     // The same key, listed twice on purpose. Inside a table Tab walks the
     // grid and only indents where the walk runs out, so a panel that named one meaning would be
@@ -123,6 +124,7 @@ private fun keyLabel(keyCode: Int): String = when (keyCode) {
     KeyEvent.KEYCODE_EQUALS, KeyEvent.KEYCODE_NUMPAD_ADD -> "="
     KeyEvent.KEYCODE_MINUS, KeyEvent.KEYCODE_NUMPAD_SUBTRACT -> "−"
     KeyEvent.KEYCODE_TAB -> "Tab"
+    KeyEvent.KEYCODE_ENTER -> "Enter"
     else -> KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_").removePrefix("NUMPAD_")
 }
 

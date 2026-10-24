@@ -2,7 +2,6 @@ package com.vivenotes.ui.editor
 
 import android.graphics.RectF
 import androidx.annotation.StringRes
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,14 +45,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.vivenotes.R
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.LineTypePicker
-import com.vivenotes.ui.panel.pathEffect
 import com.vivenotes.ui.panel.PanelSlider
 import com.vivenotes.data.ShapeSettings
 import kotlin.math.roundToInt
@@ -372,8 +368,9 @@ internal fun RowScope.SelectAllAction(onSelectAll: () -> Unit) {
  * One action, because it is the only thing about a placed formula the base toolkit does not already
  * cover — the corners resize it, the swatch colours it, and Copy and Delete are the base bar's.
  *
- * The glyph is ƒ ([MaterialSymbols.Function]) — the same one the ribbon's two equation buttons wear,
- * and deliberately not the Σ that hands ink to the math engine.
+ * The glyph is edit_square ([MaterialSymbols.EditSquare]): what the button does to the formula. Not
+ * the ƒ the ribbon's two equation buttons wear to make one, nor the Σ that hands ink to the math
+ * engine.
  *
  * Absent rather than dead when the selection holds two different formulas: there is no one source to
  * open.
@@ -392,7 +389,7 @@ internal fun RowScope.EquationEditAction(latex: String?, onEdit: (String) -> Uni
                 .semantics { contentDescription = description },
         ) {
             Icon(
-                imageVector = MaterialSymbols.Function,
+                imageVector = MaterialSymbols.EditSquare,
                 contentDescription = null,
                 tint = Color(0xFFE8EAED),
                 modifier = Modifier.size(18.dp),
@@ -628,10 +625,11 @@ private fun GridMenu(
  * Only for a shape with an inside. A line, an arrow and an L have none, and the caller leaves this
  * out for them rather than showing it dead. `Outline.Shape.canFill` is what answers that.
  *
- * The button is the fill itself, as the base bar's colour button is the border: a swatch says what a
- * glyph would only label. "None" leads the palette because it is where every shape starts and the
- * one value that cannot be mixed — an absent fill is not a transparent one, and a chequer of the
- * surface behind it is how you say so without a word.
+ * The button shows the fill itself, as the base bar's colour button is the border. A shape's wears
+ * format_color_fill with its bar painted in the fill, faint with none ([paintBucket]); a table's is a
+ * swatch of it. "None" leads the palette because it is where every shape starts and the one value
+ * that cannot be mixed — an absent fill is not a transparent one, and a chequer of the surface behind
+ * it is how you say so without a word.
  *
  * A picture's background is the same control in its own words and glyphs: [words], and the
  * [glyph] / [noneGlyph] pair standing in for the swatch and the Block icon.
@@ -642,8 +640,10 @@ internal fun RowScope.FillAction(
     words: FillWords = FillWords.Fill,
     /** What the button wears once a colour is set. Null shows the colour itself, as a swatch. */
     glyph: ImageVector? = null,
-    /** What it wears with no colour, also leading the "No …" entry. Null is the shape's Block icon. */
+    /** What it wears with no colour, also leading the "No …" entry. Null is the Block icon. */
     noneGlyph: ImageVector? = null,
+    /** Wear the paint bucket, its bar in [fill], in place of [glyph], [noneGlyph] and the swatch. */
+    paintBucket: Boolean = false,
     onChange: (Int?) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
@@ -656,7 +656,17 @@ internal fun RowScope.FillAction(
                 .testTag(OBJECT_FILL_TAG)
                 .semantics { contentDescription = description },
         ) {
-            if (fill == null) {
+            if (paintBucket) {
+                Box {
+                    Icon(MaterialSymbols.FormatColorFillBucket, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(
+                        MaterialSymbols.FormatColorFillBar,
+                        contentDescription = null,
+                        tint = fill?.let(::Color) ?: LocalContentColor.current.copy(alpha = .38f),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            } else if (fill == null) {
                 Icon(
                     noneGlyph ?: MaterialSymbols.Block,
                     contentDescription = null,
@@ -731,7 +741,8 @@ internal enum class FillWords(
  * DataStore, while this one edits the border of the object in the document. Merging them would be a
  * sync bug rather than a refactor.
  *
- * The button draws the current type rather than naming it: a dashed line is a picture of itself.
+ * The button wears line_style ([MaterialSymbols.LineStyle]); the menu it opens is where the current
+ * type shows, selected among the three.
  */
 @Composable
 internal fun RowScope.LineTypeAction(current: LineType, onChange: (LineType) -> Unit) {
@@ -745,17 +756,7 @@ internal fun RowScope.LineTypeAction(current: LineType, onChange: (LineType) -> 
                 .testTag(OBJECT_LINE_TYPE_TAG)
                 .semantics { contentDescription = description },
         ) {
-            Canvas(Modifier.size(width = 18.dp, height = 18.dp)) {
-                val stroke = 2.dp.toPx()
-                drawLine(
-                    color = Color(0xFFE8EAED),
-                    start = Offset(0f, center.y),
-                    end = Offset(size.width, center.y),
-                    strokeWidth = stroke,
-                    cap = StrokeCap.Round,
-                    pathEffect = current.pathEffect(stroke),
-                )
-            }
+            Icon(MaterialSymbols.LineStyle, contentDescription = null, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             Column(Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {

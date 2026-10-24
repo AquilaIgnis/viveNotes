@@ -1,5 +1,8 @@
 package com.vivenotes.richtext
 
+import android.text.TextPaint
+import android.text.style.CharacterStyle
+import android.view.KeyEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -7,6 +10,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.math.abs
+import com.vivenotes.model.Align
 import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
@@ -153,6 +158,143 @@ class OutlineEditTextTest {
             view.text?.insert(4, "\n")
 
             assertEquals(listOf(BlockType.Bullet, BlockType.Bullet), view.blocks().map { it.type })
+        }
+    }
+
+    @Test
+    fun ctrlEnterEndsTheListWithAPlainParagraph() {
+        withEditor { view ->
+            val item = Block(
+                id = "a", type = BlockType.Bullet, indent = 1, align = Align.Center,
+                runs = listOf(Run("item", setOf(Mark.Bold))),
+            )
+            view.setBlocks(listOf(item))
+            view.setSelection(4)
+
+            view.ctrlEnter()
+
+            val atEnd = view.blocks()
+            assertEquals("item\n", view.text.toString())
+            assertEquals(listOf(BlockType.Bullet, BlockType.Paragraph), atEnd.map { it.type })
+            assertEquals("a", atEnd.first().id)
+            assertEquals("the indent carries on as with Enter", listOf(1, 1), atEnd.map { it.indent })
+            assertEquals(Align.Center, atEnd.last().align)
+            assertEquals(5, view.selectionStart)
+            view.text?.insert(5, "next")
+            assertEquals(BlockType.Paragraph, view.blocks().last().type)
+
+            view.setBlocks(listOf(item))
+            view.setSelection(2)
+            view.ctrlEnter()
+            assertEquals(listOf("it", "em"), view.blocks().map { it.text })
+            assertEquals(listOf(BlockType.Bullet, BlockType.Paragraph), view.blocks().map { it.type })
+            assertEquals(setOf(Mark.Bold), view.blocks().last().runs.single().marks)
+
+            view.setBlocks(listOf(item))
+            view.setSelection(1, 3)
+            view.ctrlEnter()
+            assertEquals("i\nm", view.text.toString())
+            assertEquals(2, view.selectionStart)
+        }
+    }
+
+    @Test
+    fun ctrlEnterAlsoLeavesToDosQuotesCodeAndHeadings() {
+        withEditor { view ->
+            listOf(BlockType.Todo, BlockType.Quote, BlockType.Code, BlockType.Heading1, BlockType.Numbered).forEach { type ->
+                val block = Block(
+                    id = "b", type = type, runs = listOf(Run("text")),
+                    checked = if (type == BlockType.Todo) true else null,
+                )
+                view.setBlocks(listOf(block))
+                view.setSelection(4)
+
+                view.ctrlEnter()
+
+                val split = view.blocks()
+                assertEquals(type, split.first().type)
+                assertEquals("the item keeps its tick", block.checked, split.first().checked)
+                assertEquals("after $type", BlockType.Paragraph, split.last().type)
+                assertNull(split.last().checked)
+            }
+        }
+    }
+
+    private fun OutlineEditText.ctrlEnter() {
+        onKeyDown(
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER, 0, KeyEvent.META_CTRL_ON),
+        )
+    }
+
+    /**
+     * Headings 1–3 are blue under any colour their text has — given before or after the heading was
+     * made — and a link in one keeps the link colour. The paint is run through each span in the
+     * order the text layout runs it.
+     */
+    @Test
+    fun headingsAreBlueUnlessTheirTextHasAColour() {
+        withEditor { view ->
+            val red = 0xFFE53935.toInt()
+            view.setBlocks(
+                listOf(
+                    Block(
+                        id = "h", type = BlockType.Heading1,
+                        runs = listOf(
+                            Run("Big"),
+                            Run("red", setOf(Mark.TextColor(red))),
+                            Run("link", setOf(Mark.Link("https://example.com"))),
+                        ),
+                    ),
+                    Block.of("body"),
+                ),
+            )
+            fun drawnColor(offset: Int): Int {
+                val paint = TextPaint().apply {
+                    color = INK
+                    linkColor = LINK
+                }
+                requireNotNull(view.text).getSpans(offset, offset + 1, CharacterStyle::class.java)
+                    .forEach { it.updateDrawState(paint) }
+                return paint.color
+            }
+
+            assertEquals(HeadingColorSpan.HEADING_COLOR, drawnColor(0))
+            assertEquals(red, drawnColor(3))
+            assertEquals(LINK, drawnColor(6))
+            assertEquals(INK, drawnColor(view.text.toString().indexOf("body")))
+
+            view.setSelection(0, 3)
+            view.apply(FormatCommand.SetMark(Mark.TextColor(red)))
+            assertEquals("a colour given after the heading still wins", red, drawnColor(0))
+
+            // Heading 1 again turns the heading back into a paragraph, and its blue goes with it.
+            view.apply(FormatCommand.SetBlockType(BlockType.Heading1))
+            assertEquals(BlockType.Paragraph, view.blocks().first().type)
+            val editable = requireNotNull(view.text)
+            assertTrue(editable.getSpans(0, editable.length, HeadingColorSpan::class.java).isEmpty())
+        }
+    }
+
+    /** The heading blue reaches the screen, and leaves with the heading. */
+    @Test
+    fun aHeadingDrawsInBlue() {
+        withEditor { view ->
+            fun bluePixels(): Int {
+                val bitmap = renderToBitmap(view)
+                val pixels = IntArray(bitmap.width * bitmap.height)
+                bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                return pixels.count { pixel ->
+                    android.graphics.Color.alpha(pixel) > 128 &&
+                        abs(android.graphics.Color.red(pixel) - 0x00) < 40 &&
+                        abs(android.graphics.Color.green(pixel) - 0x71) < 40 &&
+                        abs(android.graphics.Color.blue(pixel) - 0xE3) < 40
+                }
+            }
+            view.setBlocks(listOf(Block.of("Heading", BlockType.Heading2)))
+            assertTrue("a heading drew no blue", bluePixels() > 0)
+            view.setBlocks(listOf(Block.of("Heading")))
+            assertEquals(0, bluePixels())
         }
     }
 
@@ -672,5 +814,8 @@ class OutlineEditTextTest {
 
         /** What `EditorPane` sets the editor's own text size to; see `EditorDefaults`. */
         const val BASE_SIZE = 15
+
+        const val INK = 0xFF202124.toInt()
+        const val LINK = 0xFF0063C6.toInt()
     }
 }

@@ -169,6 +169,25 @@ object SpannableCodec {
         applyDerived(editable, style)
     }
 
+    /**
+     * Gives the paragraphs from the one holding [position] on the [BlockSpan]s in [styles], one
+     * each and in order, then rebuilds the derived spans once — the paragraphs of a paste, which
+     * [updateBlocks] would restyle one full pass at a time.
+     */
+    fun restyleParagraphs(editable: Editable, position: Int, styles: List<BlockSpan>, style: EditorStyle) {
+        val all = paragraphs(editable)
+        val first = all.indexOfFirst { position in it.first..it.second }
+        if (first < 0) return
+        styles.forEachIndexed { offset, meta ->
+            val (start, end) = all.getOrNull(first + offset) ?: return@forEachIndexed
+            editable.getSpans(start, end, BlockSpan::class.java)
+                .filter { editable.getSpanStart(it) <= start && editable.getSpanEnd(it) >= end }
+                .forEach(editable::removeSpan)
+            editable.setSpan(meta, start, end, paragraphFlags(start, end))
+        }
+        applyDerived(editable, style)
+    }
+
     fun blockAt(text: Spanned, position: Int): BlockSpan? {
         val (start, end) = paragraphs(text).firstOrNull { position in it.first..it.second } ?: return null
         return text.getSpans(start, end, BlockSpan::class.java)
@@ -506,6 +525,8 @@ object SpannableCodec {
             meta.type.headingScale?.let { scale ->
                 text.setSpan(HeadingSizeSpan(scale), start, end, flags)
                 text.setSpan(HeadingBoldSpan(), start, end, flags)
+                // Drawn first, so a colour or link on the heading's own text is drawn over it.
+                text.setSpan(HeadingColorSpan(), start, end, flags or HeadingColorSpan.PRIORITY)
             }
 
             if (meta.align != Align.Start) {

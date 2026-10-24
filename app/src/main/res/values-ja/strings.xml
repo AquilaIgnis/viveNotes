@@ -354,6 +354,7 @@
     <string name="shortcut_underline">下線</string>
     <string name="shortcut_indent">インデント</string>
     <string name="shortcut_outdent">インデント解除</string>
+    <string name="shortcut_exit_list">リストを終了</string>
     <string name="shortcut_next_cell">次のセル</string>
     <string name="shortcut_previous_cell">前のセル</string>
 

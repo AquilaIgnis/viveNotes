@@ -45,6 +45,7 @@ object MaterialSymbols {
     val Delete: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_delete)
     val DragIndicator: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_drag_indicator)
     val Edit: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_edit)
+    val EditSquare: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_edit_square)
     val Expand: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_expand)
     val ExpandLess: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_expand_less)
     val ExpandMore: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_expand_more)
@@ -53,6 +54,12 @@ object MaterialSymbols {
     val FormatAlignRight: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_align_right)
     val FormatBold: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_bold)
     val FormatClear: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_clear)
+    /**
+     * format_color_fill split at its last subpath: the bucket, and the bar beneath it that the shape
+     * toolkit paints in the current fill — `ms_rounded_format_color_fill_bucket.xml` and `_bar.xml`.
+     */
+    val FormatColorFillBucket: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_color_fill_bucket)
+    val FormatColorFillBar: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_color_fill_bar)
     val FormatIndentDecrease: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_indent_decrease)
     val FormatIndentIncrease: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_indent_increase)
     val FormatItalic: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_italic)
@@ -68,6 +75,7 @@ object MaterialSymbols {
     val KeyboardDoubleArrowLeft: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_keyboard_double_arrow_left)
     val KeyboardDoubleArrowRight: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_keyboard_double_arrow_right)
     val LassoSelect: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_lasso_select)
+    val LineStyle: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_line_style)
     val Link: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_link)
     val LocalCafe: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_local_cafe)
     val Lock: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_lock)

@@ -364,6 +364,7 @@
     <string name="shortcut_underline">Unterstrichen</string>
     <string name="shortcut_indent">Einrücken</string>
     <string name="shortcut_outdent">Ausrücken</string>
+    <string name="shortcut_exit_list">Liste verlassen</string>
     <string name="shortcut_next_cell">Nächste Zelle</string>
     <string name="shortcut_previous_cell">Vorherige Zelle</string>
 

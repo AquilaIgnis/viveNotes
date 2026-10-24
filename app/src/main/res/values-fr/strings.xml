@@ -364,6 +364,7 @@
     <string name="shortcut_underline">Souligné</string>
     <string name="shortcut_indent">Augmenter le retrait</string>
     <string name="shortcut_outdent">Diminuer le retrait</string>
+    <string name="shortcut_exit_list">Quitter la liste</string>
     <string name="shortcut_next_cell">Cellule suivante</string>
     <string name="shortcut_previous_cell">Cellule précédente</string>
 

@@ -1,5 +1,6 @@
 package com.vivenotes.ui.editor
 
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -141,7 +142,7 @@ class EquationObjectTest {
             }
         }
 
-        compose.onNodeWithTag(OBJECT_EQUATION_EDIT_TAG).performClick()
+        compose.onNodeWithTag(OBJECT_EQUATION_EDIT_TAG).assertContentDescriptionEquals("Edit equation").performClick()
         compose.onNodeWithTag(EquationTags.SOURCE).performTextReplacement("y^3")
         compose.onNodeWithTag(EquationTags.SUBMIT).performClick()
 

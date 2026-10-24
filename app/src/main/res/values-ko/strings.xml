@@ -354,6 +354,7 @@
     <string name="shortcut_underline">밑줄</string>
     <string name="shortcut_indent">들여쓰기</string>
     <string name="shortcut_outdent">내어쓰기</string>
+    <string name="shortcut_exit_list">목록 나가기</string>
     <string name="shortcut_next_cell">다음 셀</string>
     <string name="shortcut_previous_cell">이전 셀</string>
 

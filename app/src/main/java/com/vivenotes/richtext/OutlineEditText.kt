@@ -1,5 +1,7 @@
 package com.vivenotes.richtext
 
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Rect
 import android.text.Editable
@@ -23,6 +25,7 @@ import com.vivenotes.model.Mark
 import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
 import com.vivenotes.model.VideoLink
 import com.vivenotes.model.findVideoLinks
+import com.vivenotes.model.newId
 import com.vivenotes.model.opposingScript
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -443,6 +446,11 @@ class OutlineEditText @JvmOverloads constructor(
             return true
         }
         if (event.isCtrlPressed) {
+            // A new paragraph without the list's marker: Enter would make another item.
+            if (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                insertPlainParagraph()
+                return true
+            }
             val mark = when (keyCode) {
                 KeyEvent.KEYCODE_B -> Mark.Bold
                 KeyEvent.KEYCODE_I -> Mark.Italic
@@ -545,6 +553,125 @@ class OutlineEditText @JvmOverloads constructor(
         refreshAutoEquations()
         refreshLinkStyles()
         refreshVideoEmbeds()
+    }
+
+    /**
+     * Paste keeps what another app copied as HTML — a web page, Google Docs — as the headings,
+     * lists and marks it showed there ([pastedHtmlBlocks]), in the font and size at the caret.
+     *
+     * Every Paste lands here: the ribbon's, the selection toolbar's and Ctrl+V. HTML with no text in
+     * it — a picture's — and a whole site copied, too long to read without a stall, paste their plain
+     * text, not the platform's reading of the HTML. Paste as plain text and a clip with no HTML, such
+     * as this app's own Copy, are left to the platform, as before.
+     */
+    override fun onTextContextMenuItem(id: Int): Boolean {
+        if (id != android.R.id.paste) return super.onTextContextMenuItem(id)
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        // The description first: reading the clip itself is what Android announces, and the
+        // platform's paste would read it a second time.
+        if (clipboard?.primaryClipDescription?.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML) != true) {
+            return super.onTextContextMenuItem(id)
+        }
+        val html = clipboard.primaryClip?.takeIf { it.itemCount == 1 }?.getItemAt(0)?.htmlText
+            ?: return super.onTextContextMenuItem(id)
+        val fragment = html.takeIf { it.length <= MAX_PASTED_HTML_CHARS }?.let { pastedHtmlBlocks(it, typingMarks()) }
+            ?: return super.onTextContextMenuItem(android.R.id.pasteAsPlainText)
+        pasteFormatted(fragment)
+        return true
+    }
+
+    /** What typing at the caret would be drawn in: what [carryFontForward] gives a new character. */
+    private fun typingMarks(): Set<Mark> {
+        val editable = text ?: return defaultMarks
+        val inherited = SpannableCodec.inheritedMarks(editable, minOf(selectionStart, selectionEnd).coerceAtLeast(0))
+            .overriddenBy(pendingMarks)
+        return inherited + defaultMarks.filterNot { default -> inherited.any { it.sameKindAs(default) } }
+    }
+
+    /**
+     * Puts [fragment] over the selection. Its first paragraph joins the one the caret is in and its
+     * last runs on into the text after the selection, each keeping that paragraph's style, unless
+     * the paste begins or ends the paragraph, which then takes the pasted one's. A single heading,
+     * list item, quote or code line pasted where it fills its paragraph keeps its style: it was copied
+     * as that paragraph, where a piece of a paragraph copied here is words out of one.
+     */
+    private fun pasteFormatted(fragment: List<Block>) {
+        val editable = text ?: return
+        if (BaseInputConnection.getComposingSpanStart(editable) >= 0) {
+            BaseInputConnection.removeComposingSpans(editable)
+        }
+        val from = minOf(selectionStart, selectionEnd).coerceAtLeast(0)
+        val to = maxOf(selectionStart, selectionEnd).coerceAtLeast(0)
+        val paragraphs = SpannableCodec.paragraphs(editable)
+        val first = paragraphs.first { from in it.first..it.second }
+        val last = paragraphs.first { to in it.first..it.second }
+        fun plain() = BlockSpan(newId(), BlockType.Paragraph, 0, Align.Start, null)
+        val head = SpannableCodec.blockAt(editable, from) ?: plain()
+        val tail = SpannableCodec.blockAt(editable, to) ?: plain()
+        val startsParagraph = from == first.first
+        val endsParagraph = to == last.second
+        fun BlockSpan.styledAs(block: Block) =
+            copy(type = block.type, indent = block.indent, align = block.align, checked = block.checked)
+
+        val styles = if (fragment.size == 1) {
+            val single = fragment.single()
+            listOf(if (single.type != BlockType.Paragraph && startsParagraph && endsParagraph) head.styledAs(single) else head)
+        } else {
+            buildList {
+                add(if (startsParagraph) head.styledAs(fragment.first()) else head)
+                fragment.subList(1, fragment.lastIndex).forEach {
+                    add(BlockSpan(it.id, it.type, it.indent, it.align, it.checked))
+                }
+                // As Enter splits it: the rest of the paragraph continues it, a to-do unticked.
+                val after = if (first == last) {
+                    BlockSpan(newId(), head.type, head.indent, head.align, head.checked?.let { false })
+                } else {
+                    tail
+                }
+                add(if (endsParagraph) after.styledAs(fragment.last()) else after)
+            }
+        }
+
+        val inserted = SpannableCodec.render(fragment, editorStyle)
+        suppressWatcher = true
+        editable.replace(from, to, inserted)
+        SpannableCodec.normalize(editable, editorStyle)
+        SpannableCodec.restyleParagraphs(editable, from, styles, editorStyle)
+        suppressWatcher = false
+        // Typing on continues in the formatting just pasted, as it would after that text was typed.
+        setSelection(from + inserted.length)
+
+        onBlocksChanged?.invoke(SpannableCodec.parse(editable))
+        emitSelectionState()
+        refreshAutoEquations()
+        refreshLinkStyles()
+        refreshVideoEmbeds()
+    }
+
+    /**
+     * Ctrl+Enter: ends the paragraph at the caret as Enter does, but the paragraph that follows is a
+     * plain one — no bullet, number, to-do box, quote, code or heading — which is how a list is left
+     * without first emptying an item. It keeps the indent and alignment Enter would carry on. A
+     * selection is replaced, as by typing.
+     */
+    private fun insertPlainParagraph() {
+        val editable = text ?: return
+        if (BaseInputConnection.getComposingSpanStart(editable) >= 0) {
+            BaseInputConnection.removeComposingSpans(editable)
+        }
+        val from = minOf(selectionStart, selectionEnd).coerceAtLeast(0)
+        val to = maxOf(selectionStart, selectionEnd).coerceAtLeast(0)
+        // Through the watcher, as the newline Enter types: the new paragraph continues the old one,
+        // and is then made a plain one.
+        editable.replace(from, to, "\n")
+        setSelection(from + 1)
+        suppressWatcher = true
+        SpannableCodec.updateBlocks(editable, from + 1, from + 1, editorStyle) {
+            it.copy(type = BlockType.Paragraph, checked = null)
+        }
+        suppressWatcher = false
+        onBlocksChanged?.invoke(SpannableCodec.parse(editable))
+        emitSelectionState()
     }
 
     private fun insertLink(editable: Editable, label: String, url: String, from: Int, to: Int) {
@@ -1052,6 +1179,7 @@ class OutlineEditText @JvmOverloads constructor(
 
     private companion object {
         const val MAX_INDENT = 8
+        const val MAX_PASTED_HTML_CHARS = 4 * 1024 * 1024
         const val AUTO_EQUATION_CACHE_SIZE = 48
     }
 

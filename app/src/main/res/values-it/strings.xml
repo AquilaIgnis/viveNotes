@@ -364,6 +364,7 @@
     <string name="shortcut_underline">Sottolineato</string>
     <string name="shortcut_indent">Aumenta rientro</string>
     <string name="shortcut_outdent">Riduci rientro</string>
+    <string name="shortcut_exit_list">Esci dall\'elenco</string>
     <string name="shortcut_next_cell">Cella successiva</string>
     <string name="shortcut_previous_cell">Cella precedente</string>
 

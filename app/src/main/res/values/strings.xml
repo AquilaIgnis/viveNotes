@@ -405,6 +405,7 @@
     <string name="shortcut_underline">Underline</string>
     <string name="shortcut_indent">Indent</string>
     <string name="shortcut_outdent">Outdent</string>
+    <string name="shortcut_exit_list">Exit list</string>
     <string name="shortcut_next_cell">Next cell</string>
     <string name="shortcut_previous_cell">Previous cell</string>
 
