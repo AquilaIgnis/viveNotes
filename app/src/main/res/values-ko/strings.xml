@@ -4,7 +4,7 @@
     <string name="account">계정</string>
     <string name="navigate_back">뒤로</string>
     <string name="account_title">언제 어디서나 기록하는 나의 노트</string>
-    <string name="account_supporting_text">로그인하여 기기 간에 노트를 동기화하거나, ViveNotes를 직접 관리하는 서버에 연결하세요.</string>
+    <string name="account_supporting_text">로그인하여 기기 간에 노트북을 동기화하거나, ViveNotes를 직접 관리하는 서버에 연결하세요.</string>
     <string name="account_log_in">로그인</string>
     <string name="account_sign_up">회원가입</string>
     <string name="account_self_host">자체 호스팅</string>
@@ -69,7 +69,7 @@
     <string name="account_subscription_coupon_label">쿠폰 코드</string>
     <string name="account_subscription_coupon_redeem">등록</string>
     <string name="account_subscription_coupon_redeeming">쿠폰 등록 중</string>
-    <string name="account_subscription_coupon_applied">프로모션 저장소 %1$개월이 추가되었습니다.</string>
+    <string name="account_subscription_coupon_applied">프로모션 저장소 %1$d개월이 추가되었습니다.</string>
     <string name="account_subscription_error_play_unavailable">이 기기에서는 Google Play 결제를 사용할 수 없습니다.</string>
     <string name="account_subscription_error_play_network">Google Play에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요.</string>
     <string name="account_subscription_error_product">이 Play 계정에서는 월간 요금제를 아직 사용할 수 없습니다.</string>
@@ -104,10 +104,10 @@
     <string name="account_sync_error_parent">상위 항목이 없어 섹션이나 페이지를 보낼 수 없습니다.</string>
     <string name="account_disconnect_failed">기기 해제에 실패했습니다. 다시 시도할 수 있도록 토큰이 유지되었습니다.</string>
     <string name="account_disconnect_anyway_note">서버가 응답하지 않음</string>
-    <string name="account_disconnect_anyway">서버 잊기</string>
+    <string name="account_disconnect_anyway">서버 등록 해제</string>
     <string name="account_disconnecting">이 기기 해제 중</string>
     <string name="account_disconnect">연결 해제</string>
-    <string name="account_disconnect_title">이 server에서 연결을 해제하시겠습니까?</string>
+    <string name="account_disconnect_title">이 서버에서 연결을 해제하시겠습니까?</string>
     <string name="account_disconnect_body">서버가 이 기기의 연결을 해제합니다. 이 기기에 이미 있는 노트는 그대로 유지됩니다.</string>
     <string name="account_disconnect_cancel">취소</string>
     <string name="account_error_address">올바른 서버 주소가 아닙니다. https://notes.example.com과 같이 입력하세요.</string>
@@ -225,9 +225,6 @@
     <string name="ai_section_text">텍스트</string>
     <string name="ai_section_text_in_pictures">사진 속 텍스트</string>
     <string name="ai_section_handwriting_in_search">검색 내 손글씨</string>
-    <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
-    <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
-    <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
     <string name="ai_model_unimernet_strength">더 빠름</string>
     <string name="ai_model_formulanet_strength">행렬 읽기</string>
     <string name="ai_model_unimernet_small_strength">가장 정확함</string>
@@ -248,9 +245,9 @@
     <plurals name="ai_ink_text_to_go">
         <item quantity="other">읽는 중… %d페이지 남음</item>
     </plurals>
-    <string name="ai_ink_text_failed">페이지 %1$d개 읽음 · %2$d개 읽을 수 없음</string>
+    <string name="ai_ink_text_failed">%1$d페이지 읽음 · %2$d개 읽을 수 없음</string>
     <plurals name="ai_ink_text_read">
-        <item quantity="other">페이지 %d개 읽음</item>
+        <item quantity="other">%d페이지 읽음</item>
     </plurals>
     <string name="ai_picture_text_title">사진 속 텍스트 검색</string>
     <string name="ai_picture_text_description">붙여넣은 스크린샷과 사진을 읽어 콘텐츠 패널에서 찾을 수 있도록 합니다.</string>
@@ -273,7 +270,7 @@
     <plurals name="content_status_pages">
         <item quantity="other">페이지 %d개</item>
     </plurals>
-    <string name="content_status_first">첫 번째 %1$s</string>
+    <string name="content_status_first">상위 %1$s</string>
     <string name="content_status_found">%2$s 중 %1$s</string>
     <string name="content_reading">%1$s 읽는 중…</string>
     <string name="content_reading_both">%1$s 및 %2$s 읽는 중…</string>
@@ -318,7 +315,7 @@
     <string name="eraser_mode_normal">일반</string>
     <string name="eraser_mode_object">개체</string>
 
-    <string name="hardware_stylus">스타러스</string>
+    <string name="hardware_stylus">스타일러스</string>
     <string name="hardware_keyboard">키보드</string>
     <string name="hardware_finger_draws">손가락으로 그리기 허용</string>
     <string name="hardware_pen_button">펜 버튼</string>
@@ -334,7 +331,7 @@
     <string name="stylus_action_pen_3">펜 3</string>
     <string name="stylus_action_highlighter">형광펜</string>
     <string name="stylus_action_eraser">지우개</string>
-    <string name="stylus_action_lasso">올라소 선택</string>
+    <string name="stylus_action_lasso">올가미 선택</string>
     <string name="stylus_action_undo">실행 취소</string>
     <string name="stylus_action_redo">다시 실행</string>
     <string name="shortcut_group_pages">페이지</string>
@@ -414,7 +411,6 @@
 
     <string name="recognition_processing">이 기기에서 선택한 잉크 처리 중…</string>
     <string name="recognition_failed">인식 실패</string>
-    <string name="recognition_source_latex" translatable="false">LaTeX</string>
     <string name="recognition_source_text">텍스트</string>
     <string name="recognition_copy">복사</string>
     <string name="recognition_copied">클립보드에 복사됨</string>
@@ -511,7 +507,6 @@
     <string name="ribbon_link_edit">링크 편집</string>
     <string name="ribbon_link_text">표시할 텍스트</string>
     <string name="ribbon_link_address">웹 주소</string>
-    <string name="ribbon_link_address_example" translatable="false">https://example.com</string>
     <string name="ribbon_link_cancel">취소</string>
     <string name="ribbon_link_apply">적용</string>
     <string name="ribbon_font_hint">글꼴을 길게 누르면 기본값으로 입력됩니다</string>
@@ -529,7 +524,7 @@
 
     <string name="draw_undo">실행 취소</string>
     <string name="draw_redo">다시 실행</string>
-    <string name="draw_lasso">올라소</string>
+    <string name="draw_lasso">올가미</string>
     <string name="draw_insert_space">간격 삽입</string>
     <string name="draw_equation">수식</string>
     <string name="draw_calculator">계산기</string>
@@ -739,7 +734,7 @@
     <string name="workspace_math_failed">수학 작업에 실패했습니다.</string>
     <string name="workspace_clip_latex">인식된 LaTeX</string>
     <string name="workspace_clip_text">인식된 텍스트</string>
-    <string name="workspace_recognition_empty">잉크를 선택하고 인식을 선택하여 여기에 결과를 확인하세요.</string>
+    <string name="workspace_recognition_empty">잉크를 선택하고 \'인식\'을 누르면 여기에 결과가 표시됩니다.</string>
     <string name="workspace_no_page">선택된 페이지 없음</string>
     <string name="workspace_close_search">검색 닫기</string>
     <string name="workspace_export_file_fallback">노트북</string>
@@ -770,7 +765,7 @@
     <string name="delete_nothing_to_keep">내용이 비어 있으므로 삭제된 항목에 보관되지 않고 영구 삭제됩니다.</string>
     <string name="delete_section_empty">이 섹션이 제거됩니다. 나중에 삭제된 항목에서 복원할 수 있습니다.</string>
     <plurals name="delete_section_pages">
-        <item quantity="other">포함된 페이지 %d개도 함께 삭제됩니다. 나중에 삭제된 항목에서 복원할 수 있습니다.</item>
+        <item quantity="other">포함된 %d개 페이지도 함께 삭제됩니다. 나중에 삭제된 항목에서 복원할 수 있습니다.</item>
     </plurals>
     <string name="delete_notebook_empty">이 노트북이 제거됩니다. 나중에 삭제된 항목에서 복원할 수 있습니다.</string>
     <string name="delete_notebook_contents">포함된 %1$s 및 %2$s이(가) 함께 삭제됩니다. 나중에 삭제된 항목에서 복원할 수 있습니다.</string>

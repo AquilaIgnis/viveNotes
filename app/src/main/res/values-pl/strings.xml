@@ -225,9 +225,6 @@
     <string name="ai_section_text">Tekst</string>
     <string name="ai_section_text_in_pictures">Tekst na zdjęciach</string>
     <string name="ai_section_handwriting_in_search">Pismo odręczne w wyszukiwaniu</string>
-    <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
-    <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
-    <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
     <string name="ai_model_unimernet_strength">Szybszy</string>
     <string name="ai_model_formulanet_strength">Odczytuje macierze</string>
     <string name="ai_model_unimernet_small_strength">Najdokładniejszy</string>
@@ -247,7 +244,7 @@
     <string name="ai_ink_text_off">Wyłączone. Pismo odręczne nie jest odczytywane i nic nie jest zapisywane.</string>
     <!-- Polish plural rules: 1 -> one, ending in 2,3,4 except 12,13,14 -> few, others -> many -->
     <plurals name="ai_ink_text_to_go">
-        <item quantity="one">Odczytywanie… do końca 1 strona</item>
+        <item quantity="one">Odczytywanie… do końca %d strona</item>
         <item quantity="few">Odczytywanie… do końca %d strony</item>
         <item quantity="many">Odczytywanie… do końca %d stron</item>
         <item quantity="other">Odczytywanie… do końca %d strony</item>
@@ -365,7 +362,7 @@
     <string name="stylus_action_pen_3">Pióro 3</string>
     <string name="stylus_action_highlighter">Zakreślacz</string>
     <string name="stylus_action_eraser">Gumka</string>
-    <string name="stylus_action_lasso">Zaznaczenie lasem</string>
+    <string name="stylus_action_lasso">Zaznaczanie lassem</string>
     <string name="stylus_action_undo">Cofnij</string>
     <string name="stylus_action_redo">Ponów</string>
     <string name="shortcut_group_pages">Strony</string>
@@ -445,7 +442,6 @@
 
     <string name="recognition_processing">Przetwarzanie zaznaczonego atramentu na tym urządzeniu…</string>
     <string name="recognition_failed">Rozpoznawanie nie powiodło się</string>
-    <string name="recognition_source_latex" translatable="false">LaTeX</string>
     <string name="recognition_source_text">Tekst</string>
     <string name="recognition_copy">Kopiuj</string>
     <string name="recognition_copied">Skopiowano do schowka</string>
@@ -542,7 +538,6 @@
     <string name="ribbon_link_edit">Edytuj link</string>
     <string name="ribbon_link_text">Tekst do wyświetlenia</string>
     <string name="ribbon_link_address">Adres strony www</string>
-    <string name="ribbon_link_address_example" translatable="false">https://example.com</string>
     <string name="ribbon_link_cancel">Anuluj</string>
     <string name="ribbon_link_apply">Zastosuj</string>
     <string name="ribbon_font_hint">Przytrzymaj czcionkę, aby domyślnie pisać jej stylem</string>
@@ -588,7 +583,7 @@
     <string name="view_paper_standard_ruled">Standardowy w linię</string>
     <string name="view_paper_wide_ruled">Szeroko w linię</string>
     <string name="view_paper_dotted">W kropki</string>
-    <string name="view_paper_hexagonal">Sześciokątny</string>
+    <string name="view_paper_hexagonal">W kratkę heksagonalną</string>
     <string name="view_paper_grid_medium">Średnia krata</string>
     <string name="view_paper_grid_large">Duża krata</string>
     <string name="view_page_color">Kolor strony</string>
@@ -790,7 +785,7 @@
     <string name="name_dialog_rename">Zmień nazwę</string>
     <string name="name_dialog_hint">Nazwa</string>
 
-    <string name="transfer_running">Praca z notesem</string>
+    <string name="transfer_running">Przetwarzanie notesu…</string>
     <string name="transfer_failed">Przenoszenie notesu nie powiodło się</string>
     <string name="transfer_complete">Zakończono przenoszenie notesu</string>
     <string name="transfer_preparing">Sprawdzanie i przygotowywanie notesu…</string>
@@ -810,7 +805,7 @@
     </plurals>
     <string name="delete_title">Usunąć %1$s?</string>
     <string name="delete_confirm">Usuń</string>
-    <string name="delete_nothing_to_keep">To nic nie zawiera, więc zostanie usunięte na stałe zamiast trafiać do Usuniętych elementów.</string>
+    <string name="delete_nothing_to_keep">Zawartość jest pusta, więc zostanie usunięta na stałe, zamiast trafiać do Usuniętych elementów.</string>
     <string name="delete_section_empty">Ta sekcja zostanie usunięta. Możesz ją później przywrócić z Usuniętych elementów.</string>
     <plurals name="delete_section_pages">
         <item quantity="one">Jej %d strona zostanie usunięta razem z nią. Możesz ją później przywrócić z Usuniętych elementów.</item>
@@ -819,7 +814,7 @@
         <item quantity="other">Jej %d strony zostaną usunięte razem z nią. Możesz je później przywrócić z Usuniętych elementów.</item>
     </plurals>
     <string name="delete_notebook_empty">Ten notes zostanie usunięty. Możesz go później przywrócić z Usuniętych elementów.</string>
-    <string name="delete_notebook_contents">Jej %1$s i %2$s zostaną usunięte razem z nim. Możesz je później przywrócić z Usuniętych elementów.</string>
+    <string name="delete_notebook_contents">Zawarte w nim %1$s i %2$s zostaną usunięte razem z nim. Możesz je później przywrócić z Usuniętych elementów.</string>
     <string name="close_notebook_title">Zamknąć %1$s?</string>
     <string name="close_notebook_confirm">Zamknij</string>
     <string name="close_notebook_contents">Nic nie zostało usunięte. %1$s i %2$s pozostają na swoim miejscu, a notes znika z panelu, dopóki nie otworzysz go ponownie z Zamkniętych notesów.</string>

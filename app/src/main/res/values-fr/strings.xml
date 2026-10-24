@@ -225,9 +225,6 @@
     <string name="ai_section_text">Texte</string>
     <string name="ai_section_text_in_pictures">Texte dans les images</string>
     <string name="ai_section_handwriting_in_search">Écriture manuscrite dans la recherche</string>
-    <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
-    <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
-    <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
     <string name="ai_model_unimernet_strength">Plus rapide</string>
     <string name="ai_model_formulanet_strength">Lit les matrices</string>
     <string name="ai_model_unimernet_small_strength">Le plus précis</string>
@@ -424,7 +421,6 @@
 
     <string name="recognition_processing">Traitement de l\'encre sélectionnée sur cet appareil…</string>
     <string name="recognition_failed">Échec de la reconnaissance</string>
-    <string name="recognition_source_latex" translatable="false">LaTeX</string>
     <string name="recognition_source_text">Texte</string>
     <string name="recognition_copy">Copier</string>
     <string name="recognition_copied">Copié dans le presse-papiers</string>
@@ -521,7 +517,6 @@
     <string name="ribbon_link_edit">Modifier le lien</string>
     <string name="ribbon_link_text">Texte à afficher</string>
     <string name="ribbon_link_address">Adresse Web</string>
-    <string name="ribbon_link_address_example" translatable="false">https://example.com</string>
     <string name="ribbon_link_cancel">Annuler</string>
     <string name="ribbon_link_apply">Appliquer</string>
     <string name="ribbon_font_hint">Maintenez une police enfoncée pour écrire avec par défaut</string>
@@ -566,8 +561,8 @@
     <string name="view_paper_none">Aucun</string>
     <string name="view_paper_standard_ruled">Ligné standard</string>
     <string name="view_paper_wide_ruled">Ligné grand format</string>
-    <string name="view_paper_dotted">À points</string>
-    <string name="view_paper_hexagonal">Hexagonal</string>
+    <string name="view_paper_dotted">Papier à points</string>
+    <string name="view_paper_hexagonal">Papier hexagonal</string>
     <string name="view_paper_grid_medium">Grille moyenne</string>
     <string name="view_paper_grid_large">Grande grille</string>
     <string name="view_page_color">Couleur de page</string>
@@ -646,7 +641,7 @@
     <string name="shape_button">Formes</string>
     <string name="shape_button_panel">Forme</string>
     <string name="table_button">Tableau</string>
-    <string name="table_button_ink">Tableau à écrire dedans</string>
+    <string name="table_button_ink">Tableau d\'écriture manuscrite</string>
     <string name="table_move">Déplacer le tableau</string>
 
     <string name="calculator_title">Calculatrice</string>
@@ -765,7 +760,7 @@
     <string name="name_dialog_rename">Renommer</string>
     <string name="name_dialog_hint">Nom</string>
 
-    <string name="transfer_running">Utilisation du carnet</string>
+    <string name="transfer_running">Traitement du carnet…</string>
     <string name="transfer_failed">Échec du transfert du carnet</string>
     <string name="transfer_complete">Transfert du carnet terminé</string>
     <string name="transfer_preparing">Vérification et préparation du carnet…</string>

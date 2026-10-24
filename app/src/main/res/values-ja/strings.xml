@@ -65,10 +65,10 @@
     <string name="account_subscription_paid_on_hold">お支払い方法が修正されるまで、Google Playによってサブスクリプションが保留されています。</string>
     <string name="account_subscription_paid_paused">Google Playのサブスクリプションが一時停止されています。</string>
     <string name="account_subscription_paid_expired">Google Playのサブスクリプションの有効期限が切れています。</string>
-    <string name="account_subscription_coupon_prompt">クーポンコードをお持ちですか？こちらで換算</string>
+    <string name="account_subscription_coupon_prompt">クーポンコードをお持ちですか？こちらで引き換え</string>
     <string name="account_subscription_coupon_label">クーポンコード</string>
-    <string name="account_subscription_coupon_redeem">換算</string>
-    <string name="account_subscription_coupon_redeeming">クーポンを換算中</string>
+    <string name="account_subscription_coupon_redeem">引き換える</string>
+    <string name="account_subscription_coupon_redeeming">クーポンを引き換え中</string>
     <string name="account_subscription_coupon_applied">%1$dか月のプロモーションストレージが追加されました。</string>
     <string name="account_subscription_error_play_unavailable">このデバイスではGoogle Play課金を利用できません。</string>
     <string name="account_subscription_error_play_network">Google Playに接続できませんでした。接続を確認してもう一度お試しください。</string>
@@ -104,7 +104,7 @@
     <string name="account_sync_error_parent">親要素が見つからないため、セクションまたはページを送信できませんでした。</string>
     <string name="account_disconnect_failed">デバイスの取り消しに失敗しました。もう一度試せるよう、トークンは保持されました。</string>
     <string name="account_disconnect_anyway_note">サーバーからの応答がありません</string>
-    <string name="account_disconnect_anyway">サーバーを忘れる</string>
+    <string name="account_disconnect_anyway">サーバー情報を削除</string>
     <string name="account_disconnecting">このデバイスの登録を取り消しています</string>
     <string name="account_disconnect">切断</string>
     <string name="account_disconnect_title">このサーバーから切断しますか？</string>
@@ -129,7 +129,7 @@
     <string name="account_error_account_unavailable">このアカウントは利用できません。心当たりがない場合はサポートにお問い合わせください。</string>
     <string name="account_error_no_google_account">このデバイスで利用可能なGoogleアカウントがありません。設定で追加してからもう一度お試しください。</string>
     <string name="account_error_google_unconfigured">このビルドではGoogleサインインが設定されていません。代わりに独自のサーバーを使用してください。</string>
-    <string name="account_error_link_credentials">パスワードが正しくないか、メールアドレスが先ほど使用したGoogleアカウントの住所と一致しません。</string>
+    <string name="account_error_link_credentials">パスワードが正しくないか、メールアドレスが先ほど使用したGoogleアカウントのアドレスと一致しません。</string>
     <string name="account_error_not_stored">このデバイスはサーバーに登録されましたが、トークンを保存できなかったため使用できません。ストレージを空けてから再接続してください（使用していないデバイスはサーバーのダッシュボードから削除できます）。</string>
 
     <string name="account_forgot_password">パスワードをお忘れですか？</string>
@@ -176,7 +176,7 @@
     <string name="closed_notebooks_empty">閉じたノートブックはありません。ノートブックを閉じると、何も削除せずにパネルから非表示になります。</string>
     <string name="closed_notebooks_on_device">このデバイス上</string>
     <string name="closed_notebooks_in_cloud">クラウド内</string>
-    <string name="closed_notebooks_in_cloud_supporting">これらのノートブックのページはサーバー上にあり、このデバイスにはないため、元に戻すまで検索やオープンはできません。</string>
+    <string name="closed_notebooks_in_cloud_supporting">これらのノートブックのページはサーバー上にあり、このデバイスにはないため、デバイスに戻すまで検索したり開いたりすることはできません。</string>
     <string name="closed_notebooks_no_account">これらを戻すには、アカウント画面でアカウントを接続してください。</string>
     <string name="closed_notebook_contents">%1$dセクション · %2$dページ</string>
     <string name="closed_notebook_open">開く</string>
@@ -225,9 +225,6 @@
     <string name="ai_section_text">テキスト</string>
     <string name="ai_section_text_in_pictures">画像内のテキスト</string>
     <string name="ai_section_handwriting_in_search">手書き文字の検索</string>
-    <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
-    <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
-    <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
     <string name="ai_model_unimernet_strength">高速</string>
     <string name="ai_model_formulanet_strength">行列を読み取る</string>
     <string name="ai_model_unimernet_small_strength">最も高精度</string>
@@ -273,7 +270,7 @@
     <plurals name="content_status_pages">
         <item quantity="other">%dページ</item>
     </plurals>
-    <string name="content_status_first">最初の子 %1$s</string>
+    <string name="content_status_first">最初の%1$s</string>
     <string name="content_status_found">%2$s中 %1$s</string>
     <string name="content_reading">%1$sを読み取り中…</string>
     <string name="content_reading_both">%1$sと%2$sを読み取り中…</string>
@@ -282,7 +279,7 @@
     </plurals>
     <string name="content_reading_pictures_unnumbered">写真</string>
     <plurals name="content_reading_handwritten_pages">
-        <item quantity="other">%dページの手書きページ</item>
+        <item quantity="other">%dページの手書き</item>
     </plurals>
     <string name="content_reading_handwritten_pages_unnumbered">手書きページ</string>
     <plurals name="content_more_on_page">
@@ -414,7 +411,6 @@
 
     <string name="recognition_processing">このデバイスで選択したインクを処理中…</string>
     <string name="recognition_failed">認識に失敗しました</string>
-    <string name="recognition_source_latex" translatable="false">LaTeX</string>
     <string name="recognition_source_text">テキスト</string>
     <string name="recognition_copy">コピー</string>
     <string name="recognition_copied">クリップボードにコピーしました</string>
@@ -511,7 +507,6 @@
     <string name="ribbon_link_edit">リンクを編集</string>
     <string name="ribbon_link_text">表示するテキスト</string>
     <string name="ribbon_link_address">Webアドレス</string>
-    <string name="ribbon_link_address_example" translatable="false">https://example.com</string>
     <string name="ribbon_link_cancel">キャンセル</string>
     <string name="ribbon_link_apply">適用</string>
     <string name="ribbon_font_hint">フォントを長押しすると、デフォルトでそのフォントを使用できます</string>
@@ -557,7 +552,7 @@
     <string name="view_paper_standard_ruled">標準横罫線</string>
     <string name="view_paper_wide_ruled">広めの横罫線</string>
     <string name="view_paper_dotted">ドット方眼</string>
-    <string name="view_paper_hexagonal">ハニカム</string>
+    <string name="view_paper_hexagonal">六角形方眼</string>
     <string name="view_paper_grid_medium">中方眼</string>
     <string name="view_paper_grid_large">大方眼</string>
     <string name="view_page_color">ページの色</string>
@@ -687,7 +682,7 @@
     <string name="online_image_unreachable">画像検索に接続できませんでした。接続を確認してもう一度お試しください。</string>
     <string name="online_image_download_failed">その画像をダウンロードできませんでした。別の画像をお試しください。</string>
 
-    <string name="about_description">Source First License 1.1の下でライセンスされた、OneNoteのオープンソース代替品</string>
+    <string name="about_description">Source First License 1.1に基づき提供される、OneNoteのオープンソース代替アプリ</string>
     <string name="about_source">GitHubで表示</string>
     <string name="about_donate">プロジェクトに寄付</string>
     <string name="about_close">閉じる</string>

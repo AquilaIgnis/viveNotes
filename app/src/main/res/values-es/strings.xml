@@ -21,7 +21,7 @@
     <string name="account_connected_created">Cuenta creada</string>
     <string name="account_self_host_description">Conéctate a tu propio servidor de ViveNotes.</string>
     <string name="account_server_url">URL del servidor</string>
-    <string name="account_server_url_example" translatable="false">https://notes.example.com</string>
+    <string name="account_server_url_example">https://notes.example.com</string>
     <string name="account_email">Correo electrónico</string>
     <string name="account_password">Contraseña</string>
     <string name="account_connect">Conectar</string>
@@ -80,7 +80,7 @@
     <string name="account_subscription_error_coupon_expired">Ese cupón ha caducado.</string>
     <string name="account_subscription_error_coupon_used">Esta cuenta ya ha canjeado ese cupón.</string>
     <string name="account_subscription_error_purchase">Google Play no pudo verificar esa compra.</string>
-    <string name="account_subscription_error_purchase_owner">Ese compra ya pertenece a otra cuenta de ViveNotes.</string>
+    <string name="account_subscription_error_purchase_owner">Esa compra ya pertenece a otra cuenta de ViveNotes.</string>
     <string name="account_subscription_error_server_billing">Las suscripciones no están disponibles temporalmente en el servidor. Inténtalo de nuevo en breve.</string>
     <string name="account_subscription_error_request">No se aceptó la solicitud de suscripción. Inténtalo de nuevo.</string>
     <string name="account_subscription_error_server_unreachable">No se pudo contactar con el servidor en la nube. Tu compra de Play está segura y se restaurará cuando se vuelva a conectar.</string>
@@ -237,9 +237,6 @@
     <string name="ai_section_text">Texto</string>
     <string name="ai_section_text_in_pictures">Texto en imágenes</string>
     <string name="ai_section_handwriting_in_search">Escritura a mano en la búsqueda</string>
-    <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
-    <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
-    <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
     <string name="ai_model_unimernet_strength">Más rápido</string>
     <string name="ai_model_formulanet_strength">Lee matrices</string>
     <string name="ai_model_unimernet_small_strength">El más preciso</string>
@@ -437,7 +434,6 @@
 
     <string name="recognition_processing">Procesando la tinta seleccionada en este dispositivo…</string>
     <string name="recognition_failed">Error en el reconocimiento</string>
-    <string name="recognition_source_latex" translatable="false">LaTeX</string>
     <string name="recognition_source_text">Texto</string>
     <string name="recognition_copy">Copiar</string>
     <string name="recognition_copied">Copiado al portapapeles</string>
@@ -455,7 +451,7 @@
     <string name="ruler_diameter">Diámetro</string>
     <string name="ruler_diameter_inches">%1$.1f pulg</string>
 
-    <string name="shape_page">Forma de la página %1$d</string>
+    <string name="shape_page">Página de formas %1$d</string>
     <string name="shape_line">Línea</string>
     <string name="shape_arrow">Flecha</string>
     <string name="shape_rectangle">Rectángulo</string>
@@ -535,12 +531,11 @@
     <string name="ribbon_link_edit">Editar enlace</string>
     <string name="ribbon_link_text">Texto a mostrar</string>
     <string name="ribbon_link_address">Dirección web</string>
-    <string name="ribbon_link_address_example" translatable="false">https://example.com</string>
     <string name="ribbon_link_cancel">Cancelar</string>
     <string name="ribbon_link_apply">Aplicar</string>
     <string name="ribbon_font_hint">Mantén presionada una fuente para escribir en ella de forma predeterminada</string>
     <string name="ribbon_font_size_hint">Mantén presionado un tamaño para iniciar el texto nuevo con él</string>
-    <string name="ribbon_make_default">Predeterminar</string>
+    <string name="ribbon_make_default">Establecer como predeterminado</string>
     <string name="ribbon_default">Predeterminado</string>
     <string name="ribbon_color_none">Ninguno</string>
     <string name="ribbon_styles">Estilos</string>
@@ -763,7 +758,7 @@
     </plurals>
 
     <!-- The horizontal section tabs. -->
-    <string name="tabs_no_notebook">Ningún cuaderno</string>
+    <string name="tabs_no_notebook">Sin cuaderno</string>
     <string name="tabs_choose_notebook">Elegir cuaderno</string>
     <string name="tabs_new_section">Nueva sección</string>
     <string name="scroll_more_left">Más a la izquierda</string>
@@ -780,7 +775,7 @@
     <string name="workspace_clip_latex">LaTeX reconocido</string>
     <string name="workspace_clip_text">Texto reconocido</string>
     <string name="workspace_recognition_empty">Selecciona tinta y elige Reconocer para ver un resultado aquí.</string>
-    <string name="workspace_no_page">Ninguna página seleccionada</string>
+    <string name="workspace_no_page">No hay ninguna página seleccionada</string>
     <string name="workspace_close_search">Cerrar búsqueda</string>
     <string name="workspace_export_file_fallback">Cuaderno</string>
     <string name="dialog_cancel">Cancelar</string>
@@ -793,7 +788,7 @@
     <string name="name_dialog_rename">Cambiar nombre</string>
     <string name="name_dialog_hint">Nombre</string>
 
-    <string name="transfer_running">Trabajando con el cuaderno</string>
+    <string name="transfer_running">Procesando el cuaderno…</string>
     <string name="transfer_failed">Error en la transferencia del cuaderno</string>
     <string name="transfer_complete">Transferencia del cuaderno completada</string>
     <string name="transfer_preparing">Comprobando y preparando el cuaderno…</string>

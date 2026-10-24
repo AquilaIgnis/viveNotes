@@ -89,7 +89,7 @@ private val releaseKeystore: File? =
 private val signedRelease: Boolean = releaseKeystore != null && !testRelease
 
 // Single source of truth for `versionName` and for the [releaseArtifactName] built from it.
-private val appVersionName = "1.3.2"
+private val appVersionName = "1.3.3-beta"
 
 // `vivenotes-1.2.2.apk` / `.aab`, the names a signed release is published under.
 private val releaseArtifactName = "vivenotes-$appVersionName"

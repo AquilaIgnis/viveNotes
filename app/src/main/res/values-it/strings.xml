@@ -225,9 +225,6 @@
     <string name="ai_section_text">Testo</string>
     <string name="ai_section_text_in_pictures">Testo nelle immagini</string>
     <string name="ai_section_handwriting_in_search">Scrittura manuale nella ricerca</string>
-    <string name="ai_model_unimernet_name" translatable="false">UniMERNet-T</string>
-    <string name="ai_model_formulanet_name" translatable="false">PP-FormulaNet-S</string>
-    <string name="ai_model_ocr_name" translatable="false">PP-OCRv5 Mobile</string>
     <string name="ai_model_unimernet_strength">Più veloce</string>
     <string name="ai_model_formulanet_strength">Legge le matrici</string>
     <string name="ai_model_unimernet_small_strength">Il più preciso</string>
@@ -246,7 +243,7 @@
     <string name="ai_ink_text_rebuild">Rileggi ogni pagina scritta a mano</string>
     <string name="ai_ink_text_off">Disattivo. La scrittura manuale non viene letta e non viene memorizzato nulla.</string>
     <plurals name="ai_ink_text_to_go">
-        <item quantity="one">Lettura in corso… manca 1 pagina</item>
+        <item quantity="one">Lettura in corso… manca %d pagina</item>
         <item quantity="other">Lettura in corso… mancano %d pagine</item>
     </plurals>
     <string name="ai_ink_text_failed">%1$d pagine lette · %2$d non hanno potuto essere lette</string>
@@ -258,7 +255,7 @@
     <string name="ai_picture_text_description">Legge schermate e foto incollate affinché il pannello Contenuto possa trovarle.</string>
     <string name="ai_picture_text_rebuild">Rileggi ogni immagine</string>
     <string name="ai_picture_text_off">Disattivo. Le immagini non vengono lette e non viene memorizzato nulla.</string>
-    <string name="ai_picture_text_to_go">Lettura in corso… ne mancano %1$d</string>
+    <string name="ai_picture_text_to_go">Lettura in corso… ancora %1$d</string>
     <string name="ai_picture_text_failed">%1$d lette · %2$d non hanno potuto essere lette</string>
     <plurals name="ai_picture_text_read">
         <item quantity="one">%d immagine letta</item>
@@ -424,7 +421,6 @@
 
     <string name="recognition_processing">Elaborazione dell\'inchiostro selezionato su questo dispositivo in corso…</string>
     <string name="recognition_failed">Riconoscimento non riuscito</string>
-    <string name="recognition_source_latex" translatable="false">LaTeX</string>
     <string name="recognition_source_text">Testo</string>
     <string name="recognition_copy">Copia</string>
     <string name="recognition_copied">Copiato negli appunti</string>
@@ -432,7 +428,7 @@
     <string name="recognition_preview_empty">Inserisci il LaTeX per visualizzarlo in anteprima</string>
     <string name="recognition_render_failed">Impossibile eseguire il rendering del LaTeX</string>
     <string name="recognition_math_actions">Azioni matematiche</string>
-    <string name="recognition_analyzing">Comprensione del LaTeX tramite SymPy in corso…</string>
+    <string name="recognition_analyzing">Analisi del LaTeX tramite SymPy in corso…</string>
     <string name="recognition_actions">Azioni</string>
     <string name="recognition_operation_failed">Operazione non riuscita</string>
     <string name="recognition_show_decimal">Mostra come decimale</string>
@@ -506,7 +502,7 @@
     <string name="ribbon_clear_formatting">Cancella formattazione</string>
     <string name="ribbon_bulleted_list">Elenco puntato</string>
     <string name="ribbon_numbered_list">Elenco numerato</string>
-    <string name="ribbon_todo_list">Cose da fare</string>
+    <string name="ribbon_todo_list">Da fare</string>
     <string name="ribbon_decrease_indent">Riduci rientro</string>
     <string name="ribbon_increase_indent">Aumenta rientro</string>
     <string name="ribbon_align_left">Allinea a sinistra</string>
@@ -521,11 +517,10 @@
     <string name="ribbon_link_edit">Modifica collegamento</string>
     <string name="ribbon_link_text">Testo da visualizzare</string>
     <string name="ribbon_link_address">Indirizzo web</string>
-    <string name="ribbon_link_address_example" translatable="false">https://example.com</string>
     <string name="ribbon_link_cancel">Annulla</string>
     <string name="ribbon_link_apply">Applica</string>
-    <string name="ribbon_font_hint">Tieni premuto un carattere per digitare con esso per predefinito</string>
-    <string name="ribbon_font_size_hint">Tieni premuta una dimensione per iniziare il nuovo testo con essa</string>
+    <string name="ribbon_font_hint">Tieni premuto un tipo di carattere per usarlo come predefinito</string>
+    <string name="ribbon_font_size_hint">Tieni premuta una dimensione per iniziare i nuovi testi con essa</string>
     <string name="ribbon_make_default">Imposta come predefinito</string>
     <string name="ribbon_default">Predefinito</string>
     <string name="ribbon_color_none">Nessuno</string>
@@ -739,10 +734,10 @@
     <string name="tabs_no_notebook">Nessun notebook</string>
     <string name="tabs_choose_notebook">Scegli notebook</string>
     <string name="tabs_new_section">Nuova sezione</string>
-    <string name="scroll_more_left">Altro a sinistra</string>
-    <string name="scroll_more_right">Altro a destra</string>
-    <string name="scroll_more_up">Altro sopra</string>
-    <string name="scroll_more_down">Altro sotto</string>
+    <string name="scroll_more_left">Più a sinistra</string>
+    <string name="scroll_more_right">Più a destra</string>
+    <string name="scroll_more_up">Più in alto</string>
+    <string name="scroll_more_down">Più in basso</string>
 
     <string name="workspace_undo">Annulla</string>
     <string name="workspace_no_camera">Nessuna app fotocamera disponibile.</string>
@@ -765,7 +760,7 @@
     <string name="name_dialog_rename">Rinomina</string>
     <string name="name_dialog_hint">Nome</string>
 
-    <string name="transfer_running">Utilizzo notebook in corso</string>
+    <string name="transfer_running">Elaborazione del notebook in corso…</string>
     <string name="transfer_failed">Trasferimento notebook non riuscito</string>
     <string name="transfer_complete">Trasferimento notebook completato</string>
     <string name="transfer_preparing">Controllo e preparazione del notebook in corso…</string>
@@ -788,9 +783,9 @@
         <item quantity="other">Le sue %d pagine verranno rimosse insieme ad essa. Potrai ripristinarle in seguito dagli elementi eliminati.</item>
     </plurals>
     <string name="delete_notebook_empty">Questo notebook verrà rimosso. Potrai ripristinarlo in seguito dagli elementi eliminati.</string>
-    <string name="delete_notebook_contents">La sua %1$s e le sue %2$s verranno rimosse insieme ad esso. Potrai ripristinarle in seguito dagli elementi eliminati.</string>
+    <string name="delete_notebook_contents">Con esso verranno rimossi anche %1$s e %2$s. Potrai ripristinarli in seguito da Elementi eliminati.</string>
     <string name="close_notebook_title">Vuoi chiudere %1$s?</string>
     <string name="close_notebook_confirm">Chiudi</string>
-    <string name="close_notebook_contents">Non viene eliminato nulla. La sua %1$s e le sue %2$s rimangono dove sono, e il notebook lascia il pannello finché non lo apri di nuovo da Notebook chiusi.</string>
+    <string name="close_notebook_contents">Non viene eliminato nulla. %1$s e %2$s rimangono dove sono, e il notebook lascia il pannello finché non lo apri di nuovo da Notebook chiusi.</string>
     <string name="close_notebook_empty">Non viene eliminato nulla. Il notebook lascia il pannello finché non lo apri di nuovo da Notebook chiusi.</string>
 </resources>

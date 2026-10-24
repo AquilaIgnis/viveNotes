@@ -1,5 +1,6 @@
 package com.vivenotes
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.KeyboardShortcutGroup
@@ -86,7 +87,12 @@ class MainActivity : ComponentActivity() {
     /**
      * The shortcuts that go ahead of the focused view — Esc and Ctrl+F; see `ui/KeyboardShortcuts.kt`.
      * Everything else waits for [onKeyDown].
+     *
+     * The suppression is for a false positive: this overrides the public `Activity` method, but
+     * `androidx.core`'s `ComponentActivity` redeclares it under `@RestrictTo`, which lint reads as
+     * the override and the `super` call reaching into a library-private API.
      */
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean =
         viewModel.handleShortcut(event, ShortcutScope.Anywhere) || super.dispatchKeyEvent(event)
 
