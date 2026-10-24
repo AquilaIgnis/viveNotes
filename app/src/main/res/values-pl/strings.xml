@@ -766,6 +766,8 @@
     <string name="tabs_new_section">Nowa sekcja</string>
     <string name="scroll_more_left">Więcej w lewo</string>
     <string name="scroll_more_right">Więcej w prawo</string>
+    <string name="scroll_more_up">Więcej w górę</string>
+    <string name="scroll_more_down">Więcej w dół</string>
 
     <string name="workspace_undo">Cofnij</string>
     <string name="workspace_no_camera">Brak dostępnej aplikacji aparatu.</string>

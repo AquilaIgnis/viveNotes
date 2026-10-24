@@ -803,6 +803,8 @@
     <string name="tabs_new_section">New section</string>
     <string name="scroll_more_left">More to the left</string>
     <string name="scroll_more_right">More to the right</string>
+    <string name="scroll_more_up">More above</string>
+    <string name="scroll_more_down">More below</string>
 
     <!-- The workspace: snackbars, empty states and fallbacks for failures that carry no message. -->
     <string name="workspace_undo">Undo</string>

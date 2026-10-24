@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
+import com.vivenotes.ui.VerticalScrollEdges
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.shell.swipeRight
 import kotlin.math.floor
@@ -171,14 +172,23 @@ fun ToolPanel(
             )
         }
 
-        Column(
+        // A pane's settings run past the bottom of a short window, and one cut off at the edge looks
+        // like one that ends there, so the body says when there is more above or below it.
+        val scroll = rememberScrollState()
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            content = content,
-        )
+                .weight(1f),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scroll)
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                content = content,
+            )
+            VerticalScrollEdges(scroll, background = MaterialTheme.colorScheme.surface)
+        }
 
         if (footer != null) {
             Column(

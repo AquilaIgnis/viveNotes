@@ -741,6 +741,8 @@
     <string name="tabs_new_section">Nouvelle section</string>
     <string name="scroll_more_left">Plus vers la gauche</string>
     <string name="scroll_more_right">Plus vers la droite</string>
+    <string name="scroll_more_up">Plus vers le haut</string>
+    <string name="scroll_more_down">Plus vers le bas</string>
 
     <string name="workspace_undo">Annuler</string>
     <string name="workspace_no_camera">Aucune application d\'appareil photo n\'est disponible.</string>

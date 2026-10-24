@@ -741,6 +741,8 @@
     <string name="tabs_new_section">Nuova sezione</string>
     <string name="scroll_more_left">Altro a sinistra</string>
     <string name="scroll_more_right">Altro a destra</string>
+    <string name="scroll_more_up">Altro sopra</string>
+    <string name="scroll_more_down">Altro sotto</string>
 
     <string name="workspace_undo">Annulla</string>
     <string name="workspace_no_camera">Nessuna app fotocamera disponibile.</string>

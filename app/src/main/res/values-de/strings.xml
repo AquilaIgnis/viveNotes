@@ -741,6 +741,8 @@
     <string name="tabs_new_section">Neuer Abschnitt</string>
     <string name="scroll_more_left">Mehr nach links</string>
     <string name="scroll_more_right">Mehr nach rechts</string>
+    <string name="scroll_more_up">Mehr nach oben</string>
+    <string name="scroll_more_down">Mehr nach unten</string>
 
     <string name="workspace_undo">Rückgängig</string>
     <string name="workspace_no_camera">Es ist keine Kamera-App verfügbar.</string>

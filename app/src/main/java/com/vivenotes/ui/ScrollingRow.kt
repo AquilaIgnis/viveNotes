@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,6 +41,8 @@ private val EDGE_WIDTH = 30.dp
 internal object ScrollEdgeTags {
     const val START = "scroll-edge-start"
     const val END = "scroll-edge-end"
+    const val TOP = "scroll-edge-top"
+    const val BOTTOM = "scroll-edge-bottom"
 }
 
 /**
@@ -102,6 +106,39 @@ fun ScrollingRow(
     }
 }
 
+/**
+ * The same edges for a column: a fade with an arrow at the top while there is more above, and at the
+ * bottom while there is more below. Laid over the scrolling content, in a [BoxScope] the size of
+ * the visible area — the docked tool pane's body, whose settings run past a short window.
+ */
+@Composable
+fun BoxScope.VerticalScrollEdges(
+    state: ScrollState,
+    /** What the arrows fade into. Should match whatever the column is drawn on. */
+    background: Color = MaterialTheme.colorScheme.surface,
+) {
+    // Derived for the reason `ScrollingRow`'s are: a recomposition when an edge comes or goes, not
+    // one per scrolled pixel.
+    val atTop by remember(state) { derivedStateOf { !state.canScrollBackward } }
+    val atBottom by remember(state) { derivedStateOf { !state.canScrollForward } }
+    ScrollEdge(
+        alignment = Alignment.TopCenter,
+        visible = !atTop,
+        icon = MaterialSymbols.KeyboardDoubleArrowUp,
+        label = stringResource(R.string.scroll_more_up),
+        tag = ScrollEdgeTags.TOP,
+        background = background,
+    )
+    ScrollEdge(
+        alignment = Alignment.BottomCenter,
+        visible = !atBottom,
+        icon = MaterialSymbols.KeyboardDoubleArrowDown,
+        label = stringResource(R.string.scroll_more_down),
+        tag = ScrollEdgeTags.BOTTOM,
+        background = background,
+    )
+}
+
 @Composable
 private fun BoxScope.ScrollEdge(
     alignment: Alignment,
@@ -111,25 +148,29 @@ private fun BoxScope.ScrollEdge(
     tag: String,
     background: Color,
 ) {
-    val fadeAway = if (alignment == Alignment.CenterStart) {
+    val vertical = alignment == Alignment.TopCenter || alignment == Alignment.BottomCenter
+    val fadeAway = if (alignment == Alignment.CenterStart || alignment == Alignment.TopCenter) {
         listOf(background, background.copy(alpha = 0f))
     } else {
         listOf(background.copy(alpha = 0f), background)
     }
+    val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(),
-        exit = fadeOut(),
+        enter = fadeIn(effects),
+        exit = fadeOut(effects),
         modifier = Modifier.align(alignment),
     ) {
         Box(
             modifier = Modifier
-                .fillMaxHeight()
-                .width(EDGE_WIDTH)
+                .then(
+                    if (vertical) Modifier.fillMaxWidth().height(EDGE_WIDTH)
+                    else Modifier.fillMaxHeight().width(EDGE_WIDTH),
+                )
                 // Painted as a fade rather than a solid block so the controls underneath read as
                 // continuing past the edge, which is the thing being communicated.
-                .background(Brush.horizontalGradient(fadeAway))
+                .background(if (vertical) Brush.verticalGradient(fadeAway) else Brush.horizontalGradient(fadeAway))
                 .testTag(tag),
             contentAlignment = Alignment.Center,
         ) {
@@ -138,7 +179,7 @@ private fun BoxScope.ScrollEdge(
                 contentDescription = label,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
-                    .padding(horizontal = 4.dp)
+                    .padding(if (vertical) PaddingValues(vertical = 4.dp) else PaddingValues(horizontal = 4.dp))
                     .size(18.dp),
             )
         }

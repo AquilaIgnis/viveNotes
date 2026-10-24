@@ -729,6 +729,8 @@
     <string name="tabs_new_section">새 섹션</string>
     <string name="scroll_more_left">왼쪽으로 더 이동</string>
     <string name="scroll_more_right">오른쪽으로 더 이동</string>
+    <string name="scroll_more_up">위로 더 이동</string>
+    <string name="scroll_more_down">아래로 더 이동</string>
 
     <string name="workspace_undo">실행 취소</string>
     <string name="workspace_no_camera">사용 가능한 카메라 앱이 없습니다.</string>

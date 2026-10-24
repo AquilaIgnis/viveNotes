@@ -768,6 +768,8 @@
     <string name="tabs_new_section">Nueva sección</string>
     <string name="scroll_more_left">Más a la izquierda</string>
     <string name="scroll_more_right">Más a la derecha</string>
+    <string name="scroll_more_up">Más arriba</string>
+    <string name="scroll_more_down">Más abajo</string>
 
     <!-- The workspace -->
     <string name="workspace_undo">Deshacer</string>

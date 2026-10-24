@@ -729,6 +729,8 @@
     <string name="tabs_new_section">新しいセクション</string>
     <string name="scroll_more_left">さらに左へ</string>
     <string name="scroll_more_right">さらに右へ</string>
+    <string name="scroll_more_up">さらに上へ</string>
+    <string name="scroll_more_down">さらに下へ</string>
 
     <string name="workspace_undo">元に戻す</string>
     <string name="workspace_no_camera">利用可能なカメラアプリがありません。</string>
