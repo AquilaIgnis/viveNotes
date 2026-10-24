@@ -26,6 +26,8 @@ import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.widget.doAfterTextChanged
+import com.vivenotes.keyboard.KeyBindings
+import com.vivenotes.keyboard.ShortcutAction
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
@@ -47,6 +49,15 @@ import com.vivenotes.ui.theme.LocalCanvasColors
  * Settings toggle is off.
  */
 val LocalVideoThumbnails = staticCompositionLocalOf<VideoThumbnails?> { null }
+
+/**
+ * The keyboard shortcuts in force, for every writing surface, a table cell included — a composition
+ * local for the reason [LocalVideoThumbnails] is. `NotesApp` provides the user's.
+ */
+val LocalKeyBindings = staticCompositionLocalOf { KeyBindings.Default }
+
+/** Runs a workspace command a text box key was given; see `OutlineEditText.onWorkspaceShortcut`. */
+val LocalWorkspaceShortcuts = staticCompositionLocalOf<((ShortcutAction) -> Boolean)?> { null }
 
 /**
  * One writing surface, hosted through [AndroidView] — the one place the Compose shell hands off to a
@@ -84,6 +95,8 @@ internal fun NoteEditor(
 ) {
     val canvas = LocalCanvasColors.current
     val thumbnails = LocalVideoThumbnails.current
+    val keyBindings = LocalKeyBindings.current
+    val workspaceShortcuts = LocalWorkspaceShortcuts.current
     val hostContext = LocalContext.current
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
     val readAloud = rememberNonTalkBackServiceOn()
@@ -165,6 +178,8 @@ internal fun NoteEditor(
                 editor.setHintTextColor(canvas.secondaryText.toArgb())
                 editor.defaultMarks = defaults.asEditorMarks()
                 editor.videoThumbnails = thumbnails
+                editor.keyBindings = keyBindings
+                editor.onWorkspaceShortcut = workspaceShortcuts
                 editor.onOpenVideo = { url -> hostContext.openExternally(url) }
                 editor.onOpenLink = { url -> hostContext.openExternally(url) }
                 // Applied to the view rather than as a Compose height constraint: constraining the

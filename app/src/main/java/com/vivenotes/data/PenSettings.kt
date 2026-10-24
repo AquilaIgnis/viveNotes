@@ -12,7 +12,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
+import com.vivenotes.keyboard.KeyBindings
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.ShapeKind
 import kotlinx.serialization.json.Json
@@ -588,6 +590,19 @@ class PenSettingsStore(context: Context) {
         store.edit { it[STYLUS_BUTTONS] = penSettingsJson.encodeToString(StylusButtonMap.serializer(), map) }
     }
 
+    /**
+     * The keyboard shortcuts as changed in Hardware ▸ Keyboard — only the changes, see
+     * [KeyBindings.encode]. Beside [stylusButtons] for the reason it is here: which key does what is
+     * a working habit of the user, like which click is the highlighter.
+     */
+    val keyBindings: Flow<KeyBindings> = store.data.map { prefs ->
+        prefs[KEY_BINDINGS]?.let(::decodeKeyBindings) ?: KeyBindings.Default
+    }
+
+    suspend fun setKeyBindings(bindings: KeyBindings) {
+        store.edit { it[KEY_BINDINGS] = penSettingsJson.encodeToString(KeyBindingsSerializer, KeyBindings.encode(bindings)) }
+    }
+
     suspend fun setPen(index: Int, preset: PenPreset) {
         store.edit { it[key(index)] = penSettingsJson.encodeToString(PenPreset.serializer(), preset) }
     }
@@ -658,6 +673,10 @@ class PenSettingsStore(context: Context) {
     private fun decodeStylusButtons(text: String): StylusButtonMap? =
         runCatching { penSettingsJson.decodeFromString(StylusButtonMap.serializer(), text) }.getOrNull()
 
+    /** A command or chord this build does not know is skipped inside [KeyBindings.decode], not here. */
+    private fun decodeKeyBindings(text: String): KeyBindings? =
+        runCatching { KeyBindings.decode(penSettingsJson.decodeFromString(KeyBindingsSerializer, text)) }.getOrNull()
+
     /**
      * A stored row shorter or longer than the current [PALETTE_SIZE] is trimmed rather than
      * rejected, so changing how many swatches fit is not a migration. An empty one is nothing to
@@ -674,6 +693,8 @@ class PenSettingsStore(context: Context) {
 
         val DRAW_WITH_FINGER = booleanPreferencesKey("draw_with_finger")
         val STYLUS_BUTTONS = stringPreferencesKey("stylus_buttons")
+        val KEY_BINDINGS = stringPreferencesKey("key_bindings")
+        val KeyBindingsSerializer = MapSerializer(String.serializer(), ListSerializer(String.serializer()))
         val ERASER = stringPreferencesKey("eraser")
         val HIGHLIGHTER = stringPreferencesKey("highlighter")
         val SHAPE = stringPreferencesKey("shape")

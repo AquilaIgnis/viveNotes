@@ -89,6 +89,7 @@ object MaterialSymbols {
     val PhotoLibrary: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_photo_library)
     val Redo: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_redo)
     val Remove: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_remove)
+    val RestartAlt: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_restart_alt)
     val RestoreFromTrash: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_restore_from_trash)
     val Search: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_search)
     val Sort: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_sort)

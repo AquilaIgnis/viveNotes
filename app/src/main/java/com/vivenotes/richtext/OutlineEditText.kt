@@ -18,6 +18,11 @@ import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.BaseInputConnection
 import android.widget.EditText
+import com.vivenotes.keyboard.KeyBindings
+import com.vivenotes.keyboard.ShortcutAction
+import com.vivenotes.keyboard.ShortcutDecision
+import com.vivenotes.keyboard.ShortcutScope
+import com.vivenotes.keyboard.toChord
 import com.vivenotes.model.Align
 import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
@@ -132,6 +137,15 @@ class OutlineEditText @JvmOverloads constructor(
      * cell it is (if it is one at all) is `TableContainer`'s business, not its own.
      */
     var onTabNavigate: ((forward: Boolean) -> Boolean)? = null
+
+    /** Which keys run which commands here — Hardware ▸ Keyboard's, set by the host. */
+    var keyBindings: KeyBindings = KeyBindings.Default
+
+    /**
+     * Runs a workspace command — Zoom in, say — that the user gave one of this box's own keys, which
+     * would otherwise never get past the text field. Returns whether it did anything.
+     */
+    var onWorkspaceShortcut: ((ShortcutAction) -> Boolean)? = null
 
     /**
      * Fired when a [FormatCommand.SetMark] lands on a collapsed caret.
@@ -435,34 +449,45 @@ class OutlineEditText @JvmOverloads constructor(
             ?.hideSoftInputFromWindow(windowToken, 0)
     }
 
+    /**
+     * The text box's shortcuts, ahead of `TextView`'s own keys — see [ShortcutScope.TextBox]. Which
+     * key does what is [keyBindings]'s; a default this box's commands no longer use is used up rather
+     * than left to `TextView`, whose own Ctrl+C would otherwise come back.
+     */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        // Tab indents rather than moving focus — inside a note, indent is what a writer means. In a
-        // table cell it walks the grid instead, and falls back to the indent in the last cell,
-        // where there is nowhere left to walk.
-        if (keyCode == KeyEvent.KEYCODE_TAB) {
-            val forward = !event.isShiftPressed
-            if (onTabNavigate?.invoke(forward) == true) return true
-            apply(FormatCommand.Indent(if (forward) 1 else -1))
-            return true
+        val chord = event.toChord() ?: return super.onKeyDown(keyCode, event)
+        return when (val decision = keyBindings.decide(chord, ShortcutScope.TextBox, repeat = event.repeatCount > 0)) {
+            ShortcutDecision.Pass -> super.onKeyDown(keyCode, event)
+            ShortcutDecision.Swallow -> true
+            is ShortcutDecision.Run -> runShortcut(decision.action) || super.onKeyDown(keyCode, event)
         }
-        if (event.isCtrlPressed) {
-            // A new paragraph without the list's marker: Enter would make another item.
-            if (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
-                insertPlainParagraph()
-                return true
+    }
+
+    /** One text box command; a workspace one a text box key was given goes to [onWorkspaceShortcut]. */
+    private fun runShortcut(action: ShortcutAction): Boolean {
+        val selected = selectionStart != selectionEnd
+        when (action) {
+            // With nothing selected these still use the key, as `TextView`'s own would — and must not
+            // reach it, which would put an empty clip on the clipboard.
+            ShortcutAction.Cut -> if (selected) apply(FormatCommand.Clipboard(ClipboardAction.Cut))
+            ShortcutAction.Copy -> if (selected) apply(FormatCommand.Clipboard(ClipboardAction.Copy))
+            ShortcutAction.Paste -> apply(FormatCommand.Clipboard(ClipboardAction.Paste))
+            ShortcutAction.PastePlainText -> apply(FormatCommand.Clipboard(ClipboardAction.PasteAsPlainText))
+            ShortcutAction.SelectAll -> apply(FormatCommand.SelectAll)
+            ShortcutAction.Bold -> apply(FormatCommand.ToggleMark(Mark.Bold))
+            ShortcutAction.Italic -> apply(FormatCommand.ToggleMark(Mark.Italic))
+            ShortcutAction.Underline -> apply(FormatCommand.ToggleMark(Mark.Underline))
+            // Indent rather than moving focus — inside a note, indent is what a writer means. In a
+            // table cell it walks the grid instead, and falls back to the indent in the last cell,
+            // where there is nowhere left to walk.
+            ShortcutAction.Indent, ShortcutAction.Outdent -> {
+                val forward = action == ShortcutAction.Indent
+                if (onTabNavigate?.invoke(forward) != true) apply(FormatCommand.Indent(if (forward) 1 else -1))
             }
-            val mark = when (keyCode) {
-                KeyEvent.KEYCODE_B -> Mark.Bold
-                KeyEvent.KEYCODE_I -> Mark.Italic
-                KeyEvent.KEYCODE_U -> Mark.Underline
-                else -> null
-            }
-            if (mark != null) {
-                apply(FormatCommand.ToggleMark(mark))
-                return true
-            }
+            ShortcutAction.ExitList -> insertPlainParagraph()
+            else -> return onWorkspaceShortcut?.invoke(action) == true
         }
-        return super.onKeyDown(keyCode, event)
+        return true
     }
 
     fun apply(command: FormatCommand) {
@@ -472,7 +497,8 @@ class OutlineEditText @JvmOverloads constructor(
             command == FormatCommand.DeactivateTextInput ||
             command == FormatCommand.RetainInlineTarget ||
             command == FormatCommand.ReleaseInlineTarget ||
-            command == FormatCommand.ClearCanvasSelection
+            command == FormatCommand.ClearCanvasSelection ||
+            command == FormatCommand.DeleteCanvasSelection
         ) return
         val editable = text ?: return
         // Applying spans while the IME holds a composing region corrupts predictive text on many
@@ -541,8 +567,9 @@ class OutlineEditText @JvmOverloads constructor(
             FormatCommand.DeactivateTextInput,
             FormatCommand.RetainInlineTarget,
             FormatCommand.ReleaseInlineTarget,
-            // The canvas's selection, not this view's — `EditorPane` holds it and consumes this.
+            // The canvas's selection, not this view's — `EditorPane` holds it and consumes these.
             FormatCommand.ClearCanvasSelection,
+            FormatCommand.DeleteCanvasSelection,
             -> Unit
         }
         suppressWatcher = false

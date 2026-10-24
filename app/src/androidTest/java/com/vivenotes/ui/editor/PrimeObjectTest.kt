@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.MutableSharedFlow
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -52,6 +54,8 @@ class PrimeObjectTest {
     private val textArmed = mutableStateOf(false)
     private val commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 4)
     private var created: Pair<Float, Float>? = null
+    private var deleted: Set<String>? = null
+    private var holdsSelection = false
 
     /** The travel a shape drag reported, and null when the drag moved nothing. */
     private var moved: Pair<Float, Float>? = null
@@ -67,6 +71,7 @@ class PrimeObjectTest {
         this.textArmed.value = textArmed
         created = null
         moved = null
+        deleted = null
         compose.setContent {
             density = LocalDensity.current
             ViveNotesTheme {
@@ -89,6 +94,7 @@ class PrimeObjectTest {
                     commands = commands,
                     onBlocksChanged = { _, _ -> },
                     onSelectionChanged = {},
+                    onCanvasSelectionChanged = { holdsSelection = it },
                     onMarkArmed = {},
                     onCreateOutline = { x, y -> created = x to y; "outline" },
                     textArmed = this@PrimeObjectTest.textArmed.value,
@@ -98,6 +104,7 @@ class PrimeObjectTest {
                     onOutlineBlurred = {},
                     shapes = this@PrimeObjectTest.shapes.value,
                     onMoveShape = { _, dx, dy -> moved = dx to dy },
+                    onDeleteShapes = { deleted = it },
                     // The ViewModel's edit in one line: the group *is* the lock, so a lock stamps
                     // one id on what is held and an unlock clears it — `setSelectionLocked`.
                     onSetSelectionLocked = { held, locked ->
@@ -213,6 +220,30 @@ class PrimeObjectTest {
         // The bar is the half of the selection with a semantics node to assert on; the dashed box
         // and its four handles are painted into the layer's canvas from the same `selection`.
         compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
+    }
+
+    /**
+     * The Delete key: the toolkit's trash, down the same bus, and the selection goes with it. The
+     * pane reports what it holds, which is how the ViewModel knows whether Delete has anything to do.
+     */
+    @Test
+    fun theDeleteKeysCommandDeletesWhatIsSelected() {
+        setPage(listOf(square(left = 60f, top = 60f, side = 120f)))
+        assertFalse(holdsSelection)
+
+        tapPage(120f, 60f)
+        assertTrue("the pane did not report its selection", holdsSelection)
+
+        var emitted = false
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            emitted = commands.tryEmit(FormatCommand.DeleteCanvasSelection)
+        }
+        assertTrue(emitted)
+        compose.waitForIdle()
+
+        assertEquals(setOf("square"), deleted)
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
+        assertFalse(holdsSelection)
     }
 
     @Test

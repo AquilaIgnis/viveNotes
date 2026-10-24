@@ -70,6 +70,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.IntOffset
+import com.vivenotes.keyboard.ShortcutAction
 import com.vivenotes.data.db.NotebookEntity
 import com.vivenotes.data.db.SectionEntity
 import androidx.compose.ui.unit.dp
@@ -122,7 +123,9 @@ import com.vivenotes.ui.editor.EditorPane
 import com.vivenotes.ui.editor.ExportPdfDialog
 import com.vivenotes.ui.editor.FileActions
 import com.vivenotes.ui.editor.FloatingCalculator
+import com.vivenotes.ui.editor.LocalKeyBindings
 import com.vivenotes.ui.editor.LocalVideoThumbnails
+import com.vivenotes.ui.editor.LocalWorkspaceShortcuts
 import com.vivenotes.ui.editor.OnlineImageDialog
 import com.vivenotes.ui.editor.PictureSource
 import com.vivenotes.ui.editor.Ribbon
@@ -359,8 +362,12 @@ fun NotesApp(
             // just this one flag rather than as the whole of `ViewSettings`, because a static
             // local invalidates everything below it — reading zoom here would rebuild the
             // workspace on every frame of a pinch.
+            val keyBindings by viewModel.keyBindings.collectAsStateWithLifecycle()
+            val workspaceShortcuts = remember(viewModel) { { action: ShortcutAction -> viewModel.runShortcut(action) } }
             CompositionLocalProvider(
                 LocalVideoThumbnails provides videoThumbnails.takeIf { linkPreviews },
+                LocalKeyBindings provides keyBindings,
+                LocalWorkspaceShortcuts provides workspaceShortcuts,
             ) {
                 NotesWorkspace(
                     viewModel = viewModel,
@@ -849,6 +856,14 @@ private fun NotesWorkspace(
     }
     /** The docked pane, if any. Deliberately not persisted: it is where you are, not what you have. */
     var openPane by remember { mutableStateOf<ToolPane?>(null) }
+    /** Ctrl+F's: the query field takes the focus once the Content pane is up, and clears this. */
+    var searchFocusRequested by remember { mutableStateOf(false) }
+    LaunchedEffect(viewModel) {
+        viewModel.searchRequests.collect {
+            openPane = ToolPane.Content
+            searchFocusRequested = true
+        }
+    }
     var recognition by remember { mutableStateOf<RecognitionPanelState?>(null) }
     var recognitionRunning by remember { mutableStateOf(false) }
     var formulaTools by remember { mutableStateOf(FormulaToolsState()) }
@@ -1247,6 +1262,8 @@ private fun NotesWorkspace(
                                     style = state.pageStyle,
                                     allowFinger = drawWithFinger,
                                     stylusButtons = stylusButtons,
+                                    searchFocusRequested = searchFocusRequested,
+                                    onSearchFocusHandled = { searchFocusRequested = false },
                                     aiModels = aiModels,
                                     onDownloadFormula = aiModelStore::download,
                                     onDeleteFormula = aiModelStore::delete,
@@ -1324,6 +1341,8 @@ private fun NotesWorkspace(
                                     style = state.pageStyle,
                                     allowFinger = drawWithFinger,
                                     stylusButtons = stylusButtons,
+                                    searchFocusRequested = searchFocusRequested,
+                                    onSearchFocusHandled = { searchFocusRequested = false },
                                     aiModels = aiModels,
                                     onDownloadFormula = aiModelStore::download,
                                     onDeleteFormula = aiModelStore::delete,
@@ -1588,6 +1607,9 @@ private fun ToolPaneHost(
     allowFinger: Boolean,
     /** Hardware pane, a property of the user. */
     stylusButtons: StylusButtonMap,
+    /** Ctrl+F asked for the query field; [onSearchFocusHandled] once it has the focus. */
+    searchFocusRequested: Boolean,
+    onSearchFocusHandled: () -> Unit,
     aiModels: AiModelsState,
     onDownloadFormula: (FormulaEngine) -> Unit,
     onDeleteFormula: (FormulaEngine) -> Unit,
@@ -1610,12 +1632,15 @@ private fun ToolPaneHost(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val keyBindings by viewModel.keyBindings.collectAsStateWithLifecycle()
     // The query field is the one control that must survive its own results scrolling past it.
     val header: (@Composable ColumnScope.() -> Unit)? = if (pane == ToolPane.Content) {
         {
             ContentPanelHeader(
                 state = contentSearch,
                 onQueryChange = onSearchQueryChange,
+                focusRequested = searchFocusRequested,
+                onFocusRequestHandled = onSearchFocusHandled,
                 imageProgress = imageTextProgress,
                 inkProgress = inkTextProgress,
             )
@@ -1681,6 +1706,8 @@ private fun ToolPaneHost(
                 onSetDrawWithFinger = viewModel::setDrawWithFinger,
                 buttons = stylusButtons,
                 onSetButtons = viewModel::setStylusButtons,
+                keyBindings = keyBindings,
+                onSetKeyBindings = viewModel::setKeyBindings,
             )
             ToolPane.Recognition -> recognition?.let { result ->
                 RecognitionPanelContent(
@@ -1893,6 +1920,7 @@ private fun PageEditor(
         commands = viewModel.commands,
         onBlocksChanged = viewModel::onBlocksChanged,
         onSelectionChanged = viewModel::onSelectionChanged,
+        onCanvasSelectionChanged = viewModel::onCanvasSelectionChanged,
         onMarkArmed = viewModel::onMarkArmed,
         onCreateOutline = viewModel::createOutline,
         textArmed = tool == DrawTool.Text,

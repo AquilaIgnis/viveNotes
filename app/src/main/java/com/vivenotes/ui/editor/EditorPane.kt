@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
@@ -269,6 +270,8 @@ fun EditorPane(
     commands: Flow<FormatCommand>,
     onBlocksChanged: (String, List<Block>) -> Unit,
     onSelectionChanged: (SelectionState) -> Unit,
+    /** Whether anything is selected on the canvas, for the keys that act on a selection. */
+    onCanvasSelectionChanged: (Boolean) -> Unit = {},
     /** A mark applied with no selection — the editor's new default, not an edit. */
     onMarkArmed: (Mark) -> Unit,
     onCreateOutline: (Float, Float) -> String,
@@ -639,6 +642,26 @@ fun EditorPane(
         }
     }
 
+    // Delete and Esc ask the ViewModel whether anything is selected before they take the key.
+    val holdsSelection = selection?.isEmpty == false
+    DisposableEffect(holdsSelection) {
+        onCanvasSelectionChanged(holdsSelection)
+        onDispose { onCanvasSelectionChanged(false) }
+    }
+
+    /** What the toolkit's trash does to [CanvasSelection], and the Delete key with it. */
+    val deleteHeld: (CanvasSelection) -> Unit = { held ->
+        held.inkHalf()?.let(onDeleteInkSelection)
+        if (held.shapeIds.isNotEmpty()) onDeleteShapes(held.shapeIds)
+        if (held.tableIds.isNotEmpty()) onDeleteTables(held.tableIds)
+        if (held.equationIds.isNotEmpty()) onDeleteEquations(held.equationIds)
+        if (held.imageIds.isNotEmpty()) onDeleteImages(held.imageIds)
+        selection = null
+        lassoGesture.clear()
+    }
+    // The collector below starts once, so it reaches the page's current selection through these.
+    val currentDeleteHeld = rememberUpdatedState(deleteHeld)
+
     // Commands are one-shot events, so they are collected rather than read from state —
     // replaying them on recomposition would re-apply formatting.
     LaunchedEffect(Unit) {
@@ -668,6 +691,10 @@ fun EditorPane(
                 FormatCommand.ClearCanvasSelection -> {
                     selection = null
                     lassoGesture.clear()
+                }
+                // Never over a caret: there Delete is the text's own.
+                FormatCommand.DeleteCanvasSelection -> if (focusedEditor == null) {
+                    currentSelection.value?.takeIf { !it.isEmpty }?.let(currentDeleteHeld.value)
                 }
                 FormatCommand.RetainInlineTarget -> {
                     retainedInlineEditor = focusedEditor ?: lastFocusedEditor
@@ -1559,15 +1586,7 @@ fun EditorPane(
                     viewportSize = with(density) {
                         IntSize(window.width.roundToPx(), window.height.roundToPx())
                     },
-                    onDelete = {
-                        held.inkHalf()?.let(onDeleteInkSelection)
-                        if (held.shapeIds.isNotEmpty()) onDeleteShapes(held.shapeIds)
-                        if (held.tableIds.isNotEmpty()) onDeleteTables(held.tableIds)
-                        if (held.equationIds.isNotEmpty()) onDeleteEquations(held.equationIds)
-                        if (held.imageIds.isNotEmpty()) onDeleteImages(held.imageIds)
-                        selection = null
-                        lassoGesture.clear()
-                    },
+                    onDelete = { deleteHeld(held) },
                     onCopy = {
                         onCopySelection(held)
                         lassoGesture.clear()

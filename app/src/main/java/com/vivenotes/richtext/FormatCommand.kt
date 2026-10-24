@@ -47,6 +47,12 @@ sealed interface FormatCommand {
      */
     data object ClearCanvasSelection : FormatCommand
 
+    /**
+     * Deletes what the canvas holds selected, as the toolkit's trash does — the Delete key's command.
+     * `EditorPane` holds the selection and consumes this, as it does [ClearCanvasSelection].
+     */
+    data object DeleteCanvasSelection : FormatCommand
+
     /** Keeps the current editor and selection while an inline insertion panel has focus. */
     data object RetainInlineTarget : FormatCommand
 

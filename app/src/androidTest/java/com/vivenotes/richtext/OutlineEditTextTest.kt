@@ -6,11 +6,16 @@ import android.view.KeyEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import kotlin.math.abs
+import com.vivenotes.keyboard.KeyBindings
+import com.vivenotes.keyboard.KeyChord
+import com.vivenotes.keyboard.ShortcutAction
+import com.vivenotes.keyboard.ShortcutKey
 import com.vivenotes.model.Align
 import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
@@ -219,6 +224,61 @@ class OutlineEditTextTest {
             }
         }
     }
+
+    /** A command moved to new keys runs on them, and its old keys are used up rather than typed. */
+    @Test
+    fun aRebindingMovesATextBoxCommandAndUsesUpItsOldKeys() {
+        withEditor { view ->
+            view.setBlocks(listOf(Block.of("hello")))
+            view.setSelection(0, 5)
+            view.keyBindings = KeyBindings.Default
+                .rebind(ShortcutAction.Bold, KeyChord(ShortcutKey.B, ctrl = true, shift = true))
+
+            assertTrue("Ctrl+B was left to the text field", view.press(KeyEvent.KEYCODE_B, KeyEvent.META_CTRL_ON))
+            assertEquals("hello", view.text.toString())
+            assertEquals(emptySet<Mark>(), view.blocks().single().runs.single().marks)
+
+            assertTrue(view.press(KeyEvent.KEYCODE_B, KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON))
+            assertEquals(setOf(Mark.Bold), view.blocks().single().runs.single().marks)
+        }
+    }
+
+    /** Indent moved off Tab still walks a table, and Tab no longer indents. */
+    @Test
+    fun indentFollowsItsKeysIntoATableCell() {
+        withEditor { view ->
+            var walked: Boolean? = null
+            view.onTabNavigate = { forward -> walked = forward; true }
+            view.setBlocks(listOf(Block.of("cell")))
+            view.keyBindings = KeyBindings.Default
+                .rebind(ShortcutAction.Indent, KeyChord(ShortcutKey.RightBracket, ctrl = true))
+
+            assertTrue(view.press(KeyEvent.KEYCODE_TAB))
+            assertNull("Tab still walked the grid", walked)
+            assertTrue(view.press(KeyEvent.KEYCODE_RIGHT_BRACKET, KeyEvent.META_CTRL_ON))
+            assertEquals(true, walked)
+        }
+    }
+
+    /** A workspace command given a text box key would never get past the text field otherwise. */
+    @Test
+    fun aWorkspaceCommandOnATextBoxKeyRunsFromTheTextBox() {
+        withEditor { view ->
+            var ran: ShortcutAction? = null
+            view.onWorkspaceShortcut = { ran = it; true }
+            view.setBlocks(listOf(Block.of("hello")))
+            view.setSelection(0, 5)
+            view.keyBindings = KeyBindings.Default.rebind(ShortcutAction.ZoomIn, KeyChord(ShortcutKey.C, ctrl = true))
+
+            assertTrue(view.press(KeyEvent.KEYCODE_C, KeyEvent.META_CTRL_ON))
+            assertEquals(ShortcutAction.ZoomIn, ran)
+            // And a key no command has is the text field's, as it always was.
+            assertFalse(view.press(KeyEvent.KEYCODE_K, KeyEvent.META_CTRL_ON))
+        }
+    }
+
+    private fun OutlineEditText.press(keyCode: Int, meta: Int = 0): Boolean =
+        onKeyDown(keyCode, KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0, meta))
 
     private fun OutlineEditText.ctrlEnter() {
         onKeyDown(

@@ -53,6 +53,9 @@ import com.vivenotes.data.db.ImageTextStatus
 import com.vivenotes.data.db.InkTextEntity
 import com.vivenotes.data.db.InkTextStatus
 import com.vivenotes.data.DrawTool
+import com.vivenotes.keyboard.ShortcutScope
+import com.vivenotes.richtext.SelectionState
+import android.view.KeyEvent
 import com.vivenotes.data.DeletedItemKind
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
@@ -2688,6 +2691,109 @@ class NotesViewModelTest {
 
         vm.undoCanvas()
         assertEquals(2, vm.uiState.value.tables.single().rowCount)
+    }
+
+    // --- keyboard shortcuts ------------------------------------------------------------------
+
+    private fun key(keyCode: Int, meta: Int = 0, repeat: Int = 0) =
+        KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, repeat, meta)
+
+    /**
+     * Esc puts down whatever is in hand and drops the object selection — and, with nothing in hand,
+     * leaves the key alone, so it goes on to be Back as it was before it was a shortcut.
+     */
+    @Test
+    fun escPutsTheToolDownAndPassesWhenThereIsNothingToPutDown() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val seen = mutableListOf<FormatCommand>()
+        val collector = launch { vm.commands.toList(seen) }
+        vm.selectTool(DrawTool.Pen(0))
+        runCurrent()
+        seen.clear()
+
+        assertTrue(vm.handleShortcut(key(KeyEvent.KEYCODE_ESCAPE), ShortcutScope.Anywhere))
+        runCurrent()
+        assertEquals(DrawTool.None, vm.tool.value)
+        assertTrue("Esc left the object selection up", FormatCommand.ClearCanvasSelection in seen)
+
+        assertFalse("Esc with nothing in hand still took the key",
+            vm.handleShortcut(key(KeyEvent.KEYCODE_ESCAPE), ShortcutScope.Anywhere))
+
+        vm.onCanvasSelectionChanged(true)
+        assertTrue("a selection is something for Esc to put down",
+            vm.handleShortcut(key(KeyEvent.KEYCODE_ESCAPE), ShortcutScope.Anywhere))
+        collector.cancel()
+    }
+
+    /** The Text box tool's I: a letter, so it runs only where nothing types, and toggles. */
+    @Test
+    fun iTogglesTheTextToolOnlyWhereNothingTypes() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        vm.selectTool(DrawTool.Pen(0))
+
+        assertFalse(vm.handleShortcut(key(KeyEvent.KEYCODE_I), ShortcutScope.Workspace))
+        assertEquals(DrawTool.Pen(0), vm.tool.value)
+        assertTrue(vm.handleShortcut(key(KeyEvent.KEYCODE_I), ShortcutScope.OutsideText))
+        assertEquals(DrawTool.Text, vm.tool.value)
+        assertTrue("a held I flicked the tool", vm.handleShortcut(key(KeyEvent.KEYCODE_I, repeat = 1), ShortcutScope.OutsideText))
+        assertEquals(DrawTool.Text, vm.tool.value)
+        assertTrue(vm.handleShortcut(key(KeyEvent.KEYCODE_I), ShortcutScope.OutsideText))
+        assertEquals(DrawTool.None, vm.tool.value)
+    }
+
+    /** Delete is the toolkit's trash for a canvas selection, and never the text box's key. */
+    @Test
+    fun deleteActsOnlyOnACanvasSelectionAndNeverOverACaret() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val seen = mutableListOf<FormatCommand>()
+        val collector = launch { vm.commands.toList(seen) }
+        runCurrent()
+        val delete = key(KeyEvent.KEYCODE_FORWARD_DEL)
+
+        assertFalse("Delete with nothing selected took the key", vm.handleShortcut(delete, ShortcutScope.Workspace))
+
+        vm.onCanvasSelectionChanged(true)
+        vm.onSelectionChanged(SelectionState(editorFocused = true))
+        assertFalse("Delete over a caret is the text's", vm.handleShortcut(delete, ShortcutScope.Workspace))
+
+        vm.onSelectionChanged(SelectionState())
+        assertTrue(vm.handleShortcut(delete, ShortcutScope.Workspace))
+        runCurrent()
+        assertEquals(listOf(FormatCommand.DeleteCanvasSelection), seen)
+        collector.cancel()
+    }
+
+    /** With nothing on the canvas to undo or redo, the key goes on — to the text's own undo in a box. */
+    @Test
+    fun undoAndRedoWithNothingToDoLeaveTheKey() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val ctrl = KeyEvent.META_CTRL_ON
+
+        assertFalse(vm.handleShortcut(key(KeyEvent.KEYCODE_Z, ctrl), ShortcutScope.Workspace))
+        assertFalse(vm.handleShortcut(key(KeyEvent.KEYCODE_R, ctrl), ShortcutScope.Workspace))
+        assertFalse(vm.handleShortcut(key(KeyEvent.KEYCODE_Z, ctrl or KeyEvent.META_SHIFT_ON), ShortcutScope.Workspace))
+
+        vm.insertTable(TableSettings(inkOnly = true, columns = 2, rows = 2), 40f, 40f)
+        advanceUntilIdle()
+        assertTrue(vm.handleShortcut(key(KeyEvent.KEYCODE_Z, ctrl), ShortcutScope.Workspace))
+        assertTrue(vm.uiState.value.tables.isEmpty())
+        assertTrue("Ctrl+R is the desktop's redo", vm.handleShortcut(key(KeyEvent.KEYCODE_R, ctrl), ShortcutScope.Workspace))
+        assertEquals(1, vm.uiState.value.tables.size)
+    }
+
+    /** Ctrl+F goes ahead of whatever has the focus, and asks for the Content pane. */
+    @Test
+    fun ctrlFAsksForTheSearchPaneFromAnywhere() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val requests = mutableListOf<Unit>()
+        val collector = launch { vm.searchRequests.toList(requests) }
+        runCurrent()
+
+        assertFalse(vm.handleShortcut(key(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON), ShortcutScope.Workspace))
+        assertTrue(vm.handleShortcut(key(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON), ShortcutScope.Anywhere))
+        runCurrent()
+        assertEquals(1, requests.size)
+        collector.cancel()
     }
 
     private companion object {

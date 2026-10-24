@@ -74,6 +74,7 @@ import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.StylusAction
 import com.vivenotes.data.StylusButtonMap
+import com.vivenotes.keyboard.KeyBindings
 import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
 import com.vivenotes.data.ViewSettings
@@ -591,6 +592,60 @@ class NotesViewModel(
      */
     val stylusButtons: StateFlow<StylusButtonMap> = penSettingsStore.stylusButtons
         .stateIn(viewModelScope, SharingStarted.Eagerly, StylusButtonMap())
+
+    /** The keyboard shortcuts in force — [KeyBindings]. `Eagerly` for the reason [stylusButtons] is. */
+    val keyBindings: StateFlow<KeyBindings> = penSettingsStore.keyBindings
+        .stateIn(viewModelScope, SharingStarted.Eagerly, KeyBindings.Default)
+
+    fun setKeyBindings(bindings: KeyBindings) {
+        viewModelScope.launch { penSettingsStore.setKeyBindings(bindings) }
+    }
+
+    /**
+     * Whether the canvas holds an object selection. The selection itself is `EditorPane`'s, which
+     * reports this so Delete and Esc know whether they have anything to act on before they claim
+     * the key.
+     */
+    private var canvasSelectionHeld = false
+
+    fun onCanvasSelectionChanged(held: Boolean) {
+        canvasSelectionHeld = held
+    }
+
+    private val _searchRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Ctrl+F: the Content pane open with its query field focused. The pane is `NotesApp`'s. */
+    val searchRequests: SharedFlow<Unit> = _searchRequests
+
+    fun requestSearch() {
+        _searchRequests.tryEmit(Unit)
+    }
+
+    /**
+     * Esc: the tool put down, the text box left and the object selection dropped. False, using up
+     * nothing, when there is none of those to put down, so the key goes on to be Back as it was.
+     */
+    fun putDownTool(): Boolean {
+        if (_tool.value == DrawTool.None && !_selection.value.editorFocused && !canvasSelectionHeld) return false
+        selectTool(DrawTool.None)
+        _commands.tryEmit(FormatCommand.ClearCanvasSelection)
+        return true
+    }
+
+    /** The Document tab's Text button: arms the text box tool, or puts it down if it is armed. */
+    fun toggleTextTool() {
+        selectTool(if (_tool.value == DrawTool.Text) DrawTool.None else DrawTool.Text)
+    }
+
+    /**
+     * Delete: removes what is selected on the canvas, as the toolkit's trash does. False with nothing
+     * selected, or while a text box has the caret, where Delete is the text's own.
+     */
+    fun deleteCanvasSelection(): Boolean {
+        if (!canvasSelectionHeld || _selection.value.editorFocused) return false
+        _commands.tryEmit(FormatCommand.DeleteCanvasSelection)
+        return true
+    }
 
     /**
      * The tool in hand. Transient rather than a preference: an app that reopened with an eraser

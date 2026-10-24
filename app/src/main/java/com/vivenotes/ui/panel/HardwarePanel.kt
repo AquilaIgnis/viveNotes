@@ -1,7 +1,7 @@
 package com.vivenotes.ui.panel
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,13 +11,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
@@ -27,19 +29,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.data.StylusAction
 import com.vivenotes.data.StylusButtonMap
+import com.vivenotes.keyboard.KeyBindings
+import com.vivenotes.keyboard.KeyChord
+import com.vivenotes.keyboard.ShortcutAction
 import com.vivenotes.ui.StylusPress
-import com.vivenotes.ui.chord
+import com.vivenotes.ui.TABLE_ROWS
 import com.vivenotes.ui.icons.MaterialSymbols
-import com.vivenotes.ui.shortcutRows
 
 /**
  * The two kinds of hardware you write at this app with.
@@ -60,6 +64,9 @@ enum class HardwareKind(@param:StringRes val label: Int) {
 internal object HardwareTags {
     fun kind(kind: HardwareKind) = "hardware-${kind.name.lowercase()}"
     const val SHORTCUTS = "hardware-shortcuts"
+    const val RESET_ALL = "hardware-shortcuts-reset-all"
+    fun shortcut(action: ShortcutAction) = "hardware-shortcut-${action.name}"
+    fun reset(action: ShortcutAction) = "hardware-shortcut-reset-${action.name}"
 }
 
 /**
@@ -80,6 +87,9 @@ fun ColumnScope.HardwarePanelContent(
     onSetDrawWithFinger: (Boolean) -> Unit,
     buttons: StylusButtonMap,
     onSetButtons: (StylusButtonMap) -> Unit,
+    /** The keyboard shortcuts, a property of the user as the pen button's are. */
+    keyBindings: KeyBindings = KeyBindings.Default,
+    onSetKeyBindings: (KeyBindings) -> Unit = {},
 ) {
     var kind by remember { mutableStateOf(HardwareKind.Stylus) }
 
@@ -111,7 +121,7 @@ fun ColumnScope.HardwarePanelContent(
             buttons = buttons,
             onSetButtons = onSetButtons,
         )
-        HardwareKind.Keyboard -> KeyboardSettings()
+        HardwareKind.Keyboard -> KeyboardSettings(keyBindings, onSetKeyBindings)
     }
 }
 
@@ -224,45 +234,136 @@ private fun PenButtonRow(
 }
 
 /**
- * Every hardware-keyboard shortcut, read off the one table that also dispatches them.
+ * Every hardware-keyboard shortcut, read off the one table that also dispatches them, and changed
+ * here: a row opens its key capture, a changed one has its own reset, and Reset all asks first.
  *
- * A reference rather than a setting, and worth the space: the shortcuts work today but the only way
- * to find them was the system's Meta + / panel, which nobody presses by accident. Rebinding is not
- * offered because nothing in the app can rebind them yet.
+ * The Table rows are Indent's and Outdent's keys as they act in a cell, so they are shown but not
+ * changed here — they follow whatever those two are given.
  */
 @Composable
-private fun ColumnScope.KeyboardSettings() {
+private fun ColumnScope.KeyboardSettings(bindings: KeyBindings, onSetBindings: (KeyBindings) -> Unit) {
+    var editing by remember { mutableStateOf<ShortcutAction?>(null) }
+    var confirmingReset by remember { mutableStateOf(false) }
+    Text(
+        text = stringResource(R.string.hardware_shortcuts_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
     Column(Modifier.fillMaxWidth().testTag(HardwareTags.SHORTCUTS)) {
-        shortcutRows().forEach { (group, shortcuts) ->
-            Text(
-                text = stringResource(group),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+        ShortcutAction.groups.forEach { (group, actions) ->
+            ShortcutGroupHeading(stringResource(group.label))
+            actions.forEach { action ->
+                ShortcutRow(
+                    label = stringResource(action.label),
+                    chord = bindings.primary(action),
+                    customized = bindings.isCustomized(action),
+                    modifier = Modifier.testTag(HardwareTags.shortcut(action)),
+                    onEdit = { editing = action },
+                    onReset = { onSetBindings(bindings.reset(action)) },
+                    resetTag = HardwareTags.reset(action),
+                )
+            }
+        }
+        ShortcutGroupHeading(stringResource(R.string.shortcut_group_table))
+        TABLE_ROWS.forEach { (label, action) ->
+            ShortcutRow(label = stringResource(label), chord = bindings.primary(action), customized = false)
+        }
+        Text(
+            text = stringResource(R.string.hardware_shortcuts_table_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+    OutlinedButton(
+        onClick = { confirmingReset = true },
+        enabled = bindings.isCustomized,
+        modifier = Modifier.align(Alignment.End).padding(top = 12.dp).testTag(HardwareTags.RESET_ALL),
+    ) { Text(stringResource(R.string.hardware_shortcuts_reset_all)) }
+
+    editing?.let { action ->
+        ShortcutCaptureDialog(
+            action = action,
+            bindings = bindings,
+            onSet = { chord ->
+                onSetBindings(bindings.rebind(action, chord))
+                editing = null
+            },
+            onDismiss = { editing = null },
+        )
+    }
+    if (confirmingReset) {
+        ResetAllShortcutsDialog(
+            onConfirm = {
+                onSetBindings(bindings.resetAll())
+                confirmingReset = false
+            },
+            onDismiss = { confirmingReset = false },
+        )
+    }
+}
+
+@Composable
+private fun ShortcutGroupHeading(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+    )
+}
+
+/**
+ * One shortcut: its name, its keys (or Disabled), and a reset once it has been changed. [onEdit]
+ * null is a row to read, not to change.
+ */
+@Composable
+private fun ShortcutRow(
+    label: String,
+    chord: KeyChord?,
+    customized: Boolean,
+    modifier: Modifier = Modifier,
+    onEdit: (() -> Unit)? = null,
+    onReset: () -> Unit = {},
+    resetTag: String = "",
+) {
+    val change = stringResource(R.string.hardware_shortcut_change)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .then(
+                if (onEdit != null) Modifier.clickable(onClickLabel = change, role = Role.Button, onClick = onEdit)
+                else Modifier,
             )
-            shortcuts.forEach { shortcut ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(shortcut.label),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
+            .padding(start = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        if (chord != null) {
+            Keycap(chord.label)
+        } else {
+            Text(
+                text = stringResource(R.string.hardware_shortcut_disabled),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // The slot stays when empty, so every row's keys line up.
+        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            if (customized) {
+                IconButton(onClick = onReset, modifier = Modifier.testTag(resetTag)) {
+                    Icon(
+                        imageVector = MaterialSymbols.RestartAlt,
+                        contentDescription = stringResource(R.string.hardware_shortcut_reset, label),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
                     )
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                    ) {
-                        Text(
-                            text = shortcut.chord,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
             }
         }

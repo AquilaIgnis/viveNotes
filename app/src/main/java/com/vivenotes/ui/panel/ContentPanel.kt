@@ -29,9 +29,13 @@ import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -86,8 +90,18 @@ internal fun ColumnScope.ContentPanelHeader(
     onQueryChange: (String) -> Unit,
     imageProgress: ImageTextProgress = ImageTextProgress(enabled = false),
     inkProgress: InkTextProgress = InkTextProgress(enabled = false),
+    /** Ctrl+F's: put the caret in the query, so typing searches straight away. */
+    focusRequested: Boolean = false,
+    onFocusRequestHandled: () -> Unit = {},
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
+    val queryFocus = remember { FocusRequester() }
+    LaunchedEffect(focusRequested) {
+        if (focusRequested) {
+            queryFocus.requestFocus()
+            onFocusRequestHandled()
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -127,6 +141,7 @@ internal fun ColumnScope.ContentPanelHeader(
                 keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .focusRequester(queryFocus)
                     .testTag(ContentPanelTags.QUERY),
             )
         }
