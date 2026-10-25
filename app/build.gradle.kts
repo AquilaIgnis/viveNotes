@@ -246,10 +246,23 @@ android {
 
 androidComponents {
     onVariants(selector().withBuildType("release")) { variant ->
+        val droppedAbis = allAbis - releaseAbis.toSet()
         //Drops whatever [releaseAbis] leaves out of the release APK.
-        variant.packaging.jniLibs.excludes.addAll(
-            (allAbis - releaseAbis.toSet()).map { abi -> "lib/$abi/**" }
-        )
+        variant.packaging.jniLibs.excludes.addAll(droppedAbis.map { abi -> "lib/$abi/**" })
+        // And Chaquopy's Python for those ABIs. Chaquopy picks its ABI by which `stdlib-<abi>.imy`
+        // asset exists, not by which libpython was installed, so an x86_64 emulator running the
+        // arm64 libraries would load x86_64 modules and abort. A non-empty list replaces AGP's
+        // default patterns, so those are restated first.
+        if (droppedAbis.isNotEmpty()) {
+            variant.androidResources.ignoreAssetsPatterns.addAll(
+                listOf(
+                    "!.svn", "!.git", "!.ds_store", "!*.scc", ".*", "<dir>_*",
+                    "!CVS", "!thumbs.db", "!picasa.ini", "!*~",
+                ) + droppedAbis.flatMap { abi ->
+                    listOf("<dir>$abi", "<file>stdlib-$abi.imy", "<file>requirements-$abi.imy")
+                }
+            )
+        }
 
         // Only a signed build is publishable, so only a signed build gets the published name. An
         // unsigned or debug-signed release keeps AGP's `app-release-unsigned.apk` /

@@ -11,6 +11,7 @@ memory
 .claude
 .codex
 converter/
+.kotlin
 
 #trash
 *.db
