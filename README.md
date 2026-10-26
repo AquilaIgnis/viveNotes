@@ -10,6 +10,8 @@ and all AI features run entirely on-device.
 
 [Demo Video](https://youtu.be/QZ6rd2uQD9E)
 
+> The desktop repo is [here](https://github.com/CrownByte0b/viveNotes-multiplataform)
+
 # Download
 
 <table>
@@ -35,6 +37,29 @@ and all AI features run entirely on-device.
       <td align="center">
         <a href="https://github.com/AquilaIgnis/viveNotes/releases/latest">
           <img src="repo/apk.png" height="80" alt="Download APK">
+        </a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<table>
+  <thead>
+    <tr>
+      <th>Linux</th>
+      <th>Windows</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td align="center">
+        <a href="#">
+          <img src="repo/flathub.svg" height="80" width="200" alt="Get it on flathub">
+        </a>
+      </td>
+      <td align="center">
+        <a href="#">
+          <img src="repo/windows-logo.svg" height="80" alt="Download for Windows">
         </a>
       </td>
     </tr>
