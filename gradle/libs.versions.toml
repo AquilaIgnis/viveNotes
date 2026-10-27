@@ -50,7 +50,7 @@ googleid = "1.2.0"
 playBilling = "9.1.0"
 # Play's in-app rating sheet. 2.0.2 is the newest on Google's maven as of 2026-10-10.
 playReview = "2.0.2"
-ink = "1.1.0-alpha06"
+ink = "1.1.0-alpha10"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 # Room 2.8's migration-test serializers require the default interface methods added in 1.8.
