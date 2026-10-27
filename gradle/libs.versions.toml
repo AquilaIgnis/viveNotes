@@ -8,7 +8,7 @@ kotlin = "2.2.10"
 ksp = "2.3.6"
 
 activityCompose = "1.10.1"
-composeBom = "2025.09.00"
+composeBom = "2026.09.00"
 
 # M3 Expressive, on purpose and on pre-release — decided 2026-08-09, `memory/plan.md` §1a.
 #
