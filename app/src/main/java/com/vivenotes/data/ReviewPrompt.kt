@@ -49,7 +49,7 @@ class ReviewPrompt(
     private val context = context.applicationContext
     private val store = this.context.reviewPreferences
     private val asking = Mutex()
-    private val fromPlay: Boolean by lazy(::installedByPlay)
+    private val fromPlay: Boolean by lazy { installedByGooglePlay(this.context) }
 
     /** True from the session that should ask until that ask has been made. */
     val sessionsReached: Flow<Boolean>
@@ -103,11 +103,6 @@ class ReviewPrompt(
         }
     }
 
-    private fun installedByPlay(): Boolean = runCatching {
-        context.packageManager.getInstallSourceInfo(context.packageName)
-            .installingPackageName == PLAY_STORE
-    }.getOrDefault(false)
-
     internal companion object {
         const val SESSIONS_BEFORE_ASKING = 20
 
@@ -124,7 +119,6 @@ class ReviewPrompt(
             !asked && sessions >= SESSIONS_BEFORE_ASKING
 
         private const val TAG = "ReviewPrompt"
-        private const val PLAY_STORE = "com.android.vending"
         private val SESSIONS = intPreferencesKey("sessions")
         private val LAST_STOPPED = longPreferencesKey("last_stopped")
         private val ASKED_FOR_SESSIONS = booleanPreferencesKey("asked_for_sessions")

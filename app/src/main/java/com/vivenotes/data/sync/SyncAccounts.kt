@@ -269,41 +269,19 @@ class SyncAccounts(
     fun isManagedAccount(account: SyncAccount?): Boolean =
         account != null && account.serverUrl == cloudServerUrl
 
-    /** Reads the server-authoritative union of paid Play and promotional coupon access. */
+    /** Reads the server-authoritative union of paid and promotional coupon access. */
     suspend fun managedSubscription(
         expectedAccountId: String? = null,
-    ): SubscriptionResult<ManagedSubscriptionStatus> {
-        val account = store.account.first()
-            ?: return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
-        if (expectedAccountId != null && account.accountId != expectedAccountId) {
-            return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
-        }
-        if (!isManagedAccount(account)) {
-            return SubscriptionResult.Failed(SubscriptionFailure.NotManaged)
-        }
-        return handleSubscriptionResult(
-            account,
-            client.getSubscription(account.serverUrl, account.token),
-        )
+    ): SubscriptionResult<ManagedSubscriptionStatus> = managedSubscriptionCall(expectedAccountId) {
+        client.getSubscription(it.serverUrl, it.token)
     }
 
-    /** Redeems an existing managed-server coupon without touching the Play subscription. */
+    /** Redeems an existing managed-server coupon without touching a paid subscription. */
     suspend fun redeemManagedCoupon(
         code: String,
         expectedAccountId: String? = null,
-    ): SubscriptionResult<CouponGrant> {
-        val account = store.account.first()
-            ?: return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
-        if (expectedAccountId != null && account.accountId != expectedAccountId) {
-            return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
-        }
-        if (!isManagedAccount(account)) {
-            return SubscriptionResult.Failed(SubscriptionFailure.NotManaged)
-        }
-        return handleSubscriptionResult(
-            account,
-            client.redeemCoupon(account.serverUrl, account.token, code),
-        )
+    ): SubscriptionResult<CouponGrant> = managedSubscriptionCall(expectedAccountId) {
+        client.redeemCoupon(it.serverUrl, it.token, code)
     }
 
     /** Sends a Play token to the managed backend; local code never grants the entitlement. */
@@ -311,7 +289,56 @@ class SyncAccounts(
         purchaseToken: String,
         productId: String,
         expectedAccountId: String? = null,
-    ): SubscriptionResult<ManagedSubscriptionStatus> {
+    ): SubscriptionResult<ManagedSubscriptionStatus> = managedSubscriptionCall(expectedAccountId) {
+        client.confirmGooglePlaySubscription(
+            serverBaseUrl = it.serverUrl,
+            token = it.token,
+            purchaseToken = purchaseToken,
+            productId = productId,
+        )
+    }
+
+    /** The price card checkout sells, or `BillingUnavailable` from a server that sells nothing by card. */
+    suspend fun stripePlan(
+        expectedAccountId: String? = null,
+    ): SubscriptionResult<StripePlan> = managedSubscriptionCall(expectedAccountId) {
+        client.getStripePlan(it.serverUrl, it.token)
+    }
+
+    /** A Stripe Checkout page bound to the stored managed account. */
+    suspend fun openStripeCheckout(
+        expectedAccountId: String? = null,
+    ): SubscriptionResult<StripeRedirect> = managedSubscriptionCall(expectedAccountId) {
+        client.createStripeCheckoutSession(it.serverUrl, it.token)
+    }
+
+    /** The Stripe customer portal for the stored managed account's card plan. */
+    suspend fun openStripePortal(
+        expectedAccountId: String? = null,
+    ): SubscriptionResult<StripeRedirect> = managedSubscriptionCall(expectedAccountId) {
+        client.createStripePortalSession(it.serverUrl, it.token)
+    }
+
+    /** Has the server re-read this account's card subscriptions from Stripe. */
+    suspend fun refreshStripeSubscriptions(
+        expectedAccountId: String? = null,
+    ): SubscriptionResult<ManagedSubscriptionStatus> = managedSubscriptionCall(expectedAccountId) {
+        client.refreshStripeSubscriptions(it.serverUrl, it.token)
+    }
+
+    /**
+     * One entitlement request for the stored account, refused before any network traffic when that
+     * account is gone, is not the one the caller expected, or is self-hosted — billing exists only on
+     * the managed deployment.
+     *
+     * It authenticates with the same revocable device token as sync, so its explicit 401 is treated
+     * identically: retain nothing that can only fail, while every transport/5xx result leaves the
+     * once-issued credential alone.
+     */
+    private suspend inline fun <T> managedSubscriptionCall(
+        expectedAccountId: String?,
+        request: (SyncAccount) -> SubscriptionResult<T>,
+    ): SubscriptionResult<T> {
         val account = store.account.first()
             ?: return SubscriptionResult.Failed(SubscriptionFailure.NotConnected)
         if (expectedAccountId != null && account.accountId != expectedAccountId) {
@@ -320,26 +347,7 @@ class SyncAccounts(
         if (!isManagedAccount(account)) {
             return SubscriptionResult.Failed(SubscriptionFailure.NotManaged)
         }
-        return handleSubscriptionResult(
-            account,
-            client.confirmGooglePlaySubscription(
-                serverBaseUrl = account.serverUrl,
-                token = account.token,
-                purchaseToken = purchaseToken,
-                productId = productId,
-            ),
-        )
-    }
-
-    /**
-     * An entitlement request authenticates with the same revocable device token as sync. Treat its
-     * explicit 401 identically: retain nothing that can only fail, while every transport/5xx result
-     * leaves the once-issued credential alone.
-     */
-    private suspend fun <T> handleSubscriptionResult(
-        account: SyncAccount,
-        result: SubscriptionResult<T>,
-    ): SubscriptionResult<T> {
+        val result = request(account)
         if (result == SubscriptionResult.Unauthorized) forget(account)
         return result
     }

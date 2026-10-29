@@ -86,6 +86,17 @@
     <string name="account_subscription_error_server_unreachable">No se pudo contactar con el servidor en la nube. Tu compra de Play está segura y se restaurará cuando se vuelva a conectar.</string>
     <string name="account_subscription_error_server">El servidor en la nube no pudo actualizar la suscripción. Inténtalo de nuevo.</string>
     <string name="account_subscription_required_state">Se requiere suscripción para sincronizar</string>
+    <string name="account_subscription_subscribe_card">Suscribirse</string>
+    <string name="account_subscription_opening_checkout">Abriendo el pago seguro</string>
+    <string name="account_subscription_manage_card">Administrar facturación</string>
+    <string name="account_subscription_card_grace">El pago con tarjeta no se completó. Stripe lo está reintentando y el almacenamiento sigue disponible mientras tanto.</string>
+    <string name="account_subscription_card_on_hold">La suscripción con tarjeta está suspendida hasta que se actualice el método de pago.</string>
+    <string name="account_subscription_card_paused">La suscripción con tarjeta está pausada.</string>
+    <string name="account_subscription_card_expired">La suscripción con tarjeta ha finalizado.</string>
+    <string name="account_subscription_card_pending">El pago está pendiente. El almacenamiento comenzará cuando Stripe lo confirme.</string>
+    <string name="account_subscription_error_already_subscribed">Esta cuenta ya tiene una suscripción. Adminístrala en lugar de comprar otra.</string>
+    <string name="account_subscription_error_card_unreachable">No se pudo contactar con el servidor en la nube. Comprueba la conexión e inténtalo de nuevo.</string>
+    <string name="account_subscription_error_browser">No hay ningún navegador disponible para abrir la página de pago.</string>
     <string name="account_sync_now">Sincronizar ahora</string>
     <string name="account_syncing">Sincronizando cuadernos</string>
     <string name="account_sync_up_to_date">Actualizado</string>

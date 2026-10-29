@@ -84,6 +84,17 @@
     <string name="account_subscription_error_server_unreachable">Nie można połączyć się z serwerem w chmurze. Twój zakup w Play jest bezpieczny i zostanie przywrócony po ponownym połączeniu.</string>
     <string name="account_subscription_error_server">Serwer w chmurze nie mógł zaktualizować subskrypcji. Spróbuj ponownie.</string>
     <string name="account_subscription_required_state">Do synchronizacji wymagana jest subskrypcja</string>
+    <string name="account_subscription_subscribe_card">Subskrybuj</string>
+    <string name="account_subscription_opening_checkout">Otwieranie bezpiecznej płatności</string>
+    <string name="account_subscription_manage_card">Zarządzaj płatnościami</string>
+    <string name="account_subscription_card_grace">Płatność kartą nie powiodła się. Stripe ponawia próbę, a pamięć pozostaje w tym czasie dostępna.</string>
+    <string name="account_subscription_card_on_hold">Subskrypcja kartą jest wstrzymana do momentu zaktualizowania metody płatności.</string>
+    <string name="account_subscription_card_paused">Subskrypcja kartą została wstrzymana.</string>
+    <string name="account_subscription_card_expired">Subskrypcja kartą wygasła.</string>
+    <string name="account_subscription_card_pending">Płatność oczekuje na realizację. Pamięć zostanie aktywowana po potwierdzeniu przez Stripe.</string>
+    <string name="account_subscription_error_already_subscribed">To konto ma już subskrypcję. Zarządzaj nią zamiast kupować kolejną.</string>
+    <string name="account_subscription_error_card_unreachable">Nie można połączyć się z serwerem w chmurze. Sprawdź połączenie i spróbuj ponownie.</string>
+    <string name="account_subscription_error_browser">Brak przeglądarki, w której można otworzyć stronę płatności.</string>
     <string name="account_sync_now">Synchronizuj teraz</string>
     <string name="account_syncing">Synchronizowanie notesów</string>
     <string name="account_sync_up_to_date">Aktualne</string>

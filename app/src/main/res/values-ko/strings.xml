@@ -84,6 +84,17 @@
     <string name="account_subscription_error_server_unreachable">클라우드 서버에 연결할 수 없습니다. Play 구매 내역은 안전하게 유지되며 재연결 시 복원됩니다.</string>
     <string name="account_subscription_error_server">클라우드 서버에서 구독을 업데이트할 수 없습니다. 다시 시도하세요.</string>
     <string name="account_subscription_required_state">동기화하려면 구독이 필요합니다</string>
+    <string name="account_subscription_subscribe_card">구독하기</string>
+    <string name="account_subscription_opening_checkout">안전한 결제 페이지 여는 중</string>
+    <string name="account_subscription_manage_card">결제 관리</string>
+    <string name="account_subscription_card_grace">카드 결제가 완료되지 않았습니다. Stripe에서 다시 시도하는 동안 저장소를 계속 이용할 수 있습니다.</string>
+    <string name="account_subscription_card_on_hold">결제 수단이 업데이트될 때까지 카드 구독이 보류되었습니다.</string>
+    <string name="account_subscription_card_paused">카드 구독이 일시 중지되었습니다.</string>
+    <string name="account_subscription_card_expired">카드 구독이 종료되었습니다.</string>
+    <string name="account_subscription_card_pending">결제 대기 중입니다. Stripe 확인 후 저장소가 시작됩니다.</string>
+    <string name="account_subscription_error_already_subscribed">이 계정에는 이미 구독이 있습니다. 새로 구매하지 말고 기존 구독을 관리하세요.</string>
+    <string name="account_subscription_error_card_unreachable">클라우드 서버에 연결할 수 없습니다. 연결을 확인한 후 다시 시도하세요.</string>
+    <string name="account_subscription_error_browser">결제 페이지를 열 수 있는 브라우저가 없습니다.</string>
     <string name="account_sync_now">지금 동기화</string>
     <string name="account_syncing">노트북 동기화 중</string>
     <string name="account_sync_up_to_date">최신 상태</string>

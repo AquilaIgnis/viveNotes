@@ -324,6 +324,10 @@ dependencies {
     // The in-app rating sheet. Asked for only on a Play install; a sideloaded or F-Droid APK
     // carries the library but never calls it.
     implementation(libs.google.play.review.ktx)
+    // Card subscriptions on installs Google Play did not make. Stripe Checkout and its customer
+    // portal are Stripe-hosted pages opened in a Custom Tab, so no Stripe SDK — and none of its
+    // analytics — ships in the APK; the managed server holds the Stripe key.
+    implementation(libs.androidx.browser)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

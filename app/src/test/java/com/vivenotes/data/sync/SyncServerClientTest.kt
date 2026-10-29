@@ -1180,6 +1180,9 @@ class SyncServerClientTest {
                     promotionalValidUntil = "2026-12-03T12:00:00Z",
                     autoRenewing = true,
                     productId = "vivenotes_storage_monthly",
+                    // No paidProvider in the answer: a server from before card billing, whose every
+                    // paid plan was Google Play's.
+                    paidProvider = PaidProvider.GooglePlay,
                 ),
             ),
             result,
@@ -1285,6 +1288,103 @@ class SyncServerClientTest {
             SubscriptionResult.Unauthorized,
             SyncServerClient().getSubscription(baseUrl, "vive_dead"),
         )
+    }
+
+    @Test
+    fun cardPlanIsThePriceInItsCurrencysSmallestUnit() = runBlocking {
+        respond = {
+            send(it, 200, """{"unitAmount":499,"currency":"usd","interval":"month","intervalCount":1}""")
+        }
+
+        val result = SyncServerClient().getStripePlan(baseUrl, "vive_abc")
+
+        assertEquals("GET", requestMethod)
+        assertEquals("/v1/billing/stripe/plan", requestPath)
+        assertEquals("Bearer vive_abc", authorization)
+        assertEquals(SubscriptionResult.Success(StripePlan(499, "usd", "month", 1)), result)
+    }
+
+    /** A server without a Stripe account says so the same way, and the app keeps Play's checkout. */
+    @Test
+    fun aServerThatSellsNothingByCardAnswersBillingUnavailable() = runBlocking {
+        respond = {
+            send(it, 503, """{"error":"billing_unavailable","message":"card billing is not configured"}""")
+        }
+
+        assertEquals(
+            SubscriptionResult.Failed(SubscriptionFailure.BillingUnavailable),
+            SyncServerClient().getStripePlan(baseUrl, "vive_abc"),
+        )
+    }
+
+    @Test
+    fun cardCheckoutAndPortalAreAuthenticatedPostsThatReturnAStripePage() = runBlocking {
+        respond = {
+            send(
+                it,
+                200,
+                """{"url":"https://checkout.stripe.com/c/pay/cs_test","expiresAt":"2026-10-19T19:00:00Z"}""",
+            )
+        }
+
+        assertEquals(
+            SubscriptionResult.Success(
+                StripeRedirect("https://checkout.stripe.com/c/pay/cs_test", "2026-10-19T19:00:00Z"),
+            ),
+            SyncServerClient().createStripeCheckoutSession(baseUrl, "vive_abc"),
+        )
+        assertEquals("POST", requestMethod)
+        assertEquals("/v1/billing/stripe/checkout-sessions", requestPath)
+        assertEquals("Bearer vive_abc", authorization)
+
+        respond = { send(it, 200, """{"url":"https://billing.stripe.com/p/session/test"}""") }
+
+        assertEquals(
+            SubscriptionResult.Success(StripeRedirect("https://billing.stripe.com/p/session/test", null)),
+            SyncServerClient().createStripePortalSession(baseUrl, "vive_abc"),
+        )
+        assertEquals("POST", requestMethod)
+        assertEquals("/v1/billing/stripe/portal-sessions", requestPath)
+    }
+
+    @Test
+    fun aSecondCardPlanIsRefusedAsAlreadySubscribed() = runBlocking {
+        respond = {
+            send(it, 409, """{"error":"already_subscribed","message":"this account already has a paid subscription"}""")
+        }
+
+        assertEquals(
+            SubscriptionResult.Failed(SubscriptionFailure.AlreadySubscribed),
+            SyncServerClient().createStripeCheckoutSession(baseUrl, "vive_abc"),
+        )
+    }
+
+    @Test
+    fun cardRefreshSaysWhichProviderThePaidPlanCameFrom() = runBlocking {
+        val answers = listOf(
+            "stripe" to PaidProvider.Stripe,
+            "google_play" to PaidProvider.GooglePlay,
+            "apple" to PaidProvider.Unknown,
+        )
+        for ((provider, expected) in answers) {
+            respond = {
+                send(
+                    it,
+                    200,
+                    """{"state":"active","paidState":"active","paidProvider":"$provider","autoRenewing":true}""",
+                )
+            }
+
+            val result = SyncServerClient().refreshStripeSubscriptions(baseUrl, "vive_abc")
+
+            assertEquals("POST", requestMethod)
+            assertEquals("/v1/billing/stripe/subscriptions/refresh", requestPath)
+            assertEquals(expected, (result as SubscriptionResult.Success).value.paidProvider)
+        }
+
+        respond = { send(it, 200, """{"state":"inactive","autoRenewing":false}""") }
+        val unpaid = SyncServerClient().refreshStripeSubscriptions(baseUrl, "vive_abc")
+        assertEquals(null, (unpaid as SubscriptionResult.Success).value.paidProvider)
     }
 
     private fun googleDevice(): GoogleDeviceDetails = GoogleDeviceDetails(
