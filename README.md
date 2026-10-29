@@ -55,10 +55,11 @@ and all AI features run entirely on-device.
       <td align="center">
         <a href="#">
           <img src="repo/flathub.svg" height="80" width="200" alt="Get it on flathub">
-        </a>
+        </a> </br>
+        <a>coming soon</a>
       </td>
       <td align="center">
-        <a href="#">
+        <a href="https://github.com/CrownByte0b/viveNotes-multiplataform/releases/latest/download/ViveNotes-x64.msi">
           <img src="repo/windows-logo.svg" height="80" alt="Download for Windows">
         </a>
       </td>
