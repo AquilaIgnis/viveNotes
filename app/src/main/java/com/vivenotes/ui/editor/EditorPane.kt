@@ -27,6 +27,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.rememberSplineBasedDecay
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -459,6 +467,8 @@ fun EditorPane(
     onPaste: (InkPoint) -> Unit = {},
     /** A paste of several objects, waiting to be measured before it is stacked; see [onPasteMeasured]. */
     pendingPasteLayout: CanvasPasteLayoutRequest? = null,
+    /** Where pastes from another app will land on this page, while they are read and downloaded. */
+    pastesLoadingAt: List<InkPoint> = emptyList(),
     onPasteMeasured: (CanvasPasteLayoutRequest, PasteFrames) -> Unit = { _, _ -> },
     onRecolorInkSelection: (Set<String>, Int) -> Unit = { _, _ -> },
     onGroupInkSelection: (Set<String>) -> Unit = {},
@@ -1872,6 +1882,17 @@ fun EditorPane(
                     )
                 }
 
+            pastesLoadingAt.forEach { point ->
+                key(point) {
+                    PasteProgress(
+                        point = point,
+                        zoom = zoom,
+                        scrollX = horizontal.value.toFloat(),
+                        scrollY = vertical.value.toFloat(),
+                    )
+                }
+            }
+
             pastePopupAt?.takeIf { hasClipboard }?.let { point ->
                 ObjectPastePopup(
                     point = point,
@@ -2082,6 +2103,7 @@ internal object PageTags {
     const val CANVAS = "page-canvas"
     const val PASTE_MENU = "ink-paste-menu"
     const val PASTE = "ink-paste"
+    const val PASTE_PROGRESS = "paste-progress"
 }
 
 /** A touch-only double tap; mouse and stylus clicks retain the canvas's normal single-tap action. */
@@ -2168,6 +2190,49 @@ private fun BoxScope.ObjectPastePopup(
         }
     }
 }
+
+/**
+ * The wait for a paste from another app, where its top-left will be: a picture downloading, a long
+ * page being read. Placed through [inkPageToView] as [ObjectPastePopup] is, and drawn at its own
+ * size whatever the zoom, since it is not part of the page.
+ *
+ * It appears only once the wait has lasted a moment, so a paste of a few words does not flash one.
+ * Contained, as the formula panel's wait for its model is: it sits on the page's own colours, which
+ * an uncontained indicator could vanish into.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun BoxScope.PasteProgress(point: InkPoint, zoom: Float, scrollX: Float, scrollY: Float) {
+    val density = LocalDensity.current
+    val anchor = remember(point, zoom, scrollX, scrollY, density.density) {
+        val mapped = floatArrayOf(point.x, point.y)
+        inkPageToView(zoom = zoom, density = density.density, scrollX = scrollX, scrollY = scrollY).mapPoints(mapped)
+        IntOffset(mapped[0].roundToInt(), mapped[1].roundToInt())
+    }
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(PASTE_PROGRESS_DELAY_MS)
+        shown = true
+    }
+    val description = stringResource(R.string.editor_pasting)
+    AnimatedVisibility(
+        visible = shown,
+        enter = fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+        modifier = Modifier.offset { anchor },
+    ) {
+        ContainedLoadingIndicator(
+            modifier = Modifier
+                .testTag(PageTags.PASTE_PROGRESS)
+                .semantics {
+                    contentDescription = description
+                    liveRegion = LiveRegionMode.Polite
+                },
+        )
+    }
+}
+
+/** How long a paste from another app runs before [PasteProgress] says so. */
+private const val PASTE_PROGRESS_DELAY_MS = 150L
 
 /** Test tags for the container's drag targets. */
 internal object OutlineTags {

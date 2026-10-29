@@ -647,6 +647,7 @@
 
     <!-- The page editor. -->
     <string name="editor_paste">Pegar</string>
+    <string name="editor_pasting">Pegando…</string>
     <string name="editor_untitled_page">Página sin título</string>
 
     <string name="equation_button">Ecuación</string>

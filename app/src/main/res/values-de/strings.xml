@@ -627,6 +627,7 @@
     <string name="color_dark_purple">Dunkellila</string>
 
     <string name="editor_paste">Einfügen</string>
+    <string name="editor_pasting">Wird eingefügt…</string>
     <string name="editor_untitled_page">Unbenannte Seite</string>
 
     <string name="equation_button">Gleichung</string>

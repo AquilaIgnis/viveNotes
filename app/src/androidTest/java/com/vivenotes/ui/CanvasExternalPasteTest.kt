@@ -55,6 +55,7 @@ class CanvasExternalPasteTest {
     private lateinit var attachments: AttachmentStore
     private lateinit var vm: NotesViewModel
     private val source = Source()
+    private lateinit var scratch: java.io.File
 
     @Before
     fun setUp() {
@@ -67,8 +68,12 @@ class CanvasExternalPasteTest {
             .build()
         val repository = NotesRepository(db)
         runBlocking { repository.seedIfEmpty() }
-        // On the test's own scheduler, so a picture's import has finished when the scheduler idles.
-        attachments = AttachmentStore(context, db, io = dispatcher)
+        // On the test's own scheduler, so a picture's import has finished when the scheduler idles —
+        // and in a folder of its own, not among the installed app's pictures.
+        val files = java.io.File(context.cacheDir, "canvas-paste-test").also { scratch = it }
+        attachments = AttachmentStore(object : android.content.ContextWrapper(context) {
+            override fun getFilesDir() = files
+        }, db, io = dispatcher)
         vm = NotesViewModel(repository, attachments, EditorDefaultsStore(context), ViewSettingsStore(context),
             PenSettingsStore(context), inkDispatcher = dispatcher, systemClipboard = source,
             pasteDispatcher = dispatcher)
@@ -77,6 +82,7 @@ class CanvasExternalPasteTest {
 
     @After
     fun tearDown() {
+        scratch.deleteRecursively()
         db.close()
         Dispatchers.resetMain()
     }
@@ -252,6 +258,45 @@ class CanvasExternalPasteTest {
         assertTrue(vm.uiState.value.images.isEmpty())
     }
 
+    /** Both pictures are asked for before either has arrived: downloads run side by side. */
+    @Test
+    fun picturesDownloadAtOnceAndThePasteShowsWhereItWillLand() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        source.ready = gate
+        source.picture = png(4, 2)
+        source.content = ClipboardContent(html = "<img src='https://example.org/a.png'><p>Between</p><img src='https://example.org/b.png'>")
+        vm.refreshClipboard()
+        vm.pasteObjects(InkPoint(150f, 250f))
+        runCurrent()
+        assertEquals(listOf("https://example.org/a.png", "https://example.org/b.png"), source.downloads)
+        assertEquals(listOf(PendingPaste(pageId(), InkPoint(150f, 250f))), vm.pendingPastes.value)
+
+        gate.complete(Unit)
+        runCurrent()
+        vm.pendingPasteLayout.value?.let { request ->
+            vm.completePasteLayout(request, PasteFrames(request.outlines.associate { it.id to 40f }))
+        }
+        advanceUntilIdle()
+        assertEquals(2, vm.uiState.value.images.size)
+        assertTrue("landed, so nothing is pending", vm.pendingPastes.value.isEmpty())
+    }
+
+    @Test
+    fun aCopiedBitmapLeavesTheMarkupsPicturesUndownloaded() = runTest(dispatcher) {
+        source.content = ClipboardContent(html = "<p>Preview</p><img src='https://example.org/preview.png'>", image = png(40, 20))
+        paste(InkPoint(150f, 250f))
+        assertEquals(1, vm.uiState.value.images.size)
+        assertTrue(source.downloads.isEmpty())
+    }
+
+    @Test
+    fun aFailedPasteIsNoLongerPending() = runTest(dispatcher) {
+        source.failing = true
+        source.content = ClipboardContent(text = "anything")
+        paste(InkPoint(150f, 250f))
+        assertTrue(vm.pendingPastes.value.isEmpty())
+    }
+
     private fun png(width: Int, height: Int): ByteArray {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         return ByteArrayOutputStream().use { out ->
@@ -268,7 +313,8 @@ class CanvasExternalPasteTest {
         val downloads = mutableListOf<String>()
         override fun hasContent() = !internal &&
             (content.text != null || content.html != null || content.image != null || content.imageUrl != null)
-        override suspend fun readContent() = content
+        var failing = false
+        override suspend fun readContent(): ClipboardContent = if (failing) error("unreadable") else content
         override suspend fun imageBytes(address: String): ByteArray? {
             downloads += address
             ready?.await()

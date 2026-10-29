@@ -627,6 +627,7 @@
     <string name="color_dark_purple">Violet foncé</string>
 
     <string name="editor_paste">Coller</string>
+    <string name="editor_pasting">Collage en cours…</string>
     <string name="editor_untitled_page">Page sans titre</string>
 
     <string name="equation_button">Équation</string>

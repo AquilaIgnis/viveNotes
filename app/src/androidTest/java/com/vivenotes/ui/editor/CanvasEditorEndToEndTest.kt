@@ -10,6 +10,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -39,6 +40,7 @@ import com.vivenotes.richtext.OutlineEditText
 import com.vivenotes.richtext.TextSelection
 import com.vivenotes.ui.NotesViewModel
 import com.vivenotes.ui.theme.ViveNotesTheme
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -90,6 +92,7 @@ class CanvasEditorEndToEndTest {
             val state by vm.uiState.collectAsState()
             val hasClipboard by vm.hasClipboard.collectAsState()
             val pending by vm.pendingPasteLayout.collectAsState()
+            val pastes by vm.pendingPastes.collectAsState()
             ViveNotesTheme {
                 EditorPane(
                     title = state.title,
@@ -122,6 +125,7 @@ class CanvasEditorEndToEndTest {
                     onPaste = vm::pasteObjects,
                     pendingPasteLayout = pending,
                     onPasteMeasured = vm::completePasteLayout,
+                    pastesLoadingAt = pastes.filter { it.pageId == state.selectedPageId }.map { it.at },
                 )
             }
         }
@@ -212,11 +216,44 @@ class CanvasEditorEndToEndTest {
         assertEquals("one Undo takes the whole paste back", count, vm.uiState.value.outlines.size)
     }
 
+    /** While a picture downloads, the paste shows where it will land, and stops when it has. */
+    @Test
+    fun aPasteStillDownloadingShowsItsProgressWhereItWillLand() {
+        val gate = CompletableDeferred<Unit>()
+        source.ready = gate
+        source.content = ClipboardContent(html = "<img src='https://example.org/slow.png'>")
+        compose.runOnIdle { vm.refreshClipboard() }
+        val tap = with(density) { Offset(220.dp.toPx(), 420.dp.toPx()) }
+
+        compose.onRoot().performTouchInput { doubleClick(tap) }
+        compose.onNodeWithTag(PageTags.PASTE).performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag(PageTags.PASTE_PROGRESS).fetchSemanticsNodes().isNotEmpty()
+        }
+        val shown = compose.onNodeWithTag(PageTags.PASTE_PROGRESS).fetchSemanticsNode().boundsInRoot
+        val landing = compose.runOnIdle { vm.pendingPastes.value.single().at }
+        assertEquals("at the point the paste was asked for", 220f, landing.x, 2f)
+        assertEquals("drawn from where the paste lands", tap.x, shown.left, 2 * density.density)
+        assertEquals(tap.y, shown.top, 2 * density.density)
+
+        gate.complete(Unit)
+        compose.waitUntil(5_000) { vm.pendingPastes.value.isEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag(PageTags.PASTE_PROGRESS).fetchSemanticsNodes().isEmpty() }
+        // Nothing came back for the picture, so its address is pasted instead.
+        compose.runOnIdle {
+            assertEquals("https://example.org/slow.png", vm.initialBlocksFor(vm.uiState.value.outlines.last().id).single().text)
+        }
+    }
+
     private class Source : CanvasClipboardSource {
         var content = ClipboardContent()
+        var ready: CompletableDeferred<Unit>? = null
         override fun hasContent() = content.text != null || content.html != null
         override suspend fun readContent() = content
-        override suspend fun imageBytes(address: String): ByteArray? = null
+        override suspend fun imageBytes(address: String): ByteArray? {
+            ready?.await()
+            return null
+        }
         override fun markInternalCopy() {}
         override fun ownsInternalCopy() = false
     }

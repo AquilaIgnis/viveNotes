@@ -11,6 +11,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -159,8 +162,8 @@ import com.vivenotes.model.withRowInserted
 import com.vivenotes.model.withRowMinHeight
 import com.vivenotes.model.withRowRemoved
 import com.vivenotes.richtext.CanvasPasteItem
+import com.vivenotes.richtext.CanvasPastePlan
 import com.vivenotes.richtext.FormatCommand
-import com.vivenotes.richtext.canvasPasteItems
 import com.vivenotes.richtext.plainPasteBlocks
 import com.vivenotes.richtext.Keystroke
 import com.vivenotes.richtext.SelectionState
@@ -338,6 +341,9 @@ private sealed interface CanvasHistoryEntry {
      */
     data class Text(val change: TextHistoryChange) : CanvasHistoryEntry
 }
+
+/** A paste from another app on its way to [pageId], whose top-left will be [at]. */
+data class PendingPaste(val pageId: String, val at: InkPoint)
 
 /** A text step undone or redone: the editor for [outlineId] shows [blocks] with [selection]. */
 data class TextRestore(val outlineId: String, val blocks: List<Block>, val selection: TextSelection)
@@ -787,6 +793,11 @@ class NotesViewModel(
 
     /** A paste of several objects waiting for the canvas to measure them — see [completePasteLayout]. */
     val pendingPasteLayout: StateFlow<CanvasPasteLayoutRequest?> = _pendingPasteLayout.asStateFlow()
+
+    private val _pendingPastes = MutableStateFlow<List<PendingPaste>>(emptyList())
+
+    /** Pastes from another app still being read or downloaded, for the canvas to show where they will land. */
+    val pendingPastes: StateFlow<List<PendingPaste>> = _pendingPastes.asStateFlow()
 
     /**
      * Snapshots are shallow lists: native strokes are immutable, an `Outline.Shape` is a data class,
@@ -3597,39 +3608,67 @@ class NotesViewModel(
     /**
      * Pastes what another app copied, with its top-left at [at]: plain or rich text becomes a text
      * box, a copied picture or a picture's address a picture, and an HTML table an editable table,
-     * in the order the copy held them — see [canvasPasteItems]. One step of Undo takes it all back.
+     * in the order the copy held them — see [CanvasPastePlan]. One step of Undo takes it all back.
      *
      * Several objects are stacked once the canvas has measured them ([pendingPasteLayout]), so each
-     * keeps a margin from the next whatever its text wraps to.
+     * keeps a margin from the next whatever its text wraps to. Until it lands, [pendingPastes] says
+     * where it will.
      */
     private fun pasteFromClipboard(pageId: String, at: InkPoint) {
         val source = systemClipboard ?: return
         val marks = editorDefaults.value.asEditorMarks()
+        val pending = PendingPaste(pageId, at)
+        _pendingPastes.value += pending
         viewModelScope.launch {
-            externalPaste.withLock {
-                val imported = mutableListOf<String>()
-                try {
-                    val content = source.readContent()
-                    val items = withContext(pasteDispatcher) { canvasPasteItems(content, marks) }
-                    val outlines = items.mapNotNull { item ->
-                        when (item) {
-                            is CanvasPasteItem.Text -> Outline.Text.empty().copy(blocks = item.blocks)
-                            is CanvasPasteItem.Table -> item.outline
-                            is CanvasPasteItem.Image -> pastedPicture(source, item, content, marks, imported)
-                        }
+            try {
+                externalPaste.withLock { paste(source, marks, pageId, at) }
+            } finally {
+                _pendingPastes.value -= pending
+            }
+        }
+    }
+
+    /** One paste from another app, start to finish; [pasteFromClipboard] runs them one at a time. */
+    private suspend fun paste(source: CanvasClipboardSource, marks: Set<Mark>, pageId: String, at: InkPoint) {
+        val imported = mutableListOf<String>()
+        try {
+            val content = source.readContent()
+            val plan = withContext(pasteDispatcher) { CanvasPastePlan(content, marks) }
+            val outlines = coroutineScope {
+                // Every picture starts downloading the moment the scan finds it, while the
+                // tables and the text between them are read, all of them at once.
+                val fetches = plan.pictures.map { picture ->
+                    picture to async { pastedPicture(source, picture, content, marks, imported) }
+                }
+                val read = plan.runs.map { run -> async(pasteDispatcher) { run.read() } }.awaitAll()
+                val items = plan.resolve(read)
+                // A picture the paste turned out not to need — a copied bitmap won over the
+                // markup — is not waited for.
+                fetches.filter { (picture, _) -> items.none { it === picture } }.forEach { it.second.cancel() }
+                items.mapNotNull { item ->
+                    when (item) {
+                        is CanvasPasteItem.Text -> Outline.Text.empty().copy(blocks = item.blocks)
+                        is CanvasPasteItem.Table -> item.outline
+                        is CanvasPasteItem.Image -> fetches.firstOrNull { it.first === item }?.second?.await()
+                            ?: pastedPicture(source, item, content, marks, imported)
                     }
-                    val placed = if (outlines.size < 2) outlines else laidOut(outlines)
-                    if (placed.isNotEmpty() && insertClipboardOutlines(pageId, placed, at.x, at.y)) imported.clear()
-                    DebugLog.i(DebugLog.CLIPBOARD) { "canvas paste: placed ${placed.size} objects" }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (error: Exception) {
-                    DebugLog.i(DebugLog.CLIPBOARD) { "canvas paste failed: ${error.javaClass.simpleName}" }
-                } finally {
-                    // A paste that did not land — the page changed under a download — places nothing.
-                    if (imported.isNotEmpty()) withContext(NonCancellable) { imported.forEach { attachments.release(it) } }
                 }
             }
+            val placed = if (outlines.size < 2) outlines else laidOut(outlines)
+            if (placed.isNotEmpty() && insertClipboardOutlines(pageId, placed, at.x, at.y)) {
+                // Placed now, so kept; whatever was fetched and not placed is let go below.
+                placed.filterIsInstance<Outline.Image>().forEach { imported.remove(it.attachmentId) }
+            }
+            DebugLog.i(DebugLog.CLIPBOARD) {
+                "canvas paste: placed ${placed.size} objects from ${plan.runs.size} runs, ${plan.pictures.size} pictures"
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            DebugLog.i(DebugLog.CLIPBOARD) { "canvas paste failed: ${error.javaClass.simpleName}" }
+        } finally {
+            // A paste that did not land — the page changed under a download — places nothing.
+            if (imported.isNotEmpty()) withContext(NonCancellable) { imported.forEach { attachments.release(it) } }
         }
     }
 

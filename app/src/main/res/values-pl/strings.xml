@@ -648,6 +648,7 @@
     <string name="color_dark_purple">Ciemnofioletowy</string>
 
     <string name="editor_paste">Wklej</string>
+    <string name="editor_pasting">Wklejanie…</string>
     <string name="editor_untitled_page">Strona bez tytułu</string>
 
     <string name="equation_button">Równanie</string>

@@ -1902,6 +1902,7 @@ private fun PageEditor(
     val pictureText by viewModel.pictureText.collectAsStateWithLifecycle()
     val inkDescriptions by viewModel.inkDescriptions.collectAsStateWithLifecycle()
     val pendingPasteLayout by viewModel.pendingPasteLayout.collectAsStateWithLifecycle()
+    val pendingPastes by viewModel.pendingPastes.collectAsStateWithLifecycle()
     val accessibilityOn = rememberAccessibilityServiceOn()
     LaunchedEffect(accessibilityOn) { viewModel.setDescribingPage(accessibilityOn) }
 
@@ -2028,6 +2029,7 @@ private fun PageEditor(
         onPaste = viewModel::pasteObjects,
         pendingPasteLayout = pendingPasteLayout,
         onPasteMeasured = viewModel::completePasteLayout,
+        pastesLoadingAt = pendingPastes.filter { it.pageId == state.selectedPageId }.map { it.at },
         onRecolorInkSelection = viewModel::recolorInk,
         onGroupInkSelection = viewModel::groupInk,
         onUngroupInkSelection = viewModel::ungroupInk,

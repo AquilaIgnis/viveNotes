@@ -13,14 +13,77 @@ internal sealed interface CanvasPasteItem {
     data class Image(val address: String? = null, val bytes: ByteArray? = null) : CanvasPasteItem
 }
 
+/** What [content] pastes onto the canvas, read one run after another — see [CanvasPastePlan]. */
 internal fun canvasPasteItems(content: ClipboardContent, marks: Set<Mark> = emptySet()): List<CanvasPasteItem> {
-    content.html?.takeIf { it.length <= MAX_HTML_CHARS }?.let { source ->
-        val items = htmlCanvasItems(source, marks)
+    val plan = CanvasPastePlan(content, marks)
+    return plan.resolve(plan.runs.map(CanvasPasteRun::read))
+}
+
+/**
+ * What a copy pastes as, found by one quick pass over its markup before any of it is read: each
+ * table, each picture, and the text between them, in order. Each [run] reads on its own, so a page
+ * with several tables can have them all read at once, and the [pictures] it names can start
+ * downloading before any of it is. [resolve] puts the read runs together as [canvasPasteItems] would.
+ */
+internal class CanvasPastePlan(private val content: ClipboardContent, private val marks: Set<Mark>) {
+    private val scan: HtmlScan? = content.html?.takeIf { it.length <= MAX_HTML_CHARS }?.let { scanHtml(it, marks) }
+
+    /** A copied bitmap wins over markup with no table in it, such as an office suite's preview. */
+    private val native: CanvasPasteItem.Image? = content.image?.let { CanvasPasteItem.Image(bytes = it) }
+        ?.takeIf { scan != null && scan.runs.none { run -> run.isTable } }
+
+    private val fallback: List<CanvasPasteItem> by lazy { plainCanvasItems(content, marks) }
+
+    /** The runs to read, in order; none depends on another. */
+    val runs: List<CanvasPasteRun> = if (scan == null || native != null || scan.overflow) emptyList() else scan.runs
+
+    /** The pictures the paste names, before anything is read: what to start fetching now. */
+    val pictures: List<CanvasPasteItem.Image> = when {
+        native != null -> listOf(native)
+        scan == null -> fallback.filterIsInstance<CanvasPasteItem.Image>()
+        else -> runs.mapNotNull { it.picture }
+    }
+
+    /** The items, from what each of [runs] read, in the same order. */
+    fun resolve(read: List<CanvasPasteItem?>): List<CanvasPasteItem> {
+        native?.let { return listOf(it) }
+        val scanned = scan ?: return fallback
+        // Past the cap the page is one text box — counted as the scan went, before its last text.
+        val counted = read.withIndex().count { (index, item) -> item != null && index != scanned.trailing }
+        val items = if (scanned.overflow || counted > MAX_ITEMS) scanned.whole() else read.filterNotNull()
         if (content.image != null && items.none { it is CanvasPasteItem.Table }) {
             return listOf(CanvasPasteItem.Image(bytes = content.image))
         }
-        if (items.isNotEmpty()) return items
+        return items.ifEmpty { fallback }
     }
+}
+
+/** One run of a copy's markup: read into a text box, a table or a picture — or nothing, when it is empty. */
+internal class CanvasPasteRun private constructor(
+    private val html: String?,
+    private val base: String?,
+    private val marks: Set<Mark>,
+    /** The picture this run is, found by the scan already; nothing is left to read. */
+    val picture: CanvasPasteItem.Image?,
+    val isTable: Boolean,
+) {
+    fun read(): CanvasPasteItem? {
+        picture?.let { return it }
+        val source = html ?: return null
+        if (isTable) pastedTable(source, marks, base)?.let { return CanvasPasteItem.Table(it) }
+        // A table too big for the stored grid is kept as its text, none of its cells dropped.
+        return pastedHtmlBlocks(source, marks)?.let { CanvasPasteItem.Text(it) }
+    }
+
+    companion object {
+        fun text(html: String, marks: Set<Mark>) = CanvasPasteRun(html, null, marks, null, isTable = false)
+        fun table(html: String, base: String?, marks: Set<Mark>) = CanvasPasteRun(html, base, marks, null, isTable = true)
+        fun picture(image: CanvasPasteItem.Image) = CanvasPasteRun(null, null, emptySet(), image, isTable = false)
+    }
+}
+
+/** A copy without markup worth reading: its picture, its picture's address, or its text. */
+private fun plainCanvasItems(content: ClipboardContent, marks: Set<Mark>): List<CanvasPasteItem> {
     content.image?.let { return listOf(CanvasPasteItem.Image(bytes = it)) }
     content.imageUrl?.let(::imageAddress)?.let { return listOf(CanvasPasteItem.Image(address = it)) }
     val text = content.text?.replace("\r\n", "\n")?.replace('\r', '\n') ?: return emptyList()
@@ -38,20 +101,31 @@ internal fun imageLink(value: String, base: String? = null): String? = imageAddr
     it.substringBefore('?').substringBefore('#').substringAfterLast('.').lowercase() in PictureFileExtensions
 }
 
-private fun htmlCanvasItems(source: String, marks: Set<Mark>): List<CanvasPasteItem> {
+/**
+ * A copy's markup as runs, unread. [trailing] is the run of text after the last table or picture,
+ * if any; [overflow] says the tables and pictures alone are more than one paste places.
+ */
+private class HtmlScan(private val html: String, private val marks: Set<Mark>, val runs: List<CanvasPasteRun>,
+    val trailing: Int, val overflow: Boolean) {
+    /** The whole page as one text box, for a page too long to split. */
+    fun whole(): List<CanvasPasteItem> = pastedHtmlBlocks(html, marks)?.let { listOf(CanvasPasteItem.Text(it)) }.orEmpty()
+}
+
+private fun scanHtml(source: String, marks: Set<Mark>): HtmlScan {
     val sourceBase = Regex("(?im)^SourceURL:(.+)$").find(source)?.groupValues?.get(1)?.trim()
     val html = if (source.startsWith("Version:")) source.substring(source.indexOf('<').coerceAtLeast(0)) else source
     val tags = visibleTags(html)
     // Browsers may offer only selected rows, without their enclosing table.
     if (tags.none { it.second.name == "table" } && tags.any { it.second.name in setOf("tr", "td", "th") }) {
-        return htmlCanvasItems("<table>$html</table>", marks)
+        return scanHtml("<table>$html</table>", marks)
     }
     val base = tags.firstOrNull { it.second.name == "base" }?.second?.attributes?.get("href") ?: sourceBase
-    val items = mutableListOf<CanvasPasteItem>()
+    val runs = mutableListOf<CanvasPasteRun>()
+    var placed = 0
     var from = 0
     var index = 0
     fun text(until: Int) {
-        pastedHtmlBlocks(html.substring(from, until), marks)?.let { items += CanvasPasteItem.Text(it) }
+        if (until > from) runs += CanvasPasteRun.text(html.substring(from, until), marks)
     }
     while (index < tags.size) {
         val (at, tag) = tags[index]
@@ -64,10 +138,8 @@ private fun htmlCanvasItems(source: String, marks: Set<Mark>): List<CanvasPasteI
             }
             val until = tags.getOrNull(end)?.second?.end ?: html.length
             text(at)
-            val fragment = html.substring(at, until)
-            val table = pastedTable(fragment, marks, base)
-            if (table != null) items += CanvasPasteItem.Table(table)
-            else pastedHtmlBlocks(fragment, marks)?.let { items += CanvasPasteItem.Text(it) }
+            runs += CanvasPasteRun.table(html.substring(at, until), base, marks)
+            placed++
             from = until
             index = end
         } else if (!tag.closing && tag.name == "a" && tag.attributes["href"]?.let { imageLink(it, base) } != null) {
@@ -75,7 +147,8 @@ private fun htmlCanvasItems(source: String, marks: Set<Mark>): List<CanvasPasteI
             while (end < tags.size && !(tags[end].second.name == "a" && tags[end].second.closing)) end++
             if ((index + 1 until end).none { tags[it].second.name == "img" }) {
                 text(at)
-                items += CanvasPasteItem.Image(imageLink(tag.attributes.getValue("href"), base))
+                runs += CanvasPasteRun.picture(CanvasPasteItem.Image(imageLink(tag.attributes.getValue("href"), base)))
+                placed++
                 from = tags.getOrNull(end)?.second?.end ?: html.length
                 index = end
             }
@@ -84,15 +157,19 @@ private fun htmlCanvasItems(source: String, marks: Set<Mark>): List<CanvasPasteI
             val address = tag.attributes["src"]?.let { imageAddress(it, base) }
             if (address != null) {
                 text(at)
-                items += CanvasPasteItem.Image(address)
+                runs += CanvasPasteRun.picture(CanvasPasteItem.Image(address))
+                placed++
                 from = tag.end
             }
         }
         index++
-        if (items.size > MAX_ITEMS) return pastedHtmlBlocks(html, marks)?.let { listOf(CanvasPasteItem.Text(it)) }.orEmpty()
+        // Text runs are counted once they are read; past the cap on tables and pictures alone the
+        // page is one text box whatever they hold, and nothing more needs finding.
+        if (placed > MAX_ITEMS) return HtmlScan(html, marks, runs, trailing = -1, overflow = true)
     }
+    val trailing = if (html.length > from) runs.size else -1
     text(html.length)
-    return items
+    return HtmlScan(html, marks, runs, trailing, overflow = false)
 }
 
 private data class PastedCell(val blocks: List<Block>, val columns: Int, val rows: Int, val header: Boolean)

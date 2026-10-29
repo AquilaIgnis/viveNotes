@@ -617,6 +617,7 @@
     <string name="color_dark_purple">진한 보라색</string>
 
     <string name="editor_paste">붙여넣기</string>
+    <string name="editor_pasting">붙여넣는 중…</string>
     <string name="editor_untitled_page">제목 없는 페이지</string>
 
     <string name="equation_button">수식</string>

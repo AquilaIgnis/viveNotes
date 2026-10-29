@@ -627,6 +627,7 @@
     <string name="color_dark_purple">Viola scuro</string>
 
     <string name="editor_paste">Incolla</string>
+    <string name="editor_pasting">Incollaggio in corso…</string>
     <string name="editor_untitled_page">Pagina senza titolo</string>
 
     <string name="equation_button">Equazione</string>
