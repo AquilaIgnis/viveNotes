@@ -23,8 +23,8 @@ import com.vivenotes.keyboard.toChord
  * - [ShortcutScope.Anywhere] from `MainActivity.dispatchKeyEvent`, ahead of the focused view: Esc
  *   leaves a text box as readily as it puts a pen down.
  * - [ShortcutScope.Workspace] from `MainActivity.onKeyDown`, which runs only after the focused view
- *   has declined the key. That is what lets a text box keep its own keys, and lets Ctrl+Z with
- *   nothing on the canvas to undo go on to the text's own undo.
+ *   has declined the key. That is what lets a text box keep its own keys, and the page title its
+ *   own Ctrl+Z.
  * - [ShortcutScope.OutsideText] from the same place, and only while no text field has the keyboard.
  *
  * [ShortcutScope.TextBox] is `richtext/OutlineEditText.onKeyDown`'s, ahead of `TextView`'s own keys.
@@ -41,8 +41,8 @@ internal fun NotesViewModel.handleShortcut(event: KeyEvent, scope: ShortcutScope
 
 /**
  * What each workspace command does — the same thing the ribbon, the toolkit and the panes do.
- * Returns whether the key was used: an undo with nothing to undo leaves the key to whatever else
- * wants it, which in a text box is the text's own undo.
+ * Returns whether the key was used: on the canvas, an undo with nothing to undo leaves the key to
+ * whatever else wants it. A text box uses its undo key up regardless — see `OutlineEditText`.
  *
  * The text box's commands are `OutlineEditText`'s and are not run from here; it hands this only the
  * workspace commands a text box key was given.

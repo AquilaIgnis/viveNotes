@@ -582,6 +582,7 @@ private fun TableGrid(
                                         moveCaret(currentTable.value, cellEditors, cell.id, forward)
                                     },
                                     onViewCreated = { editor -> cellEditors[cell.id] = editor },
+                                    historyId = cell.id,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .testTag(TableTags.cell(cell.id)),
@@ -878,7 +879,7 @@ private fun Modifier.pointerInputScale(
     },
 )
 
-private val CELL_PADDING: Dp = 6.dp
+internal val CELL_PADDING: Dp = 6.dp
 private val HANDLE_RADIUS: Dp = 7.dp
 
 /**

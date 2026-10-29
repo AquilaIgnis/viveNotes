@@ -2763,7 +2763,7 @@ class NotesViewModelTest {
         collector.cancel()
     }
 
-    /** With nothing on the canvas to undo or redo, the key goes on — to the text's own undo in a box. */
+    /** With nothing on the canvas to undo or redo, the key goes on. A text box uses it up itself. */
     @Test
     fun undoAndRedoWithNothingToDoLeaveTheKey() = runTest(dispatcher) {
         val vm = seededViewModel()

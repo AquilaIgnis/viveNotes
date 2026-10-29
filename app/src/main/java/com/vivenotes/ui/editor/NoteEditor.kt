@@ -34,6 +34,7 @@ import com.vivenotes.model.Mark
 import com.vivenotes.richtext.EditorStyle
 import com.vivenotes.richtext.OutlineEditText
 import com.vivenotes.richtext.SelectionState
+import com.vivenotes.richtext.TextEdit
 import com.vivenotes.richtext.VideoThumbnails
 import com.vivenotes.ui.theme.LocalCanvasColors
 
@@ -58,6 +59,24 @@ val LocalKeyBindings = staticCompositionLocalOf { KeyBindings.Default }
 
 /** Runs a workspace command a text box key was given; see `OutlineEditText.onWorkspaceShortcut`. */
 val LocalWorkspaceShortcuts = staticCompositionLocalOf<((ShortcutAction) -> Boolean)?> { null }
+
+/**
+ * The editors on the open page, by the id of the container or cell each one edits, and where their
+ * changes go for the undo history. A composition local for [LocalVideoThumbnails]' reason: a cell is
+ * three composables deep. `EditorPane` provides it; an editor outside one records nothing.
+ */
+internal class PageEditors(private val record: (String, TextEdit) -> Unit) {
+    val byId: MutableMap<String, OutlineEditText> = mutableMapOf()
+
+    /** The words selected together across these editors, which every change passes through. */
+    var words: WordSelectionController? = null
+
+    fun onTextEdited(id: String, edit: TextEdit) {
+        words?.onTextEdited(id, edit) ?: record(id, edit)
+    }
+}
+
+internal val LocalPageEditors = staticCompositionLocalOf<PageEditors?> { null }
 
 /**
  * One writing surface, hosted through [AndroidView] — the one place the Compose shell hands off to a
@@ -91,16 +110,26 @@ internal fun NoteEditor(
     onTabNavigate: ((forward: Boolean) -> Boolean)? = null,
     /** Handed the view once, so a caller can hold it for focus requests. */
     onViewCreated: (OutlineEditText) -> Unit = {},
+    /** The container or cell this edits, under which its changes are undo steps of the page. */
+    historyId: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val canvas = LocalCanvasColors.current
     val thumbnails = LocalVideoThumbnails.current
     val keyBindings = LocalKeyBindings.current
     val workspaceShortcuts = LocalWorkspaceShortcuts.current
+    val pageEditors = LocalPageEditors.current
     val hostContext = LocalContext.current
     val linkColor = MaterialTheme.colorScheme.primary.toArgb()
     val readAloud = rememberNonTalkBackServiceOn()
     var spoken by remember { mutableStateOf("") }
+    val created = remember { arrayOfNulls<OutlineEditText>(1) }
+    if (historyId != null && pageEditors != null) {
+        DisposableEffect(historyId, pageEditors) {
+            created[0]?.let { pageEditors.byId[historyId] = it }
+            onDispose { created[0]?.let { pageEditors.byId.remove(historyId, it) } }
+        }
+    }
 
     // The editor's text again, on a Compose node around it, for every accessibility service but
     // TalkBack. While a service is on, Compose reports the holder it wraps each AndroidView in as
@@ -130,29 +159,20 @@ internal fun NoteEditor(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT,
                     )
-                    background = null
-                    setPadding(0, 0, 0, 0)
-                    // Fixed, never the current default: this is what every character with no span
-                    // of its own renders as, so changing it would restyle old writing.
-                    setTextSize(
-                        TypedValue.COMPLEX_UNIT_SP,
-                        EditorDefaults.FALLBACK_FONT_SIZE.toFloat(),
-                    )
-                    setLineSpacing(0f, 1.25f)
-                    typeface = Typeface.SANS_SERIF
-                    // Named here because a Typeface cannot be mapped back to an id, and the ribbon
-                    // has to be able to say what unmarked text is written in.
-                    baseFontFamily = EditorDefaults.FALLBACK_FONT_FAMILY
-                    gravity = android.view.Gravity.TOP or android.view.Gravity.START
-                    inputType = InputType.TYPE_CLASS_TEXT or
-                        InputType.TYPE_TEXT_FLAG_MULTI_LINE or
-                        InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-                    isVerticalScrollBarEnabled = false
-                    maxLines = Int.MAX_VALUE
+                    useBaseStyle()
                     // Qualified because the composable's parameters of the same name would
                     // otherwise shadow the view's properties inside apply.
                     this@apply.editorStyle = editorStyle
                     this@apply.onBlocksChanged = { blocks -> onBlocksChanged(blocks) }
+                    if (historyId != null && pageEditors != null) {
+                        this@apply.onTextEdited = { edit -> pageEditors.onTextEdited(historyId, edit) }
+                        this@apply.onCtrlDoubleClickWord = { range -> pageEditors.words?.onCtrlDoubleClick(historyId, range) }
+                        this@apply.onPlainPress = { pageEditors.words?.onPlainPress() }
+                        this@apply.onSelectionMoved = { selection -> pageEditors.words?.onSelectionMoved(historyId, selection) }
+                        this@apply.commandInterceptor = { command -> pageEditors.words?.intercept(command) == true }
+                        pageEditors.byId[historyId] = this
+                    }
+                    created[0] = this
                     this@apply.onSelectionStateChanged = { state -> onSelectionChanged(state) }
                     this@apply.onMarkArmed = { mark -> onMarkArmed(mark) }
                     setOnFocusChangeListener { view, hasFocus ->
@@ -189,6 +209,29 @@ internal fun NoteEditor(
             },
         )
     }
+}
+
+/**
+ * What every writing surface's characters look like without a span of their own — a container's, a
+ * cell's, and the one a paste is measured with, which has to wrap exactly as they do.
+ */
+internal fun OutlineEditText.useBaseStyle() {
+    background = null
+    setPadding(0, 0, 0, 0)
+    // Fixed, never the current default: this is what every character with no span of its own
+    // renders as, so changing it would restyle old writing.
+    setTextSize(TypedValue.COMPLEX_UNIT_SP, EditorDefaults.FALLBACK_FONT_SIZE.toFloat())
+    setLineSpacing(0f, 1.25f)
+    typeface = Typeface.SANS_SERIF
+    // Named here because a Typeface cannot be mapped back to an id, and the ribbon has to be able
+    // to say what unmarked text is written in.
+    baseFontFamily = EditorDefaults.FALLBACK_FONT_FAMILY
+    gravity = android.view.Gravity.TOP or android.view.Gravity.START
+    inputType = InputType.TYPE_CLASS_TEXT or
+        InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+        InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+    isVerticalScrollBarEnabled = false
+    maxLines = Int.MAX_VALUE
 }
 
 /**

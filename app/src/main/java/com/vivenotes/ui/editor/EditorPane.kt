@@ -1,5 +1,6 @@
 package com.vivenotes.ui.editor
 
+import android.content.ClipboardManager
 import android.graphics.RectF
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
@@ -38,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -95,6 +97,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.emptyFlow
 import com.vivenotes.ai.InkTextRegion
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.EditorDefaults
@@ -132,6 +135,10 @@ import com.vivenotes.richtext.EditorStyle
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.OutlineEditText
 import com.vivenotes.richtext.SelectionState
+import com.vivenotes.richtext.TextEdit
+import com.vivenotes.ink.CanvasPasteLayoutRequest
+import com.vivenotes.ink.PasteFrames
+import com.vivenotes.ui.TextRestore
 import com.vivenotes.ui.ContentReveal
 import com.vivenotes.ui.OutlineBox
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -160,7 +167,10 @@ private val CANVAS_MIN_WIDTH = 720.dp
  */
 private val REVEAL_MARGIN = 48.dp
 private const val INK_SEARCH_HIGHLIGHT_MS = 1_800L
-private val GRIP_HEIGHT = 18.dp
+internal val GRIP_HEIGHT = 18.dp
+
+/** Between a container's border and its text. */
+internal val TEXT_BOX_PADDING = 6.dp
 private val RESIZE_HANDLE_WIDTH = 18.dp
 
 /**
@@ -269,6 +279,12 @@ fun EditorPane(
     initialBlocksFor: (String) -> List<Block>,
     commands: Flow<FormatCommand>,
     onBlocksChanged: (String, List<Block>) -> Unit,
+    /** Each editor's changes, as undo steps of the page — see `OutlineEditText.onTextEdited`. */
+    onTextEdited: (String, TextEdit) -> Unit = { _, _ -> },
+    /** Text steps undone and redone, which the editor holding that text puts back. */
+    textRestores: Flow<TextRestore> = emptyFlow(),
+    /** Runs what it is given as one step of Undo — the words selected together, edited at once. */
+    onTextEditsTogether: (() -> Unit) -> Unit = { it() },
     onSelectionChanged: (SelectionState) -> Unit,
     /** Whether anything is selected on the canvas, for the keys that act on a selection. */
     onCanvasSelectionChanged: (Boolean) -> Unit = {},
@@ -441,6 +457,9 @@ fun EditorPane(
     onSetSelectionLocked: (CanvasSelection, Boolean) -> Unit = { _, _ -> },
     hasClipboard: Boolean = false,
     onPaste: (InkPoint) -> Unit = {},
+    /** A paste of several objects, waiting to be measured before it is stacked; see [onPasteMeasured]. */
+    pendingPasteLayout: CanvasPasteLayoutRequest? = null,
+    onPasteMeasured: (CanvasPasteLayoutRequest, PasteFrames) -> Unit = { _, _ -> },
     onRecolorInkSelection: (Set<String>, Int) -> Unit = { _, _ -> },
     onGroupInkSelection: (Set<String>) -> Unit = {},
     onUngroupInkSelection: (Set<String>) -> Unit = {},
@@ -466,6 +485,31 @@ fun EditorPane(
      */
     var focusedCellId by remember { mutableStateOf<String?>(null) }
 
+    val currentOnTextEdited = rememberUpdatedState(onTextEdited)
+    val pageEditors = remember { PageEditors { id, edit -> currentOnTextEdited.value(id, edit) } }
+
+    val currentTogether = rememberUpdatedState(onTextEditsTogether)
+    val currentOnSelectionChanged = rememberUpdatedState(onSelectionChanged)
+    val currentOutlines = rememberUpdatedState(outlines)
+    val currentTables = rememberUpdatedState(tables)
+    val hostContext = LocalContext.current
+    val words = remember(pageEditors) {
+        WordSelectionController(
+            editors = pageEditors,
+            ownerOf = { id ->
+                if (currentOutlines.value.any { it.id == id }) id
+                else currentTables.value.firstOrNull { !it.inkOnly && it.lockGroup == null && it.locate(id) != null }?.id
+            },
+            readingOrder = { owner -> currentTables.value.firstOrNull { it.id == owner }?.contentCellIds() ?: listOf(owner) },
+            together = { body -> currentTogether.value(body) },
+            record = { id, edit -> currentOnTextEdited.value(id, edit) },
+            clipboard = { hostContext.getSystemService(ClipboardManager::class.java) },
+            publish = { state -> currentOnSelectionChanged.value(state) },
+        ).also { pageEditors.words = it }
+    }
+    /** What the editors report, with the marks every word selected together has in common. */
+    val editorSelectionChanged: (SelectionState) -> Unit = { state -> onSelectionChanged(words.decorate(state)) }
+
     /**
      * Puts text input away, wherever on the page it is.
      *
@@ -481,6 +525,7 @@ fun EditorPane(
      * call it are keyed on page geometry and outlive the composition that built them.
      */
     val dismissTextInput: () -> Unit = {
+        words.clear()
         focusedEditor?.let { editor ->
             editor.deactivateTextInput()
             // `clearFocus()` normally publishes this from the View's focus callback. A pointer
@@ -642,6 +687,13 @@ fun EditorPane(
         }
     }
 
+    // Measured here because only the canvas knows how its text wraps: in an editor styled as these
+    // are, at the same widths, so each pasted object keeps its margin from the next.
+    LaunchedEffect(pendingPasteLayout, editorStyle) {
+        val request = pendingPasteLayout ?: return@LaunchedEffect
+        onPasteMeasured(request, measurePastedOutlines(hostContext, density, editorStyle, request.outlines))
+    }
+
     // Delete and Esc ask the ViewModel whether anything is selected before they take the key.
     val holdsSelection = selection?.isEmpty == false
     DisposableEffect(holdsSelection) {
@@ -668,6 +720,7 @@ fun EditorPane(
         commands.collect { command ->
             when (command) {
                 FormatCommand.DeactivateTextInput -> {
+                    words.clear()
                     val editor = focusedEditor ?: retainedInlineEditor
                     val outlineId = focusedOutlineId ?: retainedInlineOutlineId
                     val editorWasFocused = editor?.hasFocus() == true
@@ -730,6 +783,19 @@ fun EditorPane(
         lastFocusedOutlineId = null
         retainedInlineEditor = null
         retainedInlineOutlineId = null
+    }
+
+    // The editors the words were selected in are rebuilt, or belong to another page.
+    LaunchedEffect(pageRevision, pageId) { words.clear() }
+
+    // An undone or redone text step leaves its box being edited, with the caret where the text
+    // changed — in the editor already showing it, so no other box loses its caret.
+    LaunchedEffect(textRestores) {
+        textRestores.collect { restore ->
+            val editor = pageEditors.byId[restore.outlineId] ?: return@collect
+            editor.restore(restore.blocks, restore.selection)
+            editor.requestFocus()
+        }
     }
 
     val sheet = style.pageSizeDp?.let { (w, h) -> DpSize(w.dp, h.dp) }
@@ -1089,7 +1155,7 @@ fun EditorPane(
 
         // Provided so containers and the title read the page's colours, which may be nothing like
         // the shell's — a white page inside a dark app, or a page painted from the Page Color menu.
-        CompositionLocalProvider(LocalCanvasColors provides canvas) {
+        CompositionLocalProvider(LocalCanvasColors provides canvas, LocalPageEditors provides pageEditors) {
             PageViewport(zoom, horizontal, vertical) {
                 // One coordinate space. An outline's stored (x, y) is measured from this corner, and
                 // so are the sheet, the ruling and the margin guides drawn behind it — before, the
@@ -1219,6 +1285,7 @@ fun EditorPane(
                                     pendingSelection = null
                                 },
                                 onFocused = { view ->
+                                    words.onFocused(box.id)
                                     focusedEditor = view
                                     focusedOutlineId = box.id
                                     lastFocusedEditor = view
@@ -1253,7 +1320,7 @@ fun EditorPane(
                                     nonEmpty[box.id] = blocks.any { it.text.isNotBlank() }
                                     onBlocksChanged(box.id, blocks)
                                 },
-                                onSelectionChanged = onSelectionChanged,
+                                onSelectionChanged = editorSelectionChanged,
                                 onMarkArmed = onMarkArmed,
                                 onMove = { x, y -> onMoveOutline(box.id, x, y) },
                                 onResize = { width -> onResizeOutline(box.id, width) },
@@ -1413,6 +1480,7 @@ fun EditorPane(
                                         ?.let { selection = CanvasSelection.ofTable(it) }
                                 },
                                 onCellFocused = { cellId, view ->
+                                    words.onFocused(cellId)
                                     focusedEditor = view
                                     focusedOutlineId = null
                                     focusedCellId = cellId
@@ -1437,7 +1505,7 @@ fun EditorPane(
                                     }
                                 },
                                 onCellBlocksChanged = onBlocksChanged,
-                                onSelectionChanged = onSelectionChanged,
+                                onSelectionChanged = editorSelectionChanged,
                                 onMarkArmed = onMarkArmed,
                                 onMove = { dx, dy -> onMoveTables(setOf(table.id), dx, dy) },
                                 onResize = { scaleX, scaleY ->
@@ -2211,6 +2279,7 @@ internal fun OutlineContainer(
                     onSelectionChanged = onSelectionChanged,
                     onMarkArmed = onMarkArmed,
                     onViewCreated = { view = it },
+                    historyId = box.id,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag(OutlineTags.EDITOR)
@@ -2219,7 +2288,7 @@ internal fun OutlineContainer(
                             width = 1.dp,
                             color = if (showChrome) outline.copy(alpha = 0.55f) else Color.Transparent,
                         )
-                        .padding(6.dp),
+                        .padding(TEXT_BOX_PADDING),
                 )
             }
 

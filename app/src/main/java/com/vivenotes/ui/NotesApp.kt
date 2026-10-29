@@ -1901,6 +1901,7 @@ private fun PageEditor(
 ) {
     val pictureText by viewModel.pictureText.collectAsStateWithLifecycle()
     val inkDescriptions by viewModel.inkDescriptions.collectAsStateWithLifecycle()
+    val pendingPasteLayout by viewModel.pendingPasteLayout.collectAsStateWithLifecycle()
     val accessibilityOn = rememberAccessibilityServiceOn()
     LaunchedEffect(accessibilityOn) { viewModel.setDescribingPage(accessibilityOn) }
 
@@ -1919,6 +1920,9 @@ private fun PageEditor(
         initialBlocksFor = viewModel::initialBlocksFor,
         commands = viewModel.commands,
         onBlocksChanged = viewModel::onBlocksChanged,
+        onTextEdited = viewModel::onTextEdited,
+        textRestores = viewModel.textRestores,
+        onTextEditsTogether = viewModel::asOneTextStep,
         onSelectionChanged = viewModel::onSelectionChanged,
         onCanvasSelectionChanged = viewModel::onCanvasSelectionChanged,
         onMarkArmed = viewModel::onMarkArmed,
@@ -2022,6 +2026,8 @@ private fun PageEditor(
         onCopySelection = viewModel::copySelection,
         onSetSelectionLocked = viewModel::setSelectionLocked,
         onPaste = viewModel::pasteObjects,
+        pendingPasteLayout = pendingPasteLayout,
+        onPasteMeasured = viewModel::completePasteLayout,
         onRecolorInkSelection = viewModel::recolorInk,
         onGroupInkSelection = viewModel::groupInk,
         onUngroupInkSelection = viewModel::ungroupInk,

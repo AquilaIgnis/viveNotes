@@ -22,6 +22,8 @@ internal class PictureHttp(
     private val openConnection: (URL) -> HttpURLConnection = { url ->
         url.openConnection() as HttpURLConnection
     },
+    /** Plain HTTP too, for a picture the user copied from a page themselves rather than from an index. */
+    private val allowHttp: Boolean = false,
 ) {
     sealed interface Text {
         data class Ok(val body: String) : Text
@@ -79,7 +81,7 @@ internal class PictureHttp(
 
     private fun connect(address: String): HttpURLConnection? {
         val url = runCatching { URL(address) }.getOrNull() ?: return null
-        if (url.protocol != "https") return null
+        if (url.protocol != "https" && !(allowHttp && url.protocol == "http")) return null
         return openConnection(url).apply {
             connectTimeout = CONNECT_TIMEOUT_MS
             readTimeout = READ_TIMEOUT_MS

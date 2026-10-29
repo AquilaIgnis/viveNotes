@@ -18,6 +18,7 @@ import com.vivenotes.data.NotebookTransferManager
 import com.vivenotes.data.OnlineImageSearch
 import com.vivenotes.data.PenSettingsStore
 import com.vivenotes.data.ReviewPrompt
+import com.vivenotes.data.SystemClipboardContent
 import com.vivenotes.data.VideoThumbnailStore
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
@@ -54,6 +55,9 @@ class NotesApplication : Application() {
      */
     val repository: NotesRepository by lazy { NotesRepository(database) }
     val attachments: AttachmentStore by lazy { AttachmentStore(this, database) }
+
+    /** The system clipboard as the canvas pastes from it — one for the process, as the clipboard is. */
+    val systemClipboard: SystemClipboardContent by lazy { SystemClipboardContent(this) }
 
     /** Lets go of pictures nothing can put back on a page; run by [DeletionPurgeWorker]. */
     val attachmentSweep: AttachmentSweep by lazy {

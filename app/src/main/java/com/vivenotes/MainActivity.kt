@@ -22,6 +22,7 @@ import com.vivenotes.ui.claimsStylusButton
 import com.vivenotes.ui.handleStylusButton
 import com.vivenotes.ui.shortcutGroups
 import com.vivenotes.ui.theme.ViveNotesTheme
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
@@ -48,6 +49,7 @@ class MainActivity : ComponentActivity() {
                 app.inkText,
                 remoteInk = app.syncAccounts.remoteInk,
                 maySeedStarter = { app.syncAccounts.maySeedStarter() },
+                systemClipboard = app.systemClipboard,
             ),
         )[NotesViewModel::class.java]
 
@@ -75,6 +77,20 @@ class MainActivity : ComponentActivity() {
         // Activity, and pausing this one under it must not cancel the request that opened it.
         // A sideloaded build's flow is a single false that then completes, so running out without
         // a true means "never", not an error.
+        // Whether a paste onto the canvas has another app's copy to put there. Android tells only
+        // the app in focus of a new clip, so it is asked again each time this comes back as well.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.refreshClipboard()
+                val changes = app.systemClipboard.observe(viewModel::refreshClipboard)
+                try {
+                    awaitCancellation()
+                } finally {
+                    changes.close()
+                }
+            }
+        }
+
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 if (app.reviewPrompt.sessionsReached.firstOrNull { it } == true) {
@@ -126,6 +142,12 @@ class MainActivity : ComponentActivity() {
     /** Where a stylus barrel button is acted on — see `ui/StylusButtons.kt`. */
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean =
         viewModel.handleStylusButton(keyCode) || super.onKeyUp(keyCode, event)
+
+    /** Back in focus, possibly with something new copied elsewhere — in split screen, say. */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) viewModel.refreshClipboard()
+    }
 
     /** What the system's Meta + / shortcut panel lists for this app. */
     override fun onProvideKeyboardShortcuts(

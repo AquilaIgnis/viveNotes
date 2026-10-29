@@ -38,9 +38,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import android.net.Uri
 import android.util.Log
 import com.vivenotes.data.AttachmentStore
+import com.vivenotes.data.CanvasClipboardSource
+import com.vivenotes.data.ClipboardContent
+import com.vivenotes.data.DebugLog
 import com.vivenotes.data.ContentSearchIndex
 import com.vivenotes.data.ContentSearchOutcome
 import com.vivenotes.data.ContentSearchResults
@@ -89,6 +93,10 @@ import com.vivenotes.data.db.PageRevisionSummary
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.unionBounds
 import com.vivenotes.ink.CanvasClipboard
+import com.vivenotes.ink.CanvasPasteLayoutRequest
+import com.vivenotes.ink.PasteFrames
+import com.vivenotes.ink.documentHeight
+import com.vivenotes.ink.stackPastedOutlines
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.InkLassoMove
@@ -110,6 +118,7 @@ import com.vivenotes.ink.resizeSelected
 import com.vivenotes.ink.subtract
 import com.vivenotes.ink.targetsFor
 import com.vivenotes.ui.editor.RibbonTab
+import com.vivenotes.ui.editor.asEditorMarks
 import com.vivenotes.ink.translatedCopy
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
@@ -149,8 +158,16 @@ import com.vivenotes.model.withNewIds
 import com.vivenotes.model.withRowInserted
 import com.vivenotes.model.withRowMinHeight
 import com.vivenotes.model.withRowRemoved
+import com.vivenotes.richtext.CanvasPasteItem
 import com.vivenotes.richtext.FormatCommand
+import com.vivenotes.richtext.canvasPasteItems
+import com.vivenotes.richtext.plainPasteBlocks
+import com.vivenotes.richtext.Keystroke
 import com.vivenotes.richtext.SelectionState
+import com.vivenotes.richtext.TextEdit
+import com.vivenotes.richtext.TextHistoryChange
+import com.vivenotes.richtext.TextSelection
+import com.vivenotes.richtext.TypingRun
 import com.vivenotes.richtext.sameKindAs
 
 /**
@@ -313,7 +330,17 @@ private sealed interface CanvasHistoryEntry {
      * ([NotesViewModel.asOneAction]) rather than inferred from the ring afterwards.
      */
     data class Composite(val parts: List<CanvasHistoryEntry>) : CanvasHistoryEntry
+
+    /**
+     * Typing, or a formatting command, in one text container or table cell — see
+     * [TextHistoryChange]. Undone in the editor itself, which keeps the caret, rather than by
+     * rebuilding the page the way [Texts] is.
+     */
+    data class Text(val change: TextHistoryChange) : CanvasHistoryEntry
 }
+
+/** A text step undone or redone: the editor for [outlineId] shows [blocks] with [selection]. */
+data class TextRestore(val outlineId: String, val blocks: List<Block>, val selection: TextSelection)
 
 /**
  * A formula composed but not yet placed — what [DrawTool.Equation] is holding.
@@ -475,6 +502,13 @@ class NotesViewModel(
      * is registered with a server it has not pulled from yet. Null means seed unconditionally.
      */
     private val maySeedStarter: (suspend () -> Boolean)? = null,
+    /**
+     * The system clipboard, for pasting another app's copy onto the canvas and for telling that copy
+     * from one of this page's own objects. Null pastes only what was copied here.
+     */
+    private val systemClipboard: CanvasClipboardSource? = null,
+    /** Where another app's copy is read into blocks — HTML up to megabytes, so off the main thread. */
+    private val pasteDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     private val inkPageLoader = InkPageLoader(repository, inkDispatcher)
@@ -704,8 +738,8 @@ class NotesViewModel(
      * Only a tool action brings the Draw tab forward: an undo is already visible on the page, so
      * moving the ribbon for it would be a change nobody asked for.
      *
-     * A bound Undo is always canvas undo, even with a caret in a text container. Ctrl+Z is ambiguous
-     * — the focused `EditText` takes it first — but no view claims a stylus keycode.
+     * A bound Undo is the page's undo, with a caret in a text container or not — the same history
+     * Ctrl+Z steps through, text and formatting included.
      */
     fun pressStylusButton(action: StylusAction) {
         when (action) {
@@ -739,7 +773,20 @@ class NotesViewModel(
      */
     private var clipboard = CanvasClipboard()
     private val _hasClipboard = MutableStateFlow(false)
+
+    /** Whether a paste onto the canvas has something to put there: this page's copy or another app's. */
     val hasClipboard: StateFlow<Boolean> = _hasClipboard.asStateFlow()
+
+    /** Whether [systemClipboard] held something to paste when last asked — see [refreshClipboard]. */
+    private var systemClipboardHasContent = false
+
+    /** One paste from another app at a time: each reads the clipboard and may download a picture. */
+    private val externalPaste = Mutex()
+
+    private val _pendingPasteLayout = MutableStateFlow<CanvasPasteLayoutRequest?>(null)
+
+    /** A paste of several objects waiting for the canvas to measure them — see [completePasteLayout]. */
+    val pendingPasteLayout: StateFlow<CanvasPasteLayoutRequest?> = _pendingPasteLayout.asStateFlow()
 
     /**
      * Snapshots are shallow lists: native strokes are immutable, an `Outline.Shape` is a data class,
@@ -825,6 +872,13 @@ class NotesViewModel(
     /** Commands travel to the focused editor, the only thing that can act on them. */
     private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
     val commands: SharedFlow<FormatCommand> = _commands
+
+    /** Text steps undone and redone, for the editor holding that text — see [TextRestore]. */
+    private val _textRestores = MutableSharedFlow<TextRestore>(extraBufferCapacity = 32)
+    val textRestores: SharedFlow<TextRestore> = _textRestores
+
+    /** Typing the last text step may still take in — see [TypingRun]. */
+    private var typingRun: TypingRun? = null
 
     private val _compactPane = MutableStateFlow(CompactPane.Editor)
     val compactPane: StateFlow<CompactPane> = _compactPane.asStateFlow()
@@ -1888,7 +1942,24 @@ class NotesViewModel(
                 ),
             ),
         )
-        _hasClipboard.value = true
+        systemClipboard?.markInternalCopy()
+        publishClipboard()
+    }
+
+    /**
+     * Asks the system clipboard again whether it holds anything — on its change listener, and when
+     * the app comes back to the front, since Android tells only the app in focus of a change.
+     */
+    fun refreshClipboard() {
+        systemClipboardHasContent = systemClipboard?.hasContent() == true
+        publishClipboard()
+    }
+
+    /** Whether a paste puts down what was copied here rather than what another app copied since. */
+    private fun pastesOwnCopy(): Boolean = !clipboard.isEmpty && systemClipboard?.ownsInternalCopy() != false
+
+    private fun publishClipboard() {
+        _hasClipboard.value = pastesOwnCopy() || systemClipboardHasContent
     }
 
     /**
@@ -1947,12 +2018,74 @@ class NotesViewModel(
         _uiState.value = _uiState.value.copy(
             outlines = _uiState.value.outlines.filterNot { it.id == outlineId },
         )
+        // A box tapped into and abandoned takes its typing with it: what was typed and deleted
+        // again is no step anyone would undo.
+        discardTextHistory(setOf(outlineId))
         edits.tryEmit(Unit)
     }
 
     fun onBlocksChanged(outlineId: String, blocks: List<Block>) {
         blocksById[outlineId] = blocks
         edits.tryEmit(Unit)
+    }
+
+    /**
+     * Runs [body]'s text edits as one step of Undo: the words selected together, formatted or typed
+     * at once across a box or a table's cells.
+     */
+    fun asOneTextStep(body: () -> Unit) {
+        val pageId = _uiState.value.selectedPageId ?: return body()
+        asOneAction(pageId, body)
+    }
+
+    /** One change an editor made to [outlineId]'s text, as an undo step of the open page. */
+    fun onTextEdited(outlineId: String, edit: TextEdit) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        recordText(pageId, TextHistoryChange(outlineId, edit.before, edit.after, edit.selectionBefore, edit.selectionAfter),
+            edit.keystroke, edit.composing)
+    }
+
+    /**
+     * [change], made on [pageId], as an undo step. A [keystroke] joins the typing step before it
+     * when it carries on where that one stopped ([TypingRun]); while an input method is composing,
+     * each change to what it composes joins it too.
+     */
+    private fun recordText(pageId: String, change: TextHistoryChange, keystroke: Keystroke?, composing: Boolean) {
+        val history = canvasHistoryByPage.getOrPut(pageId, ::PageCanvasHistory)
+        val last = history.undo.lastOrNull() as? CanvasHistoryEntry.Text
+        val run = typingRun
+        val joined = last?.change?.takeIf {
+            historyGroup == null && keystroke != null && run != null && run.outlineId == change.outlineId &&
+                it.outlineId == change.outlineId &&
+                (composing || keystroke.joinable && keystroke.deleting == run.deleting &&
+                    run.caret == change.selectionBefore)
+        }
+        if (joined == null) {
+            pushHistory(pageId, CanvasHistoryEntry.Text(change))
+        } else {
+            history.undo[history.undo.lastIndex] =
+                CanvasHistoryEntry.Text(joined.copy(after = change.after, selectionAfter = change.selectionAfter))
+            history.redo.clear()
+            if (_uiState.value.selectedPageId == pageId) publishCanvasUndoState(pageId)
+        }
+        typingRun = keystroke?.let { TypingRun(change.outlineId, it.deleting, change.selectionAfter) }
+    }
+
+    /** Whether [id] is a text container or a table cell with text on the open page. */
+    private fun holdsText(id: String): Boolean {
+        val state = _uiState.value
+        return state.outlines.any { it.id == id } || state.tables.any { id in it.contentCellIds() }
+    }
+
+    /** Takes [ids]' text steps out of the open page's history: their containers are gone for good. */
+    private fun discardTextHistory(ids: Set<String>) {
+        val history = _uiState.value.selectedPageId?.let(canvasHistoryByPage::get) ?: return
+        fun CanvasHistoryEntry.names() = this is CanvasHistoryEntry.Text && change.outlineId in ids
+        history.undo.removeAll { it.names() }
+        history.redo.removeAll { it.names() }
+        if (typingRun?.outlineId in ids) typingRun = null
+        publishCanvasUndoState()
     }
 
     fun onSelectionChanged(state: SelectionState) {
@@ -3316,7 +3449,8 @@ class NotesViewModel(
             tables = tables,
             equations = equations,
         )
-        _hasClipboard.value = true
+        systemClipboard?.markInternalCopy()
+        publishClipboard()
     }
 
     /**
@@ -3332,6 +3466,10 @@ class NotesViewModel(
     fun pasteObjects(at: InkPoint) {
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
+        if (!pastesOwnCopy()) {
+            pasteFromClipboard(pageId, at)
+            return
+        }
         val sources = clipboard.strokes
         val sourceShapes = clipboard.shapes
         val sourceTexts = clipboard.texts
@@ -3456,6 +3594,134 @@ class NotesViewModel(
         }
     }
 
+    /**
+     * Pastes what another app copied, with its top-left at [at]: plain or rich text becomes a text
+     * box, a copied picture or a picture's address a picture, and an HTML table an editable table,
+     * in the order the copy held them — see [canvasPasteItems]. One step of Undo takes it all back.
+     *
+     * Several objects are stacked once the canvas has measured them ([pendingPasteLayout]), so each
+     * keeps a margin from the next whatever its text wraps to.
+     */
+    private fun pasteFromClipboard(pageId: String, at: InkPoint) {
+        val source = systemClipboard ?: return
+        val marks = editorDefaults.value.asEditorMarks()
+        viewModelScope.launch {
+            externalPaste.withLock {
+                val imported = mutableListOf<String>()
+                try {
+                    val content = source.readContent()
+                    val items = withContext(pasteDispatcher) { canvasPasteItems(content, marks) }
+                    val outlines = items.mapNotNull { item ->
+                        when (item) {
+                            is CanvasPasteItem.Text -> Outline.Text.empty().copy(blocks = item.blocks)
+                            is CanvasPasteItem.Table -> item.outline
+                            is CanvasPasteItem.Image -> pastedPicture(source, item, content, marks, imported)
+                        }
+                    }
+                    val placed = if (outlines.size < 2) outlines else laidOut(outlines)
+                    if (placed.isNotEmpty() && insertClipboardOutlines(pageId, placed, at.x, at.y)) imported.clear()
+                    DebugLog.i(DebugLog.CLIPBOARD) { "canvas paste: placed ${placed.size} objects" }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    DebugLog.i(DebugLog.CLIPBOARD) { "canvas paste failed: ${error.javaClass.simpleName}" }
+                } finally {
+                    // A paste that did not land — the page changed under a download — places nothing.
+                    if (imported.isNotEmpty()) withContext(NonCancellable) { imported.forEach { attachments.release(it) } }
+                }
+            }
+        }
+    }
+
+    /**
+     * The picture [item] names, stored as an attachment, or the address it came from as text when it
+     * cannot be had: a link that is not a picture after all, or no network.
+     */
+    private suspend fun pastedPicture(
+        source: CanvasClipboardSource,
+        item: CanvasPasteItem.Image,
+        content: ClipboardContent,
+        marks: Set<Mark>,
+        imported: MutableList<String>,
+    ): Outline? {
+        val bytes = item.bytes ?: item.address?.let { source.imageBytes(it) }
+        val picture = bytes?.let { attachments.import(it) }
+        if (picture != null) {
+            imported += picture.id
+            val width = Outline.Image.DEFAULT_WIDTH
+            return Outline.Image(
+                id = newId(),
+                attachmentId = picture.id,
+                width = width,
+                height = (width * picture.pixelHeight / picture.pixelWidth.coerceAtLeast(1))
+                    .coerceAtLeast(Outline.Image.MIN_SIZE),
+            )
+        }
+        DebugLog.i(DebugLog.CLIPBOARD) { "canvas paste: picture unavailable" }
+        val fallback = item.address?.takeUnless { it.startsWith("data:", true) } ?: content.text
+        return fallback?.takeIf { it.isNotBlank() }?.let { Outline.Text.empty().copy(blocks = plainPasteBlocks(it, marks)) }
+    }
+
+    /**
+     * [outlines] stacked by the heights the canvas measures them at. Should no canvas answer — the
+     * editor left the screen mid-paste — the document's own sizes stand in.
+     */
+    private suspend fun laidOut(outlines: List<Outline>): List<Outline> {
+        val request = CanvasPasteLayoutRequest(outlines)
+        _pendingPasteLayout.value = request
+        return try {
+            withTimeoutOrNull(PASTE_LAYOUT_TIMEOUT_MS) { request.result.await() }
+                ?: stackPastedOutlines(outlines, outlines.associate { it.id to it.documentHeight() })
+        } finally {
+            if (_pendingPasteLayout.value === request) _pendingPasteLayout.value = null
+        }
+    }
+
+    /** The canvas's answer to [pendingPasteLayout]: how tall it draws each outline. */
+    fun completePasteLayout(request: CanvasPasteLayoutRequest, frames: PasteFrames) {
+        if (_pendingPasteLayout.value !== request) return
+        request.result.complete(stackPastedOutlines(request.outlines, frames.heights, frames.insets))
+    }
+
+    /**
+     * Puts [outlines] on [pageId] with their top-left at ([x], [y]), as one step of Undo. Refused,
+     * returning false, when that page is no longer the one open or cannot be edited, which is what a
+     * paste that waited for a download finds after the user has moved on.
+     */
+    fun insertClipboardOutlines(pageId: String, outlines: List<Outline>, x: Float, y: Float): Boolean {
+        if (_uiState.value.selectedPageId != pageId || readOnlyPageId == pageId) return false
+        if (outlines.isEmpty() || !x.isFinite() || !y.isFinite()) return false
+        val titleFloor = if (_uiState.value.pageStyle.hideTitle) 0f else PageStyle.TITLE_BAND_DP
+        val left = x.coerceAtLeast(0f)
+        val top = y.coerceAtLeast(titleFloor)
+        val texts = outlines.filterIsInstance<Outline.Text>()
+            .map { it.copy(id = newId(), x = left + it.x, y = top + it.y) }
+        val tables = outlines.filterIsInstance<Outline.Table>()
+            .map { it.withNewIds().copy(x = left + it.x, y = top + it.y, lockGroup = null) }
+        val images = outlines.filterIsInstance<Outline.Image>()
+            .map { it.copy(id = newId(), x = left + it.x, y = top + it.y, lockGroup = null) }
+        asOneAction(pageId) {
+            if (texts.isNotEmpty()) {
+                editTexts(texts.map { it.id }.toSet()) { boxes ->
+                    texts.forEach { blocksById[it.id] = it.blocks }
+                    boxes + texts.map { OutlineBox(id = it.id, x = it.x, y = it.y, width = it.width, minHeight = it.minHeight) }
+                }
+            }
+            if (tables.isNotEmpty()) {
+                editTables(tables.flatMap { it.contentCellIds() }.toSet()) { existing ->
+                    tables.forEach { table ->
+                        table.rows.forEach { row -> row.cells.forEach { blocksById[it.id] = it.blocks } }
+                    }
+                    existing + tables
+                }
+            }
+            if (images.isNotEmpty()) editImages { it + images }
+        }
+        // As after a picture is inserted: nothing armed, so the next tap reaches what was pasted.
+        _tool.value = DrawTool.None
+        return true
+    }
+
     fun recolorInk(ids: Set<String>, colorArgb: Int) {
         if (ids.isEmpty()) return
         val pageId = _uiState.value.selectedPageId ?: return
@@ -3552,10 +3818,15 @@ class NotesViewModel(
         val pageId = _uiState.value.selectedPageId ?: return
         if ((pendingInkEditsByPage[pageId] ?: 0) > 0) return
         val history = canvasHistoryByPage[pageId] ?: return
-        if (history.undo.isEmpty()) return
-        val entry = history.undo.removeAt(history.undo.lastIndex)
-        history.redo += entry
-        applyHistoryEntry(entry, applied = false)
+        typingRun = null
+        // A text step for a container no longer on the page has nothing left to undo.
+        while (true) {
+            val entry = history.undo.removeLastOrNull() ?: break
+            if (entry is CanvasHistoryEntry.Text && !holdsText(entry.change.outlineId)) continue
+            history.redo += entry
+            applyHistoryEntry(entry, applied = false)
+            break
+        }
         publishCanvasUndoState(pageId)
     }
 
@@ -3564,10 +3835,14 @@ class NotesViewModel(
         val pageId = _uiState.value.selectedPageId ?: return
         if ((pendingInkEditsByPage[pageId] ?: 0) > 0) return
         val history = canvasHistoryByPage[pageId] ?: return
-        if (history.redo.isEmpty()) return
-        val entry = history.redo.removeAt(history.redo.lastIndex)
-        history.undo += entry
-        applyHistoryEntry(entry, applied = true)
+        typingRun = null
+        while (true) {
+            val entry = history.redo.removeLastOrNull() ?: break
+            if (entry is CanvasHistoryEntry.Text && !holdsText(entry.change.outlineId)) continue
+            history.undo += entry
+            applyHistoryEntry(entry, applied = true)
+            break
+        }
         publishCanvasUndoState(pageId)
     }
 
@@ -3635,6 +3910,16 @@ class NotesViewModel(
             is CanvasHistoryEntry.Composite -> {
                 val parts = if (applied) entry.parts else entry.parts.asReversed()
                 parts.forEach { applyHistoryEntry(it, applied) }
+            }
+            // In the editor that holds the text, which takes the caret back to where it changed;
+            // the page is not rebuilt, so every other box keeps its caret and its keyboard.
+            is CanvasHistoryEntry.Text -> {
+                val change = entry.change
+                val blocks = if (applied) change.after else change.before
+                blocksById[change.outlineId] = blocks
+                _textRestores.tryEmit(TextRestore(change.outlineId, blocks,
+                    if (applied) change.selectionAfter else change.selectionBefore))
+                edits.tryEmit(Unit)
             }
         }
     }
@@ -4277,6 +4562,9 @@ class NotesViewModel(
          */
         private const val CANVAS_HISTORY_LIMIT = 20
 
+        /** How long a paste of several objects waits for the canvas to measure them. */
+        private const val PASTE_LAYOUT_TIMEOUT_MS = 2_000L
+
         /** Pages whose undo history is kept; see [canvasHistoryByPage]. */
         private const val CANVAS_HISTORY_PAGES = 3
 
@@ -4323,6 +4611,7 @@ class NotesViewModel(
             inkText: InkTextIndexer? = null,
             remoteInk: StateFlow<Map<String, Long>>? = null,
             maySeedStarter: (suspend () -> Boolean)? = null,
+            systemClipboard: CanvasClipboardSource? = null,
         ) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
@@ -4338,6 +4627,7 @@ class NotesViewModel(
                     inkText = inkText,
                     remoteInk = remoteInk,
                     maySeedStarter = maySeedStarter,
+                    systemClipboard = systemClipboard,
                 ) as T
         }
     }

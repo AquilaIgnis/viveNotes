@@ -91,8 +91,8 @@ enum class ShortcutScope {
     Anywhere,
 
     /**
-     * After the focused view leaves the key unused: `MainActivity.onKeyDown`. In a text box, Ctrl+Z
-     * with nothing on the canvas to undo goes on to the text's own undo.
+     * After the focused view leaves the key unused: `MainActivity.onKeyDown`. In the page title,
+     * Ctrl+Z is the title's own undo.
      */
     Workspace,
 
@@ -140,9 +140,11 @@ enum class ShortcutAction(
     Search(R.string.shortcut_search, ShortcutGroup.Pages, ShortcutScope.Anywhere, false, ctrl(ShortcutKey.F)),
     NewPage(R.string.shortcut_new_page, ShortcutGroup.Pages, ShortcutScope.Workspace, false, ctrl(ShortcutKey.N)),
 
-    Undo(R.string.shortcut_undo, ShortcutGroup.Edit, ShortcutScope.Workspace, true, ctrl(ShortcutKey.Z)),
+    // A text box's own: its text and formatting are steps of the page's history, which the text
+    // field's undo, knowing only characters, would garble. They run on the canvas as well.
+    Undo(R.string.shortcut_undo, ShortcutGroup.Edit, ShortcutScope.TextBox, true, ctrl(ShortcutKey.Z)),
     // Ctrl+R is the desktop's own redo; Ctrl+Shift+Z is Android's, and works as well.
-    Redo(R.string.shortcut_redo, ShortcutGroup.Edit, ShortcutScope.Workspace, true, ctrl(ShortcutKey.R), ctrlShift(ShortcutKey.Z)),
+    Redo(R.string.shortcut_redo, ShortcutGroup.Edit, ShortcutScope.TextBox, true, ctrl(ShortcutKey.R), ctrlShift(ShortcutKey.Z)),
     DeleteSelection(R.string.shortcut_delete_selection, ShortcutGroup.Edit, ShortcutScope.Workspace, false, KeyChord(ShortcutKey.Delete)),
     Cut(R.string.shortcut_cut, ShortcutGroup.Edit, ShortcutScope.TextBox, false, ctrl(ShortcutKey.X)),
     Copy(R.string.shortcut_copy, ShortcutGroup.Edit, ShortcutScope.TextBox, false, ctrl(ShortcutKey.C)),
@@ -179,6 +181,12 @@ enum class ShortcutAction(
      * command that never runs while a text field has the keyboard, where it types nothing.
      */
     fun accepts(chord: KeyChord): Boolean = chord.usable || scope == ShortcutScope.OutsideText
+
+    /**
+     * A text box command that also runs where [ShortcutScope.Workspace] is: Ctrl+Z undoes the last
+     * step wherever it was. The clipboard's stay in the text box.
+     */
+    val alsoOnCanvas: Boolean get() = this == Undo || this == Redo
 
     companion object {
         /** Grouped as the Hardware pane shows them, groups and rows in declaration order. */
@@ -250,6 +258,7 @@ class KeyBindings private constructor(private val overrides: Map<ShortcutAction,
                     return if (textDefault) ShortcutDecision.Swallow else ShortcutDecision.Pass
                 action.scope == ShortcutScope.TextBox || (textDefault && action.scope == ShortcutScope.Workspace)
             }
+            ShortcutScope.Workspace -> action?.scope == at || action?.alsoOnCanvas == true
             else -> action?.scope == at
         }
         if (!claimed || action == null) return ShortcutDecision.Pass

@@ -3,6 +3,9 @@ package com.vivenotes.richtext
 import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Rect
 import android.text.Editable
 import android.text.Spannable
@@ -15,6 +18,7 @@ import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.BaseInputConnection
 import android.widget.EditText
@@ -37,6 +41,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.text.BreakIterator
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 /**
@@ -123,6 +129,13 @@ class OutlineEditText @JvmOverloads constructor(
 
     /** Called after any user edit, debounced by the caller. */
     var onBlocksChanged: ((List<Block>) -> Unit)? = null
+
+    /**
+     * Each change to the blocks as an undo step — see [TextEdit]. Beside [onBlocksChanged] rather
+     * than in it: that one is the document's, this one is the history's, and a command that edits in
+     * several passes is one step here.
+     */
+    var onTextEdited: ((TextEdit) -> Unit)? = null
 
     var onSelectionStateChanged: ((SelectionState) -> Unit)? = null
 
@@ -217,6 +230,58 @@ class OutlineEditText @JvmOverloads constructor(
     /** Guards the [TextWatcher] against the edits that normalisation itself makes. */
     private var suppressWatcher = false
 
+    /** The blocks as last reported to [onTextEdited]: what the next change is a change from. */
+    private var reportedBlocks: List<Block> = emptyList()
+
+    /** Above zero while a command runs, so what it types through the watcher is one step, not typing. */
+    private var commandDepth = 0
+
+    // The text, selection and composition before the keystroke the watcher is about to see.
+    private var textBeforeEdit = ""
+    private var selectionBeforeEdit = TextSelection(0)
+    private var composingBeforeEdit = false
+
+    /** Above zero while the text is changing, when a selection that moves has not been moved by anyone. */
+    private var textChanges = 0
+
+    /**
+     * Above zero inside a batch edit — a key typed, or an input method's commit — and the selection
+     * when it began. Both move the caret to the end of the selection before replacing it, so the
+     * selection a keystroke replaced is the one the batch began with.
+     */
+    private var batchEdits = 0
+    private var selectionAtBatch = TextSelection(0)
+
+    /**
+     * Ctrl+double-click on a word, with a mouse: the word to select beside the others — see
+     * `ui/editor/WordSelections.kt`. Null leaves Ctrl+click to the editor.
+     */
+    var onCtrlDoubleClickWord: ((TextSelection) -> Unit)? = null
+
+    /** Any other press on this editor, which puts the words selected together down. */
+    var onPlainPress: (() -> Unit)? = null
+
+    /** The selection moved by a click or a key, rather than by the text changing under it. */
+    var onSelectionMoved: ((TextSelection) -> Unit)? = null
+
+    /** Gets each command first, for the words selected together; true when it took it. */
+    var commandInterceptor: ((FormatCommand) -> Boolean)? = null
+
+    /** Words selected beside this editor's own selection, drawn the way it is. */
+    var extraSelections: List<TextSelection> = emptyList()
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
+
+    private val extraPath = Path()
+    private val extraPaint = Paint()
+    private var ctrlPress = false
+    private var ctrlClickAt = -1L
+    private var ctrlClickX = 0f
+    private var ctrlClickY = 0f
+
     /** The card whose play badge a finger went down on, held until it lifts. See [onTouchEvent]. */
     private var pressedBadge: VideoEmbedSpan? = null
     private var pressedLink: String? = null
@@ -226,6 +291,7 @@ class OutlineEditText @JvmOverloads constructor(
         private var insertCount = 0
 
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+            textChanges++
             inheritedAtInsert = if (!suppressWatcher && after > 0 && s is Spanned) {
                 SpannableCodec.inheritedMarks(s, start)
             } else {
@@ -236,6 +302,11 @@ class OutlineEditText @JvmOverloads constructor(
             if (count > 0 && s is Spannable) {
                 SpannableCodec.forgetDeletedEmptyParagraphs(s, start, start + count)
             }
+            if (!suppressWatcher && commandDepth == 0 && s is Spannable) {
+                textBeforeEdit = s.toString()
+                selectionBeforeEdit = if (batchEdits > 0) selectionAtBatch else currentSelection()
+                composingBeforeEdit = BaseInputConnection.getComposingSpanStart(s) >= 0
+            }
         }
 
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -244,6 +315,7 @@ class OutlineEditText @JvmOverloads constructor(
         }
 
         override fun afterTextChanged(s: Editable?) {
+            textChanges--
             if (suppressWatcher || s == null) return
             suppressWatcher = true
 
@@ -256,12 +328,179 @@ class OutlineEditText @JvmOverloads constructor(
             SpannableCodec.normalize(s, editorStyle)
 
             suppressWatcher = false
-            onBlocksChanged?.invoke(SpannableCodec.parse(s))
+            val blocks = SpannableCodec.parse(s)
+            onBlocksChanged?.invoke(blocks)
+            if (commandDepth == 0) {
+                val before = selectionBeforeEdit.clamped(textBeforeEdit.length)
+                reportEdit(blocks, before, Keystroke.of(textBeforeEdit, s.toString(), before), composingBeforeEdit)
+                // The next edit in the same batch replaces what this one left selected.
+                if (batchEdits > 0) selectionAtBatch = currentSelection()
+            }
             emitSelectionState()
             refreshAutoEquations()
             refreshLinkStyles()
             refreshVideoEmbeds()
         }
+    }
+
+    private fun currentSelection(): TextSelection =
+        TextSelection(selectionStart.coerceAtLeast(0), selectionEnd.coerceAtLeast(0))
+
+    /** Reports the change from [reportedBlocks] to [after], unless there was none. */
+    private fun reportEdit(after: List<Block>, selectionBefore: TextSelection, keystroke: Keystroke?, composing: Boolean) {
+        val before = reportedBlocks
+        reportedBlocks = after
+        if (before == after) return
+        onTextEdited?.invoke(TextEdit(before, after, selectionBefore, currentSelection(), keystroke, composing))
+    }
+
+    /**
+     * Runs [body] as one command: whatever it changes, typed through the watcher or not, is a single
+     * step of the history, reported once it is done. A command inside another is part of it.
+     */
+    private inline fun <T> asCommand(body: () -> T): T {
+        val selection = currentSelection()
+        commandDepth++
+        try {
+            return body()
+        } finally {
+            commandDepth--
+            if (commandDepth == 0) text?.let { reportEdit(SpannableCodec.parse(it), selection, keystroke = null, composing = false) }
+        }
+    }
+
+    /**
+     * Puts [blocks] back with [selection] — Undo and Redo of the text. The history has the step
+     * already, so only [onBlocksChanged] hears of it, for whatever shows whether the box is empty.
+     */
+    fun restore(blocks: List<Block>, selection: TextSelection) {
+        setBlocks(blocks)
+        val length = text?.length ?: 0
+        setSelection(selection.start.coerceIn(0, length), selection.end.coerceIn(0, length))
+        onBlocksChanged?.invoke(blocks)
+    }
+
+    /** The text of [range], spans and all — a word among several being copied together. */
+    fun textIn(range: TextSelection): CharSequence {
+        val editable = text ?: return ""
+        val clamped = range.clamped(editable.length)
+        return editable.subSequence(clamped.min, clamped.max)
+    }
+
+    /** The marks all of [range] carries, or what typing would carry at a caret. */
+    fun marksIn(range: TextSelection): Set<Mark> {
+        val editable = text ?: return emptySet()
+        val clamped = range.clamped(editable.length)
+        return if (clamped.collapsed) SpannableCodec.inheritedMarks(editable, clamped.min)
+        else SpannableCodec.marksAt(editable, clamped.min, clamped.max)
+    }
+
+    /**
+     * Runs [command] at each of [ranges] — once in each paragraph they touch, when [paragraphs] — as
+     * one change, and leaves the selection where it was.
+     */
+    fun applyAt(command: FormatCommand, ranges: List<TextSelection>, paragraphs: Boolean): Unit = asCommand {
+        val editable = text ?: return@asCommand
+        val targets = if (!paragraphs) ranges else SpannableCodec.paragraphs(editable)
+            .filter { (start, end) -> ranges.any { it.min <= end && it.max >= start } }
+            .map { (start, _) -> TextSelection(start) }
+        val kept = currentSelection()
+        for (target in targets.sortedByDescending { it.min }) {
+            val clamped = target.clamped(editable.length)
+            setSelection(clamped.min, clamped.max)
+            applyCommand(command)
+        }
+        setSelection(kept.start.coerceIn(0, editable.length), kept.end.coerceIn(0, editable.length))
+    }
+
+    /**
+     * Puts [content] in place of each of [ranges] as one change, and returns the caret after each,
+     * in the same order. The editor's own selection moves with the text around it.
+     */
+    fun replaceAt(ranges: List<TextSelection>, content: CharSequence): List<TextSelection> = asCommand {
+        val editable = text ?: return@asCommand ranges
+        val carets = IntArray(ranges.size)
+        val done = mutableListOf<Int>()
+        // Right to left, so a replacement cannot move a range still to come; each one moves the
+        // carets already placed after it.
+        for (index in ranges.indices.sortedByDescending { ranges[it].min }) {
+            val range = ranges[index].clamped(editable.length)
+            editable.replace(range.min, range.max, content)
+            val shift = content.length - (range.max - range.min)
+            done.forEach { carets[it] += shift }
+            carets[index] = range.min + content.length
+            done += index
+        }
+        carets.map { TextSelection(it) }
+    }
+
+    /** Ctrl+double-click selects a word beside the others. Both presses are used up, so the editor keeps them. */
+    private fun wordClick(event: MotionEvent): Boolean {
+        val onWord = onCtrlDoubleClickWord ?: return false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val ctrl = event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE &&
+                    event.metaState and KeyEvent.META_CTRL_ON != 0 &&
+                    event.isButtonPressed(MotionEvent.BUTTON_PRIMARY)
+                if (!ctrl) {
+                    ctrlClickAt = -1L
+                    onPlainPress?.invoke()
+                    return false
+                }
+                ctrlPress = true
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> return ctrlPress
+            MotionEvent.ACTION_UP -> {
+                if (!ctrlPress) return false
+                ctrlPress = false
+                val near = hypot(event.x - ctrlClickX, event.y - ctrlClickY) <= ViewConfiguration.get(context).scaledTouchSlop * 2
+                if (ctrlClickAt >= 0 && event.eventTime - ctrlClickAt <= ViewConfiguration.getDoubleTapTimeout() && near) {
+                    ctrlClickAt = -1L
+                    wordAt(event.x, event.y)?.let(onWord)
+                } else {
+                    ctrlClickAt = event.eventTime
+                    ctrlClickX = event.x
+                    ctrlClickY = event.y
+                }
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                val pressed = ctrlPress
+                ctrlPress = false
+                return pressed
+            }
+        }
+        return false
+    }
+
+    /** The word at ([x], [y]), or null over a space or past the text. */
+    private fun wordAt(x: Float, y: Float): TextSelection? {
+        val content = text?.toString().orEmpty()
+        if (content.isEmpty()) return null
+        val offset = getOffsetForPosition(x, y).coerceIn(0, content.lastIndex)
+        val words = BreakIterator.getWordInstance().apply { setText(content) }
+        val end = words.following(offset).takeIf { it != BreakIterator.DONE } ?: content.length
+        val start = words.preceding(end).takeIf { it != BreakIterator.DONE } ?: 0
+        return TextSelection(start, end).takeUnless { it.collapsed || content.substring(start, end).isBlank() }
+    }
+
+    /** The words selected beside this editor's own selection, under the text as a selection is. */
+    override fun onDraw(canvas: Canvas) {
+        val shown = layout
+        if (extraSelections.isNotEmpty() && shown != null) {
+            extraPaint.color = highlightColor
+            val length = shown.text.length
+            canvas.save()
+            canvas.translate(compoundPaddingLeft.toFloat(), extendedPaddingTop.toFloat())
+            for (range in extraSelections) {
+                extraPath.reset()
+                shown.getSelectionPath(range.min.coerceIn(0, length), range.max.coerceIn(0, length), extraPath)
+                canvas.drawPath(extraPath, extraPaint)
+            }
+            canvas.restore()
+        }
+        super.onDraw(canvas)
     }
 
     /**
@@ -285,6 +524,7 @@ class OutlineEditText @JvmOverloads constructor(
         suppressedMarks.clear()
         setText(SpannableCodec.render(blocks, editorStyle))
         suppressWatcher = false
+        reportedBlocks = blocks
         hydrateEquations()
         emitSelectionState()
         refreshAutoEquations()
@@ -297,12 +537,25 @@ class OutlineEditText @JvmOverloads constructor(
     override fun onSelectionChanged(selStart: Int, selEnd: Int) {
         super.onSelectionChanged(selStart, selEnd)
         if (!initialised) return
+        if (textChanges == 0 && commandDepth == 0 && batchEdits == 0) onSelectionMoved?.invoke(currentSelection())
         // Moving the caret discards formatting that was armed or suppressed but never typed.
         if (pendingMarks.isNotEmpty()) pendingMarks.clear()
         if (suppressedMarks.isNotEmpty()) suppressedMarks.clear()
         emitSelectionState()
         refreshAutoEquations()
         refreshVideoEmbeds()
+    }
+
+    override fun onBeginBatchEdit() {
+        super.onBeginBatchEdit()
+        if (batchEdits++ == 0) selectionAtBatch = currentSelection()
+    }
+
+    /** Where a batch left the caret is where a click or a key moved it, unless the text changed with it. */
+    override fun onEndBatchEdit() {
+        super.onEndBatchEdit()
+        batchEdits = (batchEdits - 1).coerceAtLeast(0)
+        if (batchEdits == 0 && initialised && commandDepth == 0) onSelectionMoved?.invoke(currentSelection())
     }
 
     override fun onFocusChanged(focused: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
@@ -339,6 +592,7 @@ class OutlineEditText @JvmOverloads constructor(
      * uncovers the URL for editing.
      */
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (wordClick(event)) return true
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 val span = badgeAt(event.x, event.y)
@@ -485,6 +739,9 @@ class OutlineEditText @JvmOverloads constructor(
                 if (onTabNavigate?.invoke(forward) != true) apply(FormatCommand.Indent(if (forward) 1 else -1))
             }
             ShortcutAction.ExitList -> insertPlainParagraph()
+            // The page's history, which holds the text and its formatting. The key is used up even
+            // with nothing to undo: `TextView`'s own undo would put back characters without either.
+            ShortcutAction.Undo, ShortcutAction.Redo -> onWorkspaceShortcut?.invoke(action)
             else -> return onWorkspaceShortcut?.invoke(action) == true
         }
         return true
@@ -500,6 +757,11 @@ class OutlineEditText @JvmOverloads constructor(
             command == FormatCommand.ClearCanvasSelection ||
             command == FormatCommand.DeleteCanvasSelection
         ) return
+        if (commandInterceptor?.invoke(command) == true) return
+        asCommand { applyCommand(command) }
+    }
+
+    private fun applyCommand(command: FormatCommand) {
         val editable = text ?: return
         // Applying spans while the IME holds a composing region corrupts predictive text on many
         // keyboards. Committing the composition first is cheap and avoids the whole class of bug.
@@ -591,7 +853,33 @@ class OutlineEditText @JvmOverloads constructor(
      * text, not the platform's reading of the HTML. Paste as plain text and a clip with no HTML, such
      * as this app's own Copy, are left to the platform, as before.
      */
-    override fun onTextContextMenuItem(id: Int): Boolean {
+    override fun onTextContextMenuItem(id: Int): Boolean = when (id) {
+        // `TextView`'s own undo knows characters only, and would put text back without its
+        // formatting: Ctrl+Z, Ctrl+Y and a keyboard's undo key all take the page's history instead,
+        // whether or not there is anything in it.
+        android.R.id.undo -> {
+            onWorkspaceShortcut?.invoke(ShortcutAction.Undo)
+            true
+        }
+        android.R.id.redo -> {
+            onWorkspaceShortcut?.invoke(ShortcutAction.Redo)
+            true
+        }
+        // The selection toolbar's, which reach the words selected together as the ribbon's do.
+        android.R.id.cut, android.R.id.copy, android.R.id.paste, android.R.id.pasteAsPlainText ->
+            commandInterceptor?.invoke(FormatCommand.Clipboard(clipboardAction(id))) == true ||
+                asCommand { contextMenuItem(id) }
+        else -> asCommand { contextMenuItem(id) }
+    }
+
+    private fun clipboardAction(id: Int): ClipboardAction = when (id) {
+        android.R.id.cut -> ClipboardAction.Cut
+        android.R.id.copy -> ClipboardAction.Copy
+        android.R.id.paste -> ClipboardAction.Paste
+        else -> ClipboardAction.PasteAsPlainText
+    }
+
+    private fun contextMenuItem(id: Int): Boolean {
         if (id != android.R.id.paste) return super.onTextContextMenuItem(id)
         val clipboard = context.getSystemService(ClipboardManager::class.java)
         // The description first: reading the clip itself is what Android announces, and the
@@ -681,8 +969,8 @@ class OutlineEditText @JvmOverloads constructor(
      * without first emptying an item. It keeps the indent and alignment Enter would carry on. A
      * selection is replaced, as by typing.
      */
-    private fun insertPlainParagraph() {
-        val editable = text ?: return
+    private fun insertPlainParagraph(): Unit = asCommand {
+        val editable = text ?: return@asCommand
         if (BaseInputConnection.getComposingSpanStart(editable) >= 0) {
             BaseInputConnection.removeComposingSpans(editable)
         }

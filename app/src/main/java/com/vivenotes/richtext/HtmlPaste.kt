@@ -77,50 +77,15 @@ private class HtmlPaste(private val textMarks: Set<Mark>) {
 
     /** Reads the tag at [at] and returns where the text after it starts. */
     private fun startTag(html: String, at: Int): Int {
-        var index = at + 1
-        val nameStart = index
-        while (index < html.length && !html[index].isWhitespace() && html[index] != '>' && html[index] != '/') index++
-        val name = html.substring(nameStart, index).lowercase()
-        val attributes = mutableMapOf<String, String>()
-        var selfClosing = false
-        while (index < html.length) {
-            while (index < html.length && html[index].isWhitespace()) index++
-            if (index >= html.length) break
-            if (html[index] == '>') { index++; break }
-            if (html[index] == '/') {
-                selfClosing = true
-                index++
-                continue
-            }
-            val attributeStart = index
-            while (index < html.length && !html[index].isWhitespace() && html[index] !in "=>/") index++
-            val attribute = html.substring(attributeStart, index).lowercase()
-            while (index < html.length && html[index].isWhitespace()) index++
-            var value = ""
-            if (index < html.length && html[index] == '=') {
-                index++
-                while (index < html.length && html[index].isWhitespace()) index++
-                if (index < html.length && (html[index] == '"' || html[index] == '\'')) {
-                    val quote = html[index]
-                    val close = html.indexOf(quote, index + 1).let { if (it < 0) html.length else it }
-                    value = html.substring(index + 1, close)
-                    index = close + 1
-                } else {
-                    val valueStart = index
-                    while (index < html.length && !html[index].isWhitespace() && html[index] != '>') index++
-                    value = html.substring(valueStart, index)
-                }
-            }
-            if (attribute.isNotEmpty()) attributes.putIfAbsent(attribute, decodeEntities(value))
-            if (attributeStart == index) index++
-        }
+        val tag = htmlTag(html, at) ?: return at + 1
+        val (name, attributes, index) = tag
         if (name in RawText) {
             // Their content is not markup, and none of it is text on the page.
             val close = html.indexOf("</$name", index, ignoreCase = true)
             return if (close < 0) html.length else html.indexOf('>', close).let { if (it < 0) html.length else it + 1 }
         }
         element(name, attributes)
-        if (selfClosing && name !in Void) endTag(name)
+        if (tag.selfClosing && name !in Void) endTag(name)
         return index
     }
 
@@ -571,7 +536,7 @@ private fun Char.isHtmlSpace(): Boolean = this == ' ' || this == '\t' || this ==
 private fun BlockType.isListType(): Boolean = this == BlockType.Bullet || this == BlockType.Numbered || this == BlockType.Todo
 
 /** An address the page linked to, made absolute by its `<base>` if it gave a relative one. */
-private fun resolveLink(href: String, base: String?): String? {
+internal fun resolveLink(href: String, base: String?): String? {
     val link = href.trim()
     if (link.isEmpty() || link.startsWith("#")) return null
     if (link.startsWith("//")) return normalizedLinkUrl("https:$link")
