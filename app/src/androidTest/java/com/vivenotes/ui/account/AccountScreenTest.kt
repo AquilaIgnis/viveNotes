@@ -12,6 +12,9 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onChild
 import androidx.compose.ui.test.onNodeWithTag
@@ -693,9 +696,14 @@ class AccountScreenTest {
         compose.onNodeWithTag(AccountTags.SUBSCRIBE)
             .performScrollTo()
             .assertIsNotEnabled()
-            .assertContentDescriptionEquals(
-                context.getString(R.string.account_subscription_opening_checkout),
-            )
+        // LoadingIndicator's progress semantics make it its own merged node, so its description
+        // stays on the indicator inside the button rather than merging into the button itself.
+        compose.onNode(
+            hasContentDescription(context.getString(R.string.account_subscription_opening_checkout)) and
+                hasAnyAncestor(hasTestTag(AccountTags.SUBSCRIBE)),
+        ).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.account_subscription_subscribe_card))
+            .assertDoesNotExist()
     }
 
     @Test
