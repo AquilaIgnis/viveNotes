@@ -101,7 +101,7 @@ and all AI features run entirely on-device.
 
 - [x] Fdroid release
 - [x] Play Store
-- [ ] Linux & windows port
+- [x] Linux & windows port
 - [ ] Apple
 - [ ] Web Client
 
