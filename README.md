@@ -53,10 +53,9 @@ and all AI features run entirely on-device.
   <tbody>
     <tr>
       <td align="center">
-        <a href="#">
-          <img src="repo/flathub.svg" height="80" width="200" alt="Get it on flathub">
-        </a> </br>
-        <a>coming soon</a>
+        <a href="https://github.com/CrownByte0b/viveNotes-multiplataform/releases/latest/">
+          <img src="repo/linux-logo.svg" height="80" width="200" alt="Get it on flathub">
+        </a>
       </td>
       <td align="center">
         <a href="https://github.com/CrownByte0b/viveNotes-multiplataform/releases/latest/download/ViveNotes-x64.msi">
