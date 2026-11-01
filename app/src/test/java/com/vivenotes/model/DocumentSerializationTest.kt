@@ -93,6 +93,28 @@ class DocumentSerializationTest {
     }
 
     @Test
+    fun `line spacing is written only when a block has its own, after the other fields`() {
+        // The desktop app writes the same field in the same place; an ordinary block's bytes do not change.
+        val plain = PageDoc(outlines = listOf(Outline.Text(id = "o", blocks = listOf(
+            Block(id = "b", type = BlockType.Todo, checked = false, runs = listOf(Run("x")))))))
+        assertTrue(plain.encode(), "lineSpacing" !in plain.encode())
+
+        val spaced = PageDoc(outlines = listOf(Outline.Text(id = "o", blocks = listOf(
+            Block(id = "b", type = BlockType.Todo, checked = false, runs = listOf(Run("x")), lineSpacing = 1.5f)))))
+        assertTrue(spaced.encode(), spaced.encode().contains(""""checked":false,"lineSpacing":1.5}"""))
+        assertEquals(spaced, decodePageDoc(spaced.encode()))
+    }
+
+    @Test
+    fun `a stored line spacing outside the menu's range is drawn within it`() {
+        assertEquals(1f, Block(id = "b").shownLineSpacing)
+        assertEquals(2.5f, Block(id = "b", lineSpacing = 2.5f).shownLineSpacing)
+        assertEquals(Block.MAX_LINE_SPACING, Block(id = "b", lineSpacing = 40f).shownLineSpacing)
+        assertEquals(Block.MIN_LINE_SPACING, Block(id = "b", lineSpacing = -1f).shownLineSpacing)
+        assertEquals(1f, Block(id = "b", lineSpacing = Float.NaN).shownLineSpacing)
+    }
+
+    @Test
     fun `tolerates fields written by a newer schema`() {
         // Forward compatibility matters once a sync server can hand this client a document
         // written by a newer build.

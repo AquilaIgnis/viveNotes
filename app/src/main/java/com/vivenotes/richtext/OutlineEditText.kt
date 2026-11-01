@@ -91,7 +91,7 @@ class OutlineEditText @JvmOverloads constructor(
         bulletRadiusPx = 6,
         accentColor = 0xFF4CAF50.toInt(),
         codeBackgroundColor = 0x22FFFFFF,
-        quoteColor = 0xFF4CAF50.toInt(),
+        quoteColor = QUOTE_STRIPE_COLOR,
     )
 
     /**
@@ -803,6 +803,11 @@ class OutlineEditText @JvmOverloads constructor(
             is FormatCommand.SetAlign -> SpannableCodec.updateBlocks(editable, from, to, editorStyle) {
                 it.copy(align = command.align)
             }
+            is FormatCommand.SetLineSpacing -> if (!command.spacing.isNaN()) {
+                SpannableCodec.updateBlocks(editable, from, to, editorStyle) {
+                    it.copy(lineSpacing = Block.shownLineSpacing(command.spacing))
+                }
+            }
             is FormatCommand.InsertEquation -> insertEquation(editable, command.latex, from, to)
             is FormatCommand.InsertLink -> insertLink(editable, command.text, command.url, from, to)
             is FormatCommand.Clipboard -> {
@@ -819,7 +824,7 @@ class OutlineEditText @JvmOverloads constructor(
             FormatCommand.ClearFormatting -> {
                 SpannableCodec.clearMarks(editable, from, to)
                 SpannableCodec.updateBlocks(editable, from, to, editorStyle) {
-                    it.copy(type = BlockType.Paragraph, indent = 0, align = Align.Start, checked = null)
+                    it.copy(type = BlockType.Paragraph, indent = 0, align = Align.Start, checked = null, lineSpacing = 1f)
                 }
                 pendingMarks.clear()
             }
@@ -926,7 +931,8 @@ class OutlineEditText @JvmOverloads constructor(
         val startsParagraph = from == first.first
         val endsParagraph = to == last.second
         fun BlockSpan.styledAs(block: Block) =
-            copy(type = block.type, indent = block.indent, align = block.align, checked = block.checked)
+            copy(type = block.type, indent = block.indent, align = block.align, checked = block.checked,
+                lineSpacing = block.lineSpacing)
 
         val styles = if (fragment.size == 1) {
             val single = fragment.single()
@@ -935,11 +941,11 @@ class OutlineEditText @JvmOverloads constructor(
             buildList {
                 add(if (startsParagraph) head.styledAs(fragment.first()) else head)
                 fragment.subList(1, fragment.lastIndex).forEach {
-                    add(BlockSpan(it.id, it.type, it.indent, it.align, it.checked))
+                    add(BlockSpan(it.id, it.type, it.indent, it.align, it.checked, it.lineSpacing))
                 }
                 // As Enter splits it: the rest of the paragraph continues it, a to-do unticked.
                 val after = if (first == last) {
-                    BlockSpan(newId(), head.type, head.indent, head.align, head.checked?.let { false })
+                    BlockSpan(newId(), head.type, head.indent, head.align, head.checked?.let { false }, head.lineSpacing)
                 } else {
                     tail
                 }
@@ -1468,6 +1474,7 @@ class OutlineEditText @JvmOverloads constructor(
                 blockType = block?.type ?: BlockType.Paragraph,
                 align = block?.align ?: Align.Start,
                 indent = block?.indent ?: 0,
+                lineSpacing = block?.lineSpacing?.let { Block.shownLineSpacing(it) } ?: 1f,
                 hasSelection = !caret,
                 fontSize = if (caret) {
                     equationFontSize

@@ -142,6 +142,7 @@ import com.vivenotes.model.search.ContentKind
 import com.vivenotes.richtext.EditorStyle
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.OutlineEditText
+import com.vivenotes.richtext.QUOTE_STRIPE_COLOR
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.richtext.TextEdit
 import com.vivenotes.ink.CanvasPasteLayoutRequest
@@ -692,7 +693,10 @@ fun EditorPane(
                 bulletRadiusPx = 3.dp.roundToPx(),
                 accentColor = primary.toArgb(),
                 codeBackgroundColor = Color.White.copy(alpha = 0.07f).toArgb(),
-                quoteColor = primary.toArgb(),
+                // The desktop app's stripe: green, 3 wide, the text 14 in from where it starts.
+                quoteColor = QUOTE_STRIPE_COLOR,
+                quoteStripePx = 3.dp.roundToPx(),
+                quoteGapPx = 11.dp.roundToPx(),
             )
         }
     }

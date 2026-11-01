@@ -519,6 +519,7 @@
     <string name="ribbon_align_left">Links ausrichten</string>
     <string name="ribbon_align_center">Zentrieren</string>
     <string name="ribbon_align_right">Rechts ausrichten</string>
+    <string name="ribbon_line_spacing">Zeilenabstand</string>
     <string name="ribbon_picture">Bild</string>
     <string name="ribbon_picture_device">Auf Gerät</string>
     <string name="ribbon_picture_online">Online suchen</string>

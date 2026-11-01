@@ -509,6 +509,7 @@
     <string name="ribbon_align_left">왼쪽 정렬</string>
     <string name="ribbon_align_center">가운데 정렬</string>
     <string name="ribbon_align_right">오른쪽 정렬</string>
+    <string name="ribbon_line_spacing">줄 간격</string>
     <string name="ribbon_picture">사진</string>
     <string name="ribbon_picture_device">기기</string>
     <string name="ribbon_picture_online">온라인 검색</string>

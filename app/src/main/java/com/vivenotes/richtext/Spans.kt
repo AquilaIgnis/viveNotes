@@ -19,6 +19,7 @@ import com.vivenotes.model.BlockType
 import io.ratex.RaTeXRenderer
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /** LaTeX is intentionally more prominent than the prose size that owns it. */
 internal const val EQUATION_FONT_SCALE = 1.6f
@@ -45,6 +46,7 @@ class BlockSpan(
     val indent: Int,
     val align: Align,
     val checked: Boolean?,
+    val lineSpacing: Float = 1f,
 ) : android.text.style.ParagraphStyle {
 
     fun copy(
@@ -52,7 +54,107 @@ class BlockSpan(
         indent: Int = this.indent,
         align: Align = this.align,
         checked: Boolean? = this.checked,
-    ) = BlockSpan(id, type, indent, align, checked)
+        lineSpacing: Float = this.lineSpacing,
+    ) = BlockSpan(id, type, indent, align, checked, lineSpacing)
+}
+
+/**
+ * Spaces a paragraph's lines [spacing] single lines apart.
+ *
+ * The room added goes above and below each line in the proportion its font already splits ascent
+ * from descent, as the desktop app's `LineHeightStyle.Alignment.Proportional` does, so a page
+ * spaced on one is spaced the same on the other.
+ *
+ * `StaticLayout` hands a line that continues the previous one's font run the metrics this span
+ * wrote for that line, not the font's, so scaling whatever arrives compounds: a double-spaced
+ * paragraph's second line came out four lines tall, its third eight. The span keeps what it last
+ * wrote and what it wrote it from, and scales the original again when its own output comes back.
+ * A span belongs to one paragraph, and its lines are laid out in order on one thread.
+ */
+class LineSpacingSpan(private val spacing: Float) : android.text.style.LineHeightSpan, Derived {
+
+    private val read = IntArray(4)
+    private val written = IntArray(4)
+    private var hasWritten = false
+
+    override fun chooseHeight(
+        text: CharSequence,
+        start: Int,
+        end: Int,
+        spanstartv: Int,
+        lineHeight: Int,
+        fm: Paint.FontMetricsInt,
+    ) {
+        // The paragraph's first line: nothing carried over can be this span's yet.
+        if (lineHeight == spanstartv) hasWritten = false
+        if (hasWritten && fm.matches(written)) fm.set(read) else fm.copyInto(read)
+
+        val height = fm.descent - fm.ascent
+        if (height > 0) {
+            val extra = height * (spacing - 1f)
+            val above = (extra * -fm.ascent / height).roundToInt()
+            val below = extra.roundToInt() - above
+            fm.ascent -= above
+            fm.descent += below
+            // Font padding, where the view includes it, rides on the line rather than being eaten by it.
+            fm.top -= above
+            fm.bottom += below
+        }
+        fm.copyInto(written)
+        hasWritten = true
+    }
+
+    private fun Paint.FontMetricsInt.matches(values: IntArray): Boolean =
+        ascent == values[0] && descent == values[1] && top == values[2] && bottom == values[3]
+
+    private fun Paint.FontMetricsInt.set(values: IntArray) {
+        ascent = values[0]
+        descent = values[1]
+        top = values[2]
+        bottom = values[3]
+    }
+
+    private fun Paint.FontMetricsInt.copyInto(values: IntArray) {
+        values[0] = ascent
+        values[1] = descent
+        values[2] = top
+        values[3] = bottom
+    }
+}
+
+/**
+ * A bullet that stays level with its text on a line [LineSpacingSpan] spaced [spacing] apart.
+ *
+ * [BulletSpan] centres on the whole line, and most of the room spacing adds is above the text, so
+ * the bullet rose toward the line before. It goes where single spacing would put it instead, as on
+ * desktop.
+ */
+class SpacedBulletSpan(
+    gapWidth: Int,
+    color: Int,
+    radius: Int,
+    private val spacing: Float,
+) : android.text.style.BulletSpan(gapWidth, color, radius) {
+
+    override fun drawLeadingMargin(
+        canvas: Canvas,
+        paint: Paint,
+        x: Int,
+        dir: Int,
+        top: Int,
+        baseline: Int,
+        bottom: Int,
+        text: CharSequence,
+        start: Int,
+        end: Int,
+        first: Boolean,
+        layout: Layout?,
+    ) {
+        // BulletSpan draws at the middle of top and bottom; a top that puts that middle here.
+        val centre = baseline + ((top + bottom) / 2f - baseline) / spacing
+        val shiftedTop = (2f * centre - bottom).roundToInt()
+        super.drawLeadingMargin(canvas, paint, x, dir, shiftedTop, baseline, bottom, text, start, end, first, layout)
+    }
 }
 
 /** Draws "1." style ordinals. Android ships [android.text.style.BulletSpan] but no numbered equivalent. */

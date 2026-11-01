@@ -1,5 +1,8 @@
 package com.vivenotes.richtext
 
+import android.graphics.Paint
+import android.text.StaticLayout
+import android.text.TextPaint
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -378,6 +381,56 @@ class SpannableCodecTest {
 
         assertEquals(BlockType.Bullet, blocks[1].type)
         assertEquals(1, blocks[1].indent)
+    }
+
+    @Test
+    fun lineSpacingSurvivesARoundTripAndCarriesOnPastEnter() {
+        val blocks = listOf(Block(id = "b", runs = listOf(Run("spaced")), lineSpacing = 2f), Block.of("single"))
+        assertEquals(blocks, roundTrip(blocks))
+
+        val rendered = SpannableCodec.render(blocks.take(1), style)
+        assertEquals(1, rendered.getSpans(0, rendered.length, LineSpacingSpan::class.java).size)
+        rendered.append("\nnext")
+        SpannableCodec.normalize(rendered, style)
+        assertEquals(listOf(2f, 2f), SpannableCodec.parse(rendered).map { it.lineSpacing })
+    }
+
+    /** The platform hands a continued line the metrics the span already scaled; it must not scale them twice. */
+    @Test
+    fun everyLineOfASpacedParagraphIsTheSameDistanceApart() {
+        val words = List(60) { "word" }.joinToString(" ")
+        fun layoutOf(spacing: Float): StaticLayout {
+            val text = SpannableCodec.render(listOf(Block(id = "b", runs = listOf(Run(words)), lineSpacing = spacing)), style)
+            val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 40f }
+            return StaticLayout.Builder.obtain(text, 0, text.length, paint, 600).build()
+        }
+        val single = layoutOf(1f)
+        val pitch = single.getLineBaseline(1) - single.getLineBaseline(0)
+        val double = layoutOf(2f)
+
+        assertTrue(double.lineCount >= 4)
+        for (line in 1 until double.lineCount) {
+            assertEquals(2f * pitch, (double.getLineBaseline(line) - double.getLineBaseline(line - 1)).toFloat(), 2f)
+        }
+    }
+
+    @Test
+    fun singleSpacedBlocksGetNoLineSpacingSpan() {
+        val rendered = SpannableCodec.render(listOf(Block.of("plain")), style)
+        assertEquals(0, rendered.getSpans(0, rendered.length, LineSpacingSpan::class.java).size)
+    }
+
+    @Test
+    fun aQuoteDrawsTheStyleStripeAfterItsIndent() {
+        val rendered = SpannableCodec.render(listOf(Block.of("quoted", BlockType.Quote, indent = 1)), style)
+        val quote = rendered.getSpans(0, rendered.length, android.text.style.QuoteSpan::class.java).single()
+        assertEquals(style.quoteStripePx, quote.stripeWidth)
+        assertEquals(style.quoteGapPx, quote.gapWidth)
+        assertEquals(style.quoteColor, quote.color)
+        // Margins are laid out in span order: the indent first, so the stripe moves in with the text.
+        val margins = rendered.getSpans(0, rendered.length, android.text.style.LeadingMarginSpan::class.java)
+        assertTrue(margins.first() is android.text.style.LeadingMarginSpan.Standard)
+        assertTrue(margins.last() is android.text.style.QuoteSpan)
     }
 
     @Test

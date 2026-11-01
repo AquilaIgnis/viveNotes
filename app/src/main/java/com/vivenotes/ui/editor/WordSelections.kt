@@ -211,7 +211,8 @@ internal class WordSelectionController(
             }
             is FormatCommand.SetMark, is FormatCommand.ClearMark, FormatCommand.ClearFormatting ->
                 applyEverywhere(current, command, paragraphs = false)
-            is FormatCommand.SetBlockType, is FormatCommand.SetAlign, is FormatCommand.Indent ->
+            is FormatCommand.SetBlockType, is FormatCommand.SetAlign, is FormatCommand.SetLineSpacing,
+            is FormatCommand.Indent ->
                 applyEverywhere(current, command, paragraphs = true)
             is FormatCommand.Clipboard -> when (command.action) {
                 ClipboardAction.Copy -> copy(current)

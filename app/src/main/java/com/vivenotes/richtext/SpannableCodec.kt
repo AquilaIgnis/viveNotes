@@ -12,6 +12,7 @@ import android.text.style.BulletSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.LeadingMarginSpan
 import android.text.style.QuoteSpan
+import android.text.style.UpdateLayout
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
 import android.text.style.SubscriptSpan
@@ -28,6 +29,9 @@ import com.vivenotes.model.Run
 import com.vivenotes.model.opposingScript
 import com.vivenotes.model.newId
 
+/** The quote stripe's green, the desktop app's too, so a quoted page looks the same on either. */
+const val QUOTE_STRIPE_COLOR: Int = 0xFF4CAF50.toInt()
+
 /** Pixel metrics the codec needs; supplied by the view so the codec stays density-agnostic. */
 data class EditorStyle(
     val indentStepPx: Int,
@@ -36,6 +40,9 @@ data class EditorStyle(
     val accentColor: Int,
     val codeBackgroundColor: Int,
     val quoteColor: Int,
+    /** A quote's stripe, then the room between it and the text — 3 and 11 units on desktop. */
+    val quoteStripePx: Int = 6,
+    val quoteGapPx: Int = 22,
 )
 
 /**
@@ -66,7 +73,7 @@ object SpannableCodec {
             }
             // An empty block still needs a paragraph to hang its BlockSpan on.
             blockRanges += Triple(
-                BlockSpan(block.id, block.type, block.indent, block.align, block.checked),
+                BlockSpan(block.id, block.type, block.indent, block.align, block.checked, block.lineSpacing),
                 start,
                 out.length,
             )
@@ -95,6 +102,7 @@ object SpannableCodec {
             align = meta?.align ?: Align.Start,
             checked = meta?.checked,
             runs = readRuns(text, start, end),
+            lineSpacing = meta?.lineSpacing ?: 1f,
         )
     }
 
@@ -123,7 +131,10 @@ object SpannableCodec {
                 previous != null -> previous
                 // A paragraph created mid-edit continues the block it was split from, except that
                 // a new to-do starts unchecked rather than inheriting a tick.
-                inherited != null -> BlockSpan(newId(), inherited.type, inherited.indent, inherited.align, inherited.checked?.let { false })
+                inherited != null -> BlockSpan(
+                    newId(), inherited.type, inherited.indent, inherited.align, inherited.checked?.let { false },
+                    inherited.lineSpacing,
+                )
                 else -> BlockSpan(newId(), BlockType.Paragraph, 0, Align.Start, null)
             }
             editable.setSpan(meta, start, end, paragraphFlags(start, end))
@@ -158,6 +169,8 @@ object SpannableCodec {
         style: EditorStyle,
         transform: (BlockSpan) -> BlockSpan,
     ) {
+        var changedFrom = -1
+        var changedTo = -1
         for ((start, end) in paragraphs(editable)) {
             if (end < selStart || start > selEnd) continue
             val current = editable.getSpans(start, end, BlockSpan::class.java)
@@ -165,8 +178,11 @@ object SpannableCodec {
                 ?: BlockSpan(newId(), BlockType.Paragraph, 0, Align.Start, null)
             editable.removeSpan(current)
             editable.setSpan(transform(current), start, end, paragraphFlags(start, end))
+            if (changedFrom < 0) changedFrom = start
+            changedTo = end
         }
         applyDerived(editable, style)
+        if (changedFrom >= 0) relayout(editable, changedFrom, changedTo)
     }
 
     /**
@@ -186,7 +202,27 @@ object SpannableCodec {
             editable.setSpan(meta, start, end, paragraphFlags(start, end))
         }
         applyDerived(editable, style)
+        val last = all[minOf(first + maxOf(styles.lastIndex, 0), all.lastIndex)]
+        relayout(editable, all[first].first, last.second)
     }
+
+    /**
+     * Has an editable text's layout wrap and space [start]..[end] again.
+     *
+     * It does that when the text changes, or when a span marked [UpdateLayout] comes or goes, and no
+     * paragraph span is one: a quote's stripe, a list's margin, an indent or a line spacing set on
+     * its own was drawn at once, but left the lines where they were — running past the box's edge,
+     * or as far apart as before — until the paragraph was next typed in. One such span, set and
+     * taken off again, is that signal. Not done from [applyDerived], which every keystroke runs over
+     * the whole text and which the edit itself has already laid out.
+     */
+    private fun relayout(text: Spannable, start: Int, end: Int) {
+        val signal = RelayoutSignal()
+        text.setSpan(signal, start, end, paragraphFlags(start, end))
+        text.removeSpan(signal)
+    }
+
+    private class RelayoutSignal : UpdateLayout
 
     fun blockAt(text: Spanned, position: Int): BlockSpan? {
         val (start, end) = paragraphs(text).firstOrNull { position in it.first..it.second } ?: return null
@@ -499,9 +535,10 @@ object SpannableCodec {
             previousWasNumbered = meta.type == BlockType.Numbered
 
             val baseIndent = meta.indent * style.indentStepPx
+            val spacing = Block.shownLineSpacing(meta.lineSpacing)
             when (meta.type) {
                 BlockType.Bullet ->
-                    text.setSpan(BulletSpanCompat(style, baseIndent), start, end, flags)
+                    text.setSpan(BulletSpanCompat(style, baseIndent, spacing), start, end, flags)
                 BlockType.Numbered -> {
                     if (baseIndent > 0) text.setSpan(LeadingMarginSpan.Standard(baseIndent), start, end, flags)
                     text.setSpan(NumberSpan(ordinal, style.listGapPx), start, end, flags)
@@ -511,8 +548,10 @@ object SpannableCodec {
                     text.setSpan(TodoSpan(meta.checked == true, style.listGapPx, style.accentColor), start, end, flags)
                 }
                 BlockType.Quote -> {
-                    text.setSpan(QuoteSpan(style.quoteColor), start, end, flags)
+                    // The indent goes first: margins are laid out in the order their spans were
+                    // set, and an indented quote moves its stripe in with its text.
                     if (baseIndent > 0) text.setSpan(LeadingMarginSpan.Standard(baseIndent), start, end, flags)
+                    text.setSpan(QuoteSpan(style.quoteColor, style.quoteStripePx, style.quoteGapPx), start, end, flags)
                 }
                 BlockType.Code -> {
                     text.setSpan(CodeTypefaceSpan(), start, end, flags)
@@ -528,6 +567,8 @@ object SpannableCodec {
                 // Drawn first, so a colour or link on the heading's own text is drawn over it.
                 text.setSpan(HeadingColorSpan(), start, end, flags or HeadingColorSpan.PRIORITY)
             }
+
+            if (spacing != 1f) text.setSpan(LineSpacingSpan(spacing), start, end, flags)
 
             if (meta.align != Align.Start) {
                 val alignment = when (meta.align) {
@@ -554,8 +595,12 @@ object SpannableCodec {
         if (start == end) Spannable.SPAN_INCLUSIVE_INCLUSIVE else Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
 
     @Suppress("FunctionName")
-    private fun BulletSpanCompat(style: EditorStyle, extraIndent: Int): BulletSpan =
-        BulletSpan(style.listGapPx + extraIndent, style.accentColor, style.bulletRadiusPx)
+    private fun BulletSpanCompat(style: EditorStyle, extraIndent: Int, spacing: Float): BulletSpan =
+        if (spacing == 1f) {
+            BulletSpan(style.listGapPx + extraIndent, style.accentColor, style.bulletRadiusPx)
+        } else {
+            SpacedBulletSpan(style.listGapPx + extraIndent, style.accentColor, style.bulletRadiusPx, spacing)
+        }
 
     /**
      * Paragraph ranges as [start, end) where end excludes the trailing newline. A trailing newline

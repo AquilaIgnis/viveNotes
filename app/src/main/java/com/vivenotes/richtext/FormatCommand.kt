@@ -27,6 +27,9 @@ sealed interface FormatCommand {
 
     data class SetAlign(val align: Align) : FormatCommand
 
+    /** Spaces the selected paragraphs' lines [spacing] single lines apart. */
+    data class SetLineSpacing(val spacing: Float) : FormatCommand
+
     data object ClearFormatting : FormatCommand
 
     /** Puts the caret and IME away before a Draw-tab tool starts consuming page gestures. */
@@ -91,6 +94,8 @@ data class SelectionState(
     val blockType: BlockType = BlockType.Paragraph,
     val align: Align = Align.Start,
     val indent: Int = 0,
+    /** The line spacing of the paragraph the selection starts in. */
+    val lineSpacing: Float = 1f,
     val hasSelection: Boolean = false,
     /**
      * The size the selected text is drawn at, or the size the next character typed will be when

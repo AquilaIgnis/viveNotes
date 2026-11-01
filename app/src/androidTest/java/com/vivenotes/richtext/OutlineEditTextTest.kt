@@ -142,6 +142,61 @@ class OutlineEditTextTest {
         }
     }
 
+    /**
+     * The ribbon's Line spacing changes what is laid out, not only what is drawn: a span that only
+     * TextView's redraw noticed left the lines where they were until the paragraph was next edited.
+     */
+    @Test
+    fun lineSpacingFromTheRibbonMovesTheLinesApartAndBackTogether() {
+        withEditor { view ->
+            view.setBlocks(listOf(Block(id = "b", runs = listOf(Run(List(30) { "word" }.joinToString(" "))))))
+            fun pitch(): Int {
+                view.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(RENDER_WIDTH, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED),
+                )
+                view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                val layout = view.layout
+                assertTrue(layout.lineCount >= 3)
+                return layout.getLineBaseline(2) - layout.getLineBaseline(1)
+            }
+            val single = pitch()
+            view.setSelection(3)
+
+            view.apply(FormatCommand.SetLineSpacing(2f))
+            assertEquals(2f, view.blocks().single().lineSpacing)
+            assertEquals(2f * single, pitch().toFloat(), 2f)
+
+            view.apply(FormatCommand.SetLineSpacing(1f))
+            assertEquals(single, pitch())
+        }
+    }
+
+    /** A quote's margin set from the ribbon re-wraps its text, as the quote does when the page opens. */
+    @Test
+    fun aParagraphMadeAQuoteWrapsInsideItsStripe() {
+        withEditor { view ->
+            val words = List(30) { "word" }.joinToString(" ")
+            fun ends(): List<Int> {
+                view.measure(
+                    android.view.View.MeasureSpec.makeMeasureSpec(RENDER_WIDTH, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED),
+                )
+                view.layout(0, 0, view.measuredWidth, view.measuredHeight)
+                return (0 until view.layout.lineCount).map { view.layout.getLineEnd(it) }
+            }
+            view.setBlocks(listOf(Block(id = "b", type = BlockType.Quote, runs = listOf(Run(words)))))
+            val opened = ends()
+            view.setBlocks(listOf(Block(id = "b", runs = listOf(Run(words)))))
+            assertTrue(ends() != opened)
+            view.setSelection(3)
+
+            view.apply(FormatCommand.SetBlockType(BlockType.Quote))
+
+            assertEquals(opened, ends())
+        }
+    }
+
     @Test
     fun aListStyleSetOnAnEmptyLineIsKept() {
         withEditor { view ->

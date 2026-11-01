@@ -566,6 +566,7 @@
     <string name="ribbon_align_left">Align left</string>
     <string name="ribbon_align_center">Align centre</string>
     <string name="ribbon_align_right">Align right</string>
+    <string name="ribbon_line_spacing">Line spacing</string>
     <string name="ribbon_picture">Picture</string>
     <string name="ribbon_picture_device">On device</string>
     <string name="ribbon_picture_online">Search online</string>

@@ -519,6 +519,7 @@
     <string name="ribbon_align_left">Allinea a sinistra</string>
     <string name="ribbon_align_center">Allinea al centro</string>
     <string name="ribbon_align_right">Allinea a destra</string>
+    <string name="ribbon_line_spacing">Interlinea</string>
     <string name="ribbon_picture">Immagine</string>
     <string name="ribbon_picture_device">Sul dispositivo</string>
     <string name="ribbon_picture_online">Cerca online</string>

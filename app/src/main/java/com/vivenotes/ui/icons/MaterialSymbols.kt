@@ -65,6 +65,7 @@ object MaterialSymbols {
     val FormatIndentDecrease: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_indent_decrease)
     val FormatIndentIncrease: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_indent_increase)
     val FormatItalic: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_italic)
+    val FormatLineSpacing: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_line_spacing)
     val FormatStrikethrough: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_strikethrough)
     val FormatUnderlined: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_format_underlined)
     val Function: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_function)

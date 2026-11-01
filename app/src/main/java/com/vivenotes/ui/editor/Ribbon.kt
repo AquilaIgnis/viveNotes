@@ -63,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -95,6 +96,8 @@ import com.vivenotes.ui.icons.fontColorGlyph
 import com.vivenotes.ui.theme.LocalIconAccents
 import com.vivenotes.ui.panel.FloatingSettingsPanel
 import com.vivenotes.ui.panel.colorName
+import java.text.NumberFormat
+import kotlin.math.roundToInt
 
 /**
  * Ribbon tabs from the reference UI. Each tab owns commands with the same scope as its name: File
@@ -142,6 +145,10 @@ internal object HomeTags {
     const val PICTURE_DEVICE = "home-picture-device"
     const val PICTURE_ONLINE = "home-picture-online"
     const val PICTURE_CAMERA = "home-picture-camera"
+    const val LINE_SPACING = "home-line-spacing"
+
+    /** One of the Line spacing menu's entries: 150 for 1.5. */
+    fun lineSpacing(spacing: Float): String = "$LINE_SPACING-${(spacing * 100).roundToInt()}"
 }
 
 /** Where the Picture button's menu fetches a picture from. */
@@ -619,6 +626,7 @@ private fun HomeTab(
             stringResource(R.string.ribbon_align_right),
             selection.align == Align.End,
         ) { onCommand(FormatCommand.SetAlign(Align.End)) }
+        LineSpacingPicker(selection.lineSpacing) { onCommand(FormatCommand.SetLineSpacing(it)) }
 
         Divider()
 
@@ -1281,6 +1289,57 @@ private fun ColorPicker(
                         open = false
                         onClear()
                     },
+                )
+            }
+        }
+    }
+}
+
+/** The spacings the Line spacing menu offers, as word processors do: multiples of a single line. */
+private val LINE_SPACINGS = listOf(1f, 1.15f, 1.5f, 2f, 2.5f, 3f)
+
+/** Line spacing for the paragraphs in the selection, ticking [current]. */
+@Composable
+internal fun LineSpacingPicker(current: Float, onPick: (Float) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val format = remember {
+        NumberFormat.getNumberInstance().apply {
+            minimumFractionDigits = 1
+            maximumFractionDigits = 2
+        }
+    }
+    Box(Modifier.testTag(HomeTags.LINE_SPACING)) {
+        RibbonButton(
+            MaterialSymbols.FormatLineSpacing,
+            stringResource(R.string.ribbon_line_spacing),
+            active = open,
+            dropdown = true,
+            onClick = { open = true },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            LINE_SPACINGS.forEach { spacing ->
+                val chosen = spacing == current
+                DropdownMenuItem(
+                    text = { Text(format.format(spacing.toDouble())) },
+                    leadingIcon = {
+                        if (chosen) {
+                            Icon(
+                                MaterialSymbols.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        } else {
+                            Spacer(Modifier.size(18.dp))
+                        }
+                    },
+                    onClick = {
+                        open = false
+                        onPick(spacing)
+                    },
+                    modifier = Modifier
+                        .testTag(HomeTags.lineSpacing(spacing))
+                        .semantics { selected = chosen },
                 )
             }
         }

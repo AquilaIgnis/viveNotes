@@ -540,6 +540,7 @@
     <string name="ribbon_align_left">Wyrównaj do lewej</string>
     <string name="ribbon_align_center">Wyśrodkuj</string>
     <string name="ribbon_align_right">Wyrównaj do prawej</string>
+    <string name="ribbon_line_spacing">Interlinia</string>
     <string name="ribbon_picture">Zdjęcie</string>
     <string name="ribbon_picture_device">Na urządzeniu</string>
     <string name="ribbon_picture_online">Szukaj online</string>

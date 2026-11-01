@@ -509,6 +509,7 @@
     <string name="ribbon_align_left">左揃え</string>
     <string name="ribbon_align_center">中央揃え</string>
     <string name="ribbon_align_right">右揃え</string>
+    <string name="ribbon_line_spacing">行間</string>
     <string name="ribbon_picture">画像</string>
     <string name="ribbon_picture_device">デバイス内</string>
     <string name="ribbon_picture_online">オンラインで検索</string>

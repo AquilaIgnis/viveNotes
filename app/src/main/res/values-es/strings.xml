@@ -533,6 +533,7 @@
     <string name="ribbon_align_left">Alinear a la izquierda</string>
     <string name="ribbon_align_center">Centrar</string>
     <string name="ribbon_align_right">Alinear a la derecha</string>
+    <string name="ribbon_line_spacing">Interlineado</string>
     <string name="ribbon_picture">Imagen</string>
     <string name="ribbon_picture_device">En el dispositivo</string>
     <string name="ribbon_picture_online">Buscar en línea</string>

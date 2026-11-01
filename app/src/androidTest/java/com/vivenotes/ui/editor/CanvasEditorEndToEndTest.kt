@@ -185,6 +185,30 @@ class CanvasEditorEndToEndTest {
         compose.waitUntil(5_000) { box().text.toString() == "start more" && Mark.Bold in box().marksIn(TextSelection(0, 5)) }
     }
 
+    /** Line spacing given to a text box being edited spaces its lines on screen and is saved with the page. */
+    @Test
+    fun lineSpacingSpacesTheBoxBeingEditedAndIsSaved() {
+        compose.runOnIdle {
+            val editor = box()
+            editor.requestFocus()
+            editor.setSelection(5)
+            editor.onCreateInputConnection(EditorInfo())!!.commitText(" " + List(40) { "word" }.joinToString(" "), 1)
+            editor.setSelection(2)
+        }
+        fun pitch(): Int = box().layout.let { it.getLineBaseline(2) - it.getLineBaseline(1) }
+        var single = 0
+        compose.waitUntil(5_000) { box().layout.lineCount >= 3 }
+        compose.runOnIdle { single = pitch() }
+
+        vm.send(FormatCommand.SetLineSpacing(2f))
+
+        compose.waitUntil(5_000) { vm.initialBlocksFor("box").single().lineSpacing == 2f }
+        compose.runOnIdle {
+            assertEquals(2f, box().blocks().single().lineSpacing)
+            assertEquals(2f * single, pitch().toFloat(), 2f)
+        }
+    }
+
     /** A double-tap on bare canvas offers Paste, and another app's page lands as its objects. */
     @Test
     fun theDoubleTapPasteMenuPastesAnotherAppsTableAndHeadingAsObjects() {
