@@ -813,6 +813,8 @@
     <string name="graph_show_derivative">Mostra derivata</string>
     <string name="graph_trace">Traccia e tangente</string>
     <string name="graph_area">Area sotto la curva</string>
+    <string name="tooltip_graph_equation">Traccia il grafico di questa equazione</string>
+    <string name="graph_equation_failed">Impossibile tracciare il grafico di questa formula.</string>
     <string name="graph_zoom_in">Ingrandisci</string>
     <string name="graph_zoom_out">Riduci</string>
     <string name="graph_fit">Adatta alla funzione</string>

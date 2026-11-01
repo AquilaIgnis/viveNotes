@@ -66,6 +66,8 @@ internal const val OBJECT_FILL_NONE_TAG = "object-tooltip-fill-none"
 internal const val OBJECT_LINE_TYPE_TAG = "object-tooltip-line-type"
 internal const val OBJECT_SELECT_ALL_TAG = "object-tooltip-select-all"
 internal const val OBJECT_EQUATION_EDIT_TAG = "object-tooltip-equation-edit"
+internal const val OBJECT_EQUATION_GRAPH_TAG = "object-tooltip-equation-graph"
+internal const val OBJECT_EQUATION_MATH_TAG = "object-tooltip-equation-math"
 
 /**
  * The Math button. The two menu-item tags beside it are gone with the menu itself — see
@@ -406,6 +408,57 @@ internal fun RowScope.EquationEditAction(latex: String?, onEdit: (String) -> Uni
                 open = false
             },
         )
+    }
+}
+
+/**
+ * Opens the held equation in the Math pane — solve, simplify, graph and the rest, on a formula that
+ * is already typed rather than one read off ink.
+ *
+ * Dressed as ink's [RecognitionAction] on purpose, Σ and "Math": it is the same pane and the same
+ * engine, so it is the same button. Unlike that one it needs no formula model, so it is never absent
+ * for want of one.
+ */
+@Composable
+internal fun RowScope.EquationMathAction(onOpen: () -> Unit) {
+    TextButton(
+        onClick = onOpen,
+        contentPadding = PaddingValues(horizontal = 7.dp),
+        modifier = Modifier.height(32.dp).testTag(OBJECT_EQUATION_MATH_TAG),
+    ) {
+        Icon(
+            imageVector = MaterialSymbols.Functions,
+            contentDescription = null,
+            tint = Color(0xFFE8EAED),
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(5.dp))
+        Text(
+            text = stringResource(R.string.tooltip_math),
+            color = Color(0xFFE8EAED),
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+/**
+ * Places a graph of the held equation below it — the Math pane's Graph result, for a formula that
+ * is already on the page.
+ *
+ * Absent until the engine has said the formula is one it can graph, by the bar's rule that an action
+ * a kind cannot perform is missing rather than dead: a matrix or an integral has no curve to draw.
+ */
+@Composable
+internal fun RowScope.EquationGraphAction(onGraph: () -> Unit) {
+    val description = stringResource(R.string.tooltip_graph_equation)
+    IconButton(
+        onClick = onGraph,
+        modifier = Modifier
+            .size(32.dp)
+            .testTag(OBJECT_EQUATION_GRAPH_TAG)
+            .semantics { contentDescription = description },
+    ) {
+        Icon(MaterialSymbols.AddChart, contentDescription = null, tint = Color(0xFFE8EAED), modifier = Modifier.size(18.dp))
     }
 }
 

@@ -281,4 +281,82 @@ class GraphObjectTest {
         assertTrue("the root did not move", mutated?.second is GraphDrag.Root)
         assertEquals(GraphInterval(-2.0, 2.0), graphs.value.single().area)
     }
+    /** One equation on the page; [graphable] is what the engine would answer about it. */
+    private fun setEquationPage(
+        graphable: Boolean,
+        graphed: MutableList<Outline.Equation>,
+        opened: MutableList<Outline.Equation> = mutableListOf(),
+    ) {
+        val equation = Outline.Equation(id = "eq", x = 40f, y = 40f, width = 160f, height = 48f, latex = "y=x^2-4")
+        compose.setContent {
+            density = LocalDensity.current
+            ViveNotesTheme {
+                EditorPane(
+                    title = "A page",
+                    createdAt = 0L,
+                    defaults = EditorDefaults(),
+                    style = PageStyle(hideTitle = true),
+                    zoom = 1f,
+                    onZoomPinched = {},
+                    onZoomCommitted = {},
+                    onTitleChange = {},
+                    outlines = emptyList(),
+                    pageRevision = 0,
+                    initialBlocksFor = { emptyList() },
+                    commands = commands,
+                    onBlocksChanged = { _, _ -> },
+                    onSelectionChanged = {},
+                    onCanvasSelectionChanged = {},
+                    onMarkArmed = {},
+                    onCreateOutline = { _, _ -> "outline" },
+                    textArmed = false,
+                    onMoveOutline = { _, _, _ -> },
+                    onResizeOutline = { _, _ -> },
+                    onSetOutlineMinHeight = { _, _ -> },
+                    onOutlineBlurred = {},
+                    equations = listOf(equation),
+                    graphableFormulas = object : GraphableFormulas {
+                        override fun known(latex: String): Boolean? = null
+                        override suspend fun check(latex: String): Boolean = graphable
+                    },
+                    onGraphEquation = { graphed += it },
+                    onOpenEquationInMath = { opened += it },
+                    onCanvasMeasured = { _, _ -> },
+                    showPrintMargins = false,
+                )
+            }
+        }
+        compose.waitForIdle()
+        tapPage(120f, 64f)
+    }
+
+    @Test
+    fun aGraphableEquationsToolkitGraphsIt() {
+        val graphed = mutableListOf<Outline.Equation>()
+        setEquationPage(graphable = true, graphed = graphed)
+
+        compose.onNodeWithTag(OBJECT_EQUATION_GRAPH_TAG).assertIsDisplayed().performClick()
+        compose.waitForIdle()
+
+        assertEquals(listOf("eq"), graphed.map { it.id })
+    }
+
+    @Test
+    fun anEquationThatCannotBeGraphedHasNoGraphButton() {
+        setEquationPage(graphable = false, graphed = mutableListOf())
+
+        compose.onNodeWithTag(OBJECT_EQUATION_EDIT_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_EQUATION_GRAPH_TAG).assertDoesNotExist()
+    }
+    @Test
+    fun theEquationsMathButtonOpensItInTheMathPane() {
+        val opened = mutableListOf<Outline.Equation>()
+        // Graphable or not, a formula can always go to the pane.
+        setEquationPage(graphable = false, graphed = mutableListOf(), opened = opened)
+
+        compose.onNodeWithTag(OBJECT_EQUATION_MATH_TAG).assertIsDisplayed().performClick()
+        compose.waitForIdle()
+
+        assertEquals(listOf("y=x^2-4"), opened.map { it.latex })
+    }
 }

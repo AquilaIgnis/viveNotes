@@ -121,8 +121,10 @@ import com.vivenotes.ink.InkBounds
 import com.vivenotes.math.FormulaToolsState
 import com.vivenotes.math.GraphRewrite
 import com.vivenotes.math.MathGraph
+import com.vivenotes.math.MathOperationResult
 import com.vivenotes.model.Outline
 import com.vivenotes.ui.editor.GraphRewriteInFlight
+import com.vivenotes.ui.editor.GraphableFormulas
 import com.vivenotes.math.MathEngine
 import com.vivenotes.pdf.PdfExporter
 import com.vivenotes.richtext.VideoThumbnails
@@ -211,6 +213,9 @@ private enum class AppDestination {
  * Ids rather than labels: these are matched against the action list SymPy returns.
  */
 internal val AUTOMATIC_MATH_ACTIONS = listOf("solve", "evaluate", "simplify")
+
+/** The engine's Graph action, which the equation toolkit runs on a placed formula. */
+private const val GRAPH_ACTION = "graph"
 
 @Composable
 fun NotesApp(
@@ -1000,6 +1005,69 @@ private fun NotesWorkspace(
     }
 
     /**
+     * Which equation objects can be graphed, asked of the engine once per formula and remembered
+     * for the session — so after the first time the toolkit's Graph button is there as the bar opens.
+     */
+    val graphableFormulas = remember(mathEngine) {
+        object : GraphableFormulas {
+            private val answers = HashMap<String, Boolean>()
+
+            override fun known(latex: String): Boolean? = answers[latex]
+
+            override suspend fun check(latex: String): Boolean = answers[latex] ?: try {
+                mathEngine.analyze(latex).actions.any { it.id == GRAPH_ACTION }
+            } catch (failure: Exception) {
+                false
+            }.also { answers[latex] = it }
+        }
+    }
+    /** Equations whose graph is being drawn up, so a second tap does not place a second graph. */
+    var graphingEquations by remember { mutableStateOf(emptySet<String>()) }
+
+    /**
+     * The equation toolkit's Math: the formula in the Math pane, as if it had been read off ink. The
+     * pane analyses it and runs the obvious action as it would for a lasso, and a graph placed from
+     * there lands below the equation. The pane holds a copy — editing it there leaves the equation
+     * on the page as it was.
+     *
+     * Not while ink is being read: that result would land on top of this one.
+     */
+    fun openEquationInMath(equation: Outline.Equation) {
+        if (recognitionRunning) return
+        recognitionAnchor = InkBounds(equation.x, equation.y, equation.x + equation.width, equation.y + equation.height)
+        recognition = RecognitionPanelState(kind = RecognitionOutputKind.Formula, value = equation.latex)
+        openPane = ToolPane.Recognition
+    }
+
+    /** The equation toolkit's Graph: the Math pane's Graph result, placed just below the formula. */
+    fun graphEquation(equation: Outline.Equation) {
+        if (equation.id in graphingEquations) return
+        graphingEquations = graphingEquations + equation.id
+        recognitionScope.launch {
+            try {
+                val result = try {
+                    mathEngine.execute(equation.latex, GRAPH_ACTION)
+                } catch (failure: Exception) {
+                    MathOperationResult(error = failure.message)
+                }
+                val graph = result.graph?.takeIf { it.expression != null }
+                if (graph != null) {
+                    viewModel.insertGraph(
+                        graph,
+                        InkBounds(equation.x, equation.y, equation.x + equation.width, equation.y + equation.height),
+                    )
+                } else {
+                    snackbarHostState.showSnackbar(
+                        result.error ?: resources.getString(R.string.graph_equation_failed),
+                    )
+                }
+            } finally {
+                graphingEquations = graphingEquations - equation.id
+            }
+        }
+    }
+
+    /**
      * A dragged point let go on a graph: the engine writes the new function exactly while the page
      * keeps drawing the drag, and the answer replaces it as one Undo step.
      */
@@ -1317,6 +1385,9 @@ private fun NotesWorkspace(
                                 pendingEquation = pendingEquation,
                                 graphRewrites = graphRewrites,
                                 onMutateGraph = ::mutateGraph,
+                                graphableFormulas = graphableFormulas,
+                                onGraphEquation = ::graphEquation,
+                                onOpenEquationInMath = ::openEquationInMath,
                                 modifier = Modifier.weight(1f),
                             )
                             openPane?.let { toolPane ->
@@ -1475,6 +1546,9 @@ private fun NotesWorkspace(
                                 pendingEquation = pendingEquation,
                                 graphRewrites = graphRewrites,
                                 onMutateGraph = ::mutateGraph,
+                                graphableFormulas = graphableFormulas,
+                                onGraphEquation = ::graphEquation,
+                                onOpenEquationInMath = ::openEquationInMath,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -1834,6 +1908,9 @@ private fun EditorSurface(
     pendingEquation: PendingEquation?,
     graphRewrites: Map<String, GraphRewriteInFlight>,
     onMutateGraph: (Outline.Graph, GraphDrag) -> Unit,
+    graphableFormulas: GraphableFormulas,
+    onGraphEquation: (Outline.Equation) -> Unit,
+    onOpenEquationInMath: (Outline.Equation) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // The magnifier is a sibling of the page rather than part of it, and composed after it, so it
@@ -1876,6 +1953,9 @@ private fun EditorSurface(
                 pendingEquation = pendingEquation,
                 graphRewrites = graphRewrites,
                 onMutateGraph = onMutateGraph,
+                graphableFormulas = graphableFormulas,
+                onGraphEquation = onGraphEquation,
+                onOpenEquationInMath = onOpenEquationInMath,
             )
         }
 
@@ -1974,6 +2054,9 @@ private fun PageEditor(
     pendingEquation: PendingEquation?,
     graphRewrites: Map<String, GraphRewriteInFlight>,
     onMutateGraph: (Outline.Graph, GraphDrag) -> Unit,
+    graphableFormulas: GraphableFormulas,
+    onGraphEquation: (Outline.Equation) -> Unit,
+    onOpenEquationInMath: (Outline.Equation) -> Unit,
 ) {
     val pictureText by viewModel.pictureText.collectAsStateWithLifecycle()
     val inkDescriptions by viewModel.inkDescriptions.collectAsStateWithLifecycle()
@@ -2059,6 +2142,9 @@ private fun PageEditor(
         onFitGraphs = viewModel::fitGraphs,
         onResetGraphs = viewModel::resetGraphs,
         onMutateGraph = onMutateGraph,
+        graphableFormulas = graphableFormulas,
+        onGraphEquation = onGraphEquation,
+        onOpenEquationInMath = onOpenEquationInMath,
         images = state.images,
         attachments = attachments,
         pictureText = pictureText,

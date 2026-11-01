@@ -798,6 +798,8 @@
     <string name="graph_show_derivative">導関数を表示</string>
     <string name="graph_trace">トレースと接線</string>
     <string name="graph_area">曲線の下の面積</string>
+    <string name="tooltip_graph_equation">この式のグラフを描く</string>
+    <string name="graph_equation_failed">この式はグラフにできません。</string>
     <string name="graph_zoom_in">拡大</string>
     <string name="graph_zoom_out">縮小</string>
     <string name="graph_fit">関数に合わせる</string>

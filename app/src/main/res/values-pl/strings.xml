@@ -844,6 +844,8 @@
     <string name="graph_show_derivative">Pokaż pochodną</string>
     <string name="graph_trace">Śledzenie i styczna</string>
     <string name="graph_area">Pole pod krzywą</string>
+    <string name="tooltip_graph_equation">Narysuj wykres tego równania</string>
+    <string name="graph_equation_failed">Nie można narysować wykresu tej formuły.</string>
     <string name="graph_zoom_in">Powiększ</string>
     <string name="graph_zoom_out">Pomniejsz</string>
     <string name="graph_fit">Dopasuj do funkcji</string>

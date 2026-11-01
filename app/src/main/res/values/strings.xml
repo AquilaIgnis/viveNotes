@@ -891,6 +891,8 @@
     <string name="graph_show_derivative">Show derivative</string>
     <string name="graph_trace">Trace and tangent</string>
     <string name="graph_area">Area under the curve</string>
+    <string name="tooltip_graph_equation">Graph this equation</string>
+    <string name="graph_equation_failed">This formula can\'t be graphed.</string>
     <string name="graph_zoom_in">Zoom in</string>
     <string name="graph_zoom_out">Zoom out</string>
     <string name="graph_fit">Fit to function</string>

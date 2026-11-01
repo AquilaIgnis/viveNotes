@@ -56,6 +56,25 @@ internal object GraphToolkitTags {
     const val RESET = "object-tooltip-graph-reset"
 }
 
+/**
+ * Whether a formula can be drawn as a graph, which only the math engine can say.
+ *
+ * Two halves so the button can be right on the first frame: [known] answers from what has already
+ * been asked, synchronously, and [check] asks the engine the first time a formula is seen.
+ */
+interface GraphableFormulas {
+    fun known(latex: String): Boolean?
+    suspend fun check(latex: String): Boolean
+
+    companion object {
+        /** Nothing can be graphed — where there is no engine, in previews and most tests. */
+        val None: GraphableFormulas = object : GraphableFormulas {
+            override fun known(latex: String): Boolean = false
+            override suspend fun check(latex: String): Boolean = false
+        }
+    }
+}
+
 /** What the graph's half of the toolkit can do; the page supplies each one. */
 internal class GraphToolkitActions(
     val update: ((Outline.Graph) -> Outline.Graph) -> Unit,

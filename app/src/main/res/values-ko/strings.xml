@@ -798,6 +798,8 @@
     <string name="graph_show_derivative">도함수 표시</string>
     <string name="graph_trace">추적과 접선</string>
     <string name="graph_area">곡선 아래 넓이</string>
+    <string name="tooltip_graph_equation">이 방정식의 그래프 그리기</string>
+    <string name="graph_equation_failed">이 수식은 그래프로 그릴 수 없습니다.</string>
     <string name="graph_zoom_in">확대</string>
     <string name="graph_zoom_out">축소</string>
     <string name="graph_fit">함수에 맞추기</string>

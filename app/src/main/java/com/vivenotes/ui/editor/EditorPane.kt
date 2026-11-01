@@ -56,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -413,6 +414,11 @@ fun EditorPane(
     onDeleteEquations: (Set<String>) -> Unit = {},
     onRecolorEquations: (Set<String>, Int) -> Unit = { _, _ -> },
     onEditEquation: (Set<String>, String) -> Unit = { _, _ -> },
+    /** Which formulas can be graphed, and placing one's graph below it — the equation's Graph button. */
+    graphableFormulas: GraphableFormulas = GraphableFormulas.None,
+    onGraphEquation: (Outline.Equation) -> Unit = {},
+    /** Opens an equation in the Math pane. Null where there is no pane to open, and no button. */
+    onOpenEquationInMath: ((Outline.Equation) -> Unit)? = null,
     /**
      * The graphs on the page. [onMutateGraph] receives a dragged point once it is let go; the page
      * keeps drawing that drag from [graphRewrites] until the engine's exact answer replaces it.
@@ -1798,6 +1804,19 @@ fun EditorPane(
                                 latex = selectedEquations.map { it.latex }.distinct().singleOrNull(),
                                 onEdit = { onEditEquation(held.equationIds, it) },
                             )
+                            // One formula, one graph — and one formula in the pane: several held
+                            // equations have neither a single curve nor a single source to show.
+                            selectedEquations.singleOrNull()?.let { equation ->
+                                onOpenEquationInMath?.let { open -> EquationMathAction(onOpen = { open(equation) }) }
+                                val graphable by produceState(
+                                    initialValue = graphableFormulas.known(equation.latex) ?: false,
+                                    equation.latex,
+                                    graphableFormulas,
+                                ) {
+                                    value = graphableFormulas.check(equation.latex)
+                                }
+                                if (graphable) EquationGraphAction(onGraph = { onGraphEquation(equation) })
+                            }
                         }
                         // The graph's half: mutate, and the menu of how it is drawn.
                         if (held.isGraphOnly) {
