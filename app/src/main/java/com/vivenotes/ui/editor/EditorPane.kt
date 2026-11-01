@@ -1457,6 +1457,9 @@ fun EditorPane(
                                             onResizeGraphs(setOf(id), anchorX, anchorY, scaleX, scaleY)
                                         },
                                         onMutate = onMutateGraph,
+                                        onTrace = { id, x ->
+                                            onUpdateGraphs(setOf(id)) { it.copy(traceX = x) }
+                                        },
                                         rewrites = graphRewrites,
                                         canvasExtent = canvasSize,
                                     )

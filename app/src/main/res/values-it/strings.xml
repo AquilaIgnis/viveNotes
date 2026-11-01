@@ -811,6 +811,7 @@
     <string name="graph_show_labels">Etichetta i punti</string>
     <string name="graph_show_original">Mostra originale</string>
     <string name="graph_show_derivative">Mostra derivata</string>
+    <string name="graph_trace">Traccia e tangente</string>
     <string name="graph_zoom_in">Ingrandisci</string>
     <string name="graph_zoom_out">Riduci</string>
     <string name="graph_fit">Adatta alla funzione</string>

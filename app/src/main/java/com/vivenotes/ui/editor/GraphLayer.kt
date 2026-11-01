@@ -33,6 +33,7 @@ import com.vivenotes.graph.GraphExpression
 import com.vivenotes.graph.GraphFrame
 import com.vivenotes.graph.GraphPainter
 import com.vivenotes.graph.GraphPoint
+import com.vivenotes.graph.GraphTangent
 import com.vivenotes.graph.window
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
@@ -77,6 +78,8 @@ internal fun GraphLayer(
     onMove: (graphId: String, dx: Float, dy: Float) -> Unit,
     onResize: (graphId: String, anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float) -> Unit,
     onMutate: (Outline.Graph, GraphDrag) -> Unit,
+    /** The tracer let go at a new x, in the function's units. */
+    onTrace: (graphId: String, x: Double) -> Unit = { _, _ -> },
     rewrites: Map<String, GraphRewriteInFlight> = emptyMap(),
     modifier: Modifier = Modifier,
     canvasExtent: DpSize? = null,
@@ -94,10 +97,12 @@ internal fun GraphLayer(
     val currentOnMove = rememberUpdatedState(onMove)
     val currentOnResize = rememberUpdatedState(onResize)
     val currentOnMutate = rememberUpdatedState(onMutate)
+    val currentOnTrace = rememberUpdatedState(onTrace)
 
     val resize = remember { mutableStateOf<GraphResize?>(null) }
     val move = remember { mutableStateOf<GraphMove?>(null) }
     val pointDrag = remember { mutableStateOf<GraphPointDrag?>(null) }
+    val traceDrag = remember { mutableStateOf<GraphTraceDrag?>(null) }
     val painter = remember { GraphPainter() }
     val functions = remember { GraphFunctions() }
 
@@ -131,8 +136,22 @@ internal fun GraphLayer(
 
                     val selected = all.singleOrNull { held != null && held.isGraphOnly && held.holdsGraph(it.id) }
                     val handle = selected?.takeIf { it.lockGroup == null }?.handleNear(startX, startY)
+                    // The tracer, on a selected graph — mutate or not, locked or not: sliding it reads
+                    // the curve and changes neither the function nor where the graph sits. It wins
+                    // over a point of interest under it, being the thing that was put there.
+                    val tracing = selected?.takeIf { handle == null }?.let { graph ->
+                        val at = graph.traceX ?: return@let null
+                        val function = functions.of(graph.expression) ?: return@let null
+                        val frame = graph.frame(density)
+                        val y = function.evaluate(at)
+                        val near = y.isFinite() && hypot(
+                            frame.canvasX(at) - down.position.x,
+                            frame.canvasY(y) - down.position.y,
+                        ) <= GraphFrame.POINT_REACH_DP * density
+                        graph.takeIf { near }
+                    }
                     // A point of interest under the finger, on a selected graph with mutate on.
-                    val grabbed = selected?.takeIf { it.mutable && handle == null }?.let { graph ->
+                    val grabbed = selected?.takeIf { it.mutable && handle == null && tracing == null }?.let { graph ->
                         val frame = graph.frame(density)
                         val function = functions.of(graph.expression) ?: return@let null
                         val points = GraphAnalysis.pointsOfInterest(function::evaluate, frame.window)
@@ -142,7 +161,7 @@ internal fun GraphLayer(
                     }
 
                     val target = when {
-                        handle != null || grabbed != null -> selected
+                        handle != null || grabbed != null || tracing != null -> selected
                         selected?.contains(startX, startY) == true -> selected
                         else -> all.topmostNear(startX, startY)
                     }
@@ -166,6 +185,9 @@ internal fun GraphLayer(
                             pointDrag.value?.let { drag ->
                                 if (drag.drag.changes) currentOnMutate.value(drag.graph, drag.drag)
                             }
+                            traceDrag.value?.let { drag ->
+                                if (drag.x != tracing?.traceX) currentOnTrace.value(drag.graphId, drag.x)
+                            }
                             break
                         }
                         if (!dragging && (change.position - down.position).getDistance() > slop) {
@@ -174,7 +196,17 @@ internal fun GraphLayer(
                             if (selected?.id != target.id) currentOnSelect.value(CanvasSelection.ofGraph(target))
                         }
                         if (!dragging) continue
-                        if (grabbed != null) {
+                        if (tracing != null) {
+                            // Along the curve: the finger chooses x and the function says where on
+                            // the curve that is. A point of interest within reach pulls the tracer
+                            // onto it, so a maximum's slope reads exactly 0.
+                            val frame = tracing.frame(density)
+                            val window = frame.window
+                            val x = frame.graphX(change.position.x).coerceIn(window.xMin, window.xMax)
+                            val magnet = TRACE_MAGNET_DP * density / frame.plot.width() * window.width
+                            val points = functions.pointsOf(tracing.expression, window)
+                            traceDrag.value = GraphTraceDrag(tracing.id, GraphTangent.snap(x, points, magnet, window))
+                        } else if (grabbed != null) {
                             // The function changes under the finger; the box stays where it is, locked
                             // or not — mutate is its own permission.
                             val (graph, function, point) = grabbed
@@ -217,6 +249,7 @@ internal fun GraphLayer(
                     resize.value = null
                     move.value = null
                     pointDrag.value = null
+                    traceDrag.value = null
                 }
             }
             .fillDocument(canvasExtent),
@@ -230,6 +263,7 @@ internal fun GraphLayer(
             val resizing = resize.value
             val nudging = move.value
             val dragging = pointDrag.value
+            val tracer = traceDrag.value
 
             fun previewOf(graph: Outline.Graph): Outline.Graph = when {
                 resizing?.graphId == graph.id ->
@@ -278,8 +312,10 @@ internal fun GraphLayer(
                         original = original,
                         points = points,
                         header = header,
-                        handles = graph.mutable && graph.id == single?.id && dragging == null,
+                        handles = graph.mutable && graph.id == single?.id && dragging == null && tracer == null,
                         active = dragging?.takeIf { it.graph.id == graph.id }?.drag?.let { it.pointX to it.pointY },
+                        traceX = tracer?.takeIf { it.graphId == graph.id }?.x ?: graph.traceX,
+                        traceHandle = graph.id == single?.id && dragging == null,
                     )
                 }
             }
@@ -323,6 +359,12 @@ private data class GraphResize(
 private data class GraphMove(val graphId: String, val dx: Float, val dy: Float)
 
 private data class GraphPointDrag(val graph: Outline.Graph, val drag: GraphDrag)
+
+/** The tracer in flight: preview only, written once on the lift. */
+private data class GraphTraceDrag(val graphId: String, val x: Double)
+
+/** How near a point of interest the tracer has to come to be pulled onto it. */
+private const val TRACE_MAGNET_DP = 12f
 
 private fun Outline.Graph.withLassoPreview(gesture: LassoGesture): Outline.Graph {
     val offset = gesture.previewOffset()

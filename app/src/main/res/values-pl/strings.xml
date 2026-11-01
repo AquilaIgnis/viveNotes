@@ -842,6 +842,7 @@
     <string name="graph_show_labels">Opisz punkty</string>
     <string name="graph_show_original">Pokaż oryginał</string>
     <string name="graph_show_derivative">Pokaż pochodną</string>
+    <string name="graph_trace">Śledzenie i styczna</string>
     <string name="graph_zoom_in">Powiększ</string>
     <string name="graph_zoom_out">Pomniejsz</string>
     <string name="graph_fit">Dopasuj do funkcji</string>

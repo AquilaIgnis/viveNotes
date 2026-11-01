@@ -811,6 +811,7 @@
     <string name="graph_show_labels">Étiqueter les points</string>
     <string name="graph_show_original">Afficher l\'original</string>
     <string name="graph_show_derivative">Afficher la dérivée</string>
+    <string name="graph_trace">Suivi et tangente</string>
     <string name="graph_zoom_in">Zoom avant</string>
     <string name="graph_zoom_out">Zoom arrière</string>
     <string name="graph_fit">Ajuster à la fonction</string>

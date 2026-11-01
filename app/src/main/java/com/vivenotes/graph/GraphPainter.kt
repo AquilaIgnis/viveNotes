@@ -94,6 +94,8 @@ class GraphPainter {
      * @param points the points of interest of [function] in the window.
      * @param handles whether the points are grabbable: drawn as handles rather than dots.
      * @param active the point being dragged, highlighted.
+     * @param traceX where the tracer is — the stored one, or a drag's; null draws none.
+     * @param traceHandle whether the tracer can be grabbed, which only a selected graph's can.
      */
     fun draw(
         canvas: Canvas,
@@ -105,6 +107,8 @@ class GraphPainter {
         header: RaTeXRenderer?,
         handles: Boolean = false,
         active: Pair<Double, Double>? = null,
+        traceX: Double? = frame.graph.traceX,
+        traceHandle: Boolean = false,
     ) {
         val graph = frame.graph
         val unit = frame.unit
@@ -132,9 +136,18 @@ class GraphPainter {
             drawCurve(canvas, frame, original, withAlpha(colors.curve, 0.4f), 1.8f, dashed = true)
         }
         drawCurve(canvas, frame, function, colors.curve, 2.5f, dashed = false)
+        val tangent = traceX
+            ?.takeIf { it in frame.window.xMin..frame.window.xMax }
+            ?.let { GraphTangent.at(function, it, frame.window) }
+        tangent?.let { drawTangentLine(canvas, frame, it) }
         canvas.restore()
 
-        drawPoints(canvas, frame, colors, points, handles, active)
+        // Every dot first, so no label is placed over one; then the tracer, above the dots it may
+        // sit on and labelled before the points so they make room for it; then the points' labels.
+        val taken = mutableListOf<RectF>()
+        val visible = drawDots(canvas, frame, colors, points, handles, taken)
+        tangent?.let { drawTracer(canvas, frame, colors, it, traceHandle, taken) }
+        drawLabels(canvas, frame, colors, visible, active, taken)
 
         // The box's edge, so a graph with no background still reads as one object.
         line.pathEffect = null
@@ -300,18 +313,18 @@ class GraphPainter {
         line.pathEffect = null
     }
 
-    private fun drawPoints(
+    /** The points of interest's dots, each reserved in [taken]; returns the ones in view. */
+    private fun drawDots(
         canvas: Canvas,
         frame: GraphFrame,
         colors: GraphColors,
         points: List<GraphPoint>,
         handles: Boolean,
-        active: Pair<Double, Double>?,
-    ) {
+        taken: MutableList<RectF>,
+    ): List<GraphPoint> {
         val unit = frame.unit
         val window = frame.window
         val visible = points.filter { it.x in window.xMin..window.xMax && it.y in window.yMin..window.yMax }
-        val taken = mutableListOf<RectF>()
 
         visible.forEach { point ->
             val cx = frame.canvasX(point.x)
@@ -337,7 +350,19 @@ class GraphPainter {
             }
             taken += RectF(cx - radius, cy - radius, cx + radius, cy + radius)
         }
+        return visible
+    }
 
+    /** The dragged point, then a label for each point of interest that has room for one. */
+    private fun drawLabels(
+        canvas: Canvas,
+        frame: GraphFrame,
+        colors: GraphColors,
+        visible: List<GraphPoint>,
+        active: Pair<Double, Double>?,
+        taken: MutableList<RectF>,
+    ) {
+        val unit = frame.unit
         active?.let { (x, y) ->
             val cx = frame.canvasX(x)
             val cy = frame.canvasY(y)
@@ -372,29 +397,119 @@ class GraphPainter {
         taken: MutableList<RectF>,
         force: Boolean,
     ) {
-        val unit = frame.unit
         val label = "(${formatCoordinate(x)}, ${formatCoordinate(y)})"
+        drawChip(canvas, frame, colors, frame.canvasX(x), frame.canvasY(y), listOf(label), taken, force)
+    }
+
+    /**
+     * Lines of text on a chip of paper beside a canvas point, in the first corner around it that is
+     * inside the plot and clear of [taken]; skipped when none is, unless [force]d.
+     *
+     * [stripe] colours the chip's leading edge, tying it to a line drawn in that colour. The text
+     * itself stays the page's text colour: pink type on white paper is below a readable contrast.
+     */
+    private fun drawChip(
+        canvas: Canvas,
+        frame: GraphFrame,
+        colors: GraphColors,
+        cx: Float,
+        cy: Float,
+        lines: List<String>,
+        taken: MutableList<RectF>,
+        force: Boolean,
+        stripe: Int? = null,
+        /** How far the chip stands off the point — clear of the dot drawn there, whatever its size. */
+        gapDp: Float = 7f,
+    ) {
+        val unit = frame.unit
         text.textSize = 10f * unit
         text.typeface = Typeface.DEFAULT
-        val width = text.measureText(label)
-        val height = text.textSize
+        val inset = if (stripe != null) 3f * unit else 0f
+        val width = lines.maxOf { text.measureText(it) } + inset
+        val lineHeight = text.textSize * 1.25f
+        val height = lineHeight * lines.size - (lineHeight - text.textSize)
         val pad = 3f * unit
-        val cx = frame.canvasX(x)
-        val cy = frame.canvasY(y)
+        val gap = gapDp * unit
+        val w = width + pad * 2
+        val h = height + pad * 2
         val candidates = listOf(
-            RectF(cx + 7 * unit, cy - 7 * unit - height - pad * 2, cx + 7 * unit + width + pad * 2, cy - 7 * unit),
-            RectF(cx - 7 * unit - width - pad * 2, cy - 7 * unit - height - pad * 2, cx - 7 * unit, cy - 7 * unit),
-            RectF(cx + 7 * unit, cy + 7 * unit, cx + 7 * unit + width + pad * 2, cy + 7 * unit + height + pad * 2),
-            RectF(cx - 7 * unit - width - pad * 2, cy + 7 * unit, cx - 7 * unit, cy + 7 * unit + height + pad * 2),
+            RectF(cx + gap, cy - gap - h, cx + gap + w, cy - gap),
+            RectF(cx - gap - w, cy - gap - h, cx - gap, cy - gap),
+            RectF(cx + gap, cy + gap, cx + gap + w, cy + gap + h),
+            RectF(cx - gap - w, cy + gap, cx - gap, cy + gap + h),
         )
         val chip = candidates.firstOrNull { rect ->
             frame.plot.contains(rect) && taken.none { RectF.intersects(it, rect) }
-        } ?: if (force) candidates.first() else return
+        } ?: if (force) candidates.firstOrNull { frame.plot.contains(it) } ?: candidates.first() else return
         taken += chip
         fill.color = withAlpha(colors.paper, 0.88f)
         canvas.drawRoundRect(chip, 4f * unit, 4f * unit, fill)
+        if (stripe != null) {
+            fill.color = stripe
+            canvas.drawRoundRect(chip.left, chip.top, chip.left + 2.5f * unit, chip.bottom, unit, unit, fill)
+        }
         text.color = colors.text
-        canvas.drawText(label, chip.left + pad, chip.bottom - pad - height * 0.15f, text)
+        lines.forEachIndexed { index, line ->
+            val baseline = chip.top + pad + text.textSize * 0.85f + index * lineHeight
+            canvas.drawText(line, chip.left + pad + inset, baseline, text)
+        }
+    }
+
+    /** The tangent across the whole plot, in its own colour so its equation can be matched to it. */
+    private fun drawTangentLine(canvas: Canvas, frame: GraphFrame, tangent: Tangent) {
+        if (tangent.slope == null) return
+        val left = frame.window.xMin
+        val right = frame.window.xMax
+        line.pathEffect = null
+        line.color = TANGENT_ARGB
+        line.strokeWidth = 1.6f * frame.unit
+        canvas.drawLine(
+            frame.canvasX(left),
+            frame.canvasY(tangent.lineAt(left)).coerceIn(-1e6f, 1e6f),
+            frame.canvasX(right),
+            frame.canvasY(tangent.lineAt(right)).coerceIn(-1e6f, 1e6f),
+            line,
+        )
+    }
+
+    /**
+     * The tracer: a dot on the curve, and beside it the point, the slope there and the tangent's
+     * equation — the slope named after the axes, so a velocity graph reads `dv/dt`.
+     */
+    private fun drawTracer(
+        canvas: Canvas,
+        frame: GraphFrame,
+        colors: GraphColors,
+        tangent: Tangent,
+        handle: Boolean,
+        taken: MutableList<RectF>,
+    ) {
+        val unit = frame.unit
+        if (tangent.y !in frame.window.yMin..frame.window.yMax) return
+        val cx = frame.canvasX(tangent.x)
+        val cy = frame.canvasY(tangent.y)
+        if (handle) {
+            fill.color = withAlpha(TANGENT_ARGB, 0.2f)
+            canvas.drawCircle(cx, cy, 13f * unit, fill)
+            line.pathEffect = null
+            line.color = withAlpha(TANGENT_ARGB, 0.8f)
+            line.strokeWidth = 1.2f * unit
+            canvas.drawCircle(cx, cy, 13f * unit, line)
+        }
+        fill.color = colors.paper
+        canvas.drawCircle(cx, cy, TRACER_RADIUS_DP * unit, fill)
+        fill.color = TANGENT_ARGB
+        canvas.drawCircle(cx, cy, (TRACER_RADIUS_DP - 1.5f) * unit, fill)
+        val reach = TRACER_RADIUS_DP * unit
+        taken += RectF(cx - reach, cy - reach, cx + reach, cy + reach)
+
+        val graph = frame.graph
+        val lines = buildList {
+            add("(${formatCoordinate(tangent.x)}, ${formatCoordinate(tangent.y)})")
+            tangent.slope?.let { add(GraphTangent.slopeText(it, graph.variable, graph.dependent)) }
+            GraphTangent.lineText(tangent, graph.variable, graph.dependent)?.let(::add)
+        }
+        drawChip(canvas, frame, colors, cx, cy, lines, taken, force = true, stripe = TANGENT_ARGB, gapDp = TRACER_RADIUS_DP + 2f)
     }
 
     companion object {
@@ -403,6 +518,12 @@ class GraphPainter {
 
         /** f′ in amber — the ink palette's orange, and far from the default blue. */
         const val DERIVATIVE_ARGB: Int = 0xFFF59E0B.toInt()
+
+        /** The tangent and its tracer in pink — the ink palette's, clear of the blue and the amber. */
+        const val TANGENT_ARGB: Int = 0xFFEC4899.toInt()
+
+        /** The tracer's dot with its ring of paper: larger than a point's, being the one you hold. */
+        private const val TRACER_RADIUS_DP = 7.5f
 
         /** Ticks every 60 dp or so. */
         private fun tickCount(lengthDp: Float): Int = (lengthDp / 60f).toInt().coerceIn(2, 12)

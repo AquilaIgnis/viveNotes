@@ -573,6 +573,12 @@ sealed interface Outline {
         val showDerivative: Boolean = false,
         /** Coordinates beside each point of interest. */
         val showLabels: Boolean = true,
+        /**
+         * Where the tracer sits on the curve, in the function's own units, with the tangent drawn
+         * through it; null for no tracer. Stored, so a tangent placed for a worked example stays on
+         * the page and in its PDF.
+         */
+        val traceX: Double? = null,
         /** The curve. Null draws the default blue, which reads on light and dark paper alike. */
         val colorArgb: Int? = null,
         override val lockGroup: String? = null,

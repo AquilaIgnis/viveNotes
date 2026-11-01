@@ -32,6 +32,9 @@ import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
+import com.vivenotes.graph.GraphExpression
+import com.vivenotes.graph.GraphTangent
+import com.vivenotes.graph.window
 import com.vivenotes.model.GraphBackground
 import com.vivenotes.model.Outline
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -44,6 +47,7 @@ internal object GraphToolkitTags {
     const val LABELS = "object-tooltip-graph-labels"
     const val ORIGINAL = "object-tooltip-graph-original"
     const val DERIVATIVE = "object-tooltip-graph-derivative"
+    const val TRACE = "object-tooltip-graph-trace"
     const val ZOOM_IN = "object-tooltip-graph-zoom-in"
     const val ZOOM_OUT = "object-tooltip-graph-zoom-out"
     const val FIT = "object-tooltip-graph-fit"
@@ -124,6 +128,18 @@ internal fun RowScope.GraphActions(graphs: List<Outline.Graph>, actions: GraphTo
             }
             ToggleItem(R.string.graph_show_derivative, MaterialSymbols.TrendingUp, graphs.all { it.showDerivative }, GraphToolkitTags.DERIVATIVE) { on ->
                 actions.update { it.copy(showDerivative = on) }
+            }
+            // A tracer and the tangent through it: placed mid-window, then slid along the curve.
+            ToggleItem(R.string.graph_trace, MaterialSymbols.LineAxis, graphs.all { it.traceX != null }, GraphToolkitTags.TRACE) { on ->
+                actions.update { graph ->
+                    graph.copy(
+                        traceX = if (on) {
+                            GraphExpression.parse(graph.expression)?.let { GraphTangent.start(it::evaluate, graph.window()) }
+                        } else {
+                            null
+                        },
+                    )
+                }
             }
             HorizontalDivider()
             // The zoom entries leave the menu open: zooming is pressed a few times in a row.

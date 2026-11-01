@@ -49,7 +49,7 @@ class GraphObjectTest {
      * x² − 4 on −5…5 in both directions, filling a 320 × 260 box at (40, 40) with no header, so a
      * point's place on the page is plain arithmetic: x maps to 40 + (x + 5) × 32, y to 170 − y × 26.
      */
-    private fun parabola(mutable: Boolean) = Outline.Graph(
+    private fun parabola(mutable: Boolean, traceX: Double? = null) = Outline.Graph(
         id = "graph",
         x = 40f,
         y = 40f,
@@ -63,6 +63,7 @@ class GraphObjectTest {
         yMax = 5.0,
         showEquation = false,
         mutable = mutable,
+        traceX = traceX,
     )
 
     private fun pageX(x: Double): Float = (40 + (x + 5) * 32).toFloat()
@@ -201,5 +202,43 @@ class GraphObjectTest {
         drag as GraphDrag.Shift
         assertEquals("1", drag.h.toPlainString())
         assertEquals("2", drag.k.toPlainString())
+    }
+    @Test
+    fun theTraceEntryPutsATracerMidWindow() {
+        setPage(parabola(mutable = false))
+        tapPage(100f, 80f)
+
+        compose.onNodeWithTag(GraphToolkitTags.OPTIONS).performClick()
+        compose.onNodeWithTag(GraphToolkitTags.TRACE).performClick()
+        compose.waitForIdle()
+
+        assertEquals(0.0, graphs.value.single().traceX!!, 0.0)
+    }
+
+    @Test
+    fun theTracerSlidesAlongTheCurveAndNeverMovesTheGraph() {
+        // Locked and not mutable: the tracer reads the curve and is still free to move.
+        setPage(parabola(mutable = false, traceX = 0.0).copy(lockGroup = "lock"))
+        tapPage(100f, 80f)
+
+        // Off the curve on purpose — the curve, not the finger, decides how high the tracer is.
+        dragPage(pageX(0.0), pageY(-4.0), pageX(1.4), pageY(3.0))
+
+        assertNull("the graph moved", moved)
+        assertNull("a point was dragged", mutated)
+        assertEquals(1.4, graphs.value.single().traceX!!, 1e-9)
+    }
+
+    @Test
+    fun theTracerIsPulledOntoAPointOfInterest() {
+        setPage(parabola(mutable = true, traceX = 0.0))
+        tapPage(100f, 80f)
+
+        // Let go a little short of the zero at 2: the magnet takes it the rest of the way, and
+        // with mutate on the tracer still wins over the vertex it started on.
+        dragPage(pageX(0.0), pageY(-4.0), pageX(1.85), pageY(0.0))
+
+        assertNull("a point was dragged instead of the tracer", mutated)
+        assertEquals(2.0, graphs.value.single().traceX!!, 1e-6)
     }
 }
