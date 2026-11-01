@@ -112,7 +112,7 @@ fun ColumnScope.PenPanelContent(
         ) { onChange(pen.copy(kind = PenKind.Fountain)) }
         PenKindCard(
             kind = PenKind.Calligraphy,
-            icon = MaterialSymbols.Brush,
+            icon = MaterialSymbols.CalligraphyPen,
             selected = pen.kind == PenKind.Calligraphy,
             modifier = Modifier.weight(1f),
         ) { onChange(pen.copy(kind = PenKind.Calligraphy)) }

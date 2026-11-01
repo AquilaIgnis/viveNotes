@@ -29,6 +29,7 @@ import com.vivenotes.R
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
+import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
@@ -95,7 +96,8 @@ internal object DrawTags {
  * setting, and the moment you want it is usually on another tab. See `TabStrip` in `Ribbon.kt`.
  *
  * The pens are deliberately identical — they exist so that three colours are one tap apart instead
- * of a trip through a menu — so what distinguishes them on screen is the colour of each pencil.
+ * of a trip through a menu — so what distinguishes them on screen is the colour of each pencil,
+ * and its shape: a calligraphy pen shows its nib in place of the stylus.
  *
  * Holding a pen opens its settings. Tapping the pen that is already selected does the same, because
  * a gesture nobody discovers is a gesture nobody uses.
@@ -480,7 +482,9 @@ private fun PenButton(
     onAddColor: (Int) -> Unit,
 ) {
     val swatch = Color(pen.colorArgb)
-    val stylus = MaterialSymbols.Stylus
+    // The stylus glyph is drawn tip up and is turned over; the calligraphy nib already points down.
+    val calligraphy = pen.kind == PenKind.Calligraphy
+    val glyph = if (calligraphy) MaterialSymbols.CalligraphyPen else MaterialSymbols.Stylus
     val penLabel = stringResource(R.string.draw_pen, index + 1)
 
     val background = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
@@ -507,12 +511,12 @@ private fun PenButton(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = stylus,
+                    imageVector = glyph,
                     contentDescription = penLabel,
                     tint = swatch,
                     modifier = Modifier
                         .size(19.dp)
-                        .rotate(180f),
+                        .rotate(if (calligraphy) 0f else 180f),
                 )
             }
         }

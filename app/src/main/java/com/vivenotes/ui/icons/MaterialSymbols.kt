@@ -29,8 +29,9 @@ object MaterialSymbols {
     val BackgroundNone: ImageVector @Composable get() = symbol(R.drawable.ic_background_none)
     val Block: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_block)
     val Book: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_book)
-    val Brush: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_brush)
     val Calculate: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_calculate)
+    /** Not a Google symbol: Fluent's calligraphy_pen, nib down — `ic_fluent_calligraphy_pen.xml`. */
+    val CalligraphyPen: ImageVector @Composable get() = symbol(R.drawable.ic_fluent_calligraphy_pen)
     val Category: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_category)
     val Check: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_check)
     val CheckCircle: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_check_circle)
