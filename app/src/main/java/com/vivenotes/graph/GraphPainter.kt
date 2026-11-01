@@ -7,6 +7,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import com.vivenotes.model.GraphBackground
+import com.vivenotes.model.GraphInterval
 import com.vivenotes.model.Outline
 import io.ratex.RaTeXRenderer
 import java.math.BigDecimal
@@ -96,6 +97,8 @@ class GraphPainter {
      * @param active the point being dragged, highlighted.
      * @param traceX where the tracer is — the stored one, or a drag's; null draws none.
      * @param traceHandle whether the tracer can be grabbed, which only a selected graph's can.
+     * @param area the shaded interval — the stored one, or a drag's; null draws none.
+     * @param areaHandles whether its bounds can be grabbed.
      */
     fun draw(
         canvas: Canvas,
@@ -109,6 +112,8 @@ class GraphPainter {
         active: Pair<Double, Double>? = null,
         traceX: Double? = frame.graph.traceX,
         traceHandle: Boolean = false,
+        area: GraphInterval? = frame.graph.area,
+        areaHandles: Boolean = false,
     ) {
         val graph = frame.graph
         val unit = frame.unit
@@ -127,6 +132,9 @@ class GraphPainter {
         val yStep = GraphAnalysis.niceStep(frame.window.height, tickCount(frame.plot.height() / unit))
         drawBackground(canvas, frame, colors, xStep, yStep)
         drawAxes(canvas, frame, colors, xStep, yStep)
+        // Under every curve, so the shading never hides the line it is the area of.
+        val integral = area?.let { GraphArea.integrate(function, it.from, it.to) }
+        if (area != null && integral != null) drawArea(canvas, frame, colors, function, area)
 
         if (graph.showDerivative) {
             val h = frame.window.width * 1e-5
@@ -140,13 +148,16 @@ class GraphPainter {
             ?.takeIf { it in frame.window.xMin..frame.window.xMax }
             ?.let { GraphTangent.at(function, it, frame.window) }
         tangent?.let { drawTangentLine(canvas, frame, it) }
+        area?.let { drawBounds(canvas, frame, colors, it) }
         canvas.restore()
 
         // Every dot first, so no label is placed over one; then the tracer, above the dots it may
         // sit on and labelled before the points so they make room for it; then the points' labels.
         val taken = mutableListOf<RectF>()
         val visible = drawDots(canvas, frame, colors, points, handles, taken)
+        area?.let { drawBoundTabs(canvas, frame, colors, it, areaHandles, taken) }
         tangent?.let { drawTracer(canvas, frame, colors, it, traceHandle, taken) }
+        area?.let { drawAreaLabel(canvas, frame, colors, function, it, integral, taken) }
         drawLabels(canvas, frame, colors, visible, active, taken)
 
         // The box's edge, so a graph with no background still reads as one object.
@@ -455,6 +466,132 @@ class GraphPainter {
         }
     }
 
+    /**
+     * The region between the curve and the axis, one tint above the axis and another below: the
+     * part an integral counts as negative looks it.
+     */
+    private fun drawArea(
+        canvas: Canvas,
+        frame: GraphFrame,
+        colors: GraphColors,
+        function: (Double) -> Double,
+        area: GraphInterval,
+    ) {
+        val window = frame.window
+        val lo = minOf(area.from, area.to).coerceIn(window.xMin, window.xMax)
+        val hi = maxOf(area.from, area.to).coerceIn(window.xMin, window.xMax)
+        if (hi <= lo) return
+        val plot = frame.plot
+        val far = plot.height() * 4
+        val axis = frame.canvasY(0.0).coerceIn(plot.top - far, plot.bottom + far)
+        val samples = ((frame.canvasX(hi) - frame.canvasX(lo)) / frame.unit).toInt().coerceIn(16, 1200)
+        path.reset()
+        path.moveTo(frame.canvasX(lo), axis)
+        for (i in 0..samples) {
+            val x = lo + (hi - lo) * i / samples
+            val y = function(x)
+            if (!y.isFinite()) continue
+            path.lineTo(frame.canvasX(x), frame.canvasY(y).coerceIn(plot.top - far, plot.bottom + far))
+        }
+        path.lineTo(frame.canvasX(hi), axis)
+        path.close()
+
+        val split = axis.coerceIn(plot.top, plot.bottom)
+        canvas.save()
+        canvas.clipRect(plot.left, plot.top, plot.right, split)
+        fill.color = withAlpha(colors.curve, 0.24f)
+        canvas.drawPath(path, fill)
+        canvas.restore()
+        canvas.save()
+        canvas.clipRect(plot.left, split, plot.right, plot.bottom)
+        fill.color = withAlpha(AREA_BELOW_ARGB, 0.28f)
+        canvas.drawPath(path, fill)
+        canvas.restore()
+    }
+
+    /** Each bound, dashed from the top of the plot to the bottom. */
+    private fun drawBounds(canvas: Canvas, frame: GraphFrame, colors: GraphColors, area: GraphInterval) {
+        line.color = withAlpha(colors.text, 0.55f)
+        line.strokeWidth = 1.2f * frame.unit
+        line.pathEffect = DashPathEffect(floatArrayOf(4f * frame.unit, 3f * frame.unit), 0f)
+        listOf(area.from, area.to).forEach { x ->
+            if (x !in frame.window.xMin..frame.window.xMax) return@forEach
+            val cx = frame.canvasX(x)
+            canvas.drawLine(cx, frame.plot.top, cx, frame.plot.bottom, line)
+        }
+        line.pathEffect = null
+    }
+
+    /**
+     * A tab at the foot of each bound with the bound's value: the number a student reads off, and,
+     * on a selected graph, what a finger takes hold of.
+     */
+    private fun drawBoundTabs(
+        canvas: Canvas,
+        frame: GraphFrame,
+        colors: GraphColors,
+        area: GraphInterval,
+        handles: Boolean,
+        taken: MutableList<RectF>,
+    ) {
+        val unit = frame.unit
+        text.textSize = 10f * unit
+        text.typeface = Typeface.DEFAULT
+        listOf(area.from, area.to).forEach { x ->
+            if (x !in frame.window.xMin..frame.window.xMax) return@forEach
+            val label = GraphTangent.number(x)
+            val width = text.measureText(label) + 10f * unit
+            val height = text.textSize + 8f * unit
+            val cx = frame.canvasX(x)
+            val tab = RectF(cx - width / 2, frame.plot.bottom - height - 3f * unit, cx + width / 2, frame.plot.bottom - 3f * unit)
+            if (tab.left < frame.plot.left) tab.offset(frame.plot.left - tab.left, 0f)
+            if (tab.right > frame.plot.right) tab.offset(frame.plot.right - tab.right, 0f)
+            fill.color = if (handles) colors.curve else withAlpha(colors.paper, 0.92f)
+            canvas.drawRoundRect(tab, height / 2, height / 2, fill)
+            line.pathEffect = null
+            line.color = colors.curve
+            line.strokeWidth = 1.2f * unit
+            canvas.drawRoundRect(tab, height / 2, height / 2, line)
+            text.color = if (handles) colors.paper else colors.text
+            canvas.drawText(label, tab.centerX() - text.measureText(label) / 2, tab.bottom - 4.5f * unit, text)
+            taken += tab
+        }
+    }
+
+    /**
+     * The integral's value inside the shaded region — and, when the curve crosses the axis between
+     * the bounds, the area counting both sides as well: displacement and distance on a velocity
+     * graph. A dash where the integral has no value, across a pole.
+     */
+    private fun drawAreaLabel(
+        canvas: Canvas,
+        frame: GraphFrame,
+        colors: GraphColors,
+        function: (Double) -> Double,
+        area: GraphInterval,
+        integral: AreaValue?,
+        taken: MutableList<RectF>,
+    ) {
+        val graph = frame.graph
+        val window = frame.window
+        val lo = maxOf(minOf(area.from, area.to), window.xMin)
+        val hi = minOf(maxOf(area.from, area.to), window.xMax)
+        if (hi < lo) return
+        val lines = if (integral == null) {
+            listOf("∫ ${graph.dependent} d${graph.variable} = —")
+        } else {
+            listOfNotNull(
+                GraphArea.netText(integral, graph.variable, graph.dependent),
+                GraphArea.totalText(integral, graph.variable, graph.dependent).takeIf { integral.crosses },
+            )
+        }
+        val middle = (lo + hi) / 2
+        val height = function(middle).takeIf { it.isFinite() }?.div(2) ?: 0.0
+        val cx = frame.canvasX(middle)
+        val cy = frame.canvasY(height).coerceIn(frame.plot.top, frame.plot.bottom)
+        drawChip(canvas, frame, colors, cx, cy, lines, taken, force = true, stripe = colors.curve, gapDp = 2f)
+    }
+
     /** The tangent across the whole plot, in its own colour so its equation can be matched to it. */
     private fun drawTangentLine(canvas: Canvas, frame: GraphFrame, tangent: Tangent) {
         if (tangent.slope == null) return
@@ -521,6 +658,9 @@ class GraphPainter {
 
         /** The tangent and its tracer in pink — the ink palette's, clear of the blue and the amber. */
         const val TANGENT_ARGB: Int = 0xFFEC4899.toInt()
+
+        /** The part of an area below the axis, counted negative: Tailwind violet 500. */
+        const val AREA_BELOW_ARGB: Int = 0xFF8B5CF6.toInt()
 
         /** The tracer's dot with its ring of paper: larger than a point's, being the one you hold. */
         private const val TRACER_RADIUS_DP = 7.5f

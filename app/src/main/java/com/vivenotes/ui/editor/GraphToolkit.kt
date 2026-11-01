@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
+import com.vivenotes.graph.GraphArea
 import com.vivenotes.graph.GraphExpression
 import com.vivenotes.graph.GraphTangent
 import com.vivenotes.graph.window
@@ -48,6 +49,7 @@ internal object GraphToolkitTags {
     const val ORIGINAL = "object-tooltip-graph-original"
     const val DERIVATIVE = "object-tooltip-graph-derivative"
     const val TRACE = "object-tooltip-graph-trace"
+    const val AREA = "object-tooltip-graph-area"
     const val ZOOM_IN = "object-tooltip-graph-zoom-in"
     const val ZOOM_OUT = "object-tooltip-graph-zoom-out"
     const val FIT = "object-tooltip-graph-fit"
@@ -135,6 +137,18 @@ internal fun RowScope.GraphActions(graphs: List<Outline.Graph>, actions: GraphTo
                     graph.copy(
                         traceX = if (on) {
                             GraphExpression.parse(graph.expression)?.let { GraphTangent.start(it::evaluate, graph.window()) }
+                        } else {
+                            null
+                        },
+                    )
+                }
+            }
+            // The area under the curve, starting between the zeros nearest the middle of the view.
+            ToggleItem(R.string.graph_area, MaterialSymbols.AreaChart, graphs.all { it.area != null }, GraphToolkitTags.AREA) { on ->
+                actions.update { graph ->
+                    graph.copy(
+                        area = if (on) {
+                            GraphExpression.parse(graph.expression)?.let { GraphArea.start(it::evaluate, graph.window()) }
                         } else {
                             null
                         },

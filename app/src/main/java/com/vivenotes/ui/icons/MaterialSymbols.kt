@@ -18,6 +18,7 @@ object MaterialSymbols {
     val AddChart: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_chart)
     val AddColumnRight: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_column_right)
     val AddRowBelow: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_add_row_below)
+    val AreaChart: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_area_chart)
     val ArrowBack: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_back)
     val ArrowDownward: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_downward)
     val ArrowDropDown: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_arrow_drop_down)

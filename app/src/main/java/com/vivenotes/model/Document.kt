@@ -579,6 +579,11 @@ sealed interface Outline {
          * the page and in its PDF.
          */
         val traceX: Double? = null,
+        /**
+         * The bounds of the shaded area under the curve, in the function's units; null for none.
+         * One field rather than two, so an area can never be half set.
+         */
+        val area: GraphInterval? = null,
         /** The curve. Null draws the default blue, which reads on light and dark paper alike. */
         val colorArgb: Int? = null,
         override val lockGroup: String? = null,
@@ -807,6 +812,13 @@ sealed interface Outline {
         override val lockGroup: String? = null,
     ) : Outline
 }
+
+/**
+ * A stretch of a graph's horizontal axis. [from] may be past [to]: the integral then changes sign,
+ * as it does on paper.
+ */
+@Serializable
+data class GraphInterval(val from: Double, val to: Double)
 
 /** What is drawn behind a graph's curve — the Graph Class's three. */
 @Serializable

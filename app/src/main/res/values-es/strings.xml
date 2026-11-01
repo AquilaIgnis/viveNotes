@@ -840,6 +840,7 @@
     <string name="graph_show_original">Mostrar original</string>
     <string name="graph_show_derivative">Mostrar derivada</string>
     <string name="graph_trace">Trazar y tangente</string>
+    <string name="graph_area">Área bajo la curva</string>
     <string name="graph_zoom_in">Acercar</string>
     <string name="graph_zoom_out">Alejar</string>
     <string name="graph_fit">Ajustar a la función</string>

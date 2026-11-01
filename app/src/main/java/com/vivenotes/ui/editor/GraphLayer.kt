@@ -39,9 +39,11 @@ import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
 import com.vivenotes.ink.pageBounds
+import com.vivenotes.model.GraphInterval
 import com.vivenotes.model.Outline
 import com.vivenotes.richtext.createEquationRenderer
 import io.ratex.RaTeXRenderer
+import kotlin.math.abs
 import kotlin.math.hypot
 
 internal const val GRAPH_LAYER_TAG = "graph-layer"
@@ -80,6 +82,8 @@ internal fun GraphLayer(
     onMutate: (Outline.Graph, GraphDrag) -> Unit,
     /** The tracer let go at a new x, in the function's units. */
     onTrace: (graphId: String, x: Double) -> Unit = { _, _ -> },
+    /** The area's bounds after one of them was let go. */
+    onArea: (graphId: String, area: GraphInterval) -> Unit = { _, _ -> },
     rewrites: Map<String, GraphRewriteInFlight> = emptyMap(),
     modifier: Modifier = Modifier,
     canvasExtent: DpSize? = null,
@@ -98,11 +102,13 @@ internal fun GraphLayer(
     val currentOnResize = rememberUpdatedState(onResize)
     val currentOnMutate = rememberUpdatedState(onMutate)
     val currentOnTrace = rememberUpdatedState(onTrace)
+    val currentOnArea = rememberUpdatedState(onArea)
 
     val resize = remember { mutableStateOf<GraphResize?>(null) }
     val move = remember { mutableStateOf<GraphMove?>(null) }
     val pointDrag = remember { mutableStateOf<GraphPointDrag?>(null) }
     val traceDrag = remember { mutableStateOf<GraphTraceDrag?>(null) }
+    val areaDrag = remember { mutableStateOf<GraphAreaDrag?>(null) }
     val painter = remember { GraphPainter() }
     val functions = remember { GraphFunctions() }
 
@@ -160,8 +166,24 @@ internal fun GraphLayer(
                         }
                     }
 
+                    // One of the area's bounds: its dashed line, anywhere down the plot, or the tab at its
+                    // foot. After the points, so with mutate on a zero a bound sits on still moves the
+                    // root — the bound is reachable anywhere else along its line.
+                    val bounding = selected
+                        ?.takeIf { handle == null && tracing == null && grabbed == null }
+                        ?.let { graph ->
+                            val area = graph.area ?: return@let null
+                            val frame = graph.frame(density)
+                            if (!frame.plot.contains(down.position.x, down.position.y)) return@let null
+                            listOf(true to area.from, false to area.to)
+                                .filter { (_, x) -> x in frame.window.xMin..frame.window.xMax }
+                                .minByOrNull { (_, x) -> abs(frame.canvasX(x) - down.position.x) }
+                                ?.takeIf { (_, x) -> abs(frame.canvasX(x) - down.position.x) <= BOUND_REACH_DP * density }
+                                ?.let { (isFrom, _) -> GraphBoundGrab(graph, isFrom) }
+                        }
+
                     val target = when {
-                        handle != null || grabbed != null || tracing != null -> selected
+                        handle != null || grabbed != null || tracing != null || bounding != null -> selected
                         selected?.contains(startX, startY) == true -> selected
                         else -> all.topmostNear(startX, startY)
                     }
@@ -188,6 +210,9 @@ internal fun GraphLayer(
                             traceDrag.value?.let { drag ->
                                 if (drag.x != tracing?.traceX) currentOnTrace.value(drag.graphId, drag.x)
                             }
+                            areaDrag.value?.let { drag ->
+                                if (drag.area != bounding?.graph?.area) currentOnArea.value(drag.graphId, drag.area)
+                            }
                             break
                         }
                         if (!dragging && (change.position - down.position).getDistance() > slop) {
@@ -196,7 +221,22 @@ internal fun GraphLayer(
                             if (selected?.id != target.id) currentOnSelect.value(CanvasSelection.ofGraph(target))
                         }
                         if (!dragging) continue
-                        if (tracing != null) {
+                        if (bounding != null) {
+                            // Sideways only, pulled onto a point of interest within reach as the
+                            // tracer is — a zero, most often — and otherwise onto the fine grid. A
+                            // bound may cross the other one; the integral then changes sign.
+                            val graph = bounding.graph
+                            val area = graph.area ?: continue
+                            val frame = graph.frame(density)
+                            val window = frame.window
+                            val x = frame.graphX(change.position.x).coerceIn(window.xMin, window.xMax)
+                            val magnet = TRACE_MAGNET_DP * density / frame.plot.width() * window.width
+                            val snapped = GraphTangent.snap(x, functions.pointsOf(graph.expression, window), magnet, window)
+                            areaDrag.value = GraphAreaDrag(
+                                graph.id,
+                                if (bounding.isFrom) area.copy(from = snapped) else area.copy(to = snapped),
+                            )
+                        } else if (tracing != null) {
                             // Along the curve: the finger chooses x and the function says where on
                             // the curve that is. A point of interest within reach pulls the tracer
                             // onto it, so a maximum's slope reads exactly 0.
@@ -250,6 +290,7 @@ internal fun GraphLayer(
                     move.value = null
                     pointDrag.value = null
                     traceDrag.value = null
+                    areaDrag.value = null
                 }
             }
             .fillDocument(canvasExtent),
@@ -264,6 +305,7 @@ internal fun GraphLayer(
             val nudging = move.value
             val dragging = pointDrag.value
             val tracer = traceDrag.value
+            val bounds = areaDrag.value
 
             fun previewOf(graph: Outline.Graph): Outline.Graph = when {
                 resizing?.graphId == graph.id ->
@@ -312,10 +354,13 @@ internal fun GraphLayer(
                         original = original,
                         points = points,
                         header = header,
-                        handles = graph.mutable && graph.id == single?.id && dragging == null && tracer == null,
+                        handles = graph.mutable && graph.id == single?.id && dragging == null && tracer == null &&
+                            bounds == null,
                         active = dragging?.takeIf { it.graph.id == graph.id }?.drag?.let { it.pointX to it.pointY },
                         traceX = tracer?.takeIf { it.graphId == graph.id }?.x ?: graph.traceX,
                         traceHandle = graph.id == single?.id && dragging == null,
+                        area = bounds?.takeIf { it.graphId == graph.id }?.area ?: graph.area,
+                        areaHandles = graph.id == single?.id && dragging == null,
                     )
                 }
             }
@@ -362,6 +407,15 @@ private data class GraphPointDrag(val graph: Outline.Graph, val drag: GraphDrag)
 
 /** The tracer in flight: preview only, written once on the lift. */
 private data class GraphTraceDrag(val graphId: String, val x: Double)
+
+/** One end of an area taken hold of. */
+private data class GraphBoundGrab(val graph: Outline.Graph, val isFrom: Boolean)
+
+/** An area's bounds in flight: preview only, written once on the lift. */
+private data class GraphAreaDrag(val graphId: String, val area: GraphInterval)
+
+/** How far either side of a bound's line a finger may land and still take it. */
+private const val BOUND_REACH_DP = 14f
 
 /** How near a point of interest the tracer has to come to be pulled onto it. */
 private const val TRACE_MAGNET_DP = 12f

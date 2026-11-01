@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.graph.GraphDrag
+import com.vivenotes.model.GraphInterval
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageStyle
 import com.vivenotes.richtext.FormatCommand
@@ -49,7 +50,7 @@ class GraphObjectTest {
      * x² − 4 on −5…5 in both directions, filling a 320 × 260 box at (40, 40) with no header, so a
      * point's place on the page is plain arithmetic: x maps to 40 + (x + 5) × 32, y to 170 − y × 26.
      */
-    private fun parabola(mutable: Boolean, traceX: Double? = null) = Outline.Graph(
+    private fun parabola(mutable: Boolean, traceX: Double? = null, area: GraphInterval? = null) = Outline.Graph(
         id = "graph",
         x = 40f,
         y = 40f,
@@ -64,6 +65,7 @@ class GraphObjectTest {
         showEquation = false,
         mutable = mutable,
         traceX = traceX,
+        area = area,
     )
 
     private fun pageX(x: Double): Float = (40 + (x + 5) * 32).toFloat()
@@ -240,5 +242,43 @@ class GraphObjectTest {
 
         assertNull("a point was dragged instead of the tracer", mutated)
         assertEquals(2.0, graphs.value.single().traceX!!, 1e-6)
+    }
+    @Test
+    fun theAreaEntryShadesBetweenTheZeros() {
+        setPage(parabola(mutable = false))
+        tapPage(100f, 80f)
+
+        compose.onNodeWithTag(GraphToolkitTags.OPTIONS).performClick()
+        compose.onNodeWithTag(GraphToolkitTags.AREA).performClick()
+        compose.waitForIdle()
+
+        val area = graphs.value.single().area!!
+        assertEquals(-2.0, area.from, 1e-6)
+        assertEquals(2.0, area.to, 1e-6)
+    }
+
+    @Test
+    fun aBoundIsDraggedByItsLine() {
+        setPage(parabola(mutable = false, area = GraphInterval(-2.0, 2.0)))
+        tapPage(100f, 80f)
+
+        // High up the dashed line, well away from the zero it stands on.
+        dragPage(pageX(2.0), pageY(3.0), pageX(3.0), pageY(3.0))
+
+        assertNull("the graph moved", moved)
+        val area = graphs.value.single().area!!
+        assertEquals(-2.0, area.from, 1e-6)
+        assertEquals(3.0, area.to, 1e-9)
+    }
+
+    @Test
+    fun withMutateOnAZeroUnderABoundStillMovesTheRoot() {
+        setPage(parabola(mutable = true, area = GraphInterval(-2.0, 2.0)))
+        tapPage(100f, 80f)
+
+        dragPage(pageX(2.0), pageY(0.0), pageX(3.0), pageY(0.0))
+
+        assertTrue("the root did not move", mutated?.second is GraphDrag.Root)
+        assertEquals(GraphInterval(-2.0, 2.0), graphs.value.single().area)
     }
 }

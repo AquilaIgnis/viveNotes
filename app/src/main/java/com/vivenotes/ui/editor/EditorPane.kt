@@ -1460,6 +1460,9 @@ fun EditorPane(
                                         onTrace = { id, x ->
                                             onUpdateGraphs(setOf(id)) { it.copy(traceX = x) }
                                         },
+                                        onArea = { id, area ->
+                                            onUpdateGraphs(setOf(id)) { it.copy(area = area) }
+                                        },
                                         rewrites = graphRewrites,
                                         canvasExtent = canvasSize,
                                     )
