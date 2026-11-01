@@ -378,6 +378,13 @@ sealed interface DrawTool {
     /** One highlighter, not three: its colour is the only thing to swap and the row is short. */
     data object Highlighter : DrawTool
 
+    /**
+     * Laser pointer: a dot under the pen and a short tail that fades behind it, for pointing at what
+     * is already on the page. It leaves nothing behind — no stroke, no history step, no row — so it
+     * carries no settings either. See `com.vivenotes.ui.editor.LaserPointer`.
+     */
+    data object Laser : DrawTool
+
     data object Eraser : DrawTool
 
     /**

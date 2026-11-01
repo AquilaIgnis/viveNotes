@@ -4,6 +4,7 @@ import android.graphics.DashPathEffect
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
@@ -23,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -31,6 +33,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
@@ -167,6 +170,11 @@ internal fun InkOverlay(
      */
     insertingSpace: Boolean = false,
     /**
+     * Whether the laser pointer is in hand. A flag for the reason [insertingSpace] is one: it has
+     * nothing to configure, and nothing it does outlives the gesture. See [LaserPointer].
+     */
+    laserPointing: Boolean = false,
+    /**
      * The ruler lying on the page, or null when it is away.
      *
      * Drawn here because this canvas is composed in every tool state, and applied here because the
@@ -250,6 +258,7 @@ internal fun InkOverlay(
     val currentShaping by rememberUpdatedState(shaping)
     val currentInsertingSpace by rememberUpdatedState(insertingSpace)
     val currentOnInsertSpace by rememberUpdatedState(onInsertSpace)
+    val currentLaserPointing by rememberUpdatedState(laserPointing)
     val currentRuler by rememberUpdatedState(ruler)
     val currentEraser by rememberUpdatedState(eraser)
     val currentAllowFinger by rememberUpdatedState(allowFinger)
@@ -306,6 +315,9 @@ internal fun InkOverlay(
     val shapeGesture = remember { ShapeGesture() }
     val straightenHold = remember { StraightenHold() }
     val insertSpaceGesture = remember { InsertSpaceGesture() }
+    val laser = remember { LaserPointer() }
+    val density = LocalDensity.current.density
+    val laserPaint = remember(density) { LaserPaint(density) }
     val viewConfiguration = LocalViewConfiguration.current
     val doubleTap = remember(viewConfiguration) {
         DoubleTapGesture(
@@ -326,6 +338,24 @@ internal fun InkOverlay(
     }
     LaunchedEffect(insertingSpace) {
         if (!insertingSpace) insertSpaceGesture.clear()
+    }
+    LaunchedEffect(laserPointing) {
+        if (!laserPointing) laser.clear()
+    }
+
+    // The laser's clock. Its trace thins away and its dot fades with no motion event arriving, so
+    // the overlay has to ask for frames itself — but only while something is actually changing,
+    // which is what [LaserPointer.wakeups] restarts this on. A pen held still with its trace spent
+    // costs nothing.
+    //
+    // Aged against the uptime clock the marks are stamped from, not the frame time, which is on
+    // another base.
+    LaunchedEffect(laser) {
+        snapshotFlow { laser.wakeups }.collectLatest {
+            while (laser.animating) {
+                withFrameMillis { laser.tick(SystemClock.uptimeMillis()) }
+            }
+        }
     }
     LaunchedEffect(strokes) {
         eraseGesture.reconcileCommittedStrokes()
@@ -427,7 +457,8 @@ internal fun InkOverlay(
         )
     }
     /** Whether anything in hand owns the page's gestures — the condition the touch filter is on. */
-    val armed = brush != null || erasing || lassoing || shaping != null || insertingSpace
+    val armed = brush != null || erasing || lassoing || shaping != null || insertingSpace ||
+        laserPointing
 
     Box(
         modifier
@@ -456,6 +487,7 @@ internal fun InkOverlay(
             val gestureRevision = lassoGesture.renderRevision
             val shapeRevision = shapeGesture.renderRevision
             val spaceRevision = insertSpaceGesture.renderRevision
+            val laserRevision = laser.renderRevision
             val matrix = currentTransform()
             // The window in page units, so a stroke that cannot be seen is not drawn. On a densely
             // handwritten page this is the difference between drawing a screenful and drawing ten
@@ -525,6 +557,11 @@ internal fun InkOverlay(
                 }
                 // Last, so it lies on top of the ink the way a ruler lies on top of the paper.
                 currentRuler?.let { drawRuler(native, matrix, it, rulerPaint) }
+                // Except for the laser, which is light rather than an object, and lands on the
+                // ruler as readily as on the page under it.
+                if (laserRevision >= 0) {
+                    laser.draw(native, matrix, SystemClock.uptimeMillis(), laserPaint, renderer)
+                }
             }
         }
 
@@ -669,6 +706,8 @@ internal fun InkOverlay(
                             insertingSpace = currentInsertingSpace,
                             insertSpaceGesture = insertSpaceGesture,
                             onInsertSpace = currentOnInsertSpace,
+                            laser = laser.takeIf { currentLaserPointing },
+                            laserWidth = laserPaint.traceWidth,
                             touchSlop = viewConfiguration.touchSlop,
                         )
                         pastePoint?.let(currentOnRequestPaste)
@@ -867,6 +906,10 @@ private fun handleInk(
     insertingSpace: Boolean,
     insertSpaceGesture: InsertSpaceGesture,
     onInsertSpace: (SpaceCut) -> Unit,
+    /** The laser pointer, or null when it is not the tool in hand. */
+    laser: LaserPointer?,
+    /** The laser trace's width, in view pixels. */
+    laserWidth: Float,
     touchSlop: Float,
 ): Boolean {
     val index = event.actionIndex
@@ -933,6 +976,16 @@ private fun handleInk(
             onMoveGraphs = onMoveGraphs,
             onResizeGraphs = onResizeGraphs,
         )
+    }
+
+    // The tip only. Turning the pen over still erases, as it does with a pen in hand: the laser
+    // leaves nothing on the page, so the flip cannot mean anything else.
+    if (laser != null && toolType != MotionEvent.TOOL_TYPE_ERASER) {
+        if (isDirectTouch && !allowFinger) {
+            return panPage(event, pan, velocity, panning, lastPan, setPanning)
+        }
+        val toPage = Matrix().also { transform.invert(it) }
+        return laser.handle(event, toPage, laserWidth)
     }
 
     if (view == null) return false

@@ -81,6 +81,7 @@ internal object DrawTags {
     const val REDO = "draw-redo"
     const val ERASER = "draw-eraser"
     const val HIGHLIGHTER = "draw-highlighter"
+    const val LASER = "draw-laser"
     const val LASSO = "draw-lasso"
     const val RULER = "draw-ruler"
     const val INSERT_SPACE = "draw-insert-space"
@@ -107,6 +108,9 @@ internal object DrawTags {
  *
  * Insert Space is the odd one out and has no settings at all: it edits the emptiness rather than any
  * object, and how much of it is the drag itself — see `com.vivenotes.model.PageSpace`.
+ *
+ * The laser pointer has none either, for a different reason: it leaves nothing behind to configure.
+ * It sits with the pens because it is held like one — see [LaserPointer].
  *
  * The finger button is not in this tray either, and a release APK does not carry it anywhere in the
  * ribbon: it is a debug convenience, because an emulator has no stylus. *Let a finger draw* in
@@ -182,6 +186,17 @@ internal fun DrawTab(
             onDismiss = { highlighterSettingsOpen = false },
             onChange = actions.updateHighlighter,
         )
+
+        // The last of the things held like a pen, and the one that lays nothing down. A plain
+        // button, like Insert Space: tapping it again has no settings to open.
+        Box(Modifier.testTag(DrawTags.LASER)) {
+            RibbonButton(
+                icon = MaterialSymbols.StylusLaserPointer,
+                label = stringResource(R.string.draw_laser_pointer),
+                active = tool == DrawTool.Laser,
+                onClick = { actions.selectTool(DrawTool.Laser) },
+            )
+        }
 
         Divider()
 

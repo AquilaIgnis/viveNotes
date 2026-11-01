@@ -552,6 +552,7 @@
     <string name="draw_calculator">Calculatrice</string>
     <string name="draw_calculator_close">Fermer la calculatrice</string>
     <string name="draw_highlighter">Surligneur</string>
+    <string name="draw_laser_pointer">Pointeur laser</string>
     <string name="draw_ruler">Règle</string>
     <string name="draw_ruler_put_away">Ranger la règle</string>
     <string name="draw_eraser">Gomme</string>

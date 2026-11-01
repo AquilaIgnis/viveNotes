@@ -459,6 +459,8 @@ fun EditorPane(
      */
     insertingSpace: Boolean = false,
     onInsertSpace: (SpaceCut) -> Unit = {},
+    /** The laser pointer in hand: the pen points, and nothing it does reaches the page. */
+    laserPointing: Boolean = false,
     eraser: EraserSettings = EraserSettings(),
     allowFinger: Boolean = false,
     onStrokeFinished: (InkStroke) -> Unit = {},
@@ -1628,6 +1630,7 @@ fun EditorPane(
                 lassoing = lassoing,
                 shaping = shaping,
                 insertingSpace = insertingSpace,
+                laserPointing = laserPointing,
                 ruler = laidRuler,
                 eraser = eraser,
                 allowFinger = allowFinger,

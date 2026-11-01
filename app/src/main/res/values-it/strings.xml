@@ -552,6 +552,7 @@
     <string name="draw_calculator">Calcolatrice</string>
     <string name="draw_calculator_close">Chiudi calcolatrice</string>
     <string name="draw_highlighter">Evidenziatore</string>
+    <string name="draw_laser_pointer">Puntatore laser</string>
     <string name="draw_ruler">Righello</string>
     <string name="draw_ruler_put_away">Metti via il righello</string>
     <string name="draw_eraser">Gomma</string>

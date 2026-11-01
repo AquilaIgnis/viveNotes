@@ -542,6 +542,7 @@
     <string name="draw_calculator">계산기</string>
     <string name="draw_calculator_close">계산기 닫기</string>
     <string name="draw_highlighter">형광펜</string>
+    <string name="draw_laser_pointer">레이저 포인터</string>
     <string name="draw_ruler">자</string>
     <string name="draw_ruler_put_away">자 치우기</string>
     <string name="draw_eraser">지우개</string>

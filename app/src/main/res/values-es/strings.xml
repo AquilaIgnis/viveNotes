@@ -567,6 +567,7 @@
     <string name="draw_calculator">Calculadora</string>
     <string name="draw_calculator_close">Cerrar calculadora</string>
     <string name="draw_highlighter">Resaltador</string>
+    <string name="draw_laser_pointer">Puntero láser</string>
     <string name="draw_ruler">Regla</string>
     <string name="draw_ruler_put_away">Guardar la regla</string>
     <string name="draw_eraser">Borrador</string>

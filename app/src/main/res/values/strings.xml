@@ -601,6 +601,7 @@
     <string name="draw_calculator">Calculator</string>
     <string name="draw_calculator_close">Close calculator</string>
     <string name="draw_highlighter">Highlighter</string>
+    <string name="draw_laser_pointer">Laser pointer</string>
     <string name="draw_ruler">Ruler</string>
     <string name="draw_ruler_put_away">Put the ruler away</string>
     <string name="draw_eraser">Eraser</string>

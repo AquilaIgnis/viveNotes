@@ -256,6 +256,37 @@ class DrawTabTest {
     }
 
     @Test
+    fun theLaserPointerIsPickedUp() {
+        setTab()
+        compose.onNodeWithTag(DrawTags.LASER).performClick()
+        assertEquals(DrawTool.Laser, selected)
+    }
+
+    /** Held like a pen, so it sits with them — after the highlighter, before the eraser. */
+    @Test
+    fun theLaserPointerSitsBetweenTheHighlighterAndTheEraser() {
+        setTab()
+        val highlighter = compose.onNodeWithTag(DrawTags.HIGHLIGHTER).fetchSemanticsNode().boundsInRoot
+        val laser = compose.onNodeWithTag(DrawTags.LASER).fetchSemanticsNode().boundsInRoot
+        val eraser = compose.onNodeWithTag(DrawTags.ERASER).fetchSemanticsNode().boundsInRoot
+
+        assertTrue("$laser is not right of $highlighter", laser.left >= highlighter.right)
+        assertTrue("$laser is not left of $eraser", laser.right <= eraser.left)
+    }
+
+    /** Nothing it leaves behind, so nothing to configure: tapping it armed opens no pane. */
+    @Test
+    fun tappingTheArmedLaserPointerOpensNoSettings() {
+        setTab(tool = DrawTool.Laser)
+
+        compose.onNodeWithTag(DrawTags.LASER).performClick()
+
+        assertEquals(DrawTool.Laser, selected)
+        compose.onNodeWithTag(PenPanelTags.PREVIEW).assertDoesNotExist()
+        compose.onNodeWithTag(HighlighterPanelTags.PREVIEW).assertDoesNotExist()
+    }
+
+    @Test
     fun insertSpaceIsPickedUp() {
         setTab()
         compose.onNodeWithTag(DrawTags.INSERT_SPACE).performClick()

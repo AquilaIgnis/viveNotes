@@ -2113,6 +2113,7 @@ private fun PageEditor(
         // No settings to pass with it: the drag is the whole of what Insert Space knows.
         insertingSpace = tool == DrawTool.InsertSpace,
         onInsertSpace = viewModel::insertSpace,
+        laserPointing = tool == DrawTool.Laser,
         ruler = ruler.takeIf { rulerOut },
         tables = state.tables,
         // One tool places a table on the next tap; which *kind* rides in on the settings, so the

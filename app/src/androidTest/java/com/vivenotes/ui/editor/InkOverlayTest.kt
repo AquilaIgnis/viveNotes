@@ -103,6 +103,7 @@ class InkOverlayTest {
         erasing: Boolean = false,
         lassoing: Boolean = false,
         insertingSpace: Boolean = false,
+        laserPointing: Boolean = false,
         eraser: EraserSettings = EraserSettings(),
         pageStrokes: List<PageStroke> = emptyList(),
         hasClipboard: Boolean = false,
@@ -121,7 +122,7 @@ class InkOverlayTest {
                         selection = selection,
                         onSelect = { selection = it },
                         lassoGesture = lasso,
-                        brush = if (lassoing || insertingSpace) null else Brush.createWithColorIntArgb(
+                        brush = if (lassoing || insertingSpace || laserPointing) null else Brush.createWithColorIntArgb(
                             family = StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1),
                             colorIntArgb = android.graphics.Color.BLACK,
                             size = 5f,
@@ -131,6 +132,7 @@ class InkOverlayTest {
                         lassoing = lassoing,
                         shaping = null,
                         insertingSpace = insertingSpace,
+                        laserPointing = laserPointing,
                         ruler = ruler,
                         eraser = eraser,
                         allowFinger = allowFinger,
@@ -338,6 +340,143 @@ class InkOverlayTest {
 
         assertEquals(null, spaceCut)
         assertTrue("the page did not pan", abs(dragged) > 0f)
+    }
+
+    // --- the laser pointer -----------------------------------------------------------------------
+
+    /**
+     * The dot is under the pen while it touches, and it is light rather than ink: nothing reaches
+     * the page, and once the pen lifts it goes out. Waiting for idle waits out the trace and the
+     * fade, since the overlay keeps asking for frames until both are spent.
+     */
+    @Test
+    fun theLaserLightsWhereItPointsThenGoesOutLeavingNoInk() {
+        setLaserOnWhite()
+        val overlay = compose.onNodeWithTag(INK_OVERLAY_TAG)
+
+        overlay.performTouchInput {
+            down(Offset(200f, 200f))
+            moveTo(Offset(300f, 200f))
+        }
+        compose.waitForIdle()
+
+        assertTrue("no dot under the pen", inkPixels(290, 190, 310, 210) > 0)
+        assertEquals("the dot was left where the pen started", 0, inkPixels(180, 180, 220, 220))
+
+        overlay.performTouchInput { up() }
+        compose.waitForIdle()
+
+        assertEquals("the dot outlived the gesture", 0, inkPixels(150, 150, 350, 250))
+        assertEquals("the laser laid down ink", 0, strokes)
+    }
+
+    /**
+     * The trace outlives the pen: lifting it puts the dot out, but what was drawn stays up for its
+     * second. Captured on a held clock straight after the lift, which is well inside that second.
+     */
+    @Test
+    fun theLaserTraceStaysUpAfterThePenLifts() {
+        setLaserOnWhite()
+        val overlay = compose.onNodeWithTag(INK_OVERLAY_TAG)
+        compose.mainClock.autoAdvance = false
+
+        // Real milliseconds apart, as a pen's samples are: inputs sharing one timestamp are a
+        // single instant to Ink's time window, which averages them to one point.
+        overlay.performTouchInput { down(Offset(200f, 200f)) }
+        Thread.sleep(30)
+        overlay.performTouchInput { moveTo(Offset(300f, 200f)) }
+        Thread.sleep(30)
+        overlay.performTouchInput { moveTo(Offset(400f, 200f)) }
+        Thread.sleep(30)
+        overlay.performTouchInput { up() }
+        compose.mainClock.advanceTimeByFrame()
+
+        assertTrue("the trace went with the pen", inkPixels(240, 190, 260, 210) > 0)
+
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+
+        assertEquals("the trace never went", 0, inkPixels(150, 150, 450, 250))
+        assertEquals("the laser laid down ink", 0, strokes)
+    }
+
+    /** Circling something twice leaves both circles up: the next press does not wipe the last. */
+    @Test
+    fun aSecondPressLeavesTheFirstTraceUp() {
+        setLaserOnWhite()
+        val overlay = compose.onNodeWithTag(INK_OVERLAY_TAG)
+        compose.mainClock.autoAdvance = false
+
+        overlay.performTouchInput {
+            down(Offset(200f, 200f))
+            moveTo(Offset(400f, 200f))
+            up()
+        }
+        overlay.performTouchInput {
+            down(Offset(200f, 400f))
+            moveTo(Offset(400f, 400f))
+        }
+        compose.mainClock.advanceTimeByFrame()
+
+        assertTrue("the second press wiped the first trace", inkPixels(290, 190, 310, 210) > 0)
+        assertTrue("the second trace is missing", inkPixels(290, 390, 310, 410) > 0)
+
+        overlay.performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+
+        assertEquals(0, inkPixels(150, 150, 450, 450))
+    }
+
+    private fun setLaserOnWhite() {
+        compose.setContent {
+            ViveNotesTheme {
+                Box(Modifier.fillMaxSize().background(Color.White)) {
+                    InkOverlay(
+                        strokes = emptyList(),
+                        lassoGesture = remember { LassoGesture() },
+                        brush = null,
+                        erasing = false,
+                        lassoing = false,
+                        shaping = null,
+                        laserPointing = true,
+                        eraser = EraserSettings(),
+                        allowFinger = true,
+                        pageToView = { Matrix() },
+                        onStrokeFinished = { strokes++ },
+                        onPartialErase = { partialErases++ },
+                        onObjectErase = { objectEraseCalls++ },
+                        onMoveSelection = {},
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    }
+
+    /** The bargain every other tool strikes: a finger that may not draw moves the page instead. */
+    @Test
+    fun aDisallowedFingerPansRatherThanPointing() {
+        setOverlay(allowFinger = false, laserPointing = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+
+        assertTrue("the page did not pan", abs(dragged) > 0f)
+        assertEquals(0, strokes)
+    }
+
+    /** And one that may draw points, which must not also scroll or erase anything. */
+    @Test
+    fun aFingerThatMayDrawPointsWithoutPanningOrMarking() {
+        setOverlay(allowFinger = true, laserPointing = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+
+        assertEquals("pointing scrolled the page", 0f, dragged, 0.001f)
+        assertEquals(0, strokes)
+        assertEquals(0, partialErases)
     }
 
     // --- the ruler -------------------------------------------------------------------------------

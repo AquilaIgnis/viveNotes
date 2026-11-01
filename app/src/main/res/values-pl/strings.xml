@@ -573,6 +573,7 @@
     <string name="draw_calculator">Kalkulator</string>
     <string name="draw_calculator_close">Zamknij kalkulator</string>
     <string name="draw_highlighter">Zakreślacz</string>
+    <string name="draw_laser_pointer">Wskaźnik laserowy</string>
     <string name="draw_ruler">Linijka</string>
     <string name="draw_ruler_put_away">Schowaj linijkę</string>
     <string name="draw_eraser">Gumka</string>

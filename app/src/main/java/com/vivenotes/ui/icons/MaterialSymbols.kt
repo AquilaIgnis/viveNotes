@@ -110,6 +110,7 @@ object MaterialSymbols {
     val Straighten: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_straighten)
     val Stylus: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_stylus)
     val StylusHighlighter: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_stylus_highlighter)
+    val StylusLaserPointer: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_stylus_laser_pointer)
     val Table: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_table)
     val TableRows: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_table_rows)
     val TouchApp: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_touch_app)

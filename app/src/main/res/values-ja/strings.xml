@@ -542,6 +542,7 @@
     <string name="draw_calculator">電卓</string>
     <string name="draw_calculator_close">電卓を閉じる</string>
     <string name="draw_highlighter">蛍光ペン</string>
+    <string name="draw_laser_pointer">レーザーポインター</string>
     <string name="draw_ruler">定規</string>
     <string name="draw_ruler_put_away">定規をしまう</string>
     <string name="draw_eraser">消しゴム</string>

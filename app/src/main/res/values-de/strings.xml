@@ -552,6 +552,7 @@
     <string name="draw_calculator">Taschenrechner</string>
     <string name="draw_calculator_close">Taschenrechner schließen</string>
     <string name="draw_highlighter">Textmarker</string>
+    <string name="draw_laser_pointer">Laserpointer</string>
     <string name="draw_ruler">Lineal</string>
     <string name="draw_ruler_put_away">Lineal weglegen</string>
     <string name="draw_eraser">Radierer</string>
