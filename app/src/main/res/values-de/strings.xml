@@ -800,4 +800,20 @@
     <string name="close_notebook_confirm">Schließen</string>
     <string name="close_notebook_contents">Nichts wird gelöscht. Seine %1$s und %2$s bleiben an ihrem Platz, und das Notizbuch verlässt den Bereich, bis du es aus „Geschlossene Notizbücher“ wieder öffnest.</string>
     <string name="close_notebook_empty">Nichts wird gelöscht. Das Notizbuch verlässt den Bereich, bis du es aus „Geschlossene Notizbücher“ wieder öffnest.</string>
+
+    <string name="recognition_place_graph">Auf der Seite einfügen</string>
+    <string name="tooltip_graph_mutate">Punkte verschieben</string>
+    <string name="tooltip_graph_options">Diagrammoptionen</string>
+    <string name="graph_background_none">Kein Hintergrund</string>
+    <string name="graph_background_grid">Raster</string>
+    <string name="graph_background_dotted">Gepunktet</string>
+    <string name="graph_show_equation">Gleichung anzeigen</string>
+    <string name="graph_show_labels">Punkte beschriften</string>
+    <string name="graph_show_original">Original anzeigen</string>
+    <string name="graph_show_derivative">Ableitung anzeigen</string>
+    <string name="graph_zoom_in">Vergrößern</string>
+    <string name="graph_zoom_out">Verkleinern</string>
+    <string name="graph_fit">An Funktion anpassen</string>
+    <string name="graph_reset">Funktion zurücksetzen</string>
+    <string name="graph_rewrite_failed">Das Diagramm konnte nicht geändert werden.</string>
 </resources>

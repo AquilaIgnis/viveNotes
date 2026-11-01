@@ -34,6 +34,8 @@ data class CanvasSelection(
     val equationIds: Set<String> = emptySet(),
     /** Pictures, and the fifth kind. One line here, exactly as [othersEmpty] promised. */
     val imageIds: Set<String> = emptySet(),
+    /** Graphs of functions, the sixth. */
+    val graphIds: Set<String> = emptySet(),
     /** Live ink projections, including pieces that share a row id after a partial erase. */
     val projections: Set<InkProjectionKey> = emptySet(),
     /**
@@ -54,7 +56,7 @@ data class CanvasSelection(
 ) {
     val isEmpty: Boolean
         get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isEmpty() &&
-            equationIds.isEmpty() && imageIds.isEmpty()
+            equationIds.isEmpty() && imageIds.isEmpty() && graphIds.isEmpty()
 
     /**
      * Whether what is held is locked, and so refuses to be moved or resized.
@@ -70,6 +72,7 @@ data class CanvasSelection(
     val isTableOnly: Boolean get() = tableIds.isNotEmpty() && othersEmpty(tableIds)
     val isEquationOnly: Boolean get() = equationIds.isNotEmpty() && othersEmpty(equationIds)
     val isImageOnly: Boolean get() = imageIds.isNotEmpty() && othersEmpty(imageIds)
+    val isGraphOnly: Boolean get() = graphIds.isNotEmpty() && othersEmpty(graphIds)
 
     /**
      * Every id set except the one asked about is empty.
@@ -79,13 +82,15 @@ data class CanvasSelection(
      * forgetting one would have claimed a mixed selection was pure. The next kind adds one line here.
      */
     private fun othersEmpty(own: Set<String>): Boolean =
-        listOf(inkIds, shapeIds, tableIds, equationIds, imageIds).all { it === own || it.isEmpty() }
+        listOf(inkIds, shapeIds, tableIds, equationIds, imageIds, graphIds).all { it === own || it.isEmpty() }
 
     fun holdsShape(shapeId: String): Boolean = shapeId in shapeIds
 
     fun holdsEquation(equationId: String): Boolean = equationId in equationIds
 
     fun holdsImage(imageId: String): Boolean = imageId in imageIds
+
+    fun holdsGraph(graphId: String): Boolean = graphId in graphIds
 
     /** The ink half, in the shape the ink move/resize/replay path already takes. */
     fun inkHalf(): InkLassoSelection? = if (inkIds.isEmpty()) {
@@ -136,14 +141,16 @@ data class CanvasSelection(
         tables: List<TableBounds> = emptyList(),
         equations: List<Outline.Equation> = emptyList(),
         images: List<Outline.Image> = emptyList(),
+        graphs: List<Outline.Graph> = emptyList(),
     ): CanvasSelection? {
         val liveShapes = shapes.filter { it.id in shapeIds }
         val liveTables = tables.filter { it.id in tableIds }
         val liveEquations = equations.filter { it.id in equationIds }
         val liveImages = images.filter { it.id in imageIds }
+        val liveGraphs = graphs.filter { it.id in graphIds }
         val directInk = strokes.filter { it.projectionKey in projections }
         if (liveShapes.isEmpty() && directInk.isEmpty() && liveTables.isEmpty() &&
-            liveEquations.isEmpty() && liveImages.isEmpty()
+            liveEquations.isEmpty() && liveImages.isEmpty() && liveGraphs.isEmpty()
         ) {
             return null
         }
@@ -163,7 +170,8 @@ data class CanvasSelection(
             liveShapes.mapNotNull(Outline.Shape::lockGroup) +
                 liveTables.mapNotNull(TableBounds::lockGroup) +
                 liveEquations.mapNotNull(Outline.Equation::lockGroup) +
-                liveImages.mapNotNull(Outline.Image::lockGroup)
+                liveImages.mapNotNull(Outline.Image::lockGroup) +
+                liveGraphs.mapNotNull(Outline.Graph::lockGroup)
             ).toSet()
         val keptShapes = if (heldLocks.isEmpty()) {
             liveShapes
@@ -185,12 +193,18 @@ data class CanvasSelection(
         } else {
             images.filter { it.id in imageIds || it.lockGroup.belongsTo(heldLocks) }
         }
+        val keptGraphs = if (heldLocks.isEmpty()) {
+            liveGraphs
+        } else {
+            graphs.filter { it.id in graphIds || it.lockGroup.belongsTo(heldLocks) }
+        }
 
         val measured = expandedInk.mapNotNull(PageStroke::pageBounds) +
             keptShapes.map(Outline.Shape::pageBounds) +
             keptTables.map(TableBounds::bounds) +
             keptEquations.map(Outline.Equation::pageBounds) +
-            keptImages.map(Outline.Image::pageBounds)
+            keptImages.map(Outline.Image::pageBounds) +
+            keptGraphs.map(Outline.Graph::pageBounds)
         val union = measured.unionBounds() ?: return null
 
         return copy(
@@ -199,6 +213,7 @@ data class CanvasSelection(
             tableIds = keptTables.map(TableBounds::id).toSet(),
             equationIds = keptEquations.map(Outline.Equation::id).toSet(),
             imageIds = keptImages.map(Outline.Image::id).toSet(),
+            graphIds = keptGraphs.map(Outline.Graph::id).toSet(),
             projections = expandedInk.map(PageStroke::projectionKey).toSet(),
             lockGroups = heldLocks,
             bounds = union,
@@ -225,6 +240,13 @@ data class CanvasSelection(
             equationIds = setOf(equation.id),
             lockGroups = setOfNotNull(equation.lockGroup),
             bounds = equation.pageBounds(),
+        )
+
+        /** One tapped graph, by its box. */
+        fun ofGraph(graph: Outline.Graph): CanvasSelection = CanvasSelection(
+            graphIds = setOf(graph.id),
+            lockGroups = setOfNotNull(graph.lockGroup),
+            bounds = graph.pageBounds(),
         )
 
         /** One tapped picture, measured from its frame rather than from its pixels. */
@@ -271,7 +293,9 @@ fun CanvasSelection?.lineShape(shapes: List<Outline.Shape>): Outline.Shape? = th
 fun CanvasSelection?.isInkAndLines(shapes: List<Outline.Shape>): Boolean {
     val held = this ?: return false
     if (held.inkIds.isEmpty()) return false
-    if (held.tableIds.isNotEmpty() || held.equationIds.isNotEmpty() || held.imageIds.isNotEmpty()) {
+    if (held.tableIds.isNotEmpty() || held.equationIds.isNotEmpty() || held.imageIds.isNotEmpty() ||
+        held.graphIds.isNotEmpty()
+    ) {
         return false
     }
     return held.shapeIds.all { id -> shapes.firstOrNull { it.id == id }?.kind?.hasEnds == true }
@@ -328,10 +352,12 @@ data class CanvasClipboard(
     val tables: List<Outline.Table> = emptyList(),
     /** Equations, which carry their whole selves: the source is the object. */
     val equations: List<Outline.Equation> = emptyList(),
+    /** Graphs, likewise: the function and the window are the whole of one. */
+    val graphs: List<Outline.Graph> = emptyList(),
 ) {
     val isEmpty: Boolean
         get() = strokes.isEmpty() && shapes.isEmpty() && texts.isEmpty() && tables.isEmpty() &&
-            equations.isEmpty()
+            equations.isEmpty() && graphs.isEmpty()
 }
 
 /**
@@ -353,6 +379,7 @@ internal fun selectWithLasso(
     tables: List<TableBounds> = emptyList(),
     equations: List<Outline.Equation> = emptyList(),
     images: List<Outline.Image> = emptyList(),
+    graphs: List<Outline.Graph> = emptyList(),
     path: List<InkPoint>,
     edgeTolerance: Float = DEFAULT_LASSO_EDGE_TOLERANCE,
 ): CanvasSelection? {
@@ -365,6 +392,7 @@ internal fun selectWithLasso(
     // A picture is a rectangle too, and is caught by its frame rather than by what is in it: a
     // photograph of a circle is still a photograph, and half-circling one leaves it alone.
     val caughtImages = images.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
+    val caughtGraphs = graphs.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
     // The loop passes over what is locked, unless locked is all it caught, which is how a locked
     // group is picked up again to be unlocked. Applied to the catch rather than to the hit test, so
     // the rule is stated once for every kind, and so the "unless" can be answered at all: whether a
@@ -376,15 +404,17 @@ internal fun selectWithLasso(
         caughtShapes.any { it.lockGroup == null } ||
         caughtTables.any { it.lockGroup == null } ||
         caughtEquations.any { it.lockGroup == null } ||
-        caughtImages.any { it.lockGroup == null }
+        caughtImages.any { it.lockGroup == null } ||
+        caughtGraphs.any { it.lockGroup == null }
     val heldShapes = if (caughtUnlocked) caughtShapes.filter { it.lockGroup == null } else caughtShapes
     val heldTables = if (caughtUnlocked) caughtTables.filter { it.lockGroup == null } else caughtTables
     val heldEquations =
         if (caughtUnlocked) caughtEquations.filter { it.lockGroup == null } else caughtEquations
     val heldImages = if (caughtUnlocked) caughtImages.filter { it.lockGroup == null } else caughtImages
+    val heldGraphs = if (caughtUnlocked) caughtGraphs.filter { it.lockGroup == null } else caughtGraphs
 
     if (ink == null && heldShapes.isEmpty() && heldTables.isEmpty() &&
-        heldEquations.isEmpty() && heldImages.isEmpty()
+        heldEquations.isEmpty() && heldImages.isEmpty() && heldGraphs.isEmpty()
     ) {
         return null
     }
@@ -393,7 +423,8 @@ internal fun selectWithLasso(
         heldShapes.map(Outline.Shape::pageBounds) +
         heldTables.map(TableBounds::bounds) +
         heldEquations.map(Outline.Equation::pageBounds) +
-        heldImages.map(Outline.Image::pageBounds)
+        heldImages.map(Outline.Image::pageBounds) +
+        heldGraphs.map(Outline.Graph::pageBounds)
     val union = measured.unionBounds() ?: return null
     return CanvasSelection(
         path = path,
@@ -402,6 +433,7 @@ internal fun selectWithLasso(
         tableIds = heldTables.map(TableBounds::id).toSet(),
         equationIds = heldEquations.map(Outline.Equation::id).toSet(),
         imageIds = heldImages.map(Outline.Image::id).toSet(),
+        graphIds = heldGraphs.map(Outline.Graph::id).toSet(),
         projections = ink?.projections.orEmpty(),
         // Whatever survived the rule above is either all unlocked or all locked, so this is empty or
         // it is the groups the loop closed around. `reconcile` widens it to whole groups.
@@ -409,7 +441,8 @@ internal fun selectWithLasso(
             heldShapes.mapNotNull(Outline.Shape::lockGroup) +
                 heldTables.mapNotNull(TableBounds::lockGroup) +
                 heldEquations.mapNotNull(Outline.Equation::lockGroup) +
-                heldImages.mapNotNull(Outline.Image::lockGroup)
+                heldImages.mapNotNull(Outline.Image::lockGroup) +
+                heldGraphs.mapNotNull(Outline.Graph::lockGroup)
             ).toSet(),
         bounds = union,
     )
@@ -556,14 +589,18 @@ internal fun selectByTap(
     equations: List<Outline.Equation>,
     images: List<Outline.Image>,
     point: InkPoint,
+    graphs: List<Outline.Graph> = emptyList(),
 ): CanvasSelection? {
     images.asReversed().firstOrNull { it.pageBounds().contains(point) }
         ?.let { return CanvasSelection.ofImage(it) }
     equations.asReversed().firstOrNull { it.pageBounds().contains(point) }
         ?.let { return CanvasSelection.ofEquation(it) }
-    return shapes.asReversed()
+    shapes.asReversed()
         .firstOrNull { shape -> shape.isUnderTap(point) }
-        ?.let(CanvasSelection::ofShape)
+        ?.let { return CanvasSelection.ofShape(it) }
+    // Last: the layers nest graphs beneath shapes, so an arrow drawn over a graph is the arrow.
+    return graphs.asReversed().firstOrNull { it.pageBounds().contains(point) }
+        ?.let(CanvasSelection::ofGraph)
 }
 
 /** A shape is its outline and not the rectangle around it — `ShapeLayer.topmostNear`'s rule. */
@@ -619,6 +656,10 @@ internal fun Outline.Shape.pageBounds(): InkBounds =
  * there is nothing here for the canvas to know better (see `Outline.Equation`).
  */
 internal fun Outline.Equation.pageBounds(): InkBounds =
+    InkBounds(left = x, top = y, right = x + width, bottom = y + height)
+
+/** A graph's box on the page, header included. */
+internal fun Outline.Graph.pageBounds(): InkBounds =
     InkBounds(left = x, top = y, right = x + width, bottom = y + height)
 
 /** A picture's frame on the page. Its pixel size is a different fact and lives in `attachments`. */

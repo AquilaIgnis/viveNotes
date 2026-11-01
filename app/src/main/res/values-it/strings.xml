@@ -800,4 +800,20 @@
     <string name="close_notebook_confirm">Chiudi</string>
     <string name="close_notebook_contents">Non viene eliminato nulla. %1$s e %2$s rimangono dove sono, e il notebook lascia il pannello finché non lo apri di nuovo da Notebook chiusi.</string>
     <string name="close_notebook_empty">Non viene eliminato nulla. Il notebook lascia il pannello finché non lo apri di nuovo da Notebook chiusi.</string>
+
+    <string name="recognition_place_graph">Inserisci nella pagina</string>
+    <string name="tooltip_graph_mutate">Sposta i punti</string>
+    <string name="tooltip_graph_options">Opzioni del grafico</string>
+    <string name="graph_background_none">Nessuno sfondo</string>
+    <string name="graph_background_grid">Griglia</string>
+    <string name="graph_background_dotted">Punteggiato</string>
+    <string name="graph_show_equation">Mostra equazione</string>
+    <string name="graph_show_labels">Etichetta i punti</string>
+    <string name="graph_show_original">Mostra originale</string>
+    <string name="graph_show_derivative">Mostra derivata</string>
+    <string name="graph_zoom_in">Ingrandisci</string>
+    <string name="graph_zoom_out">Riduci</string>
+    <string name="graph_fit">Adatta alla funzione</string>
+    <string name="graph_reset">Ripristina funzione</string>
+    <string name="graph_rewrite_failed">Impossibile modificare il grafico.</string>
 </resources>

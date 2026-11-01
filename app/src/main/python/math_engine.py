@@ -1040,13 +1040,296 @@ def _graph_result(expression: ParsedInput) -> ResultPayload:
 
     if not any(value is not None for value in y_values):
         raise MathInputError("No real graph values were found between −10 and 10.")
-    return {
-        "title": "Graph",
-        "latex": sp.latex(graph_expression),
-        "graph": {
-            "xLabel": str(variable),
-            "yLabel": dependent_label,
-            "xValues": x_values,
-            "yValues": y_values,
-        },
+    graph: dict[str, Any] = {
+        "xLabel": str(variable),
+        "yLabel": dependent_label,
+        "xValues": x_values,
+        "yValues": y_values,
     }
+    # Only a function the canvas can evaluate without Python can be placed on the page. Anything
+    # else still previews here; it just offers no Place button.
+    try:
+        source: str = graph_source(graph_expression, variable)
+        graph["expression"] = source
+        # Printed from the grammar read back, not from the parse: that is the function the canvas
+        # will draw, and SymPy prints an unevaluated ``log(x, 10)`` with its base dropped.
+        graph["functionLatex"] = graph_latex(_GraphParser(source).parse(), str(variable))
+    except MathInputError:
+        pass
+    return {"title": "Graph", "latex": sp.latex(graph_expression), "graph": graph}
+
+
+# --- Graph objects ----------------------------------------------------------------------------
+#
+# A graph placed on the page stores its function in a small closed grammar rather than as LaTeX,
+# because the canvas evaluates it thousands of times a frame while a point is dragged and cannot call
+# Python to do so. The grammar is numbers, the variable written as ``x`` whatever it was called,
+# ``+ - * / ^``, parentheses, ``pi``, ``E`` and the function names in ``_GRAPH_FUNCTIONS``. The Kotlin
+# twin is ``graph/GraphExpression.kt``; the two must accept exactly the same language.
+#
+# Read back with a parser of its own rather than ``sympify``: the string comes out of a synced
+# document, and ``sympify`` evaluates Python.
+
+#: SymPy function class → grammar name. ``ln`` is the natural logarithm, as ``log`` is in SymPy.
+_GRAPH_FUNCTIONS: dict[type, str] = {
+    sp.sin: "sin",
+    sp.cos: "cos",
+    sp.tan: "tan",
+    sp.cot: "cot",
+    sp.sec: "sec",
+    sp.csc: "csc",
+    sp.asin: "asin",
+    sp.acos: "acos",
+    sp.atan: "atan",
+    sp.sinh: "sinh",
+    sp.cosh: "cosh",
+    sp.tanh: "tanh",
+    sp.exp: "exp",
+    sp.log: "ln",
+    sp.Abs: "abs",
+    sp.floor: "floor",
+    sp.ceiling: "ceil",
+    sp.sign: "sign",
+}
+_GRAPH_NAMES: dict[str, type] = {name: function for function, name in _GRAPH_FUNCTIONS.items()}
+_GRAPH_SYMBOL: sp.Symbol = sp.Symbol("x")
+MAX_GRAPH_SOURCE_CHARS = 4000
+
+
+def graph_source(expression: sp.Expr, variable: sp.Symbol) -> str:
+    """``expression`` in the graph grammar, with ``variable`` written as ``x``.
+
+    Every compound child is parenthesized, so precedence never has to be agreed between the two
+    languages — only the grammar.
+    """
+    if expression.has(sp.I):
+        raise MathInputError("A graph with complex values cannot be placed on the page.")
+    source: str = _graph_node(expression, variable)
+    if len(source) > MAX_GRAPH_SOURCE_CHARS:
+        raise MathInputError("This function is too long to place on the page.")
+    return source
+
+
+def _graph_node(node: sp.Basic, variable: sp.Symbol) -> str:
+    if node == variable:
+        return "x"
+    if node is sp.pi:
+        return "pi"
+    if node is sp.E:
+        return "E"
+    if isinstance(node, sp.Integer):
+        return str(int(node)) if node >= 0 else f"({int(node)})"
+    if isinstance(node, sp.Rational):
+        return f"({int(node.p)}/{int(node.q)})"
+    if isinstance(node, sp.Float):
+        value: float = float(node)
+        if not math.isfinite(value):
+            raise MathInputError("This function has no finite value to draw.")
+        return repr(value) if value >= 0 else f"({repr(value)})"
+    if isinstance(node, sp.Add):
+        return "(" + "+".join(_graph_node(term, variable) for term in node.args) + ")"
+    if isinstance(node, sp.Mul):
+        return "(" + "*".join(_graph_node(factor, variable) for factor in node.args) + ")"
+    if isinstance(node, sp.Pow):
+        base, exponent = node.args
+        if exponent == sp.Rational(1, 2):
+            return f"sqrt({_graph_node(base, variable)})"
+        return f"({_graph_node(base, variable)}^{_graph_node(exponent, variable)})"
+    if isinstance(node, sp.log) and len(node.args) == 2:
+        # ``parse_latex`` keeps ``\\ln x`` as an unevaluated ``log(x, E)`` and ``\\log_{b}`` as
+        # ``log(x, b)``; both are a natural logarithm, divided by the base's when there is one.
+        argument, base = node.args
+        if base is sp.E:
+            return f"ln({_graph_node(argument, variable)})"
+        return f"(ln({_graph_node(argument, variable)})/ln({_graph_node(base, variable)}))"
+    if isinstance(node, sp.Function) and type(node) in _GRAPH_FUNCTIONS and len(node.args) == 1:
+        return f"{_GRAPH_FUNCTIONS[type(node)]}({_graph_node(node.args[0], variable)})"
+    raise MathInputError("This function cannot be placed on the page yet.")
+
+
+class _GraphParser:
+    """Reads the graph grammar back into SymPy, ``x`` as ``_GRAPH_SYMBOL``. Nothing is evaluated."""
+
+    _TOKEN = re.compile(r"\s*(?:(?P<number>\d+(?:\.\d*)?(?:[eE][-+]?\d+)?)|(?P<name>[A-Za-z]+)|(?P<op>[-+*/^(),]))")
+
+    def __init__(self, source: str) -> None:
+        if len(source) > MAX_GRAPH_SOURCE_CHARS:
+            raise MathInputError("This function is too long to edit.")
+        self.tokens: list[tuple[str, str]] = self._tokenize(source)
+        self.index: int = 0
+
+    def _tokenize(self, source: str) -> list[tuple[str, str]]:
+        tokens: list[tuple[str, str]] = []
+        position: int = 0
+        while position < len(source):
+            if source[position:].strip() == "":
+                break
+            match = self._TOKEN.match(source, position)
+            if match is None:
+                raise MathInputError("The stored function is not readable.")
+            kind: str = match.lastgroup or ""
+            tokens.append((kind, match.group(kind)))
+            position = match.end()
+        return tokens
+
+    def parse(self) -> sp.Expr:
+        expression: sp.Expr = self._sum()
+        if self.index != len(self.tokens):
+            raise MathInputError("The stored function is not readable.")
+        return expression
+
+    def _peek(self) -> str | None:
+        return self.tokens[self.index][1] if self.index < len(self.tokens) else None
+
+    def _take(self) -> tuple[str, str]:
+        if self.index >= len(self.tokens):
+            raise MathInputError("The stored function is not readable.")
+        token: tuple[str, str] = self.tokens[self.index]
+        self.index += 1
+        return token
+
+    def _expect(self, symbol: str) -> None:
+        if self._take()[1] != symbol:
+            raise MathInputError("The stored function is not readable.")
+
+    def _sum(self) -> sp.Expr:
+        result: sp.Expr = self._product()
+        while self._peek() in ("+", "-"):
+            operator: str = self._take()[1]
+            right: sp.Expr = self._product()
+            result = result + right if operator == "+" else result - right
+        return result
+
+    def _product(self) -> sp.Expr:
+        result: sp.Expr = self._unary()
+        while self._peek() in ("*", "/"):
+            operator: str = self._take()[1]
+            right: sp.Expr = self._unary()
+            result = result * right if operator == "*" else result / right
+        return result
+
+    def _unary(self) -> sp.Expr:
+        if self._peek() == "-":
+            self._take()
+            return -self._unary()
+        return self._power()
+
+    def _power(self) -> sp.Expr:
+        base: sp.Expr = self._atom()
+        if self._peek() == "^":
+            self._take()
+            return base ** self._unary()
+        return base
+
+    def _atom(self) -> sp.Expr:
+        kind, text = self._take()
+        if kind == "number":
+            return sp.Rational(text) if "e" not in text.lower() else sp.Float(text)
+        if text == "(":
+            inner: sp.Expr = self._sum()
+            self._expect(")")
+            return inner
+        if kind == "name":
+            if text == "x":
+                return _GRAPH_SYMBOL
+            if text == "pi":
+                return sp.pi
+            if text == "E":
+                return sp.E
+            if text == "sqrt":
+                return sp.sqrt(self._argument())
+            function: type | None = _GRAPH_NAMES.get(text)
+            if function is not None:
+                return function(self._argument())
+        raise MathInputError("The stored function is not readable.")
+
+    def _argument(self) -> sp.Expr:
+        self._expect("(")
+        argument: sp.Expr = self._sum()
+        self._expect(")")
+        return argument
+
+
+def _graph_number(text: Any) -> sp.Rational:
+    """A decimal sent by the canvas — already snapped to the grid — as the exact number it names."""
+    if not isinstance(text, str) or not re.fullmatch(r"-?\d+(?:\.\d+)?", text):
+        raise MathInputError("The dragged position is not a number.")
+    return sp.Rational(text)
+
+
+def graph_latex(expression: sp.Expr, variable: str) -> str:
+    """``expression`` as LaTeX, with the grammar's ``x`` written as the graph's own variable."""
+    return sp.latex(expression.subs(_GRAPH_SYMBOL, sp.Symbol(variable)))
+
+
+def mutate_graph(source: str, variable: str, mutation: str) -> str:
+    """Rewrite a placed graph's function after one of its points was dragged.
+
+    ``mutation`` is JSON, one of:
+
+    * ``{"kind": "shift", "h": "0.5", "k": "-2"}`` — ``f(x - h) + k``. What dragging an extremum, an
+      inflection point, the y-intercept or a non-polynomial zero does.
+    * ``{"kind": "root", "root": "1.41421356", "to": "2.5"}`` — a polynomial's root, found near
+      ``root`` among its exact roots, moved to ``to`` with its multiplicity. Every other root and the
+      leading coefficient stay where they were.
+
+    Answers ``{"expression", "latex"}`` — the new function in the graph grammar, and in LaTeX written
+    in ``variable`` — or ``{"error"}``.
+    """
+    try:
+        expression: sp.Expr = _GraphParser(source).parse()
+        request: Any = json.loads(mutation)
+        if not isinstance(request, dict):
+            raise MathInputError("That change cannot be made to this graph.")
+        kind: Any = request.get("kind")
+        if kind == "shift":
+            result: sp.Expr = _shifted(expression, _graph_number(request.get("h")), _graph_number(request.get("k")))
+        elif kind == "root":
+            result = _root_moved(expression, request.get("root"), _graph_number(request.get("to")))
+        else:
+            raise MathInputError("That change cannot be made to this graph.")
+        _check_complexity(result)
+        return _json(
+            {
+                "expression": graph_source(result, _GRAPH_SYMBOL),
+                "latex": graph_latex(result, variable if isinstance(variable, str) else "x"),
+            }
+        )
+    except Exception as error:
+        return _json({"error": _friendly_error(error)})
+
+
+def _shifted(expression: sp.Expr, h: sp.Rational, k: sp.Rational) -> sp.Expr:
+    result: sp.Expr = expression.subs(_GRAPH_SYMBOL, _GRAPH_SYMBOL - h) + k
+    # Expanded only when it is a polynomial: there it is the form a student checks against, while
+    # expanding sin(x - 1/2) would trade the shift they made for a sum of products.
+    return sp.expand(result) if result.is_polynomial(_GRAPH_SYMBOL) else result
+
+
+def _root_moved(expression: sp.Expr, near: Any, to: sp.Rational) -> sp.Expr:
+    if not expression.is_polynomial(_GRAPH_SYMBOL):
+        raise MathInputError("Only a polynomial's roots can be moved one at a time.")
+    if not isinstance(near, str):
+        raise MathInputError("The dragged root is not a number.")
+    approximate: float = float(near)
+    polynomial = sp.Poly(expression, _GRAPH_SYMBOL)
+    found: tuple[sp.Expr, int] | None = None
+    for root, multiplicity in sp.roots(polynomial).items():
+        value: complex = complex(root.evalf())
+        if abs(value.imag) > 1e-9:
+            continue
+        if abs(value.real - approximate) <= 1e-6 * (1.0 + abs(approximate)):
+            found = (root, multiplicity)
+            break
+    if found is None:
+        raise MathInputError("That root could not be found exactly, so it cannot be moved.")
+    root, multiplicity = found
+    factor: sp.Expr = (_GRAPH_SYMBOL - root) ** multiplicity
+    quotient: sp.Expr = sp.quo(expression, factor, _GRAPH_SYMBOL)
+    moved: sp.Expr = sp.expand(quotient * (_GRAPH_SYMBOL - to) ** multiplicity)
+    surds: list[sp.Expr] = [atom for atom in moved.atoms(sp.Pow) if atom.is_number]
+    if not surds:
+        return moved
+    # The roots of x³ − 2x left at ±√2 when 0 moves expand to x³ − 2x² + √2x² − 2√2x. Factored over
+    # the surds the coefficients carry, the header shows the roots instead: x(x − 2)(x + √2).
+    return sp.factor(moved, extension=surds)

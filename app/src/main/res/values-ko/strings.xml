@@ -785,4 +785,20 @@
     <string name="close_notebook_confirm">닫기</string>
     <string name="close_notebook_contents">아무것도 삭제되지 않습니다. %1$s 및 %2$s은(는) 제자리에 유지되며, 닫힌 노트북에서 다시 열 때까지 패널에서 사라집니다.</string>
     <string name="close_notebook_empty">아무것도 삭제되지 않습니다. 닫힌 노트북에서 다시 열 때까지 노트북이 패널에서 사라집니다.</string>
+
+    <string name="recognition_place_graph">페이지에 배치</string>
+    <string name="tooltip_graph_mutate">점 이동</string>
+    <string name="tooltip_graph_options">그래프 옵션</string>
+    <string name="graph_background_none">배경 없음</string>
+    <string name="graph_background_grid">격자</string>
+    <string name="graph_background_dotted">점선</string>
+    <string name="graph_show_equation">방정식 표시</string>
+    <string name="graph_show_labels">점 좌표 표시</string>
+    <string name="graph_show_original">원래 함수 표시</string>
+    <string name="graph_show_derivative">도함수 표시</string>
+    <string name="graph_zoom_in">확대</string>
+    <string name="graph_zoom_out">축소</string>
+    <string name="graph_fit">함수에 맞추기</string>
+    <string name="graph_reset">함수 되돌리기</string>
+    <string name="graph_rewrite_failed">그래프를 변경할 수 없습니다.</string>
 </resources>

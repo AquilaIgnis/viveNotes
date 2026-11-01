@@ -123,6 +123,10 @@ import com.vivenotes.ink.targetsFor
 import com.vivenotes.ui.editor.RibbonTab
 import com.vivenotes.ui.editor.asEditorMarks
 import com.vivenotes.ink.translatedCopy
+import com.vivenotes.graph.GraphAnalysis
+import com.vivenotes.graph.GraphExpression
+import com.vivenotes.graph.window
+import com.vivenotes.math.MathGraph
 import com.vivenotes.model.Block
 import com.vivenotes.model.Mark
 import com.vivenotes.model.Orientation
@@ -324,6 +328,14 @@ private sealed interface CanvasHistoryEntry {
         val atMillis: Long = 0L,
     ) : CanvasHistoryEntry
 
+    /** An edit to the graphs on the canvas — whole lists, like [Equations], for the same reason. */
+    data class Graphs(
+        val before: List<Outline.Graph>,
+        val after: List<Outline.Graph>,
+        val coalesceKey: String? = null,
+        val atMillis: Long = 0L,
+    ) : CanvasHistoryEntry
+
     /**
      * Several kinds' entries that are one action and must be undone as one.
      *
@@ -454,6 +466,8 @@ data class NotesUiState(
     val equations: List<Outline.Equation> = emptyList(),
     /** Pictures on the canvas. Frames only; the pixels are in `attachments`. */
     val images: List<Outline.Image> = emptyList(),
+    /** Graphs of functions, placed from the Math pane. */
+    val graphs: List<Outline.Graph> = emptyList(),
     /**
      * The tables on the canvas — the grid, not the writing in it.
      *
@@ -1427,7 +1441,7 @@ class NotesViewModel(
         // text box. Carrying unknown outline kinds through preserves load -> save -> load identity.
         unmanagedOutlines = doc.outlines.filterNot {
             it is Outline.Text || it is Outline.Shape || it is Outline.Table ||
-                it is Outline.Equation || it is Outline.Image
+                it is Outline.Equation || it is Outline.Image || it is Outline.Graph
         }
         // Every kind, not just the unmanaged ones — see [documentOrder] for why the rebuilt list
         // cannot be trusted to come back in the order it went out in.
@@ -1441,6 +1455,7 @@ class NotesViewModel(
             tables = tables,
             equations = doc.outlines.filterIsInstance<Outline.Equation>(),
             images = doc.outlines.filterIsInstance<Outline.Image>(),
+            graphs = doc.outlines.filterIsInstance<Outline.Graph>(),
             pageStyle = doc.style,
             pageRevision = _uiState.value.pageRevision + 1,
             contentError = contentError,
@@ -2890,6 +2905,129 @@ class NotesViewModel(
         edits.tryEmit(Unit)
     }
 
+    // --- graphs ---------------------------------------------------------------------------------
+
+    /**
+     * Places a function's graph from the Math pane, just below the formula it was recognised from
+     * — [near], in page units — or at the top of the view when there is none.
+     *
+     * The window is fitted here rather than taken from the pane's preview, which always shows
+     * −10…10: a graph whose roots sit near 0.1 should arrive showing them.
+     */
+    fun insertGraph(graph: MathGraph, near: InkBounds?): String? {
+        val pageId = _uiState.value.selectedPageId ?: return null
+        if (readOnlyPageId == pageId) return null
+        val source = graph.expression ?: return null
+        val function = GraphExpression.parse(source) ?: return null
+        val window = GraphAnalysis.fit(function::evaluate)
+        val titleFloor = if (_uiState.value.pageStyle.hideTitle) 0f else PageStyle.TITLE_BAND_DP
+        val created = Outline.Graph(
+            id = newId(),
+            x = PageBounds.clampX(near?.left ?: (viewportOrigin.x + INSERT_MARGIN)),
+            y = PageBounds.clampY(
+                near?.let { it.bottom + INSERT_MARGIN } ?: maxOf(viewportOrigin.y + INSERT_MARGIN, titleFloor),
+            ),
+            expression = source,
+            latex = graph.functionLatex.orEmpty(),
+            variable = graph.xLabel,
+            dependent = graph.yLabel,
+            xMin = window.xMin,
+            xMax = window.xMax,
+            yMin = window.yMin,
+            yMax = window.yMax,
+        )
+        editGraphs { it + created }
+        // Nothing armed, so the next tap reaches the graph — the lasso that picked the formula would
+        // otherwise still own every touch on the page.
+        _tool.value = DrawTool.None
+        return created.id
+    }
+
+    fun moveGraphs(graphIds: Set<String>, dx: Float, dy: Float) {
+        if (graphIds.isEmpty() || (dx == 0f && dy == 0f)) return
+        editGraphs { graphs -> graphs.map { if (it.id in graphIds) it.translated(dx, dy) else it } }
+    }
+
+    /** Absolute and once per gesture — [resizeEquations]' contract. */
+    fun resizeGraphs(graphIds: Set<String>, anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float) {
+        if (graphIds.isEmpty() || (scaleX == 1f && scaleY == 1f)) return
+        editGraphs { graphs ->
+            graphs.map { if (it.id in graphIds) it.scaledAbout(anchorX, anchorY, scaleX, scaleY) else it }
+        }
+    }
+
+    fun deleteGraphs(graphIds: Set<String>) {
+        if (graphIds.isEmpty()) return
+        editGraphs { graphs -> graphs.filterNot { it.id in graphIds } }
+    }
+
+    /** The curve's colour. */
+    fun recolorGraphs(graphIds: Set<String>, argb: Int) =
+        updateGraphs(graphIds, coalesceKey = "graph-color") { it.copy(colorArgb = argb) }
+
+    /** One of the toolkit's settings — background, the toggles — on every held graph. */
+    fun updateGraphs(
+        graphIds: Set<String>,
+        coalesceKey: String? = null,
+        change: (Outline.Graph) -> Outline.Graph,
+    ) {
+        if (graphIds.isEmpty()) return
+        editGraphs(coalesceKey) { graphs -> graphs.map { if (it.id in graphIds) change(it) else it } }
+    }
+
+    /** Zoom in (below 1) or out about the window's centre. A run of presses is one Undo. */
+    fun zoomGraphs(graphIds: Set<String>, factor: Double) = updateGraphs(graphIds, coalesceKey = "graph-zoom") {
+        val zoomed = it.window().zoomed(factor)
+        it.copy(xMin = zoomed.xMin, xMax = zoomed.xMax, yMin = zoomed.yMin, yMax = zoomed.yMax)
+    }
+
+    /** The window refitted to the current function, as on insert. */
+    fun fitGraphs(graphIds: Set<String>) = updateGraphs(graphIds) { graph ->
+        val function = GraphExpression.parse(graph.expression) ?: return@updateGraphs graph
+        val fitted = GraphAnalysis.fit(function::evaluate)
+        graph.copy(xMin = fitted.xMin, xMax = fitted.xMax, yMin = fitted.yMin, yMax = fitted.yMax)
+    }
+
+    fun resetGraphs(graphIds: Set<String>) = updateGraphs(graphIds) { it.reset() }
+
+    /**
+     * A dragged point's change, once the engine has written it exactly.
+     *
+     * Applied only while the graph still holds [from], the function the drag began on: an Undo or a
+     * second drag landing while the engine worked would otherwise be overwritten by a stale answer.
+     */
+    fun rewriteGraph(graphId: String, from: String, expression: String, latex: String) {
+        if (GraphExpression.parse(expression) == null) return
+        editGraphs { graphs ->
+            graphs.map { if (it.id == graphId && it.expression == from) it.rewritten(expression, latex) else it }
+        }
+    }
+
+    /** The one door every graph edit goes through — see [editShapes] for why there is exactly one. */
+    private inline fun editGraphs(
+        coalesceKey: String? = null,
+        change: (List<Outline.Graph>) -> List<Outline.Graph>,
+    ) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId) return
+        val state = _uiState.value
+        val before = state.graphs
+        val after = change(before).onPage()
+        if (after == before) return
+
+        _uiState.value = state.copy(graphs = after)
+        pushHistory(
+            pageId,
+            CanvasHistoryEntry.Graphs(
+                before = before,
+                after = after,
+                coalesceKey = coalesceKey,
+                atMillis = System.currentTimeMillis(),
+            ),
+        )
+        edits.tryEmit(Unit)
+    }
+
     // --- tables ---------------------------------------------------------------------------------
 
     /**
@@ -3314,8 +3452,9 @@ class NotesViewModel(
         val movingImages = state.images.filter { cut.moves(it.x, it.y) }
         val movingTables = state.tables.filter { cut.moves(it.x, it.y) }
         val movingEquations = state.equations.filter { cut.moves(it.x, it.y) }
+        val movingGraphs = state.graphs.filter { cut.moves(it.x, it.y) }
         val movingOutlines: List<Outline> =
-            movingShapes + movingImages + movingTables + movingEquations
+            movingShapes + movingImages + movingTables + movingEquations + movingGraphs
 
         val nearest = (
             movingInk.mapNotNull(PageStroke::pageBounds).map { cut.nearEdge(it.left, it.top) } +
@@ -3343,6 +3482,7 @@ class NotesViewModel(
             moveImages(movingImages.mapTo(mutableSetOf(), Outline.Image::id), dx, dy)
             moveTables(movingTables.mapTo(mutableSetOf(), Outline.Table::id), dx, dy)
             moveEquations(movingEquations.mapTo(mutableSetOf(), Outline.Equation::id), dx, dy)
+            moveGraphs(movingGraphs.mapTo(mutableSetOf(), Outline.Graph::id), dx, dy)
             moveInkPastLine(movingInk, dx, dy)
         }
     }
@@ -3413,6 +3553,8 @@ class NotesViewModel(
             state.equations.filter { it.lockGroup.belongsTo(groups) }.map(Outline.Equation::id)
         val imageIds = selection.imageIds +
             state.images.filter { it.lockGroup.belongsTo(groups) }.map(Outline.Image::id)
+        val graphIds = selection.graphIds +
+            state.graphs.filter { it.lockGroup.belongsTo(groups) }.map(Outline.Graph::id)
 
         if (shapeIds.isNotEmpty()) {
             editShapes { shapes ->
@@ -3434,6 +3576,11 @@ class NotesViewModel(
                 images.map { if (it.id in imageIds) it.copy(lockGroup = group) else it }
             }
         }
+        if (graphIds.isNotEmpty()) {
+            editGraphs { graphs ->
+                graphs.map { if (it.id in graphIds) it.copy(lockGroup = group) else it }
+            }
+        }
     }
 
     /**
@@ -3453,12 +3600,18 @@ class NotesViewModel(
         // Read straight off the state, unlike a table: an equation carries its own content, so there
         // is no second half of it anywhere else to go stale.
         val equations = _uiState.value.equations.filter { it.id in selection.equationIds }
-        if (strokes.isEmpty() && shapes.isEmpty() && tables.isEmpty() && equations.isEmpty()) return
+        val graphs = _uiState.value.graphs.filter { it.id in selection.graphIds }
+        if (strokes.isEmpty() && shapes.isEmpty() && tables.isEmpty() && equations.isEmpty() &&
+            graphs.isEmpty()
+        ) {
+            return
+        }
         clipboard = CanvasClipboard(
             strokes = strokes,
             shapes = shapes,
             tables = tables,
             equations = equations,
+            graphs = graphs,
         )
         systemClipboard?.markInternalCopy()
         publishClipboard()
@@ -3486,8 +3639,9 @@ class NotesViewModel(
         val sourceTexts = clipboard.texts
         val sourceTables = clipboard.tables
         val sourceEquations = clipboard.equations
+        val sourceGraphs = clipboard.graphs
         if (sources.isEmpty() && sourceShapes.isEmpty() && sourceTexts.isEmpty() &&
-            sourceTables.isEmpty() && sourceEquations.isEmpty()
+            sourceTables.isEmpty() && sourceEquations.isEmpty() && sourceGraphs.isEmpty()
         ) {
             return
         }
@@ -3496,6 +3650,7 @@ class NotesViewModel(
             sourceShapes.map(Outline.Shape::pageBounds) +
             // Exact, unlike the two approximations below it: an equation's box is its geometry.
             sourceEquations.map(Outline.Equation::pageBounds) +
+            sourceGraphs.map(Outline.Graph::pageBounds) +
             // The sum of the row floors, which is the height the document can know. Off by however
             // far a cell's text runs past its row, exactly as a text box's floor is.
             sourceTables.map { InkBounds(it.x, it.y, it.x + it.width, it.y + it.height) } +
@@ -3568,6 +3723,13 @@ class NotesViewModel(
                 source.translated(dx, dy).copy(id = newId(), lockGroup = null)
             }
             editEquations { it + pastedEquations }
+        }
+
+        if (sourceGraphs.isNotEmpty()) {
+            val pastedGraphs = sourceGraphs.map { source ->
+                source.translated(dx, dy).copy(id = newId(), lockGroup = null)
+            }
+            editGraphs { it + pastedGraphs }
         }
 
         if (sources.isEmpty()) return
@@ -3907,6 +4069,12 @@ class NotesViewModel(
                 )
                 edits.tryEmit(Unit)
             }
+            is CanvasHistoryEntry.Graphs -> {
+                _uiState.value = _uiState.value.copy(
+                    graphs = if (applied) entry.after else entry.before,
+                )
+                edits.tryEmit(Unit)
+            }
             // One half too, and deliberately so: the picture's bytes are not in the history and are
             // not touched by it. An undone delete restores a frame whose file was never removed.
             is CanvasHistoryEntry.Images -> {
@@ -4048,7 +4216,19 @@ class NotesViewModel(
             previous.coalesceKey == entry.coalesceKey &&
             entry.atMillis - previous.atMillis <= SHAPE_COALESCE_MS
 
-        if (equationsCoalesce) {
+        // The graph's colour picker and its zoom buttons, pressed in a run, are one change each.
+        val graphsCoalesce = entry is CanvasHistoryEntry.Graphs &&
+            entry.coalesceKey != null &&
+            previous is CanvasHistoryEntry.Graphs &&
+            previous.coalesceKey == entry.coalesceKey &&
+            entry.atMillis - previous.atMillis <= SHAPE_COALESCE_MS
+
+        if (graphsCoalesce) {
+            history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Graphs).copy(
+                after = (entry as CanvasHistoryEntry.Graphs).after,
+                atMillis = entry.atMillis,
+            )
+        } else if (equationsCoalesce) {
             history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Equations).copy(
                 after = (entry as CanvasHistoryEntry.Equations).after,
                 atMillis = entry.atMillis,
@@ -4478,7 +4658,7 @@ class NotesViewModel(
             pageId = pageId,
             doc = PageDoc(
                 outlines = inDocumentOrder(
-                    state.shapes + state.equations + state.images + tables + outlines +
+                    state.shapes + state.equations + state.images + state.graphs + tables + outlines +
                         unmanagedOutlines,
                 ),
                 style = state.pageStyle,
@@ -4541,6 +4721,13 @@ class NotesViewModel(
         val correction = PageBounds.correctionFor(equation.x, equation.y)
         if (correction.x == 0f && correction.y == 0f) equation
         else equation.translated(correction.x, correction.y)
+    }
+
+    @JvmName("graphsOnPage")
+    private fun List<Outline.Graph>.onPage(): List<Outline.Graph> = map { graph ->
+        val correction = PageBounds.correctionFor(graph.x, graph.y)
+        if (correction.x == 0f && correction.y == 0f) graph
+        else graph.translated(correction.x, correction.y)
     }
 
     @JvmName("tablesOnPage")

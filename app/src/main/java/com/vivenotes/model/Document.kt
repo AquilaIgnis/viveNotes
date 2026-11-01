@@ -68,6 +68,7 @@ private fun Outline.shiftedDown(dy: Float): Outline = when (this) {
     is Outline.Shape -> translated(0f, dy)
     is Outline.Table -> translated(0f, dy)
     is Outline.Equation -> translated(0f, dy)
+    is Outline.Graph -> translated(0f, dy)
 }
 
 /**
@@ -525,6 +526,101 @@ sealed interface Outline {
     }
 
     /**
+     * A function's graph placed on the canvas — what the Math pane's Graph result becomes when it is
+     * placed on the page.
+     *
+     * The function is [expression], in the small grammar `math_engine.py` writes and
+     * `graph/GraphExpression.kt` evaluates: the canvas draws it, finds its points of interest and
+     * re-draws it under a dragged point without calling Python, so a stored graph is drawable on load
+     * and in a PDF before the engine has started. [latex] is the same function for the header.
+     *
+     * [originalExpression] and [originalLatex] are what was placed, kept from the first mutation on
+     * — null until then — so the original can be drawn faintly beneath the change and Reset can put
+     * it back.
+     *
+     * The window is in the function's units, independent of the box: resizing the box stretches the
+     * view, the toolkit's zoom changes what is in it.
+     *
+     * [mutable] is the toolkit's mutate toggle — points of interest can be dragged — and independent
+     * of [lockGroup]: a locked graph stays put while its points move.
+     */
+    @Serializable
+    @SerialName("graph")
+    data class Graph(
+        override val id: String,
+        override val x: Float = 0f,
+        override val y: Float = 0f,
+        override val width: Float = DEFAULT_WIDTH,
+        val height: Float = DEFAULT_HEIGHT,
+        val expression: String,
+        val latex: String = "",
+        /** What the horizontal axis is called — `t` for a physics formula. */
+        val variable: String = "x",
+        /** What the vertical axis is called. */
+        val dependent: String = "y",
+        val originalExpression: String? = null,
+        val originalLatex: String? = null,
+        val xMin: Double = -10.0,
+        val xMax: Double = 10.0,
+        val yMin: Double = -10.0,
+        val yMax: Double = 10.0,
+        val background: GraphBackground = GraphBackground.Grid,
+        val showEquation: Boolean = true,
+        val mutable: Boolean = false,
+        /** The original function, faint and dashed, once the graph has been mutated. */
+        val showOriginal: Boolean = true,
+        /** f′, dashed: the slope as a curve of its own. */
+        val showDerivative: Boolean = false,
+        /** Coordinates beside each point of interest. */
+        val showLabels: Boolean = true,
+        /** The curve. Null draws the default blue, which reads on light and dark paper alike. */
+        val colorArgb: Int? = null,
+        override val lockGroup: String? = null,
+    ) : Outline {
+
+        val isMutated: Boolean get() = originalExpression != null && originalExpression != expression
+
+        fun translated(dx: Float, dy: Float): Graph = copy(x = x + dx, y = y + dy)
+
+        /** [Equation.scaledAbout]'s contract: absolute, applied once on the lift, floored per axis. */
+        fun scaledAbout(anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float): Graph = copy(
+            x = anchorX + (x - anchorX) * scaleX,
+            y = anchorY + (y - anchorY) * scaleY,
+            width = (width * scaleX).coerceAtLeast(MIN_SIZE),
+            height = (height * scaleY).coerceAtLeast(MIN_SIZE),
+        )
+
+        /** The function replaced, keeping the first one it ever had as the original. */
+        fun rewritten(newExpression: String, newLatex: String): Graph = copy(
+            expression = newExpression,
+            latex = newLatex,
+            originalExpression = originalExpression ?: expression,
+            originalLatex = originalLatex ?: latex,
+        )
+
+        /** Back to what was placed. */
+        fun reset(): Graph = if (originalExpression == null) {
+            this
+        } else {
+            copy(
+                expression = originalExpression,
+                latex = originalLatex ?: latex,
+                originalExpression = null,
+                originalLatex = null,
+            )
+        }
+
+        companion object {
+            /** A little under half the writing width, like a picture, and a 4:3 plot. */
+            const val DEFAULT_WIDTH = 320f
+            const val DEFAULT_HEIGHT = 260f
+
+            /** Below this the axes' labels have nowhere to go. */
+            const val MIN_SIZE = 80f
+        }
+    }
+
+    /**
      * A table placed on the canvas.
      *
      * An object, not a block: lassoed, dragged, resized by its corners, copied, deleted and undone,
@@ -705,6 +801,10 @@ sealed interface Outline {
         override val lockGroup: String? = null,
     ) : Outline
 }
+
+/** What is drawn behind a graph's curve — the Graph Class's three. */
+@Serializable
+enum class GraphBackground { None, Grid, Dotted }
 
 /**
  * One row of an [Outline.Table]: a height floor, and one cell per column.
@@ -922,6 +1022,8 @@ fun PageDoc.plainText(): String = outlines
             // mark: someone looking for the page they wrote `\int` on is looking for this one, and
             // the rendered picture is not a thing anybody can search.
             is Outline.Equation -> outline.latex.ifBlank { null }
+            // Its function, for the reason an equation gives its source.
+            is Outline.Graph -> outline.latex.ifBlank { null }
             is Outline.Image, is Outline.Ink, is Outline.Shape -> null
         }
     }

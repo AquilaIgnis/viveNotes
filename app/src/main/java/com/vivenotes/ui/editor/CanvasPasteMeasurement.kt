@@ -66,6 +66,7 @@ internal fun measurePastedOutlines(
             is Outline.Image -> outline.height
             is Outline.Shape -> outline.height
             is Outline.Equation -> outline.height
+            is Outline.Graph -> outline.height
             is Outline.Ink -> outline.height
         }
     }

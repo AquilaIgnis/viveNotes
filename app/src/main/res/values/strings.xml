@@ -877,4 +877,21 @@
     <string name="close_notebook_confirm">Close</string>
     <string name="close_notebook_contents">Nothing is deleted. Its %1$s and %2$s stay where they are, and the notebook leaves the panel until you open it again from Closed Notebooks.</string>
     <string name="close_notebook_empty">Nothing is deleted. The notebook leaves the panel until you open it again from Closed Notebooks.</string>
+
+    <!-- Graphs placed from the Math pane. -->
+    <string name="recognition_place_graph">Place on page</string>
+    <string name="tooltip_graph_mutate">Move points</string>
+    <string name="tooltip_graph_options">Graph options</string>
+    <string name="graph_background_none">No background</string>
+    <string name="graph_background_grid">Grid</string>
+    <string name="graph_background_dotted">Dotted</string>
+    <string name="graph_show_equation">Show equation</string>
+    <string name="graph_show_labels">Label points</string>
+    <string name="graph_show_original">Show original</string>
+    <string name="graph_show_derivative">Show derivative</string>
+    <string name="graph_zoom_in">Zoom in</string>
+    <string name="graph_zoom_out">Zoom out</string>
+    <string name="graph_fit">Fit to function</string>
+    <string name="graph_reset">Reset function</string>
+    <string name="graph_rewrite_failed">The graph could not be changed.</string>
 </resources>

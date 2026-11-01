@@ -116,7 +116,13 @@ import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.search.ContentHit
+import com.vivenotes.graph.GraphDrag
+import com.vivenotes.ink.InkBounds
 import com.vivenotes.math.FormulaToolsState
+import com.vivenotes.math.GraphRewrite
+import com.vivenotes.math.MathGraph
+import com.vivenotes.model.Outline
+import com.vivenotes.ui.editor.GraphRewriteInFlight
 import com.vivenotes.math.MathEngine
 import com.vivenotes.pdf.PdfExporter
 import com.vivenotes.richtext.VideoThumbnails
@@ -890,6 +896,10 @@ private fun NotesWorkspace(
     var recognition by remember { mutableStateOf<RecognitionPanelState?>(null) }
     var recognitionRunning by remember { mutableStateOf(false) }
     var formulaTools by remember { mutableStateOf(FormulaToolsState()) }
+    /** Where the formula in the Math pane was written, so its graph can be placed beside it. */
+    var recognitionAnchor by remember { mutableStateOf<InkBounds?>(null) }
+    /** Dragged graph points the engine is still rewriting — see `GraphRewriteInFlight`. */
+    var graphRewrites by remember { mutableStateOf(emptyMap<String, GraphRewriteInFlight>()) }
     /** The hand calculator. Not persisted, and its ink with it — see `CalculatorWindow`. */
     var calculatorOpen by remember { mutableStateOf(false) }
     val formulaInstalled = aiModels.formulaReady
@@ -900,6 +910,7 @@ private fun NotesWorkspace(
     ) {
         if (recognitionRunning) return
         recognitionRunning = true
+        recognitionAnchor = selection.bounds
         recognition = RecognitionPanelState(kind = kind, running = true)
         openPane = ToolPane.Recognition
         val selectedStrokes = strokes
@@ -985,6 +996,34 @@ private fun NotesWorkspace(
                     error = result.error,
                 )
             }
+        }
+    }
+
+    /**
+     * A dragged point let go on a graph: the engine writes the new function exactly while the page
+     * keeps drawing the drag, and the answer replaces it as one Undo step.
+     */
+    fun mutateGraph(graph: Outline.Graph, drag: GraphDrag) {
+        val inFlight = GraphRewriteInFlight(from = graph.expression, drag = drag)
+        graphRewrites = graphRewrites + (graph.id to inFlight)
+        recognitionScope.launch {
+            val rewrite = try {
+                mathEngine.mutateGraph(graph.expression, graph.variable, drag.request())
+            } catch (failure: Exception) {
+                GraphRewrite(error = failure.message)
+            }
+            val expression = rewrite.expression
+            val latex = rewrite.latex
+            if (rewrite.error == null && expression != null && latex != null) {
+                viewModel.rewriteGraph(graph.id, graph.expression, expression, latex)
+            } else {
+                launch {
+                    snackbarHostState.showSnackbar(
+                        rewrite.error ?: resources.getString(R.string.graph_rewrite_failed),
+                    )
+                }
+            }
+            if (graphRewrites[graph.id] === inFlight) graphRewrites = graphRewrites - graph.id
         }
     }
 
@@ -1276,6 +1315,8 @@ private fun NotesWorkspace(
                                 recognitionRunning = recognitionRunning,
                                 onRecognizeFormula = { recognize(it, RecognitionOutputKind.Formula) },
                                 pendingEquation = pendingEquation,
+                                graphRewrites = graphRewrites,
+                                onMutateGraph = ::mutateGraph,
                                 modifier = Modifier.weight(1f),
                             )
                             openPane?.let { toolPane ->
@@ -1307,6 +1348,7 @@ private fun NotesWorkspace(
                                         copyRecognizedText(context, label, value)
                                     },
                                     onMathAction = ::executeMathAction,
+                                    onPlaceGraph = { graph -> viewModel.insertGraph(graph, recognitionAnchor) },
                                     contentSearch = contentSearch,
                                     imageTextProgress = imageTextProgress,
                                     inkTextProgress = inkTextProgress,
@@ -1386,6 +1428,7 @@ private fun NotesWorkspace(
                                         copyRecognizedText(context, label, value)
                                     },
                                     onMathAction = ::executeMathAction,
+                                    onPlaceGraph = { graph -> viewModel.insertGraph(graph, recognitionAnchor) },
                                     contentSearch = contentSearch,
                                     imageTextProgress = imageTextProgress,
                                     inkTextProgress = inkTextProgress,
@@ -1430,6 +1473,8 @@ private fun NotesWorkspace(
                                 recognitionRunning = recognitionRunning,
                                 onRecognizeFormula = { recognize(it, RecognitionOutputKind.Formula) },
                                 pendingEquation = pendingEquation,
+                                graphRewrites = graphRewrites,
+                                onMutateGraph = ::mutateGraph,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -1642,6 +1687,7 @@ private fun ToolPaneHost(
     onRecognitionChange: (String) -> Unit,
     onCopyRecognition: (String) -> Unit,
     onMathAction: (String) -> Unit,
+    onPlaceGraph: (MathGraph) -> Unit,
     /** Content pane — the query, and what it found across the notebook. */
     contentSearch: ContentSearchState,
     /** How far reading this notebook's pictures has got. */
@@ -1739,6 +1785,7 @@ private fun ToolPaneHost(
                     onValueChange = onRecognitionChange,
                     onCopy = onCopyRecognition,
                     onMathAction = onMathAction,
+                    onPlaceGraph = onPlaceGraph,
                 )
             } ?: Text(
                 text = stringResource(R.string.workspace_recognition_empty),
@@ -1785,6 +1832,8 @@ private fun EditorSurface(
     onRecognizeFormula: (com.vivenotes.ink.CanvasSelection) -> Unit,
     /** The formula the Draw tab's ƒ is holding, or null when it is holding none. */
     pendingEquation: PendingEquation?,
+    graphRewrites: Map<String, GraphRewriteInFlight>,
+    onMutateGraph: (Outline.Graph, GraphDrag) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // The magnifier is a sibling of the page rather than part of it, and composed after it, so it
@@ -1825,6 +1874,8 @@ private fun EditorSurface(
                 recognitionRunning = recognitionRunning,
                 onRecognizeFormula = onRecognizeFormula,
                 pendingEquation = pendingEquation,
+                graphRewrites = graphRewrites,
+                onMutateGraph = onMutateGraph,
             )
         }
 
@@ -1921,6 +1972,8 @@ private fun PageEditor(
     recognitionRunning: Boolean,
     onRecognizeFormula: (com.vivenotes.ink.CanvasSelection) -> Unit,
     pendingEquation: PendingEquation?,
+    graphRewrites: Map<String, GraphRewriteInFlight>,
+    onMutateGraph: (Outline.Graph, GraphDrag) -> Unit,
 ) {
     val pictureText by viewModel.pictureText.collectAsStateWithLifecycle()
     val inkDescriptions by viewModel.inkDescriptions.collectAsStateWithLifecycle()
@@ -1995,6 +2048,17 @@ private fun PageEditor(
         onMoveEquations = viewModel::moveEquations,
         onResizeEquations = viewModel::resizeEquations,
         onDeleteEquations = viewModel::deleteEquations,
+        graphs = state.graphs,
+        graphRewrites = graphRewrites,
+        onMoveGraphs = viewModel::moveGraphs,
+        onResizeGraphs = viewModel::resizeGraphs,
+        onDeleteGraphs = viewModel::deleteGraphs,
+        onRecolorGraphs = viewModel::recolorGraphs,
+        onUpdateGraphs = { ids, change -> viewModel.updateGraphs(ids, change = change) },
+        onZoomGraphs = viewModel::zoomGraphs,
+        onFitGraphs = viewModel::fitGraphs,
+        onResetGraphs = viewModel::resetGraphs,
+        onMutateGraph = onMutateGraph,
         images = state.images,
         attachments = attachments,
         pictureText = pictureText,

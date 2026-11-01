@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -21,6 +22,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -57,6 +59,7 @@ import com.vivenotes.math.MathGraph
 import com.vivenotes.math.MathOperationResult
 import com.vivenotes.richtext.createEquationRenderer
 import com.vivenotes.richtext.fittedTo
+import com.vivenotes.ui.icons.MaterialSymbols
 import io.ratex.RaTeXRenderer
 import kotlin.math.abs
 
@@ -81,6 +84,7 @@ internal object RecognitionPanelTags {
     const val RESULT = "recognition-math-result"
     const val DECIMAL = "recognition-math-decimal"
     const val GRAPH = "recognition-math-graph"
+    const val PLACE_GRAPH = "recognition-math-place-graph"
     fun action(id: String) = "recognition-math-action-$id"
 }
 
@@ -114,6 +118,8 @@ internal fun ColumnScope.RecognitionPanelContent(
     onValueChange: (String) -> Unit,
     onCopy: (String) -> Unit,
     onMathAction: (String) -> Unit = {},
+    /** Puts a Graph result on the page. Null where there is no page to put it on. */
+    onPlaceGraph: ((MathGraph) -> Unit)? = null,
 ) {
     if (state.running) {
         Row(
@@ -185,6 +191,7 @@ internal fun ColumnScope.RecognitionPanelContent(
         FormulaToolsContent(
             state = formulaTools,
             onAction = onMathAction,
+            onPlaceGraph = onPlaceGraph,
         )
     }
 }
@@ -194,6 +201,7 @@ internal fun ColumnScope.RecognitionPanelContent(
 private fun ColumnScope.FormulaToolsContent(
     state: FormulaToolsState,
     onAction: (String) -> Unit,
+    onPlaceGraph: ((MathGraph) -> Unit)?,
 ) {
     // Above every early return, so the choice outlives the result it was made on.
     var showDecimal by remember { mutableStateOf(false) }
@@ -318,7 +326,28 @@ private fun ColumnScope.FormulaToolsContent(
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }
-            result.graph?.let { graph -> MathGraphPreview(graph) }
+            result.graph?.let { graph ->
+                MathGraphPreview(graph)
+                // Only a function the canvas can draw on its own can leave the pane: one outside the
+                // graph grammar still previews here and offers nothing to place.
+                if (onPlaceGraph != null && graph.expression != null) {
+                    PanelButton(
+                        onClick = { onPlaceGraph(graph) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
+                            .testTag(RecognitionPanelTags.PLACE_GRAPH),
+                    ) {
+                        Icon(
+                            MaterialSymbols.AddChart,
+                            contentDescription = null,
+                            modifier = Modifier.size(ButtonDefaults.IconSize),
+                        )
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        Text(stringResource(R.string.recognition_place_graph))
+                    }
+                }
+            }
             Box(Modifier.testTag(RecognitionPanelTags.RESULT))
         }
     }

@@ -20,6 +20,26 @@ class SympyMathEngineTest {
         engine = SympyMathEngine(InstrumentationRegistry.getInstrumentation().targetContext)
     }
 
+    /**
+     * The placed graph's two trips through Python: the Graph result carries a function the canvas can
+     * draw on its own, and a dragged root comes back as the exact polynomial with only that root moved.
+     */
+    @Test
+    fun aGraphCanBePlacedAndItsRootMoved() = runBlocking {
+        val graph = engine.execute("y=x^2-4", "graph").graph
+        org.junit.Assert.assertEquals("((x^2)+(-4))", graph?.expression)
+        org.junit.Assert.assertEquals("x^{2} - 4", graph?.functionLatex)
+        org.junit.Assert.assertNotNull(com.vivenotes.graph.GraphExpression.parse(graph!!.expression!!))
+
+        val moved = engine.mutateGraph(
+            graph.expression!!,
+            "x",
+            """{"kind":"root","root":"2.0","to":"3.5"}""",
+        )
+        org.junit.Assert.assertNull(moved.error)
+        org.junit.Assert.assertEquals("x^{2} - \\frac{3 x}{2} - 7", moved.latex)
+    }
+
     @Test
     fun equationOffersOnlyRelevantActionsAndSolvesExactly() = runBlocking {
         val analysis = engine.analyze("x^2-4=0")

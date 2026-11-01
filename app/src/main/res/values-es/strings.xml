@@ -828,4 +828,20 @@
     <string name="close_notebook_confirm">Cerrar</string>
     <string name="close_notebook_contents">No se elimina nada. Sus %1$s y %2$s se quedan donde están, y el cuaderno desaparece del panel hasta que lo vuelvas a abrir desde Cuadernos cerrados.</string>
     <string name="close_notebook_empty">No se elimina nada. El cuaderno desaparece del panel hasta que lo vuelvas a abrir desde Cuadernos cerrados.</string>
+
+    <string name="recognition_place_graph">Colocar en la página</string>
+    <string name="tooltip_graph_mutate">Mover puntos</string>
+    <string name="tooltip_graph_options">Opciones de la gráfica</string>
+    <string name="graph_background_none">Sin fondo</string>
+    <string name="graph_background_grid">Cuadrícula</string>
+    <string name="graph_background_dotted">Punteado</string>
+    <string name="graph_show_equation">Mostrar ecuación</string>
+    <string name="graph_show_labels">Etiquetar puntos</string>
+    <string name="graph_show_original">Mostrar original</string>
+    <string name="graph_show_derivative">Mostrar derivada</string>
+    <string name="graph_zoom_in">Acercar</string>
+    <string name="graph_zoom_out">Alejar</string>
+    <string name="graph_fit">Ajustar a la función</string>
+    <string name="graph_reset">Restablecer función</string>
+    <string name="graph_rewrite_failed">No se pudo cambiar la gráfica.</string>
 </resources>

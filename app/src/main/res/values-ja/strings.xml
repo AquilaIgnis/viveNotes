@@ -785,4 +785,20 @@
     <string name="close_notebook_confirm">閉じる</string>
     <string name="close_notebook_contents">何も削除されません。%1$sと%2$sはそのままで、もう一度「閉じたノートブック」から開くまでパネルから非表示になります。</string>
     <string name="close_notebook_empty">何も削除されません。もう一度「閉じたノートブック」から開くまでノートブックはパネルから非表示になります。</string>
+
+    <string name="recognition_place_graph">ページに配置</string>
+    <string name="tooltip_graph_mutate">点を動かす</string>
+    <string name="tooltip_graph_options">グラフのオプション</string>
+    <string name="graph_background_none">背景なし</string>
+    <string name="graph_background_grid">グリッド</string>
+    <string name="graph_background_dotted">ドット</string>
+    <string name="graph_show_equation">数式を表示</string>
+    <string name="graph_show_labels">点に座標を表示</string>
+    <string name="graph_show_original">元の関数を表示</string>
+    <string name="graph_show_derivative">導関数を表示</string>
+    <string name="graph_zoom_in">拡大</string>
+    <string name="graph_zoom_out">縮小</string>
+    <string name="graph_fit">関数に合わせる</string>
+    <string name="graph_reset">関数を元に戻す</string>
+    <string name="graph_rewrite_failed">グラフを変更できませんでした。</string>
 </resources>

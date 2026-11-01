@@ -121,6 +121,8 @@ import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.canFill
 import com.vivenotes.ink.PageStroke
 import com.vivenotes.ink.InkPoint
+import com.vivenotes.graph.GraphDrag
+import com.vivenotes.graph.GraphPainter
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.isInkAndLines
 import com.vivenotes.ink.InkLassoMove
@@ -411,6 +413,21 @@ fun EditorPane(
     onDeleteEquations: (Set<String>) -> Unit = {},
     onRecolorEquations: (Set<String>, Int) -> Unit = { _, _ -> },
     onEditEquation: (Set<String>, String) -> Unit = { _, _ -> },
+    /**
+     * The graphs on the page. [onMutateGraph] receives a dragged point once it is let go; the page
+     * keeps drawing that drag from [graphRewrites] until the engine's exact answer replaces it.
+     */
+    graphs: List<Outline.Graph> = emptyList(),
+    graphRewrites: Map<String, GraphRewriteInFlight> = emptyMap(),
+    onMoveGraphs: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeGraphs: (Set<String>, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
+    onDeleteGraphs: (Set<String>) -> Unit = {},
+    onRecolorGraphs: (Set<String>, Int) -> Unit = { _, _ -> },
+    onUpdateGraphs: (Set<String>, (Outline.Graph) -> Outline.Graph) -> Unit = { _, _ -> },
+    onZoomGraphs: (Set<String>, Double) -> Unit = { _, _ -> },
+    onFitGraphs: (Set<String>) -> Unit = {},
+    onResetGraphs: (Set<String>) -> Unit = {},
+    onMutateGraph: (Outline.Graph, GraphDrag) -> Unit = { _, _ -> },
     shapes: List<Outline.Shape> = emptyList(),
     onMoveShape: (String, Float, Float) -> Unit = { _, _, _ -> },
     onResizeShape: (String, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
@@ -655,8 +672,8 @@ fun EditorPane(
     // this key nothing would re-read it until the *page* next changed, so the other members of a
     // locked pair would be left out of the rectangle they are part of. Idempotent, so the write of
     // an equal selection ends the loop rather than restarting the effect.
-    LaunchedEffect(selection, strokes, shapes, tableBounds, equations, images) {
-        selection = selection?.reconcile(strokes, shapes, tableBounds, equations, images)
+    LaunchedEffect(selection, strokes, shapes, tableBounds, equations, images, graphs) {
+        selection = selection?.reconcile(strokes, shapes, tableBounds, equations, images, graphs)
     }
 
     // A hold outlives neither its table's selection nor the row it named. Selecting something else
@@ -722,6 +739,7 @@ fun EditorPane(
         if (held.tableIds.isNotEmpty()) onDeleteTables(held.tableIds)
         if (held.equationIds.isNotEmpty()) onDeleteEquations(held.equationIds)
         if (held.imageIds.isNotEmpty()) onDeleteImages(held.imageIds)
+        if (held.graphIds.isNotEmpty()) onDeleteGraphs(held.graphIds)
         selection = null
         lassoGesture.clear()
     }
@@ -824,6 +842,7 @@ fun EditorPane(
         shapes,
         images,
         equations,
+        graphs,
         style.hideTitle,
         density,
     ) {
@@ -848,6 +867,7 @@ fun EditorPane(
             shapes.forEach { include(it.pageBounds()) }
             images.forEach { include(it.pageBounds()) }
             equations.forEach { include(it.pageBounds()) }
+            graphs.forEach { include(it.pageBounds()) }
             DpSize(width, height)
         }
     }
@@ -1418,7 +1438,29 @@ fun EditorPane(
                                     onResizeShapeArm = onResizeShapeArm,
                                     onMoveShapeEnd = onMoveShapeEnd,
                                     canvasExtent = canvasSize,
-                                )
+                                ) {
+                                    GraphLayer(
+                                        graphs = graphs,
+                                        selection = selection,
+                                        canvasTextColor = canvas.text,
+                                        paperColor = canvas.background,
+                                        lassoGesture = lassoGesture.takeIf { lassoing },
+                                        interactive = shaping == null && !lassoing && !equationArmed &&
+                                            !tableArmed && !insertingSpace,
+                                        visibleWindow = visibleWindow,
+                                        onSelect = {
+                                            dismissTextInput()
+                                            selection = it
+                                        },
+                                        onMove = { id, dx, dy -> onMoveGraphs(setOf(id), dx, dy) },
+                                        onResize = { id, anchorX, anchorY, scaleX, scaleY ->
+                                            onResizeGraphs(setOf(id), anchorX, anchorY, scaleX, scaleY)
+                                        },
+                                        onMutate = onMutateGraph,
+                                        rewrites = graphRewrites,
+                                        canvasExtent = canvasSize,
+                                    )
+                                }
                             }
                         }
 
@@ -1564,6 +1606,7 @@ fun EditorPane(
                 images = images,
                 tables = tableBounds,
                 equations = equations,
+                graphs = graphs,
                 selection = selection,
                 searchHighlight = inkSearchHighlight,
                 onSelect = { selection = it },
@@ -1626,6 +1669,10 @@ fun EditorPane(
                 onResizeImages = { ids, anchor, scaleX, scaleY ->
                     onResizeImages(ids, anchor.x, anchor.y, scaleX, scaleY)
                 },
+                onMoveGraphs = onMoveGraphs,
+                onResizeGraphs = { ids, anchor, scaleX, scaleY ->
+                    onResizeGraphs(ids, anchor.x, anchor.y, scaleX, scaleY)
+                },
                 onDeleteSelection = onDeleteInkSelection,
                 onRecolorSelection = onRecolorInkSelection,
                 onGroupSelection = onGroupInkSelection,
@@ -1644,7 +1691,7 @@ fun EditorPane(
             // bar drawn inside the zoomed page grew with it and could be clamped off-screen.
             selection?.takeIf { !it.isEmpty }?.let { held ->
                 ObjectTooltip(
-                    swatch = held.swatch(strokes, shapes, tables),
+                    swatch = held.swatch(strokes, shapes, tables, graphs),
                     selectionBoundsInView = {
                         lassoGesture.previewBoundsInView(held, inkPageToView(
                             zoom = zoom,
@@ -1680,6 +1727,7 @@ fun EditorPane(
                         if (held.equationIds.isNotEmpty()) {
                             onRecolorEquations(held.equationIds, color)
                         }
+                        if (held.graphIds.isNotEmpty()) onRecolorGraphs(held.graphIds, color)
                     },
                     // Absent over anything holding ink: a stroke is not an outline and has no lock
                     // to set, and a bar over a mixed loop must not offer an action half of what it
@@ -1743,6 +1791,18 @@ fun EditorPane(
                                 // only when every held equation says the same thing.
                                 latex = selectedEquations.map { it.latex }.distinct().singleOrNull(),
                                 onEdit = { onEditEquation(held.equationIds, it) },
+                            )
+                        }
+                        // The graph's half: mutate, and the menu of how it is drawn.
+                        if (held.isGraphOnly) {
+                            GraphActions(
+                                graphs = graphs.filter { it.id in held.graphIds },
+                                actions = GraphToolkitActions(
+                                    update = { change -> onUpdateGraphs(held.graphIds, change) },
+                                    zoom = { factor -> onZoomGraphs(held.graphIds, factor) },
+                                    fit = { onFitGraphs(held.graphIds) },
+                                    reset = { onResetGraphs(held.graphIds) },
+                                ),
                             )
                         }
                         // A picture's half: a colour behind it, which shows wherever it is
@@ -1925,6 +1985,7 @@ private fun CanvasSelection.swatch(
     strokes: List<PageStroke>,
     shapes: List<Outline.Shape>,
     tables: List<Outline.Table>,
+    graphs: List<Outline.Graph>,
 ): Color? {
     // A photograph has no colour of its own to change, which is why the swatch is nullable at all.
     // Absent rather than disabled: a button that opens a palette which then changes nothing is worse
@@ -1934,7 +1995,8 @@ private fun CanvasSelection.swatch(
     val inkColors = strokes.filter { it.id in inkIds }.map { it.stroke.brush.colorIntArgb }
     val shapeColors = shapes.filter { it.id in shapeIds }.map(Outline.Shape::borderArgb)
     val tableColors = tables.filter { it.id in tableIds }.map(Outline.Table::borderArgb)
-    return (inkColors + shapeColors + tableColors).distinct().singleOrNull()?.let(::Color)
+    val graphColors = graphs.filter { it.id in graphIds }.map { it.colorArgb ?: GraphPainter.DEFAULT_CURVE_ARGB }
+    return (inkColors + shapeColors + tableColors + graphColors).distinct().singleOrNull()?.let(::Color)
         ?: Color.White
 }
 

@@ -14,6 +14,11 @@ import android.text.TextUtils
 import android.util.TypedValue
 import androidx.ink.geometry.outlinesToPath
 import com.vivenotes.data.automaticColorOr
+import com.vivenotes.graph.GraphAnalysis
+import com.vivenotes.graph.GraphColors
+import com.vivenotes.graph.GraphExpression
+import com.vivenotes.graph.GraphFrame
+import com.vivenotes.graph.GraphPainter
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.model.Outline
 import com.vivenotes.model.RuleLines
@@ -124,6 +129,13 @@ class PageRenderer(private val metrics: DisplayMetrics) {
             val shift = shiftOf(equation.id)
             if (!equation.pageRect().translated(shift.dx, shift.dy).overlaps(visible)) return@forEach
             drawEquation(canvas, equation, page, shift)
+        }
+
+        page.doc.outlines.filterIsInstance<Outline.Graph>().forEach { graph ->
+            val shift = shiftOf(graph.id)
+            val bounds = InkBounds(graph.x, graph.y, graph.x + graph.width, graph.y + graph.height)
+            if (!bounds.translated(shift.dx, shift.dy).overlaps(visible)) return@forEach
+            drawGraph(canvas, graph, page, shift)
         }
 
         page.doc.outlines.filterIsInstance<Outline.Image>().forEach { picture ->
@@ -292,6 +304,34 @@ class PageRenderer(private val metrics: DisplayMetrics) {
     }
 
     // --- equations ---------------------------------------------------------------------------
+
+    /**
+     * `GraphLayer`'s drawing, by the same painter: the PDF's canvas is in dp, so one dp is one unit.
+     * The page is not selected and nothing is being dragged, so the points are dots, not handles.
+     */
+    private fun drawGraph(canvas: Canvas, graph: Outline.Graph, page: MeasuredPage, shift: PdfShift) {
+        val function = GraphExpression.parse(graph.expression) ?: return
+        val frame = GraphFrame(graph, graph.x + shift.dx, graph.y + shift.dy, graph.width, graph.height, 1f)
+        val original = graph.originalExpression
+            ?.takeIf { graph.showOriginal && graph.isMutated }
+            ?.let(GraphExpression::parse)
+        graphPainter.draw(
+            canvas = canvas,
+            frame = frame,
+            colors = GraphColors(
+                paper = page.colors.backgroundArgb,
+                text = page.colors.textArgb,
+                curve = graph.colorArgb ?: GraphPainter.DEFAULT_CURVE_ARGB,
+                accent = page.colors.accentArgb,
+            ),
+            function = function::evaluate,
+            original = original?.let { it::evaluate },
+            points = GraphAnalysis.pointsOfInterest(function::evaluate, frame.window),
+            header = page.equations[graph.id],
+        )
+    }
+
+    private val graphPainter = GraphPainter()
 
     /** `EquationLayer.drawEquation`: the formula stretched from its own metrics into a stored box. */
     private fun drawEquation(

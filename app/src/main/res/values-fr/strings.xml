@@ -800,4 +800,20 @@
     <string name="close_notebook_confirm">Fermer</string>
     <string name="close_notebook_contents">Rien n\'est supprimé. Ses %1$s et %2$s restent où ils sont, et le carnet quitte le panneau jusqu\'à ce que vous l\'ouvriez à nouveau depuis les carnets fermés.</string>
     <string name="close_notebook_empty">Rien n\'est supprimé. Le carnet quitte le panneau jusqu\'à ce que vous l\'ouvriez à nouveau depuis les carnets fermés.</string>
+
+    <string name="recognition_place_graph">Placer sur la page</string>
+    <string name="tooltip_graph_mutate">Déplacer les points</string>
+    <string name="tooltip_graph_options">Options du graphique</string>
+    <string name="graph_background_none">Aucun arrière-plan</string>
+    <string name="graph_background_grid">Grille</string>
+    <string name="graph_background_dotted">Pointillé</string>
+    <string name="graph_show_equation">Afficher l\'équation</string>
+    <string name="graph_show_labels">Étiqueter les points</string>
+    <string name="graph_show_original">Afficher l\'original</string>
+    <string name="graph_show_derivative">Afficher la dérivée</string>
+    <string name="graph_zoom_in">Zoom avant</string>
+    <string name="graph_zoom_out">Zoom arrière</string>
+    <string name="graph_fit">Ajuster à la fonction</string>
+    <string name="graph_reset">Rétablir la fonction</string>
+    <string name="graph_rewrite_failed">Le graphique n\'a pas pu être modifié.</string>
 </resources>

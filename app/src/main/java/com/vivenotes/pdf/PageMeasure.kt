@@ -295,6 +295,30 @@ class PageMeasurer(
             )
         }
 
+        // A graph's header is a formula too, kept in the same map under the graph's own id.
+        doc.outlines.filterIsInstance<Outline.Graph>().forEach { graph ->
+            if (graph.showEquation && graph.latex.isNotBlank()) {
+                runCatching {
+                    createEquationRenderer(
+                        context = context,
+                        latex = "${graph.dependent} = ${graph.latex}",
+                        fontSizePx = EQUATION_BASE_DP * density,
+                        color = colors.textArgb,
+                    )
+                }.getOrNull()?.let { equations[graph.id] = it }
+            }
+            atoms += PdfAtom(
+                id = graph.id,
+                outlineId = graph.id,
+                bounds = InkBounds(
+                    left = graph.x,
+                    top = graph.y,
+                    right = graph.x + graph.width,
+                    bottom = graph.y + graph.height,
+                ),
+            )
+        }
+
         val images = mutableMapOf<String, Bitmap>()
         doc.outlines.filterIsInstance<Outline.Image>().forEach { image ->
             val store = attachments

@@ -831,4 +831,20 @@
     <string name="close_notebook_confirm">Zamknij</string>
     <string name="close_notebook_contents">Nic nie zostało usunięte. %1$s i %2$s pozostają na swoim miejscu, a notes znika z panelu, dopóki nie otworzysz go ponownie z Zamkniętych notesów.</string>
     <string name="close_notebook_empty">Nic nie zostało usunięte. Notes znika z panelu, dopóki nie otworzysz go ponownie z Zamkniętych notesów.</string>
+
+    <string name="recognition_place_graph">Umieść na stronie</string>
+    <string name="tooltip_graph_mutate">Przesuwaj punkty</string>
+    <string name="tooltip_graph_options">Opcje wykresu</string>
+    <string name="graph_background_none">Bez tła</string>
+    <string name="graph_background_grid">Siatka</string>
+    <string name="graph_background_dotted">Kropkowane</string>
+    <string name="graph_show_equation">Pokaż równanie</string>
+    <string name="graph_show_labels">Opisz punkty</string>
+    <string name="graph_show_original">Pokaż oryginał</string>
+    <string name="graph_show_derivative">Pokaż pochodną</string>
+    <string name="graph_zoom_in">Powiększ</string>
+    <string name="graph_zoom_out">Pomniejsz</string>
+    <string name="graph_fit">Dopasuj do funkcji</string>
+    <string name="graph_reset">Przywróć funkcję</string>
+    <string name="graph_rewrite_failed">Nie udało się zmienić wykresu.</string>
 </resources>

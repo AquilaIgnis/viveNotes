@@ -123,6 +123,12 @@ internal fun ShapeLayer(
     /** Null in standalone uses; the document extent when hosted by the unbounded page. */
     canvasExtent: DpSize? = null,
     modifier: Modifier = Modifier,
+    /**
+     * The next layer down — the graphs — composed as a child for the reason `EquationLayer` gives:
+     * siblings would leave one of the two dead to touch. A shape drawn over a graph is how a graph
+     * is annotated, so the shape is above it and asked first.
+     */
+    beneath: @Composable () -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val handleFill = MaterialTheme.colorScheme.surface
@@ -382,6 +388,7 @@ internal fun ShapeLayer(
             }
             .fillDocument(canvasExtent),
     ) {
+        beneath()
         DocumentCanvas(canvasExtent) {
             // Read in the draw so a live lasso drag re-runs this and nothing above it, the same
             // reason the ruling takes its window as a lambda.

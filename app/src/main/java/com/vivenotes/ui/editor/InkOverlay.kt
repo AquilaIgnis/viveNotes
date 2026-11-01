@@ -141,6 +141,8 @@ internal fun InkOverlay(
     equations: List<Outline.Equation> = emptyList(),
     /** Pictures, taken by their frame for the reason an equation is taken by its box. */
     images: List<Outline.Image> = emptyList(),
+    /** Graphs, taken by their box. */
+    graphs: List<Outline.Graph> = emptyList(),
     /**
      * What is selected, across kinds. Owned by the page rather than this overlay: a shape can be in
      * it, and `ShapeLayer` has to draw the same selection. See [CanvasSelection].
@@ -208,6 +210,8 @@ internal fun InkOverlay(
     onResizeEquations: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onMoveImages: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeImages: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+    onMoveGraphs: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeGraphs: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onDeleteSelection: (InkLassoSelection) -> Unit = {},
     hasClipboard: Boolean = false,
     onRequestPaste: (InkPoint) -> Unit = {},
@@ -263,6 +267,7 @@ internal fun InkOverlay(
     val currentTables by rememberUpdatedState(tables)
     val currentEquations by rememberUpdatedState(equations)
     val currentImages by rememberUpdatedState(images)
+    val currentGraphs by rememberUpdatedState(graphs)
     val currentOnMoveShapes by rememberUpdatedState(onMoveShapes)
     val currentOnResizeShapes by rememberUpdatedState(onResizeShapes)
     val currentOnMoveShapeEnd by rememberUpdatedState(onMoveShapeEnd)
@@ -270,6 +275,8 @@ internal fun InkOverlay(
     val currentOnResizeEquations by rememberUpdatedState(onResizeEquations)
     val currentOnMoveImages by rememberUpdatedState(onMoveImages)
     val currentOnResizeImages by rememberUpdatedState(onResizeImages)
+    val currentOnMoveGraphs by rememberUpdatedState(onMoveGraphs)
+    val currentOnResizeGraphs by rememberUpdatedState(onResizeGraphs)
     val currentOnMoveTables by rememberUpdatedState(onMoveTables)
     val currentOnResizeTables by rememberUpdatedState(onResizeTables)
     val currentOnMoveSelection by rememberUpdatedState(onMoveSelection)
@@ -641,6 +648,7 @@ internal fun InkOverlay(
                             tables = currentTables,
                             equations = currentEquations,
                             images = currentImages,
+                            graphs = currentGraphs,
                             selection = currentSelection,
                             onSelect = currentOnSelect,
                             onMoveShapes = currentOnMoveShapes,
@@ -652,6 +660,8 @@ internal fun InkOverlay(
                             onResizeEquations = currentOnResizeEquations,
                             onMoveImages = currentOnMoveImages,
                             onResizeImages = currentOnResizeImages,
+                            onMoveGraphs = currentOnMoveGraphs,
+                            onResizeGraphs = currentOnResizeGraphs,
                             shapeGesture = shapeGesture,
                             onInsertShape = currentOnInsertShape,
                             straightenOnHold = currentStraightenOnHold,
@@ -819,6 +829,7 @@ private fun handleInk(
     tables: List<TableBounds>,
     equations: List<Outline.Equation>,
     images: List<Outline.Image>,
+    graphs: List<Outline.Graph>,
     selection: CanvasSelection?,
     onSelect: (CanvasSelection?) -> Unit,
     allowFinger: Boolean,
@@ -836,6 +847,8 @@ private fun handleInk(
     onResizeEquations: (Set<String>, InkPoint, Float, Float) -> Unit,
     onMoveImages: (Set<String>, Float, Float) -> Unit,
     onResizeImages: (Set<String>, InkPoint, Float, Float) -> Unit,
+    onMoveGraphs: (Set<String>, Float, Float) -> Unit,
+    onResizeGraphs: (Set<String>, InkPoint, Float, Float) -> Unit,
     liveStroke: InProgressStrokeId?,
     livePointer: Int,
     ruledSide: RulerSide?,
@@ -902,6 +915,7 @@ private fun handleInk(
             tables = tables,
             equations = equations,
             images = images,
+            graphs = graphs,
             touchSlop = touchSlop,
             selection = selection,
             onSelect = onSelect,
@@ -916,6 +930,8 @@ private fun handleInk(
             onResizeEquations = onResizeEquations,
             onMoveImages = onMoveImages,
             onResizeImages = onResizeImages,
+            onMoveGraphs = onMoveGraphs,
+            onResizeGraphs = onResizeGraphs,
         )
     }
 
@@ -2071,6 +2087,7 @@ internal class LassoGesture {
         tables: List<TableBounds> = emptyList(),
         equations: List<Outline.Equation> = emptyList(),
         images: List<Outline.Image> = emptyList(),
+        graphs: List<Outline.Graph> = emptyList(),
         touchSlop: Float = 0f,
         selection: CanvasSelection?,
         onSelect: (CanvasSelection?) -> Unit,
@@ -2085,6 +2102,8 @@ internal class LassoGesture {
         onResizeEquations: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
         onMoveImages: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
         onResizeImages: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+        onMoveGraphs: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+        onResizeGraphs: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     ): Boolean {
         return when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -2174,6 +2193,7 @@ internal class LassoGesture {
                                 tables = tables,
                                 equations = equations,
                                 images = images,
+                                graphs = graphs,
                                 path = drawn,
                                 edgeTolerance = lassoEdgeTolerance(toPage),
                             ) ?: drawn.tapPoint(toPage.pageSpan(touchSlop))?.let { tap ->
@@ -2182,6 +2202,7 @@ internal class LassoGesture {
                                     equations = equations,
                                     images = images,
                                     point = tap,
+                                    graphs = graphs,
                                 )
                             },
                         )
@@ -2219,6 +2240,9 @@ internal class LassoGesture {
                             if (selection.imageIds.isNotEmpty()) {
                                 onMoveImages(selection.imageIds, delta.x, delta.y)
                             }
+                            if (selection.graphIds.isNotEmpty()) {
+                                onMoveGraphs(selection.graphIds, delta.x, delta.y)
+                            }
                             onSelect(selection.translated(delta.x, delta.y))
                         }
                     }
@@ -2251,6 +2275,9 @@ internal class LassoGesture {
                             }
                             if (selection.imageIds.isNotEmpty()) {
                                 onResizeImages(selection.imageIds, resizeAnchor, scale.x, scale.y)
+                            }
+                            if (selection.graphIds.isNotEmpty()) {
+                                onResizeGraphs(selection.graphIds, resizeAnchor, scale.x, scale.y)
                             }
                             onSelect(selection.scaled(resizeAnchor, scale.x, scale.y))
                         }

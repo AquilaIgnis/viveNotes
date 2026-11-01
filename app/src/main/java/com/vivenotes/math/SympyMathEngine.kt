@@ -31,6 +31,22 @@ data class MathGraph(
     val yLabel: String,
     val xValues: List<Double>,
     val yValues: List<Double?>,
+    /**
+     * The function in the graph grammar `math_engine.py` and `graph/GraphExpression.kt` share — what
+     * a graph placed on the page stores and draws. Null when the function uses something outside
+     * that grammar: it still previews in the pane, but cannot be placed.
+     */
+    val expression: String? = null,
+    /** The same function as LaTeX, written in [xLabel], for the placed graph's header. */
+    val functionLatex: String? = null,
+)
+
+/** A placed graph's function after a dragged point was let go: `mutate_graph`'s answer. */
+@Serializable
+data class GraphRewrite(
+    val expression: String? = null,
+    val latex: String? = null,
+    val error: String? = null,
 )
 
 @Serializable
@@ -70,6 +86,16 @@ interface MathEngine {
     }
 
     /**
+     * Rewrites a placed graph's function exactly after one of its points was dragged.
+     *
+     * [mutation] is the JSON `GraphDrag.request` writes. The canvas already drew the new curve
+     * numerically while the finger moved; this is what makes the header read `x^2 - 3x + 1.5` rather
+     * than the decimals the drag produced.
+     */
+    suspend fun mutateGraph(expression: String, variable: String, mutation: String): GraphRewrite =
+        GraphRewrite(error = "This engine cannot rewrite graphs.")
+
+    /**
      * Pays the engine's first-use costs ahead of the first formula. Best effort: an engine that
      * fails here fails again on the formula, where the error is shown.
      */
@@ -100,6 +126,12 @@ class SympyMathEngine(
         withContext(dispatcher) {
             val payload = module().callAttr("calculate", latex, *preferred.toTypedArray()).toString()
             json.decodeFromString<MathOperationResult?>(payload)
+        }
+
+    override suspend fun mutateGraph(expression: String, variable: String, mutation: String): GraphRewrite =
+        withContext(dispatcher) {
+            val payload = module().callAttr("mutate_graph", expression, variable, mutation).toString()
+            json.decodeFromString<GraphRewrite>(payload)
         }
 
     /** Starts Python, imports SymPy and parses one throwaway formula — `warm_up` in the module. */

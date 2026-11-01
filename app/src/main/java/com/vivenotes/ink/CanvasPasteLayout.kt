@@ -32,6 +32,7 @@ internal fun stackPastedOutlines(
             // Its segments are placed on the page as well, so the whole shape moves.
             is Outline.Shape -> outline.translated(0f, y - outline.y)
             is Outline.Equation -> outline.copy(y = y)
+            is Outline.Graph -> outline.copy(y = y)
             is Outline.Ink -> outline.copy(y = y)
         }
         top = y + inset + height + CANVAS_PASTE_MARGIN
@@ -54,6 +55,7 @@ internal fun Outline.documentHeight(): Float = when (this) {
     is Outline.Image -> height
     is Outline.Shape -> height
     is Outline.Equation -> height
+    is Outline.Graph -> height
     is Outline.Ink -> height
 }
 
