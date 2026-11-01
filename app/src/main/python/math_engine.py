@@ -7,9 +7,10 @@ classification, and may invoke only the operation identifiers returned by ``anal
 import json
 import math
 import re
-from typing import Any
+from typing import Any, NamedTuple
 
 import sympy as sp
+from sympy.core.function import AppliedUndef
 from sympy.core.relational import Relational
 from sympy.matrices.matrixbase import MatrixBase
 from sympy.parsing.latex import parse_latex
@@ -441,9 +442,11 @@ def _classify(expression: ParsedInput) -> tuple[str, list[Action]]:
             [
                 _action("differentiate", "Differentiate"),
                 _action("integrate", "Integrate"),
-                _action("graph", "Graph"),
             ]
         )
+    # Not only for one letter: the others become the placed graph's sliders.
+    if _graph_expression(expression) is not None:
+        actions.append(_action("graph", "Graph"))
     if not symbols:
         actions.append(_action("decimal", "Decimal"))
     return "Expression", actions
@@ -991,34 +994,149 @@ def _series_convergence(series: sp.Sum) -> ResultPayload:
     return _verdict_result("Converges", "Absolute convergence could not be determined.")
 
 
-def _graph_expression(expression: ParsedInput) -> tuple[sp.Symbol, sp.Expr, str] | None:
-    if not isinstance(expression, Relational):
-        symbols = _symbols(expression)
-        return (symbols[0], expression, "y") if len(symbols) == 1 else None
+class GraphReading(NamedTuple):
+    """How a formula is drawn: its function of ``variable``, the vertical axis's name, and sliders."""
 
+    variable: sp.Symbol
+    function: sp.Expr
+    dependent: str
+    #: Every other letter, alphabetical: each becomes a slider on the placed graph.
+    parameters: list[sp.Symbol]
+
+
+#: The horizontal axis when a formula has more than one letter, first present wins: algebra's ``x``,
+#: physics' ``t``, then an angle.
+_GRAPH_VARIABLES: tuple[str, ...] = ("x", "t", "theta")
+#: One slider row each under the plot; past this the band would crowd the graph out of its box.
+MAX_GRAPH_PARAMETERS = 5
+#: Desmos's default slider: −10 to 10. A tenth is fine enough to sweep and still reads as typed.
+GRAPH_PARAMETER_MIN = -10.0
+GRAPH_PARAMETER_MAX = 10.0
+GRAPH_PARAMETER_STEP = 0.1
+
+
+def _graph_expression(expression: ParsedInput) -> GraphReading | None:
+    if isinstance(expression, (MatrixBase, sp.Tuple)):
+        return None
+    if not isinstance(expression, Relational):
+        return _parametrised(_juxtaposed(expression), "y", None)
+
+    notation: GraphReading | None = _function_notation(expression)
+    if notation is not None:
+        return notation
     symbols = _symbols(expression)
-    if len(symbols) == 1:
-        return symbols[0], sp.simplify(expression.lhs - expression.rhs), "y"
+    if len(symbols) == 1 and not expression.has(AppliedUndef):
+        return GraphReading(symbols[0], sp.simplify(expression.lhs - expression.rhs), "y", [])
 
     # Recognize ordinary explicit functions such as y = x^2 without attempting a costly solve.
-    if len(symbols) == 2 and isinstance(expression, sp.Equality):
-        if expression.lhs.is_Symbol:
-            other = list(expression.rhs.free_symbols)
-            if len(other) == 1 and expression.lhs not in expression.rhs.free_symbols:
-                return other[0], expression.rhs, str(expression.lhs)
-        if expression.rhs.is_Symbol:
-            other = list(expression.lhs.free_symbols)
-            if len(other) == 1 and expression.rhs not in expression.lhs.free_symbols:
-                return other[0], expression.lhs, str(expression.rhs)
+    if isinstance(expression, sp.Equality):
+        for dependent, other in ((expression.lhs, expression.rhs), (expression.rhs, expression.lhs)):
+            if dependent.is_Symbol and dependent not in other.free_symbols:
+                return _parametrised(_juxtaposed(other), str(dependent), None)
     return None
 
 
+def _function_notation(relation: Relational) -> GraphReading | None:
+    """``f(x) = …`` or ``x(t) = …``: the notation names the variable, and the function the axis."""
+    if not isinstance(relation, sp.Equality):
+        return None
+    for side, other in ((relation.lhs, relation.rhs), (relation.rhs, relation.lhs)):
+        if not isinstance(side, AppliedUndef) or len(side.args) != 1 or not side.args[0].is_Symbol:
+            continue
+        if other.has(side.func):
+            return None
+        variable: sp.Symbol = side.args[0]
+        return _parametrised(_juxtaposed(other), f"{side.func.__name__}({variable})", variable)
+    return None
+
+
+def _parametrised(function: sp.Expr, dependent: str, variable: sp.Symbol | None) -> GraphReading | None:
+    if function.has(AppliedUndef):
+        return None
+    symbols: list[sp.Symbol] = sorted(function.free_symbols, key=sp.default_sort_key)
+    if variable is None:
+        variable = _graph_variable(symbols)
+        if variable is None:
+            return None
+    parameters: list[sp.Symbol] = [symbol for symbol in symbols if symbol != variable]
+    # A bare expression in x and y is a relation written without its = sign, not y as a slider.
+    if len(parameters) > MAX_GRAPH_PARAMETERS or any(str(symbol) == dependent for symbol in parameters):
+        return None
+    return GraphReading(variable, function, dependent, parameters)
+
+
+def _graph_variable(symbols: list[sp.Symbol]) -> sp.Symbol | None:
+    if len(symbols) == 1:
+        return symbols[0]
+    named: dict[str, sp.Symbol] = {str(symbol): symbol for symbol in symbols}
+    for name in _GRAPH_VARIABLES:
+        if name in named:
+            return named[name]
+    return None
+
+
+def _is_juxtaposition(node: sp.Basic) -> bool:
+    return isinstance(node, AppliedUndef) and len(node.args) == 1 and not node.args[0].is_Symbol
+
+
+def _juxtaposed(node: sp.Basic) -> sp.Basic:
+    """Read ``a(x - h)^2`` as the product it was written as, not a function ``a`` squared.
+
+    The parser takes a letter before a bracket for a function call, and applies a following power to
+    the call. Only in a graph is the product certain: an unknown function cannot be drawn anyway.
+    ``f(x)`` — a bare letter inside — is left as the function it reads as, and so is not graphed.
+    """
+    if not node.has(AppliedUndef):
+        return node
+    if isinstance(node, sp.Pow) and _is_juxtaposition(node.base):
+        return sp.Symbol(node.base.func.__name__) * _juxtaposed(node.base.args[0]) ** _juxtaposed(node.exp)
+    if _is_juxtaposition(node):
+        return sp.Symbol(node.func.__name__) * _juxtaposed(node.args[0])
+    if not node.args:
+        return node
+    return node.func(*(_juxtaposed(argument) for argument in node.args))
+
+
+def _parameter_start(function: sp.Expr, parameter: sp.Symbol) -> int:
+    """0 for a parameter only ever added — a phase, an offset, the ``b`` of mx + b — and 1 otherwise.
+
+    The placed graph then starts as the parent function: ``sin(t)`` for ``A sin(ωt + φ)``, ``x²`` for
+    ``a(x − h)² + k``.
+    """
+    return 0 if _only_added(function, parameter, False) else 1
+
+
+def _only_added(node: sp.Basic, parameter: sp.Symbol, in_sum: bool) -> bool:
+    if node == parameter:
+        return in_sum
+    if in_sum and isinstance(node, sp.Mul) and node.args == (sp.Integer(-1), parameter):
+        return True
+    return all(_only_added(argument, parameter, isinstance(node, sp.Add)) for argument in node.args)
+
+
+_SUBSCRIPT_BRACES = re.compile(r"_\{([^{}]*)\}")
+
+
+def _parameter_label(parameter: sp.Symbol) -> str:
+    """What the slider calls it: ``ω``, ``v₀``. SymPy's pretty printer reads ``v_0``, not ``v_{0}``."""
+    name: str = _SUBSCRIPT_BRACES.sub(r"_\1", str(parameter))
+    if name.startswith("var"):
+        name = name[3:]
+    label: str = sp.pretty(sp.Symbol(name), use_unicode=True)
+    return label if "\n" not in label else str(parameter)
+
+
 def _graph_result(expression: ParsedInput) -> ResultPayload:
-    graph = _graph_expression(expression)
-    if graph is None:
+    reading: GraphReading | None = _graph_expression(expression)
+    if reading is None:
         raise MathInputError("This expression cannot be represented as a one-variable graph yet.")
-    variable, graph_expression, dependent_label = graph
-    function = sp.lambdify(variable, graph_expression, modules=["math"])
+    variable: sp.Symbol = reading.variable
+    starts: dict[sp.Symbol, int] = {
+        parameter: _parameter_start(reading.function, parameter) for parameter in reading.parameters
+    }
+    # The preview is drawn where the sliders will start.
+    sampled: sp.Expr = reading.function.subs(starts) if starts else reading.function
+    function = sp.lambdify(variable, sampled, modules=["math"])
     x_min: float = -10.0
     x_max: float = 10.0
     x_values: list[float] = []
@@ -1042,30 +1160,47 @@ def _graph_result(expression: ParsedInput) -> ResultPayload:
         raise MathInputError("No real graph values were found between −10 and 10.")
     graph: dict[str, Any] = {
         "xLabel": str(variable),
-        "yLabel": dependent_label,
+        "yLabel": reading.dependent,
         "xValues": x_values,
         "yValues": y_values,
     }
+    if reading.parameters:
+        graph["parameters"] = [
+            {
+                "symbol": str(parameter),
+                "label": _parameter_label(parameter),
+                "value": float(starts[parameter]),
+                "min": GRAPH_PARAMETER_MIN,
+                "max": GRAPH_PARAMETER_MAX,
+                "step": GRAPH_PARAMETER_STEP,
+            }
+            for parameter in reading.parameters
+        ]
     # Only a function the canvas can evaluate without Python can be placed on the page. Anything
     # else still previews here; it just offers no Place button.
     try:
-        source: str = graph_source(graph_expression, variable)
+        source: str = graph_source(reading.function, variable, reading.parameters)
         graph["expression"] = source
         # Printed from the grammar read back, not from the parse: that is the function the canvas
         # will draw, and SymPy prints an unevaluated ``log(x, 10)`` with its base dropped.
-        graph["functionLatex"] = graph_latex(_GraphParser(source).parse(), str(variable))
+        graph["functionLatex"] = graph_latex(
+            _GraphParser(source, len(reading.parameters)).parse(),
+            str(variable),
+            [str(parameter) for parameter in reading.parameters],
+        )
     except MathInputError:
         pass
-    return {"title": "Graph", "latex": sp.latex(graph_expression), "graph": graph}
+    return {"title": "Graph", "latex": sp.latex(reading.function), "graph": graph}
 
 
 # --- Graph objects ----------------------------------------------------------------------------
 #
 # A graph placed on the page stores its function in a small closed grammar rather than as LaTeX,
 # because the canvas evaluates it thousands of times a frame while a point is dragged and cannot call
-# Python to do so. The grammar is numbers, the variable written as ``x`` whatever it was called,
-# ``+ - * / ^``, parentheses, ``pi``, ``E`` and the function names in ``_GRAPH_FUNCTIONS``. The Kotlin
-# twin is ``graph/GraphExpression.kt``; the two must accept exactly the same language.
+# Python to do so. The grammar is numbers, the variable written as ``x`` whatever it was called, the
+# graph's parameters written ``$0``, ``$1``… in the order of its slider list, ``+ - * / ^``,
+# parentheses, ``pi``, ``E`` and the function names in ``_GRAPH_FUNCTIONS``. The Kotlin twin is
+# ``graph/GraphExpression.kt``; the two must accept exactly the same language.
 #
 # Read back with a parser of its own rather than ``sympify``: the string comes out of a synced
 # document, and ``sympify`` evaluates Python.
@@ -1096,23 +1231,31 @@ _GRAPH_SYMBOL: sp.Symbol = sp.Symbol("x")
 MAX_GRAPH_SOURCE_CHARS = 4000
 
 
-def graph_source(expression: sp.Expr, variable: sp.Symbol) -> str:
-    """``expression`` in the graph grammar, with ``variable`` written as ``x``.
+def _graph_parameter(index: int) -> sp.Symbol:
+    """Parameter ``$index`` as read back from the grammar — named apart from any letter a formula has."""
+    return sp.Symbol(f"${index}")
+
+
+def graph_source(expression: sp.Expr, variable: sp.Symbol, parameters: list[sp.Symbol] | None = None) -> str:
+    """``expression`` in the graph grammar, with ``variable`` written as ``x`` and ``parameters[i]`` as ``$i``.
 
     Every compound child is parenthesized, so precedence never has to be agreed between the two
     languages — only the grammar.
     """
     if expression.has(sp.I):
         raise MathInputError("A graph with complex values cannot be placed on the page.")
-    source: str = _graph_node(expression, variable)
+    indices: dict[sp.Symbol, int] = {parameter: index for index, parameter in enumerate(parameters or [])}
+    source: str = _graph_node(expression, variable, indices)
     if len(source) > MAX_GRAPH_SOURCE_CHARS:
         raise MathInputError("This function is too long to place on the page.")
     return source
 
 
-def _graph_node(node: sp.Basic, variable: sp.Symbol) -> str:
+def _graph_node(node: sp.Basic, variable: sp.Symbol, parameters: dict[sp.Symbol, int]) -> str:
     if node == variable:
         return "x"
+    if node in parameters:
+        return f"${parameters[node]}"
     if node is sp.pi:
         return "pi"
     if node is sp.E:
@@ -1127,36 +1270,43 @@ def _graph_node(node: sp.Basic, variable: sp.Symbol) -> str:
             raise MathInputError("This function has no finite value to draw.")
         return repr(value) if value >= 0 else f"({repr(value)})"
     if isinstance(node, sp.Add):
-        return "(" + "+".join(_graph_node(term, variable) for term in node.args) + ")"
+        return "(" + "+".join(_graph_node(term, variable, parameters) for term in node.args) + ")"
     if isinstance(node, sp.Mul):
-        return "(" + "*".join(_graph_node(factor, variable) for factor in node.args) + ")"
+        return "(" + "*".join(_graph_node(factor, variable, parameters) for factor in node.args) + ")"
     if isinstance(node, sp.Pow):
         base, exponent = node.args
         if exponent == sp.Rational(1, 2):
-            return f"sqrt({_graph_node(base, variable)})"
-        return f"({_graph_node(base, variable)}^{_graph_node(exponent, variable)})"
+            return f"sqrt({_graph_node(base, variable, parameters)})"
+        return f"({_graph_node(base, variable, parameters)}^{_graph_node(exponent, variable, parameters)})"
     if isinstance(node, sp.log) and len(node.args) == 2:
         # ``parse_latex`` keeps ``\\ln x`` as an unevaluated ``log(x, E)`` and ``\\log_{b}`` as
         # ``log(x, b)``; both are a natural logarithm, divided by the base's when there is one.
         argument, base = node.args
         if base is sp.E:
-            return f"ln({_graph_node(argument, variable)})"
-        return f"(ln({_graph_node(argument, variable)})/ln({_graph_node(base, variable)}))"
+            return f"ln({_graph_node(argument, variable, parameters)})"
+        return f"(ln({_graph_node(argument, variable, parameters)})/ln({_graph_node(base, variable, parameters)}))"
     if isinstance(node, sp.Function) and type(node) in _GRAPH_FUNCTIONS and len(node.args) == 1:
-        return f"{_GRAPH_FUNCTIONS[type(node)]}({_graph_node(node.args[0], variable)})"
+        return f"{_GRAPH_FUNCTIONS[type(node)]}({_graph_node(node.args[0], variable, parameters)})"
     raise MathInputError("This function cannot be placed on the page yet.")
 
 
 class _GraphParser:
-    """Reads the graph grammar back into SymPy, ``x`` as ``_GRAPH_SYMBOL``. Nothing is evaluated."""
+    """Reads the graph grammar back into SymPy, ``x`` as ``_GRAPH_SYMBOL``. Nothing is evaluated.
 
-    _TOKEN = re.compile(r"\s*(?:(?P<number>\d+(?:\.\d*)?(?:[eE][-+]?\d+)?)|(?P<name>[A-Za-z]+)|(?P<op>[-+*/^(),]))")
+    ``$i`` reads as ``_graph_parameter(i)``, and only for ``i`` below ``parameter_count`` — the length
+    of the graph's slider list.
+    """
 
-    def __init__(self, source: str) -> None:
+    _TOKEN = re.compile(
+        r"\s*(?:(?P<number>\d+(?:\.\d*)?(?:[eE][-+]?\d+)?)|(?P<name>[A-Za-z]+)|(?P<parameter>\$\d+)|(?P<op>[-+*/^(),]))"
+    )
+
+    def __init__(self, source: str, parameter_count: int = 0) -> None:
         if len(source) > MAX_GRAPH_SOURCE_CHARS:
             raise MathInputError("This function is too long to edit.")
         self.tokens: list[tuple[str, str]] = self._tokenize(source)
         self.index: int = 0
+        self.parameter_count: int = parameter_count
 
     def _tokenize(self, source: str) -> list[tuple[str, str]]:
         tokens: list[tuple[str, str]] = []
@@ -1225,6 +1375,11 @@ class _GraphParser:
         kind, text = self._take()
         if kind == "number":
             return sp.Rational(text) if "e" not in text.lower() else sp.Float(text)
+        if kind == "parameter":
+            parameter: int = int(text[1:])
+            if parameter >= self.parameter_count:
+                raise MathInputError("The stored function is not readable.")
+            return _graph_parameter(parameter)
         if text == "(":
             inner: sp.Expr = self._sum()
             self._expect(")")
@@ -1257,13 +1412,18 @@ def _graph_number(text: Any) -> sp.Rational:
     return sp.Rational(text)
 
 
-def graph_latex(expression: sp.Expr, variable: str) -> str:
-    """``expression`` as LaTeX, with the grammar's ``x`` written as the graph's own variable."""
-    return sp.latex(expression.subs(_GRAPH_SYMBOL, sp.Symbol(variable)))
+def graph_latex(expression: sp.Expr, variable: str, parameters: list[str] | None = None) -> str:
+    """``expression`` as LaTeX, in the graph's own variable and with each ``$i`` as its letter again."""
+    names: dict[sp.Symbol, sp.Symbol] = {_GRAPH_SYMBOL: sp.Symbol(variable)}
+    names.update({_graph_parameter(index): sp.Symbol(name) for index, name in enumerate(parameters or [])})
+    return sp.latex(expression.subs(names, simultaneous=True))
 
 
-def mutate_graph(source: str, variable: str, mutation: str) -> str:
+def mutate_graph(source: str, variable: str, mutation: str, parameters: str = "[]") -> str:
     """Rewrite a placed graph's function after one of its points was dragged.
+
+    ``parameters`` is the JSON list of the graph's slider letters, SymPy's names in slider order —
+    what ``$0``, ``$1``… are printed as. A mutation never adds or removes one.
 
     ``mutation`` is JSON, one of:
 
@@ -1277,7 +1437,14 @@ def mutate_graph(source: str, variable: str, mutation: str) -> str:
     in ``variable`` — or ``{"error"}``.
     """
     try:
-        expression: sp.Expr = _GraphParser(source).parse()
+        names: Any = json.loads(parameters)
+        if (
+            not isinstance(names, list)
+            or len(names) > MAX_GRAPH_PARAMETERS
+            or not all(isinstance(name, str) and name for name in names)
+        ):
+            raise MathInputError("That change cannot be made to this graph.")
+        expression: sp.Expr = _GraphParser(source, len(names)).parse()
         request: Any = json.loads(mutation)
         if not isinstance(request, dict):
             raise MathInputError("That change cannot be made to this graph.")
@@ -1291,8 +1458,10 @@ def mutate_graph(source: str, variable: str, mutation: str) -> str:
         _check_complexity(result)
         return _json(
             {
-                "expression": graph_source(result, _GRAPH_SYMBOL),
-                "latex": graph_latex(result, variable if isinstance(variable, str) else "x"),
+                "expression": graph_source(
+                    result, _GRAPH_SYMBOL, [_graph_parameter(index) for index in range(len(names))]
+                ),
+                "latex": graph_latex(result, variable if isinstance(variable, str) else "x", names),
             }
         )
     except Exception as error:
@@ -1302,12 +1471,14 @@ def mutate_graph(source: str, variable: str, mutation: str) -> str:
 def _shifted(expression: sp.Expr, h: sp.Rational, k: sp.Rational) -> sp.Expr:
     result: sp.Expr = expression.subs(_GRAPH_SYMBOL, _GRAPH_SYMBOL - h) + k
     # Expanded only when it is a polynomial: there it is the form a student checks against, while
-    # expanding sin(x - 1/2) would trade the shift they made for a sum of products.
-    return sp.expand(result) if result.is_polynomial(_GRAPH_SYMBOL) else result
+    # expanding sin(x - 1/2) would trade the shift they made for a sum of products. Not with sliders
+    # in it either: a(x - 1)^2 + k keeps the a and k a student is moving.
+    plain: bool = result.free_symbols <= {_GRAPH_SYMBOL}
+    return sp.expand(result) if plain and result.is_polynomial(_GRAPH_SYMBOL) else result
 
 
 def _root_moved(expression: sp.Expr, near: Any, to: sp.Rational) -> sp.Expr:
-    if not expression.is_polynomial(_GRAPH_SYMBOL):
+    if not expression.free_symbols <= {_GRAPH_SYMBOL} or not expression.is_polynomial(_GRAPH_SYMBOL):
         raise MathInputError("Only a polynomial's roots can be moved one at a time.")
     if not isinstance(near, str):
         raise MathInputError("The dragged root is not a number.")

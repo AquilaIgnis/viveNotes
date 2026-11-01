@@ -543,6 +543,10 @@ sealed interface Outline {
      *
      * [mutable] is the toolkit's mutate toggle — points of interest can be dragged — and independent
      * of [lockGroup]: a locked graph stays put while its points move.
+     *
+     * [parameters] are the formula's other letters — the A, ω and φ of `A sin(ωt + φ)` — each with a
+     * slider under the plot. The grammar names parameter *i* `$i`, so [expression] and
+     * [originalExpression] both mean nothing without this list; it is fixed for the graph's life.
      */
     @Serializable
     @SerialName("graph")
@@ -586,10 +590,29 @@ sealed interface Outline {
         val area: GraphInterval? = null,
         /** The curve. Null draws the default blue, which reads on light and dark paper alike. */
         val colorArgb: Int? = null,
+        val parameters: List<GraphParameter> = emptyList(),
         override val lockGroup: String? = null,
     ) : Outline {
 
         val isMutated: Boolean get() = originalExpression != null && originalExpression != expression
+
+        /**
+         * The Sliders dialog's answer: every range and value at once. Only ever the same letters in
+         * the same order — the function names them by position — so anything else is refused.
+         */
+        fun withParameters(changed: List<GraphParameter>): Graph {
+            val same = changed.map { it.symbol } == parameters.map { it.symbol }
+            if (!same || !changed.all { it.isUsable }) return this
+            return copy(parameters = changed.map { it.copy(value = it.snapped(it.value)) })
+        }
+
+        /** Parameter [index] set to [value], snapped onto its slider's steps. */
+        fun withParameterValue(index: Int, value: Double): Graph {
+            val parameter = parameters.getOrNull(index) ?: return this
+            val snapped = parameter.snapped(value)
+            if (snapped == parameter.value) return this
+            return copy(parameters = parameters.toMutableList().also { it[index] = parameter.copy(value = snapped) })
+        }
 
         fun translated(dx: Float, dy: Float): Graph = copy(x = x + dx, y = y + dy)
 
@@ -819,6 +842,51 @@ sealed interface Outline {
  */
 @Serializable
 data class GraphInterval(val from: Double, val to: Double)
+
+/**
+ * One of a graph's sliders: a letter of its formula other than the variable.
+ *
+ * [symbol] is SymPy's name for the letter — `omega`, `v_{0}` — which the engine needs to print the
+ * header after a mutation; [label] is how the slider shows it, `ω`, `v₀`. The value is always on a
+ * step counted from [min], so it reads as typed.
+ */
+@Serializable
+data class GraphParameter(
+    val symbol: String,
+    val label: String,
+    val value: Double,
+    val min: Double = -10.0,
+    val max: Double = 10.0,
+    val step: Double = 0.1,
+) {
+    /**
+     * [raw] clamped to the range and put on the nearest step: `2.3`, not `2.2999999999999998`.
+     * Rounded through the step's own decimal places, which a sum of doubles would not keep.
+     */
+    fun snapped(raw: Double): Double {
+        if (raw.isNaN() || !isUsable) return value
+        val clamped = raw.coerceIn(min, max)
+        val steps = Math.round((clamped - min) / step)
+        val places = maxOf(
+            java.math.BigDecimal.valueOf(step).stripTrailingZeros().scale(),
+            java.math.BigDecimal.valueOf(min).stripTrailingZeros().scale(),
+            0,
+        )
+        val onStep = java.math.BigDecimal.valueOf(min + steps * step)
+            .setScale(places.coerceAtMost(MAX_PLACES), java.math.RoundingMode.HALF_EVEN)
+            .toDouble()
+        return onStep.coerceIn(min, max)
+    }
+
+    /** A range a slider can be drawn over; a stored one that is not falls back to its value alone. */
+    val isUsable: Boolean
+        get() = min.isFinite() && max.isFinite() && step.isFinite() && min < max && step > 0.0 &&
+            value.isFinite()
+
+    companion object {
+        private const val MAX_PLACES = 10
+    }
+}
 
 /** What is drawn behind a graph's curve — the Graph Class's three. */
 @Serializable

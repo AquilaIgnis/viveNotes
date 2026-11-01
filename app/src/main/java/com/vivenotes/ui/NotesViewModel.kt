@@ -125,6 +125,8 @@ import com.vivenotes.ui.editor.asEditorMarks
 import com.vivenotes.ink.translatedCopy
 import com.vivenotes.graph.GraphAnalysis
 import com.vivenotes.graph.GraphExpression
+import com.vivenotes.graph.GraphFrame
+import com.vivenotes.graph.function
 import com.vivenotes.graph.window
 import com.vivenotes.math.MathGraph
 import com.vivenotes.model.Block
@@ -2912,13 +2914,14 @@ class NotesViewModel(
      * — [near], in page units — or at the top of the view when there is none.
      *
      * The window is fitted here rather than taken from the pane's preview, which always shows
-     * −10…10: a graph whose roots sit near 0.1 should arrive showing them.
+     * −10…10: a graph whose roots sit near 0.1 should arrive showing them. A formula with sliders
+     * arrives taller by their band, so its plot is the size every other graph's is.
      */
     fun insertGraph(graph: MathGraph, near: InkBounds?): String? {
         val pageId = _uiState.value.selectedPageId ?: return null
         if (readOnlyPageId == pageId) return null
         val source = graph.expression ?: return null
-        val function = GraphExpression.parse(source) ?: return null
+        val function = GraphExpression.parse(source)?.with(graph.parameters.map { it.value }) ?: return null
         val window = GraphAnalysis.fit(function::evaluate)
         val titleFloor = if (_uiState.value.pageStyle.hideTitle) 0f else PageStyle.TITLE_BAND_DP
         val created = Outline.Graph(
@@ -2935,6 +2938,8 @@ class NotesViewModel(
             xMax = window.xMax,
             yMin = window.yMin,
             yMax = window.yMax,
+            parameters = graph.parameters,
+            height = Outline.Graph.DEFAULT_HEIGHT + graph.parameters.size * GraphFrame.SLIDER_ROW_DP,
         )
         editGraphs { it + created }
         // Nothing armed, so the next tap reaches the graph — the lasso that picked the formula would
@@ -2983,7 +2988,7 @@ class NotesViewModel(
 
     /** The window refitted to the current function, as on insert. */
     fun fitGraphs(graphIds: Set<String>) = updateGraphs(graphIds) { graph ->
-        val function = GraphExpression.parse(graph.expression) ?: return@updateGraphs graph
+        val function = graph.function() ?: return@updateGraphs graph
         val fitted = GraphAnalysis.fit(function::evaluate)
         graph.copy(xMin = fitted.xMin, xMax = fitted.xMax, yMin = fitted.yMin, yMax = fitted.yMax)
     }

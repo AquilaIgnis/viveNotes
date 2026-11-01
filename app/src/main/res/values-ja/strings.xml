@@ -806,4 +806,16 @@
     <string name="graph_fit">関数に合わせる</string>
     <string name="graph_reset">関数を元に戻す</string>
     <string name="graph_rewrite_failed">グラフを変更できませんでした。</string>
+    <string name="graph_sliders">スライダー</string>
+    <string name="graph_sliders_edit">スライダーを編集</string>
+    <string name="graph_slider_play">再生</string>
+    <string name="graph_slider_pause">一時停止</string>
+    <string name="graph_slider_value">値</string>
+    <string name="graph_slider_min">最小</string>
+    <string name="graph_slider_max">最大</string>
+    <string name="graph_slider_step">刻み</string>
+    <string name="graph_slider_invalid">最小は最大より小さく、刻みは 0 より大きく範囲以下にしてください。</string>
+    <string name="graph_sliders_apply">適用</string>
+    <string name="graph_sliders_cancel">キャンセル</string>
+    <string name="recognition_graph_parameters">%1$s で描画しています。配置すると、それぞれにスライダーが付きます。</string>
 </resources>

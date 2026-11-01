@@ -821,4 +821,16 @@
     <string name="graph_fit">Adatta alla funzione</string>
     <string name="graph_reset">Ripristina funzione</string>
     <string name="graph_rewrite_failed">Impossibile modificare il grafico.</string>
+    <string name="graph_sliders">Cursori</string>
+    <string name="graph_sliders_edit">Modifica cursori</string>
+    <string name="graph_slider_play">Riproduci</string>
+    <string name="graph_slider_pause">Pausa</string>
+    <string name="graph_slider_value">Valore</string>
+    <string name="graph_slider_min">Min</string>
+    <string name="graph_slider_max">Max</string>
+    <string name="graph_slider_step">Passo</string>
+    <string name="graph_slider_invalid">Il minimo deve essere inferiore al massimo e il passo maggiore di 0 e non più ampio dell\'intervallo.</string>
+    <string name="graph_sliders_apply">Applica</string>
+    <string name="graph_sliders_cancel">Annulla</string>
+    <string name="recognition_graph_parameters">Disegnato con %1$s. Ognuno avrà un cursore una volta posizionato.</string>
 </resources>

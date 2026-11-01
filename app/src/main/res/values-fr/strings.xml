@@ -821,4 +821,16 @@
     <string name="graph_fit">Ajuster à la fonction</string>
     <string name="graph_reset">Rétablir la fonction</string>
     <string name="graph_rewrite_failed">Le graphique n\'a pas pu être modifié.</string>
+    <string name="graph_sliders">Curseurs</string>
+    <string name="graph_sliders_edit">Modifier les curseurs</string>
+    <string name="graph_slider_play">Lire</string>
+    <string name="graph_slider_pause">Pause</string>
+    <string name="graph_slider_value">Valeur</string>
+    <string name="graph_slider_min">Min</string>
+    <string name="graph_slider_max">Max</string>
+    <string name="graph_slider_step">Pas</string>
+    <string name="graph_slider_invalid">Le min doit être inférieur au max, et le pas supérieur à 0 sans dépasser l\'intervalle.</string>
+    <string name="graph_sliders_apply">Appliquer</string>
+    <string name="graph_sliders_cancel">Annuler</string>
+    <string name="recognition_graph_parameters">Tracé avec %1$s. Chacun aura un curseur une fois placé.</string>
 </resources>

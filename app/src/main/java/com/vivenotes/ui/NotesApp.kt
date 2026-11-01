@@ -1076,7 +1076,7 @@ private fun NotesWorkspace(
         graphRewrites = graphRewrites + (graph.id to inFlight)
         recognitionScope.launch {
             val rewrite = try {
-                mathEngine.mutateGraph(graph.expression, graph.variable, drag.request())
+                mathEngine.mutateGraph(graph.expression, graph.variable, drag.request(), graph.parameters.map { it.symbol })
             } catch (failure: Exception) {
                 GraphRewrite(error = failure.message)
             }

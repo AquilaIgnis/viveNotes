@@ -852,4 +852,16 @@
     <string name="graph_fit">Dopasuj do funkcji</string>
     <string name="graph_reset">Przywróć funkcję</string>
     <string name="graph_rewrite_failed">Nie udało się zmienić wykresu.</string>
+    <string name="graph_sliders">Suwaki</string>
+    <string name="graph_sliders_edit">Edytuj suwaki</string>
+    <string name="graph_slider_play">Odtwórz</string>
+    <string name="graph_slider_pause">Pauza</string>
+    <string name="graph_slider_value">Wartość</string>
+    <string name="graph_slider_min">Min</string>
+    <string name="graph_slider_max">Maks</string>
+    <string name="graph_slider_step">Krok</string>
+    <string name="graph_slider_invalid">Min musi być mniejsze od maks, a krok większy od 0 i nie szerszy niż zakres.</string>
+    <string name="graph_sliders_apply">Zastosuj</string>
+    <string name="graph_sliders_cancel">Anuluj</string>
+    <string name="recognition_graph_parameters">Narysowano dla %1$s. Po umieszczeniu każdy parametr dostanie suwak.</string>
 </resources>

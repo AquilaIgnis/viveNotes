@@ -33,7 +33,7 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.graph.GraphArea
-import com.vivenotes.graph.GraphExpression
+import com.vivenotes.graph.function
 import com.vivenotes.graph.GraphTangent
 import com.vivenotes.graph.window
 import com.vivenotes.model.GraphBackground
@@ -54,6 +54,7 @@ internal object GraphToolkitTags {
     const val ZOOM_OUT = "object-tooltip-graph-zoom-out"
     const val FIT = "object-tooltip-graph-fit"
     const val RESET = "object-tooltip-graph-reset"
+    const val SLIDERS = "object-tooltip-graph-sliders"
 }
 
 /**
@@ -81,6 +82,8 @@ internal class GraphToolkitActions(
     val zoom: (Double) -> Unit,
     val fit: () -> Unit,
     val reset: () -> Unit,
+    /** The Sliders dialog, for one graph with parameters. */
+    val editSliders: () -> Unit = {},
 )
 
 /**
@@ -155,7 +158,7 @@ internal fun RowScope.GraphActions(graphs: List<Outline.Graph>, actions: GraphTo
                 actions.update { graph ->
                     graph.copy(
                         traceX = if (on) {
-                            GraphExpression.parse(graph.expression)?.let { GraphTangent.start(it::evaluate, graph.window()) }
+                            graph.function()?.let { GraphTangent.start(it::evaluate, graph.window()) }
                         } else {
                             null
                         },
@@ -167,7 +170,7 @@ internal fun RowScope.GraphActions(graphs: List<Outline.Graph>, actions: GraphTo
                 actions.update { graph ->
                     graph.copy(
                         area = if (on) {
-                            GraphExpression.parse(graph.expression)?.let { GraphArea.start(it::evaluate, graph.window()) }
+                            graph.function()?.let { GraphArea.start(it::evaluate, graph.window()) }
                         } else {
                             null
                         },
@@ -181,6 +184,13 @@ internal fun RowScope.GraphActions(graphs: List<Outline.Graph>, actions: GraphTo
             ActionItem(R.string.graph_fit, MaterialSymbols.FitScreen, GraphToolkitTags.FIT) {
                 open = false
                 actions.fit()
+            }
+            // One graph's sliders at a time: the dialog edits ranges, which mean nothing across graphs.
+            if (graphs.singleOrNull()?.parameters?.isNotEmpty() == true) {
+                ActionItem(R.string.graph_sliders, MaterialSymbols.InstantMix, GraphToolkitTags.SLIDERS) {
+                    open = false
+                    actions.editSliders()
+                }
             }
             // Absent until there is something to go back to.
             if (graphs.any { it.originalExpression != null }) {

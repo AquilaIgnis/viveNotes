@@ -3,13 +3,18 @@ package com.vivenotes.ui.editor
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -24,7 +29,21 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.DpSize
 import com.vivenotes.graph.GraphAnalysis
 import com.vivenotes.graph.GraphColors
@@ -33,18 +52,23 @@ import com.vivenotes.graph.GraphExpression
 import com.vivenotes.graph.GraphFrame
 import com.vivenotes.graph.GraphPainter
 import com.vivenotes.graph.GraphPoint
+import com.vivenotes.graph.GraphSliders
+import com.vivenotes.graph.SliderPart
 import com.vivenotes.graph.GraphTangent
 import com.vivenotes.graph.window
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
 import com.vivenotes.ink.pageBounds
+import com.vivenotes.R
 import com.vivenotes.model.GraphInterval
+import com.vivenotes.model.GraphParameter
 import com.vivenotes.model.Outline
 import com.vivenotes.richtext.createEquationRenderer
 import io.ratex.RaTeXRenderer
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.roundToInt
 
 internal const val GRAPH_LAYER_TAG = "graph-layer"
 
@@ -66,6 +90,10 @@ data class GraphRewriteInFlight(val from: String, val drag: GraphDrag)
  *
  * Point drags need the graph selected first, so a finger resting on a page cannot rewrite a
  * function by accident; and they work on a locked graph, which keeps still while its points move.
+ *
+ * A selected graph's sliders take a finger the same way, mutate or not: a drag previews every frame
+ * and [onParameter] writes the value on the lift; play sweeps one until it is paused or the graph is
+ * let go, and writes where it stopped. Each row is a TalkBack slider too.
  */
 @Composable
 internal fun GraphLayer(
@@ -84,6 +112,10 @@ internal fun GraphLayer(
     onTrace: (graphId: String, x: Double) -> Unit = { _, _ -> },
     /** The area's bounds after one of them was let go. */
     onArea: (graphId: String, area: GraphInterval) -> Unit = { _, _ -> },
+    /** A slider let go, paused, or set by TalkBack, at a value not yet snapped. */
+    onParameter: (graphId: String, index: Int, value: Double) -> Unit = { _, _, _ -> },
+    /** A slider's name tapped: the Sliders dialog, for its range and an exact value. */
+    onEditSliders: (graphId: String) -> Unit = {},
     rewrites: Map<String, GraphRewriteInFlight> = emptyMap(),
     modifier: Modifier = Modifier,
     canvasExtent: DpSize? = null,
@@ -103,14 +135,51 @@ internal fun GraphLayer(
     val currentOnMutate = rememberUpdatedState(onMutate)
     val currentOnTrace = rememberUpdatedState(onTrace)
     val currentOnArea = rememberUpdatedState(onArea)
+    val currentOnParameter = rememberUpdatedState(onParameter)
+    val currentOnEditSliders = rememberUpdatedState(onEditSliders)
 
     val resize = remember { mutableStateOf<GraphResize?>(null) }
     val move = remember { mutableStateOf<GraphMove?>(null) }
     val pointDrag = remember { mutableStateOf<GraphPointDrag?>(null) }
     val traceDrag = remember { mutableStateOf<GraphTraceDrag?>(null) }
     val areaDrag = remember { mutableStateOf<GraphAreaDrag?>(null) }
+    val sliderDrag = remember { mutableStateOf<GraphSliderValue?>(null) }
+    val playing = remember { mutableStateOf<GraphSliderPlay?>(null) }
     val painter = remember { GraphPainter() }
     val functions = remember { GraphFunctions() }
+
+    /** Writes where play has got to and stops it. */
+    fun stopPlaying() {
+        val play = playing.value ?: return
+        playing.value = null
+        currentOnParameter.value(play.graphId, play.index, play.value)
+    }
+
+    // Play: one slider at a time, swept a frame at a time. Nothing is written until it stops.
+    // Read in composition only through this, so a frame of play redraws without recomposing.
+    val playKey by remember { derivedStateOf { playing.value?.let { it.graphId to it.index } } }
+    LaunchedEffect(playKey) {
+        if (playKey == null) return@LaunchedEffect
+        var last = withFrameMillis { it }
+        while (true) {
+            val now = withFrameMillis { it }
+            val play = playing.value ?: break
+            val parameter = currentGraphs.value.firstOrNull { it.id == play.graphId }?.parameters?.getOrNull(play.index)
+            if (parameter == null) {
+                playing.value = null
+                break
+            }
+            val (value, direction) = GraphSliders.sweep(parameter, play.value, play.direction, now - last)
+            playing.value = play.copy(value = value, direction = direction)
+            last = now
+        }
+    }
+    // Letting the graph go — selecting something else, or nothing — pauses it where it is.
+    LaunchedEffect(selection, playKey) {
+        val play = playing.value ?: return@LaunchedEffect
+        val held = selection != null && selection.isGraphOnly && selection.holdsGraph(play.graphId)
+        if (!held) stopPlaying()
+    }
 
     // Headers are formulas, rendered as an equation object's are and cached by text and colour.
     val renderers = remember { mutableStateMapOf<HeaderKey, RaTeXRenderer>() }
@@ -142,12 +211,71 @@ internal fun GraphLayer(
 
                     val selected = all.singleOrNull { held != null && held.isGraphOnly && held.holdsGraph(it.id) }
                     val handle = selected?.takeIf { it.lockGroup == null }?.handleNear(startX, startY)
+
+                    // A slider on a selected graph — locked or not, mutate or not, like the tracer.
+                    val slider = selected?.takeIf { handle == null }?.let { graph ->
+                        graph.frame(density).sliderAt(down.position.x, down.position.y)?.let { graph to it }
+                    }
+                    if (slider != null) {
+                        down.consume()
+                        val (graph, hit) = slider
+                        val frame = graph.frame(density)
+                        val parameter = graph.parameters[hit.index]
+                        val slop = viewConfiguration.touchSlop
+                        if (hit.part == SliderPart.Track) {
+                            // Material's: the handle jumps to the finger, then follows it.
+                            if (playing.value?.let { it.graphId == graph.id && it.index == hit.index } == true) {
+                                playing.value = null
+                            }
+                            sliderDrag.value = GraphSliderValue(
+                                graph.id,
+                                hit.index,
+                                parameter.snapped(frame.sliderValue(parameter, down.position.x)),
+                            )
+                        }
+                        var moved = false
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            change.consume()
+                            if ((change.position - down.position).getDistance() > slop) moved = true
+                            if (!change.pressed) {
+                                when (hit.part) {
+                                    SliderPart.Track -> sliderDrag.value?.let { drag ->
+                                        if (!GraphSliders.same(drag.value, parameter.value)) {
+                                            currentOnParameter.value(graph.id, hit.index, drag.value)
+                                        }
+                                    }
+                                    SliderPart.Play -> if (!moved) {
+                                        val now = playing.value
+                                        if (now?.graphId == graph.id && now.index == hit.index) {
+                                            stopPlaying()
+                                        } else {
+                                            stopPlaying()
+                                            playing.value = GraphSliderPlay(graph.id, hit.index, parameter.value, 1)
+                                        }
+                                    }
+                                    SliderPart.Label -> if (!moved) currentOnEditSliders.value(graph.id)
+                                }
+                                break
+                            }
+                            if (hit.part == SliderPart.Track) {
+                                sliderDrag.value = GraphSliderValue(
+                                    graph.id,
+                                    hit.index,
+                                    parameter.snapped(frame.sliderValue(parameter, change.position.x)),
+                                )
+                            }
+                        }
+                        sliderDrag.value = null
+                        return@awaitEachGesture
+                    }
                     // The tracer, on a selected graph — mutate or not, locked or not: sliding it reads
                     // the curve and changes neither the function nor where the graph sits. It wins
                     // over a point of interest under it, being the thing that was put there.
                     val tracing = selected?.takeIf { handle == null }?.let { graph ->
                         val at = graph.traceX ?: return@let null
-                        val function = functions.of(graph.expression) ?: return@let null
+                        val function = functions.of(graph) ?: return@let null
                         val frame = graph.frame(density)
                         val y = function.evaluate(at)
                         val near = y.isFinite() && hypot(
@@ -159,7 +287,7 @@ internal fun GraphLayer(
                     // A point of interest under the finger, on a selected graph with mutate on.
                     val grabbed = selected?.takeIf { it.mutable && handle == null && tracing == null }?.let { graph ->
                         val frame = graph.frame(density)
-                        val function = functions.of(graph.expression) ?: return@let null
+                        val function = functions.of(graph) ?: return@let null
                         val points = GraphAnalysis.pointsOfInterest(function::evaluate, frame.window)
                         frame.pointNear(points, down.position.x, down.position.y)?.let { point ->
                             Triple(graph, function, point)
@@ -231,7 +359,7 @@ internal fun GraphLayer(
                             val window = frame.window
                             val x = frame.graphX(change.position.x).coerceIn(window.xMin, window.xMax)
                             val magnet = TRACE_MAGNET_DP * density / frame.plot.width() * window.width
-                            val snapped = GraphTangent.snap(x, functions.pointsOf(graph.expression, window), magnet, window)
+                            val snapped = GraphTangent.snap(x, functions.pointsOf(graph, window), magnet, window)
                             areaDrag.value = GraphAreaDrag(
                                 graph.id,
                                 if (bounding.isFrom) area.copy(from = snapped) else area.copy(to = snapped),
@@ -244,7 +372,7 @@ internal fun GraphLayer(
                             val window = frame.window
                             val x = frame.graphX(change.position.x).coerceIn(window.xMin, window.xMax)
                             val magnet = TRACE_MAGNET_DP * density / frame.plot.width() * window.width
-                            val points = functions.pointsOf(tracing.expression, window)
+                            val points = functions.pointsOf(tracing, window)
                             traceDrag.value = GraphTraceDrag(tracing.id, GraphTangent.snap(x, points, magnet, window))
                         } else if (grabbed != null) {
                             // The function changes under the finger; the box stays where it is, locked
@@ -254,7 +382,7 @@ internal fun GraphLayer(
                             pointDrag.value = GraphPointDrag(
                                 graph = graph,
                                 drag = GraphDrag.of(
-                                    base = function,
+                                    base = function::evaluate,
                                     polynomial = functions.polynomialOf(graph.expression),
                                     point = point,
                                     x = frame.graphX(change.position.x),
@@ -306,6 +434,8 @@ internal fun GraphLayer(
             val dragging = pointDrag.value
             val tracer = traceDrag.value
             val bounds = areaDrag.value
+            val sliding = sliderDrag.value
+            val play = playing.value
 
             fun previewOf(graph: Outline.Graph): Outline.Graph = when {
                 resizing?.graphId == graph.id ->
@@ -321,7 +451,12 @@ internal fun GraphLayer(
             graphs.forEach { graph ->
                 val drawn = previewOf(graph)
                 if (!pageBoxIsVisible(drawn.x, drawn.y, drawn.width, drawn.height, window, density)) return@forEach
-                val base = functions.of(graph.expression) ?: return@forEach
+                // The sliders as they stand this frame: stored, else played, else under the finger.
+                val live = graph.parameters
+                    .withValue(play?.takeIf { it.graphId == graph.id }?.let { it.index to it.value })
+                    .withValue(sliding?.takeIf { it.graphId == graph.id }?.let { it.index to it.value })
+                val values = live.map { it.value }
+                val base = functions.of(graph.expression)?.with(values) ?: return@forEach
                 // The drag in hand, else one let go of and still with the engine, else the function.
                 val change = dragging?.takeIf { it.graph.id == graph.id }?.drag
                     ?: rewrites[graph.id]?.takeIf { it.from == graph.expression }?.drag
@@ -330,11 +465,11 @@ internal fun GraphLayer(
                 val original = when {
                     !graph.showOriginal -> null
                     change != null -> base::evaluate
-                    graph.isMutated -> graph.originalExpression?.let(functions::of)?.let { it::evaluate }
+                    graph.isMutated -> graph.originalExpression?.let(functions::of)?.with(values)?.let { it::evaluate }
                     else -> null
                 }
                 val points = if (change == null) {
-                    functions.pointsOf(graph.expression, frame.window)
+                    functions.pointsOf(graph.expression, values, frame.window)
                 } else {
                     GraphAnalysis.pointsOfInterest(current, frame.window)
                 }
@@ -361,29 +496,141 @@ internal fun GraphLayer(
                         traceHandle = graph.id == single?.id && dragging == null,
                         area = bounds?.takeIf { it.graphId == graph.id }?.area ?: graph.area,
                         areaHandles = graph.id == single?.id && dragging == null,
+                        parameters = live,
+                        sliderControls = graph.id == single?.id,
+                        playing = play?.takeIf { it.graphId == graph.id }?.index,
+                        pressedSlider = sliding?.takeIf { it.graphId == graph.id }?.index,
                     )
                 }
             }
 
             single?.let { drawGraphSelection(previewOf(it), accent, handleFill, density) }
         }
+
+        // The selected graph's sliders as TalkBack sees them: semantics only, so every touch still
+        // reaches the gesture handler above.
+        graphs.singleOrNull { selection != null && selection.isGraphOnly && selection.holdsGraph(it.id) }
+            ?.takeIf { lassoGesture == null && interactive }
+            ?.let { graph ->
+                GraphSliderSemantics(
+                    graph = graph,
+                    frame = graph.frame(density),
+                    playingIndex = playKey?.takeIf { it.first == graph.id }?.second,
+                    onSet = { index, value -> currentOnParameter.value(graph.id, index, value) },
+                    onPlay = { index ->
+                        val now = playing.value
+                        stopPlaying()
+                        if (now?.graphId != graph.id || now.index != index) {
+                            playing.value = GraphSliderPlay(graph.id, index, graph.parameters[index].value, 1)
+                        }
+                    },
+                    onEdit = { currentOnEditSliders.value(graph.id) },
+                )
+            }
     }
 }
 
-/** The function behind each stored string, parsed once; and its points, found once per window. */
+/** Each slider row of [graph] as an adjustable TalkBack slider, with play as a button beside it. */
+@Composable
+private fun GraphSliderSemantics(
+    graph: Outline.Graph,
+    frame: GraphFrame,
+    playingIndex: Int?,
+    onSet: (index: Int, value: Double) -> Unit,
+    onPlay: (index: Int) -> Unit,
+    onEdit: () -> Unit,
+) {
+    if (frame.sliders == null) return
+    val density = LocalDensity.current
+    val editLabel = stringResource(R.string.graph_sliders_edit)
+    val playLabel = stringResource(R.string.graph_slider_play)
+    val pauseLabel = stringResource(R.string.graph_slider_pause)
+    graph.parameters.forEachIndexed { index, parameter ->
+        val row = frame.sliderRow(index) ?: return@forEachIndexed
+        val trackEnd = frame.trackRight + GraphFrame.SLIDER_GAP_DP / 2 * frame.unit
+        with(density) {
+            Box(
+                Modifier
+                    .offset { IntOffset(row.left.roundToInt(), row.top.roundToInt()) }
+                    .size((trackEnd - row.left).toDp(), row.height().toDp())
+                    .testTag(GraphSliderTags.slider(index))
+                    .semantics {
+                        contentDescription = parameter.label
+                        stateDescription = GraphSliders.number(parameter.value, parameter.step)
+                        if (parameter.isUsable) {
+                            progressBarRangeInfo = ProgressBarRangeInfo(
+                                parameter.value.toFloat(),
+                                parameter.min.toFloat()..parameter.max.toFloat(),
+                            )
+                        }
+                        setProgress { target ->
+                            onSet(index, target.toDouble())
+                            true
+                        }
+                        customActions = listOf(CustomAccessibilityAction(editLabel) { onEdit(); true })
+                    },
+            )
+            Box(
+                Modifier
+                    .offset { IntOffset(trackEnd.roundToInt(), row.top.roundToInt()) }
+                    .size((row.right - trackEnd).toDp(), row.height().toDp())
+                    .testTag(GraphSliderTags.play(index))
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = "${if (playingIndex == index) pauseLabel else playLabel} ${parameter.label}"
+                        onClick {
+                            onPlay(index)
+                            true
+                        }
+                    },
+            )
+        }
+    }
+}
+
+internal object GraphSliderTags {
+    fun slider(index: Int) = "graph-slider-$index"
+    fun play(index: Int) = "graph-slider-play-$index"
+}
+
+/** A slider's value in flight — under the finger — before it is written. */
+private data class GraphSliderValue(val graphId: String, val index: Int, val value: Double)
+
+/** Play sweeping one slider: where it has got to, and which way it is going. */
+private data class GraphSliderPlay(val graphId: String, val index: Int, val value: Double, val direction: Int)
+
+/** The list with one slider at a value in flight, given as its index and the value. */
+private fun List<GraphParameter>.withValue(change: Pair<Int, Double>?): List<GraphParameter> {
+    if (change == null) return this
+    val (index, value) = change
+    val parameter = getOrNull(index) ?: return this
+    return toMutableList().also { it[index] = parameter.copy(value = value) }
+}
+
+/**
+ * The function behind each stored string, parsed once; and its points, found once per window and
+ * set of slider values.
+ */
 private class GraphFunctions {
     private val parsed = HashMap<String, GraphExpression?>()
     private val polynomials = HashMap<String, DoubleArray?>()
-    private val points = HashMap<Pair<String, com.vivenotes.graph.GraphWindow>, List<GraphPoint>>()
+    private val points = HashMap<Triple<String, List<Double>, com.vivenotes.graph.GraphWindow>, List<GraphPoint>>()
 
+    /** Unbound: its parameters, if it has any, are not yet given values. */
     fun of(source: String): GraphExpression? = parsed.getOrPut(source) { GraphExpression.parse(source) }
+
+    /** [graph]'s function at its stored slider values. */
+    fun of(graph: Outline.Graph): GraphExpression? = of(graph.expression)?.with(graph.parameters.map { it.value })
 
     fun polynomialOf(source: String): DoubleArray? = polynomials.getOrPut(source) { of(source)?.polynomial() }
 
-    fun pointsOf(source: String, window: com.vivenotes.graph.GraphWindow): List<GraphPoint> {
+    fun pointsOf(graph: Outline.Graph, window: com.vivenotes.graph.GraphWindow): List<GraphPoint> =
+        pointsOf(graph.expression, graph.parameters.map { it.value }, window)
+
+    fun pointsOf(source: String, values: List<Double>, window: com.vivenotes.graph.GraphWindow): List<GraphPoint> {
         if (points.size > 64) points.clear()
-        return points.getOrPut(source to window) {
-            of(source)?.let { GraphAnalysis.pointsOfInterest(it::evaluate, window) }.orEmpty()
+        return points.getOrPut(Triple(source, values, window)) {
+            of(source)?.with(values)?.let { GraphAnalysis.pointsOfInterest(it::evaluate, window) }.orEmpty()
         }
     }
 }

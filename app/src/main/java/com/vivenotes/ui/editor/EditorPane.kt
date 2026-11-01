@@ -645,6 +645,9 @@ fun EditorPane(
      */
     val currentSelection = rememberUpdatedState(selection)
 
+    /** The graph whose Sliders dialog is open — from a slider's name, or the graph's options menu. */
+    var slidersOf by remember(pageId) { mutableStateOf<String?>(null) }
+
     /** Search feedback is emphasis, not an editable object selection. It therefore has no tooltip. */
     var inkSearchHighlight by remember(pageId) { mutableStateOf<InkBounds?>(null) }
     val lassoGesture = remember { LassoGesture() }
@@ -1471,6 +1474,10 @@ fun EditorPane(
                                         onArea = { id, area ->
                                             onUpdateGraphs(setOf(id)) { it.copy(area = area) }
                                         },
+                                        onParameter = { id, index, value ->
+                                            onUpdateGraphs(setOf(id)) { it.withParameterValue(index, value) }
+                                        },
+                                        onEditSliders = { id -> slidersOf = id },
                                         rewrites = graphRewrites,
                                         canvasExtent = canvasSize,
                                     )
@@ -1700,6 +1707,17 @@ fun EditorPane(
                 onRequestPaste = requestPasteAt,
             )
 
+            slidersOf?.let { id -> graphs.firstOrNull { it.id == id } }?.let { graph ->
+                GraphSlidersDialog(
+                    parameters = graph.parameters,
+                    onDismiss = { slidersOf = null },
+                    onApply = { changed ->
+                        onUpdateGraphs(setOf(graph.id)) { it.withParameters(changed) }
+                        slidersOf = null
+                    },
+                )
+            }
+
             // One bar over whatever is selected, whatever kind it is. Raised here rather than
             // inside a layer because a selection can hold both kinds, and because the bar is chrome:
             // out here it keeps its own size at any zoom and is clamped against the *window*, where a
@@ -1830,6 +1848,7 @@ fun EditorPane(
                                     zoom = { factor -> onZoomGraphs(held.graphIds, factor) },
                                     fit = { onFitGraphs(held.graphIds) },
                                     reset = { onResetGraphs(held.graphIds) },
+                                    editSliders = { slidersOf = held.graphIds.singleOrNull() },
                                 ),
                             )
                         }

@@ -24,52 +24,75 @@ import kotlin.math.tanh
 /**
  * A placed graph's function, read from the grammar `math_engine.py` writes, and evaluated.
  *
- * The grammar is numbers, the variable written `x` whatever the graph calls it, `+ - * / ^`,
- * parentheses, `pi`, `E` and the names in [Function]. Python's `_GraphParser` reads the same
- * language; the two must accept exactly the same strings.
+ * The grammar is numbers, the variable written `x` whatever the graph calls it, the graph's
+ * parameters written `$0`, `$1`…, `+ - * / ^`, parentheses, `pi`, `E` and the names in [Function].
+ * Python's `_GraphParser` reads the same language; the two must accept exactly the same strings.
  *
  * Evaluated here rather than in Python because the canvas asks for thousands of values a frame
- * while a point is dragged. Undefined values — a square root of a negative, a pole — are NaN, never
- * an exception: a curve with gaps is the normal case.
+ * while a point or a slider is dragged. Undefined values — a square root of a negative, a pole — are
+ * NaN, never an exception: a curve with gaps is the normal case.
+ *
+ * A parsed function holds its parameters' values; [with] binds new ones to the same tree, which is
+ * all a slider frame costs.
  */
-class GraphExpression private constructor(private val root: Node) {
+class GraphExpression private constructor(
+    private val root: Node,
+    /** One more than the highest `$i` the function names: how many values it needs. */
+    val parameterCount: Int,
+    private val values: DoubleArray,
+) {
 
     /** f(x), or NaN where the function is undefined or not real. */
-    fun evaluate(x: Double): Double = root.evaluate(x)
+    fun evaluate(x: Double): Double = root.evaluate(x, values)
+
+    /**
+     * The same function with its parameters at [values], or null when there are too few of them
+     * — a stored graph whose slider list does not cover its formula is not drawable.
+     */
+    fun with(values: List<Double>): GraphExpression? {
+        if (values.size < parameterCount) return null
+        return GraphExpression(root, parameterCount, values.toDoubleArray())
+    }
 
     /**
      * The coefficients, constant term first, when this is a polynomial in `x`; otherwise null.
      *
      * A polynomial is what lets a single root be dragged on its own — see `GraphDrag.Root`. Only
      * `+ - *`, division by a constant and whole non-negative powers qualify, so `1/x` and `sqrt(x)`
-     * are refused. Degree is capped where floating point stops being honest about the roots.
+     * are refused. Degree is capped where floating point stops being honest about the roots. A
+     * parameter refuses it too: the engine cannot find a root of `ax² − 4` among exact numbers.
      */
     fun polynomial(): DoubleArray? = root.polynomial()?.takeIf { it.size - 1 <= MAX_DEGREE }?.trimmed()
 
     sealed interface Node {
-        fun evaluate(x: Double): Double
+        fun evaluate(x: Double, parameters: DoubleArray): Double
         fun polynomial(): DoubleArray?
     }
 
     private data class Constant(val value: Double) : Node {
-        override fun evaluate(x: Double): Double = value
+        override fun evaluate(x: Double, parameters: DoubleArray): Double = value
         override fun polynomial(): DoubleArray = doubleArrayOf(value)
     }
 
     private data object Variable : Node {
-        override fun evaluate(x: Double): Double = x
+        override fun evaluate(x: Double, parameters: DoubleArray): Double = x
         override fun polynomial(): DoubleArray = doubleArrayOf(0.0, 1.0)
     }
 
+    private data class Parameter(val index: Int) : Node {
+        override fun evaluate(x: Double, parameters: DoubleArray): Double = parameters.getOrElse(index) { Double.NaN }
+        override fun polynomial(): DoubleArray? = null
+    }
+
     private data class Negate(val operand: Node) : Node {
-        override fun evaluate(x: Double): Double = -operand.evaluate(x)
+        override fun evaluate(x: Double, parameters: DoubleArray): Double = -operand.evaluate(x, parameters)
         override fun polynomial(): DoubleArray? = operand.polynomial()?.let { p -> DoubleArray(p.size) { -p[it] } }
     }
 
     private data class Binary(val operator: Char, val left: Node, val right: Node) : Node {
-        override fun evaluate(x: Double): Double {
-            val a = left.evaluate(x)
-            val b = right.evaluate(x)
+        override fun evaluate(x: Double, parameters: DoubleArray): Double {
+            val a = left.evaluate(x, parameters)
+            val b = right.evaluate(x, parameters)
             return when (operator) {
                 '+' -> a + b
                 '-' -> a - b
@@ -102,7 +125,8 @@ class GraphExpression private constructor(private val root: Node) {
     }
 
     private data class Call(val function: Function, val argument: Node) : Node {
-        override fun evaluate(x: Double): Double = function.apply(argument.evaluate(x))
+        override fun evaluate(x: Double, parameters: DoubleArray): Double =
+            function.apply(argument.evaluate(x, parameters))
         override fun polynomial(): DoubleArray? = null
     }
 
@@ -146,6 +170,10 @@ class GraphExpression private constructor(private val root: Node) {
     private class Parser(private val source: String) {
         private var at = 0
         private var depth = 0
+
+        /** One more than the highest parameter read so far. */
+        var parameterCount = 0
+            private set
 
         fun parse(): Node? {
             val node = sum() ?: return null
@@ -200,6 +228,7 @@ class GraphExpression private constructor(private val root: Node) {
                 return if (peek() == ')') inner.also { at++ } else null
             }
             if (next.isDigit()) return number()
+            if (next == '$') return parameter()
             if (!next.isLetter()) return null
             val start = at
             while (at < source.length && source[at].isLetter()) at++
@@ -217,6 +246,14 @@ class GraphExpression private constructor(private val root: Node) {
                     Call(function, argument)
                 }
             }
+        }
+
+        private fun parameter(): Node? {
+            val match = PARAMETER.matchAt(source, at) ?: return null
+            at = match.range.last + 1
+            val index = match.groupValues[1].toIntOrNull()?.takeIf { it < MAX_PARAMETERS } ?: return null
+            parameterCount = maxOf(parameterCount, index + 1)
+            return Parameter(index)
         }
 
         private fun number(): Node? {
@@ -248,13 +285,22 @@ class GraphExpression private constructor(private val root: Node) {
         /** The same ceiling `math_engine.py` puts on what it writes. */
         const val MAX_SOURCE_CHARS = 4000
 
+        /** `math_engine.py`'s `MAX_GRAPH_PARAMETERS`, with room: a slider list is never this long. */
+        private const val MAX_PARAMETERS = 16
+
         private const val MAX_DEPTH = 200
         private val NUMBER = Regex("""\d+(?:\.\d*)?(?:[eE][-+]?\d+)?""")
+        private val PARAMETER = Regex("""\$(\d{1,2})""")
 
-        /** The function [source] names, or null when it is not in the grammar. */
+        /**
+         * The function [source] names, or null when it is not in the grammar. Its parameters start
+         * unbound — NaN — until [with] gives them values.
+         */
         fun parse(source: String): GraphExpression? {
             if (source.isBlank() || source.length > MAX_SOURCE_CHARS) return null
-            return Parser(source).parse()?.let(::GraphExpression)
+            val parser = Parser(source)
+            val root = parser.parse() ?: return null
+            return GraphExpression(root, parser.parameterCount, DoubleArray(0))
         }
 
         private fun power(base: Double, exponent: Double): Double {

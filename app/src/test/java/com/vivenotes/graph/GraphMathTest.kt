@@ -131,7 +131,7 @@ class GraphMathTest {
     fun draggingAPolynomialZeroMovesOnlyThatRoot() {
         val f = parse("((x^2)+(-4))")
         val zero = GraphPoint(2.0, 0.0, PointKind.Zero)
-        val drag = GraphDrag.of(f, f.polynomial(), zero, 3.4, 0.7, GraphWindow(-10.0, 10.0, -10.0, 10.0))
+        val drag = GraphDrag.of(f::evaluate, f.polynomial(), zero, 3.4, 0.7, GraphWindow(-10.0, 10.0, -10.0, 10.0))
         drag as GraphDrag.Root
         assertEquals(3.5, drag.pointX, 0.0)
         assertEquals(0.0, drag.pointY, 0.0)
@@ -146,7 +146,7 @@ class GraphMathTest {
     fun aDoubleRootMovesWithItsMultiplicity() {
         val f = parse("(((x+(-1))^2)*(x+3))")
         val zero = GraphPoint(1.0000003, 0.0, PointKind.Zero)
-        val drag = GraphDrag.of(f, f.polynomial(), zero, 2.0, 0.0, GraphWindow(-10.0, 10.0, -50.0, 50.0))
+        val drag = GraphDrag.of(f::evaluate, f.polynomial(), zero, 2.0, 0.0, GraphWindow(-10.0, 10.0, -50.0, 50.0))
         drag as GraphDrag.Root
         // Still tangent at its new place: (x − 2)²(x + 3).
         assertEquals(0.0, drag.evaluate(2.0), 1e-6)
@@ -157,7 +157,7 @@ class GraphMathTest {
     fun draggingAVertexTranslates() {
         val f = parse("((x^2)+(-4))")
         val vertex = GraphPoint(0.0, -4.0, PointKind.Minimum)
-        val drag = GraphDrag.of(f, f.polynomial(), vertex, 1.1, -2.9, GraphWindow(-10.0, 10.0, -10.0, 10.0))
+        val drag = GraphDrag.of(f::evaluate, f.polynomial(), vertex, 1.1, -2.9, GraphWindow(-10.0, 10.0, -10.0, 10.0))
         drag as GraphDrag.Shift
         assertEquals("1", drag.h.toPlainString())
         assertEquals("1", drag.k.toPlainString())
@@ -169,7 +169,7 @@ class GraphMathTest {
     fun aNonPolynomialZeroShiftsSideways() {
         val f = parse("sin(x)")
         val zero = GraphPoint(PI, 0.0, PointKind.Zero)
-        val drag = GraphDrag.of(f, f.polynomial(), zero, PI + 0.52, 3.0, GraphWindow(-10.0, 10.0, -2.0, 2.0))
+        val drag = GraphDrag.of(f::evaluate, f.polynomial(), zero, PI + 0.52, 3.0, GraphWindow(-10.0, 10.0, -2.0, 2.0))
         drag as GraphDrag.Shift
         assertEquals("0.5", drag.h.toPlainString())
         assertEquals(0, drag.k.signum())
@@ -180,7 +180,7 @@ class GraphMathTest {
     fun theInterceptMovesVertically() {
         val f = parse("(x+1)")
         val intercept = GraphPoint(0.0, 1.0, PointKind.YIntercept)
-        val drag = GraphDrag.of(f, f.polynomial(), intercept, 4.0, 3.0, GraphWindow(-10.0, 10.0, -10.0, 10.0))
+        val drag = GraphDrag.of(f::evaluate, f.polynomial(), intercept, 4.0, 3.0, GraphWindow(-10.0, 10.0, -10.0, 10.0))
         drag as GraphDrag.Shift
         assertEquals(0, drag.h.signum())
         assertEquals(3.0, drag.evaluate(0.0), 1e-12)

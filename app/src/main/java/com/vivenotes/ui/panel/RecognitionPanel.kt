@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vivenotes.BuildConfig
 import com.vivenotes.R
+import com.vivenotes.graph.GraphSliders
 import com.vivenotes.math.FormulaToolsState
 import com.vivenotes.math.MathGraph
 import com.vivenotes.math.MathOperationResult
@@ -85,6 +86,7 @@ internal object RecognitionPanelTags {
     const val DECIMAL = "recognition-math-decimal"
     const val GRAPH = "recognition-math-graph"
     const val PLACE_GRAPH = "recognition-math-place-graph"
+    const val GRAPH_PARAMETERS = "recognition-math-graph-parameters"
     fun action(id: String) = "recognition-math-action-$id"
 }
 
@@ -328,6 +330,20 @@ private fun ColumnScope.FormulaToolsContent(
             }
             result.graph?.let { graph ->
                 MathGraphPreview(graph)
+                // The preview is one setting of the sliders the placed graph will have; say which.
+                if (graph.parameters.isNotEmpty()) {
+                    Text(
+                        text = stringResource(
+                            R.string.recognition_graph_parameters,
+                            graph.parameters.joinToString(", ") { GraphSliders.text(it) },
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .testTag(RecognitionPanelTags.GRAPH_PARAMETERS),
+                    )
+                }
                 // Only a function the canvas can draw on its own can leave the pane: one outside the
                 // graph grammar still previews here and offers nothing to place.
                 if (onPlaceGraph != null && graph.expression != null) {

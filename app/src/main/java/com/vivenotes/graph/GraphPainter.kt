@@ -8,6 +8,7 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import com.vivenotes.model.GraphBackground
 import com.vivenotes.model.GraphInterval
+import com.vivenotes.model.GraphParameter
 import com.vivenotes.model.Outline
 import io.ratex.RaTeXRenderer
 import java.math.BigDecimal
@@ -43,7 +44,54 @@ class GraphFrame(
         null
     }
 
-    val plot = RectF(box.left, header?.bottom ?: box.top, box.right, box.bottom)
+    /**
+     * The sliders' band at the foot of the box, one [SLIDER_ROW_DP] row per parameter; null when
+     * there are none, or when the box is too small to keep a plot above them.
+     */
+    val sliders: RectF? = graph.parameters.size.takeIf { it > 0 }?.let { rows ->
+        val band = SLIDER_ROW_DP * unit * rows
+        val above = header?.bottom ?: box.top
+        val fits = box.bottom - band - above >= MIN_PLOT_DP * unit && width >= MIN_SLIDER_WIDTH_DP * unit
+        if (fits) RectF(box.left, box.bottom - band, box.right, box.bottom) else null
+    }
+
+    val plot = RectF(box.left, header?.bottom ?: box.top, box.right, sliders?.top ?: box.bottom)
+
+    /** Row [index] of the band. */
+    fun sliderRow(index: Int): RectF? = sliders?.let { band ->
+        val top = band.top + index * SLIDER_ROW_DP * unit
+        RectF(band.left, top, band.right, top + SLIDER_ROW_DP * unit)
+    }
+
+    /** Where every row's track starts and ends: the same for all, so their handles line up. */
+    val trackLeft: Float get() = box.left + (SLIDER_PAD_DP + SLIDER_LABEL_DP + SLIDER_GAP_DP) * unit
+    val trackRight: Float get() = box.right - (SLIDER_PLAY_DP + SLIDER_GAP_DP / 2) * unit
+
+    /** The handle's x for [value] on [parameter]'s range. */
+    fun sliderX(parameter: GraphParameter, value: Double): Float {
+        if (!parameter.isUsable) return trackLeft
+        val fraction = ((value - parameter.min) / (parameter.max - parameter.min)).coerceIn(0.0, 1.0)
+        return (trackLeft + fraction * (trackRight - trackLeft)).toFloat()
+    }
+
+    /** The value under a canvas x on [parameter]'s track, unsnapped. */
+    fun sliderValue(parameter: GraphParameter, canvasX: Float): Double {
+        val fraction = ((canvasX - trackLeft) / (trackRight - trackLeft)).coerceIn(0f, 1f)
+        return parameter.min + fraction * (parameter.max - parameter.min)
+    }
+
+    /** Which row, and which part of it, a canvas position falls on; null outside the band. */
+    fun sliderAt(x: Float, y: Float): SliderHit? {
+        val band = sliders ?: return null
+        if (!band.contains(x, y)) return null
+        val index = ((y - band.top) / (SLIDER_ROW_DP * unit)).toInt().coerceIn(0, graph.parameters.lastIndex)
+        val part = when {
+            x >= trackRight + SLIDER_GAP_DP / 2 * unit -> SliderPart.Play
+            x >= trackLeft - SLIDER_GAP_DP * unit -> SliderPart.Track
+            else -> SliderPart.Label
+        }
+        return SliderHit(index, part)
+    }
 
     fun canvasX(x: Double): Float = (plot.left + (x - window.xMin) / window.width * plot.width()).toFloat()
     fun canvasY(y: Double): Float = (plot.bottom - (y - window.yMin) / window.height * plot.height()).toFloat()
@@ -62,8 +110,30 @@ class GraphFrame(
 
         /** How far from a point a finger may land and still take it — a touch target, not the dot. */
         const val POINT_REACH_DP = 22f
+
+        /** One slider: tall enough to take a finger, short enough that five leave a plot. */
+        const val SLIDER_ROW_DP = 36f
+
+        /** The plot the band always leaves above it; below this the sliders are not drawn. */
+        const val MIN_PLOT_DP = 80f
+
+        /** The name and value, `ω = −2.5`, ahead of the track. */
+        const val SLIDER_LABEL_DP = 84f
+        const val SLIDER_PAD_DP = 12f
+        const val SLIDER_GAP_DP = 10f
+
+        /** Play at the end of the row: its touch target. */
+        const val SLIDER_PLAY_DP = 36f
+
+        /** Label, a usable track and play: narrower than this the band is not drawn. */
+        const val MIN_SLIDER_WIDTH_DP = 200f
     }
 }
+
+/** A position in the sliders' band: row [index], and whether it is the name, the track or play. */
+data class SliderHit(val index: Int, val part: SliderPart)
+
+enum class SliderPart { Label, Track, Play }
 
 /** What a graph is drawn in. Plain ARGB, so the canvas and a PDF can both supply them. */
 data class GraphColors(
@@ -99,6 +169,10 @@ class GraphPainter {
      * @param traceHandle whether the tracer can be grabbed, which only a selected graph's can.
      * @param area the shaded interval — the stored one, or a drag's; null draws none.
      * @param areaHandles whether its bounds can be grabbed.
+     * @param parameters the sliders as drawn now — the stored values, or a drag's or play's.
+     * @param sliderControls whether play is offered, which only a selected graph's sliders are.
+     * @param playing the slider play is sweeping, drawn with pause instead.
+     * @param pressedSlider the slider under the finger, whose handle narrows as Material's does.
      */
     fun draw(
         canvas: Canvas,
@@ -114,6 +188,10 @@ class GraphPainter {
         traceHandle: Boolean = false,
         area: GraphInterval? = frame.graph.area,
         areaHandles: Boolean = false,
+        parameters: List<GraphParameter> = frame.graph.parameters,
+        sliderControls: Boolean = false,
+        playing: Int? = null,
+        pressedSlider: Int? = null,
     ) {
         val graph = frame.graph
         val unit = frame.unit
@@ -159,6 +237,7 @@ class GraphPainter {
         tangent?.let { drawTracer(canvas, frame, colors, it, traceHandle, taken) }
         area?.let { drawAreaLabel(canvas, frame, colors, function, it, integral, taken) }
         drawLabels(canvas, frame, colors, visible, active, taken)
+        frame.sliders?.let { drawSliders(canvas, frame, colors, it, parameters, sliderControls, playing, pressedSlider) }
 
         // The box's edge, so a graph with no background still reads as one object.
         line.pathEffect = null
@@ -188,6 +267,127 @@ class GraphPainter {
         canvas.scale(scale, scale)
         header.draw(canvas)
         canvas.restore()
+    }
+
+    /**
+     * One row per parameter: `ω = 2.5`, then a slider after Material 3 Expressive's — the active
+     * track in the curve's colour up to a gap, a narrow upright handle, the inactive track beyond it
+     * ending in a stop dot — then play, on a selected graph.
+     *
+     * In the curve's colour rather than the theme's, so on a page of several graphs each slider is
+     * plainly its own curve's. The name and value keep the page's text colour, for contrast.
+     */
+    private fun drawSliders(
+        canvas: Canvas,
+        frame: GraphFrame,
+        colors: GraphColors,
+        band: RectF,
+        parameters: List<GraphParameter>,
+        controls: Boolean,
+        playing: Int?,
+        pressed: Int?,
+    ) {
+        val unit = frame.unit
+        line.pathEffect = null
+        line.strokeWidth = unit
+        line.color = withAlpha(colors.text, 0.12f)
+        canvas.drawLine(band.left, band.top, band.right, band.top, line)
+
+        val labelLeft = band.left + GraphFrame.SLIDER_PAD_DP * unit
+        val labelWidth = GraphFrame.SLIDER_LABEL_DP * unit
+        val trackHeight = SLIDER_TRACK_DP * unit
+        val gap = SLIDER_HANDLE_GAP_DP * unit
+        val outer = trackHeight / 2
+        val inner = 2f * unit
+        parameters.forEachIndexed { index, parameter ->
+            val row = frame.sliderRow(index) ?: return@forEachIndexed
+            val cy = row.centerY()
+
+            // The name in math italic, then the value upright, shrunk together to fit the column.
+            val name = parameter.label
+            val rest = GraphSliders.text(parameter).removePrefix(name)
+            text.textSize = 12f * unit
+            text.typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+            val nameWidth = text.measureText(name)
+            text.typeface = Typeface.DEFAULT
+            val restWidth = text.measureText(rest)
+            val fit = (labelWidth / (nameWidth + restWidth)).coerceAtMost(1f)
+            text.textSize = 12f * unit * fit
+            text.color = colors.text
+            val baseline = cy + text.textSize / 3
+            text.typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+            canvas.drawText(name, labelLeft, baseline, text)
+            text.typeface = Typeface.DEFAULT
+            canvas.drawText(rest, labelLeft + nameWidth * fit, baseline, text)
+
+            val left = frame.trackLeft
+            val right = frame.trackRight
+            val handleX = frame.sliderX(parameter, parameter.value)
+            val top = cy - trackHeight / 2
+            val bottom = cy + trackHeight / 2
+            fill.color = colors.curve
+            if (handleX - gap > left + inner) {
+                path.reset()
+                path.addRoundRect(
+                    RectF(left, top, handleX - gap, bottom),
+                    floatArrayOf(outer, outer, inner, inner, inner, inner, outer, outer),
+                    Path.Direction.CW,
+                )
+                canvas.drawPath(path, fill)
+            }
+            if (handleX + gap < right - inner) {
+                fill.color = withAlpha(colors.curve, 0.24f)
+                path.reset()
+                path.addRoundRect(
+                    RectF(handleX + gap, top, right, bottom),
+                    floatArrayOf(inner, inner, outer, outer, outer, outer, inner, inner),
+                    Path.Direction.CW,
+                )
+                canvas.drawPath(path, fill)
+                // The stop indicator: where the range ends, once the handle has left it.
+                fill.color = colors.curve
+                canvas.drawCircle(right - outer, cy, SLIDER_STOP_DP / 2 * unit, fill)
+            }
+            val handleWidth = (if (pressed == index) 2f else 4f) * unit
+            val handleHeight = SLIDER_HANDLE_DP * unit
+            fill.color = colors.curve
+            canvas.drawRoundRect(
+                handleX - handleWidth / 2,
+                cy - handleHeight / 2,
+                handleX + handleWidth / 2,
+                cy + handleHeight / 2,
+                handleWidth / 2,
+                handleWidth / 2,
+                fill,
+            )
+
+            if (controls) drawPlay(canvas, frame, colors, row, playing == index)
+        }
+        text.typeface = Typeface.DEFAULT
+    }
+
+    /** Play, or pause while this slider is sweeping, centred in its touch target at the row's end. */
+    private fun drawPlay(canvas: Canvas, frame: GraphFrame, colors: GraphColors, row: RectF, playing: Boolean) {
+        val unit = frame.unit
+        val cx = row.right - GraphFrame.SLIDER_PLAY_DP / 2 * unit
+        val cy = row.centerY()
+        val size = 10f * unit
+        if (playing) {
+            fill.color = withAlpha(colors.curve, 0.16f)
+            canvas.drawCircle(cx, cy, 14f * unit, fill)
+            fill.color = colors.text
+            val bar = size * 0.32f
+            canvas.drawRoundRect(cx - size / 2, cy - size / 2, cx - size / 2 + bar, cy + size / 2, unit, unit, fill)
+            canvas.drawRoundRect(cx + size / 2 - bar, cy - size / 2, cx + size / 2, cy + size / 2, unit, unit, fill)
+        } else {
+            fill.color = withAlpha(colors.text, 0.72f)
+            path.reset()
+            path.moveTo(cx - size * 0.4f, cy - size / 2)
+            path.lineTo(cx + size * 0.55f, cy)
+            path.lineTo(cx - size * 0.4f, cy + size / 2)
+            path.close()
+            canvas.drawPath(path, fill)
+        }
     }
 
     private fun drawBackground(canvas: Canvas, frame: GraphFrame, colors: GraphColors, xStep: BigDecimal, yStep: BigDecimal) {
@@ -664,6 +864,12 @@ class GraphPainter {
 
         /** The tracer's dot with its ring of paper: larger than a point's, being the one you hold. */
         private const val TRACER_RADIUS_DP = 7.5f
+
+        /** Material's Expressive slider at the page's scale: its proportions, half its size. */
+        private const val SLIDER_TRACK_DP = 8f
+        private const val SLIDER_HANDLE_DP = 22f
+        private const val SLIDER_HANDLE_GAP_DP = 3f
+        private const val SLIDER_STOP_DP = 3f
 
         /** Ticks every 60 dp or so. */
         private fun tickCount(lengthDp: Float): Int = (lengthDp / 60f).toInt().coerceIn(2, 12)

@@ -2,10 +2,14 @@ package com.vivenotes.ui.editor
 
 import android.animation.ValueAnimator
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.RectF
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
 import android.graphics.Shader
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -14,7 +18,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.ink.brush.Brush
 import androidx.ink.brush.BrushBehavior
+import androidx.ink.brush.BrushCoat
 import androidx.ink.brush.BrushFamily
+import androidx.ink.brush.BrushPaint
 import androidx.ink.brush.BrushTip
 import androidx.ink.brush.InputToolType
 import androidx.ink.brush.behavior.SourceNode
@@ -24,8 +30,12 @@ import androidx.ink.strokes.InProgressStroke
 import androidx.ink.strokes.MutableStrokeInputBatch
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkPoint
+import kotlin.math.PI
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * The laser pointer: a lit dot under the pen, and the trace it draws, which stays for a second and
@@ -46,6 +56,12 @@ import kotlin.math.roundToInt
  * written here. The vanishing is part of the brush too: a behaviour shrinks each point to nothing as
  * it ages, so the trace is a function of time that Ink re-evaluates every frame.
  *
+ * **It looks like a lightsaber blade.** The films' blades were composited by hand: a white core,
+ * then copies of the same shape blurred at growing radii and tinted, each wider and fainter than
+ * the last. The trace is built the same way. Its brush has two coats, a red edge with a white-hot
+ * core on top. Under that sit two blurred copies of the stroke: a tight bright-red glow and a wide
+ * deep-crimson one. Both glows waver slightly, the way a blade hums. See [drawTraces].
+ *
  * **The dot is drawn here, at the raw pen position.** That is where the trace's head is: Ink's
  * sliding window is centred and clamps to the inputs it has, so the newest input is modelled where
  * it was reported, exactly as a pen's wet tip is. A soft glow is also beyond what a brush tip can
@@ -57,8 +73,8 @@ import kotlin.math.roundToInt
  * is the same size at every zoom.
  *
  * With animations removed — Remove animations in the accessibility settings, or an animator scale
- * of zero — there is no trace and no fade: the dot is under the pen while it touches and gone the
- * moment it lifts.
+ * of zero — there is no trace, no fade and no waver: the dot is under the pen while it touches,
+ * steady, and gone the moment it lifts.
  */
 internal class LaserPointer {
 
@@ -228,9 +244,10 @@ internal class LaserPointer {
         scratch[1] = spot.y
         pageToView.mapPoints(scratch)
         val alpha = (fade * 255f).roundToInt()
+        val hum = if (motion) hum(now) else 1f
         val checkpoint = canvas.save()
         canvas.translate(scratch[0], scratch[1])
-        paint.glow.alpha = alpha
+        paint.glow.alpha = (fade * hum * 255f).roundToInt()
         canvas.drawCircle(0f, 0f, paint.glowRadius, paint.glow)
         paint.core.alpha = alpha
         canvas.drawCircle(0f, 0f, paint.coreRadius, paint.core)
@@ -240,8 +257,15 @@ internal class LaserPointer {
     }
 
     /**
-     * The traces, opaque, laid into one layer that is then put down translucent — so the writing
-     * under them still reads, and so two traces crossing do not darken where they cross.
+     * The traces as lightsaber blades: two blurred glows, then the blade itself on top.
+     *
+     * The blade is opaque, laid into one layer that is then put down translucent, so the writing
+     * under it still reads and two traces crossing do not darken where they cross. Each glow is one
+     * layer for the same reason: every trace is blurred together, and the blur is tinted and faded
+     * as a whole.
+     *
+     * The glows are a [RenderEffect], which only a hardware canvas runs. On a software canvas the
+     * blade is drawn without them.
      */
     private fun drawTraces(
         canvas: Canvas,
@@ -271,16 +295,62 @@ internal class LaserPointer {
         }
         bounds.inset(-paint.traceWidth, -paint.traceWidth)
 
+        // Once a frame, before any of the three passes reads it.
+        traces.forEach { trace ->
+            if (trace.marks.isNotEmpty()) trace.stroke.updateShape(now - trace.startedAt)
+        }
+
+        if (canvas.isHardwareAccelerated) {
+            val hum = hum(now)
+            drawGlow(canvas, paint.outerGlow, OUTER_GLOW_ALPHA * hum, bounds, paint, pageToView, renderer)
+            drawGlow(canvas, paint.innerGlow, INNER_GLOW_ALPHA * hum, bounds, paint, pageToView, renderer)
+        }
+
         val layer = canvas.saveLayerAlpha(bounds, (TRACE_ALPHA * 255f).roundToInt())
         // On the canvas *and* to the renderer, as the finished ink is drawn: the renderer reads the
         // matrix only to pick a level of detail.
         canvas.concat(pageToView)
-        traces.forEach { trace ->
-            if (trace.marks.isEmpty()) return@forEach
-            trace.stroke.updateShape(now - trace.startedAt)
-            renderer.draw(canvas, trace.stroke, pageToView)
-        }
+        drawStrokes(canvas, pageToView, renderer)
         canvas.restoreToCount(layer)
+    }
+
+    private fun drawStrokes(canvas: Canvas, pageToView: Matrix, renderer: CanvasStrokeRenderer) {
+        traces.forEach { trace ->
+            if (trace.marks.isNotEmpty()) renderer.draw(canvas, trace.stroke, pageToView)
+        }
+    }
+
+    /**
+     * One glow: the traces recorded into [node], whose effect blurs and tints them, put down at
+     * [alpha]. The node is sized to [blade] plus the distance the blur spreads.
+     */
+    private fun drawGlow(
+        canvas: Canvas,
+        node: RenderNode,
+        alpha: Float,
+        blade: RectF,
+        paint: LaserPaint,
+        pageToView: Matrix,
+        renderer: CanvasStrokeRenderer,
+    ) {
+        val left = floor(blade.left - paint.glowReach).toInt()
+        val top = floor(blade.top - paint.glowReach).toInt()
+        node.setPosition(
+            left,
+            top,
+            ceil(blade.right + paint.glowReach).toInt(),
+            ceil(blade.bottom + paint.glowReach).toInt(),
+        )
+        node.setAlpha(alpha)
+        val recording = node.beginRecording()
+        try {
+            recording.translate(-left.toFloat(), -top.toFloat())
+            recording.concat(pageToView)
+            drawStrokes(recording, pageToView, renderer)
+        } finally {
+            node.endRecording()
+        }
+        canvas.drawRenderNode(node)
     }
 
     private fun mark(x: Float, y: Float, time: Long, toPage: Matrix) {
@@ -443,6 +513,32 @@ internal class LaserPointer {
         /** The trace is laid down slightly translucent, so writing under it still reads. */
         private const val TRACE_ALPHA = 0.85f
 
+        /** How strongly the wide crimson glow and the tight red one are put down. */
+        private const val OUTER_GLOW_ALPHA = 0.8f
+        private const val INNER_GLOW_ALPHA = 0.9f
+
+        /** How far the hum dims the glow at its lowest. */
+        private const val HUM_DEPTH = 0.12f
+
+        /**
+         * The blade's hum: a slight, uneven waver in the glow, between `1 - HUM_DEPTH` and 1.
+         *
+         * Two slow sines, a few times a second, that never fall into step, so it reads as a hum
+         * rather than a blink. Wrapped to a minute first, since uptime in milliseconds outgrows
+         * the precision a sine needs within a day.
+         */
+        private fun hum(now: Long): Float {
+            val seconds = (now % 60_000L) / 1_000.0
+            val wave = 0.5 + 0.3 * sin(2.0 * PI * 4.3 * seconds) + 0.2 * sin(2.0 * PI * 7.1 * seconds)
+            return (1.0 - HUM_DEPTH * wave).toFloat()
+        }
+
+        /** How wide the white-hot core is, as a share of the blade. */
+        private const val CORE_SHARE = 0.5f
+
+        /** The blade's core: white, with the faintest warmth so it reads as heat and not paper. */
+        private const val LASER_CORE = 0xFFFFF4F4.toInt()
+
         /** A quarter pixel, the finest detail worth meshing at the zoom the press landed at. */
         private const val EPSILON_PIXELS = 0.25f
 
@@ -452,28 +548,43 @@ internal class LaserPointer {
         /** Red A400 — the most saturated red in the Material palette. */
         internal const val LASER_RED = 0xFFFF1744.toInt()
 
+        /** The outer glow's deep crimson, the dark red a blade's light fades into. */
+        internal const val LASER_CRIMSON = 0xFF8E0010.toInt()
+
         /**
-         * A round tip held at full size for [HOLD_MILLIS] since each input, then shrunk to nothing
-         * by [TRAIL_MILLIS]. Below the range the source clamps, which is what holds it.
+         * Two round coats, a red edge and the white core on top of it. Each is held at full size
+         * for [HOLD_MILLIS] since each input, then shrunk to nothing by [TRAIL_MILLIS]; below the
+         * range the source clamps, which is what holds it.
          *
          * Built once: a family is a native allocation, and nothing in it varies between presses.
          */
         private val traceFamily: BrushFamily by lazy {
+            val vanish = BrushBehavior(
+                terminalNode = TargetNode(
+                    target = TargetNode.Target.SIZE_MULTIPLIER,
+                    targetModifierRangeStart = 1f,
+                    targetModifierRangeEnd = 0f,
+                    input = SourceNode(
+                        source = SourceNode.Source.TIME_SINCE_INPUT_IN_SECONDS,
+                        sourceValueRangeStart = HOLD_MILLIS / 1_000f,
+                        sourceValueRangeEnd = TRAIL_MILLIS / 1_000f,
+                    ),
+                ),
+                developerComment = "Laser trace: held for a second, then thins away.",
+            )
             BrushFamily(
-                tip = BrushTip(
-                    behaviors = listOf(
-                        BrushBehavior(
-                            terminalNode = TargetNode(
-                                target = TargetNode.Target.SIZE_MULTIPLIER,
-                                targetModifierRangeStart = 1f,
-                                targetModifierRangeEnd = 0f,
-                                input = SourceNode(
-                                    source = SourceNode.Source.TIME_SINCE_INPUT_IN_SECONDS,
-                                    sourceValueRangeStart = HOLD_MILLIS / 1_000f,
-                                    sourceValueRangeEnd = TRAIL_MILLIS / 1_000f,
-                                ),
+                coats = listOf(
+                    BrushCoat(tip = BrushTip(behaviors = listOf(vanish)), paint = BrushPaint()),
+                    BrushCoat(
+                        tip = BrushTip(
+                            scaleX = CORE_SHARE,
+                            scaleY = CORE_SHARE,
+                            behaviors = listOf(vanish),
+                        ),
+                        paint = BrushPaint(
+                            colorFunctions = listOf(
+                                BrushPaint.ColorFunction.ReplaceColor.withColorIntArgb(LASER_CORE),
                             ),
-                            developerComment = "Laser trace: held for a second, then thins away.",
                         ),
                     ),
                 ),
@@ -485,12 +596,12 @@ internal class LaserPointer {
 }
 
 /**
- * What the laser's dot is drawn with, sized for one display density.
+ * What the laser's dot and its trace's glows are drawn with, sized for one display density.
  *
- * Built once and reused every frame: the overlay redraws for as long as a trace is up, and a shader
- * and three paints a frame would be garbage at the display's refresh rate.
+ * Built once and reused every frame: the overlay redraws for as long as a trace is up, and a shader,
+ * three paints and two blur layers a frame would be garbage at the display's refresh rate.
  *
- * A fixed red rather than a theme colour. A laser pointer is red the world over, and it has to stand
+ * Fixed reds rather than theme colours. A laser pointer is red the world over, and it has to stand
  * out from ink of every colour on paper of either shade — the app's accent is what selection and the
  * Insert Space guide are drawn in, and a dot in that colour would read as one of them.
  */
@@ -502,16 +613,28 @@ internal class LaserPaint(density: Float) {
     /** The trace's width, in view pixels — see [LaserPointer.handle]. */
     val traceWidth = TRACE_WIDTH_DP * density
 
+    /**
+     * How far past the blade the glows spread, which the layers they are blurred in must hold. A
+     * blur's radius is about 1.7 standard deviations, and a Gaussian has all but run out by three.
+     */
+    val glowReach = OUTER_BLUR_DP * density * 2f
+
+    /** The wide, deep-crimson glow, under everything else. Thickened so it reads on dark paper. */
+    val outerGlow = glowLayer("laser outer glow", OUTER_BLUR_DP * density, LaserPointer.LASER_CRIMSON, 1.8f)
+
+    /** The tight, bright-red glow hugging the blade. Thickened so it stays dense right at the edge. */
+    val innerGlow = glowLayer("laser inner glow", INNER_BLUR_DP * density, LaserPointer.LASER_RED, 1.5f)
+
     val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         // Centred on the origin: the dot is drawn after translating the canvas to it, so one shader
-        // serves every frame.
+        // serves every frame. Bright red at the spot, fading through crimson, like the blade.
         shader = RadialGradient(
             0f,
             0f,
             glowRadius,
-            intArrayOf(GLOW_INNER, GLOW_MIDDLE, GLOW_OUTER),
-            floatArrayOf(0f, 0.4f, 1f),
+            intArrayOf(GLOW_INNER, GLOW_MIDDLE, GLOW_DARK, GLOW_OUTER),
+            floatArrayOf(0f, 0.35f, 0.7f, 1f),
             Shader.TileMode.CLAMP,
         )
     }
@@ -534,15 +657,45 @@ internal class LaserPaint(density: Float) {
     }
 
     private companion object {
-        const val CORE_RADIUS_DP = 4f
-        const val CENTRE_RADIUS_DP = 1.5f
-        const val GLOW_RADIUS_DP = 14f
+        const val CORE_RADIUS_DP = 4.5f
+        const val CENTRE_RADIUS_DP = 2.5f
+        const val GLOW_RADIUS_DP = 16f
         const val TRACE_WIDTH_DP = 6f
 
-        /** The hot centre of the spot, nearly white the way a real laser's is. */
-        const val LASER_CENTRE = 0xFFFFEBEE.toInt()
-        const val GLOW_INNER = 0x99FF1744.toInt()
-        const val GLOW_MIDDLE = 0x4DFF1744
-        const val GLOW_OUTER = 0x00FF1744
+        /** Blur radii of the two glows. */
+        const val INNER_BLUR_DP = 4f
+        const val OUTER_BLUR_DP = 12f
+
+        /** The hot centre of the spot, nearly white the way the blade's core is. */
+        const val LASER_CENTRE = 0xFFFFF4F4.toInt()
+        const val GLOW_INNER = 0xCCFF1744.toInt()
+        const val GLOW_MIDDLE = 0x80FF1744.toInt()
+        const val GLOW_DARK = 0x408E0010
+        const val GLOW_OUTER = 0x008E0010
+
+        /**
+         * A layer whose content comes out blurred by [radius] pixels and recoloured to [color],
+         * keeping only its shape, with that shape's coverage scaled by [thicken].
+         *
+         * Recoloured after the blur rather than before, so the glow is one even colour all the way
+         * out instead of whitening where it passes over the blade's core.
+         */
+        fun glowLayer(name: String, radius: Float, color: Int, thicken: Float): RenderNode =
+            RenderNode(name).apply {
+                val tint = ColorMatrixColorFilter(
+                    floatArrayOf(
+                        0f, 0f, 0f, 0f, Color.red(color).toFloat(),
+                        0f, 0f, 0f, 0f, Color.green(color).toFloat(),
+                        0f, 0f, 0f, 0f, Color.blue(color).toFloat(),
+                        0f, 0f, 0f, thicken, 0f,
+                    ),
+                )
+                setRenderEffect(
+                    RenderEffect.createColorFilterEffect(
+                        tint,
+                        RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.DECAL),
+                    ),
+                )
+            }
     }
 }

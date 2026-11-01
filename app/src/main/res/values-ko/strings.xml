@@ -806,4 +806,16 @@
     <string name="graph_fit">함수에 맞추기</string>
     <string name="graph_reset">함수 되돌리기</string>
     <string name="graph_rewrite_failed">그래프를 변경할 수 없습니다.</string>
+    <string name="graph_sliders">슬라이더</string>
+    <string name="graph_sliders_edit">슬라이더 편집</string>
+    <string name="graph_slider_play">재생</string>
+    <string name="graph_slider_pause">일시정지</string>
+    <string name="graph_slider_value">값</string>
+    <string name="graph_slider_min">최소</string>
+    <string name="graph_slider_max">최대</string>
+    <string name="graph_slider_step">간격</string>
+    <string name="graph_slider_invalid">최소는 최대보다 작아야 하고, 간격은 0보다 크고 범위 이하여야 합니다.</string>
+    <string name="graph_sliders_apply">적용</string>
+    <string name="graph_sliders_cancel">취소</string>
+    <string name="recognition_graph_parameters">%1$s(으)로 그렸습니다. 배치하면 각각 슬라이더가 생깁니다.</string>
 </resources>

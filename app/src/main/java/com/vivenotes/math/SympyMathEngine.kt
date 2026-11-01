@@ -7,6 +7,7 @@ import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.vivenotes.model.GraphParameter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -39,6 +40,11 @@ data class MathGraph(
     val expression: String? = null,
     /** The same function as LaTeX, written in [xLabel], for the placed graph's header. */
     val functionLatex: String? = null,
+    /**
+     * The formula's other letters, each a slider once placed, at the values the preview was drawn
+     * with: the `$0`, `$1`… of [expression], in order.
+     */
+    val parameters: List<GraphParameter> = emptyList(),
 )
 
 /** A placed graph's function after a dragged point was let go: `mutate_graph`'s answer. */
@@ -90,10 +96,15 @@ interface MathEngine {
      *
      * [mutation] is the JSON `GraphDrag.request` writes. The canvas already drew the new curve
      * numerically while the finger moved; this is what makes the header read `x^2 - 3x + 1.5` rather
-     * than the decimals the drag produced.
+     * than the decimals the drag produced. [parameters] are the graph's slider letters in order —
+     * SymPy's names, what `$0`, `$1`… are printed as.
      */
-    suspend fun mutateGraph(expression: String, variable: String, mutation: String): GraphRewrite =
-        GraphRewrite(error = "This engine cannot rewrite graphs.")
+    suspend fun mutateGraph(
+        expression: String,
+        variable: String,
+        mutation: String,
+        parameters: List<String> = emptyList(),
+    ): GraphRewrite = GraphRewrite(error = "This engine cannot rewrite graphs.")
 
     /**
      * Pays the engine's first-use costs ahead of the first formula. Best effort: an engine that
@@ -128,9 +139,15 @@ class SympyMathEngine(
             json.decodeFromString<MathOperationResult?>(payload)
         }
 
-    override suspend fun mutateGraph(expression: String, variable: String, mutation: String): GraphRewrite =
+    override suspend fun mutateGraph(
+        expression: String,
+        variable: String,
+        mutation: String,
+        parameters: List<String>,
+    ): GraphRewrite =
         withContext(dispatcher) {
-            val payload = module().callAttr("mutate_graph", expression, variable, mutation).toString()
+            val names = json.encodeToString(parameters)
+            val payload = module().callAttr("mutate_graph", expression, variable, mutation, names).toString()
             json.decodeFromString<GraphRewrite>(payload)
         }
 

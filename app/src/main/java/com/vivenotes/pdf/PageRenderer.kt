@@ -16,9 +16,10 @@ import androidx.ink.geometry.outlinesToPath
 import com.vivenotes.data.automaticColorOr
 import com.vivenotes.graph.GraphAnalysis
 import com.vivenotes.graph.GraphColors
-import com.vivenotes.graph.GraphExpression
 import com.vivenotes.graph.GraphFrame
 import com.vivenotes.graph.GraphPainter
+import com.vivenotes.graph.function
+import com.vivenotes.graph.originalFunction
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.model.Outline
 import com.vivenotes.model.RuleLines
@@ -310,11 +311,9 @@ class PageRenderer(private val metrics: DisplayMetrics) {
      * The page is not selected and nothing is being dragged, so the points are dots, not handles.
      */
     private fun drawGraph(canvas: Canvas, graph: Outline.Graph, page: MeasuredPage, shift: PdfShift) {
-        val function = GraphExpression.parse(graph.expression) ?: return
+        val function = graph.function() ?: return
         val frame = GraphFrame(graph, graph.x + shift.dx, graph.y + shift.dy, graph.width, graph.height, 1f)
-        val original = graph.originalExpression
-            ?.takeIf { graph.showOriginal && graph.isMutated }
-            ?.let(GraphExpression::parse)
+        val original = graph.takeIf { it.showOriginal && it.isMutated }?.originalFunction()
         graphPainter.draw(
             canvas = canvas,
             frame = frame,

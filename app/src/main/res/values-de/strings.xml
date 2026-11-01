@@ -821,4 +821,16 @@
     <string name="graph_fit">An Funktion anpassen</string>
     <string name="graph_reset">Funktion zurücksetzen</string>
     <string name="graph_rewrite_failed">Das Diagramm konnte nicht geändert werden.</string>
+    <string name="graph_sliders">Schieberegler</string>
+    <string name="graph_sliders_edit">Schieberegler bearbeiten</string>
+    <string name="graph_slider_play">Abspielen</string>
+    <string name="graph_slider_pause">Pause</string>
+    <string name="graph_slider_value">Wert</string>
+    <string name="graph_slider_min">Min</string>
+    <string name="graph_slider_max">Max</string>
+    <string name="graph_slider_step">Schritt</string>
+    <string name="graph_slider_invalid">Min muss unter Max liegen und der Schritt größer als 0 und höchstens so groß wie der Bereich sein.</string>
+    <string name="graph_sliders_apply">Übernehmen</string>
+    <string name="graph_sliders_cancel">Abbrechen</string>
+    <string name="recognition_graph_parameters">Gezeichnet mit %1$s. Nach dem Platzieren erhält jeder Wert einen Schieberegler.</string>
 </resources>

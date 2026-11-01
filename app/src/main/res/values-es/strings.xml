@@ -849,4 +849,16 @@
     <string name="graph_fit">Ajustar a la función</string>
     <string name="graph_reset">Restablecer función</string>
     <string name="graph_rewrite_failed">No se pudo cambiar la gráfica.</string>
+    <string name="graph_sliders">Controles deslizantes</string>
+    <string name="graph_sliders_edit">Editar controles deslizantes</string>
+    <string name="graph_slider_play">Reproducir</string>
+    <string name="graph_slider_pause">Pausa</string>
+    <string name="graph_slider_value">Valor</string>
+    <string name="graph_slider_min">Mín.</string>
+    <string name="graph_slider_max">Máx.</string>
+    <string name="graph_slider_step">Paso</string>
+    <string name="graph_slider_invalid">El mínimo debe ser menor que el máximo, y el paso mayor que 0 y no más ancho que el rango.</string>
+    <string name="graph_sliders_apply">Aplicar</string>
+    <string name="graph_sliders_cancel">Cancelar</string>
+    <string name="recognition_graph_parameters">Dibujada con %1$s. Cada uno tendrá un control deslizante al colocarla.</string>
 </resources>

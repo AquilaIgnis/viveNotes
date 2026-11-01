@@ -41,6 +41,27 @@ class SympyMathEngineTest {
     }
 
     @Test
+    fun aFormulasOtherLettersArriveAsSlidersAndSurviveAMutation() = runBlocking {
+        val graph = engine.execute("y = A\\sin(\\omega t + \\phi)", "graph").graph!!
+        org.junit.Assert.assertEquals("t", graph.xLabel)
+        org.junit.Assert.assertEquals(listOf("A", "omega", "phi"), graph.parameters.map { it.symbol })
+        org.junit.Assert.assertEquals(listOf("A", "ω", "φ"), graph.parameters.map { it.label })
+        // The parent function: A and ω at 1, the added φ at 0.
+        org.junit.Assert.assertEquals(listOf(1.0, 1.0, 0.0), graph.parameters.map { it.value })
+        val function = com.vivenotes.graph.GraphExpression.parse(graph.expression!!)!!.with(graph.parameters.map { it.value })!!
+        org.junit.Assert.assertEquals(1.0, function.evaluate(Math.PI / 2), 1e-12)
+
+        val shifted = engine.mutateGraph(
+            graph.expression!!,
+            "t",
+            """{"kind":"shift","h":"0.5","k":"0"}""",
+            graph.parameters.map { it.symbol },
+        )
+        org.junit.Assert.assertNull(shifted.error)
+        org.junit.Assert.assertEquals("A \\sin{\\left(\\omega \\left(t - \\frac{1}{2}\\right) + \\phi \\right)}", shifted.latex)
+    }
+
+    @Test
     fun equationOffersOnlyRelevantActionsAndSolvesExactly() = runBlocking {
         val analysis = engine.analyze("x^2-4=0")
 

@@ -37,7 +37,7 @@ sealed interface GraphDrag {
 
     /** `f(x − h) + k`. */
     class Shift(
-        private val base: GraphExpression,
+        private val base: (Double) -> Double,
         val h: BigDecimal,
         val k: BigDecimal,
         override val pointX: Double,
@@ -45,7 +45,7 @@ sealed interface GraphDrag {
     ) : GraphDrag {
         private val dx = h.toDouble()
         private val dy = k.toDouble()
-        override fun evaluate(x: Double): Double = base.evaluate(x - dx) + dy
+        override fun evaluate(x: Double): Double = base(x - dx) + dy
         override fun request(): String = """{"kind":"shift","h":"${h.toPlainString()}","k":"${k.toPlainString()}"}"""
         override val changes: Boolean get() = h.signum() != 0 || k.signum() != 0
     }
@@ -73,7 +73,7 @@ sealed interface GraphDrag {
          * frame.
          */
         fun of(
-            base: GraphExpression,
+            base: (Double) -> Double,
             polynomial: DoubleArray?,
             point: GraphPoint,
             x: Double,
@@ -99,7 +99,7 @@ sealed interface GraphDrag {
         /** Positions snap to about this many steps across the window: 0.5 on a window 20 wide. */
         private const val SNAP_STEPS = 40
 
-        private fun shift(base: GraphExpression, point: GraphPoint, h: BigDecimal, k: BigDecimal): GraphDrag =
+        private fun shift(base: (Double) -> Double, point: GraphPoint, h: BigDecimal, k: BigDecimal): GraphDrag =
             Shift(base, h, k, point.x + h.toDouble(), point.y + k.toDouble())
 
         /**
