@@ -747,7 +747,7 @@ fun EditorPane(
                     retainedInlineEditor = null
                     retainedInlineOutlineId = null
                     editor?.deactivateTextInput()
-                    // A retained equation target has already lost View focus to its popup, so it
+                    // A retained link target has already lost View focus to its popup, so it
                     // will not produce another blur callback when the Draw tool releases it.
                     if (!editorWasFocused && outlineId != null) onOutlineBlurred(outlineId)
                     onSelectionChanged(SelectionState())
@@ -773,7 +773,7 @@ fun EditorPane(
                     retainedInlineOutlineId = null
                     if (releasedId != null && focusedOutlineId != releasedId) onOutlineBlurred(releasedId)
                 }
-                is FormatCommand.InsertEquation, is FormatCommand.InsertLink -> {
+                is FormatCommand.InsertLink -> {
                     (retainedInlineEditor ?: focusedEditor)?.apply(command)
                     retainedInlineEditor = null
                     retainedInlineOutlineId = null

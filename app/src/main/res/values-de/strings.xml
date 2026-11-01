@@ -642,7 +642,6 @@
     <string name="editor_pasting">Wird eingefügt…</string>
     <string name="editor_untitled_page">Unbenannte Seite</string>
 
-    <string name="equation_button">Gleichung</string>
     <string name="equation_insert">Gleichung einfügen</string>
     <string name="equation_edit">Gleichung bearbeiten</string>
     <string name="equation_source_hint">Gib LaTeX ohne $-Begrenzer ein.</string>

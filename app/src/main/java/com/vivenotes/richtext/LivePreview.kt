@@ -4,7 +4,7 @@ package com.vivenotes.richtext
  * Whether a live preview must step aside so the exact source under it can receive the caret.
  *
  * The rule every "draw something over text that is still there" span in this editor shares —
- * [LiveEquationSpan] over `$x^2$`, [VideoEmbedSpan] over a pasted URL. It is what makes those
+ * [LiveEquationSpan] over `$$x^2$$`, [VideoEmbedSpan] over a pasted URL. It is what makes those
  * previews safe to apply automatically: the characters are never replaced, only covered.
  *
  * A collapsed caret counts as inside when it sits anywhere in `start..end` inclusive of both ends,

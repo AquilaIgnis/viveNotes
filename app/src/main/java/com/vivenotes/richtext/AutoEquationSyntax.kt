@@ -25,7 +25,8 @@ internal fun AutoEquationCandidate.isBeingEdited(
 /**
  * Finds explicitly bounded LaTeX without trying to guess whether ordinary prose is mathematics.
  *
- * `$...$` and `\(...\)` are inline; `$$...$$` and `\[...\]` request display style. A whole
+ * `\(...\)` is inline; `$$...$$` and `\[...\]` request display style. A lone `$...$` is left as
+ * text: prices and shell variables pair up too easily to be read as math. A whole
  * paragraph already wrapped in `{\displaystyle ...}` is also explicit enough to convert directly,
  * which supports the form commonly copied from Wikipedia.
  */
@@ -37,7 +38,6 @@ internal fun findAutoEquationCandidates(text: String): List<AutoEquationCandidat
             text.startsWith("\$\$", offset) && !text.isEscaped(offset) -> Delimiter("\$\$", "\$\$", true)
             text.startsWith("\\[", offset) && !text.isEscaped(offset) -> Delimiter("\\[", "\\]", true)
             text.startsWith("\\(", offset) && !text.isEscaped(offset) -> Delimiter("\\(", "\\)", false)
-            text[offset] == '$' && !text.isEscaped(offset) -> Delimiter("\$", "\$", false)
             else -> null
         }
         if (opening == null) {
@@ -101,10 +101,7 @@ private fun String.findClosing(delimiter: Delimiter, start: Int): Int {
     var index = start
     while (index <= length - delimiter.close.length) {
         if (!delimiter.multiline && this[index] == '\n') return -1
-        if (startsWith(delimiter.close, index) && !isEscaped(index)) {
-            // A single-dollar close cannot consume the first half of a display delimiter.
-            if (delimiter.close != "\$" || !startsWith("\$\$", index)) return index
-        }
+        if (startsWith(delimiter.close, index) && !isEscaped(index)) return index
         index++
     }
     return -1

@@ -31,7 +31,6 @@ import com.vivenotes.model.Align
 import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
 import com.vivenotes.model.Mark
-import com.vivenotes.model.OBJECT_REPLACEMENT_CHARACTER
 import com.vivenotes.model.VideoLink
 import com.vivenotes.model.findVideoLinks
 import com.vivenotes.model.newId
@@ -298,7 +297,7 @@ class OutlineEditText @JvmOverloads constructor(
                 emptySet()
             }
             // Even while suppressed: an empty line deleted by a programmatic replace, such as an
-            // equation inserted over a selection, must not hand its style to the replacement.
+            // link inserted over a selection, must not hand its style to the replacement.
             if (count > 0 && s is Spannable) {
                 SpannableCodec.forgetDeletedEmptyParagraphs(s, start, start + count)
             }
@@ -808,7 +807,6 @@ class OutlineEditText @JvmOverloads constructor(
                     it.copy(lineSpacing = Block.shownLineSpacing(command.spacing))
                 }
             }
-            is FormatCommand.InsertEquation -> insertEquation(editable, command.latex, from, to)
             is FormatCommand.InsertLink -> insertLink(editable, command.text, command.url, from, to)
             is FormatCommand.Clipboard -> {
                 val id = when (command.action) {
@@ -1025,26 +1023,6 @@ class OutlineEditText @JvmOverloads constructor(
                 AutoVideoLinkSpan(linkColor, link.url), link.start, link.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
             )
         }
-    }
-
-    private fun insertEquation(editable: Editable, latex: String, from: Int, to: Int) {
-        val source = latex.trim()
-        if (source.isEmpty()) return
-
-        val existing = SpannableCodec.equationAt(editable, from, to)
-        val replaceFrom = existing?.start ?: from
-        val replaceTo = existing?.end ?: to
-        editable.getSpans(replaceFrom, replaceTo, EquationSpan::class.java).forEach(editable::removeSpan)
-        editable.replace(replaceFrom, replaceTo, OBJECT_REPLACEMENT_CHARACTER.toString())
-
-        // End-inclusive text formatting around the caret may have expanded onto the replacement
-        // character. An equation is its own atomic content, so begin with no inherited text marks.
-        SpannableCodec.clearMarks(editable, replaceFrom, replaceFrom + 1)
-        SpannableCodec.applyMark(editable, Mark.Equation(source), replaceFrom, replaceFrom + 1)
-        SpannableCodec.normalize(editable, editorStyle)
-        pendingMarks.clear()
-        suppressedMarks.clear()
-        setSelection(replaceFrom + 1)
     }
 
     /** Replaces each source fallback with a native renderer, discarding work from older documents. */
@@ -1488,7 +1466,6 @@ class OutlineEditText @JvmOverloads constructor(
                 } else {
                     SpannableCodec.fontFamilyIn(editable, from, to, baseFontFamily)
                 },
-                equation = SpannableCodec.equationAt(editable, from, to)?.latex,
                 linkText = if (caret) linkAtCaret(editable, from)?.let {
                     editable.subSequence(editable.getSpanStart(it), editable.getSpanEnd(it)).toString()
                 }.orEmpty() else editable.subSequence(from, to).toString(),
@@ -1515,7 +1492,6 @@ class OutlineEditText @JvmOverloads constructor(
 private class AutoVideoLinkSpan(color: Int, val url: String) : ForegroundColorSpan(color), Derived
 
 private fun FormatCommand.affectsEquationMetrics(): Boolean = when (this) {
-    is FormatCommand.InsertEquation -> true
     is FormatCommand.SetMark -> mark is Mark.FontSize
     is FormatCommand.ClearMark -> mark is Mark.FontSize
     FormatCommand.ClearFormatting -> true

@@ -663,7 +663,6 @@
     <string name="editor_pasting">Wklejanie…</string>
     <string name="editor_untitled_page">Strona bez tytułu</string>
 
-    <string name="equation_button">Równanie</string>
     <string name="equation_insert">Wstaw równanie</string>
     <string name="equation_edit">Edytuj równanie</string>
     <string name="equation_source_hint">Wpisz kod LaTeX bez ograniczników $.</string>

@@ -632,7 +632,6 @@
     <string name="editor_pasting">貼り付けています…</string>
     <string name="editor_untitled_page">無題のページ</string>
 
-    <string name="equation_button">数式</string>
     <string name="equation_insert">数式を挿入</string>
     <string name="equation_edit">数式を編集</string>
     <string name="equation_source_hint">$区切り文字なしでLaTeXを入力してください。</string>

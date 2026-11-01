@@ -634,14 +634,6 @@ private fun HomeTab(
 
         Divider()
 
-        EquationButton(
-            enabled = pageOpen && selection.editorFocused,
-            existing = selection.equation,
-            onRetainTarget = { onCommand(FormatCommand.RetainInlineTarget) },
-            onReleaseTarget = { onCommand(FormatCommand.ReleaseInlineTarget) },
-            onSubmit = { latex, _ -> onCommand(FormatCommand.InsertEquation(latex)) },
-        )
-
         LinkButton(
             enabled = pageOpen && selection.editorFocused,
             selection = selection,

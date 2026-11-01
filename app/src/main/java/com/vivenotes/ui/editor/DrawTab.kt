@@ -243,8 +243,6 @@ internal fun DrawTab(
         EquationButton(
             enabled = pageOpen,
             active = tool == DrawTool.Equation,
-            tag = EquationTags.OBJECT,
-            label = stringResource(R.string.draw_equation),
             onSubmit = { latex, measured -> actions.armEquation(latex, measured) },
         )
 

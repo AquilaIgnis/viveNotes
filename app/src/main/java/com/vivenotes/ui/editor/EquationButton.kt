@@ -17,7 +17,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,11 +40,8 @@ import io.ratex.RaTeXView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** Test tags for the equation panel, which is one composable in two tabs. */
+/** Test tags for the equation panel. */
 internal object EquationTags {
-    /** The Home tab's ƒ, which writes a formula into the text under the caret. */
-    const val INLINE = "insert-equation"
-
     /** The Draw tab's ƒ, which arms the tool that puts a formula on the canvas. */
     const val OBJECT = "draw-equation"
 
@@ -57,25 +53,10 @@ internal object EquationTags {
 internal const val EXAMPLE_EQUATION = "{\\displaystyle \\int _{a}^{b}f'(t)\\,dt=f(b)-f(a)}"
 
 /**
- * Write a formula: the ƒ button and the LaTeX panel behind it.
+ * Write a formula: the Draw tab's ƒ button and the LaTeX panel behind it.
  *
- * One composable, two tabs, two destinations. On Home it writes an equation into the text under the
- * caret, as a [com.vivenotes.model.Mark] on a run. On Draw it arms a tool that puts the same formula
- * on the canvas as an object you can drag and resize. Same panel, same validation, same glyph,
- * because it is the same question either way: what is the formula? Where it lands is the tab's
- * business, which is why [onSubmit] is the only thing that differs between the two call sites.
- *
- * That split lands on the opposite answer from [TableButton]'s, and for a reason: a table's two kinds
- * are one object with different cells, so a setting distinguishes them, while an equation's are
- * genuinely a mark and an object.
- *
- * [existing] is the formula already under the caret. When there is one the panel edits it rather than
- * inserting beside it, which is the difference between Update and Insert.
- *
- * The panel takes focus, so the caret has to be held: a focusable popup pulls focus off the Android
- * editor, and with it the selection the insert is aimed at. [onRetainTarget] and [onReleaseTarget]
- * pin that caret for the life of the panel and let it go on every exit. The Draw tab needs neither,
- * because it is aiming at a point on the canvas.
+ * Submitting arms a tool that puts the formula on the canvas as an object you can drag and resize.
+ * Formulas in text need no button: typing `$$...$$`, `\(...\)` or `\[...\]` renders in place.
  *
  * The opt-in is for the submit button's [LoadingIndicator], which is the one part of M3 Expressive
  * still gated in 1.5.0-alpha25 — `MaterialExpressiveTheme`, `MotionScheme`, `ToggleButton` and the
@@ -87,53 +68,31 @@ internal fun EquationButton(
     enabled: Boolean,
     onSubmit: (String, MeasuredEquation) -> Unit,
     modifier: Modifier = Modifier,
-    existing: String? = null,
-    tag: String = EquationTags.INLINE,
-    label: String = stringResource(R.string.equation_button),
-    /** Marks the button as armed. The Draw tab's tool stays in hand after the panel closes. */
+    /** Marks the button as armed. The tool stays in hand after the panel closes. */
     active: Boolean = false,
-    onRetainTarget: () -> Unit = {},
-    onReleaseTarget: () -> Unit = {},
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf(false) }
-    var latex by remember { mutableStateOf(EXAMPLE_EQUATION) }
-    var targetRetained by remember { mutableStateOf(false) }
-
-    // Retain the exact caret until the panel submits, and release it on every exit path.
-    DisposableEffect(targetRetained) {
-        onDispose {
-            if (targetRetained) onReleaseTarget()
-        }
-    }
 
     fun dismiss() {
         expanded = false
-        targetRetained = false
     }
 
     Box(modifier) {
         RibbonButton(
             icon = MaterialSymbols.Function,
-            label = label,
+            label = stringResource(R.string.draw_equation),
             active = active || expanded,
             // Stays live while its own panel is open, or dismissing it would be impossible the moment
             // the panel took the focus that enabled the button.
             enabled = enabled || expanded,
-            modifier = Modifier.testTag(tag),
-            onClick = {
-                editing = existing != null
-                latex = existing ?: EXAMPLE_EQUATION
-                onRetainTarget()
-                targetRetained = true
-                expanded = true
-            },
+            modifier = Modifier.testTag(EquationTags.OBJECT),
+            onClick = { expanded = true },
         )
 
         EquationSourceDialog(
             expanded = expanded,
-            latex = latex,
-            editing = editing,
+            latex = EXAMPLE_EQUATION,
+            editing = false,
             onDismiss = ::dismiss,
             onSubmit = { source, measured ->
                 onSubmit(source, measured)
@@ -146,7 +105,7 @@ internal fun EquationButton(
 /**
  * The LaTeX field, its live preview and the two buttons — everything except where the panel hangs.
  *
- * Shared between the ribbon's ƒ and the object toolkit's: editing the formula on a placed equation
+ * Shared between the Draw tab's ƒ and the object toolkit's: editing the formula on a placed equation
  * is the same act as writing one, and two copies of a validating LaTeX editor would drift apart the
  * first time either was touched.
  *

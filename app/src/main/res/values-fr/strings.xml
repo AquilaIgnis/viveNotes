@@ -642,7 +642,6 @@
     <string name="editor_pasting">Collage en cours…</string>
     <string name="editor_untitled_page">Page sans titre</string>
 
-    <string name="equation_button">Équation</string>
     <string name="equation_insert">Insérer une équation</string>
     <string name="equation_edit">Modifier l\'équation</string>
     <string name="equation_source_hint">Entrez le LaTeX sans délimiteurs $.</string>

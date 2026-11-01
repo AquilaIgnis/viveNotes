@@ -26,14 +26,10 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The Home tab's ƒ — the inline equation, which writes a `Mark` into the text under the caret.
- *
- * Driven through the whole [Ribbon] rather than through [EquationButton] alone, because the thing
- * worth pinning is that it is *reachable* — it moved here when the Insert tab was retired, and a
- * button that quietly stops being composed on the tab that now owns it is exactly the failure this
- * catches. Its canvas twin is `EquationObjectTest`.
+ * The Document tab's link button, driven through the whole [Ribbon] so it is pinned as reachable on
+ * the tab that owns it.
  */
-class EquationButtonTest {
+class LinkButtonTest {
 
     @get:Rule
     val compose = createComposeRule()
@@ -73,53 +69,6 @@ class EquationButtonTest {
     }
 
     @Test
-    fun equationRequiresARealEditorCaret() {
-        setRibbon(SelectionState(editorFocused = false))
-
-        openEquationPanel()
-        compose.onNodeWithText("Insert equation").assertDoesNotExist()
-    }
-
-    @Test
-    fun opensWithTheExampleAndRetainsTheEditorTarget() {
-        setRibbon(SelectionState(editorFocused = true))
-
-        openEquationPanel()
-
-        compose.onNodeWithText("Insert equation").assertIsDisplayed()
-        val source = compose.onNodeWithTag(EquationTags.SOURCE)
-            .fetchSemanticsNode().config[SemanticsProperties.EditableText].text
-        assertTrue(source.contains("\\int"))
-        assertTrue(commands.firstOrNull() == FormatCommand.RetainInlineTarget)
-    }
-
-    @Test
-    fun opensAnExistingEquationForUpdate() {
-        setRibbon(SelectionState(equation = "x^2", editorFocused = true))
-
-        openEquationPanel()
-
-        compose.onNodeWithText("Edit equation").assertIsDisplayed()
-        val source = compose.onNodeWithTag(EquationTags.SOURCE)
-            .fetchSemanticsNode().config[SemanticsProperties.EditableText].text
-        assertTrue(source.contains("x^2"))
-        compose.onNodeWithText("Update").assertIsDisplayed()
-    }
-
-    @Test
-    fun validatesAndSendsDelimiterFreeLatex() {
-        setRibbon(SelectionState(editorFocused = true))
-        openEquationPanel()
-        compose.onNodeWithTag(EquationTags.SOURCE).performTextReplacement("x^2+y^2=z^2")
-
-        compose.onNodeWithTag(EquationTags.SUBMIT).performClick()
-
-        compose.waitUntil(timeoutMillis = 10_000) {
-            commands.any { it == FormatCommand.InsertEquation("x^2+y^2=z^2") }
-        }
-    }
-
-    @Test
     fun linkButtonUsesSelectedTextAndNormalizesTheAddress() {
         setRibbon(SelectionState(editorFocused = true, hasSelection = true, linkText = "selected"))
         compose.onNodeWithTag("insert-link").performScrollTo().performClick()
@@ -131,14 +80,6 @@ class EquationButtonTest {
         compose.onNodeWithTag("link-submit").performClick()
         assertTrue(commands.contains(FormatCommand.RetainInlineTarget))
         assertTrue(commands.contains(FormatCommand.InsertLink("selected", "https://example.com/page")))
-    }
-
-    /** Equation sits at the far end of the horizontally scrolling Document ribbon. */
-    private fun openEquationPanel() {
-        compose.onNodeWithTag(EquationTags.INLINE)
-            .performScrollTo()
-            .performClick()
-        compose.waitForIdle()
     }
 
     private fun noopViewActions() = ViewActions(

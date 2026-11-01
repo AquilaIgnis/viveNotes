@@ -43,7 +43,7 @@ interface VideoThumbnails {
 /**
  * A YouTube link drawn as its thumbnail — the pasted URL is still the text underneath.
  *
- * The URL is the truth; the card is a view. The split [LiveEquationSpan] makes over `$x^2$`: nothing
+ * The URL is the truth; the card is a view. The split [LiveEquationSpan] makes over `$$x^2$$`: nothing
  * is written into [com.vivenotes.model.PageDoc], so there is no new mark, no schema move, and no
  * document an older build cannot open. It also means the preview costs nothing to undo — deleting
  * the card deletes the URL, because they are the same characters.

@@ -632,7 +632,6 @@
     <string name="editor_pasting">붙여넣는 중…</string>
     <string name="editor_untitled_page">제목 없는 페이지</string>
 
-    <string name="equation_button">수식</string>
     <string name="equation_insert">수식 삽입</string>
     <string name="equation_edit">수식 편집</string>
     <string name="equation_source_hint">$ 구분자 없이 LaTeX를 입력하세요.</string>

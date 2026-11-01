@@ -33,7 +33,7 @@ import org.junit.Test
  * place nothing at all and look exactly like a dead button.
  *
  * The arithmetic behind it — corners, the resize anchor, the round trip — is `EquationOutlineTest`,
- * on the JVM. Its inline twin is `EquationButtonTest`.
+ * on the JVM.
  */
 class EquationObjectTest {
 

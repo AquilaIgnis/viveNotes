@@ -697,7 +697,6 @@
     <string name="editor_pasting">Pasting…</string>
     <string name="editor_untitled_page">Untitled page</string>
 
-    <string name="equation_button">Equation</string>
     <string name="equation_insert">Insert equation</string>
     <string name="equation_edit">Edit equation</string>
     <string name="equation_source_hint">Enter LaTeX without $ delimiters.</string>

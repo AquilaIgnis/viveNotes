@@ -7,11 +7,19 @@ import org.junit.Test
 class AutoEquationSyntaxTest {
 
     @Test
-    fun `finds inline dollar and parenthesis equations`() {
-        val found = findAutoEquationCandidates("Area is \$r^2\$ and \\(x+y\\).")
+    fun `finds parenthesis equations and leaves single dollars as text`() {
+        val source = "Area is \$r^2\$ and \\(x+y\\)."
+        val found = findAutoEquationCandidates(source)
 
-        assertEquals(listOf("r^2", "x+y"), found.map { it.latex })
-        assertEquals("\$r^2\$", "Area is \$r^2\$ and \\(x+y\\).".substring(found[0].start, found[0].end))
+        assertEquals(listOf("x+y"), found.map { it.latex })
+        assertEquals("\\(x+y\\)", source.substring(found[0].start, found[0].end))
+    }
+
+    @Test
+    fun `a single dollar beside a display block does not pair with it`() {
+        val found = findAutoEquationCandidates("costs \$5 then \$\$x^2\$\$")
+
+        assertEquals(listOf("{\\displaystyle x^2}"), found.map { it.latex })
     }
 
     @Test
@@ -41,7 +49,6 @@ class AutoEquationSyntaxTest {
 
     @Test
     fun `inline delimiters do not cross a line break`() {
-        assertTrue(findAutoEquationCandidates("\$x + y\nstill prose\$").isEmpty())
         assertTrue(findAutoEquationCandidates("\\(x + y\nstill prose\\)").isEmpty())
     }
 
@@ -54,7 +61,7 @@ class AutoEquationSyntaxTest {
 
     @Test
     fun `leaves unfinished and escaped syntax as text`() {
-        assertTrue(findAutoEquationCandidates("unfinished \$x^2").isEmpty())
+        assertTrue(findAutoEquationCandidates("unfinished \$\$x^2").isEmpty())
         val escaped = "price \\${'$'}5 and an escaped \\\\( token"
         assertTrue(findAutoEquationCandidates(escaped).isEmpty())
         assertTrue(findAutoEquationCandidates("{\\displaystyle \\frac{1}{2}").isEmpty())

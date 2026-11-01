@@ -642,7 +642,6 @@
     <string name="editor_pasting">Incollaggio in corso…</string>
     <string name="editor_untitled_page">Pagina senza titolo</string>
 
-    <string name="equation_button">Equazione</string>
     <string name="equation_insert">Inserisci equazione</string>
     <string name="equation_edit">Modifica equazione</string>
     <string name="equation_source_hint">Inserisci il LaTeX senza delimitatori $.</string>

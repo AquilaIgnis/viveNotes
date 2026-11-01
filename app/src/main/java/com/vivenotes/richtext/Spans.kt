@@ -345,7 +345,7 @@ abstract class RenderedEquationSpan(val latex: String) : ReplacementSpan() {
 /** A persisted equation inserted through the ribbon. Its source lives in [com.vivenotes.model.Mark]. */
 class EquationSpan(latex: String) : RenderedEquationSpan(latex)
 
-/** A disposable preview over source text such as `$x^2$`; never read back into the document model. */
+/** A disposable preview over source text such as `$$x^2$$`; never read back into the document model. */
 class LiveEquationSpan(
     latex: String,
     /** Captured so a font-size change invalidates an otherwise identical source preview. */
