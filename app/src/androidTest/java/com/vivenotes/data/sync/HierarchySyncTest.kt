@@ -34,6 +34,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.vivenotes.model.Block
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageDoc
 import com.vivenotes.model.JsonDocumentCodec
@@ -468,6 +469,108 @@ class HierarchySyncTest {
             ).toString().encodeToByteArray()
             assertTrue(encoded.size <= MAX_SYNC_PUSH_BYTES)
         }
+    }
+
+    /**
+     * Android cannot read a row larger than its 2 MB cursor window. A body stored in its entity state
+     * as base64 passes that well before the body itself does, so a page this size could be pushed
+     * once and then never again, and every push after it stopped with it.
+     */
+    @Test
+    fun aLargeBodyCanBeEditedAndPushedAgain() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Large")
+        db.pageContentDao().upsert(PageContentEntity(pageId, "x".repeat(1_600_000), now, "json/1"))
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        val edited = "y".repeat(1_600_000)
+        db.pageContentDao().upsert(PageContentEntity(pageId, edited, now + 1, "json/1"))
+        val result = hierarchy.run(account())
+
+        assertTrue("$result", result is SyncRunResult.Succeeded)
+        val stored = server.current("pageContent", pageId)!!.getValue("doc").jsonPrimitive.content
+        assertEquals(edited, Base64.getDecoder().decode(stored).decodeToString())
+        assertEquals(2L, server.current("pageContent", pageId)!!.getValue("version").jsonPrimitive.long)
+    }
+
+    /**
+     * A batch is kept on disk so a retry can resend it under the same id, and it may be up to 4 MiB,
+     * twice what one row can be read back at. A dropped connection on exactly that push would otherwise
+     * leave a batch no later run can load.
+     */
+    @Test
+    fun aLargeBatchInterruptedMidPushIsResentByTheNextRun() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Large")
+        db.pageContentDao().upsert(PageContentEntity(pageId, "x".repeat(1_600_000), now, "json/1"))
+        server.failNextPush = ServerResult.Failed(ConnectFailure.Unreachable, retryable = true)
+
+        assertTrue(hierarchy.run(account()) is SyncRunResult.Retryable)
+        val result = hierarchy.run(account())
+
+        assertTrue("$result", result is SyncRunResult.Succeeded)
+        assertEquals(
+            "one batch, sent twice under one id, is what makes a retry safe",
+            server.pushes[0].map(::idOf),
+            server.pushes[1].map(::idOf),
+        )
+        assertNotNull(server.current("pageContent", pageId))
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    /**
+     * No server will take this body, and it stays queued because the text is still wanted. What it
+     * must not do is go first and stop every row behind it, which on a large enough body was all of
+     * them, every run, for as long as the page stayed that size.
+     */
+    @Test
+    fun aBodyTooLargeToPushIsReportedWithoutHoldingBackTheRestOfTheQueue() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val large = repository.createPage(sectionId, "Large")
+        val small = repository.createPage(sectionId, "Small")
+        db.pageContentDao().upsert(PageContentEntity(large, "x".repeat(3_500_000), now, "json/1"))
+        db.pageContentDao().upsert(PageContentEntity(small, "small", now, "json/1"))
+        db.inkStrokeDao().upsert(listOf(strokeRow("queued-behind-it", small, seq = 0)))
+
+        val result = hierarchy.run(account())
+
+        assertEquals(SyncRunResult.Failed(PermanentSyncFailure.ChangeTooLarge), result)
+        assertNull("never offered", server.current("pageContent", large))
+        assertNotNull(server.current("page", large))
+        assertNotNull(server.current("pageContent", small))
+        assertNotNull(server.current("inkStroke", "queued-behind-it"))
+        assertEquals(
+            "only it stays queued, and it stays",
+            listOf("pageContent" to large),
+            db.syncDao().outbox(512).map { it.kind to it.entityId },
+        )
+
+        // Cut back to something a server accepts, it goes on its own.
+        db.pageContentDao().upsert(PageContentEntity(large, "cut down", now + 1, "json/1"))
+        assertTrue(hierarchy.run(account()) is SyncRunResult.Succeeded)
+        assertNotNull(server.current("pageContent", large))
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    /** A device asleep past the floor holds exactly these rows, and reconciling reads every one. */
+    @Test
+    fun aDeviceHoldingALargeBodyCanStillReconcile() = runBlocking {
+        val notebookId = repository.createNotebook("Notebook")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Large")
+        db.pageContentDao().upsert(PageContentEntity(pageId, "x".repeat(1_600_000), now, "json/1"))
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+        server.seed(notebookChange("gone-n", "Deleted long ago", now))
+        server.deleteAndSweep("notebook", "gone-n")
+
+        val result = hierarchy.run(account())
+
+        assertTrue("$result", result is SyncRunResult.Succeeded)
+        assertEquals(1, server.expiredAnswers)
+        assertEquals(1_600_000, db.pageContentDao().byId(pageId)!!.docJson.length)
     }
 
     @Test
@@ -1603,6 +1706,127 @@ class HierarchySyncTest {
             hierarchy.restoreFromCloud(account(), "closed-n"),
         )
         assertNotNull(db.pageContentDao().byId("closed-p"))
+    }
+
+    private fun textDoc(vararg outlines: Pair<String, String>) = PageDoc(
+        outlines = outlines.map { (id, text) ->
+            Outline.Text(id = id, blocks = listOf(Block.of(text)))
+        },
+    )
+
+    private fun outlineIdsIn(docJson: String): List<String> =
+        JsonDocumentCodec.decodeFromString(docJson).outlines.map { it.id }
+
+    private fun outlineIdsOnServer(pageId: String): List<String> {
+        val doc = server.current("pageContent", pageId)!!.getValue("doc").jsonPrimitive.content
+        return outlineIdsIn(Base64.getDecoder().decode(doc).decodeToString())
+    }
+
+    /** A page and a body, the body one sequence after it so a first sync reads them separately. */
+    private fun seedPageWithBody(doc: PageDoc) {
+        server.seed(
+            notebookChange("n", "Notebook", now),
+            sectionChange("s", "n", "Section", now),
+            pageChange("p", "s", "Page", now),
+        )
+        server.seed(pageContentChange("p", JsonDocumentCodec.encodeToString(doc), now))
+    }
+
+    /** Runs [write] once, after the tree has landed and before any content has. */
+    private fun whenTheTreeHasLanded(write: suspend () -> Unit) {
+        var done = false
+        server.beforePull = { filter ->
+            if (filter != PullFilter.TreeOnly && !done) {
+                done = true
+                write()
+            }
+            null
+        }
+    }
+
+    @Test
+    fun textTypedOnAPageWhoseBodyHadNotArrivedIsKeptAndPushedBack() = runBlocking {
+        seedPageWithBody(textDoc("from-server" to "already here"))
+        whenTheTreeHasLanded {
+            repository.saveDoc("p", textDoc("typed-here" to "typed while it downloaded"))
+        }
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        val both = listOf("from-server", "typed-here")
+        assertEquals(both, outlineIdsIn(db.pageContentDao().byId("p")!!.docJson))
+        assertEquals("every device gets it", both, outlineIdsOnServer("p"))
+        assertEquals("already here", db.pageDao().byId("p")!!.preview)
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+        assertEquals(server.cursorValue, db.syncDao().state()!!.cursor)
+    }
+
+    @Test
+    fun aPageOpenedAndNeverTypedOnDoesNotRewriteTheBodyThatArrives() = runBlocking {
+        seedPageWithBody(textDoc("from-server" to "already here"))
+        whenTheTreeHasLanded { repository.saveDoc("p", PageDoc.empty()) }
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(listOf("from-server"), outlineIdsIn(db.pageContentDao().byId("p")!!.docJson))
+        assertEquals(
+            "nothing to say, so no new version for every other device to pull",
+            1L,
+            server.current("pageContent", "p")!!.getValue("version").jsonPrimitive.long,
+        )
+    }
+
+    /**
+     * Signing back in queues every local row with no entity state, which looks exactly like text
+     * written without seeing the server's. It is not: this is an old copy, and the outline missing
+     * from the server was deleted there on purpose.
+     */
+    @Test
+    fun aDeviceSigningBackInDoesNotBringBackTextDeletedOnTheServer() = runBlocking {
+        val notebookId = repository.createNotebook("Local")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Page")
+        repository.saveDoc(pageId, textDoc("kept" to "still here", "deleted" to "removed elsewhere"))
+        server.seed(
+            notebookChange(notebookId, "Local", now),
+            sectionChange(sectionId, notebookId, "Section", now),
+            pageChange(pageId, sectionId, "Page", now),
+            pageContentChange(pageId, JsonDocumentCodec.encodeToString(textDoc("kept" to "still here")), now),
+        )
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(listOf("kept"), outlineIdsIn(db.pageContentDao().byId(pageId)!!.docJson))
+        assertEquals(listOf("kept"), outlineIdsOnServer(pageId))
+    }
+
+    /** The same pair of bodies reaching each other the other way round: through a refused push. */
+    @Test
+    fun aFirstBodyBeatenToTheServerByAnotherDevicesFirstBodyKeepsBoth() = runBlocking {
+        server.seed(
+            notebookChange("n", "Notebook", now),
+            sectionChange("s", "n", "Section", now),
+            pageChange("p", "s", "Page", now),
+        )
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+        repository.saveDoc("p", textDoc("typed-here" to "typed on this device"))
+        server.beforeFirstPush = {
+            server.seed(
+                pageContentChange(
+                    "p",
+                    JsonDocumentCodec.encodeToString(textDoc("from-elsewhere" to "typed on that one")),
+                    now,
+                ),
+            )
+        }
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(1, result.summary.conflictsResolved)
+        val both = listOf("from-elsewhere", "typed-here")
+        assertEquals(both, outlineIdsIn(db.pageContentDao().byId("p")!!.docJson))
+        assertEquals(both, outlineIdsOnServer("p"))
+        assertTrue(db.syncDao().outbox(512).isEmpty())
     }
 
     /** An account old enough to have swept a tombstone, and every cursor it has issued below the floor. */

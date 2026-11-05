@@ -23,7 +23,12 @@ import com.vivenotes.data.db.SyncEntityStateEntity
 import com.vivenotes.data.db.SyncOutboxEntity
 import com.vivenotes.data.db.SyncStateEntity
 import com.vivenotes.data.db.deferredNotebookContentKey
+import com.vivenotes.model.DocumentCodecs
+import com.vivenotes.model.PageDoc
+import com.vivenotes.model.absorbing
+import com.vivenotes.model.migrated
 import com.vivenotes.model.newId
+import com.vivenotes.model.previewLine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -183,6 +188,9 @@ class HierarchySync(
     /** Queued rows passed over for naming one of [noRoomBlobs], by the generation that did. */
     private val waitingForRoom = mutableMapOf<Pair<String, String>, Long>()
 
+    /** A page body past what a server accepts stayed queued this run, and the screen has to say so. */
+    private var passedOverABodyTooLarge = false
+
     /**
      * Bodies written by this transaction whose pictures have still to be counted. A plain list for
      * the reason [remoteInkPages] is a plain set.
@@ -327,7 +335,7 @@ class HierarchySync(
             sync.clearState()
             sync.clearOutbox()
             sync.clearEntityStates()
-            metadata.delete(PENDING_BATCH_KEY)
+            clearPendingBatch()
             metadata.delete(CAUGHT_UP_KEY)
             metadata.delete(FIRST_SYNC_TREE_KEY)
             streamAccountId = null
@@ -440,6 +448,7 @@ class HierarchySync(
         noRoomBlobs.clear()
         smallestNoRoom = Long.MAX_VALUE
         waitingForRoom.clear()
+        passedOverABodyTooLarge = false
     }
 
     private suspend fun activateLocked(accountId: String) {
@@ -455,7 +464,7 @@ class HierarchySync(
             sync.clearState()
             sync.clearOutbox()
             sync.clearEntityStates()
-            metadata.delete(PENDING_BATCH_KEY)
+            clearPendingBatch()
             // A different account is a different tree, so "I have seen this account's tree" cannot
             // carry over — the new one has not been pulled even once.
             metadata.delete(CAUGHT_UP_KEY)
@@ -871,8 +880,7 @@ class HierarchySync(
             db.withTransaction {
                 sync.setApplyingRemote(true)
                 admitted.forEach { change ->
-                    val known = sync.entityState(change.kind.wire, change.id)?.serverVersion
-                    if (known != change.version) {
+                    if (sync.entityVersion(change.kind.wire, change.id) != change.version) {
                         applyPulledChange(change)
                         applied++
                     }
@@ -918,7 +926,7 @@ class HierarchySync(
             sync.pruneOrphanedOutbox()
             sync.pruneOrphanedEntityStates()
             // Written against the versions this run has just replaced.
-            metadata.delete(PENDING_BATCH_KEY)
+            clearPendingBatch()
             sync.setCursor(scanned)
             sync.setApplyingRemote(false)
         }
@@ -1095,7 +1103,46 @@ class HierarchySync(
         return seq <= treeAppliedThrough
     }
 
+    /**
+     * What this device wrote on a page without ever having seen a body for it, or null if it did not.
+     *
+     * A first sync puts pages on screen before their bodies arrive, so somebody can open one that
+     * looks blank and type. Read before the entity state is written, because that state is what says
+     * no body had been seen.
+     */
+    private suspend fun bodyWrittenWithoutSeeing(arriving: RemoteChange): PageContentEntity? {
+        if (arriving.kind != SyncKind.PageContent || arriving.deletedAt != null) return null
+        if (sync.entityVersion(arriving.kind.wire, arriving.id) != null) return null
+        if (sync.outboxEntry(arriving.kind.wire, arriving.id) == null) return null
+        return contents.byId(arriving.id)
+    }
+
+    /**
+     * Adds [written] to the body that has just been applied over it, if that is the right thing to do
+     * — see [absorbing]. True means the row stays queued, and goes up against the arrived version.
+     */
+    private suspend fun keepWrittenBody(written: PageContentEntity): Boolean {
+        val arrived = contents.byId(written.pageId) ?: return false
+        val writtenDoc = written.decodedOrNull() ?: return false
+        val merged = arrived.decodedOrNull()?.absorbing(writtenDoc) ?: return false
+
+        val updatedAt = maxOf(arrived.updatedAt, written.updatedAt)
+        val codec = DocumentCodecs.default
+        val kept = PageContentEntity(written.pageId, codec.encodeToString(merged), updatedAt, codec.id)
+        contents.upsert(kept)
+        pictureRecounts += PictureRecount(before = arrived, after = kept)
+        pages.updatePreview(written.pageId, merged.previewLine(), updatedAt)
+        sync.enqueueIfAbsent(SyncKind.Page.wire, written.pageId)
+        return true
+    }
+
+    /** Null for a body this build cannot read, which the server's copy simply replaces. */
+    private fun PageContentEntity.decodedOrNull(): PageDoc? = runCatching {
+        DocumentCodecs.byId(format)?.decode(docJson.encodeToByteArray())?.migrated()
+    }.getOrNull()
+
     private suspend fun applyPulledChange(remote: RemoteChange) {
+        val writtenHere = bodyWrittenWithoutSeeing(remote)
         sync.putEntityState(remote.asEntityState())
 
         // A server row newer than this device's base wins the plain whole-entity OCC decision.
@@ -1110,6 +1157,7 @@ class HierarchySync(
         // installation first discovered after it had already been closed.
         if (remote.kind != SyncKind.Attachment && !belongsToDeferredNotebook(remote)) {
             applyRemoteRow(remote)
+            if (writtenHere != null && keepWrittenBody(writtenHere)) return
         }
         sync.deleteOutbox(remote.kind.wire, remote.id)
     }
@@ -1279,12 +1327,14 @@ class HierarchySync(
 
         while (batchCount++ < MAX_BATCHES_PER_RUN) {
             val pending = loadOrCreatePendingBatch()
-                ?: return if (noRoomBlobs.isEmpty()) {
-                    PhaseResult.ConflictDone(pushed, conflicts, pictures)
-                } else {
+                ?: return when {
                     // Everything that could go has gone. What is left names a picture the account
                     // has no room for, and the screen has to say so.
-                    PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.StorageFull))
+                    noRoomBlobs.isNotEmpty() ->
+                        PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.StorageFull))
+                    passedOverABodyTooLarge ->
+                        PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.ChangeTooLarge))
+                    else -> PhaseResult.ConflictDone(pushed, conflicts, pictures)
                 }
 
             // The bytes go up before the change that names them. The server refuses it otherwise —
@@ -1297,7 +1347,7 @@ class HierarchySync(
                     // room. The batch was serialized naming it, so it is thrown away and built again
                     // without it rather than sent to be rejected: the durable batch is what a retry
                     // re-sends byte for byte.
-                    metadata.delete(PENDING_BATCH_KEY)
+                    clearPendingBatch()
                     continue
                 }
                 is BlobPhase.Stop -> return PhaseResult.Stop(preflight.result)
@@ -1316,7 +1366,7 @@ class HierarchySync(
                 is ServerResult.Failed -> {
                     // A retryable transport result keeps the serialized batch and its batchId on
                     // disk. WorkManager's next run sends byte-for-byte the same logical request.
-                    if (!result.retryable) metadata.delete(PENDING_BATCH_KEY)
+                    if (!result.retryable) clearPendingBatch()
                     return PhaseResult.Stop(result.asSyncResult())
                 }
             }
@@ -1330,7 +1380,7 @@ class HierarchySync(
                 answered != sentByKey.keys ||
                 response.applied.size + response.rejected.size != pending.changes.size
             ) {
-                metadata.delete(PENDING_BATCH_KEY)
+                clearPendingBatch()
                 return PhaseResult.Stop(
                     SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
                 )
@@ -1406,7 +1456,7 @@ class HierarchySync(
                 // After the passes, because both reach rows by page id and `invalidateInkText`
                 // *inserts* one, which a page this had already deleted would refuse.
                 purged.forEach { (kind, id) -> discardedPictures += applyPurgeOrRemap(kind, id) }
-                metadata.delete(PENDING_BATCH_KEY)
+                clearPendingBatch()
                 sync.setApplyingRemote(false)
             }
             DebugLog.i(DebugLog.DB) {
@@ -1570,12 +1620,17 @@ class HierarchySync(
         }
         val current = parseRemoteChange(currentJson)
             ?: throw IllegalArgumentException("unsupported current kind")
+        val writtenHere = bodyWrittenWithoutSeeing(current)
         sync.putEntityState(current.asEntityState())
 
         // The rejected payload was based on an older server version, including a new local edit
         // made while this request was in flight. Retrying it against `current.version` would turn a
         // stale whole document into a fresh accepted write and can resurrect remotely deleted text.
+        //
+        // The one exception is a body with no older version behind it: another device's first body
+        // reached the server just ahead of this one's, and neither has seen the other.
         applyRemoteRow(current)
+        if (writtenHere != null && keepWrittenBody(writtenHere)) return
         sync.deleteOutbox(sent.kind, sent.id)
     }
 
@@ -1596,10 +1651,47 @@ class HierarchySync(
         sync.enqueueIfAbsent(parentKind, parentId)
     }
 
-    private suspend fun loadOrCreatePendingBatch(): PendingBatch? = db.withTransaction {
-        metadata.value(PENDING_BATCH_KEY)?.let { encoded ->
-            return@withTransaction hierarchyJson.decodeFromString(PendingBatch.serializer(), encoded)
+    /**
+     * The batch being sent, kept on disk so a retry resends it under the same id.
+     *
+     * In pieces, because a batch may reach 4 MiB and Android cannot read back a row past its 2 MB
+     * cursor window. One row would mean a dropped connection during a large push leaves a batch no
+     * later run can load, and every push on the device stops there.
+     */
+    private suspend fun readPendingBatch(): PendingBatch? {
+        val encoded = StringBuilder(metadata.value(PENDING_BATCH_KEY) ?: return null)
+        var part = 1
+        while (true) {
+            encoded.append(metadata.value(pendingBatchPartKey(part++)) ?: break)
         }
+        return hierarchyJson.decodeFromString(PendingBatch.serializer(), encoded.toString())
+    }
+
+    private suspend fun writePendingBatch(batch: PendingBatch) {
+        clearPendingBatch()
+        val encoded = hierarchyJson.encodeToString(PendingBatch.serializer(), batch)
+        var start = 0
+        var part = 0
+        while (start < encoded.length) {
+            var end = minOf(start + PENDING_BATCH_PART_CHARS, encoded.length)
+            // Half a surrogate pair cannot be stored as UTF-8, so a piece never ends on one.
+            if (end < encoded.length && encoded[end - 1].isHighSurrogate()) end--
+            val key = if (part == 0) PENDING_BATCH_KEY else pendingBatchPartKey(part)
+            metadata.put(LocalMetadataEntity(key, encoded.substring(start, end)))
+            start = end
+            part++
+        }
+    }
+
+    private suspend fun clearPendingBatch() {
+        metadata.delete(PENDING_BATCH_KEY)
+        metadata.deleteWithPrefix("$PENDING_BATCH_KEY:")
+    }
+
+    private fun pendingBatchPartKey(part: Int): String = "$PENDING_BATCH_KEY:$part"
+
+    private suspend fun loadOrCreatePendingBatch(): PendingBatch? = db.withTransaction {
+        readPendingBatch()?.let { return@withTransaction it }
 
         val batchId = UUID.randomUUID().toString()
         val changes = mutableListOf<PendingChange>()
@@ -1622,6 +1714,15 @@ class HierarchySync(
                 if (changes.size == MAX_PUSH_CHANGES) break
                 val key = row.kind to row.entityId
                 if (waitingForRoom[key] == row.generation) continue
+                // Measured before it is loaded and encoded. No server will take it, and sent first
+                // it would stop every row queued behind it for as long as the page stays this big.
+                if (row.kind == SyncKind.PageContent.wire &&
+                    (contents.byteLength(row.entityId) ?: 0) > MAX_DOCUMENT_BYTES
+                ) {
+                    waitingForRoom[key] = row.generation
+                    passedOverABodyTooLarge = true
+                    continue
+                }
                 val change = snapshot(row)
                 if (digestsNamedBy(change).any(noRoomBlobs::contains)) {
                     waitingForRoom[key] = row.generation
@@ -1641,12 +1742,7 @@ class HierarchySync(
             batchId = batchId,
             changes = changes,
         )
-        metadata.put(
-            LocalMetadataEntity(
-                PENDING_BATCH_KEY,
-                hierarchyJson.encodeToString(PendingBatch.serializer(), pending),
-            ),
-        )
+        writePendingBatch(pending)
         pending
     }
 
@@ -2322,7 +2418,7 @@ class HierarchySync(
             documentJson = documentJson,
             inkPoints = inkPoints,
             targetIds = targetIds,
-            raw = if (inkPoints == null) raw else JsonObject(raw - "points"),
+            raw = JsonObject(raw - BULK_PAYLOAD_FIELDS),
         )
     }
 
@@ -2382,6 +2478,7 @@ class HierarchySync(
         fun asAcceptedState(version: Long): SyncEntityStateEntity {
             val accepted = payload.toMutableMap().apply {
                 remove("baseVersion")
+                keys.removeAll(BULK_PAYLOAD_FIELDS)
                 this["version"] = JsonPrimitive(version)
             }
             return SyncEntityStateEntity(kind, id, version, JsonObject(accepted).toString())
@@ -2939,6 +3036,9 @@ class HierarchySync(
         const val MAX_DOCUMENT_BYTES = 2 shl 20
         const val PENDING_BATCH_KEY = "syncPendingHierarchyBatch"
 
+        /** At most three bytes a char in UTF-8, so a piece stays well inside the cursor window. */
+        const val PENDING_BATCH_PART_CHARS = 400_000
+
         const val DEFAULT_PULL_LIMIT = 512
 
         /** The most a server accepts. Its byte budget still ends a page of large rows sooner. */
@@ -2967,6 +3067,13 @@ class HierarchySync(
         const val DISPLAY_UPDATED_AT = "viveDisplayUpdatedAt"
 
         const val BLOB_REFS = "blobRefs"
+
+        /**
+         * What an entity state never keeps. A push always puts these back from the row itself, so a
+         * stored copy only doubles the data, and a large enough one makes the state row too big for
+         * Android to read back at all.
+         */
+        val BULK_PAYLOAD_FIELDS = setOf("doc", "points")
 
         /** `PageContentFields.blobRefs` is `maxItems: 512`. A page with more is not a page. */
         const val MAX_BLOB_REFS = 512

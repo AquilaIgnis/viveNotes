@@ -13,6 +13,7 @@ import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
 import com.vivenotes.data.db.InkMoveTargetEntity
 import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.data.db.StrokeColor
 import com.vivenotes.data.db.LocalMetadataEntity
 import com.vivenotes.data.db.SyncEntityStateEntity
@@ -768,6 +769,66 @@ class NotebookTransferManagerTest {
         )
         // The export edits its snapshot, not the live database.
         assertEquals(now, db.notebookDao().byId(notebookId)!!.closedAt)
+    }
+
+    /** A body past Android's 2 MB cursor window, which a raw `SELECT *` could not read either way. */
+    @Test
+    fun exportThenImportCarriesABodyPastTheCursorWindow() = runBlocking {
+        val notebookId = repository.createNotebook("Long")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Pasted")
+        val text = "aé€😀".repeat(800_000)
+        repository.saveDoc(
+            pageId,
+            PageDoc(outlines = listOf(Outline.Text(id = "text", blocks = listOf(Block.of(text))))),
+        )
+        val bundle = ByteArrayOutputStream().also { transfers.exportNotebook(notebookId, it) }
+            .toByteArray()
+
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val destinationDb = openDatabase("large-body.db")
+        try {
+            NotebookTransferManager(
+                context,
+                destinationDb,
+                AttachmentStore(context, destinationDb),
+                transferRoot = File(root, "large-body-transfers"),
+                clock = { now },
+            ).importNotebook(ByteArrayInputStream(bundle))
+
+            val load = NotesRepository(destinationDb, clock = { now }).loadDoc(pageId)
+            val outline = (load as PageLoad.Loaded).doc.outlines.single() as Outline.Text
+            assertEquals(text, outline.blocks.single().text)
+        } finally {
+            destinationDb.close()
+        }
+    }
+
+    /**
+     * Reading in pieces took away the accident that stopped a crafted bundle being loaded into memory,
+     * so the limit has to be checked before any of the body leaves the database. Import and export
+     * read through the same function, which is why going through export proves it for both.
+     */
+    @Test
+    fun aBodyPastTheSafeLimitIsRefusedWithAMessageRatherThanRead() = runBlocking {
+        val notebookId = repository.createNotebook("Too long")
+        val sectionId = repository.createSection(notebookId, "Section")
+        val pageId = repository.createPage(sectionId, "Pasted")
+        db.pageContentDao().upsert(
+            PageContentEntity(
+                pageId,
+                "x".repeat(DocumentRevisionPayload.MAX_DOCUMENT_BYTES + 1),
+                now,
+                "json/1",
+            ),
+        )
+
+        val failure = runCatching {
+            transfers.exportNotebook(notebookId, ByteArrayOutputStream())
+        }.exceptionOrNull()
+
+        assertTrue("$failure", failure is NotebookTransferException)
+        assertTrue(failure!!.message!!.contains("safe import limit"))
     }
 
     /**

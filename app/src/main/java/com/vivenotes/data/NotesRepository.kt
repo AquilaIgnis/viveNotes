@@ -33,7 +33,7 @@ import com.vivenotes.model.isBlank
 import com.vivenotes.model.migrated
 import com.vivenotes.model.TextDocumentCodec
 import com.vivenotes.model.newId
-import com.vivenotes.model.plainText
+import com.vivenotes.model.previewLine
 
 /** Palette used for new notebooks and sections, cycled by creation order. */
 val ACCENT_PALETTE = listOf(
@@ -821,7 +821,7 @@ class NotesRepository(
 
         val now = clock()
         val encoded = codec.encodeToString(doc)
-        val preview = previewOf(doc)
+        val preview = doc.previewLine()
         val replaced = db.withTransaction {
             val previous = contents.byId(pageId) ?: return@withTransaction false
             val current = checkpointOf(previous, now)
@@ -845,7 +845,7 @@ class NotesRepository(
     private suspend fun writeDoc(pageId: String, doc: PageDoc) {
         val now = clock()
         val encoded = codec.encodeToString(doc)
-        val preview = previewOf(doc)
+        val preview = doc.previewLine()
 
         val written = db.withTransaction {
             val previous = contents.byId(pageId)
@@ -866,11 +866,6 @@ class NotesRepository(
         val newest = revisions.newestTimestamp(pageId) ?: return true
         return now - newest >= REVISION_CHECKPOINT_INTERVAL_MS
     }
-
-    private fun previewOf(doc: PageDoc): String = doc.plainText().lineSequence()
-        .firstOrNull { it.isNotBlank() }
-        .orEmpty()
-        .take(140)
 
     /** Must run inside the caller's transaction so document and ink describe one instant. */
     private suspend fun checkpointOf(content: PageContentEntity, now: Long) =

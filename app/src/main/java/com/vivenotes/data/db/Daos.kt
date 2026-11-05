@@ -7,6 +7,8 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 @Dao
 interface LocalMetadataDao {
@@ -22,6 +24,9 @@ interface LocalMetadataDao {
 
     @Query("SELECT `key` FROM local_metadata WHERE `key` LIKE :keyPrefix || '%' LIMIT :limit")
     suspend fun keysWithPrefix(keyPrefix: String, limit: Int): List<String>
+
+    @Query("DELETE FROM local_metadata WHERE `key` LIKE :keyPrefix || '%'")
+    suspend fun deleteWithPrefix(keyPrefix: String)
 
     /**
      * Repoints every value in one key family from one id to another.
@@ -70,6 +75,10 @@ interface SyncDao {
 
     @Query("DELETE FROM sync_entity_states WHERE kind = :kind AND entityId = :entityId")
     suspend fun deleteEntityState(kind: String, entityId: String)
+
+    /** The version alone, for a caller that has no use for the stored JSON. */
+    @Query("SELECT serverVersion FROM sync_entity_states WHERE kind = :kind AND entityId = :entityId")
+    suspend fun entityVersion(kind: String, entityId: String): Long?
 
     /** Everything the server has acknowledged holding, for a reconciliation to compare against. */
     @Query("SELECT kind, entityId FROM sync_entity_states")
@@ -719,16 +728,56 @@ interface PageDao {
 @Dao
 interface PageContentDao {
 
-    @Query("SELECT * FROM page_content WHERE pageId = :pageId")
-    suspend fun byId(pageId: String): PageContentEntity?
+    /**
+     * A body, read in pieces.
+     *
+     * Android cannot read a row past its 2 MB cursor window, and nothing stops a page growing beyond
+     * that: a large paste saves without complaint and would then be unreadable for good. So no query
+     * here selects `docJson` whole. Everything that hands out a body goes through this.
+     */
+    @Transaction
+    suspend fun byId(pageId: String): PageContentEntity? = firstPiece(pageId)?.let { assembled(it) }
 
     /** Keeps an already-open editor in step when sync or import replaces its stored body. */
-    @Query("SELECT * FROM page_content WHERE pageId = :pageId")
-    fun observeById(pageId: String): Flow<PageContentEntity?>
+    fun observeById(pageId: String): Flow<PageContentEntity?> = observeFirstPiece(pageId)
+        .distinctUntilChanged()
+        .map { first -> first?.let { byIdOrWhole(it) } }
 
     /** The bodies of named pages, for the search index's incremental rebuild. */
-    @Query("SELECT * FROM page_content WHERE pageId IN (:pageIds)")
-    suspend fun byIds(pageIds: List<String>): List<PageContentEntity>
+    @Transaction
+    suspend fun byIds(pageIds: List<String>): List<PageContentEntity> = pageIds.mapNotNull { byId(it) }
+
+    @Query("$FIRST_PIECE_COLUMNS WHERE pageId = :pageId")
+    suspend fun firstPiece(pageId: String): PageContentPiece?
+
+    @Query("$FIRST_PIECE_COLUMNS WHERE pageId = :pageId")
+    fun observeFirstPiece(pageId: String): Flow<PageContentPiece?>
+
+    @Query("SELECT substr(docJson, :start, $BODY_PIECE_CHARS) FROM page_content WHERE pageId = :pageId")
+    suspend fun laterPiece(pageId: String, start: Int): String
+
+    /**
+     * Its size in bytes, the unit a server's limit is stated in. A cast because `length` of text
+     * counts characters, and asking this way does not bring the body out of the database.
+     */
+    @Query("SELECT length(CAST(docJson AS BLOB)) FROM page_content WHERE pageId = :pageId")
+    suspend fun byteLength(pageId: String): Int?
+
+    /** One piece is the whole of almost every body, which is why the first comes with the row. */
+    private suspend fun assembled(first: PageContentPiece): PageContentEntity {
+        if (first.totalChars <= BODY_PIECE_CHARS) return first.asWholeBody(first.piece)
+        val body = StringBuilder(first.totalChars).append(first.piece)
+        var start = BODY_PIECE_CHARS + 1
+        while (start <= first.totalChars) {
+            body.append(laterPiece(first.pageId, start))
+            start += BODY_PIECE_CHARS
+        }
+        return first.asWholeBody(body.toString())
+    }
+
+    /** The row may have gone or changed since the piece was read, and then the read wins. */
+    private suspend fun byIdOrWhole(first: PageContentPiece): PageContentEntity? =
+        if (first.totalChars <= BODY_PIECE_CHARS) first.asWholeBody(first.piece) else byId(first.pageId)
 
     @Upsert
     suspend fun upsert(content: PageContentEntity)
@@ -754,8 +803,12 @@ interface PageContentDao {
      * Filtering in SQL keeps the eviction's survivor scan proportional to the pages that have
      * pictures on them.
      */
-    @Query("SELECT * FROM page_content WHERE docJson LIKE '%attachmentId%'")
-    suspend fun picturePlacingBodies(): List<PageContentEntity>
+    @Transaction
+    suspend fun picturePlacingBodies(): List<PageContentEntity> =
+        picturePlacingPageIds().mapNotNull { byId(it) }
+
+    @Query("SELECT pageId FROM page_content WHERE docJson LIKE '%attachmentId%'")
+    suspend fun picturePlacingPageIds(): List<String>
 
     /**
      * Every stored body that could carry a shape or table border, on [picturePlacingBodies]' terms.
@@ -765,8 +818,33 @@ interface PageContentDao {
      * A border written before the flag existed has no such key, which is correct: those already
      * decode to null and are what the repair is putting the others back to.
      */
-    @Query("SELECT * FROM page_content WHERE docJson LIKE '%borderFollowsTheme%'")
-    suspend fun borderCarryingBodies(): List<PageContentEntity>
+    @Transaction
+    suspend fun borderCarryingBodies(): List<PageContentEntity> =
+        borderCarryingPageIds().mapNotNull { byId(it) }
+
+    @Query("SELECT pageId FROM page_content WHERE docJson LIKE '%borderFollowsTheme%'")
+    suspend fun borderCarryingPageIds(): List<String>
+}
+
+/**
+ * Characters per piece of a body. SQLite counts a character as one code point, at most four bytes in
+ * UTF-8, so even the worst case stays inside the 2 MB cursor window with the rest of the row.
+ */
+const val BODY_PIECE_CHARS = 400_000
+
+private const val FIRST_PIECE_COLUMNS =
+    "SELECT pageId, updatedAt, format, length(docJson) AS totalChars, " +
+        "substr(docJson, 1, $BODY_PIECE_CHARS) AS piece FROM page_content"
+
+/** A `page_content` row with the start of its body and how long the whole of it is. */
+data class PageContentPiece(
+    val pageId: String,
+    val updatedAt: Long,
+    val format: String,
+    val totalChars: Int,
+    val piece: String,
+) {
+    fun asWholeBody(docJson: String) = PageContentEntity(pageId, docJson, updatedAt, format)
 }
 
 @Dao

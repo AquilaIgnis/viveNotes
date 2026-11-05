@@ -1128,8 +1128,42 @@ fun PageDoc.plainText(): String = outlines
  * The page's [PageStyle] is not consulted: a paper size chosen for a page that was then thrown away
  * is not worth keeping in a recovery list for a week.
  */
-fun PageDoc.isBlank(): Boolean = outlines.all { outline ->
-    outline is Outline.Text && outline.blocks.all { block ->
-        block.runs.all { run -> run.plainText.isBlank() }
-    }
+fun PageDoc.isBlank(): Boolean = outlines.all(Outline::holdsNothing)
+
+private fun Outline.holdsNothing(): Boolean = this is Outline.Text && blocks.all { block ->
+    block.runs.all { run -> run.plainText.isBlank() }
+}
+
+/** The line a page shows in lists: its first with anything on it. */
+fun PageDoc.previewLine(): String = plainText().lineSequence()
+    .firstOrNull { it.isNotBlank() }
+    .orEmpty()
+    .take(PREVIEW_MAX_CHARS)
+
+private const val PREVIEW_MAX_CHARS = 140
+
+/**
+ * This document with what [written] holds added, for a body that arrived on a page where something
+ * had already been written without ever seeing it.
+ *
+ * Whole-document conflict resolution has the newer server version win, which is right for two copies
+ * of one document: the loser's differences may be deletions the winner made on purpose. It is wrong
+ * here. These two have no history in common, so nothing in [written] can be an undoing of anything in
+ * this one, and dropping it would lose text somebody typed for no reason at all. Each outline stays
+ * where it was written, even on top of something, because that can be seen and dragged.
+ *
+ * Null when the ordinary rule should stand:
+ *  - [written] holds nothing, as a page that was opened and never typed on does.
+ *  - The two share an outline id, which means they share history. A device signing back in holds
+ *    old copies with nothing to mark them as such, and keeping an outline the server no longer has
+ *    would bring back text somebody deleted.
+ */
+fun PageDoc.absorbing(written: PageDoc): PageDoc? {
+    val here = outlines.mapTo(HashSet()) { it.id }
+    if (written.outlines.any { it.id in here }) return null
+    val kept = written.outlines.filterNot(Outline::holdsNothing)
+    if (kept.isEmpty()) return null
+    // A page created elsewhere and never written on holds one empty box, which is not worth keeping
+    // under what was typed here.
+    return copy(outlines = if (isBlank()) kept else outlines + kept)
 }

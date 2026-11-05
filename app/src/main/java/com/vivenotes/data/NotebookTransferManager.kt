@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import androidx.room.withTransaction
 import com.vivenotes.data.db.AttachmentEntity
+import com.vivenotes.data.db.BODY_PIECE_CHARS
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
 import com.vivenotes.data.db.InkMoveEntity
@@ -354,7 +355,7 @@ class NotebookTransferManager(
                 "Removed other notebooks, sync tables, device-local columns and derived caches"
             }
 
-            val currentDocs = source.queryRows("SELECT * FROM page_content", mapper = ::readContent)
+            val currentDocs = readContents(source)
             val revisions = source.queryRows("SELECT * FROM page_revisions", mapper = ::readRevision)
             val attachmentRefs = linkedMapOf<String, Int>()
             currentDocs.forEach { row ->
@@ -567,7 +568,7 @@ class NotebookTransferManager(
             val notebooks = database.queryRows("SELECT * FROM notebooks", mapper = ::readNotebook)
             val sections = database.queryRows("SELECT * FROM sections", mapper = ::readSection)
             val pages = database.queryRows("SELECT * FROM pages", mapper = ::readPage)
-            val contents = database.queryRows("SELECT * FROM page_content", mapper = ::readContent)
+            val contents = readContents(database)
             val revisions = database.queryRows("SELECT * FROM page_revisions", mapper = ::readRevision)
             val strokes = database.queryRows("SELECT * FROM ink_strokes", mapper = ::readStroke)
             val erases = database.queryRows("SELECT * FROM ink_erases", mapper = ::readErase)
@@ -1408,6 +1409,42 @@ class NotebookTransferManager(
         }
     }
 
+    /**
+     * Every body in a bundle's database, read in pieces for the reason `PageContentDao.byId` is.
+     *
+     * The size is checked first, in SQL, because a body too large to read used to be what stopped a
+     * crafted bundle from being loaded into memory at all. Reading in pieces takes that away, so this
+     * has to refuse one before any of it leaves the database.
+     */
+    private fun readContents(database: SQLiteDatabase): List<PageContentEntity> {
+        class Sized(val pageId: String, val updatedAt: Long, val format: String, val chars: Int)
+
+        val rows = database.queryRows(
+            "SELECT pageId, updatedAt, format, length(docJson) AS chars, " +
+                "length(CAST(docJson AS BLOB)) AS bytes FROM page_content",
+        ) { row ->
+            if (row.long("bytes") > DocumentRevisionPayload.MAX_DOCUMENT_BYTES) {
+                fail("A page document exceeds the safe import limit.")
+            }
+            Sized(row.string("pageId"), row.long("updatedAt"), row.string("format"), row.int("chars"))
+        }
+        return rows.map { row ->
+            val body = StringBuilder(row.chars)
+            var start = 1
+            while (start <= row.chars) {
+                database.rawQuery(
+                    "SELECT substr(docJson, $start, $BODY_PIECE_CHARS) FROM page_content WHERE pageId = ?",
+                    arrayOf(row.pageId),
+                ).use { piece ->
+                    check(piece.moveToFirst())
+                    body.append(piece.getString(0))
+                }
+                start += BODY_PIECE_CHARS
+            }
+            PageContentEntity(row.pageId, body.toString(), row.updatedAt, row.format)
+        }
+    }
+
     private fun fail(message: String, cause: Throwable? = null): Nothing =
         throw NotebookTransferException(message, cause)
 
@@ -1725,9 +1762,6 @@ private fun readSection(it: Cursor) = SectionEntity(
 private fun readPage(it: Cursor) = PageEntity(
     it.string("id"), it.string("sectionId"), it.string("title"), it.int("sortIndex"),
     it.string("preview"), it.long("createdAt"), it.long("updatedAt"), it.nullableLong("deletedAt"),
-)
-private fun readContent(it: Cursor) = PageContentEntity(
-    it.string("pageId"), it.string("docJson"), it.long("updatedAt"), it.string("format"),
 )
 private fun readRevision(it: Cursor) = PageRevisionEntity(
     it.string("id"), it.string("pageId"), it.long("createdAt"), it.string("format"),

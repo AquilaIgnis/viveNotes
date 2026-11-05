@@ -57,10 +57,10 @@ class MigrationTest {
      */
     @Test
     fun theNewestCommittedSchemaIsTheSchemaTheEntitiesCompileTo() {
-        helper.createDatabase(BASELINE_DB, 2).close()
+        helper.createDatabase(BASELINE_DB, 3).close()
 
         val database = Room.databaseBuilder(context, NotesDatabase::class.java, BASELINE_DB)
-            .addMigrations(NotesDatabase.MIGRATION_1_2)
+            .addMigrations(NotesDatabase.MIGRATION_1_2, NotesDatabase.MIGRATION_2_3)
             .addCallback(NotesDatabase.SYNC_TRIGGER_CALLBACK)
             .build()
         try {
@@ -106,6 +106,84 @@ class MigrationTest {
             migrated.close()
         }
     }
+
+    /**
+     * Version 3 repairs a device already stuck, whose state row is too large to read at all. Written
+     * with a row past the cursor window, because that is the case the migration exists for: reading
+     * it back through the app is what used to fail. Everything else in the JSON has to survive, since
+     * fields a newer client wrote are kept there on purpose.
+     */
+    @Test
+    fun versionTwoMigratesByDroppingBodiesAndPointsFromEntityStates() {
+        val tooLargeToRead = "A".repeat(2_400_000)
+        helper.createDatabase(BASELINE_DB, 2).apply {
+            execSQL(
+                "INSERT INTO sync_entity_states(kind, entityId, serverVersion, serverJson) VALUES " +
+                    "('pageContent', 'page', 4, '{\"doc\":\"$tooLargeToRead\",\"future\":\"kept\",\"version\":4}')",
+            )
+            execSQL(
+                "INSERT INTO sync_entity_states(kind, entityId, serverVersion, serverJson) VALUES " +
+                    "('inkStroke', 'stroke', 2, '{\"points\":\"QUJD\",\"drawOrder\":7}')",
+            )
+            execSQL(
+                "INSERT INTO sync_entity_states(kind, entityId, serverVersion, serverJson) VALUES " +
+                    "('notebook', 'book', 1, '{\"doc\":\"not a body\",\"name\":\"N\"}')",
+            )
+            execSQL(
+                "INSERT INTO local_metadata(`key`, value) " +
+                    "VALUES('syncPendingHierarchyBatch', '$tooLargeToRead')",
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(BASELINE_DB, 3, true, NotesDatabase.MIGRATION_2_3)
+        try {
+            migrated.query("SELECT COUNT(*) FROM local_metadata WHERE `key` = 'syncPendingHierarchyBatch'")
+                .use { cursor ->
+                    cursor.moveToFirst()
+                    assertEquals("a batch too large to read is dropped", 0, cursor.getInt(0))
+                }
+            assertEquals("""{"future":"kept","version":4}""", stateJson(migrated, "page"))
+            assertEquals("""{"drawOrder":7}""", stateJson(migrated, "stroke"))
+            assertEquals(
+                "only the kinds that hold these fields are touched",
+                """{"doc":"not a body","name":"N"}""",
+                stateJson(migrated, "book"),
+            )
+        } finally {
+            migrated.close()
+        }
+    }
+
+    /** A batch small enough to read is still the one to resend, under the id the server may know. */
+    @Test
+    fun versionTwoMigratesKeepingAPendingBatchThatCanStillBeRead() {
+        helper.createDatabase(BASELINE_DB, 2).apply {
+            execSQL(
+                "INSERT INTO local_metadata(`key`, value) " +
+                    "VALUES('syncPendingHierarchyBatch', '{\"batchId\":\"kept\"}')",
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(BASELINE_DB, 3, true, NotesDatabase.MIGRATION_2_3)
+        try {
+            migrated.query("SELECT value FROM local_metadata WHERE `key` = 'syncPendingHierarchyBatch'")
+                .use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals("""{"batchId":"kept"}""", cursor.getString(0))
+                }
+        } finally {
+            migrated.close()
+        }
+    }
+
+    private fun stateJson(database: SupportSQLiteDatabase, entityId: String): String =
+        database.query("SELECT serverJson FROM sync_entity_states WHERE entityId = '$entityId'")
+            .use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                cursor.getString(0)
+            }
 
     private fun outboxRows(database: SupportSQLiteDatabase): Int =
         database.query("SELECT COUNT(*) FROM sync_outbox WHERE kind = 'attachment' AND entityId = 'sha-one'")
