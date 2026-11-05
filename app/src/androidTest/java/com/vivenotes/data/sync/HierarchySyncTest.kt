@@ -278,6 +278,7 @@ class HierarchySyncTest {
                 server.seed(inkStrokeChange("stroke-$index", "absent-page", index, changedAt))
             }
             server.pageLimit = 1
+            server.ignoresPullFilters = true
             val counting = HierarchySync(
                 counted,
                 server,
@@ -714,6 +715,7 @@ class HierarchySyncTest {
         server.seed(sectionChange("s", "n", "Remote section", changedAt))
         server.seed(pageChange("p", "s", "Remote page", changedAt))
         server.pageLimit = 1
+        server.ignoresPullFilters = true
 
         val result = hierarchy.run(account()) as SyncRunResult.Succeeded
 
@@ -1400,6 +1402,401 @@ class HierarchySyncTest {
         assertTrue(repository.observeClosedNotebooks().first().single().contentOnDevice)
     }
 
+    /**
+     * One row per sequence, so a test can read the delta a row at a time without splitting a push.
+     *
+     * The closed notebook's content comes first and its row last, the order closing one leaves on a
+     * real server: that write is what moves the row behind everything it already held.
+     */
+    private fun seedClosedNotebookBehindItsContentAndAnOpenNotebook() {
+        val body = JsonDocumentCodec.encodeToString(PageDoc())
+        server.seed(sectionChange("closed-s", "closed-n", "Closed section", now))
+        server.seed(pageChange("closed-p", "closed-s", "Closed page", now))
+        server.seed(pageContentChange("closed-p", body, now))
+        server.seed(inkStrokeChange("closed-stroke", "closed-p", drawOrder = 0, updatedAt = now))
+        server.seed(notebookChange("open-n", "Open", now))
+        server.seed(sectionChange("open-s", "open-n", "Open section", now))
+        server.seed(pageChange("open-p", "open-s", "Open page", now))
+        server.seed(pageContentChange("open-p", body, now))
+        server.seed(inkStrokeChange("open-stroke", "open-p", drawOrder = 0, updatedAt = now))
+        server.seed(closedNotebookChange("closed-n", "Closed", now))
+    }
+
+    private fun closedNotebookChange(id: String, name: String, closedAt: Long): JsonObject =
+        notebookChange(id, name, closedAt).toMutableMap().apply {
+            this["closedAt"] = JsonPrimitive(closedAt)
+            this["cloudOnlyAt"] = JsonNull
+        }.let(::JsonObject)
+
+    @Test
+    fun aFirstSyncReadsTheTreeFirstAndNeverDownloadsAClosedNotebooksContent() = runBlocking {
+        seedClosedNotebookBehindItsContentAndAnOpenNotebook()
+        server.pageLimit = 1
+        var checkedTheTree = false
+        server.beforePull = { filter ->
+            if (filter is PullFilter.SkippingNotebooks && !checkedTheTree) {
+                checkedTheTree = true
+                assertNotNull("the tree must be on the device already", db.pageDao().byId("open-p"))
+                assertNotNull(db.localMetadataDao().value(deferredNotebookContentKey("closed-n")))
+                assertEquals("a tree read commits no cursor", 0L, db.syncDao().state()!!.cursor)
+            }
+            null
+        }
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertTrue(checkedTheTree)
+        assertEquals(PullFilter.TreeOnly, server.pulls.first().filter)
+        val closedOnly = PullFilter.SkippingNotebooks(listOf("closed-n"))
+        assertTrue(server.pulls.none { it.filter == PullFilter.Everything })
+        assertEquals(closedOnly, server.pulls.last().filter)
+        assertFalse("pageContent/closed-p" in server.delivered)
+        assertFalse("inkStroke/closed-stroke" in server.delivered)
+
+        assertNotNull(db.pageContentDao().byId("open-p"))
+        assertEquals(1, db.inkStrokeDao().countForPages(listOf("open-p")))
+        assertNull(db.pageContentDao().byId("closed-p"))
+        assertEquals("every row once, repeats of the tree not counted", 8, result.summary.pulled)
+        assertEquals(server.cursorValue, db.syncDao().state()!!.cursor)
+
+        // Skipped, not lost: the shelf's download reads the account unfiltered.
+        assertFalse(repository.observeClosedNotebooks().first().single().contentOnDevice)
+        assertEquals(
+            CloudArchiveResult.BroughtBack,
+            hierarchy.restoreFromCloud(account(), "closed-n"),
+        )
+        assertNotNull(db.pageContentDao().byId("closed-p"))
+        assertEquals(1, db.inkStrokeDao().countForPages(listOf("closed-p")))
+    }
+
+    @Test
+    fun onlyAFirstSyncAsksForLargePagesAndReadsTheTree() = runBlocking {
+        seedClosedNotebookBehindItsContentAndAnOpenNotebook()
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(512, server.pulls.first { it.filter == PullFilter.TreeOnly }.limit)
+        assertEquals(2048, server.pulls.first { it.filter is PullFilter.SkippingNotebooks }.limit)
+
+        server.pulls.clear()
+        server.seed(inkStrokeChange("later-stroke", "open-p", drawOrder = 1, updatedAt = now))
+        server.seed(inkStrokeChange("later-closed", "closed-p", drawOrder = 1, updatedAt = now))
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(
+            "later pulls keep naming what this device does not hold",
+            listOf(RecordedPull(10, 512, PullFilter.SkippingNotebooks(listOf("closed-n")))),
+            server.pulls.toList(),
+        )
+        assertEquals(2, db.inkStrokeDao().countForPages(listOf("open-p")))
+        assertEquals(0, db.inkStrokeDao().countForPages(listOf("closed-p")))
+    }
+
+    @Test
+    fun aRenameMadeWhileAFirstSyncDownloadsIsNotUndoneByTheTreeComingRoundAgain() = runBlocking {
+        seedClosedNotebookBehindItsContentAndAnOpenNotebook()
+        server.pageLimit = 1
+        var renamed = false
+        server.beforePull = { filter ->
+            if (filter is PullFilter.SkippingNotebooks && !renamed) {
+                renamed = true
+                repository.renameNotebook("open-n", "Renamed while downloading")
+            }
+            null
+        }
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertTrue(renamed)
+        assertEquals("Renamed while downloading", db.notebookDao().byId("open-n")!!.name)
+        assertEquals(
+            "Renamed while downloading",
+            server.current("notebook", "open-n")!!.getValue("name").jsonPrimitive.content,
+        )
+    }
+
+    @Test
+    fun anInterruptedFirstSyncResumesFromItsCursorWithoutReadingTheTreeAgain() = runBlocking {
+        seedClosedNotebookBehindItsContentAndAnOpenNotebook()
+        server.pageLimit = 1
+        var contentPulls = 0
+        server.beforePull = { filter ->
+            if (filter is PullFilter.SkippingNotebooks && ++contentPulls == 4) {
+                ServerResult.Failed(ConnectFailure.Unreachable, retryable = true)
+            } else {
+                null
+            }
+        }
+
+        assertTrue(hierarchy.run(account()) is SyncRunResult.Retryable)
+        val reached = db.syncDao().state()!!.cursor
+        assertTrue("whole pages stay committed", reached > 0)
+        assertNotNull(db.notebookDao().byId("open-n"))
+
+        server.beforePull = null
+        server.pulls.clear()
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(reached, server.pulls.first().since)
+        assertTrue(server.pulls.none { it.filter == PullFilter.TreeOnly })
+        assertNotNull(db.pageContentDao().byId("open-p"))
+        assertEquals(1, db.inkStrokeDao().countForPages(listOf("open-p")))
+        assertEquals(server.cursorValue, db.syncDao().state()!!.cursor)
+    }
+
+    @Test
+    fun aServerThatIgnoresTheFiltersStillConvergesAndIsOnlyAskedOnce() = runBlocking {
+        seedClosedNotebookBehindItsContentAndAnOpenNotebook()
+        server.pageLimit = 1
+        server.ignoresPullFilters = true
+        var pullsLeft = 5
+        server.beforePull = {
+            if (--pullsLeft == 0) {
+                ServerResult.Failed(ConnectFailure.Unreachable, retryable = true)
+            } else {
+                null
+            }
+        }
+
+        assertTrue(hierarchy.run(account()) is SyncRunResult.Retryable)
+        val treeReads = server.pulls.count { it.filter == PullFilter.TreeOnly }
+        assertTrue(treeReads > 0)
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(
+            "one scan, abandoned at the first row of another kind and never tried again",
+            treeReads,
+            server.pulls.count { it.filter == PullFilter.TreeOnly },
+        )
+        assertTrue("this server sent it", "inkStroke/closed-stroke" in server.delivered)
+        assertEquals(0, db.inkStrokeDao().countForPages(listOf("closed-p")))
+        assertNull(db.pageContentDao().byId("closed-p"))
+        assertNotNull(db.pageContentDao().byId("open-p"))
+        assertEquals(1, db.inkStrokeDao().countForPages(listOf("open-p")))
+        assertEquals(server.cursorValue, db.syncDao().state()!!.cursor)
+    }
+
+    /**
+     * What naming the notebooks from this device is for. Had the server judged "closed" for itself,
+     * the older content would have been skipped while it was closed and the notebook would then open
+     * here with nothing to say any of it was missing.
+     */
+    @Test
+    fun aNotebookReopenedElsewhereDuringAFirstSyncStaysDownloadableRatherThanOpeningEmpty() = runBlocking {
+        seedClosedNotebookBehindItsContentAndAnOpenNotebook()
+        var reopened = false
+        server.beforePull = { filter ->
+            if (filter is PullFilter.SkippingNotebooks && !reopened) {
+                reopened = true
+                server.seed(notebookChange("closed-n", "Closed", now + 1))
+            }
+            null
+        }
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertTrue(reopened)
+        assertNull(db.notebookDao().byId("closed-n")!!.closedAt)
+        assertNull(db.pageContentDao().byId("closed-p"))
+        assertFalse(repository.observeClosedNotebooks().first().single().contentOnDevice)
+        assertEquals(
+            CloudArchiveResult.BroughtBack,
+            hierarchy.restoreFromCloud(account(), "closed-n"),
+        )
+        assertNotNull(db.pageContentDao().byId("closed-p"))
+    }
+
+    /** An account old enough to have swept a tombstone, and every cursor it has issued below the floor. */
+    @Test
+    fun aNewDeviceCanJoinAnAccountWhoseTombstonesWereSwept() = runBlocking {
+        seedClosedNotebookBehindItsContentAndAnOpenNotebook()
+        server.seed(notebookChange("gone-n", "Deleted long ago", now))
+        server.deleteAndSweep("notebook", "gone-n")
+        server.pageLimit = 1
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals("it never had to be refused and recover", 0, server.expiredAnswers)
+        assertTrue(server.pulls.filter { it.filter != PullFilter.TreeOnly }.all { it.reconcile })
+        assertFalse("still leaves closed content out", "inkStroke/closed-stroke" in server.delivered)
+        assertNotNull(db.pageContentDao().byId("open-p"))
+        assertEquals(1, db.inkStrokeDao().countForPages(listOf("open-p")))
+        assertEquals(server.cursorValue, db.syncDao().state()!!.cursor)
+    }
+
+    @Test
+    fun bringingANotebookBackWorksOnAnAccountWhoseTombstonesWereSwept() = runBlocking {
+        seedClosedNotebookBehindItsContentAndAnOpenNotebook()
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+        server.seed(notebookChange("gone-n", "Deleted long ago", now))
+        server.deleteAndSweep("notebook", "gone-n")
+        server.pageLimit = 1
+
+        assertEquals(
+            CloudArchiveResult.BroughtBack,
+            hierarchy.restoreFromCloud(account(), "closed-n"),
+        )
+
+        assertEquals(0, server.expiredAnswers)
+        assertNotNull(db.pageContentDao().byId("closed-p"))
+        assertEquals(1, db.inkStrokeDao().countForPages(listOf("closed-p")))
+    }
+
+    /** One notebook to lose, one to keep, each a full subtree, all acknowledged by the device. */
+    private suspend fun syncTwoNotebooks() {
+        val body = JsonDocumentCodec.encodeToString(PageDoc())
+        server.seed(
+            notebookChange("lost-n", "Lost", now),
+            sectionChange("lost-s", "lost-n", "Lost section", now),
+            pageChange("lost-p", "lost-s", "Lost page", now),
+            pageContentChange("lost-p", body, now),
+            inkStrokeChange("lost-stroke", "lost-p", drawOrder = 0, updatedAt = now),
+            notebookChange("kept-n", "Kept", now),
+            sectionChange("kept-s", "kept-n", "Kept section", now),
+            pageChange("kept-p", "kept-s", "Kept page", now),
+            pageContentChange("kept-p", body, now),
+            inkStrokeChange("kept-stroke", "kept-p", drawOrder = 0, updatedAt = now),
+            inkStrokeChange("swept-stroke", "kept-p", drawOrder = 1, updatedAt = now),
+        )
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+        server.pulls.clear()
+    }
+
+    @Test
+    fun aDeviceAsleepPastTheFloorRemovesOnlyWhatTheAccountNoLongerHolds() = runBlocking {
+        syncTwoNotebooks()
+        server.seed(notebookChange("kept-n", "Renamed elsewhere", now + 1))
+        server.deleteAndSweepNotebook("lost-n")
+        server.deleteAndSweep("inkStroke", "swept-stroke")
+
+        val result = hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(1, server.expiredAnswers)
+        assertTrue(result.summary.pulled > 0)
+        assertNull(db.notebookDao().byId("lost-n"))
+        assertNull(db.sectionDao().byId("lost-s"))
+        assertNull(db.pageDao().byId("lost-p"))
+        assertNull(db.pageContentDao().byId("lost-p"))
+        assertEquals(0, db.inkStrokeDao().countForPages(listOf("lost-p")))
+        assertNull(db.syncDao().entityState("notebook", "lost-n"))
+        assertNull(db.syncDao().entityState("inkStroke", "lost-stroke"))
+
+        assertEquals("Renamed elsewhere", db.notebookDao().byId("kept-n")!!.name)
+        assertNotNull(db.pageContentDao().byId("kept-p"))
+        assertEquals(listOf("kept-stroke"), db.inkStrokeDao().byPage("kept-p").map { it.id })
+        assertNull(db.syncDao().entityState("inkStroke", "swept-stroke"))
+
+        assertEquals(server.cursorValue, db.syncDao().state()!!.cursor)
+        assertTrue("nothing removed here is offered back", db.syncDao().outbox(512).isEmpty())
+
+        server.pulls.clear()
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+        assertTrue("caught up: the next run is one cursor read", server.pulls.isEmpty())
+    }
+
+    @Test
+    fun reconcilingKeepsAnUnsentEditAndARowTheServerNeverSaw() = runBlocking {
+        syncTwoNotebooks()
+        repository.renameNotebook("kept-n", "Edited offline")
+        val neverPushed = repository.createNotebook("Written offline")
+        server.deleteAndSweepNotebook("lost-n")
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(1, server.expiredAnswers)
+        assertEquals("Edited offline", db.notebookDao().byId("kept-n")!!.name)
+        assertEquals(
+            "Edited offline",
+            server.current("notebook", "kept-n")!!.getValue("name").jsonPrimitive.content,
+        )
+        assertNotNull(db.notebookDao().byId(neverPushed))
+        assertNotNull(server.current("notebook", neverPushed))
+        assertNull(db.notebookDao().byId("lost-n"))
+    }
+
+    @Test
+    fun anInterruptedReconciliationMovesNoCursorAndRemovesNothing() = runBlocking {
+        syncTwoNotebooks()
+        val cursorBefore = db.syncDao().state()!!.cursor
+        server.deleteAndSweepNotebook("lost-n")
+        var scans = 0
+        server.beforePull = {
+            if (++scans == 2) {
+                ServerResult.Failed(ConnectFailure.Unreachable, retryable = true)
+            } else {
+                null
+            }
+        }
+        server.pageLimit = 1
+
+        assertTrue(hierarchy.run(account()) is SyncRunResult.Retryable)
+
+        assertEquals(cursorBefore, db.syncDao().state()!!.cursor)
+        assertNotNull("not removed on the strength of half an inventory", db.notebookDao().byId("lost-n"))
+
+        server.beforePull = null
+        server.pageLimit = Int.MAX_VALUE
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertNull(db.notebookDao().byId("lost-n"))
+        assertEquals(server.cursorValue, db.syncDao().state()!!.cursor)
+    }
+
+    /**
+     * Nobody deleted these rows: the server went back to a backup and lost them. Removing them here
+     * would finish the job, on what may be the only copy left.
+     */
+    @Test
+    fun aServerRestoredFromABackupGetsItsMissingRowsBackInsteadOfTheDeviceLosingThem() = runBlocking {
+        server.seed(notebookChange("old-n", "From before the backup", now))
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+        val backup = server.cursorValue
+        server.seed(
+            notebookChange("new-n", "After the backup", now),
+            sectionChange("new-s", "new-n", "New section", now),
+            pageChange("new-p", "new-s", "New page", now),
+            pageContentChange("new-p", JsonDocumentCodec.encodeToString(PageDoc()), now),
+            inkStrokeChange("new-stroke", "new-p", drawOrder = 0, updatedAt = now),
+        )
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+        server.restoreFromBackupAt(backup)
+        assertNull(server.current("notebook", "new-n"))
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertEquals(1, server.expiredAnswers)
+        assertNotNull(db.notebookDao().byId("new-n"))
+        assertNotNull(db.pageContentDao().byId("new-p"))
+        assertEquals(1, db.inkStrokeDao().countForPages(listOf("new-p")))
+
+        assertNotNull(server.current("notebook", "new-n"))
+        assertNotNull(server.current("section", "new-s"))
+        assertNotNull(server.current("page", "new-p"))
+        assertNotNull(server.current("pageContent", "new-p"))
+        assertNotNull(server.current("inkStroke", "new-stroke"))
+        assertTrue(db.syncDao().outbox(512).isEmpty())
+    }
+
+    @Test
+    fun theUntouchedStarterGoesAsSoonAsTheTreeHasArrived() = runBlocking {
+        val starterId = repository.createNotebook("My Notebook")
+        repository.createSection(starterId, "Getting Started")
+        db.localMetadataDao().put(
+            LocalMetadataEntity(NotesRepository.REPLACEABLE_STARTER_KEY, starterId),
+        )
+        seedClosedNotebookBehindItsContentAndAnOpenNotebook()
+        var starterGone = false
+        server.beforePull = { filter ->
+            if (filter is PullFilter.SkippingNotebooks) {
+                starterGone = db.notebookDao().byId(starterId) == null
+            }
+            null
+        }
+
+        hierarchy.run(account()) as SyncRunResult.Succeeded
+
+        assertTrue("the account's own notebooks are on screen by the time content downloads", starterGone)
+    }
+
     @Test
     fun movingANotebookToTheCloudLeavesTheIndexAndTakesEverythingElse() = runBlocking {
         val bytes = "a photograph".toByteArray()
@@ -1787,8 +2184,67 @@ class HierarchySyncTest {
         deviceName = "Test",
     )
 
+    /** One pull as it was asked for. */
+    private data class RecordedPull(
+        val since: Long,
+        val limit: Int,
+        val filter: PullFilter,
+        val reconcile: Boolean = false,
+    )
+
     private class InMemorySyncServer : SyncTransport {
         private val rows = linkedMapOf<Pair<String, String>, JsonObject>()
+
+        /** A server older than `scope` and `skipNotebook`, which ignores both and sends everything. */
+        var ignoresPullFilters = false
+
+        /** Every pull in order, so a test can show what a run asked for and what it never did. */
+        val pulls = mutableListOf<RecordedPull>()
+
+        /** `kind/id` of every row a pull has answered with. */
+        val delivered = mutableListOf<String>()
+
+        /** Runs before each pull is answered; a failure it returns is the answer. */
+        var beforePull: (suspend (PullFilter) -> ServerResult.Failed?)? = null
+
+        val cursorValue: Long get() = cursor
+
+        /** An incremental pull from below this, or above the account's cursor, is answered 410. */
+        var minimumValidCursor = 0L
+
+        /** How many pulls have been refused `cursor_expired`. */
+        var expiredAnswers = 0
+
+        /**
+         * A row deleted and its tombstone swept: gone from the server with nothing left to say so,
+         * under a floor above every cursor issued so far.
+         */
+        fun deleteAndSweep(kind: String, id: String) {
+            cursor++
+            rows.remove(kind to id)
+            log.removeAll { kindOf(it) == kind && idOf(it) == id }
+            minimumValidCursor = cursor
+        }
+
+        /** [deleteAndSweep] of a notebook and everything the server's foreign keys take with it. */
+        fun deleteAndSweepNotebook(id: String) {
+            cursor++
+            val doomed = subtreeOf(id)
+            rows.keys.removeAll(doomed)
+            log.removeAll { (kindOf(it) to idOf(it)) in doomed }
+            minimumValidCursor = cursor
+        }
+
+        /** The server put back as it was at [backupCursor], forgetting everything written since. */
+        fun restoreFromBackupAt(backupCursor: Long) {
+            val kept = log.filter { it.getValue("seq").jsonPrimitive.long <= backupCursor }
+            log.clear()
+            log += kept
+            rows.clear()
+            kept.forEach { rows[kindOf(it) to idOf(it)] = it }
+            cursor = backupCursor
+        }
+
         private val log = mutableListOf<JsonObject>()
         val pushes = mutableListOf<List<JsonObject>>()
         var beforeFirstPush: (suspend () -> Unit)? = null
@@ -1909,25 +2365,58 @@ class HierarchySyncTest {
             token: String,
             since: Long,
             limit: Int,
+            filter: PullFilter,
+            reconcile: Boolean,
         ): ServerResult<PullChangesPage> {
             pullReads++
-            val remaining = log.filter { it.getValue("seq").jsonPrimitive.long > since }
+            pulls += RecordedPull(since, limit, filter, reconcile)
+            beforePull?.invoke(filter)?.let { failure -> return failure }
+
+            val honoured = if (ignoresPullFilters) PullFilter.Everything else filter
+            if (!reconcile && honoured != PullFilter.TreeOnly &&
+                (since < minimumValidCursor || since > cursor)
+            ) {
+                expiredAnswers++
+                return ServerResult.Failed(ConnectFailure.CursorExpired, retryable = false)
+            }
+            val remaining = log
+                .filter { it.getValue("seq").jsonPrimitive.long > since }
+                .filter { passes(it, honoured) }
+            // A tree read commits nothing, so a purge reported on one is a purge the device can lose.
+            val purgesThrough = { upperBound: Long ->
+                if (honoured == PullFilter.TreeOnly) emptyList() else purgesIn(since, upperBound)
+            }
             if (remaining.size <= pageLimit) {
+                remaining.forEach { delivered += kindOf(it) + "/" + idOf(it) }
                 return ServerResult.Success(
-                    PullChangesPage(remaining, cursor, hasMore = false, purges = purgesIn(since, cursor)),
+                    PullChangesPage(remaining, cursor, hasMore = false, purges = purgesThrough(cursor)),
                 )
             }
             val page = remaining.take(pageLimit)
+            page.forEach { delivered += kindOf(it) + "/" + idOf(it) }
             val pageCursor = page.last().getValue("seq").jsonPrimitive.long
             return ServerResult.Success(
                 PullChangesPage(
                     changes = page,
                     cursor = pageCursor,
                     hasMore = true,
-                    purges = purgesIn(since, pageCursor),
+                    purges = purgesThrough(pageCursor),
                 ),
             )
         }
+
+        private fun passes(row: JsonObject, filter: PullFilter): Boolean = when (filter) {
+            PullFilter.Everything -> true
+            PullFilter.TreeOnly -> kindOf(row) in setOf("notebook", "section", "page")
+            is PullFilter.SkippingNotebooks ->
+                kindOf(row) !in setOf("pageContent", "inkStroke", "inkErase", "inkMove") ||
+                    notebookOfPage(parentIdOf(row)!!) !in filter.notebookIds
+        }
+
+        private fun notebookOfPage(pageId: String): String? =
+            rows["page" to pageId]?.let(::parentIdOf)
+                ?.let { sectionId -> rows["section" to sectionId] }
+                ?.let(::parentIdOf)
 
         override suspend fun pushChanges(
             serverBaseUrl: String,

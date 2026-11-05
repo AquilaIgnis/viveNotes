@@ -20,6 +20,9 @@ interface LocalMetadataDao {
     @Query("DELETE FROM local_metadata WHERE `key` = :key")
     suspend fun delete(key: String)
 
+    @Query("SELECT `key` FROM local_metadata WHERE `key` LIKE :keyPrefix || '%' LIMIT :limit")
+    suspend fun keysWithPrefix(keyPrefix: String, limit: Int): List<String>
+
     /**
      * Repoints every value in one key family from one id to another.
      *
@@ -33,6 +36,9 @@ interface LocalMetadataDao {
     )
     suspend fun repointValues(keyPrefix: String, oldValue: String, newValue: String)
 }
+
+/** One row of `sync_entity_states` without the server JSON each row would otherwise load. */
+data class SyncEntityKey(val kind: String, val entityId: String)
 
 /** Durable hierarchy-sync bookkeeping. Network DTO mapping stays in `data/sync`. */
 @Dao
@@ -64,6 +70,10 @@ interface SyncDao {
 
     @Query("DELETE FROM sync_entity_states WHERE kind = :kind AND entityId = :entityId")
     suspend fun deleteEntityState(kind: String, entityId: String)
+
+    /** Everything the server has acknowledged holding, for a reconciliation to compare against. */
+    @Query("SELECT kind, entityId FROM sync_entity_states")
+    suspend fun entityKeys(): List<SyncEntityKey>
 
     /**
      * Which of these ids the server has already acknowledged.
@@ -556,6 +566,10 @@ interface NotebookDao {
 @Dao
 interface SectionDao {
 
+    /** Outright, with everything below by cascade: the account no longer holds these at all. */
+    @Query("DELETE FROM sections WHERE id IN (:ids)")
+    suspend fun hardDeleteByIds(ids: List<String>)
+
     @Query("SELECT * FROM sections WHERE notebookId = :notebookId AND deletedAt IS NULL ORDER BY sortIndex")
     fun observeIn(notebookId: String): Flow<List<SectionEntity>>
 
@@ -611,6 +625,10 @@ interface SectionDao {
 
 @Dao
 interface PageDao {
+
+    /** Outright, with everything below by cascade: the account no longer holds these at all. */
+    @Query("DELETE FROM pages WHERE id IN (:ids)")
+    suspend fun hardDeleteByIds(ids: List<String>)
 
     @Query("SELECT * FROM pages WHERE sectionId = :sectionId AND deletedAt IS NULL ORDER BY sortIndex")
     fun observeIn(sectionId: String): Flow<List<PageEntity>>
@@ -852,6 +870,9 @@ interface InkStrokeDao {
      */
     @Query("DELETE FROM ink_strokes WHERE pageId IN (:pageIds)")
     suspend fun deleteForPages(pageIds: List<String>)
+
+    @Query("DELETE FROM ink_strokes WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
 
     /** Tombstones included: the question is whether any ink row is still stored for these pages. */
     @Query("SELECT COUNT(*) FROM ink_strokes WHERE pageId IN (:pageIds)")
@@ -1097,6 +1118,9 @@ interface InkEraseDao {
     @Query("DELETE FROM ink_erases WHERE pageId IN (:pageIds)")
     suspend fun deleteForPages(pageIds: List<String>)
 
+    @Query("DELETE FROM ink_erases WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
+
     @Transaction
     @Query("SELECT * FROM ink_erases WHERE pageId = :pageId AND deletedAt IS NULL ORDER BY createdAt, id")
     suspend fun byPage(pageId: String): List<InkEraseWithTargets>
@@ -1159,6 +1183,9 @@ interface InkMoveDao {
      */
     @Query("DELETE FROM ink_moves WHERE pageId IN (:pageIds)")
     suspend fun deleteForPages(pageIds: List<String>)
+
+    @Query("DELETE FROM ink_moves WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
 
     @Transaction
     @Query("SELECT * FROM ink_moves WHERE pageId = :pageId AND deletedAt IS NULL ORDER BY createdAt, id")

@@ -48,6 +48,7 @@ class SyncServerClientTest {
     private var requestMethod: String? = null
     private var requestPath: String? = null
     private var requestQuery: String? = null
+    private var requestRawQuery: String? = null
     private var requestBody: String? = null
     private var requestBytes: ByteArray? = null
     private var authorization: String? = null
@@ -61,6 +62,7 @@ class SyncServerClientTest {
             requestMethod = exchange.requestMethod
             requestPath = exchange.requestURI.path
             requestQuery = exchange.requestURI.query
+            requestRawQuery = exchange.requestURI.rawQuery
             requestBytes = exchange.requestBody.readBytes()
             requestBody = requestBytes!!.decodeToString()
             authorization = exchange.requestHeaders.getFirst("Authorization")
@@ -587,6 +589,46 @@ class SyncServerClientTest {
         val page = (result as ServerResult.Success).value
         assertEquals(42L, page.cursor)
         assertEquals("kept", page.changes.single().getValue("future").jsonPrimitive.content)
+    }
+
+    @Test
+    fun pullSpellsEachFilterTheWayTheContractDoes() = runBlocking {
+        respond = { send(it, 200, """{"changes":[],"cursor":0,"hasMore":false}""") }
+
+        SyncServerClient().pullChanges(baseUrl, "vive_abc", 0, 512, PullFilter.TreeOnly)
+        assertEquals("since=0&limit=512&scope=tree", requestRawQuery)
+
+        SyncServerClient().pullChanges(
+            baseUrl,
+            "vive_abc",
+            7,
+            2048,
+            PullFilter.SkippingNotebooks(listOf("plain-id", "a b&c=d")),
+        )
+        assertEquals(
+            "since=7&limit=2048&skipNotebook=plain-id&skipNotebook=a+b%26c%3Dd",
+            requestRawQuery,
+        )
+
+        SyncServerClient().pullChanges(baseUrl, "vive_abc", 0, 512, reconcile = true)
+        assertEquals("since=0&limit=512&reconcile=true", requestRawQuery)
+    }
+
+    /** The reconciliation that answers this is the only recovery there is, so it must not read as a fault. */
+    @Test
+    fun pullReportsAnExpiredCursorAsItself() = runBlocking {
+        respond = {
+            send(
+                it,
+                410,
+                """{"error":"cursor_expired","message":"m","minimumCursor":5,"currentCursor":9}""",
+            )
+        }
+
+        assertEquals(
+            ServerResult.Failed(ConnectFailure.CursorExpired, retryable = false),
+            SyncServerClient().pullChanges(baseUrl, "vive_abc", 1, 512),
+        )
     }
 
     @Test

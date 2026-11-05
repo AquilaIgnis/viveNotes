@@ -243,6 +243,8 @@ class InkSyncCostTest {
             token: String,
             since: Long,
             limit: Int,
+            filter: PullFilter,
+            reconcile: Boolean,
         ): ServerResult<PullChangesPage> =
             ServerResult.Success(PullChangesPage(emptyList(), cursor, hasMore = false))
 
@@ -323,6 +325,8 @@ class InkSyncCostTest {
             token: String,
             since: Long,
             limit: Int,
+            filter: PullFilter,
+            reconcile: Boolean,
         ): ServerResult<PullChangesPage> {
             val served = since.toInt()
             if (served >= strokePages) {

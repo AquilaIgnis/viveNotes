@@ -7,6 +7,7 @@ import com.vivenotes.data.DocumentPictures
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.db.AttachmentEntity
+import com.vivenotes.data.db.DEFERRED_NOTEBOOK_CONTENT_KEY_PREFIX
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
 import com.vivenotes.data.db.InkMoveEntity
@@ -328,6 +329,7 @@ class HierarchySync(
             sync.clearEntityStates()
             metadata.delete(PENDING_BATCH_KEY)
             metadata.delete(CAUGHT_UP_KEY)
+            metadata.delete(FIRST_SYNC_TREE_KEY)
             streamAccountId = null
             streamHeld = HeldBack()
             DebugLog.i(DebugLog.DB) { "Sync: cleared state, outbox and versions for account $accountId" }
@@ -457,6 +459,7 @@ class HierarchySync(
             // A different account is a different tree, so "I have seen this account's tree" cannot
             // carry over — the new one has not been pulled even once.
             metadata.delete(CAUGHT_UP_KEY)
+            metadata.delete(FIRST_SYNC_TREE_KEY)
             sync.putState(SyncStateEntity(accountId = accountId))
             // Existing offline rows are the first outbox. Inserts performed before the state row
             // existed could not have fired the triggers, so this is explicit rather than magical.
@@ -490,6 +493,7 @@ class HierarchySync(
     private suspend fun markCaughtUp(accountId: String) {
         if (metadata.value(CAUGHT_UP_KEY) == accountId) return
         metadata.put(LocalMetadataEntity(CAUGHT_UP_KEY, accountId))
+        metadata.delete(FIRST_SYNC_TREE_KEY)
     }
 
     /**
@@ -590,15 +594,49 @@ class HierarchySync(
         var cursor = localCursor
         var pulled = 0
         var hasMore: Boolean
+        val firstSync = !hasCaughtUp(account.accountId)
+        if (firstSync) {
+            when (val tree = pullTreeOnce(account)) {
+                is PhaseResult.Done -> pulled += tree.count
+                is PhaseResult.ConflictDone -> error("pull cannot return conflict count")
+                is PhaseResult.Stop -> return tree
+            }
+        }
+        val treeAppliedThrough = metadata.value(FIRST_SYNC_TREE_KEY)?.toLongOrNull() ?: 0L
         // Changes whose parent has not arrived yet, waiting for it rather than applied.
         val held = HeldBack()
         do {
             val page = when (
-                val result = client.pullChanges(account.serverUrl, account.token, cursor)
+                val result = client.pullChanges(
+                    serverBaseUrl = account.serverUrl,
+                    token = account.token,
+                    since = cursor,
+                    // A first sync is the one pull with a long way to go, and each page costs a
+                    // round trip and a server scan of everything still ahead of it.
+                    limit = if (firstSync) FIRST_SYNC_PAGE_LIMIT else DEFAULT_PULL_LIMIT,
+                    filter = deferredNotebookFilter(),
+                    // The floor protects a device from missing a deletion it was holding the row
+                    // for. On a first pull there is no such row, and without this an account that
+                    // has ever swept a tombstone refuses every device that tries to join it.
+                    reconcile = firstSync,
+                )
             ) {
                 is ServerResult.Success -> result.value
                 ServerResult.Unauthorized -> return PhaseResult.Stop(SyncRunResult.Revoked)
-                is ServerResult.Failed -> return PhaseResult.Stop(result.asSyncResult())
+                is ServerResult.Failed -> {
+                    if (result.reason != ConnectFailure.CursorExpired) {
+                        return PhaseResult.Stop(result.asSyncResult())
+                    }
+                    return when (
+                        val reconciled = reconcileExpiredCursor(
+                            account = account,
+                            aheadOfServer = cursor > serverCursor,
+                        )
+                    ) {
+                        is PhaseResult.Done -> PhaseResult.Done(pulled + reconciled.count)
+                        else -> reconciled
+                    }
+                }
             }
 
             val parsed = try {
@@ -645,7 +683,8 @@ class HierarchySync(
                 return PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.UnsupportedKind))
             }
 
-            val applicable = admit(parsed, held)
+            // Through `admit` regardless, so a child waiting on a repeated parent is still released.
+            val applicable = admit(parsed, held).filterNot { repeatsTreeRead(it, treeAppliedThrough) }
 
             val discardedPictures = mutableListOf<String>()
             db.withTransaction {
@@ -691,6 +730,265 @@ class HierarchySync(
         }
 
         return PhaseResult.Done(pulled)
+    }
+
+    /**
+     * Reads the account's notebooks, sections and pages ahead of anything under them, once per first
+     * sync.
+     *
+     * The delta is ordered by last write, and closing a notebook writes its row. So a closed
+     * notebook's ink comes first and the row saying it is closed comes after it, which means the
+     * whole notebook is downloaded and held in memory only to be thrown away. Reading the tree first
+     * means this device can name those notebooks in every later request, and that nothing under an
+     * open one has to wait for a parent.
+     *
+     * This scan commits no cursor, because it says nothing about content. What it records instead is
+     * how far it read, so the delta that follows can pass over the tree rows it repeats: see
+     * [repeatsTreeRead].
+     *
+     * The filter is only ever an optimisation. A server that ignores it answers with the ordinary
+     * delta, which shows in the first row of another kind, and the first sync carries on the old way.
+     * Recording 0 means this is tried once and that the delta passes over nothing.
+     */
+    private suspend fun pullTreeOnce(account: SyncAccount): PhaseResult {
+        if (metadata.value(FIRST_SYNC_TREE_KEY) != null) return PhaseResult.Done(0)
+
+        var scanned = 0L
+        var applied = 0
+        var hasMore: Boolean
+        val held = HeldBack()
+        do {
+            val page = when (
+                val result = client.pullChanges(
+                    serverBaseUrl = account.serverUrl,
+                    token = account.token,
+                    since = scanned,
+                    limit = DEFAULT_PULL_LIMIT,
+                    filter = PullFilter.TreeOnly,
+                )
+            ) {
+                is ServerResult.Success -> result.value
+                ServerResult.Unauthorized -> return PhaseResult.Stop(SyncRunResult.Revoked)
+                is ServerResult.Failed -> return PhaseResult.Stop(result.asSyncResult())
+            }
+            val parsed = try {
+                page.changes.mapNotNull(::parseRemoteChange)
+            } catch (malformed: IllegalArgumentException) {
+                return PhaseResult.Stop(
+                    SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+                )
+            }
+            if (parsed.size != page.changes.size || parsed.any { !it.kind.inTree }) {
+                metadata.put(LocalMetadataEntity(FIRST_SYNC_TREE_KEY, "0"))
+                return PhaseResult.Done(applied)
+            }
+
+            val applicable = admit(parsed, held)
+            db.withTransaction {
+                sync.setApplyingRemote(true)
+                applicable.forEach { change -> applyPulledChange(change) }
+                sync.setApplyingRemote(false)
+            }
+            logApplied("tree", applicable, 0, held.size, page.cursor)
+            applied += applicable.size
+            scanned = page.cursor
+            hasMore = page.hasMore
+
+            if (hasMore && page.changes.isEmpty()) {
+                return PhaseResult.Stop(
+                    SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+                )
+            }
+        } while (hasMore)
+
+        // A parent that never came — purged mid-scan, say — leaves a row this scan did not apply, so
+        // the delta must not pass over it. It reads the whole tree again and decides for itself.
+        val appliedThrough = if (held.isEmpty()) scanned else 0L
+        metadata.put(LocalMetadataEntity(FIRST_SYNC_TREE_KEY, "$appliedThrough"))
+        dropStarterSupersededByAccount()
+        return PhaseResult.Done(applied)
+    }
+
+    /**
+     * Rebuilds this device's view after the server refused its cursor with `410 cursor_expired`.
+     *
+     * A cursor below the account's floor slept through deletions the server has since forgotten, so
+     * no delta can say what should go. What is left is to read every current row and compare it with
+     * what this device knows the server once held. The cursor does not move until that comparison is
+     * done, in one transaction, so an interrupted run starts again rather than half-remembering.
+     *
+     * Two things are kept on purpose. A row at the version this device already has is passed over,
+     * because applying it would throw away an unsent edit made on top of it. A row with no entity
+     * state was never acknowledged, so the comparison does not touch it and it stays queued.
+     *
+     * [aheadOfServer] is the one case the difference means something else. A cursor above the
+     * account's own means the server went back to a backup, so nobody deleted what it lacks; it lost
+     * it, and this device may hold the only copy. Those rows go back up as new.
+     */
+    private suspend fun reconcileExpiredCursor(
+        account: SyncAccount,
+        aheadOfServer: Boolean,
+    ): PhaseResult {
+        val inventory = HashSet<String>()
+        var scanned = 0L
+        var applied = 0
+        var hasMore: Boolean
+        val held = HeldBack()
+        val discardedPictures = mutableListOf<String>()
+        do {
+            val page = when (
+                val result = client.pullChanges(
+                    serverBaseUrl = account.serverUrl,
+                    token = account.token,
+                    since = scanned,
+                    limit = FIRST_SYNC_PAGE_LIMIT,
+                    filter = deferredNotebookFilter(),
+                    reconcile = true,
+                )
+            ) {
+                is ServerResult.Success -> result.value
+                ServerResult.Unauthorized -> return PhaseResult.Stop(SyncRunResult.Revoked)
+                is ServerResult.Failed -> return PhaseResult.Stop(result.asSyncResult())
+            }
+            val parsed: List<RemoteChange>
+            val purged: List<Pair<String, String>>
+            try {
+                parsed = page.changes.mapNotNull(::parseRemoteChange)
+                purged = page.purges.map { purge ->
+                    purge.requiredString("kind") to purge.requiredString("id")
+                }
+            } catch (malformed: IllegalArgumentException) {
+                return PhaseResult.Stop(
+                    SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+                )
+            }
+            if (parsed.size != page.changes.size) {
+                return PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.UnsupportedKind))
+            }
+
+            parsed.forEach { change -> inventory += keyOf(change.kind, change.id) }
+            val admitted = admit(parsed, held)
+            db.withTransaction {
+                sync.setApplyingRemote(true)
+                admitted.forEach { change ->
+                    val known = sync.entityState(change.kind.wire, change.id)?.serverVersion
+                    if (known != change.version) {
+                        applyPulledChange(change)
+                        applied++
+                    }
+                }
+                invalidateInkText(remoteInkPages)
+                applyPictureCounts()
+                purged.forEach { (kind, id) -> discardedPictures += applyPurgeOrRemap(kind, id) }
+                sync.setApplyingRemote(false)
+            }
+            logApplied("reconciled", admitted, purged.size, held.size, page.cursor)
+            publishRemoteInk()
+            scanned = page.cursor
+            hasMore = page.hasMore
+
+            if (hasMore && page.changes.isEmpty()) {
+                return PhaseResult.Stop(
+                    SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse),
+                )
+            }
+        } while (hasMore)
+
+        if (!held.isEmpty()) {
+            return PhaseResult.Stop(SyncRunResult.Failed(PermanentSyncFailure.InvalidServerResponse))
+        }
+
+        var settled = 0
+        db.withTransaction {
+            sync.setApplyingRemote(true)
+            val absent = sync.entityKeys().mapNotNull { key ->
+                SyncKind.fromWire(key.kind)
+                    ?.takeUnless { kind -> keyOf(kind, key.entityId) in inventory }
+                    ?.let { kind -> kind to key.entityId }
+            }
+            settled = absent.size
+            if (aheadOfServer) {
+                absent.forEach { (kind, id) ->
+                    sync.deleteEntityState(kind.wire, id)
+                    sync.enqueueIfAbsent(kind.wire, id)
+                }
+            } else {
+                discardedPictures += removeRowsTheAccountNoLongerHolds(absent)
+            }
+            sync.pruneOrphanedOutbox()
+            sync.pruneOrphanedEntityStates()
+            // Written against the versions this run has just replaced.
+            metadata.delete(PENDING_BATCH_KEY)
+            sync.setCursor(scanned)
+            sync.setApplyingRemote(false)
+        }
+        if (discardedPictures.isNotEmpty()) blobs.discard(discardedPictures)
+        publishRemoteInk()
+        Log.i(TAG, "Reconciled from an expired cursor: $applied applied, $settled absent from the server")
+        return PhaseResult.Done(applied + settled)
+    }
+
+    /**
+     * The removal half of [reconcileExpiredCursor]. Children first, because counting pictures and
+     * invalidating handwriting both need the page to still be there.
+     *
+     * A picture only loses its entity state. Its row may be named by a page this device still holds,
+     * and a push naming it uploads the bytes again, whereas nothing would bring back a deleted file.
+     *
+     * Returns the digests nothing on this device still reaches, to discard after the commit.
+     */
+    private suspend fun removeRowsTheAccountNoLongerHolds(
+        absent: List<Pair<SyncKind, String>>,
+    ): List<String> {
+        val idsByKind = absent.groupBy({ it.first }, { it.second })
+        fun chunksOf(kind: SyncKind): List<List<String>> =
+            idsByKind[kind].orEmpty().chunked(SQLITE_BIND_CHUNK)
+
+        idsByKind[SyncKind.Attachment].orEmpty().forEach { id ->
+            sync.deleteEntityState(SyncKind.Attachment.wire, id)
+        }
+        chunksOf(SyncKind.InkMove).forEach { ids ->
+            remoteInkPages += inkMoves.byIds(ids).map { it.pageId }
+            inkMoves.deleteByIds(ids)
+        }
+        chunksOf(SyncKind.InkErase).forEach { ids ->
+            remoteInkPages += inkErases.byIds(ids).map { it.pageId }
+            inkErases.deleteByIds(ids)
+        }
+        chunksOf(SyncKind.InkStroke).forEach { ids ->
+            remoteInkPages += inkStrokes.byIds(ids).map { it.pageId }
+            inkStrokes.deleteByIds(ids)
+        }
+        idsByKind[SyncKind.PageContent].orEmpty().forEach { pageId ->
+            contents.byId(pageId)?.let { replaced ->
+                contents.delete(pageId)
+                pictureRecounts += PictureRecount(before = replaced, after = null)
+            }
+        }
+        invalidateInkText(remoteInkPages)
+        applyPictureCounts()
+
+        chunksOf(SyncKind.Page).forEach { ids -> pages.hardDeleteByIds(ids) }
+        chunksOf(SyncKind.Section).forEach { ids -> sections.hardDeleteByIds(ids) }
+        return idsByKind[SyncKind.Notebook].orEmpty().flatMap { id ->
+            applyPurge(SyncKind.Notebook.wire, id)
+        }
+    }
+
+    /**
+     * The notebooks whose content this installation decided not to hold, named so the server need not
+     * send it. A marker past [MAX_SKIPPED_NOTEBOOKS] only costs the download: [applyPulledChange]
+     * still discards what it receives for one.
+     */
+    private suspend fun deferredNotebookFilter(): PullFilter {
+        val notebookIds = metadata
+            .keysWithPrefix(DEFERRED_NOTEBOOK_CONTENT_KEY_PREFIX, MAX_SKIPPED_NOTEBOOKS)
+            .map { it.removePrefix(DEFERRED_NOTEBOOK_CONTENT_KEY_PREFIX) }
+        return if (notebookIds.isEmpty()) {
+            PullFilter.Everything
+        } else {
+            PullFilter.SkippingNotebooks(notebookIds)
+        }
     }
 
     /**
@@ -782,6 +1080,20 @@ class HierarchySync(
 
     /** How [admit] names a row. The kind is part of it because a page and its body share an id. */
     private fun keyOf(kind: SyncKind, id: String): String = kind.wire + ":" + id
+
+    /**
+     * Whether the first sync's tree read already applied exactly this row: a write after that scan
+     * would carry a higher `seq`.
+     *
+     * Applying it again would not be harmless. A pulled row replaces a dirty one, and the tree is on
+     * screen well before the delta comes round to it, so a notebook renamed in between would lose the
+     * rename.
+     */
+    private fun repeatsTreeRead(remote: RemoteChange, treeAppliedThrough: Long): Boolean {
+        if (treeAppliedThrough <= 0 || !remote.kind.inTree) return false
+        val seq = remote.raw.optionalLong("seq") ?: return false
+        return seq <= treeAppliedThrough
+    }
 
     private suspend fun applyPulledChange(remote: RemoteChange) {
         sync.putEntityState(remote.asEntityState())
@@ -2100,6 +2412,9 @@ class HierarchySync(
         // for the two to disagree.
         Attachment("attachment", 7);
 
+        /** The kinds that index an account rather than hold its content. */
+        val inTree: Boolean get() = this == Notebook || this == Section || this == Page
+
         companion object {
             fun fromWire(value: String): SyncKind? = entries.firstOrNull { it.wire == value }
         }
@@ -2394,8 +2709,8 @@ class HierarchySync(
      * Covers both an account-wide `cloudOnlyAt` move and a closed notebook this installation
      * deferred when it first discovered it; only the reason the payload is absent differs.
      *
-     * There is no per-notebook read in the contract — `GET /v1/changes` takes `since` and `limit`
-     * and nothing else — so this replays the account from zero and keeps only what belongs to the
+     * There is no per-notebook read in the contract — `GET /v1/changes` can leave notebooks out but
+     * not ask for just one — so this replays the account from zero and keeps only what belongs to the
      * notebook. It therefore reads the account's whole current state to extract one notebook, which
      * is acceptable for a once-in-a-while user-pressed action against the server deployed today.
      *
@@ -2438,7 +2753,14 @@ class HierarchySync(
         var applied = 0
         do {
             val page = when (
-                val result = client.pullChanges(account.serverUrl, account.token, cursor)
+                // Past the cursor floor if it has to be: this reads the account's current rows and
+                // commits no cursor, so there is no deletion it could be promising to have seen.
+                val result = client.pullChanges(
+                    serverBaseUrl = account.serverUrl,
+                    token = account.token,
+                    since = cursor,
+                    reconcile = true,
+                )
             ) {
                 is ServerResult.Success -> result.value
                 ServerResult.Unauthorized ->
@@ -2616,6 +2938,18 @@ class HierarchySync(
         const val SQLITE_BIND_CHUNK = 400
         const val MAX_DOCUMENT_BYTES = 2 shl 20
         const val PENDING_BATCH_KEY = "syncPendingHierarchyBatch"
+
+        const val DEFAULT_PULL_LIMIT = 512
+
+        /** The most a server accepts. Its byte budget still ends a page of large rows sooner. */
+        const val FIRST_SYNC_PAGE_LIMIT = 2_048
+
+        /** How far a first sync's tree read got; absent until it has run and after caught up. */
+        const val FIRST_SYNC_TREE_KEY = "syncFirstSyncTreeCursor"
+
+        /** Keeps the request line a few KB, which every proxy in front of a server will accept. */
+        const val MAX_SKIPPED_NOTEBOOKS = 100
+
         const val PLAIN_ENCODING = "none/1"
 
         /** `InkCodec`'s encoder id, and what a row that names none is taken to mean. */

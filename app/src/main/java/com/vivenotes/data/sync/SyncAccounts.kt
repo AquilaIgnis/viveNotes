@@ -141,6 +141,7 @@ data class SyncStatus(
             ConnectFailure.Unreachable, ConnectFailure.NotAViveServer -> true
 
             ConnectFailure.InvalidAddress,
+            ConnectFailure.CursorExpired,
             ConnectFailure.InvalidCredentials,
             ConnectFailure.InvalidRequest,
             ConnectFailure.PayloadTooLarge,
@@ -375,6 +376,21 @@ class SyncAccounts(
                 _streamReady.value = false
                 var terminal: ChangeStreamEvent? = null
                 val since = try {
+                    // A first sync goes over ordinary pulls and the stream opens where it finished.
+                    // Only a pull can name what to leave out, and only a pull is compressed.
+                    if (hierarchy?.hasCaughtUp(activeAccount.accountId) == false) {
+                        when (synchronize()) {
+                            is SyncRunResult.Succeeded -> Unit
+                            is SyncRunResult.Retryable -> {
+                                delay(reconnectDelayMillis)
+                                reconnectDelayMillis = (reconnectDelayMillis * 2)
+                                    .coerceAtMost(MAX_STREAM_RECONNECT_MILLIS)
+                                continue
+                            }
+                            // Already reported to the status line, as a stream failure would be.
+                            is SyncRunResult.Failed, SyncRunResult.Revoked, null -> return@flow
+                        }
+                    }
                     hierarchy?.beginChangeStream(activeAccount.accountId) ?: 0L
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -440,6 +456,18 @@ class SyncAccounts(
                     }
                     is ChangeStreamEvent.Failed -> {
                         _streamReady.value = false
+                        // The stream cannot start from this cursor, and only a pull can repair it.
+                        if (ended.reason == ConnectFailure.CursorExpired) {
+                            when (synchronize()) {
+                                is SyncRunResult.Succeeded -> continue
+                                is SyncRunResult.Retryable -> Unit
+                                is SyncRunResult.Failed, SyncRunResult.Revoked, null -> return@flow
+                            }
+                            delay(reconnectDelayMillis)
+                            reconnectDelayMillis = (reconnectDelayMillis * 2)
+                                .coerceAtMost(MAX_STREAM_RECONNECT_MILLIS)
+                            continue
+                        }
                         _status.update {
                             it.copy(
                                 failure = if (ended.reason == ConnectFailure.MembershipRequired) {

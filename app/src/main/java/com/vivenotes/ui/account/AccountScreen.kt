@@ -2504,6 +2504,7 @@ private fun ConnectionStatus(connection: ServerConnection, testTag: String) {
 @StringRes
 private fun failureMessage(reason: ConnectFailure): Int = when (reason) {
     ConnectFailure.InvalidAddress -> R.string.account_error_address
+    ConnectFailure.CursorExpired -> R.string.account_error_server
     ConnectFailure.Unreachable -> R.string.account_error_unreachable
     ConnectFailure.InvalidCredentials -> R.string.account_error_credentials
     ConnectFailure.InvalidRequest -> R.string.account_error_request

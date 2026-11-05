@@ -36,6 +36,12 @@ enum class ConnectFailure {
     /** Not a usable http/https address at all — nothing was sent. */
     InvalidAddress,
 
+    /**
+     * `410 cursor_expired`: this cursor is outside the history the server still keeps, so no delta
+     * from it can be complete. Never shown as such; `HierarchySync` answers it by reconciling.
+     */
+    CursorExpired,
+
     /** Nothing answered: wrong host or port, server down, no route. */
     Unreachable,
 
@@ -468,6 +474,22 @@ data class PushChangesReply(
     val serverCursor: Long,
 )
 
+/**
+ * What a pull leaves out.
+ *
+ * A request, never a guarantee: a server older than these parameters ignores them and sends
+ * everything, so nothing may depend on a row being absent.
+ */
+sealed interface PullFilter {
+    data object Everything : PullFilter
+
+    /** Only notebooks, sections and pages. A scan rather than a position in the delta: commit no cursor from it. */
+    data object TreeOnly : PullFilter
+
+    /** Everything except the page bodies and ink under these notebooks. */
+    data class SkippingNotebooks(val notebookIds: List<String>) : PullFilter
+}
+
 /** Narrow authenticated contract used by the hierarchy coordinator and its deterministic tests. */
 interface SyncTransport {
     suspend fun getCursor(serverBaseUrl: String, token: String): ServerResult<Long>
@@ -477,6 +499,9 @@ interface SyncTransport {
         token: String,
         since: Long,
         limit: Int = 512,
+        filter: PullFilter = PullFilter.Everything,
+        /** Reads below the account's cursor floor. See [ConnectFailure.CursorExpired]. */
+        reconcile: Boolean = false,
     ): ServerResult<PullChangesPage>
 
     suspend fun pushChanges(
@@ -1373,14 +1398,24 @@ class SyncServerClient(
         token: String,
         since: Long,
         limit: Int,
+        filter: PullFilter,
+        reconcile: Boolean,
     ): ServerResult<PullChangesPage> {
         if (since < 0 || limit !in 1..MAX_PULL_LIMIT) {
             return ServerResult.Failed(ConnectFailure.InvalidRequest, retryable = false)
         }
+        val filterQuery = when (filter) {
+            PullFilter.Everything -> ""
+            PullFilter.TreeOnly -> "&scope=tree"
+            is PullFilter.SkippingNotebooks -> filter.notebookIds.joinToString("") { id ->
+                "&skipNotebook=" + URLEncoder.encode(id, StandardCharsets.UTF_8.name())
+            }
+        }
         return when (
             val raw = authenticatedRequest(
                 serverBaseUrl = serverBaseUrl,
-                path = "/v1/changes?since=$since&limit=$limit",
+                path = "/v1/changes?since=$since&limit=$limit$filterQuery" +
+                    if (reconcile) "&reconcile=true" else "",
                 token = token,
                 maxResponseBytes = MAX_API_RESPONSE_BYTES,
             )
@@ -1851,6 +1886,7 @@ class SyncServerClient(
             "payload_too_large" -> ConnectFailure.PayloadTooLarge
             "membership_required" -> ConnectFailure.MembershipRequired
             "quota_exceeded" -> ConnectFailure.StorageFull
+            "cursor_expired" -> ConnectFailure.CursorExpired
             null -> failureForStatus(status)
             // "internal", and anything this build has not heard of. A code added to the contract
             // later is a server-side problem from here, not a reason to claim the address is wrong.
