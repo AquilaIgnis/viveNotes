@@ -198,10 +198,10 @@ class SyncAccounts(
      * Activity and a real Google account to answer, which no test on this side has.
      */
     private val google: GoogleIdentityProvider = GoogleIdentityProvider(),
+    private val store: SyncAccountStore = SyncAccountStore(context),
 ) {
 
     private val appContext = context.applicationContext
-    private val store = SyncAccountStore(context)
     private val remoteInkSignal = RemoteInkSignal()
     private val hierarchy = database?.let { db ->
         HierarchySync(
@@ -986,10 +986,22 @@ class SyncAccounts(
         forget(account)
     }
 
-    /** The local half of a disconnect, identical whichever route arrives at it. */
-    private suspend fun forget(account: SyncAccount) {
+    /**
+     * Forgets the credential and detaches the database from its account, as one step.
+     *
+     * Clearing the credential is what cancels whoever is listening to it, and that is often the
+     * caller: the stream's flow and the foreground scheduler both restart when the account changes.
+     * Left cancellable, the credential goes and the database stays attached, its triggers queueing
+     * every later edit for an account this device has just been locked out of.
+     */
+    private suspend fun clearCredential(account: SyncAccount) = withContext(NonCancellable) {
         store.clear()
         hierarchy?.deactivate(account.accountId)
+    }
+
+    /** The local half of a disconnect, identical whichever route arrives at it. */
+    private suspend fun forget(account: SyncAccount) {
+        clearCredential(account)
         // Nothing about the old server's syncing is true of the next one.
         _status.value = SyncStatus()
     }
@@ -1031,10 +1043,7 @@ class SyncAccounts(
 
         recordResult(result)
 
-        if (result == SyncRunResult.Revoked) {
-            store.clear()
-            hierarchy?.deactivate(account.accountId)
-        }
+        if (result == SyncRunResult.Revoked) clearCredential(account)
         return result
     }
 
@@ -1049,10 +1058,7 @@ class SyncAccounts(
             _status.update { it.copy(running = false) }
         }
         recordResult(result)
-        if (result == SyncRunResult.Revoked) {
-            store.clear()
-            hierarchy?.deactivate(account.accountId)
-        }
+        if (result == SyncRunResult.Revoked) clearCredential(account)
         return result
     }
 

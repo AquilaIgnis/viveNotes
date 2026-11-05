@@ -73,10 +73,13 @@ data class SyncAccount(
  * One JSON blob rather than separate keys: these values are only ever read and written together,
  * and a half-written registration is a credential that cannot work.
  */
-class SyncAccountStore(context: Context) {
+class SyncAccountStore(
+    context: Context,
+    /** Injectable so a test's credential cannot land in the file the app itself reads on launch. */
+    private val store: DataStore<Preferences> = context.applicationContext.syncPreferences,
+) {
 
     private val appContext = context.applicationContext
-    private val store = appContext.syncPreferences
 
     /** Null until this installation has been connected to a server. */
     val account: Flow<SyncAccount?> = store.data.map { prefs ->
