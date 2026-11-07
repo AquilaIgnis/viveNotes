@@ -84,10 +84,11 @@ and all AI features run entirely on-device.
 
 # Gallery
 
-| <a href='#acidburnmonkey'> <img src="repo/g5.jpeg"  height="500" /> </a> |
-| ------------------------------------------------------------------------ |
-| <a href='#acidburnmonkey'> <img src="repo/g1.png"  height="500" /> </a>  |
-| <a href='#acidburnmonkey'> <img src="repo/g2.png"  height="500" /> </a>  |
+| <a href='#acidburnmonkey'> <img src="repo/g5.jpeg"  height="500" /> </a>        |
+| ------------------------------------------------------------------------------- |
+| <a href='#acidburnmonkey'> <img src="repo/calculate.webp"  height="500" /> </a> |
+| <a href='#acidburnmonkey'> <img src="repo/search.webp"  height="500" /> </a>    |
+| <a href='#acidburnmonkey'> <img src="repo/g2.png"  height="500" /> </a>         |
 
 | <a href='#acidburnmonkey'> <img src="repo/g3.jpeg" height="150"/> </a> | <a href='#acidburnmonkey'> <img src="repo/g4.jpeg"  height="200"/> </a> |
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -102,8 +103,8 @@ and all AI features run entirely on-device.
 - [x] Fdroid release
 - [x] Play Store
 - [x] Linux & windows port
-- [ ] Apple
 - [ ] Web Client
+- [ ] Apple
 
 # Donate To Project
 
