@@ -62,6 +62,35 @@ object FuzzyMatcher {
         return TextMatch(score = total, spans = merged(spans))
     }
 
+    /**
+     * Every place [query] lands in [text], for marking the matches up where the text actually is.
+     *
+     * [match] is for ranking, where one span per term is all there is to know. A picture that shows a
+     * word three times wants three boxes, so every exact occurrence of a term comes back here, and
+     * only a term with no exact occurrence falls back to its one fuzzy span. Empty when [match] would
+     * be null: a line either answers the query or it does not.
+     */
+    fun occurrences(query: String, text: String): List<MatchSpan> {
+        val terms = query.trim().lowercase().split(WHITESPACE).filter { it.isNotEmpty() }
+        if (terms.isEmpty() || text.isEmpty()) return emptyList()
+
+        val haystack = text.lowercase()
+        val words = wordsIn(haystack)
+        val spans = mutableListOf<MatchSpan>()
+        for (term in terms) {
+            var at = haystack.indexOf(term)
+            if (at < 0) {
+                spans += (matchTerm(term, haystack, words) ?: return emptyList()).spans
+                continue
+            }
+            while (at >= 0) {
+                spans += MatchSpan(at, at + term.length)
+                at = haystack.indexOf(term, at + term.length)
+            }
+        }
+        return merged(spans)
+    }
+
     private fun matchTerm(term: String, haystack: String, words: List<MatchSpan>): TextMatch? {
         substring(term, haystack, words)?.let { return it }
         typo(term, haystack, words)?.let { return it }

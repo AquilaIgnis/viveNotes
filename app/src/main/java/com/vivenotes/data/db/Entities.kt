@@ -619,9 +619,10 @@ enum class ImageTextStatus {
  * the pipeline is a rolling re-read rather than a migration. That is also why the export in
  * `NotebookTransferManager` drops it.
  *
- * The line boxes are not stored. Highlighting the matched line on the picture would need them;
- * opening a hit selects the picture instead, and a narrow row stays cheap to read for every page of
- * a notebook on every keystroke.
+ * [layout] is declared last and read only through its own query, and that order is load-bearing: a
+ * record is stored in column order, so a query that stops before the last column never walks its
+ * overflow pages. Search reads every picture of a notebook on every keystroke and pays nothing for
+ * the column — see [AttachmentTextSummary].
  */
 @Entity(
     tableName = "attachment_text",
@@ -647,6 +648,31 @@ data class AttachmentTextEntity(
     /** How long the read took, kept because it is the only latency measurement from real devices. */
     val durationMs: Long,
     val updatedAt: Long,
+    /** Where each line and character sits on the picture, in `ImageTextLayout`'s format. */
+    val layout: ByteArray? = null,
+)
+
+/**
+ * A row of [AttachmentTextEntity] without its layout, which is what everything but drawing needs.
+ *
+ * The same fields under the same names, so nothing that reads a row has to care which it was given.
+ */
+data class AttachmentTextSummary(
+    val attachmentId: String,
+    val text: String,
+    val lineCount: Int,
+    val confidence: Float,
+    val engine: String,
+    val status: ImageTextStatus,
+    val durationMs: Long,
+    val updatedAt: Long,
+)
+
+/** One picture's text and where it sits, loaded only for the pictures on the open page. */
+data class AttachmentTextLayoutRow(
+    val attachmentId: String,
+    val text: String,
+    val layout: ByteArray,
 )
 
 /** What happened the last time one page's replayed ink was read. */

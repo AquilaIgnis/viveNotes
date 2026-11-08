@@ -45,7 +45,7 @@ import com.vivenotes.data.DebugLog
         SyncEntityStateEntity::class,
         SyncOutboxEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class NotesDatabase : RoomDatabase() {
@@ -146,11 +146,26 @@ abstract class NotesDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 4: a picture's recognized text says where on the picture each line is.
+         *
+         * `attachment_text.layout` is null on every existing row, meaning "read before positions
+         * were kept". The engine id moved with this column, so the next search reads those pictures
+         * again in the background, and their text keeps answering searches until it has. Computing
+         * anything here would be running OCR inside the migration.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(connection: SQLiteConnection) {
+                DebugLog.i(DebugLog.DB) { "Migrating notes.db from version 3 to 4" }
+                connection.execSQL("ALTER TABLE attachment_text ADD COLUMN layout BLOB")
+            }
+        }
+
         fun create(context: Context): NotesDatabase =
             Room.databaseBuilder(context, NotesDatabase::class.java, "notes.db")
                 // Never `fallbackToDestructiveMigration`, which answers a forgotten migration by
                 // deleting the notes.
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .addCallback(SYNC_TRIGGER_CALLBACK)
                 .addCallback(OPEN_LOG_CALLBACK)
                 .build()

@@ -740,6 +740,12 @@
     <string name="image_unreadable">Błąd: nie można odczytać %1$s</string>
     <string name="image_description">Zdjęcie</string>
     <string name="image_description_text">Zdjęcie: %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="one">%d trafienie wyszukiwania</item>
+        <item quantity="few">%d trafienia wyszukiwania</item>
+        <item quantity="many">%d trafień wyszukiwania</item>
+        <item quantity="other">%d trafienia wyszukiwania</item>
+    </plurals>
     <string name="ink_description">Pismo odręczne</string>
     <string name="ink_description_text">Pismo odręczne: %1$s</string>
 

@@ -779,6 +779,10 @@
     <!-- What a screen reader says for a picture or a line of handwriting, given the text read out of it. -->
     <string name="image_description">Picture</string>
     <string name="image_description_text">Picture: %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="one">%d search match</item>
+        <item quantity="other">%d search matches</item>
+    </plurals>
     <string name="ink_description">Handwriting</string>
     <string name="ink_description_text">Handwriting: %1$s</string>
 

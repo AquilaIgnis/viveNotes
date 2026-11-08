@@ -52,6 +52,7 @@ import com.vivenotes.data.ContentSearchIndex
 import com.vivenotes.data.ContentSearchOutcome
 import com.vivenotes.data.ContentSearchResults
 import com.vivenotes.data.ImageTextIndexer
+import com.vivenotes.data.PictureTextHighlighter
 import com.vivenotes.data.ImportedAttachment
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.InkPageLoader
@@ -150,6 +151,7 @@ import com.vivenotes.model.RuleLines
 import com.vivenotes.model.SpaceCut
 import com.vivenotes.model.newId
 import com.vivenotes.model.newTable
+import com.vivenotes.model.ocr.PictureHighlight
 import com.vivenotes.model.search.ContentHit
 import com.vivenotes.model.search.ContentKind
 import com.vivenotes.model.search.ContentUnit
@@ -208,6 +210,8 @@ data class ContentReveal(
     val end: Int,
     val inkStrokeIds: Set<String> = emptySet(),
     val inkBounds: InkBounds? = null,
+    /** Where a picture hit's matched words are. Null when the picture has no layout yet. */
+    val imageHighlight: PictureHighlight? = null,
 )
 
 /** What the Content panel is showing: a query, whether it is still running, and what it found. */
@@ -1667,6 +1671,51 @@ class NotesViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ContentSearchState())
 
+    /** Whether the Content pane is up, which is the only time a picture shows its search matches. */
+    private val contentPanelOpen = MutableStateFlow(false)
+
+    fun setContentPanelOpen(open: Boolean) {
+        contentPanelOpen.value = open
+    }
+
+    private val pictureHighlighter = PictureTextHighlighter(repository)
+
+    private val indexedPictures: StateFlow<Long> = imageText?.version ?: MutableStateFlow(0L)
+
+    /** The pictures on the open page, by attachment id. */
+    private val openPagePictures: Flow<Set<String>> = _uiState
+        .map { state -> state.images.mapTo(mutableSetOf()) { it.attachmentId } }
+        .distinctUntilChanged()
+
+    /**
+     * Where the current search lands on the open page's pictures, by attachment id.
+     *
+     * Costs nothing until the pane is open with a query in it. After that a keystroke runs the
+     * matcher over the lines of this one page, from memory: the wait is the panel's own, so the boxes
+     * and the list change together, and the database is asked only when the page's pictures change or
+     * the indexer writes something new.
+     */
+    val pictureHighlights: StateFlow<Map<String, PictureHighlight>> = combine(
+        combine(_searchQuery, contentPanelOpen) { query, open -> if (open) query.trim() else "" }
+            .distinctUntilChanged()
+            .transformLatest { query ->
+                if (query.isNotEmpty()) delay(SEARCH_DEBOUNCE_MS)
+                emit(query)
+            },
+        openPagePictures,
+        indexedPictures,
+    ) { query, pictures, version -> Triple(query, pictures, version) }
+        .mapLatest { (query, pictures, version) ->
+            if (query.isEmpty() || pictures.isEmpty()) {
+                emptyMap()
+            } else {
+                withContext(Dispatchers.Default) {
+                    pictureHighlighter.forQuery(pictures, query, version)
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     /** How far reading this notebook's pictures has got, for the Content and Integrated AI panes. */
     val imageTextProgress: StateFlow<ImageTextProgress> =
         imageText?.progress ?: MutableStateFlow(ImageTextProgress(enabled = false))
@@ -1711,8 +1760,7 @@ class NotesViewModel(
      * new requests, and the bump that ends it is the next chance.
      */
     val pictureText: StateFlow<Map<String, String>> = combine(
-        _uiState.map { state -> state.images.mapTo(mutableSetOf()) { it.attachmentId } }
-            .distinctUntilChanged(),
+        openPagePictures,
         describingPage,
         imageText?.version ?: MutableStateFlow(0L),
     ) { ids, describing, _ -> ids to describing }
@@ -1854,6 +1902,27 @@ class NotesViewModel(
      */
     fun openSearchHit(hit: ContentHit) {
         val unit = hit.unit
+        val attachmentId = unit.attachmentId
+        if (unit.kind != ContentKind.Image || attachmentId == null) {
+            goToHit(hit, highlight = null)
+            return
+        }
+        // Looked up before the reveal is set, because it decides where the reveal scrolls to: the
+        // line, which on a long screenshot is pages below the picture's corner. One row by primary
+        // key, so this is not a wait anyone can see.
+        viewModelScope.launch {
+            val highlight = pictureHighlighter.forLine(
+                attachmentId = attachmentId,
+                lineIndex = unit.blockIndex,
+                spans = hit.spans,
+                indexerVersion = indexedPictures.value,
+            )
+            goToHit(hit, highlight)
+        }
+    }
+
+    private fun goToHit(hit: ContentHit, highlight: PictureHighlight?) {
+        val unit = hit.unit
         _reveal.value = ContentReveal(
             pageId = unit.pageId,
             kind = unit.kind,
@@ -1863,6 +1932,7 @@ class NotesViewModel(
             end = hit.editorEnd,
             inkStrokeIds = unit.inkStrokeIds,
             inkBounds = unit.inkBounds,
+            imageHighlight = highlight,
         )
         val state = _uiState.value
         when {

@@ -42,6 +42,16 @@ object TextDetection {
         val top: Float get() = corners.minOf { it.y }
         val left: Float get() = corners.minOf { it.x }
         val bottom: Float get() = corners.maxOf { it.y }
+
+        /**
+         * The corners with the text's own direction first: `[0]→[1]` runs along the line.
+         *
+         * The long side is the line's axis, so a line written down the page is read along its own
+         * length. Which end of that axis comes first cannot be known without an orientation
+         * classifier, so it is fixed rather than guessed: the corner after the top-left leads.
+         */
+        val readingCorners: List<Point>
+            get() = if (width >= height) corners else List(4) { corners[(it + 1) % 4] }
     }
 
     data class Point(val x: Float, val y: Float) {

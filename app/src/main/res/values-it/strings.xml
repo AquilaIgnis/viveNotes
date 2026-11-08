@@ -717,6 +717,11 @@
     <string name="image_unreadable">Errore: impossibile leggere %1$s</string>
     <string name="image_description">Immagine</string>
     <string name="image_description_text">Immagine: %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="one">%d risultato di ricerca</item>
+        <item quantity="many">%d risultati di ricerca</item>
+        <item quantity="other">%d risultati di ricerca</item>
+    </plurals>
     <string name="ink_description">Scrittura manuale</string>
     <string name="ink_description_text">Scrittura manuale: %1$s</string>
 

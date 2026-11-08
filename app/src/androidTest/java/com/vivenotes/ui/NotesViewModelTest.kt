@@ -94,6 +94,12 @@ import com.vivenotes.model.PaperSize
 import com.vivenotes.model.SpaceCut
 import com.vivenotes.model.RuleLines
 import com.vivenotes.model.plainText
+import com.vivenotes.model.ocr.ImageLineLayout
+import com.vivenotes.model.ocr.ImageTextLayout
+import com.vivenotes.model.search.ContentHit
+import com.vivenotes.model.search.ContentKind
+import com.vivenotes.model.search.ContentUnit
+import com.vivenotes.model.search.MatchSpan
 import com.vivenotes.richtext.FormatCommand
 
 /**
@@ -632,6 +638,138 @@ class NotesViewModelTest {
 
         assertEquals(mapOf("sha-described" to "Quarterly totals"), vm.pictureText.value)
         collecting.cancel()
+    }
+
+    /** The boxes on a picture exist only while the Content pane is up with a query in it. */
+    @Test
+    fun aPictureCarriesTheMatchesOfASearchOnlyWhileThePaneIsOpen() = runTest(dispatcher) {
+        seedReadPicture("sha-boxes", "Quarterly totals", "Grand total")
+        val vm = NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+        )
+        val collecting = launch { vm.pictureHighlights.collect {} }
+        advanceUntilIdle()
+
+        vm.setSearchQuery("total")
+        advanceUntilIdle()
+        assertTrue("no boxes with the pane shut", vm.pictureHighlights.value.isEmpty())
+
+        vm.setContentPanelOpen(true)
+        val boxes = vm.pictureHighlights.first { it.isNotEmpty() }
+        assertEquals("one match on each line", 2, boxes.getValue("sha-boxes").count)
+
+        vm.setSearchQuery("")
+        assertTrue(vm.pictureHighlights.first { it.isEmpty() }.isEmpty())
+
+        vm.setSearchQuery("grand")
+        assertEquals(1, vm.pictureHighlights.first { it.isNotEmpty() }.getValue("sha-boxes").count)
+
+        vm.setContentPanelOpen(false)
+        assertTrue(vm.pictureHighlights.first { it.isEmpty() }.isEmpty())
+        collecting.cancel()
+    }
+
+    /** Opening a picture hit says where its words are, so the canvas can scroll to that line. */
+    @Test
+    fun openingAPictureHitCarriesWhereItsWordsAre() = runTest(dispatcher) {
+        seedReadPicture("sha-reveal", "Quarterly totals", "Grand total")
+        val vm = NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+        )
+        advanceUntilIdle()
+
+        vm.openSearchHit(pictureHit(vm, "sha-reveal", lineIndex = 1, text = "Grand total", MatchSpan(6, 11)))
+
+        val highlight = vm.reveal.first { it != null }!!.imageHighlight
+        assertEquals(1, highlight?.count)
+        assertEquals(0.1f + 0.8f * 6f / 11f, highlight!!.left, 0.001f)
+        assertEquals(0.2f, highlight.top, 0.001f)
+    }
+
+    /** A picture not yet read for positions still opens; there is just nothing to draw on it. */
+    @Test
+    fun openingAPictureHitWithNoLayoutStillOpens() = runTest(dispatcher) {
+        seedPicture("sha-unplaced")
+        repository.saveImageText(
+            AttachmentTextEntity(
+                attachmentId = "sha-unplaced",
+                text = "Grand total",
+                lineCount = 1,
+                confidence = 0.9f,
+                engine = ImageTextIndexer.ENGINE,
+                status = ImageTextStatus.Read,
+                durationMs = 0,
+                updatedAt = 0,
+            ),
+        )
+        val vm = NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+        )
+        advanceUntilIdle()
+
+        vm.openSearchHit(pictureHit(vm, "sha-unplaced", lineIndex = 0, text = "Grand total", MatchSpan(0, 5)))
+
+        assertNull(vm.reveal.first { it != null }!!.imageHighlight)
+    }
+
+    private fun pictureHit(
+        vm: NotesViewModel,
+        attachmentId: String,
+        lineIndex: Int,
+        text: String,
+        span: MatchSpan,
+    ) = ContentHit(
+        unit = ContentUnit(
+            pageId = firstPageId(),
+            sectionId = vm.uiState.value.selectedSectionId!!,
+            kind = ContentKind.Image,
+            boxId = "picture-1",
+            blockIndex = lineIndex,
+            text = text,
+            attachmentId = attachmentId,
+        ),
+        score = 100,
+        spans = listOf(span),
+    )
+
+    /** A picture whose text has been read, each line laid out straight across it, evenly spaced. */
+    private suspend fun seedReadPicture(attachmentId: String, vararg lines: String) {
+        seedPicture(attachmentId)
+        repository.saveImageText(
+            AttachmentTextEntity(
+                attachmentId = attachmentId,
+                text = lines.joinToString("\n"),
+                lineCount = lines.size,
+                confidence = 0.9f,
+                engine = ImageTextIndexer.ENGINE,
+                status = ImageTextStatus.Read,
+                durationMs = 0,
+                updatedAt = 0,
+                layout = ImageTextLayout.encode(
+                    lines.map { line ->
+                        ImageLineLayout(
+                            corners = floatArrayOf(0.1f, 0.2f, 0.9f, 0.2f, 0.9f, 0.3f, 0.1f, 0.3f),
+                            edges = FloatArray(line.length + 1) { it.toFloat() / line.length },
+                        )
+                    },
+                ),
+            ),
+        )
     }
 
     /**

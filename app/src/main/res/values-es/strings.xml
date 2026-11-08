@@ -741,6 +741,11 @@
     <string name="image_unreadable">Error: no se pudo leer %1$s</string>
     <string name="image_description">Imagen</string>
     <string name="image_description_text">Imagen: %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="one">%d coincidencia de búsqueda</item>
+        <item quantity="many">%d coincidencias de búsqueda</item>
+        <item quantity="other">%d coincidencias de búsqueda</item>
+    </plurals>
     <string name="ink_description">Escritura a mano</string>
     <string name="ink_description_text">Escritura a mano: %1$s</string>
 

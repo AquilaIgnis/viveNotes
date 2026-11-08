@@ -706,6 +706,9 @@
     <string name="image_unreadable">오류: %1$s을(를) 읽을 수 없음</string>
     <string name="image_description">사진</string>
     <string name="image_description_text">사진: %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="other">검색 결과 %d개</item>
+    </plurals>
     <string name="ink_description">손글씨</string>
     <string name="ink_description_text">손글씨: %1$s</string>
 

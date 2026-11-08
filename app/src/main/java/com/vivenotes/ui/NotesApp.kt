@@ -890,6 +890,7 @@ private fun NotesWorkspace(
     }
     /** The docked pane, if any. Deliberately not persisted: it is where you are, not what you have. */
     var openPane by remember { mutableStateOf<ToolPane?>(null) }
+    LaunchedEffect(openPane) { viewModel.setContentPanelOpen(openPane == ToolPane.Content) }
     /** Ctrl+F's: the query field takes the focus once the Content pane is up, and clears this. */
     var searchFocusRequested by remember { mutableStateOf(false) }
     LaunchedEffect(viewModel) {
@@ -2059,6 +2060,9 @@ private fun PageEditor(
     onOpenEquationInMath: (Outline.Equation) -> Unit,
 ) {
     val pictureText by viewModel.pictureText.collectAsStateWithLifecycle()
+    // Not delegated: the canvas reads this while drawing, so a new set of boxes repaints one layer
+    // and leaves this composable, and the whole page under it, alone.
+    val pictureHighlights = viewModel.pictureHighlights.collectAsStateWithLifecycle()
     val inkDescriptions by viewModel.inkDescriptions.collectAsStateWithLifecycle()
     val pendingPasteLayout by viewModel.pendingPasteLayout.collectAsStateWithLifecycle()
     val pendingPastes by viewModel.pendingPastes.collectAsStateWithLifecycle()
@@ -2149,6 +2153,7 @@ private fun PageEditor(
         images = state.images,
         attachments = attachments,
         pictureText = pictureText,
+        pictureHighlights = { pictureHighlights.value },
         inkRegions = inkDescriptions,
         onMoveImages = viewModel::moveImages,
         onResizeImages = viewModel::resizeImages,

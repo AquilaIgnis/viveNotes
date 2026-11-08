@@ -706,6 +706,9 @@
     <string name="image_unreadable">エラー: %1$sを読み込めませんでした</string>
     <string name="image_description">画像</string>
     <string name="image_description_text">画像: %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="other">検索結果 %d 件</item>
+    </plurals>
     <string name="ink_description">手書き</string>
     <string name="ink_description_text">手書き: %1$s</string>
 

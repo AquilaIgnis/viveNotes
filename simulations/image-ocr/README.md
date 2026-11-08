@@ -108,6 +108,42 @@ interactive lasso three times slower. The app takes `cores / 4` lanes, at most t
 of its speed from what used to wait behind the lock — post-processing, crops, tensors, ink replay and
 rasterization — none of which this study times.
 
+## Where a word is inside its line (2026-11-08)
+
+`word_boxes.py` asks how to place a highlight on a searched word when the detector only boxes whole
+lines. The recognizer already knows: each character it emits came from a run of output columns. Over
+pictures whose word positions are known exactly (five fonts, three sizes, light and dark, straight
+and rotated 3.5°), scored on the 348 of 360 lines read exactly right, 2,419 words:
+
+```
+estimator             IoU mean    p10    min    edge error, in line heights
+even spacing             0.814  0.538  0.000    0.16 left, 0.20 right
+start of each run        0.869  0.762  0.334    0.16 left, 0.07 right
+midpoint, ends at box    0.899  0.806  0.334    0.09 left, 0.08 right
+```
+
+The app uses the third: a boundary between two characters is halfway across the blank between their
+runs, and the line's own ends are the detected box's ends. Even spacing can miss a word entirely,
+which is what its 0.000 is. The straight and rotated pictures score the same.
+
+Midpoints sit a little inside the ink (+0.07 of a line height on the left, -0.05 on the right), so a
+highlight clips the first and last letters. A boundary beside a space is therefore pushed into the
+space, never past its middle. Boundaries between two letters stay put, so a match stopping inside a
+word still stops where it should:
+
+```
+padding, line heights    IoU    ink covered   whole word inside box   box reaches next word
+0.00                    0.899     0.908             0.135                   0.000
+0.05                    0.933     0.952             0.358                   0.002
+0.10                    0.940     0.981             0.686                   0.006
+0.15                    0.920     0.995             0.906                   0.017
+0.20                    0.897     0.998             0.969                   0.024
+0.30                    0.874     0.999             0.978                   0.043
+```
+
+The app uses 0.15: past that a box starts reaching the neighbouring word more often than it gains
+whole words, and a highlight that covers the word is what it is for.
+
 ## Layout
 
 ```
@@ -117,6 +153,7 @@ pipeline.py    det tensor -> ONNX -> quads -> warp -> rec -> CTC -> lines in rea
 run.py         sweeps (baseline | resize | thresholds | unclip) and scores them
 bench.py       batch size × thread count for the recognizer
 lanes.py       concurrent inference lanes × intra-op threads, and the lasso latency each costs
+word_boxes.py  where a word is inside a recognized line, from the CTC columns
 results/       every sweep's raw numbers
 ```
 

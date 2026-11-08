@@ -183,11 +183,14 @@ class ImageTextIndexer(
         val bitmap = withContext(Dispatchers.IO) {
             attachments.loadBitmap(attachmentId, OCR_MAX_DIMENSION)
         }
+        var layout: ByteArray? = null
         val result = if (bitmap == null) {
             null
         } else {
             try {
-                runCatching { engine.recognizeImageText(bitmap) }.getOrNull()
+                runCatching { engine.recognizeImageText(bitmap) }.getOrNull()?.also {
+                    layout = it.layout(bitmap.width, bitmap.height)
+                }
             } finally {
                 // A native allocation the size of the picture, and nothing downstream wants it.
                 bitmap.recycle()
@@ -197,9 +200,10 @@ class ImageTextIndexer(
         return when {
             // A picture that cannot be read is recorded as Failed rather than left absent, or every
             // query for the life of the notebook would queue it again.
-            result == null -> row(attachmentId, ImageTextResult.Empty, ImageTextStatus.Failed, elapsed)
-            result.lines.isEmpty() -> row(attachmentId, result, ImageTextStatus.Empty, elapsed)
-            else -> row(attachmentId, result, ImageTextStatus.Read, elapsed)
+            result == null ->
+                row(attachmentId, ImageTextResult.Empty, ImageTextStatus.Failed, elapsed, null)
+            result.lines.isEmpty() -> row(attachmentId, result, ImageTextStatus.Empty, elapsed, null)
+            else -> row(attachmentId, result, ImageTextStatus.Read, elapsed, layout)
         }
     }
 
@@ -208,6 +212,7 @@ class ImageTextIndexer(
         result: ImageTextResult,
         status: ImageTextStatus,
         elapsed: Long,
+        layout: ByteArray?,
     ) = AttachmentTextEntity(
         attachmentId = attachmentId,
         text = result.text,
@@ -217,6 +222,7 @@ class ImageTextIndexer(
         status = status,
         durationMs = elapsed,
         updatedAt = clock(),
+        layout = layout,
     )
 
     private suspend fun readEnabled(): Boolean = cachedEnabled ?: run {
@@ -234,8 +240,11 @@ class ImageTextIndexer(
          *
          * Bumping it makes every stored reading stale and re-read, which is what turns changing the
          * detector, the thresholds or the crop into a rolling change rather than a migration.
+         * A stale row keeps answering searches until its picture has been read again.
+         *
+         * `/2` added where each line and character is, which the search highlight draws from.
          */
-        const val ENGINE = "ppocrv5-en/1"
+        const val ENGINE = "ppocrv5-en/2"
 
         /** Installation-local, and therefore in `local_metadata` rather than in a notebook. */
         const val ENABLED_KEY = "imageTextEnabled"

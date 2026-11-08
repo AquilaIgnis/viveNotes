@@ -717,6 +717,10 @@
     <string name="image_unreadable">Fehler: %1$s konnte nicht gelesen werden</string>
     <string name="image_description">Bild</string>
     <string name="image_description_text">Bild: %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="one">%d Suchtreffer</item>
+        <item quantity="other">%d Suchtreffer</item>
+    </plurals>
     <string name="ink_description">Handschrift</string>
     <string name="ink_description_text">Handschrift: %1$s</string>
 

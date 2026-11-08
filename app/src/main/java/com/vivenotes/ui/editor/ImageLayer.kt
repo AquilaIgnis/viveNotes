@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -48,6 +49,7 @@ import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
 import com.vivenotes.ink.pageBounds
 import com.vivenotes.model.Outline
+import com.vivenotes.model.ocr.PictureHighlight
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
@@ -105,6 +107,15 @@ internal fun ImageLayer(
      * picture with nothing here is still announced, as a picture.
      */
     pictureText: Map<String, String> = emptyMap(),
+    /**
+     * Where the current search lands on each picture, by attachment id.
+     *
+     * Called from the draw scope and from semantics, never during composition, so that a new set of
+     * boxes repaints this canvas and recomposes nothing.
+     */
+    pictureHighlights: () -> Map<String, PictureHighlight> = { emptyMap() },
+    /** The search hit just opened, drawn strongly over the placement it was opened on. */
+    searchFocus: ImageSearchFocus? = null,
     /** Null in standalone uses; the document extent when hosted by the unbounded page. */
     canvasExtent: DpSize? = null,
     /**
@@ -141,6 +152,9 @@ internal fun ImageLayer(
     val move = remember { mutableStateOf<ImageMove?>(null) }
 
     val assets = rememberPageAssets(images, attachments, density)
+    val highlights = rememberImageSearchHighlights(pictureHighlights, searchFocus)
+    val highlightPaint = remember(density) { ImageHighlightPaint(density) }
+    val resources = LocalResources.current
 
     // What the plate says, put where a screen reader — and an instrumented test — can reach it.
     // Everything this layer shows is painted into one canvas and has no semantics node of its own, so
@@ -296,6 +310,38 @@ internal fun ImageLayer(
                 drawImage(
                     drawn, assets[image.attachmentId], placeholder, brokenLabel, measurer, density,
                 )
+                // Straight after its own picture, so one lying over it covers its boxes too. Only
+                // over pixels: the words are not there on a loading or broken plate.
+                if (assets[image.attachmentId] !is ImageAsset.Ready) return@forEach
+                val matchStrength = highlights.matchStrength.value
+                if (matchStrength > 0f) {
+                    highlights.matches[image.attachmentId]?.let { match ->
+                        drawPictureHighlight(
+                            highlight = match,
+                            image = drawn,
+                            density = density,
+                            window = window,
+                            path = highlightPaint.path,
+                            fill = accent.copy(alpha = MATCH_FILL_ALPHA * matchStrength),
+                            border = accent.copy(alpha = MATCH_BORDER_ALPHA * matchStrength),
+                            stroke = highlightPaint.matchStroke,
+                        )
+                    }
+                }
+                val focusStrength = highlights.focusStrength.value
+                highlights.focus?.takeIf { focusStrength > 0f && it.imageId == image.id }?.let { focus ->
+                    drawPictureHighlight(
+                        highlight = focus.highlight,
+                        image = drawn,
+                        density = density,
+                        window = window,
+                        path = highlightPaint.path,
+                        fill = accent.copy(alpha = FOCUS_FILL_ALPHA * focusStrength),
+                        border = accent.copy(alpha = FOCUS_BORDER_ALPHA * focusStrength),
+                        stroke = highlightPaint.focusStroke,
+                        scale = highlights.focusScale.value,
+                    )
+                }
             }
 
             // Skipped while the lasso is armed, for the reason `ShapeLayer` gives on the same line:
@@ -319,7 +365,19 @@ internal fun ImageLayer(
                 Box(
                     Modifier
                         .overPageRect(image.x, image.y, image.x + image.width, image.y + image.height, density)
-                        .semantics { contentDescription = description },
+                        .semantics {
+                            contentDescription = description
+                            // The boxes are the only place this says it: a screen reader has
+                            // nothing else telling it which picture the search landed on.
+                            val matches = pictureHighlights()[image.attachmentId]?.count ?: 0
+                            if (matches > 0) {
+                                stateDescription = resources.getQuantityString(
+                                    R.plurals.image_search_matches,
+                                    matches,
+                                    matches,
+                                )
+                            }
+                        },
                 )
             }
         }

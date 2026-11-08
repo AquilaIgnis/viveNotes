@@ -14,13 +14,17 @@ import com.vivenotes.ai.ImageTextResult
 import com.vivenotes.ai.FormulaRecognitionResult
 import com.vivenotes.ai.InkRecognitionEngine
 import com.vivenotes.ai.TextRecognitionResult
+import com.vivenotes.data.db.AttachmentTextEntity
 import com.vivenotes.data.db.ImageTextStatus
 import com.vivenotes.data.db.NotesDatabase
+import com.vivenotes.model.ocr.ImageTextLayout
+import com.vivenotes.model.ocr.TextDetection
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -249,6 +253,79 @@ class ImageTextIndexerTest {
         assertEquals(3, indexer.progress.value.done)
         assertEquals(0, indexer.progress.value.pending)
     }
+
+    /** The positions a reading carries are what the search highlight is drawn from. */
+    @Test
+    fun aReadingKeepsWhereItsLinesAre() = runBlocking {
+        val id = importPicture(Color.RED)
+        val indexer = ImageTextIndexer(repository, attachments, CountingEngine({ placedReading() }))
+
+        indexer.request(setOf(id))
+        indexer.awaitIdle()
+
+        val stored = repository.imageTextLayoutsFor(listOf(id)).getValue(id)
+        assertEquals("read", stored.text)
+        val layout = ImageTextLayout.decode(stored.layout)!!.single()
+        assertArrayEquals(floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f), layout.edges, 0.001f)
+        assertEquals("a fraction of the 64-pixel picture", 4f / 64f, layout.corners[0], 0.001f)
+    }
+
+    @Test
+    fun aReadingThatDoesNotSayWhereItsLinesAreHasNoLayout() = runBlocking {
+        val id = importPicture(Color.RED)
+        val indexer = ImageTextIndexer(repository, attachments, CountingEngine())
+
+        indexer.request(setOf(id))
+        indexer.awaitIdle()
+
+        assertEquals("read", repository.imageTextFor(listOf(id)).getValue(id).text)
+        assertTrue(repository.imageTextLayoutsFor(listOf(id)).isEmpty())
+    }
+
+    /** A row from before positions were kept answers searches until its picture is read again. */
+    @Test
+    fun aRowFromAnEarlierEngineIsReadAgain() = runBlocking {
+        val id = importPicture(Color.RED)
+        repository.saveImageText(
+            AttachmentTextEntity(
+                attachmentId = id,
+                text = "old reading",
+                lineCount = 1,
+                confidence = 0.9f,
+                engine = "ppocrv5-en/1",
+                status = ImageTextStatus.Read,
+                durationMs = 0,
+                updatedAt = 0,
+            ),
+        )
+        assertEquals("old reading", repository.imageTextFor(listOf(id)).getValue(id).text)
+        val engine = CountingEngine({ placedReading() })
+        val indexer = ImageTextIndexer(repository, attachments, engine)
+
+        indexer.request(setOf(id))
+        indexer.awaitIdle()
+
+        assertEquals(1, engine.calls.get())
+        assertEquals(ImageTextIndexer.ENGINE, repository.imageTextFor(listOf(id)).getValue(id).engine)
+        assertEquals("read", repository.imageTextLayoutsFor(listOf(id)).getValue(id).text)
+    }
+
+    private fun placedReading() = ImageTextResult(
+        lines = listOf(
+            ImageTextLine(
+                text = "read",
+                confidence = 0.9f,
+                corners = listOf(
+                    TextDetection.Point(4f, 4f),
+                    TextDetection.Point(60f, 4f),
+                    TextDetection.Point(60f, 20f),
+                    TextDetection.Point(4f, 20f),
+                ),
+                edges = listOf(0f, 0.25f, 0.5f, 0.75f, 1f),
+            ),
+        ),
+        meanConfidence = 0.9f,
+    )
 
     private suspend fun ImageTextIndexer.awaitIdle() =
         withTimeout(AWAIT_TIMEOUT_MS) { awaitPass() }

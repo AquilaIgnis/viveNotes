@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import com.vivenotes.data.db.AttachmentTextEntity
+import com.vivenotes.data.db.AttachmentTextLayoutRow
+import com.vivenotes.data.db.AttachmentTextSummary
 import com.vivenotes.data.db.InkTextEntity
 import com.vivenotes.data.db.InkTextStamp
 import com.vivenotes.data.db.StrokeColor
@@ -294,10 +296,20 @@ class NotesRepository(
      * Chunked because a notebook can hold more pictures than SQLite will bind parameters for, and
      * the failure mode of not chunking is an exception on somebody's largest notebook only.
      */
-    suspend fun imageTextFor(attachmentIds: Collection<String>): Map<String, AttachmentTextEntity> {
+    suspend fun imageTextFor(attachmentIds: Collection<String>): Map<String, AttachmentTextSummary> {
         if (attachmentIds.isEmpty()) return emptyMap()
         return attachmentIds.distinct().chunked(SQLITE_BIND_CHUNK)
             .flatMap { imageText.byIds(it) }
+            .associateBy { it.attachmentId }
+    }
+
+    /** The named pictures' text and where it sits. Absent for a picture with no layout. */
+    suspend fun imageTextLayoutsFor(
+        attachmentIds: Collection<String>,
+    ): Map<String, AttachmentTextLayoutRow> {
+        if (attachmentIds.isEmpty()) return emptyMap()
+        return attachmentIds.distinct().chunked(SQLITE_BIND_CHUNK)
+            .flatMap { imageText.layouts(it) }
             .associateBy { it.attachmentId }
     }
 
