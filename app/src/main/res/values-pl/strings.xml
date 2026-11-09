@@ -890,9 +890,8 @@
     <string name="import_file_as_objects">Tekst i tabele</string>
     <string name="import_file_as_pictures">Obraz każdej strony</string>
     <string name="import_file_as_info">Tekst i tabele można edytować na płótnie. Obraz pokazuje stronę tak, jak wygląda tutaj, gotową do pisania po niej.</string>
-    <string name="import_file_not_word">Ten plik nie jest dokumentem Word (.docx) ani plikiem PDF.</string>
-    <string name="import_file_legacy">Ten plik to starszy .doc lub jest chroniony hasłem. Na razie można importować tylko niechronione pliki .docx.</string>
-    <string name="import_file_password">Ten plik PDF jest chroniony hasłem.</string>
+    <string name="import_file_not_word">Można importować tylko dokumenty Word (.doc, .docx), tekst OpenDocument (.odt) i pliki PDF.</string>
+    <string name="import_file_password">Ten plik jest chroniony hasłem.</string>
     <string name="import_file_too_large">Ten plik jest zbyt duży, aby go zaimportować.</string>
     <string name="import_file_unreadable">Nie można odczytać tego pliku.</string>
     <string name="import_file_insert_failed">Nie udało się umieścić stron na tej stronie.</string>

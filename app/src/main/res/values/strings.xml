@@ -933,9 +933,8 @@
     <string name="import_file_as_objects">Text and tables</string>
     <string name="import_file_as_pictures">Picture of each page</string>
     <string name="import_file_as_info">Text and tables can be edited on the canvas. A picture shows the page as laid out here, ready to write over.</string>
-    <string name="import_file_not_word">This file is not a Word document (.docx) or a PDF.</string>
-    <string name="import_file_legacy">This file is an older .doc or is password-protected. Only unprotected .docx files can be imported for now.</string>
-    <string name="import_file_password">This PDF is password-protected.</string>
+    <string name="import_file_not_word">Only Word documents (.doc, .docx), OpenDocument text (.odt) and PDFs can be imported.</string>
+    <string name="import_file_password">This file is password-protected.</string>
     <string name="import_file_too_large">This file is too large to import.</string>
     <string name="import_file_unreadable">This file could not be read.</string>
     <string name="import_file_insert_failed">The pages could not be placed on this page.</string>

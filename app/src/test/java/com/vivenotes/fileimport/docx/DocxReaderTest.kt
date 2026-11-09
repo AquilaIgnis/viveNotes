@@ -47,16 +47,6 @@ class DocxReaderTest {
         assertEquals(ImportFailure.NotWord, thrown.failure)
     }
 
-    /** A `.doc` and a password-protected `.docx` are OLE containers, and get their own sentence. */
-    @Test
-    fun anOleContainerIsCalledOutRatherThanCalledBroken() {
-        val file = folder.newFile().apply {
-            writeBytes(byteArrayOf(0xD0.toByte(), 0xCF.toByte(), 0x11, 0xE0.toByte(), 0, 0, 0, 0))
-        }
-        val thrown = assertThrows(ImportException::class.java) { DocxPackage.open(file) }
-        assertEquals(ImportFailure.LegacyOrEncrypted, thrown.failure)
-    }
-
     /** A `.pptx` is a zip with a main part too; only its content type tells it apart. */
     @Test
     fun aZipThatIsSomeOtherOfficeFileIsNotWord() {

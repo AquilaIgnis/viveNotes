@@ -223,7 +223,6 @@ internal fun ImportFileDialog(
 
 private fun failureMessage(failure: Exception): Int = when ((failure as? ImportException)?.failure) {
     ImportFailure.NotWord -> R.string.import_file_not_word
-    ImportFailure.LegacyOrEncrypted -> R.string.import_file_legacy
     ImportFailure.PasswordProtected -> R.string.import_file_password
     ImportFailure.TooLarge -> R.string.import_file_too_large
     else -> R.string.import_file_unreadable

@@ -838,9 +838,8 @@
     <string name="import_file_as_objects">텍스트 및 표</string>
     <string name="import_file_as_pictures">각 페이지의 이미지</string>
     <string name="import_file_as_info">텍스트와 표는 캔버스에서 편집할 수 있습니다. 이미지는 여기 보이는 그대로의 페이지이며 그 위에 필기할 수 있습니다.</string>
-    <string name="import_file_not_word">이 파일은 Word 문서(.docx)나 PDF가 아닙니다.</string>
-    <string name="import_file_legacy">이 파일은 이전 .doc 형식이거나 암호로 보호되어 있습니다. 현재는 보호되지 않은 .docx 파일만 가져올 수 있습니다.</string>
-    <string name="import_file_password">이 PDF는 암호로 보호되어 있습니다.</string>
+    <string name="import_file_not_word">Word 문서(.doc, .docx), OpenDocument 텍스트(.odt), PDF만 가져올 수 있습니다.</string>
+    <string name="import_file_password">이 파일은 암호로 보호되어 있습니다.</string>
     <string name="import_file_too_large">이 파일은 너무 커서 가져올 수 없습니다.</string>
     <string name="import_file_unreadable">이 파일을 읽을 수 없습니다.</string>
     <string name="import_file_insert_failed">이 페이지에 페이지를 배치할 수 없습니다.</string>

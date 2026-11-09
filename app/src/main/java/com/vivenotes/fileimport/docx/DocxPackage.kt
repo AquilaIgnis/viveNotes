@@ -36,7 +36,7 @@ internal class DocxPackage private constructor(
     /** The part's bytes, or null when the package has no such part. */
     fun bytes(part: String, limit: Long = MAX_PART_BYTES): ByteArray? {
         val entry = entries[part.lowercase()] ?: return null
-        return readEntry(zip, entry, limit)
+        return readZipEntry(zip, entry, limit)
     }
 
     /** The part parsed as XML, or null when the package has no such part. */
@@ -63,7 +63,6 @@ internal class DocxPackage private constructor(
 
         /** Opens [file], or throws a [ImportException] saying why it cannot be read. */
         fun open(file: File): DocxPackage {
-            refuseOleContainer(file)
             val zip = try {
                 ZipFile(file)
             } catch (notZip: ZipException) {
@@ -83,30 +82,19 @@ internal class DocxPackage private constructor(
             }
         }
 
-        /** The OLE compound-file signature, which a `.doc` and an encrypted `.docx` both open with. */
-        private val OLE_MAGIC = byteArrayOf(0xD0.toByte(), 0xCF.toByte(), 0x11, 0xE0.toByte())
-
-        private fun refuseOleContainer(file: File) {
-            val head = ByteArray(OLE_MAGIC.size)
-            val read = file.inputStream().use { it.read(head) }
-            if (read == OLE_MAGIC.size && head.contentEquals(OLE_MAGIC)) {
-                throw ImportException(ImportFailure.LegacyOrEncrypted)
-            }
-        }
-
         /**
          * The part the package says is its document, confirmed to be a Word one by its content
          * type — so a `.pptx`, also a zip with a main part, is told apart here rather than being
          * read as an empty document.
          */
         private fun mainPartOf(zip: ZipFile, entries: Map<String, ZipEntry>): String {
-            val root = entries["_rels/.rels"]?.let { parseXml(readEntry(zip, it, MAX_XML_BYTES)) }
+            val root = entries["_rels/.rels"]?.let { parseXml(readZipEntry(zip, it, MAX_XML_BYTES)) }
                 ?: throw ImportException(ImportFailure.NotWord)
             val main = readRelationships(root, source = "").values
                 .firstOrNull { !it.external && it.type.endsWith("/officeDocument") }
                 ?: throw ImportException(ImportFailure.NotWord)
             if (main.target.lowercase() !in entries) throw ImportException(ImportFailure.NotWord)
-            val types = entries["[content_types].xml"]?.let { parseXml(readEntry(zip, it, MAX_XML_BYTES)) }
+            val types = entries["[content_types].xml"]?.let { parseXml(readZipEntry(zip, it, MAX_XML_BYTES)) }
                 ?: throw ImportException(ImportFailure.NotWord)
             val declared = types.elements("Override")
                 .firstOrNull { it.getAttribute("PartName").trimStart('/').equals(main.target, ignoreCase = true) }
@@ -123,25 +111,26 @@ internal class DocxPackage private constructor(
             "application/vnd.ms-word.document.macroEnabled.main+xml",
             "application/vnd.ms-word.template.macroEnabledTemplate.main+xml",
         )
+    }
+}
 
-        private fun readEntry(zip: ZipFile, entry: ZipEntry, limit: Long): ByteArray {
-            if (entry.size > limit) throw ImportException(ImportFailure.TooLarge)
-            val out = java.io.ByteArrayOutputStream(entry.size.coerceIn(32, limit).toInt())
-            zip.getInputStream(entry).use { input ->
-                val buffer = ByteArray(16 * 1024)
-                var total = 0L
-                while (true) {
-                    val read = input.read(buffer)
-                    if (read < 0) break
-                    total += read
-                    // Counted as it comes, because the size in the header is the file's word for it.
-                    if (total > limit) throw ImportException(ImportFailure.TooLarge)
-                    out.write(buffer, 0, read)
-                }
-            }
-            return out.toByteArray()
+/** The entry's bytes, read no further than [limit] whatever its header claims. */
+internal fun readZipEntry(zip: ZipFile, entry: ZipEntry, limit: Long): ByteArray {
+    if (entry.size > limit) throw ImportException(ImportFailure.TooLarge)
+    val out = java.io.ByteArrayOutputStream(entry.size.coerceIn(32, limit).toInt())
+    zip.getInputStream(entry).use { input ->
+        val buffer = ByteArray(16 * 1024)
+        var total = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            // Counted as it comes, because the size in the header is the file's word for it.
+            if (total > limit) throw ImportException(ImportFailure.TooLarge)
+            out.write(buffer, 0, read)
         }
     }
+    return out.toByteArray()
 }
 
 /** `word/document.xml` → `word/_rels/document.xml.rels`. */

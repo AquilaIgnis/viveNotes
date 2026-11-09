@@ -9,19 +9,20 @@ import com.vivenotes.fileimport.ImportedDocument
 import com.vivenotes.fileimport.ImportedPageSize
 import com.vivenotes.model.Mark
 import com.vivenotes.richtext.CanvasPasteItem
+import java.io.Closeable
 import kotlin.math.max
 import kotlin.math.roundToInt
 import java.nio.ByteBuffer
 
-/** The pictures inside the package, decoded when a page first needs them. */
-internal class DocxMedia(private val pkg: DocxPackage) {
+/** The pictures inside the document, decoded when a page first needs them. */
+internal class DocxMedia(private val read: (String) -> ByteArray?) {
     private val cache = LinkedHashMap<String, Bitmap>(16, 0.75f, true)
     private var cachedBytes = 0L
 
     /** Parts that would not decode — EMF and WMF, typically — so they are not tried per draw. */
     private val undecodable = HashSet<String>()
 
-    fun bytes(part: String): ByteArray? = runCatching { pkg.bytes(part) }.getOrNull()
+    fun bytes(part: String): ByteArray? = runCatching { read(part) }.getOrNull()
 
     /** [part] at no less than [longestPx] on its long side, if it is that big; null if unreadable. */
     fun bitmap(part: String, longestPx: Int): Bitmap? {
@@ -74,9 +75,14 @@ internal class DocxMedia(private val pkg: DocxPackage) {
     }
 }
 
-/** An opened document, cut into sheets. Used from one coroutine at a time. */
+/**
+ * An opened word-processor document, cut into sheets. Used from one coroutine at a time.
+ *
+ * Every such format arrives here as a [WordDocument], so they share one layout and one set of rules
+ * for what becomes an object.
+ */
 internal class DocxPages private constructor(
-    private val pkg: DocxPackage,
+    private val source: Closeable,
     private val document: WordDocument,
     private val engine: WordLayoutEngine,
     private val media: DocxMedia,
@@ -142,15 +148,28 @@ internal class DocxPages private constructor(
         return WordObjects(document, marks, media::bytes).items(pieces)
     }
 
-    override fun close() = pkg.close()
+    override fun close() = source.close()
 
     companion object {
         /** Reads and lays out [pkg]; takes ownership of it. */
-        suspend fun open(context: Context, pkg: DocxPackage): DocxPages {
-            val document = DocxReader(pkg).read()
-            val media = DocxMedia(pkg)
-            val engine = WordLayoutEngine(context, document, media, readFontFamilies(pkg))
-            return DocxPages(pkg, document, engine, media, engine.layout())
+        suspend fun open(context: Context, pkg: DocxPackage): DocxPages =
+            of(context, DocxReader(pkg).read(), { pkg.bytes(it) }, readFontFamilies(pkg), pkg)
+
+        /**
+         * Lays out a [document] read from any format. [parts] finds a picture by the name the document
+         * gives it, [fontFamilies] is each font's generic family, lowercased, and [source] is closed
+         * along with this.
+         */
+        suspend fun of(
+            context: Context,
+            document: WordDocument,
+            parts: (String) -> ByteArray?,
+            fontFamilies: Map<String, String>,
+            source: Closeable,
+        ): DocxPages {
+            val media = DocxMedia(parts)
+            val engine = WordLayoutEngine(context, document, media, fontFamilies)
+            return DocxPages(source, document, engine, media, engine.layout())
         }
 
         /** `fontTable.xml`'s family for each font, used to pick a stand-in for a font we have not met. */

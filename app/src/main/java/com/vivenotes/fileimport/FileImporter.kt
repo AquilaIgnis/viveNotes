@@ -4,8 +4,12 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.vivenotes.fileimport.doc.CompoundFile
+import com.vivenotes.fileimport.doc.DocReader
 import com.vivenotes.fileimport.docx.DocxPackage
 import com.vivenotes.fileimport.docx.DocxPages
+import com.vivenotes.fileimport.odt.OdtPackage
+import com.vivenotes.fileimport.odt.OdtReader
 import com.vivenotes.fileimport.pdf.PdfPages
 import com.vivenotes.model.Mark
 import com.vivenotes.richtext.CanvasPasteItem
@@ -27,13 +31,10 @@ class ImportedPageSize(val widthDp: Float, val heightDp: Float)
 
 /** Why a file could not be opened; the window turns each into its own sentence. */
 enum class ImportFailure {
-    /** Not something this reads at all: some other zip, or not a zip or a PDF. */
+    /** Not something this reads at all, whatever its name says. */
     NotWord,
 
-    /** A `.doc`, or a `.docx` with a password — both are OLE containers rather than zips. */
-    LegacyOrEncrypted,
-
-    /** A PDF that will not open without its password. */
+    /** Encrypted, in any of the formats that can be. */
     PasswordProtected,
 
     /** Past what this importer will read from an untrusted file. */
@@ -133,8 +134,26 @@ class FileImporter(
         remember(read(staged), staged, name)
 
     /** By what the file is rather than what it is called, which is a provider's to get wrong. */
-    private suspend fun read(file: File): ImportedDocument =
-        if (PdfPages.isPdf(file)) PdfPages.open(file) else DocxPages.open(appContext, DocxPackage.open(file))
+    private suspend fun read(file: File): ImportedDocument = when {
+        // Exact signatures first: a PDF's marker may sit anywhere in its opening kilobyte.
+        CompoundFile.isCompoundFile(file) -> readCompound(CompoundFile.open(file))
+        PdfPages.isPdf(file) -> PdfPages.open(file)
+        OdtPackage.isOdt(file) -> OdtPackage.open(file).let { odt ->
+            val read = OdtReader(odt).read()
+            DocxPages.of(appContext, read.document, { odt.bytes(it) }, read.fontFamilies, odt)
+        }
+        else -> DocxPages.open(appContext, DocxPackage.open(file))
+    }
+
+    /** One container, three things it can be: an old Word file, an encrypted new one, or neither. */
+    private suspend fun readCompound(compound: CompoundFile): ImportedDocument = when {
+        compound.has(CompoundFile.ENCRYPTED_PACKAGE) -> throw ImportException(ImportFailure.PasswordProtected)
+        compound.has(CompoundFile.WORD_DOCUMENT) -> {
+            val read = DocReader(compound).read()
+            DocxPages.of(appContext, read.document, read.pictures::get, read.fontFamilies, Closeable {})
+        }
+        else -> throw ImportException(ImportFailure.NotWord)
+    }
 
     private fun remember(pages: ImportedDocument, staged: File?, name: String): ImportedFile {
         val document = OpenDocument(pages, staged)
@@ -239,6 +258,8 @@ class FileImporter(
         /** What the file picker offers; more as they are built. */
         val MIME_TYPES: Array<String> = arrayOf(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/msword",
+            "application/vnd.oasis.opendocument.text",
             "application/pdf",
         )
 

@@ -838,9 +838,8 @@
     <string name="import_file_as_objects">テキストと表</string>
     <string name="import_file_as_pictures">各ページの画像</string>
     <string name="import_file_as_info">テキストと表はキャンバス上で編集できます。画像はここに表示されているとおりのページで、上から書き込めます。</string>
-    <string name="import_file_not_word">このファイルはWord文書（.docx）でもPDFでもありません。</string>
-    <string name="import_file_legacy">このファイルは古い.docか、パスワードで保護されています。現在インポートできるのは保護されていない.docxファイルのみです。</string>
-    <string name="import_file_password">このPDFはパスワードで保護されています。</string>
+    <string name="import_file_not_word">インポートできるのはWord文書（.doc、.docx）、OpenDocumentテキスト（.odt）、PDFのみです。</string>
+    <string name="import_file_password">このファイルはパスワードで保護されています。</string>
     <string name="import_file_too_large">このファイルは大きすぎてインポートできません。</string>
     <string name="import_file_unreadable">このファイルを読み取れませんでした。</string>
     <string name="import_file_insert_failed">このページにページを配置できませんでした。</string>

@@ -885,9 +885,8 @@
     <string name="import_file_as_objects">Texto y tablas</string>
     <string name="import_file_as_pictures">Imagen de cada página</string>
     <string name="import_file_as_info">El texto y las tablas se pueden editar en el lienzo. Una imagen muestra la página tal como se ve aquí, lista para escribir encima.</string>
-    <string name="import_file_not_word">Este archivo no es un documento de Word (.docx) ni un PDF.</string>
-    <string name="import_file_legacy">Este archivo es un .doc antiguo o está protegido con contraseña. Por ahora solo se pueden importar archivos .docx sin proteger.</string>
-    <string name="import_file_password">Este PDF está protegido con contraseña.</string>
+    <string name="import_file_not_word">Solo se pueden importar documentos de Word (.doc, .docx), texto OpenDocument (.odt) y PDF.</string>
+    <string name="import_file_password">Este archivo está protegido con contraseña.</string>
     <string name="import_file_too_large">Este archivo es demasiado grande para importarlo.</string>
     <string name="import_file_unreadable">No se pudo leer este archivo.</string>
     <string name="import_file_insert_failed">No se pudieron colocar las páginas en esta página.</string>

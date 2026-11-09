@@ -169,9 +169,9 @@ class ImportFileDialogTest {
     /** Each failure has its own sentence, and a file that cannot be read offers nothing to insert. */
     @Test
     fun aFileThatWillNotOpenSaysWhy() {
-        setDialog(open = { throw ImportException(ImportFailure.LegacyOrEncrypted) })
+        setDialog(open = { throw ImportException(ImportFailure.TooLarge) })
 
-        compose.onNodeWithText(context.getString(R.string.import_file_legacy)).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.import_file_too_large)).assertIsDisplayed()
         compose.onNodeWithTag(ImportFileTags.INSERT).assertIsNotEnabled()
     }
 
