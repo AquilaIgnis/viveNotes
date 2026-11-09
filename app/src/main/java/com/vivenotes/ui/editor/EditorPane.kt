@@ -386,7 +386,7 @@ fun EditorPane(
     onDeleteImages: (Set<String>) -> Unit = {},
     onSetImageBackground: (Set<String>, Int?) -> Unit = { _, _ -> },
     /** The page's top-left corner in page units, reported as it scrolls. See the `snapshotFlow`. */
-    onViewport: (Float, Float) -> Unit = { _, _ -> },
+    onViewport: (Float, Float, Float) -> Unit = { _, _, _ -> },
     tables: List<Outline.Table> = emptyList(),
     tableArmed: Boolean = false,
     onInsertTable: (Float, Float) -> String? = { _, _ -> null },
@@ -1209,13 +1209,14 @@ fun EditorPane(
         // tap to take a position from. A `snapshotFlow` rather than a read during composition: this
         // observes the scroll inside a coroutine, so keeping it current recomposes nothing — the same
         // property `visibleWindow` gets by being a lambda called in the draw.
-        LaunchedEffect(horizontal, vertical, zoom, density) {
+        LaunchedEffect(horizontal, vertical, zoom, density, window) {
             snapshotFlow { horizontal.value to vertical.value }
                 .conflate()
                 .collect { (scrollX, scrollY) ->
                     onViewport(
                         scrollX / (zoom * density.density),
                         scrollY / (zoom * density.density),
+                        window.width.value / zoom,
                     )
                 }
         }

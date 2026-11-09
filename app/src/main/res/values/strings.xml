@@ -915,4 +915,27 @@
     <string name="graph_sliders_apply">Apply</string>
     <string name="graph_sliders_cancel">Cancel</string>
     <string name="recognition_graph_parameters">Drawn at %1$s. Each gets a slider once placed.</string>
+    <string name="file_import_notebook">Notebook</string>
+    <string name="file_import_file">File</string>
+    <string name="import_file_title">Import file</string>
+    <string name="import_file_close">Close</string>
+    <string name="import_file_insert">Insert</string>
+    <plurals name="import_file_selected">
+        <item quantity="one">%1$d of %2$d page selected</item>
+        <item quantity="other">%1$d of %2$d pages selected</item>
+    </plurals>
+    <string name="import_file_page">Page %1$d</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">Pages</string>
+    <string name="import_file_select_all">Select all</string>
+    <string name="import_file_select_none">Clear</string>
+    <string name="import_file_as">Insert as</string>
+    <string name="import_file_as_objects">Text and tables</string>
+    <string name="import_file_as_pictures">Picture of each page</string>
+    <string name="import_file_as_info">Text and tables can be edited on the canvas. A picture shows the page as laid out here, ready to write over.</string>
+    <string name="import_file_not_word">This file is not a Word document (.docx).</string>
+    <string name="import_file_legacy">This file is an older .doc or is password-protected. Only unprotected .docx files can be imported for now.</string>
+    <string name="import_file_too_large">This file is too large to import.</string>
+    <string name="import_file_unreadable">This file could not be read.</string>
+    <string name="import_file_insert_failed">The pages could not be placed on this page.</string>
 </resources>

@@ -838,4 +838,28 @@
     <string name="graph_sliders_apply">Applica</string>
     <string name="graph_sliders_cancel">Annulla</string>
     <string name="recognition_graph_parameters">Disegnato con %1$s. Ognuno avrà un cursore una volta posizionato.</string>
+    <string name="file_import_notebook">Notebook</string>
+    <string name="file_import_file">File</string>
+    <string name="import_file_title">Importa file</string>
+    <string name="import_file_close">Chiudi</string>
+    <string name="import_file_insert">Inserisci</string>
+    <plurals name="import_file_selected">
+        <item quantity="one">%1$d di %2$d pagina selezionata</item>
+        <item quantity="many">%1$d di %2$d pagine selezionate</item>
+        <item quantity="other">%1$d di %2$d pagine selezionate</item>
+    </plurals>
+    <string name="import_file_page">Pagina %1$d</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">Pagine</string>
+    <string name="import_file_select_all">Seleziona tutto</string>
+    <string name="import_file_select_none">Cancella</string>
+    <string name="import_file_as">Inserisci come</string>
+    <string name="import_file_as_objects">Testo e tabelle</string>
+    <string name="import_file_as_pictures">Immagine di ogni pagina</string>
+    <string name="import_file_as_info">Testo e tabelle si possono modificare sulla tela. Un’immagine mostra la pagina così come appare qui, pronta per essere annotata.</string>
+    <string name="import_file_not_word">Questo file non è un documento Word (.docx).</string>
+    <string name="import_file_legacy">Questo file è un vecchio .doc o è protetto da password. Per ora si possono importare solo file .docx non protetti.</string>
+    <string name="import_file_too_large">Questo file è troppo grande per essere importato.</string>
+    <string name="import_file_unreadable">Impossibile leggere questo file.</string>
+    <string name="import_file_insert_failed">Impossibile collocare le pagine su questa pagina.</string>
 </resources>

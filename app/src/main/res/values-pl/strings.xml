@@ -870,4 +870,29 @@
     <string name="graph_sliders_apply">Zastosuj</string>
     <string name="graph_sliders_cancel">Anuluj</string>
     <string name="recognition_graph_parameters">Narysowano dla %1$s. Po umieszczeniu każdy parametr dostanie suwak.</string>
+    <string name="file_import_notebook">Notes</string>
+    <string name="file_import_file">Plik</string>
+    <string name="import_file_title">Importuj plik</string>
+    <string name="import_file_close">Zamknij</string>
+    <string name="import_file_insert">Wstaw</string>
+    <plurals name="import_file_selected">
+        <item quantity="one">Wybrano %1$d z %2$d strony</item>
+        <item quantity="few">Wybrano %1$d z %2$d stron</item>
+        <item quantity="many">Wybrano %1$d z %2$d stron</item>
+        <item quantity="other">Wybrano %1$d z %2$d stron</item>
+    </plurals>
+    <string name="import_file_page">Strona %1$d</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">Strony</string>
+    <string name="import_file_select_all">Zaznacz wszystko</string>
+    <string name="import_file_select_none">Wyczyść</string>
+    <string name="import_file_as">Wstaw jako</string>
+    <string name="import_file_as_objects">Tekst i tabele</string>
+    <string name="import_file_as_pictures">Obraz każdej strony</string>
+    <string name="import_file_as_info">Tekst i tabele można edytować na płótnie. Obraz pokazuje stronę tak, jak wygląda tutaj, gotową do pisania po niej.</string>
+    <string name="import_file_not_word">Ten plik nie jest dokumentem Word (.docx).</string>
+    <string name="import_file_legacy">Ten plik to starszy .doc lub jest chroniony hasłem. Na razie można importować tylko niechronione pliki .docx.</string>
+    <string name="import_file_too_large">Ten plik jest zbyt duży, aby go zaimportować.</string>
+    <string name="import_file_unreadable">Nie można odczytać tego pliku.</string>
+    <string name="import_file_insert_failed">Nie udało się umieścić stron na tej stronie.</string>
 </resources>

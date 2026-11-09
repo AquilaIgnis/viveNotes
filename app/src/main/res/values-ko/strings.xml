@@ -821,4 +821,26 @@
     <string name="graph_sliders_apply">적용</string>
     <string name="graph_sliders_cancel">취소</string>
     <string name="recognition_graph_parameters">%1$s(으)로 그렸습니다. 배치하면 각각 슬라이더가 생깁니다.</string>
+    <string name="file_import_notebook">노트북</string>
+    <string name="file_import_file">파일</string>
+    <string name="import_file_title">파일 가져오기</string>
+    <string name="import_file_close">닫기</string>
+    <string name="import_file_insert">삽입</string>
+    <plurals name="import_file_selected">
+        <item quantity="other">%2$d페이지 중 %1$d페이지 선택됨</item>
+    </plurals>
+    <string name="import_file_page">%1$d페이지</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">페이지</string>
+    <string name="import_file_select_all">모두 선택</string>
+    <string name="import_file_select_none">지우기</string>
+    <string name="import_file_as">삽입 형식</string>
+    <string name="import_file_as_objects">텍스트 및 표</string>
+    <string name="import_file_as_pictures">각 페이지의 이미지</string>
+    <string name="import_file_as_info">텍스트와 표는 캔버스에서 편집할 수 있습니다. 이미지는 여기 보이는 그대로의 페이지이며 그 위에 필기할 수 있습니다.</string>
+    <string name="import_file_not_word">이 파일은 Word 문서(.docx)가 아닙니다.</string>
+    <string name="import_file_legacy">이 파일은 이전 .doc 형식이거나 암호로 보호되어 있습니다. 현재는 보호되지 않은 .docx 파일만 가져올 수 있습니다.</string>
+    <string name="import_file_too_large">이 파일은 너무 커서 가져올 수 없습니다.</string>
+    <string name="import_file_unreadable">이 파일을 읽을 수 없습니다.</string>
+    <string name="import_file_insert_failed">이 페이지에 페이지를 배치할 수 없습니다.</string>
 </resources>

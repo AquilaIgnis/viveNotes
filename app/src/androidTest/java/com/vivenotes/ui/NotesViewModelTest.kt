@@ -57,6 +57,9 @@ import com.vivenotes.keyboard.ShortcutScope
 import com.vivenotes.richtext.SelectionState
 import android.view.KeyEvent
 import com.vivenotes.data.DeletedItemKind
+import com.vivenotes.fileimport.DocxTestFile
+import com.vivenotes.fileimport.FileImportMode
+import com.vivenotes.fileimport.FileImporter
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
@@ -856,6 +859,71 @@ class NotesViewModelTest {
             inkDispatcher = dispatcher,
             inkText = inkText,
         )
+
+    /** A document's pages arrive the way a paste does: separate objects, one step of Undo. */
+    @Test
+    fun aFilesPagesLandAsObjectsInOneStepOfUndo() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val importer = FileImporter(context)
+        val docx = java.io.File(context.cacheDir, "view-model-import-objects.docx")
+        DocxTestFile.write(
+            docx,
+            DocxTestFile.paragraph("from the file") +
+                DocxTestFile.table(
+                    2,
+                    DocxTestFile.row(
+                        DocxTestFile.cell(DocxTestFile.paragraph("left")),
+                        DocxTestFile.cell(DocxTestFile.paragraph("right")),
+                    ),
+                ),
+        )
+        val opened = importer.openFile(docx, docx.name)
+        val before = vm.uiState.value.outlines.size
+
+        val landed = vm.insertImportedPages(importer, opened, listOf(0), FileImportMode.Objects)
+        advanceUntilIdle()
+
+        assertTrue(landed)
+        assertEquals(before + 1, vm.uiState.value.outlines.size)
+        assertEquals("left", vm.uiState.value.tables.single().rows[0].cells[0].plainText)
+
+        vm.undoCanvas()
+        advanceUntilIdle()
+
+        assertEquals(before, vm.uiState.value.outlines.size)
+        assertTrue(vm.uiState.value.tables.isEmpty())
+        importer.release()
+        docx.delete()
+    }
+
+    /** Chosen as pictures, each page is one picture, in its own proportions, stacked down the canvas. */
+    @Test
+    fun aFilesPagesLandAsOnePicturePerPage() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val importer = FileImporter(context)
+        val docx = java.io.File(context.cacheDir, "view-model-import-pictures.docx")
+        DocxTestFile.write(
+            docx,
+            DocxTestFile.paragraph("first") + DocxTestFile.paragraph("second", "<w:pageBreakBefore/>"),
+        )
+        val opened = importer.openFile(docx, docx.name)
+
+        val landed = vm.insertImportedPages(importer, opened, listOf(0, 1), FileImportMode.Pictures)
+        advanceUntilIdle()
+
+        assertTrue(landed)
+        val images = vm.uiState.value.images
+        assertEquals(2, images.size)
+        assertEquals(1760f / 1360f, images[0].height / images[0].width, 0.01f)
+        assertTrue("the second page should be below the first", images[1].y >= images[0].y + images[0].height)
+
+        // They are real attachment files; this test should not leave them in the app's directory.
+        images.forEach { attachments.fileFor(it.attachmentId).delete() }
+        importer.release()
+        docx.delete()
+    }
 
     /** A screen reader is given the open page's handwriting line by line; a blank line says nothing. */
     @Test

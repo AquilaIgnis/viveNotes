@@ -253,7 +253,7 @@ class ImageSearchHighlightTest {
             attachmentId = id,
             reveal = imageReveal(deepLine),
             onHandled = { handled = true },
-            onViewport = { _, top -> viewportTop = top },
+            onViewport = { _, top, _ -> viewportTop = top },
         )
 
         compose.waitUntil(timeoutMillis = 10_000) { handled }
@@ -295,7 +295,7 @@ class ImageSearchHighlightTest {
         attachmentId: String,
         reveal: ContentReveal,
         onHandled: () -> Unit,
-        onViewport: (Float, Float) -> Unit = { _, _ -> },
+        onViewport: (Float, Float, Float) -> Unit = { _, _, _ -> },
     ) {
         compose.setContent {
             ViveNotesTheme {

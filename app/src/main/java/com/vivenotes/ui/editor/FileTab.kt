@@ -2,14 +2,23 @@ package com.vivenotes.ui.editor
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.ui.ScrollingRow
+import com.vivenotes.ui.icons.MaterialSymbols
 
 @Immutable
 data class FileActions(
@@ -17,6 +26,7 @@ data class FileActions(
     val exportPdf: () -> Unit = {},
     val exportNotebook: () -> Unit = {},
     val importNotebook: () -> Unit = {},
+    val importFile: () -> Unit = {},
     val deleteNotebook: () -> Unit = {},
     val openDeletedItems: () -> Unit = {},
     val closeNotebook: () -> Unit = {},
@@ -28,10 +38,53 @@ internal object FileTags {
     const val VERSION_HISTORY = "file-version-history"
     const val DELETED_ITEMS = "file-deleted-items"
     const val EXPORT_NOTEBOOK = "file-export-notebook"
+    const val IMPORT = "file-import"
     const val IMPORT_NOTEBOOK = "file-import-notebook"
+    const val IMPORT_FILE = "file-import-file"
     const val DELETE_NOTEBOOK = "file-delete-notebook"
     const val CLOSE_NOTEBOOK = "file-close-notebook"
     const val CLOSED_NOTEBOOKS = "file-closed-notebooks"
+}
+
+/**
+ * Bringing something in: a notebook, which is always possible, or a file's pages, which need an open
+ * page to land on.
+ */
+@Composable
+private fun ImportButton(actions: FileActions, pageOpen: Boolean) {
+    var open by remember { mutableStateOf(false) }
+    Box(Modifier.testTag(FileTags.IMPORT)) {
+        RibbonCommand(
+            label = stringResource(R.string.file_import),
+            onClick = { open = true },
+            active = open,
+            dropdown = true,
+            // The plain book beside it is Export; the arrow is the only thing telling the two
+            // apart, so this one is two-tone — see `icons/RibbonGlyphs.kt`.
+            icon = { active -> TwoToneIcon({ it.importNotebook }, active) },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.file_import_notebook)) },
+                leadingIcon = { Icon(MaterialSymbols.Book, contentDescription = null) },
+                onClick = {
+                    open = false
+                    actions.importNotebook()
+                },
+                modifier = Modifier.testTag(FileTags.IMPORT_NOTEBOOK),
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.file_import_file)) },
+                leadingIcon = { Icon(MaterialSymbols.Article, contentDescription = null) },
+                enabled = pageOpen,
+                onClick = {
+                    open = false
+                    actions.importFile()
+                },
+                modifier = Modifier.testTag(FileTags.IMPORT_FILE),
+            )
+        }
+    }
 }
 
 /** Commands about the open file rather than its content or the device running the app. */
@@ -108,15 +161,7 @@ internal fun FileTab(
                 icon = { active -> TwoToneIcon({ it.exportNotebook }, active) },
             )
         }
-        Box(Modifier.testTag(FileTags.IMPORT_NOTEBOOK)) {
-            RibbonCommand(
-                label = stringResource(R.string.file_import),
-                onClick = actions.importNotebook,
-                // The plain book beside it is Export; the arrow is the only thing telling the two
-                // apart, so this one is two-tone — see `icons/RibbonGlyphs.kt`.
-                icon = { active -> TwoToneIcon({ it.importNotebook }, active) },
-            )
-        }
+        ImportButton(actions, pageOpen)
 
         // Behind its own divider, and last: the only command on this tab that takes something away.
         // Export and Import sit a thumb's width from it, and a scrolling row moves under the finger,

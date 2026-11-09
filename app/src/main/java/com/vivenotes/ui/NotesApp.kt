@@ -133,6 +133,8 @@ import com.vivenotes.ui.editor.AiActions
 import com.vivenotes.ui.editor.CalculatorAnswer
 import com.vivenotes.ui.editor.EditorPane
 import com.vivenotes.ui.editor.ExportPdfDialog
+import com.vivenotes.ui.editor.ImportFileDialog
+import com.vivenotes.fileimport.FileImporter
 import com.vivenotes.ui.editor.FileActions
 import com.vivenotes.ui.editor.FloatingCalculator
 import com.vivenotes.ui.editor.LocalKeyBindings
@@ -228,6 +230,7 @@ fun NotesApp(
     syncAccounts: SyncAccounts,
     managedSubscription: ManagedSubscriptionController,
     pdfExporter: PdfExporter,
+    fileImporter: FileImporter,
     onlineImages: OnlineImages,
     onNotebookClosed: () -> Unit,
 ) {
@@ -404,6 +407,7 @@ fun NotesApp(
                     recognitionEngine = recognitionEngine,
                     mathEngine = mathEngine,
                     pdfExporter = pdfExporter,
+                    fileImporter = fileImporter,
                     onlineImages = onlineImages,
                     onNotebookClosed = onNotebookClosed,
                     onOpenAccount = {
@@ -774,6 +778,7 @@ private fun NotesWorkspace(
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
     pdfExporter: PdfExporter,
+    fileImporter: FileImporter,
     onlineImages: OnlineImages,
     onNotebookClosed: () -> Unit,
     onOpenAccount: () -> Unit,
@@ -835,6 +840,11 @@ private fun NotesWorkspace(
     val importNotebook = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(viewModel::importNotebook) }
+    /** The document whose pages are being chosen — `ui/editor/ImportFileDialog.kt`. */
+    var importFileSource by remember { mutableStateOf<Uri?>(null) }
+    val importFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { importFileSource = it } }
     val strokes by viewModel.strokes.collectAsStateWithLifecycle()
     val inkReadyPageId by viewModel.inkReadyPageId.collectAsStateWithLifecycle()
     val aiModels by aiModelStore.state.collectAsStateWithLifecycle()
@@ -1198,6 +1208,9 @@ private fun NotesWorkspace(
             },
             importNotebook = {
                 importNotebook.launch(NotebookTransferManager.importMimeTypes())
+            },
+            importFile = {
+                importFile.launch(FileImporter.MIME_TYPES)
             },
             deleteNotebook = {
                 pendingNotebookDelete = currentNotebook
@@ -1602,6 +1615,15 @@ private fun NotesWorkspace(
             pageTitle = state.title,
             sectionName = currentSection?.name.orEmpty(),
             onDismiss = { exportPdfOpen = false },
+        )
+    }
+
+    importFileSource?.let { source ->
+        ImportFileDialog(
+            importer = fileImporter,
+            open = { fileImporter.open(source) },
+            onInsert = { file, pages, mode -> viewModel.insertImportedPages(fileImporter, file, pages, mode) },
+            onDismiss = { importFileSource = null },
         )
     }
 

@@ -23,6 +23,7 @@ import com.vivenotes.data.VideoThumbnailStore
 import com.vivenotes.data.ViewSettingsStore
 import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.pdf.PdfExporter
+import com.vivenotes.fileimport.FileImporter
 import com.vivenotes.data.sync.ForegroundSyncScheduler
 import com.vivenotes.data.sync.SyncAccounts
 import com.vivenotes.data.sync.HierarchySyncWorker
@@ -85,6 +86,9 @@ class NotesApplication : Application() {
      * renderer, and an install whose owner never exports never pays for either.
      */
     val pdfExporter: PdfExporter by lazy { PdfExporter(this, repository, attachments) }
+
+    /** The File tab's Import ▸ File. Lazy for the reason [pdfExporter] is. */
+    val fileImporter: FileImporter by lazy { FileImporter(this) }
     val editorDefaults: EditorDefaultsStore by lazy { EditorDefaultsStore(this) }
     val viewSettings: ViewSettingsStore by lazy { ViewSettingsStore(this) }
     val penSettings: PenSettingsStore by lazy { PenSettingsStore(this) }

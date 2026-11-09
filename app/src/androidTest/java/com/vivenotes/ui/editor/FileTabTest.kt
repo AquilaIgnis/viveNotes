@@ -90,12 +90,37 @@ class FileTabTest {
         assertFalse(opened)
     }
 
+    /** The menu opens with nothing selected, and the notebook half of it is always available. */
     @Test
-    fun importIsAlwaysAvailable() {
+    fun importingANotebookIsAlwaysAvailable() {
         var opened = false
         setTab(pageOpen = false, notebookOpen = false, import = { opened = true })
 
+        compose.onNodeWithTag(FileTags.IMPORT).performClick()
         compose.onNodeWithTag(FileTags.IMPORT_NOTEBOOK).performClick()
+
+        assertTrue(opened)
+    }
+
+    /** A file's pages have to land on a page, so that half needs one open. */
+    @Test
+    fun importingAFileNeedsAnOpenPage() {
+        var opened = false
+        setTab(pageOpen = false, notebookOpen = true, importFile = { opened = true })
+
+        compose.onNodeWithTag(FileTags.IMPORT).performClick()
+        compose.onNodeWithTag(FileTags.IMPORT_FILE).performTouchInput { click() }
+
+        assertFalse(opened)
+    }
+
+    @Test
+    fun importingAFileOpensForAnOpenPage() {
+        var opened = false
+        setTab(pageOpen = true, importFile = { opened = true })
+
+        compose.onNodeWithTag(FileTags.IMPORT).performClick()
+        compose.onNodeWithTag(FileTags.IMPORT_FILE).performClick()
 
         assertTrue(opened)
     }
@@ -162,6 +187,7 @@ class FileTabTest {
         exportPdf: () -> Unit = {},
         export: () -> Unit = {},
         import: () -> Unit = {},
+        importFile: () -> Unit = {},
         delete: () -> Unit = {},
         deletedItems: () -> Unit = {},
         close: () -> Unit = {},
@@ -175,6 +201,7 @@ class FileTabTest {
                         exportPdf = exportPdf,
                         exportNotebook = export,
                         importNotebook = import,
+                        importFile = importFile,
                         deleteNotebook = delete,
                         openDeletedItems = deletedItems,
                         closeNotebook = close,

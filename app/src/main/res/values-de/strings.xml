@@ -837,4 +837,27 @@
     <string name="graph_sliders_apply">Übernehmen</string>
     <string name="graph_sliders_cancel">Abbrechen</string>
     <string name="recognition_graph_parameters">Gezeichnet mit %1$s. Nach dem Platzieren erhält jeder Wert einen Schieberegler.</string>
+    <string name="file_import_notebook">Notizbuch</string>
+    <string name="file_import_file">Datei</string>
+    <string name="import_file_title">Datei importieren</string>
+    <string name="import_file_close">Schließen</string>
+    <string name="import_file_insert">Einfügen</string>
+    <plurals name="import_file_selected">
+        <item quantity="one">%1$d von %2$d Seite ausgewählt</item>
+        <item quantity="other">%1$d von %2$d Seiten ausgewählt</item>
+    </plurals>
+    <string name="import_file_page">Seite %1$d</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">Seiten</string>
+    <string name="import_file_select_all">Alle auswählen</string>
+    <string name="import_file_select_none">Auswahl aufheben</string>
+    <string name="import_file_as">Einfügen als</string>
+    <string name="import_file_as_objects">Text und Tabellen</string>
+    <string name="import_file_as_pictures">Bild jeder Seite</string>
+    <string name="import_file_as_info">Text und Tabellen lassen sich auf der Zeichenfläche bearbeiten. Ein Bild zeigt die Seite wie hier angeordnet und kann überschrieben werden.</string>
+    <string name="import_file_not_word">Diese Datei ist kein Word-Dokument (.docx).</string>
+    <string name="import_file_legacy">Diese Datei ist ein älteres .doc oder passwortgeschützt. Derzeit können nur ungeschützte .docx-Dateien importiert werden.</string>
+    <string name="import_file_too_large">Diese Datei ist zu groß zum Importieren.</string>
+    <string name="import_file_unreadable">Diese Datei konnte nicht gelesen werden.</string>
+    <string name="import_file_insert_failed">Die Seiten konnten nicht auf dieser Seite platziert werden.</string>
 </resources>

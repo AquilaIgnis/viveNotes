@@ -171,6 +171,9 @@ import com.vivenotes.model.withRowMinHeight
 import com.vivenotes.model.withRowRemoved
 import com.vivenotes.richtext.CanvasPasteItem
 import com.vivenotes.richtext.CanvasPastePlan
+import com.vivenotes.fileimport.FileImportMode
+import com.vivenotes.fileimport.FileImporter
+import com.vivenotes.fileimport.ImportedFile
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.plainPasteBlocks
 import com.vivenotes.richtext.Keystroke
@@ -899,6 +902,9 @@ class NotesViewModel(
      * needing somewhere to put a new object. `EditorPane` reports it from a `snapshotFlow`.
      */
     private var viewportOrigin = InkPoint(0f, 0f)
+
+    /** How wide the canvas's view is, in page units; zero until it has said. */
+    private var viewportWidth = 0f
 
     /** Commands travel to the focused editor, the only thing that can act on them. */
     private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
@@ -2803,8 +2809,9 @@ class NotesViewModel(
     }
 
     /** Where the canvas is currently looking, in page units. Reported by `EditorPane` as it scrolls. */
-    fun reportViewport(x: Float, y: Float) {
+    fun reportViewport(x: Float, y: Float, width: Float = viewportWidth) {
         viewportOrigin = InkPoint(x, y)
+        viewportWidth = width
     }
 
     fun moveImages(imageIds: Set<String>, dx: Float, dy: Float) {
@@ -3942,15 +3949,112 @@ class NotesViewModel(
      * [outlines] stacked by the heights the canvas measures them at. Should no canvas answer — the
      * editor left the screen mid-paste — the document's own sizes stand in.
      */
-    private suspend fun laidOut(outlines: List<Outline>): List<Outline> {
+    private suspend fun laidOut(outlines: List<Outline>, timeoutMs: Long = PASTE_LAYOUT_TIMEOUT_MS): List<Outline> {
         val request = CanvasPasteLayoutRequest(outlines)
         _pendingPasteLayout.value = request
         return try {
-            withTimeoutOrNull(PASTE_LAYOUT_TIMEOUT_MS) { request.result.await() }
+            withTimeoutOrNull(timeoutMs) { request.result.await() }
                 ?: stackPastedOutlines(outlines, outlines.associate { it.id to it.documentHeight() })
         } finally {
             if (_pendingPasteLayout.value === request) _pendingPasteLayout.value = null
         }
+    }
+
+    /**
+     * Puts [pages] of an open document on the canvas, where the user is looking, as one step of Undo.
+     *
+     * From here it is the road a paste takes: the pieces are stacked by the heights the canvas measures
+     * and placed by [insertClipboardOutlines]. False when nothing landed — the page changed while the
+     * document was being read, or there was nothing on the chosen pages to place.
+     */
+    suspend fun insertImportedPages(
+        importer: FileImporter,
+        file: ImportedFile,
+        pages: List<Int>,
+        mode: FileImportMode,
+    ): Boolean {
+        val pageId = _uiState.value.selectedPageId ?: return false
+        if (readOnlyPageId == pageId) return false
+        val imported = mutableListOf<String>()
+        try {
+            val outlines = when (mode) {
+                FileImportMode.Objects -> importedObjects(importer, file, pages, imported)
+                FileImportMode.Pictures -> importedPagePictures(importer, file, pages, imported)
+            }
+            if (outlines.isEmpty()) return false
+            // Given longer than a paste: a long document is many text boxes for the canvas to measure,
+            // and the estimate it falls back on would stack them on top of one another.
+            val placed = if (outlines.size < 2) {
+                outlines
+            } else {
+                laidOut(outlines, PASTE_LAYOUT_TIMEOUT_MS + outlines.size * MEASURE_ALLOWANCE_MS)
+            }
+            val titleFloor = if (_uiState.value.pageStyle.hideTitle) 0f else PageStyle.TITLE_BAND_DP
+            val landed = insertClipboardOutlines(
+                pageId,
+                placed,
+                viewportOrigin.x + INSERT_MARGIN,
+                maxOf(viewportOrigin.y + INSERT_MARGIN, titleFloor),
+            )
+            if (landed) placed.filterIsInstance<Outline.Image>().forEach { imported.remove(it.attachmentId) }
+            return landed
+        } finally {
+            if (imported.isNotEmpty()) withContext(NonCancellable) { imported.forEach { attachments.release(it) } }
+        }
+    }
+
+    private suspend fun importedObjects(
+        importer: FileImporter,
+        file: ImportedFile,
+        pages: List<Int>,
+        imported: MutableList<String>,
+    ): List<Outline> = importer.objects(file, pages, editorDefaults.value.asEditorMarks()).mapNotNull { item ->
+        when (item) {
+            is CanvasPasteItem.Text -> Outline.Text.empty().copy(blocks = item.blocks)
+            is CanvasPasteItem.Table -> item.outline
+            is CanvasPasteItem.Image -> {
+                val stored = item.bytes?.let { attachments.import(it) } ?: return@mapNotNull null
+                imported += stored.id
+                val width = item.widthDp ?: Outline.Image.DEFAULT_WIDTH
+                Outline.Image(
+                    id = newId(),
+                    attachmentId = stored.id,
+                    width = width,
+                    height = item.heightDp ?: (width * stored.pixelHeight / stored.pixelWidth.coerceAtLeast(1))
+                        .coerceAtLeast(Outline.Image.MIN_SIZE),
+                )
+            }
+        }
+    }
+
+    private suspend fun importedPagePictures(
+        importer: FileImporter,
+        file: ImportedFile,
+        pages: List<Int>,
+        imported: MutableList<String>,
+    ): List<Outline> = pages.sorted().mapNotNull { index ->
+        val size = file.pages.getOrNull(index) ?: return@mapNotNull null
+        val bitmap = importer.pagePicture(file, index) ?: return@mapNotNull null
+        val stored = attachments.importDrawn(bitmap)
+        bitmap.recycle()
+        imported += stored.id
+        val width = pagePictureWidth(size.widthDp)
+        Outline.Image(
+            id = newId(),
+            attachmentId = stored.id,
+            width = width,
+            height = width * size.heightDp / size.widthDp.coerceAtLeast(1f),
+        )
+    }
+
+    /**
+     * How wide a page of a document lands: across the view, up to its real size, and never so small
+     * that it is narrower than a text box. Real size is what an A4 page is at 100%, and a picture of a
+     * page bigger than that would only be a blurrier one.
+     */
+    private fun pagePictureWidth(pageWidthDp: Float): Float {
+        val room = viewportWidth - INSERT_MARGIN * 2
+        return minOf(pageWidthDp, maxOf(Outline.Text.DEFAULT_WIDTH, room))
     }
 
     /** The canvas's answer to [pendingPasteLayout]: how tall it draws each outline. */
@@ -4865,6 +4969,9 @@ class NotesViewModel(
 
         /** How long a paste of several objects waits for the canvas to measure them. */
         private const val PASTE_LAYOUT_TIMEOUT_MS = 2_000L
+
+        /** A generous per-object price for measuring text the canvas has not drawn yet. */
+        private const val MEASURE_ALLOWANCE_MS = 40L
 
         /** Pages whose undo history is kept; see [canvasHistoryByPage]. */
         private const val CANVAS_HISTORY_PAGES = 3

@@ -838,4 +838,28 @@
     <string name="graph_sliders_apply">Appliquer</string>
     <string name="graph_sliders_cancel">Annuler</string>
     <string name="recognition_graph_parameters">Tracé avec %1$s. Chacun aura un curseur une fois placé.</string>
+    <string name="file_import_notebook">Carnet</string>
+    <string name="file_import_file">Fichier</string>
+    <string name="import_file_title">Importer un fichier</string>
+    <string name="import_file_close">Fermer</string>
+    <string name="import_file_insert">Insérer</string>
+    <plurals name="import_file_selected">
+        <item quantity="one">%1$d page sur %2$d sélectionnée</item>
+        <item quantity="many">%1$d pages sur %2$d sélectionnées</item>
+        <item quantity="other">%1$d pages sur %2$d sélectionnées</item>
+    </plurals>
+    <string name="import_file_page">Page %1$d</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">Pages</string>
+    <string name="import_file_select_all">Tout sélectionner</string>
+    <string name="import_file_select_none">Effacer</string>
+    <string name="import_file_as">Insérer en tant que</string>
+    <string name="import_file_as_objects">Texte et tableaux</string>
+    <string name="import_file_as_pictures">Image de chaque page</string>
+    <string name="import_file_as_info">Le texte et les tableaux restent modifiables sur le canevas. Une image montre la page telle qu’elle apparaît ici, prête à être annotée.</string>
+    <string name="import_file_not_word">Ce fichier n’est pas un document Word (.docx).</string>
+    <string name="import_file_legacy">Ce fichier est un ancien .doc ou est protégé par mot de passe. Seuls les fichiers .docx non protégés peuvent être importés pour le moment.</string>
+    <string name="import_file_too_large">Ce fichier est trop volumineux pour être importé.</string>
+    <string name="import_file_unreadable">Ce fichier n’a pas pu être lu.</string>
+    <string name="import_file_insert_failed">Les pages n’ont pas pu être placées sur cette page.</string>
 </resources>

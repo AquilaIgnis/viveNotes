@@ -10,7 +10,13 @@ import com.vivenotes.model.newTable
 internal sealed interface CanvasPasteItem {
     data class Text(val blocks: List<Block>) : CanvasPasteItem
     data class Table(val outline: Outline.Table) : CanvasPasteItem
-    data class Image(val address: String? = null, val bytes: ByteArray? = null) : CanvasPasteItem
+    /** [widthDp] and [heightDp] are the size the source asked for, when it had an opinion. */
+    data class Image(
+        val address: String? = null,
+        val bytes: ByteArray? = null,
+        val widthDp: Float? = null,
+        val heightDp: Float? = null,
+    ) : CanvasPasteItem
 }
 
 /** What [content] pastes onto the canvas, read one run after another — see [CanvasPastePlan]. */

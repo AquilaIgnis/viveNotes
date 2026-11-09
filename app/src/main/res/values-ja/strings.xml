@@ -821,4 +821,26 @@
     <string name="graph_sliders_apply">適用</string>
     <string name="graph_sliders_cancel">キャンセル</string>
     <string name="recognition_graph_parameters">%1$s で描画しています。配置すると、それぞれにスライダーが付きます。</string>
+    <string name="file_import_notebook">ノートブック</string>
+    <string name="file_import_file">ファイル</string>
+    <string name="import_file_title">ファイルをインポート</string>
+    <string name="import_file_close">閉じる</string>
+    <string name="import_file_insert">挿入</string>
+    <plurals name="import_file_selected">
+        <item quantity="other">%2$dページ中%1$dページを選択中</item>
+    </plurals>
+    <string name="import_file_page">%1$dページ</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">ページ</string>
+    <string name="import_file_select_all">すべて選択</string>
+    <string name="import_file_select_none">クリア</string>
+    <string name="import_file_as">挿入形式</string>
+    <string name="import_file_as_objects">テキストと表</string>
+    <string name="import_file_as_pictures">各ページの画像</string>
+    <string name="import_file_as_info">テキストと表はキャンバス上で編集できます。画像はここに表示されているとおりのページで、上から書き込めます。</string>
+    <string name="import_file_not_word">このファイルはWord文書（.docx）ではありません。</string>
+    <string name="import_file_legacy">このファイルは古い.docか、パスワードで保護されています。現在インポートできるのは保護されていない.docxファイルのみです。</string>
+    <string name="import_file_too_large">このファイルは大きすぎてインポートできません。</string>
+    <string name="import_file_unreadable">このファイルを読み取れませんでした。</string>
+    <string name="import_file_insert_failed">このページにページを配置できませんでした。</string>
 </resources>
