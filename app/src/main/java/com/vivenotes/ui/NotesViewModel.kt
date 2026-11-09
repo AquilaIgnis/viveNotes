@@ -217,6 +217,9 @@ data class ContentReveal(
     val imageHighlight: PictureHighlight? = null,
 )
 
+/** A height on the open page for the canvas to bring into view, because something just landed there. */
+data class CanvasScrollTarget(val pageId: String, val y: Float)
+
 /** What the Content panel is showing: a query, whether it is still running, and what it found. */
 data class ContentSearchState(
     val query: String = "",
@@ -1899,6 +1902,15 @@ class NotesViewModel(
 
     /** The hit the canvas has been asked to show, until it has shown it. */
     val reveal: StateFlow<ContentReveal?> = _reveal.asStateFlow()
+
+    private val _canvasScrollTarget = MutableStateFlow<CanvasScrollTarget?>(null)
+
+    /** Where the canvas has been asked to scroll to, until it has. */
+    val canvasScrollTarget: StateFlow<CanvasScrollTarget?> = _canvasScrollTarget.asStateFlow()
+
+    fun onCanvasScrollTargetHandled() {
+        _canvasScrollTarget.value = null
+    }
 
     /**
      * Goes to a hit: its section, its page, and then the box that holds it.
@@ -3898,7 +3910,7 @@ class NotesViewModel(
                     }
                 }
             }
-            val placed = if (outlines.size < 2) outlines else laidOut(outlines)
+            val placed = if (outlines.size < 2) outlines else laidOut(outlines).outlines
             if (placed.isNotEmpty() && insertClipboardOutlines(pageId, placed, at.x, at.y)) {
                 // Placed now, so kept; whatever was fetched and not placed is let go below.
                 placed.filterIsInstance<Outline.Image>().forEach { imported.remove(it.attachmentId) }
@@ -3949,19 +3961,21 @@ class NotesViewModel(
      * [outlines] stacked by the heights the canvas measures them at. Should no canvas answer — the
      * editor left the screen mid-paste — the document's own sizes stand in.
      */
-    private suspend fun laidOut(outlines: List<Outline>, timeoutMs: Long = PASTE_LAYOUT_TIMEOUT_MS): List<Outline> {
+    private suspend fun laidOut(outlines: List<Outline>, timeoutMs: Long = PASTE_LAYOUT_TIMEOUT_MS): StackedPaste {
         val request = CanvasPasteLayoutRequest(outlines)
         _pendingPasteLayout.value = request
         return try {
-            withTimeoutOrNull(timeoutMs) { request.result.await() }
-                ?: stackPastedOutlines(outlines, outlines.associate { it.id to it.documentHeight() })
+            val frames = withTimeoutOrNull(timeoutMs) { request.result.await() }
+                ?: PasteFrames(outlines.associate { it.id to it.documentHeight() })
+            StackedPaste(stackPastedOutlines(outlines, frames.heights, frames.insets), frames.contentBottom)
         } finally {
             if (_pendingPasteLayout.value === request) _pendingPasteLayout.value = null
         }
     }
 
     /**
-     * Puts [pages] of an open document on the canvas, where the user is looking, as one step of Undo.
+     * Puts [pages] of an open document on the canvas, under whatever is already there, as one step of
+     * Undo. A second document therefore follows the first instead of landing on top of it.
      *
      * From here it is the road a paste takes: the pieces are stacked by the heights the canvas measures
      * and placed by [insertClipboardOutlines]. False when nothing landed — the page changed while the
@@ -3982,25 +3996,40 @@ class NotesViewModel(
                 FileImportMode.Pictures -> importedPagePictures(importer, file, pages, imported)
             }
             if (outlines.isEmpty()) return false
-            // Given longer than a paste: a long document is many text boxes for the canvas to measure,
-            // and the estimate it falls back on would stack them on top of one another.
-            val placed = if (outlines.size < 2) {
-                outlines
-            } else {
-                laidOut(outlines, PASTE_LAYOUT_TIMEOUT_MS + outlines.size * MEASURE_ALLOWANCE_MS)
+            // Asked even of a single object, because the same answer says where the page's content
+            // ends. Given longer than a paste: a long document is many text boxes to measure, and the
+            // estimate this falls back on would stack them on top of one another.
+            val layout = laidOut(outlines, PASTE_LAYOUT_TIMEOUT_MS + outlines.size * MEASURE_ALLOWANCE_MS)
+            val top = importTop(layout.contentBottom)
+            val landed = insertClipboardOutlines(pageId, layout.outlines, viewportOrigin.x + INSERT_MARGIN, top)
+            if (landed) {
+                layout.outlines.filterIsInstance<Outline.Image>().forEach { imported.remove(it.attachmentId) }
+                _canvasScrollTarget.value = CanvasScrollTarget(pageId, top)
             }
-            val titleFloor = if (_uiState.value.pageStyle.hideTitle) 0f else PageStyle.TITLE_BAND_DP
-            val landed = insertClipboardOutlines(
-                pageId,
-                placed,
-                viewportOrigin.x + INSERT_MARGIN,
-                maxOf(viewportOrigin.y + INSERT_MARGIN, titleFloor),
-            )
-            if (landed) placed.filterIsInstance<Outline.Image>().forEach { imported.remove(it.attachmentId) }
             return landed
         } finally {
             if (imported.isNotEmpty()) withContext(NonCancellable) { imported.forEach { attachments.release(it) } }
         }
+    }
+
+    /**
+     * The height an imported document starts at: a margin under the page's last content, or on a page
+     * with nothing on it, where the user is looking.
+     *
+     * [contentBottom] is the canvas's own figure, which knows how its text wrapped. A page no canvas
+     * answered for gets the document's estimate; better a rough place below the content than on top.
+     */
+    private fun importTop(contentBottom: Float?): Float {
+        val saved = currentPageSave()?.doc
+        if (saved != null && saved.outlines.isEmpty() && _strokes.value.isEmpty()) {
+            val titleFloor = if (_uiState.value.pageStyle.hideTitle) 0f else PageStyle.TITLE_BAND_DP
+            return maxOf(viewportOrigin.y + INSERT_MARGIN, titleFloor)
+        }
+        val bottom = contentBottom ?: maxOf(
+            saved?.outlines?.maxOfOrNull { it.y + it.documentHeight() } ?: 0f,
+            _strokes.value.maxOfOrNull { it.pageBounds?.bottom ?: 0f } ?: 0f,
+        )
+        return bottom + INSERT_MARGIN
     }
 
     private suspend fun importedObjects(
@@ -4060,7 +4089,7 @@ class NotesViewModel(
     /** The canvas's answer to [pendingPasteLayout]: how tall it draws each outline. */
     fun completePasteLayout(request: CanvasPasteLayoutRequest, frames: PasteFrames) {
         if (_pendingPasteLayout.value !== request) return
-        request.result.complete(stackPastedOutlines(request.outlines, frames.heights, frames.insets))
+        request.result.complete(frames)
     }
 
     /**
@@ -4844,6 +4873,9 @@ class NotesViewModel(
             ),
         )
     }
+
+    /** Objects stacked for a paste or an import, and where the canvas said the page's content ends. */
+    private class StackedPaste(val outlines: List<Outline>, val contentBottom: Float?)
 
     /** Writes the current document, so switching pages cannot lose the last keystrokes. */
     private suspend fun persist() {

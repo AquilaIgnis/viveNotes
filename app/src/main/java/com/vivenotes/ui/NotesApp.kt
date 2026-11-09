@@ -2087,6 +2087,7 @@ private fun PageEditor(
     val pictureHighlights = viewModel.pictureHighlights.collectAsStateWithLifecycle()
     val inkDescriptions by viewModel.inkDescriptions.collectAsStateWithLifecycle()
     val pendingPasteLayout by viewModel.pendingPasteLayout.collectAsStateWithLifecycle()
+    val scrollTarget by viewModel.canvasScrollTarget.collectAsStateWithLifecycle()
     val pendingPastes by viewModel.pendingPastes.collectAsStateWithLifecycle()
     val accessibilityOn = rememberAccessibilityServiceOn()
     LaunchedEffect(accessibilityOn) { viewModel.setDescribingPage(accessibilityOn) }
@@ -2240,6 +2241,8 @@ private fun PageEditor(
         showPrintMargins = showPrintMargins,
         reveal = reveal,
         onRevealHandled = onRevealHandled,
+        scrollTarget = scrollTarget,
+        onScrollTargetHandled = viewModel::onCanvasScrollTargetHandled,
         modifier = Modifier.fillMaxSize(),
     )
 }

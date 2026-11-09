@@ -60,6 +60,9 @@ import com.vivenotes.data.DeletedItemKind
 import com.vivenotes.fileimport.DocxTestFile
 import com.vivenotes.fileimport.FileImportMode
 import com.vivenotes.fileimport.FileImporter
+import com.vivenotes.ink.PasteFrames
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.flow.filterNotNull
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
@@ -923,6 +926,81 @@ class NotesViewModelTest {
         images.forEach { attachments.fileFor(it.attachmentId).delete() }
         importer.release()
         docx.delete()
+    }
+
+    /** A one-page document, ready to import, cleaned up by [closeImport]. */
+    private suspend fun openedImport(name: String): Pair<FileImporter, com.vivenotes.fileimport.ImportedFile> {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val importer = FileImporter(context)
+        val docx = java.io.File(context.cacheDir, name)
+        DocxTestFile.write(docx, DocxTestFile.paragraph("from the file"))
+        return importer to importer.openFile(docx, name).also { docx.delete() }
+    }
+
+    private fun closeImport(importer: FileImporter, vm: NotesViewModel) {
+        importer.release()
+        // They are real attachment files; these tests should not leave them in the app's directory.
+        vm.uiState.value.images.forEach { attachments.fileFor(it.attachmentId).delete() }
+    }
+
+    /** The bug this pins: both landed at the top of the view, one on top of the other. */
+    @Test
+    fun aSecondImportLandsBelowTheFirst() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val (importer, opened) = openedImport("second-import.docx")
+
+        assertTrue(vm.insertImportedPages(importer, opened, listOf(0), FileImportMode.Pictures))
+        advanceUntilIdle()
+        assertTrue(vm.insertImportedPages(importer, opened, listOf(0), FileImportMode.Pictures))
+        advanceUntilIdle()
+
+        val (first, second) = vm.uiState.value.images
+        assertTrue("the second document overlaps the first", second.y >= first.y + first.height)
+        closeImport(importer, vm)
+    }
+
+    /** The canvas's own figure wins: only it knows how the page's text wrapped. */
+    @Test
+    fun anImportLandsBelowWhereTheCanvasSaysTheContentEnds() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        val (importer, opened) = openedImport("below-the-content.docx")
+        val answering = launch(start = CoroutineStart.UNDISPATCHED) {
+            val request = vm.pendingPasteLayout.filterNotNull().first()
+            vm.completePasteLayout(request, PasteFrames(request.outlines.associate { it.id to 500f }, contentBottom = 3000f))
+        }
+
+        assertTrue(vm.insertImportedPages(importer, opened, listOf(0), FileImportMode.Pictures))
+        advanceUntilIdle()
+        answering.cancel()
+
+        val landed = vm.uiState.value.images.single()
+        assertEquals(3024f, landed.y, 0.01f)
+        assertEquals("the canvas should be sent to it", CanvasScrollTarget(pageId, 3024f), vm.canvasScrollTarget.value)
+        vm.onCanvasScrollTargetHandled()
+        assertNull(vm.canvasScrollTarget.value)
+        closeImport(importer, vm)
+    }
+
+    /** An empty text box is a place for a caret, not content to go below. */
+    @Test
+    fun anImportOntoABlankPageStartsUnderTheTitle() = runTest(dispatcher) {
+        repository.seedIfEmpty()
+        val vm = viewModelWith()
+        advanceUntilIdle()
+        val (importer, opened) = openedImport("blank-page.docx")
+        val answering = launch(start = CoroutineStart.UNDISPATCHED) {
+            val request = vm.pendingPasteLayout.filterNotNull().first()
+            // What the canvas reports for a blank page: the empty box still occupies its line.
+            vm.completePasteLayout(request, PasteFrames(request.outlines.associate { it.id to 500f }, contentBottom = 180f))
+        }
+
+        assertTrue(vm.insertImportedPages(importer, opened, listOf(0), FileImportMode.Pictures))
+        advanceUntilIdle()
+        answering.cancel()
+
+        assertEquals(PageStyle.TITLE_BAND_DP, vm.uiState.value.images.single().y, 0.01f)
+        closeImport(importer, vm)
     }
 
     /** A screen reader is given the open page's handwriting line by line; a blank line says nothing. */

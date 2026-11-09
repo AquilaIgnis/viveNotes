@@ -150,6 +150,8 @@ import com.vivenotes.richtext.QUOTE_STRIPE_COLOR
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.richtext.TextEdit
 import com.vivenotes.ink.CanvasPasteLayoutRequest
+import kotlinx.coroutines.flow.first
+import com.vivenotes.ui.CanvasScrollTarget
 import com.vivenotes.ink.PasteFrames
 import com.vivenotes.ui.TextRestore
 import com.vivenotes.ui.ContentReveal
@@ -179,6 +181,12 @@ private val CANVAS_MIN_WIDTH = 720.dp
  * its left rule off screen, and a result that lands there reads as having overshot.
  */
 private val REVEAL_MARGIN = 48.dp
+
+/** How far down the window something can land and still count as in view. */
+private const val SCROLL_TARGET_COMFORTABLE = 0.6f
+
+/** Long enough for the canvas to grow to hold what just landed; a scroll can only wait so long. */
+private const val SCROLL_RANGE_WAIT_MS = 1_000L
 private const val SEARCH_HIGHLIGHT_MS = 1_800L
 internal val GRIP_HEIGHT = 18.dp
 
@@ -340,6 +348,9 @@ fun EditorPane(
      */
     reveal: ContentReveal? = null,
     onRevealHandled: () -> Unit = {},
+    /** A height on the page to bring into view, standing until [onScrollTargetHandled] takes it. */
+    scrollTarget: CanvasScrollTarget? = null,
+    onScrollTargetHandled: () -> Unit = {},
     /**
      * The page's ink, and what the armed tool does with it.
      *
@@ -741,13 +752,6 @@ fun EditorPane(
         }
     }
 
-    // Measured here because only the canvas knows how its text wraps: in an editor styled as these
-    // are, at the same widths, so each pasted object keeps its margin from the next.
-    LaunchedEffect(pendingPasteLayout, editorStyle) {
-        val request = pendingPasteLayout ?: return@LaunchedEffect
-        onPasteMeasured(request, measurePastedOutlines(hostContext, density, editorStyle, request.outlines))
-    }
-
     // Delete and Esc ask the ViewModel whether anything is selected before they take the key.
     val holdsSelection = selection?.isEmpty == false
     DisposableEffect(holdsSelection) {
@@ -895,6 +899,15 @@ fun EditorPane(
         }
     }
 
+    // Measured here because only the canvas knows how its text wraps: in an editor styled as these
+    // are, at the same widths, so each pasted object keeps its margin from the next. Where the content
+    // above them ends is a fact only this knows too, for the same reason.
+    LaunchedEffect(pendingPasteLayout, editorStyle) {
+        val request = pendingPasteLayout ?: return@LaunchedEffect
+        val frames = measurePastedOutlines(hostContext, density, editorStyle, request.outlines)
+        onPasteMeasured(request, frames.copy(contentBottom = contentBounds.height.value))
+    }
+
     // A chosen paper size binds the page only while the page can hold the content. Once something
     // sits outside it, clipping to it would hide the user's work, so the sheet steps back to being
     // a guide and the canvas covers the content instead. Live state, so dragging a container over
@@ -1033,6 +1046,24 @@ fun EditorPane(
      * straightedge's length is measured from it.
      */
     var viewport by remember { mutableStateOf(DpSize.Zero) }
+
+    // Something landed from outside the canvas — a document's pages, which go under what is already
+    // here and so usually below the window, where nothing on screen would say that they arrived. Left
+    // alone when it is already where the eye is, so importing onto a fresh page does not move the title.
+    LaunchedEffect(scrollTarget, pageId) {
+        val target = scrollTarget ?: return@LaunchedEffect
+        if (target.pageId != pageId) return@LaunchedEffect
+        val top = target.y * zoom * density.density
+        val windowHeight = viewport.height.value * density.density
+        if (top < vertical.value || top > vertical.value + windowHeight * SCROLL_TARGET_COMFORTABLE) {
+            val destination = (top - with(density) { REVEAL_MARGIN.toPx() }).roundToInt().coerceAtLeast(0)
+            // The objects arrive a frame or two before the canvas has grown to hold them, and a scroll
+            // asked for sooner stops at the page's old end.
+            withTimeoutOrNull(SCROLL_RANGE_WAIT_MS) { snapshotFlow { vertical.maxValue }.first { it >= destination } }
+            vertical.animateScrollTo(destination)
+        }
+        onScrollTargetHandled()
+    }
 
     val laidRuler = ruler?.let { settings ->
         rulerPlacement?.let {
