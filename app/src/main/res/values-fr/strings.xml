@@ -857,7 +857,7 @@
     <string name="import_file_as_objects">Texte et tableaux</string>
     <string name="import_file_as_pictures">Image de chaque page</string>
     <string name="import_file_as_info">Le texte et les tableaux restent modifiables sur le canevas. Une image montre la page telle qu’elle apparaît ici, prête à être annotée.</string>
-    <string name="import_file_not_word">Seuls les documents Word (.doc, .docx), les textes OpenDocument (.odt) et les PDF peuvent être importés.</string>
+    <string name="import_file_not_word">Seuls les documents Word (.doc, .docx), les textes OpenDocument (.odt), les présentations PowerPoint (.pptx) et les PDF peuvent être importés.</string>
     <string name="import_file_password">Ce fichier est protégé par mot de passe.</string>
     <string name="import_file_too_large">Ce fichier est trop volumineux pour être importé.</string>
     <string name="import_file_unreadable">Ce fichier n’a pas pu être lu.</string>

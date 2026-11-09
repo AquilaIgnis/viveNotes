@@ -857,7 +857,7 @@
     <string name="import_file_as_objects">Testo e tabelle</string>
     <string name="import_file_as_pictures">Immagine di ogni pagina</string>
     <string name="import_file_as_info">Testo e tabelle si possono modificare sulla tela. Un’immagine mostra la pagina così come appare qui, pronta per essere annotata.</string>
-    <string name="import_file_not_word">Si possono importare solo documenti Word (.doc, .docx), testi OpenDocument (.odt) e PDF.</string>
+    <string name="import_file_not_word">Si possono importare solo documenti Word (.doc, .docx), testi OpenDocument (.odt), presentazioni PowerPoint (.pptx) e PDF.</string>
     <string name="import_file_password">Questo file è protetto da password.</string>
     <string name="import_file_too_large">Questo file è troppo grande per essere importato.</string>
     <string name="import_file_unreadable">Impossibile leggere questo file.</string>

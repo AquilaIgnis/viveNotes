@@ -855,7 +855,7 @@
     <string name="import_file_as_objects">Text und Tabellen</string>
     <string name="import_file_as_pictures">Bild jeder Seite</string>
     <string name="import_file_as_info">Text und Tabellen lassen sich auf der Zeichenfläche bearbeiten. Ein Bild zeigt die Seite wie hier angeordnet und kann überschrieben werden.</string>
-    <string name="import_file_not_word">Nur Word-Dokumente (.doc, .docx), OpenDocument-Text (.odt) und PDFs können importiert werden.</string>
+    <string name="import_file_not_word">Nur Word-Dokumente (.doc, .docx), OpenDocument-Text (.odt), PowerPoint-Präsentationen (.pptx) und PDFs können importiert werden.</string>
     <string name="import_file_password">Diese Datei ist passwortgeschützt.</string>
     <string name="import_file_too_large">Diese Datei ist zu groß zum Importieren.</string>
     <string name="import_file_unreadable">Diese Datei konnte nicht gelesen werden.</string>

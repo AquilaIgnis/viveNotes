@@ -61,8 +61,17 @@ internal class DocxPackage private constructor(
         const val MAX_XML_BYTES: Long = 48L * 1024 * 1024
         private const val MAX_ENTRIES = 16_384
 
-        /** Opens [file], or throws a [ImportException] saying why it cannot be read. */
-        fun open(file: File): DocxPackage {
+        /** Whether [file] is an Office package holding a presentation. */
+        fun isPresentation(file: File): Boolean = runCatching {
+            open(file, PRESENTATION_CONTENT_TYPES).close()
+            true
+        }.getOrDefault(false)
+
+        /**
+         * Opens [file], or throws a [ImportException] saying why it cannot be read. [accepted] is what
+         * the package may say it is, and it is a Word document unless asked for otherwise.
+         */
+        fun open(file: File, accepted: Set<String> = WORD_CONTENT_TYPES): DocxPackage {
             val zip = try {
                 ZipFile(file)
             } catch (notZip: ZipException) {
@@ -75,7 +84,7 @@ internal class DocxPackage private constructor(
                     if (entry.isDirectory) continue
                     entries[entry.name.trimStart('/').lowercase()] = entry
                 }
-                return DocxPackage(zip, entries, mainPartOf(zip, entries))
+                return DocxPackage(zip, entries, mainPartOf(zip, entries, accepted))
             } catch (failure: Throwable) {
                 zip.close()
                 throw failure
@@ -87,7 +96,7 @@ internal class DocxPackage private constructor(
          * type — so a `.pptx`, also a zip with a main part, is told apart here rather than being
          * read as an empty document.
          */
-        private fun mainPartOf(zip: ZipFile, entries: Map<String, ZipEntry>): String {
+        private fun mainPartOf(zip: ZipFile, entries: Map<String, ZipEntry>, accepted: Set<String>): String {
             val root = entries["_rels/.rels"]?.let { parseXml(readZipEntry(zip, it, MAX_XML_BYTES)) }
                 ?: throw ImportException(ImportFailure.NotWord)
             val main = readRelationships(root, source = "").values
@@ -100,9 +109,18 @@ internal class DocxPackage private constructor(
                 .firstOrNull { it.getAttribute("PartName").trimStart('/').equals(main.target, ignoreCase = true) }
                 ?.getAttribute("ContentType")
                 .orEmpty()
-            if (WORD_CONTENT_TYPES.none { it == declared }) throw ImportException(ImportFailure.NotWord)
+            if (declared !in accepted) throw ImportException(ImportFailure.NotWord)
             return main.target
         }
+
+        val PRESENTATION_CONTENT_TYPES = setOf(
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",
+            "application/vnd.openxmlformats-officedocument.presentationml.template.main+xml",
+            "application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml",
+            "application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml",
+            "application/vnd.ms-powerpoint.template.macroEnabled.main+xml",
+            "application/vnd.ms-powerpoint.slideshow.macroEnabled.main+xml",
+        )
 
         /** A document, a template, and the macro-enabled forms, whose macros are never looked at. */
         private val WORD_CONTENT_TYPES = setOf(

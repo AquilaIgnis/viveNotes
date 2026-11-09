@@ -11,6 +11,7 @@ import com.vivenotes.fileimport.docx.DocxPages
 import com.vivenotes.fileimport.odt.OdtPackage
 import com.vivenotes.fileimport.odt.OdtReader
 import com.vivenotes.fileimport.pdf.PdfPages
+import com.vivenotes.fileimport.pptx.PptxPages
 import com.vivenotes.model.Mark
 import com.vivenotes.richtext.CanvasPasteItem
 import kotlinx.coroutines.CoroutineDispatcher
@@ -142,6 +143,7 @@ class FileImporter(
             val read = OdtReader(odt).read()
             DocxPages.of(appContext, read.document, { odt.bytes(it) }, read.fontFamilies, odt)
         }
+        DocxPackage.isPresentation(file) -> PptxPages.open(appContext, DocxPackage.open(file, DocxPackage.PRESENTATION_CONTENT_TYPES))
         else -> DocxPages.open(appContext, DocxPackage.open(file))
     }
 
@@ -260,6 +262,7 @@ class FileImporter(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/msword",
             "application/vnd.oasis.opendocument.text",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "application/pdf",
         )
 

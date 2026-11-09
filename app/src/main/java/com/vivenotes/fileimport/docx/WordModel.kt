@@ -179,6 +179,8 @@ internal class WordAnchor(
     val verticalFrom: String,
     val verticalOffsetTwips: Int?,
     val verticalAlign: String?,
+    /** Clockwise, about the box's own centre. */
+    val rotationDegrees: Float = 0f,
 )
 
 /** Something drawn in a rectangle: inline if [anchor] is null, floating otherwise. */
@@ -213,7 +215,49 @@ internal class WordShape(
     val insetRightTwips: Int,
     val insetBottomTwips: Int,
     override val anchor: WordAnchor?,
+    /** Where the text sits when it does not fill the box. */
+    val textAlign: WordCellAlign = WordCellAlign.Top,
+    /** Its own outline, in place of [form]. */
+    val outline: List<WordPath> = emptyList(),
+    val flipHorizontal: Boolean = false,
+    val flipVertical: Boolean = false,
+    val arrowAtStart: Boolean = false,
+    val arrowAtEnd: Boolean = false,
+    /** Text that keeps to its lines however narrow the box is. */
+    val noWrap: Boolean = false,
+    /** Painted in place of [fillArgb], which stays as the colour text is judged against. */
+    val gradient: WordGradient? = null,
 ) : WordBoxed
+
+/** Colours blended across a shape: along a line at [angleDegrees], or out from a point if [radial]. */
+internal class WordGradient(
+    val colors: IntArray,
+    val positions: FloatArray,
+    val angleDegrees: Float,
+    val radial: Boolean,
+    /** Where a radial blend starts, as shares of the box. */
+    val centerX: Float = 0.5f,
+    val centerY: Float = 0.5f,
+)
+
+/** One drawn outline, in a coordinate space of its own that stretches over the whole box. */
+internal class WordPath(
+    val width: Float,
+    val height: Float,
+    val commands: List<WordPathCommand>,
+    val filled: Boolean = true,
+    val stroked: Boolean = true,
+)
+
+internal sealed interface WordPathCommand
+
+internal data class WordMoveTo(val x: Float, val y: Float) : WordPathCommand
+
+internal data class WordLineTo(val x: Float, val y: Float) : WordPathCommand
+
+internal data class WordCubicTo(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val x: Float, val y: Float) : WordPathCommand
+
+internal data object WordClosePath : WordPathCommand
 
 /** A child of a [WordGroup], at its place in the group's own box. */
 internal class WordGroupChild(val boxed: WordBoxed, val xTwips: Int, val yTwips: Int)

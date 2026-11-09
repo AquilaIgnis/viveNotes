@@ -117,6 +117,7 @@ internal class DocxPages private constructor(
     private fun drawFloat(canvas: Canvas, float: SheetFloat) {
         val count = canvas.save()
         canvas.translate(float.x.toFloat(), float.y.toFloat())
+        if (float.rotationDegrees != 0f) canvas.rotate(float.rotationDegrees, float.box.width / 2f, float.box.height / 2f)
         float.box.draw(canvas)
         canvas.restoreToCount(count)
     }

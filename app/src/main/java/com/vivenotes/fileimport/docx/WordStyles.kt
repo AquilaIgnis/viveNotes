@@ -2,6 +2,7 @@ package com.vivenotes.fileimport.docx
 
 import org.w3c.dom.Element
 import kotlin.math.max
+import kotlin.math.pow
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -300,8 +301,8 @@ internal class WordTheme(val colors: Map<String, Int>, val majorFont: String?, v
             argb = when (modifier.localName) {
                 "lumMod" -> withLightness(argb) { it * amount }
                 "lumOff" -> withLightness(argb) { it + amount }
-                "tint" -> mix(argb, 0xFFFFFFFF.toInt(), 1f - amount)
-                "shade" -> mix(argb, 0xFF000000.toInt(), 1f - amount)
+                "tint" -> mixLinear(argb, 1f, 1f - amount)
+                "shade" -> mixLinear(argb, 0f, 1f - amount)
                 "alpha" -> (argb and 0xFFFFFF) or ((amount * 255).roundToInt().coerceIn(0, 255) shl 24)
                 else -> argb
             }
@@ -315,6 +316,18 @@ private val PRESET_COLORS = mapOf(
     "green" to 0xFF008000.toInt(), "blue" to 0xFF0000FF.toInt(), "yellow" to 0xFFFFFF00.toInt(),
     "gray" to 0xFF808080.toInt(), "grey" to 0xFF808080.toInt(),
 )
+
+/** Tints and shades are defined on light as it adds up, which is not how sRGB numbers do. */
+private fun mixLinear(from: Int, toward: Float, amount: Float): Int {
+    fun channel(shift: Int): Int {
+        val value = ((from ushr shift) and 0xFF) / 255f
+        val linear = if (value <= 0.04045f) value / 12.92f else ((value + 0.055f) / 1.055f).pow(2.4f)
+        val mixed = linear + (toward - linear) * amount
+        val encoded = if (mixed <= 0.0031308f) mixed * 12.92f else 1.055f * mixed.pow(1f / 2.4f) - 0.055f
+        return (encoded * 255f).roundToInt().coerceIn(0, 255)
+    }
+    return (from and (0xFF shl 24)) or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
+}
 
 private fun mix(from: Int, to: Int, amount: Float): Int {
     fun channel(shift: Int): Int {

@@ -2,8 +2,14 @@ package com.vivenotes.fileimport.docx
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.DashPathEffect
+import android.graphics.LinearGradient
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.PointF
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.graphics.text.LineBreaker
 import android.text.Layout
 import android.text.SpannableStringBuilder
@@ -21,6 +27,9 @@ import kotlin.coroutines.coroutineContext
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.sin
+import kotlin.math.hypot
+import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -127,6 +136,9 @@ internal class LaidFlow(blocks: List<LaidBlock>) {
 }
 
 /** An object drawn in its own rectangle, inline or floating. */
+/** How much wider than its box text that must not wrap may run. */
+private const val NO_WRAP_ROOM = 1.5f
+
 internal abstract class LaidBox(val width: Int, val height: Int) {
     abstract fun draw(canvas: Canvas)
 }
@@ -134,7 +146,7 @@ internal abstract class LaidBox(val width: Int, val height: Int) {
 /** One slice of a block on a sheet. */
 internal class SheetPiece(val block: LaidBlock, val x: Int, val y: Int, val from: Int, val to: Int)
 
-internal class SheetFloat(val box: LaidBox, val x: Int, val y: Int, val behind: Boolean)
+internal class SheetFloat(val box: LaidBox, val x: Int, val y: Int, val behind: Boolean, val rotationDegrees: Float = 0f)
 
 internal class PlacedFlow(val flow: LaidFlow, val x: Int, val y: Int)
 
@@ -460,7 +472,9 @@ internal class WordLayoutEngine(
         val insetTop = twipsToUnits(shape.insetTopTwips)
         val insetRight = twipsToUnits(shape.insetRightTwips)
         val insetBottom = twipsToUnits(shape.insetBottomTwips)
-        val inner = (width - insetLeft - insetRight).coerceAtLeast(MIN_TEXT_WIDTH)
+        val fitted = (width - insetLeft - insetRight).coerceAtLeast(MIN_TEXT_WIDTH)
+        // Given room to spare, because the document's own font may have been narrower than ours.
+        val inner = if (shape.noWrap) (fitted * NO_WRAP_ROOM).roundToInt() else fitted
         val ink = inkOn(shape.fillArgb)
         val flow = if (shape.blocks.isEmpty()) {
             null
@@ -469,9 +483,23 @@ internal class WordLayoutEngine(
         }
         // A box never clips its own text, since the document's font may have been narrower than
         // ours; the empty paragraphs Word lets run out of the bottom are not text.
-        val needed = (flow?.visibleHeight ?: 0) + insetTop + insetBottom
+        val textHeight = flow?.visibleHeight ?: 0
+        val needed = textHeight + insetTop + insetBottom
         val height = max(twipsToUnits(shape.heightTwips), needed).coerceAtLeast(1)
-        return ShapeBox(width, height, shape, flow, insetLeft, insetTop)
+        val free = height - needed
+        val textTop = insetTop + when (shape.textAlign) {
+            WordCellAlign.Top -> 0
+            WordCellAlign.Center -> free / 2
+            WordCellAlign.Bottom -> free
+        }
+        // The extra room goes on whichever side the text is not aligned to, so it stays where it was put.
+        val spare = inner - fitted
+        val textLeft = insetLeft - when ((shape.blocks.firstOrNull() as? WordParagraph)?.style?.align) {
+            WordAlign.Center -> spare / 2
+            WordAlign.Right -> spare
+            else -> 0
+        }
+        return ShapeBox(width, height, shape, flow, textLeft, textTop)
     }
 
     // --- tables --------------------------------------------------------------------------------
@@ -817,7 +845,7 @@ internal class WordLayoutEngine(
             ?: aligned(anchor.horizontalAlign, originX, spanX, box.width)
         val y = anchor.verticalOffsetTwips?.let { originY + twipsToUnits(it) }
             ?: aligned(anchor.verticalAlign, originY, spanY, box.height)
-        return SheetFloat(box, x, y, anchor.behindText)
+        return SheetFloat(box, x, y, anchor.behindText, anchor.rotationDegrees)
     }
 
     private fun headerFor(section: WordSection, set: WordHeaderSet, pageNumber: Int, firstSheetOfSection: Boolean): List<WordBlock>? {
@@ -1383,18 +1411,41 @@ private class ShapeBox(
     private val insetLeft: Int,
     private val insetTop: Int,
 ) : LaidBox(width, height) {
+    /** The outlines, stretched to this box. */
+    private val outlines: List<Pair<WordPath, Path>> = shape.outline.map { path -> path to scaledPath(path, width.toFloat(), height.toFloat()) }
+
     override fun draw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
-        shape.fillArgb?.let { argb ->
-            SHARED_FILL.color = argb
-            drawForm(canvas, w, h, SHARED_FILL)
+        // Only the outline turns over. The text in a flipped shape still reads the right way round.
+        val flipped = canvas.save()
+        canvas.scale(if (shape.flipHorizontal) -1f else 1f, if (shape.flipVertical) -1f else 1f, w / 2f, h / 2f)
+        val gradient = shape.gradient
+        if (gradient != null) {
+            SHARED_FILL.color = Color.BLACK
+            SHARED_FILL.shader = shaderOf(gradient, w, h)
+            drawForm(canvas, w, h, SHARED_FILL) { it.filled }
+            SHARED_FILL.shader = null
+        } else {
+            shape.fillArgb?.let { argb ->
+                SHARED_FILL.color = argb
+                drawForm(canvas, w, h, SHARED_FILL) { it.filled }
+            }
         }
         shape.line?.let { line ->
+            val width = (line.widthEighths * 1.25f).coerceAtLeast(MIN_BORDER_UNITS)
             SHARED_LINE.color = line.colorArgb ?: Color.BLACK
-            SHARED_LINE.strokeWidth = (line.widthEighths * 1.25f).coerceAtLeast(MIN_BORDER_UNITS)
-            drawForm(canvas, w, h, SHARED_LINE)
+            SHARED_LINE.strokeWidth = width
+            SHARED_LINE.pathEffect = when (line.style) {
+                WordBorderStyle.Dashed -> DashPathEffect(floatArrayOf(width * 4f, width * 3f), 0f)
+                WordBorderStyle.Dotted -> DashPathEffect(floatArrayOf(width, width * 2f), 0f)
+                else -> null
+            }
+            drawForm(canvas, w, h, SHARED_LINE) { it.stroked }
+            SHARED_LINE.pathEffect = null
+            drawArrowheads(canvas, line.colorArgb ?: Color.BLACK, width)
         }
+        canvas.restoreToCount(flipped)
         flow?.let {
             val count = canvas.save()
             canvas.translate(insetLeft.toFloat(), insetTop.toFloat())
@@ -1403,7 +1454,11 @@ private class ShapeBox(
         }
     }
 
-    private fun drawForm(canvas: Canvas, w: Float, h: Float, paint: Paint) {
+    private fun drawForm(canvas: Canvas, w: Float, h: Float, paint: Paint, wanted: (WordPath) -> Boolean) {
+        if (outlines.isNotEmpty()) {
+            outlines.filter { wanted(it.first) }.forEach { canvas.drawPath(it.second, paint) }
+            return
+        }
         when (shape.form) {
             WordShapeForm.Rectangle -> canvas.drawRect(0f, 0f, w, h, paint)
             WordShapeForm.RoundedRectangle -> canvas.drawRoundRect(0f, 0f, w, h, CORNER_RADIUS, CORNER_RADIUS, paint)
@@ -1411,8 +1466,84 @@ private class ShapeBox(
         }
     }
 
+    private fun drawArrowheads(canvas: Canvas, color: Int, lineWidth: Float) {
+        val points = shape.outline.lastOrNull()?.let { pathPoints(it, width.toFloat(), height.toFloat()) } ?: return
+        if (points.size < 2) return
+        val size = max(lineWidth * ARROW_LINE_WIDTHS, MIN_ARROW)
+        SHARED_FILL.color = color
+        if (shape.arrowAtStart) drawArrowhead(canvas, points[1], points[0], size)
+        if (shape.arrowAtEnd) drawArrowhead(canvas, points[points.size - 2], points[points.size - 1], size)
+    }
+
+    private fun drawArrowhead(canvas: Canvas, from: PointF, tip: PointF, size: Float) {
+        val dx = tip.x - from.x
+        val dy = tip.y - from.y
+        val length = kotlin.math.hypot(dx, dy)
+        if (length == 0f) return
+        val ux = dx / length
+        val uy = dy / length
+        val base = PointF(tip.x - ux * size, tip.y - uy * size)
+        val half = size / 2f
+        val head = Path()
+        head.moveTo(tip.x, tip.y)
+        head.lineTo(base.x - uy * half, base.y + ux * half)
+        head.lineTo(base.x + uy * half, base.y - ux * half)
+        head.close()
+        canvas.drawPath(head, SHARED_FILL)
+    }
+
     private companion object {
         const val CORNER_RADIUS = 80f
+        const val ARROW_LINE_WIDTHS = 4f
+        const val MIN_ARROW = 60f
+    }
+}
+
+private fun shaderOf(gradient: WordGradient, w: Float, h: Float): Shader {
+    if (gradient.radial) {
+        val x = w * gradient.centerX
+        val y = h * gradient.centerY
+        val radius = hypot(max(x, w - x), max(y, h - y)).coerceAtLeast(1f)
+        return RadialGradient(x, y, radius, gradient.colors, gradient.positions, Shader.TileMode.CLAMP)
+    }
+    val radians = Math.toRadians(gradient.angleDegrees.toDouble())
+    val dx = cos(radians).toFloat()
+    val dy = sin(radians).toFloat()
+    // Far enough along the line that the blend reaches both corners, whichever way it runs.
+    val reach = (abs(dx) * w + abs(dy) * h) / 2f
+    return LinearGradient(
+        w / 2f - dx * reach, h / 2f - dy * reach, w / 2f + dx * reach, h / 2f + dy * reach,
+        gradient.colors, gradient.positions, Shader.TileMode.CLAMP,
+    )
+}
+
+/** [path], in this box's units: a point's place within the path's own space is its place in the box. */
+private fun scaledPath(path: WordPath, width: Float, height: Float): Path {
+    val sx = if (path.width > 0f) width / path.width else 1f
+    val sy = if (path.height > 0f) height / path.height else 1f
+    val out = Path()
+    for (command in path.commands) {
+        when (command) {
+            is WordMoveTo -> out.moveTo(command.x * sx, command.y * sy)
+            is WordLineTo -> out.lineTo(command.x * sx, command.y * sy)
+            is WordCubicTo -> out.cubicTo(command.x1 * sx, command.y1 * sy, command.x2 * sx, command.y2 * sy, command.x * sx, command.y * sy)
+            WordClosePath -> out.close()
+        }
+    }
+    return out
+}
+
+/** Where [path] goes, corner by corner: what its arrowheads need to know to point the right way. */
+private fun pathPoints(path: WordPath, width: Float, height: Float): List<PointF> {
+    val sx = if (path.width > 0f) width / path.width else 1f
+    val sy = if (path.height > 0f) height / path.height else 1f
+    return path.commands.mapNotNull { command ->
+        when (command) {
+            is WordMoveTo -> PointF(command.x * sx, command.y * sy)
+            is WordLineTo -> PointF(command.x * sx, command.y * sy)
+            is WordCubicTo -> PointF(command.x * sx, command.y * sy)
+            WordClosePath -> null
+        }
     }
 }
 
