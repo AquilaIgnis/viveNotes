@@ -9,8 +9,8 @@ import com.vivenotes.fileimport.DocxTestFile.paragraph
 import com.vivenotes.fileimport.DocxTestFile.row
 import com.vivenotes.fileimport.DocxTestFile.table
 import com.vivenotes.fileimport.DocxTestFile.textBox
-import com.vivenotes.fileimport.docx.DocxException
-import com.vivenotes.fileimport.docx.DocxFailure
+import com.vivenotes.fileimport.ImportException
+import com.vivenotes.fileimport.ImportFailure
 import com.vivenotes.fileimport.docx.DocxPages
 import com.vivenotes.fileimport.docx.DocxSheet
 import com.vivenotes.fileimport.docx.ParagraphPiece
@@ -73,9 +73,9 @@ class DocxLayoutTest {
     fun aFileThatIsNotADocumentIsRefusedAndNothingIsLeftBehind() = runBlocking {
         file.writeText("just some text, whatever the name says")
 
-        val failure = runCatching { importer.open(Uri.fromFile(file)) }.exceptionOrNull() as DocxException
+        val failure = runCatching { importer.open(Uri.fromFile(file)) }.exceptionOrNull() as ImportException
 
-        assertEquals(DocxFailure.NotWord, failure.failure)
+        assertEquals(ImportFailure.NotWord, failure.failure)
         assertEquals(0, stagingDirectory.listFiles().orEmpty().size)
     }
 

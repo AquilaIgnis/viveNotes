@@ -1,5 +1,7 @@
 package com.vivenotes.fileimport.docx
 
+import com.vivenotes.fileimport.ImportException
+import com.vivenotes.fileimport.ImportFailure
 import com.vivenotes.model.normalizedLinkUrl
 import org.w3c.dom.Element
 import kotlin.math.roundToInt
@@ -42,8 +44,8 @@ internal class DocxReader(private val pkg: DocxPackage) {
     }
 
     fun read(): WordDocument {
-        val root = pkg.xml(pkg.mainPart) ?: throw DocxException(DocxFailure.Unreadable)
-        val body = root.wChild("body") ?: throw DocxException(DocxFailure.Unreadable)
+        val root = pkg.xml(pkg.mainPart) ?: throw ImportException(ImportFailure.Unreadable)
+        val body = root.wChild("body") ?: throw ImportException(ImportFailure.Unreadable)
         val sections = readSections(body)
         return WordDocument(
             sections = sections,

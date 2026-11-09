@@ -1,5 +1,7 @@
 package com.vivenotes.fileimport.docx
 
+import com.vivenotes.fileimport.ImportException
+import com.vivenotes.fileimport.ImportFailure
 import com.vivenotes.fileimport.docx.DocxFixture.paragraph
 import com.vivenotes.fileimport.docx.DocxFixture.run
 import org.junit.Assert.assertEquals
@@ -41,8 +43,8 @@ class DocxReaderTest {
     @Test
     fun aFileThatIsNotAZipIsNotWord() {
         val file = folder.newFile().apply { writeText("hello, this is not a document") }
-        val thrown = assertThrows(DocxException::class.java) { DocxPackage.open(file) }
-        assertEquals(DocxFailure.NotWord, thrown.failure)
+        val thrown = assertThrows(ImportException::class.java) { DocxPackage.open(file) }
+        assertEquals(ImportFailure.NotWord, thrown.failure)
     }
 
     /** A `.doc` and a password-protected `.docx` are OLE containers, and get their own sentence. */
@@ -51,8 +53,8 @@ class DocxReaderTest {
         val file = folder.newFile().apply {
             writeBytes(byteArrayOf(0xD0.toByte(), 0xCF.toByte(), 0x11, 0xE0.toByte(), 0, 0, 0, 0))
         }
-        val thrown = assertThrows(DocxException::class.java) { DocxPackage.open(file) }
-        assertEquals(DocxFailure.LegacyOrEncrypted, thrown.failure)
+        val thrown = assertThrows(ImportException::class.java) { DocxPackage.open(file) }
+        assertEquals(ImportFailure.LegacyOrEncrypted, thrown.failure)
     }
 
     /** A `.pptx` is a zip with a main part too; only its content type tells it apart. */
@@ -74,16 +76,16 @@ class DocxReaderTest {
             zip.write("<p/>".toByteArray())
             zip.closeEntry()
         }
-        val thrown = assertThrows(DocxException::class.java) { DocxPackage.open(file) }
-        assertEquals(DocxFailure.NotWord, thrown.failure)
+        val thrown = assertThrows(ImportException::class.java) { DocxPackage.open(file) }
+        assertEquals(ImportFailure.NotWord, thrown.failure)
     }
 
     /** No DTD ever reaches a parser, which is what takes entity expansion and XXE off the table. */
     @Test
     fun aDocumentTypeDeclarationIsRefused() {
         val bomb = """<!DOCTYPE x [<!ENTITY a "aaaa">]><w:document xmlns:w="urn:w">&a;</w:document>"""
-        val thrown = assertThrows(DocxException::class.java) { parseXml(bomb.toByteArray()) }
-        assertEquals(DocxFailure.Unreadable, thrown.failure)
+        val thrown = assertThrows(ImportException::class.java) { parseXml(bomb.toByteArray()) }
+        assertEquals(ImportFailure.Unreadable, thrown.failure)
     }
 
     @Test
@@ -91,8 +93,8 @@ class DocxReaderTest {
         val file = folder.newFile()
         DocxFixture.write(file, paragraph("some text"))
         DocxPackage.open(file).use { pkg ->
-            val thrown = assertThrows(DocxException::class.java) { pkg.bytes("word/document.xml", limit = 8) }
-            assertEquals(DocxFailure.TooLarge, thrown.failure)
+            val thrown = assertThrows(ImportException::class.java) { pkg.bytes("word/document.xml", limit = 8) }
+            assertEquals(ImportFailure.TooLarge, thrown.failure)
         }
     }
 

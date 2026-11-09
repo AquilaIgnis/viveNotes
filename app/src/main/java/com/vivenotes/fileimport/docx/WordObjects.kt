@@ -25,6 +25,11 @@ internal sealed interface PagePiece {
 
 internal class ParagraphPiece(val paragraph: WordParagraph, override val bodyWidthTwips: Int) : PagePiece
 
+/** Where what comes before and what comes after stay in separate text boxes, like two slides. */
+internal object SeparatorPiece : PagePiece {
+    override val bodyWidthTwips: Int = 0
+}
+
 internal class TablePiece(
     val table: WordTable,
     val firstRow: Int,
@@ -69,6 +74,7 @@ internal class WordObjects(
             when (piece) {
                 is ParagraphPiece -> addParagraph(piece.paragraph, current, piece.bodyWidthTwips)
                 is TablePiece -> addTable(piece, piece.bodyWidthTwips)
+                SeparatorPiece -> flush()
             }
         }
         flush()

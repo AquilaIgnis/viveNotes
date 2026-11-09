@@ -1,5 +1,7 @@
 package com.vivenotes.fileimport.docx
 
+import com.vivenotes.fileimport.ImportException
+import com.vivenotes.fileimport.ImportFailure
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.Closeable
@@ -9,24 +11,6 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipException
 import java.util.zip.ZipFile
 import javax.xml.parsers.DocumentBuilderFactory
-
-/** Why a file could not be opened; the dialog turns each into its own sentence. */
-enum class DocxFailure {
-    /** Not a Word document at all: some other zip, or not a zip. */
-    NotWord,
-
-    /** A `.doc`, or a `.docx` with a password — both are OLE containers rather than zips. */
-    LegacyOrEncrypted,
-
-    /** Past what this importer will read from an untrusted file. */
-    TooLarge,
-
-    /** A Word document in name, broken inside. */
-    Unreadable,
-}
-
-class DocxException(val failure: DocxFailure, cause: Throwable? = null) :
-    Exception(failure.name, cause)
 
 /** One line of a part's `.rels`: [target] is a part name, or a URL when [external]. */
 internal class DocxRelationship(val id: String, val type: String, val target: String, val external: Boolean)
@@ -77,16 +61,16 @@ internal class DocxPackage private constructor(
         const val MAX_XML_BYTES: Long = 48L * 1024 * 1024
         private const val MAX_ENTRIES = 16_384
 
-        /** Opens [file], or throws a [DocxException] saying why it cannot be read. */
+        /** Opens [file], or throws a [ImportException] saying why it cannot be read. */
         fun open(file: File): DocxPackage {
             refuseOleContainer(file)
             val zip = try {
                 ZipFile(file)
             } catch (notZip: ZipException) {
-                throw DocxException(DocxFailure.NotWord, notZip)
+                throw ImportException(ImportFailure.NotWord, notZip)
             }
             try {
-                if (zip.size() > MAX_ENTRIES) throw DocxException(DocxFailure.TooLarge)
+                if (zip.size() > MAX_ENTRIES) throw ImportException(ImportFailure.TooLarge)
                 val entries = HashMap<String, ZipEntry>()
                 for (entry in zip.entries()) {
                     if (entry.isDirectory) continue
@@ -106,7 +90,7 @@ internal class DocxPackage private constructor(
             val head = ByteArray(OLE_MAGIC.size)
             val read = file.inputStream().use { it.read(head) }
             if (read == OLE_MAGIC.size && head.contentEquals(OLE_MAGIC)) {
-                throw DocxException(DocxFailure.LegacyOrEncrypted)
+                throw ImportException(ImportFailure.LegacyOrEncrypted)
             }
         }
 
@@ -117,18 +101,18 @@ internal class DocxPackage private constructor(
          */
         private fun mainPartOf(zip: ZipFile, entries: Map<String, ZipEntry>): String {
             val root = entries["_rels/.rels"]?.let { parseXml(readEntry(zip, it, MAX_XML_BYTES)) }
-                ?: throw DocxException(DocxFailure.NotWord)
+                ?: throw ImportException(ImportFailure.NotWord)
             val main = readRelationships(root, source = "").values
                 .firstOrNull { !it.external && it.type.endsWith("/officeDocument") }
-                ?: throw DocxException(DocxFailure.NotWord)
-            if (main.target.lowercase() !in entries) throw DocxException(DocxFailure.NotWord)
+                ?: throw ImportException(ImportFailure.NotWord)
+            if (main.target.lowercase() !in entries) throw ImportException(ImportFailure.NotWord)
             val types = entries["[content_types].xml"]?.let { parseXml(readEntry(zip, it, MAX_XML_BYTES)) }
-                ?: throw DocxException(DocxFailure.NotWord)
+                ?: throw ImportException(ImportFailure.NotWord)
             val declared = types.elements("Override")
                 .firstOrNull { it.getAttribute("PartName").trimStart('/').equals(main.target, ignoreCase = true) }
                 ?.getAttribute("ContentType")
                 .orEmpty()
-            if (WORD_CONTENT_TYPES.none { it == declared }) throw DocxException(DocxFailure.NotWord)
+            if (WORD_CONTENT_TYPES.none { it == declared }) throw ImportException(ImportFailure.NotWord)
             return main.target
         }
 
@@ -141,7 +125,7 @@ internal class DocxPackage private constructor(
         )
 
         private fun readEntry(zip: ZipFile, entry: ZipEntry, limit: Long): ByteArray {
-            if (entry.size > limit) throw DocxException(DocxFailure.TooLarge)
+            if (entry.size > limit) throw ImportException(ImportFailure.TooLarge)
             val out = java.io.ByteArrayOutputStream(entry.size.coerceIn(32, limit).toInt())
             zip.getInputStream(entry).use { input ->
                 val buffer = ByteArray(16 * 1024)
@@ -151,7 +135,7 @@ internal class DocxPackage private constructor(
                     if (read < 0) break
                     total += read
                     // Counted as it comes, because the size in the header is the file's word for it.
-                    if (total > limit) throw DocxException(DocxFailure.TooLarge)
+                    if (total > limit) throw ImportException(ImportFailure.TooLarge)
                     out.write(buffer, 0, read)
                 }
             }
@@ -203,7 +187,7 @@ internal fun resolvePartName(base: String, target: String): String {
  */
 internal fun parseXml(bytes: ByteArray): Element {
     var text = decodeXml(bytes)
-    if ("<!DOCTYPE" in text || "<!ENTITY" in text) throw DocxException(DocxFailure.Unreadable)
+    if ("<!DOCTYPE" in text || "<!ENTITY" in text) throw ImportException(ImportFailure.Unreadable)
     if (STRICT_NAMESPACE_MARK in text) {
         STRICT_NAMESPACES.forEach { (strict, transitional) -> text = text.replace(strict, transitional) }
     }
@@ -212,9 +196,9 @@ internal fun parseXml(bytes: ByteArray): Element {
         builder.setErrorHandler(null)
         return builder.parse(InputSource(StringReader(text))).documentElement
     } catch (malformed: org.xml.sax.SAXException) {
-        throw DocxException(DocxFailure.Unreadable, malformed)
+        throw ImportException(ImportFailure.Unreadable, malformed)
     } catch (malformed: java.io.IOException) {
-        throw DocxException(DocxFailure.Unreadable, malformed)
+        throw ImportException(ImportFailure.Unreadable, malformed)
     }
 }
 

@@ -4,10 +4,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.OpenableColumns
-import com.vivenotes.fileimport.docx.DocxException
-import com.vivenotes.fileimport.docx.DocxFailure
 import com.vivenotes.fileimport.docx.DocxPackage
 import com.vivenotes.fileimport.docx.DocxPages
+import com.vivenotes.fileimport.pdf.PdfPages
 import com.vivenotes.model.Mark
 import com.vivenotes.richtext.CanvasPasteItem
 import kotlinx.coroutines.CoroutineDispatcher
@@ -15,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.Closeable
 import java.io.File
 import java.io.InputStream
 import java.util.UUID
@@ -24,6 +24,39 @@ import kotlin.math.roundToInt
 enum class FileImportMode { Objects, Pictures }
 
 class ImportedPageSize(val widthDp: Float, val heightDp: Float)
+
+/** Why a file could not be opened; the window turns each into its own sentence. */
+enum class ImportFailure {
+    /** Not something this reads at all: some other zip, or not a zip or a PDF. */
+    NotWord,
+
+    /** A `.doc`, or a `.docx` with a password — both are OLE containers rather than zips. */
+    LegacyOrEncrypted,
+
+    /** A PDF that will not open without its password. */
+    PasswordProtected,
+
+    /** Past what this importer will read from an untrusted file. */
+    TooLarge,
+
+    /** The right kind of file, broken inside. */
+    Unreadable,
+}
+
+class ImportException(val failure: ImportFailure, cause: Throwable? = null) :
+    Exception(failure.name, cause)
+
+/**
+ * A document open in the importer, whatever its format: the pages it has, a way to draw one, and
+ * what they hold as canvas objects. Used from one coroutine at a time.
+ */
+internal interface ImportedDocument : Closeable {
+    val pages: List<ImportedPageSize>
+
+    fun render(index: Int, widthPx: Int): Bitmap?
+
+    suspend fun items(pages: List<Int>, marks: Set<Mark>): List<CanvasPasteItem>
+}
 
 /** A document open in the importer: its name and the size of each page. */
 class ImportedFile internal constructor(
@@ -55,7 +88,7 @@ class FileImporter(
     @Volatile
     private var releaseRequested = false
 
-    private class OpenDocument(val pages: DocxPages, val staged: File?, val token: Any = Any())
+    private class OpenDocument(val pages: ImportedDocument, val staged: File?, val token: Any = Any())
 
     private val stagingDirectory: File
         get() = File(appContext.cacheDir, "file-import").apply { mkdirs() }
@@ -74,7 +107,7 @@ class FileImporter(
             val staged = File(stagingDirectory, UUID.randomUUID().toString())
             try {
                 val input = appContext.contentResolver.openInputStream(source)
-                    ?: throw DocxException(DocxFailure.Unreadable)
+                    ?: throw ImportException(ImportFailure.Unreadable)
                 input.use { copyBounded(it, staged) }
                 openStaged(staged, displayNameOf(source))
             } catch (failure: Throwable) {
@@ -89,34 +122,35 @@ class FileImporter(
         mutex.withLock {
             closeOpen()
             try {
-                val pages = DocxPages.open(appContext, DocxPackage.open(file))
-                remember(pages, null, name)
+                remember(read(file), null, name)
             } catch (failure: Throwable) {
                 throw translated(failure)
             }
         }
     }
 
-    private suspend fun openStaged(staged: File, name: String): ImportedFile {
-        val pages = DocxPages.open(appContext, DocxPackage.open(staged))
-        return remember(pages, staged, name)
-    }
+    private suspend fun openStaged(staged: File, name: String): ImportedFile =
+        remember(read(staged), staged, name)
 
-    private fun remember(pages: DocxPages, staged: File?, name: String): ImportedFile {
+    /** By what the file is rather than what it is called, which is a provider's to get wrong. */
+    private suspend fun read(file: File): ImportedDocument =
+        if (PdfPages.isPdf(file)) PdfPages.open(file) else DocxPages.open(appContext, DocxPackage.open(file))
+
+    private fun remember(pages: ImportedDocument, staged: File?, name: String): ImportedFile {
         val document = OpenDocument(pages, staged)
         open = document
         return ImportedFile(
             name = name,
-            pages = pages.sheets.map { ImportedPageSize(it.widthDp, it.heightDp) },
+            pages = pages.pages,
             token = document.token,
         )
     }
 
-    /** The file's [DocxFailure], or [DocxFailure.Unreadable] for the many ways bad input can blow up. */
+    /** The file's [ImportFailure], or [ImportFailure.Unreadable] for the many ways bad input can blow up. */
     private fun translated(failure: Throwable): Throwable = when (failure) {
-        is DocxException, is kotlinx.coroutines.CancellationException -> failure
-        is OutOfMemoryError -> DocxException(DocxFailure.TooLarge, failure)
-        is StackOverflowError, is Exception -> DocxException(DocxFailure.Unreadable, failure)
+        is ImportException, is kotlinx.coroutines.CancellationException -> failure
+        is OutOfMemoryError -> ImportException(ImportFailure.TooLarge, failure)
+        is StackOverflowError, is Exception -> ImportException(ImportFailure.Unreadable, failure)
         else -> failure
     }
 
@@ -128,7 +162,7 @@ class FileImporter(
                 val read = input.read(buffer)
                 if (read < 0) break
                 total += read
-                if (total > DocxPackage.MAX_FILE_BYTES) throw DocxException(DocxFailure.TooLarge)
+                if (total > DocxPackage.MAX_FILE_BYTES) throw ImportException(ImportFailure.TooLarge)
                 output.write(buffer, 0, read)
             }
         }
@@ -145,7 +179,7 @@ class FileImporter(
         pagesOf(file)?.render(index, widthPx)
     }
 
-    private suspend fun <T> job(action: () -> T): T = withContext(dispatcher) {
+    private suspend fun <T> job(action: suspend () -> T): T = withContext(dispatcher) {
         mutex.withLock {
             try {
                 action()
@@ -173,7 +207,7 @@ class FileImporter(
 
     /** Hands [action] the open document's pages, for the layout tests. */
     internal suspend fun <T> withPages(file: ImportedFile, action: (DocxPages) -> T): T? = job {
-        pagesOf(file)?.let(action)
+        (pagesOf(file) as? DocxPages)?.let(action)
     }
 
     /** Closes the document. Called when the window closes. */
@@ -190,7 +224,7 @@ class FileImporter(
         }
     }
 
-    private fun pagesOf(file: ImportedFile): DocxPages? = open?.takeIf { it.token === file.token }?.pages
+    private fun pagesOf(file: ImportedFile): ImportedDocument? = open?.takeIf { it.token === file.token }?.pages
 
     private fun closeOpen() {
         releaseRequested = false
@@ -202,9 +236,10 @@ class FileImporter(
     }
 
     companion object {
-        /** Only Word for now; the picker will offer more as they are built. */
+        /** What the file picker offers; more as they are built. */
         val MIME_TYPES: Array<String> = arrayOf(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/pdf",
         )
 
         /** The longest side a page picture is rendered at, which is what the store keeps. */

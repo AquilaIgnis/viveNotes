@@ -855,8 +855,9 @@
     <string name="import_file_as_objects">Text und Tabellen</string>
     <string name="import_file_as_pictures">Bild jeder Seite</string>
     <string name="import_file_as_info">Text und Tabellen lassen sich auf der Zeichenfläche bearbeiten. Ein Bild zeigt die Seite wie hier angeordnet und kann überschrieben werden.</string>
-    <string name="import_file_not_word">Diese Datei ist kein Word-Dokument (.docx).</string>
+    <string name="import_file_not_word">Diese Datei ist weder ein Word-Dokument (.docx) noch eine PDF-Datei.</string>
     <string name="import_file_legacy">Diese Datei ist ein älteres .doc oder passwortgeschützt. Derzeit können nur ungeschützte .docx-Dateien importiert werden.</string>
+    <string name="import_file_password">Diese PDF-Datei ist passwortgeschützt.</string>
     <string name="import_file_too_large">Diese Datei ist zu groß zum Importieren.</string>
     <string name="import_file_unreadable">Diese Datei konnte nicht gelesen werden.</string>
     <string name="import_file_insert_failed">Die Seiten konnten nicht auf dieser Seite platziert werden.</string>

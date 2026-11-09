@@ -14,11 +14,13 @@ import com.vivenotes.fileimport.DocxTestFile
 import com.vivenotes.fileimport.FileImportMode
 import com.vivenotes.fileimport.FileImporter
 import com.vivenotes.fileimport.ImportedFile
-import com.vivenotes.fileimport.docx.DocxException
-import com.vivenotes.fileimport.docx.DocxFailure
+import com.vivenotes.fileimport.ImportException
+import com.vivenotes.fileimport.ImportFailure
 import com.vivenotes.R
 import com.vivenotes.ui.panel.PanelTags
 import com.vivenotes.ui.theme.ViveNotesTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -49,7 +51,9 @@ class ImportFileDialogTest {
     }
 
     private fun setDialog(
-        open: suspend () -> ImportedFile = { importer.openFile(file, "lecture.docx") },
+        // Finished on the main thread, where the app's own window always is. The test clock's effects
+        // run on whichever thread woke them, and this one's writes then race the window's first frame.
+        open: suspend () -> ImportedFile = { withContext(Dispatchers.Main) { importer.openFile(file, "lecture.docx") } },
         landed: Boolean = true,
     ) {
         compose.setContent {
@@ -165,9 +169,17 @@ class ImportFileDialogTest {
     /** Each failure has its own sentence, and a file that cannot be read offers nothing to insert. */
     @Test
     fun aFileThatWillNotOpenSaysWhy() {
-        setDialog(open = { throw DocxException(DocxFailure.LegacyOrEncrypted) })
+        setDialog(open = { throw ImportException(ImportFailure.LegacyOrEncrypted) })
 
         compose.onNodeWithText(context.getString(R.string.import_file_legacy)).assertIsDisplayed()
+        compose.onNodeWithTag(ImportFileTags.INSERT).assertIsNotEnabled()
+    }
+
+    @Test
+    fun aPdfWithAPasswordSaysThatRatherThanThatItIsBroken() {
+        setDialog(open = { throw ImportException(ImportFailure.PasswordProtected) })
+
+        compose.onNodeWithText(context.getString(R.string.import_file_password)).assertIsDisplayed()
         compose.onNodeWithTag(ImportFileTags.INSERT).assertIsNotEnabled()
     }
 

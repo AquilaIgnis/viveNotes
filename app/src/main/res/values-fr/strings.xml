@@ -857,8 +857,9 @@
     <string name="import_file_as_objects">Texte et tableaux</string>
     <string name="import_file_as_pictures">Image de chaque page</string>
     <string name="import_file_as_info">Le texte et les tableaux restent modifiables sur le canevas. Une image montre la page telle qu’elle apparaît ici, prête à être annotée.</string>
-    <string name="import_file_not_word">Ce fichier n’est pas un document Word (.docx).</string>
+    <string name="import_file_not_word">Ce fichier n’est ni un document Word (.docx) ni un PDF.</string>
     <string name="import_file_legacy">Ce fichier est un ancien .doc ou est protégé par mot de passe. Seuls les fichiers .docx non protégés peuvent être importés pour le moment.</string>
+    <string name="import_file_password">Ce PDF est protégé par mot de passe.</string>
     <string name="import_file_too_large">Ce fichier est trop volumineux pour être importé.</string>
     <string name="import_file_unreadable">Ce fichier n’a pas pu être lu.</string>
     <string name="import_file_insert_failed">Les pages n’ont pas pu être placées sur cette page.</string>

@@ -67,8 +67,8 @@ import com.vivenotes.R
 import com.vivenotes.fileimport.FileImportMode
 import com.vivenotes.fileimport.FileImporter
 import com.vivenotes.fileimport.ImportedFile
-import com.vivenotes.fileimport.docx.DocxException
-import com.vivenotes.fileimport.docx.DocxFailure
+import com.vivenotes.fileimport.ImportException
+import com.vivenotes.fileimport.ImportFailure
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.PanelChoice
 import com.vivenotes.ui.panel.PanelSection
@@ -221,10 +221,11 @@ internal fun ImportFileDialog(
     }
 }
 
-private fun failureMessage(failure: Exception): Int = when ((failure as? DocxException)?.failure) {
-    DocxFailure.NotWord -> R.string.import_file_not_word
-    DocxFailure.LegacyOrEncrypted -> R.string.import_file_legacy
-    DocxFailure.TooLarge -> R.string.import_file_too_large
+private fun failureMessage(failure: Exception): Int = when ((failure as? ImportException)?.failure) {
+    ImportFailure.NotWord -> R.string.import_file_not_word
+    ImportFailure.LegacyOrEncrypted -> R.string.import_file_legacy
+    ImportFailure.PasswordProtected -> R.string.import_file_password
+    ImportFailure.TooLarge -> R.string.import_file_too_large
     else -> R.string.import_file_unreadable
 }
 

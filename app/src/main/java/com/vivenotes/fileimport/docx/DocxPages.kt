@@ -5,11 +5,12 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ImageDecoder
+import com.vivenotes.fileimport.ImportedDocument
+import com.vivenotes.fileimport.ImportedPageSize
 import com.vivenotes.model.Mark
 import com.vivenotes.richtext.CanvasPasteItem
 import kotlin.math.max
 import kotlin.math.roundToInt
-import java.io.Closeable
 import java.nio.ByteBuffer
 
 /** The pictures inside the package, decoded when a page first needs them. */
@@ -80,9 +81,11 @@ internal class DocxPages private constructor(
     private val engine: WordLayoutEngine,
     private val media: DocxMedia,
     val sheets: List<DocxSheet>,
-) : Closeable {
+) : ImportedDocument {
 
-    fun render(index: Int, widthPx: Int): Bitmap? {
+    override val pages: List<ImportedPageSize> = sheets.map { ImportedPageSize(it.widthDp, it.heightDp) }
+
+    override fun render(index: Int, widthPx: Int): Bitmap? {
         val sheet = sheets.getOrNull(index) ?: return null
         val scale = widthPx.toFloat() / sheet.widthUnits
         val heightPx = (sheet.heightUnits * scale).roundToInt().coerceAtLeast(1)
@@ -134,7 +137,7 @@ internal class DocxPages private constructor(
     }
 
     /** What the chosen [pages] hold as canvas objects; see [WordObjects]. */
-    fun items(pages: List<Int>, marks: Set<Mark>): List<CanvasPasteItem> {
+    override suspend fun items(pages: List<Int>, marks: Set<Mark>): List<CanvasPasteItem> {
         val pieces = pages.sorted().flatMap { index -> sheets.getOrNull(index)?.objectPieces().orEmpty() }
         return WordObjects(document, marks, media::bytes).items(pieces)
     }
