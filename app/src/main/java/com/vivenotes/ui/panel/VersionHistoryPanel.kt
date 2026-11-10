@@ -10,11 +10,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.data.db.PageRevisionSummary
+import com.vivenotes.ui.InlineWavyProgress
 import com.vivenotes.ui.VersionHistoryState
 import java.text.DateFormat
 import java.util.Date
@@ -210,7 +209,7 @@ private fun Status(text: String, progress: Boolean = false) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (progress) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        if (progress) InlineWavyProgress()
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,

@@ -8,12 +8,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.data.DeletedItem
 import com.vivenotes.data.DeletedItemKind
+import com.vivenotes.ui.InlineWavyProgress
 import com.vivenotes.ui.DeletedItemsState
 import java.text.DateFormat
 import java.util.Date
@@ -141,10 +140,9 @@ private fun DeletedItemCard(
                     .testTag(DeletedItemsPanelTags.restore(item.key.id)),
             ) {
                 if (restoring) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
+                    InlineWavyProgress(
                         color = MaterialTheme.colorScheme.onPrimary,
+                        trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.3f),
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.deleted_items_restoring))
@@ -196,7 +194,7 @@ private fun RecoveryStatus(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (progress) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        if (progress) InlineWavyProgress()
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
