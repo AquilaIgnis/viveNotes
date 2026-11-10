@@ -116,7 +116,7 @@ abstract class NameBundleTask : DefaultTask() {
 }
 
 /**
- * The OneNote converter's checkout, `github.com/AquilaIgnis/vive-converter`, with
+ * The OneNote converter's checkout, `github.com/CrownByte0b/vive-converter`, with
  * `github.com/msiemens/onenote.rs` cloned beside it as `onenote.rs`: the converter's Cargo.toml
  * names the parser by that relative path. File ▸ Import ▸ Notebook hands every file that is not a
  * `.vive` to its Rust library.
@@ -180,7 +180,7 @@ abstract class ViveConverterTask : DefaultTask() {
         }
         if (!File(checkout, "Cargo.toml").isFile) {
             val missing = "There is no OneNote converter at $checkout. Clone " +
-                "github.com/AquilaIgnis/vive-converter there, with github.com/msiemens/onenote.rs " +
+                "github.com/CrownByte0b/vive-converter there, with github.com/msiemens/onenote.rs " +
                 "beside it as onenote.rs; or set viveConverterDir; or pass -PnoOneNote to build " +
                 "without OneNote import."
             if (required.get()) throw GradleException(missing)

@@ -41,9 +41,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       # The release build fails without the OneNote converter rather than shipping without it.
+      # Pinned to a release tag: bump it here when the app needs a newer converter.
       - name: Check out the OneNote converter
         run: |
-          git clone --depth 1 https://github.com/AquilaIgnis/vive-converter.git ../converter/vive-converter
+          git clone --depth 1 --branch v1.1.0 https://github.com/CrownByte0b/vive-converter.git ../converter/vive-converter
           git clone --depth 1 --branch v2.0.0 https://github.com/msiemens/onenote.rs.git ../converter/onenote.rs
 
       - name: Set up Rust and the NDK for the converter
