@@ -873,19 +873,18 @@
     <string name="import_file_insert">Insertar</string>
     <plurals name="import_file_selected">
         <item quantity="one">%1$d de %2$d página seleccionada</item>
-        <item quantity="many">%1$d de %2$d páginas seleccionadas</item>
         <item quantity="other">%1$d de %2$d páginas seleccionadas</item>
     </plurals>
     <string name="import_file_page">Página %1$d</string>
     <string name="import_file_page_of">%1$d / %2$d</string>
     <string name="import_file_pages">Páginas</string>
     <string name="import_file_select_all">Seleccionar todo</string>
-    <string name="import_file_select_none">Borrar</string>
+    <string name="import_file_select_none">Deseleccionar todo</string>
     <string name="import_file_as">Insertar como</string>
     <string name="import_file_as_objects">Texto y tablas</string>
     <string name="import_file_as_pictures">Imagen de cada página</string>
     <string name="import_file_as_info">El texto y las tablas se pueden editar en el lienzo. Una imagen muestra la página tal como se ve aquí, lista para escribir encima.</string>
-    <string name="import_file_not_word">Solo se pueden importar documentos de Word (.doc, .docx), texto OpenDocument (.odt), presentaciones de PowerPoint (.pptx) y PDF.</string>
+    <string name="import_file_not_word">Solo se pueden importar documentos de Word (.doc, .docx), textos OpenDocument (.odt), presentaciones de PowerPoint (.pptx) y PDF.</string>
     <string name="import_file_password">Este archivo está protegido con contraseña.</string>
     <string name="import_file_too_large">Este archivo es demasiado grande para importarlo.</string>
     <string name="import_file_unreadable">No se pudo leer este archivo.</string>

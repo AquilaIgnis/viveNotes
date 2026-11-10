@@ -833,12 +833,12 @@
     <string name="import_file_page_of">%1$d / %2$d</string>
     <string name="import_file_pages">ページ</string>
     <string name="import_file_select_all">すべて選択</string>
-    <string name="import_file_select_none">クリア</string>
+    <string name="import_file_select_none">選択解除</string>
     <string name="import_file_as">挿入形式</string>
     <string name="import_file_as_objects">テキストと表</string>
     <string name="import_file_as_pictures">各ページの画像</string>
     <string name="import_file_as_info">テキストと表はキャンバス上で編集できます。画像はここに表示されているとおりのページで、上から書き込めます。</string>
-    <string name="import_file_not_word">インポートできるのはWord文書（.doc、.docx）、OpenDocumentテキスト（.odt）、PowerPointプレゼンテーション（.pptx）、PDFのみです。</string>
+    <string name="import_file_not_word">インポートできるのはWord文書 (.doc, .docx)、OpenDocumentテキスト (.odt)、PowerPointプレゼンテーション (.pptx)、PDFのみです。</string>
     <string name="import_file_password">このファイルはパスワードで保護されています。</string>
     <string name="import_file_too_large">このファイルは大きすぎてインポートできません。</string>
     <string name="import_file_unreadable">このファイルを読み取れませんでした。</string>

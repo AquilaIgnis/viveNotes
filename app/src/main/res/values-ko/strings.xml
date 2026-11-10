@@ -833,7 +833,7 @@
     <string name="import_file_page_of">%1$d / %2$d</string>
     <string name="import_file_pages">페이지</string>
     <string name="import_file_select_all">모두 선택</string>
-    <string name="import_file_select_none">지우기</string>
+    <string name="import_file_select_none">선택 해제</string>
     <string name="import_file_as">삽입 형식</string>
     <string name="import_file_as_objects">텍스트 및 표</string>
     <string name="import_file_as_pictures">각 페이지의 이미지</string>

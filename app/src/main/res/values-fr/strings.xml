@@ -844,15 +844,14 @@
     <string name="import_file_close">Fermer</string>
     <string name="import_file_insert">Insérer</string>
     <plurals name="import_file_selected">
-        <item quantity="one">%1$d page sur %2$d sélectionnée</item>
-        <item quantity="many">%1$d pages sur %2$d sélectionnées</item>
-        <item quantity="other">%1$d pages sur %2$d sélectionnées</item>
+        <item quantity="one">%1$d sur %2$d page sélectionnée</item>
+        <item quantity="other">%1$d sur %2$d pages sélectionnées</item>
     </plurals>
     <string name="import_file_page">Page %1$d</string>
     <string name="import_file_page_of">%1$d / %2$d</string>
     <string name="import_file_pages">Pages</string>
     <string name="import_file_select_all">Tout sélectionner</string>
-    <string name="import_file_select_none">Effacer</string>
+    <string name="import_file_select_none">Tout désélectionner</string>
     <string name="import_file_as">Insérer en tant que</string>
     <string name="import_file_as_objects">Texte et tableaux</string>
     <string name="import_file_as_pictures">Image de chaque page</string>

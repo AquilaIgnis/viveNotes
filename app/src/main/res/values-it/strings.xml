@@ -845,14 +845,13 @@
     <string name="import_file_insert">Inserisci</string>
     <plurals name="import_file_selected">
         <item quantity="one">%1$d di %2$d pagina selezionata</item>
-        <item quantity="many">%1$d di %2$d pagine selezionate</item>
         <item quantity="other">%1$d di %2$d pagine selezionate</item>
     </plurals>
     <string name="import_file_page">Pagina %1$d</string>
     <string name="import_file_page_of">%1$d / %2$d</string>
     <string name="import_file_pages">Pagine</string>
     <string name="import_file_select_all">Seleziona tutto</string>
-    <string name="import_file_select_none">Cancella</string>
+    <string name="import_file_select_none">Deseleziona tutto</string>
     <string name="import_file_as">Inserisci come</string>
     <string name="import_file_as_objects">Testo e tabelle</string>
     <string name="import_file_as_pictures">Immagine di ogni pagina</string>
@@ -861,5 +860,5 @@
     <string name="import_file_password">Questo file è protetto da password.</string>
     <string name="import_file_too_large">Questo file è troppo grande per essere importato.</string>
     <string name="import_file_unreadable">Impossibile leggere questo file.</string>
-    <string name="import_file_insert_failed">Impossibile collocare le pagine su questa pagina.</string>
+    <string name="import_file_insert_failed">Impossibile inserire le pagine in questa pagina.</string>
 </resources>
