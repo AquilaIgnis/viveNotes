@@ -29,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
@@ -38,7 +39,6 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -53,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
@@ -70,6 +71,7 @@ import com.vivenotes.fileimport.ImportedFile
 import com.vivenotes.fileimport.ImportException
 import com.vivenotes.fileimport.ImportFailure
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.panel.PanelButton
 import com.vivenotes.ui.panel.PanelChoice
 import com.vivenotes.ui.panel.PanelSection
 import kotlinx.coroutines.CancellationException
@@ -95,7 +97,8 @@ internal object ImportFileTags {
  * well is to see the pages. The pages are a grid rather than a stack because here they are something
  * to pick from, and a picker wants several in view at once.
  *
- * Every page starts chosen, so the common case is one tap on Insert; the ones not wanted are a tap each.
+ * No page starts chosen: what comes in is the user's pick, and Insert waits until there is one.
+ * Select all is there for the whole file.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -116,9 +119,7 @@ internal fun ImportFileDialog(
 
     LaunchedEffect(Unit) {
         try {
-            val opened = open()
-            file = opened
-            chosen = opened.pages.indices.toSet()
+            file = open()
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
@@ -407,21 +408,22 @@ private fun ImportFileOptions(
             .padding(bottom = 20.dp),
     ) {
         PanelSection(stringResource(R.string.import_file_pages)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(
+            // Tonal, so the pair reads as controls beside the filled Insert without competing with it.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SelectionButton(
+                    icon = MaterialSymbols.SelectAll,
+                    label = stringResource(R.string.import_file_select_all),
+                    enabled = enabled,
                     onClick = onSelectAll,
+                    modifier = Modifier.weight(1f).testTag(ImportFileTags.SELECT_ALL),
+                )
+                SelectionButton(
+                    icon = MaterialSymbols.Deselect,
+                    label = stringResource(R.string.import_file_select_none),
                     enabled = enabled,
-                    modifier = Modifier.testTag(ImportFileTags.SELECT_ALL),
-                ) {
-                    Text(stringResource(R.string.import_file_select_all))
-                }
-                TextButton(
                     onClick = onSelectNone,
-                    enabled = enabled,
-                    modifier = Modifier.testTag(ImportFileTags.SELECT_NONE),
-                ) {
-                    Text(stringResource(R.string.import_file_select_none))
-                }
+                    modifier = Modifier.weight(1f).testTag(ImportFileTags.SELECT_NONE),
+                )
             }
         }
 
@@ -443,6 +445,27 @@ private fun ImportFileOptions(
                 enabled = enabled,
             )
         }
+    }
+}
+
+@Composable
+private fun SelectionButton(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    PanelButton(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.filledTonalButtonColors(),
+        modifier = modifier,
+    ) {
+        // The label is inside the button and is what TalkBack reads, so the icon stays undescribed.
+        Icon(icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+        Text(label, maxLines = 1)
     }
 }
 

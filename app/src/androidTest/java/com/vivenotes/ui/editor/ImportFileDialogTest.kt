@@ -83,20 +83,21 @@ class ImportFileDialogTest {
     }
 
     @Test
-    fun everyPageStartsChosen() {
+    fun noPageStartsChosen() {
         writeDocument(pages = 3)
         setDialog()
 
-        (0 until 3).forEach { compose.onNodeWithTag(ImportFileTags.page(it)).assertIsOn() }
-        compose.onNodeWithTag(ImportFileTags.INSERT).assertIsEnabled()
+        (0 until 3).forEach { compose.onNodeWithTag(ImportFileTags.page(it)).assertIsOff() }
+        compose.onNodeWithTag(ImportFileTags.INSERT).assertIsNotEnabled()
     }
 
     @Test
-    fun tappingAPageLeavesItOutOfTheInsert() {
+    fun onlyTheTappedPagesAreInserted() {
         writeDocument(pages = 3)
         setDialog()
 
-        compose.onNodeWithTag(ImportFileTags.page(1)).performClick()
+        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
+        compose.onNodeWithTag(ImportFileTags.page(2)).performClick()
         compose.onNodeWithTag(ImportFileTags.page(1)).assertIsOff()
         compose.onNodeWithTag(ImportFileTags.INSERT).performClick()
         compose.waitUntil(WAIT_MS) { insertedPages != null }
@@ -108,6 +109,7 @@ class ImportFileDialogTest {
     fun objectsAreTheDefault() {
         writeDocument(pages = 1)
         setDialog()
+        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
 
         compose.onNodeWithTag(ImportFileTags.INSERT).performClick()
         compose.waitUntil(WAIT_MS) { insertedMode != null }
@@ -119,6 +121,7 @@ class ImportFileDialogTest {
     fun picturesCanBeChosen() {
         writeDocument(pages = 1)
         setDialog()
+        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
 
         compose.onNodeWithTag(PanelTags.field("Insert as")).performClick()
         compose.onNodeWithText(context.getString(R.string.import_file_as_pictures)).performClick()
@@ -129,23 +132,24 @@ class ImportFileDialogTest {
     }
 
     @Test
-    fun clearingEverythingLeavesNothingToInsertUntilSelectAll() {
+    fun selectAllChoosesEveryPageAndClearLeavesNothingToInsert() {
         writeDocument(pages = 2)
         setDialog()
+
+        compose.onNodeWithTag(ImportFileTags.SELECT_ALL).performClick()
+        (0 until 2).forEach { compose.onNodeWithTag(ImportFileTags.page(it)).assertIsOn() }
+        compose.onNodeWithTag(ImportFileTags.INSERT).assertIsEnabled()
 
         compose.onNodeWithTag(ImportFileTags.SELECT_NONE).performClick()
         compose.onNodeWithTag(ImportFileTags.page(0)).assertIsOff()
         compose.onNodeWithTag(ImportFileTags.INSERT).assertIsNotEnabled()
-
-        compose.onNodeWithTag(ImportFileTags.SELECT_ALL).performClick()
-        compose.onNodeWithTag(ImportFileTags.page(1)).assertIsOn()
-        compose.onNodeWithTag(ImportFileTags.INSERT).assertIsEnabled()
     }
 
     @Test
     fun aSuccessfulInsertClosesTheWindow() {
         writeDocument(pages = 1)
         setDialog()
+        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
 
         compose.onNodeWithTag(ImportFileTags.INSERT).performClick()
         compose.waitUntil(WAIT_MS) { dismissed }
@@ -157,6 +161,7 @@ class ImportFileDialogTest {
     fun anInsertThatDoesNotLandSaysSoAndStaysOpen() {
         writeDocument(pages = 1)
         setDialog(landed = false)
+        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
 
         compose.onNodeWithTag(ImportFileTags.INSERT).performClick()
         compose.waitUntil(WAIT_MS) { insertedPages != null }
