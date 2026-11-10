@@ -28,7 +28,7 @@ enum class ContentKind {
      * One line PP-OCRv5 read inside a picture.
      *
      * The only kind whose text nobody typed. That is why it is weighted below the others and why
-     * opening one selects the picture rather than pretending to put a caret in it.
+     * opening one marks the words on the picture rather than pretending to put a caret in them.
      */
     Image,
 
@@ -179,7 +179,7 @@ fun blockUnits(
 data class ImagePlacement(
     val pageId: String,
     val sectionId: String,
-    /** The `Outline.Image` to select when a hit is opened. */
+    /** The `Outline.Image` a hit opens on. */
     val outlineId: String,
     val attachmentId: String,
 )

@@ -16,6 +16,9 @@ import com.vivenotes.data.db.NotesDatabase
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.projectionKey
+import com.vivenotes.model.ocr.ImageTextLayout
+import com.vivenotes.model.ocr.PictureHighlights
+import com.vivenotes.model.search.MatchSpan
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelAndJoin
@@ -98,6 +101,53 @@ class OnnxRecognitionSmokeTest {
                 "readings do not resemble what was drawn: ${result.text}",
                 result.lines.first().text.contains("Release", ignoreCase = true),
             )
+        } finally {
+            engine.close()
+            bitmap.recycle()
+        }
+    }
+
+    /**
+     * A word's box lands on that word, through the real detector, recognizer and CTC columns, against
+     * a picture where the word's position is known because this test drew it.
+     */
+    @Test
+    fun aWordsBoxSitsOnThatWord() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val models = AiModelStore(context)
+        withTimeout(10_000) {
+            models.state.first { it.handwritingText !is AiModelInstallState.Verifying }
+        }
+        val text = "Alpha Bravo Charlie"
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLACK
+            textSize = 48f
+        }
+        val origin = 40f
+        val bitmap = Bitmap.createBitmap(760, 140, Bitmap.Config.ARGB_8888)
+        Canvas(bitmap).apply {
+            drawColor(Color.WHITE)
+            drawText(text, origin, 88f, paint)
+        }
+
+        val engine = OnnxInkRecognitionEngine(models)
+        try {
+            val result = withTimeout(60_000) { engine.recognizeImageText(bitmap) }
+            val line = result.lines.single()
+            assertEquals(text, line.text)
+            val layout = ImageTextLayout.decode(result.layout(bitmap.width, bitmap.height)!!)!!.single()
+
+            val word = text.indexOf("Bravo")
+            val quad = PictureHighlights.forSpans(line.text, layout, listOf(MatchSpan(word, word + 5)))!!.quads
+            val wantLeft = origin + paint.measureText(text.substring(0, word))
+            val wantRight = origin + paint.measureText(text.substring(0, word + 5))
+            Log.i("OnnxRecognitionSmoke", "Bravo left ${quad[0] * bitmap.width} right ${quad[2] * bitmap.width}, drawn at $wantLeft to $wantRight")
+
+            // A third of the letter size. Close enough that the box is on this word and off its
+            // neighbours, which is the promise the highlight makes.
+            val allowance = 16f
+            assertEquals(wantLeft, quad[0] * bitmap.width, allowance)
+            assertEquals(wantRight, quad[2] * bitmap.width, allowance)
         } finally {
             engine.close()
             bitmap.recycle()

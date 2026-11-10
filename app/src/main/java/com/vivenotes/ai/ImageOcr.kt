@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
+import com.vivenotes.model.ocr.ImageLineLayout
+import com.vivenotes.model.ocr.ImageTextLayout
 import com.vivenotes.model.ocr.TextDetection
 import kotlin.math.max
 import kotlin.math.min
@@ -16,6 +18,8 @@ data class ImageTextLine(
     val confidence: Float,
     /** Corners in source-picture pixels, clockwise from the top-left. */
     val corners: List<TextDetection.Point>,
+    /** Where each character begins and ends along the line, as fractions of it. */
+    val edges: List<Float> = emptyList(),
 )
 
 /** Everything read out of one picture. */
@@ -24,6 +28,29 @@ data class ImageTextResult(
     val meanConfidence: Float,
 ) {
     val text: String get() = lines.joinToString("\n") { it.text }
+
+    /**
+     * Where the lines are, packed for `attachment_text.layout`, or null if some line does not say.
+     *
+     * [width] and [height] are the bitmap's, because the corners are in its pixels. A row without a
+     * layout still searches; it just has nothing to draw.
+     */
+    fun layout(width: Int, height: Int): ByteArray? {
+        if (lines.isEmpty() || width <= 0 || height <= 0) return null
+        if (lines.any { it.corners.size != 4 || it.edges.size != it.text.length + 1 }) return null
+        return ImageTextLayout.encode(
+            lines.map { line ->
+                val corners = TextDetection.Quad(line.corners, line.confidence).readingCorners
+                ImageLineLayout(
+                    corners = FloatArray(corners.size * 2) { index ->
+                        val point = corners[index / 2]
+                        if (index % 2 == 0) point.x / width else point.y / height
+                    },
+                    edges = line.edges.toFloatArray(),
+                )
+            },
+        )
+    }
 
     companion object {
         val Empty = ImageTextResult(emptyList(), 0f)
@@ -69,9 +96,8 @@ internal fun preprocessDetection(image: Bitmap, limit: Int = DETECTION_LIMIT): D
  * `setPolyToPoly` with four points is a full perspective transform, which is what a photographed
  * page needs: its lines are not merely rotated, they are foreshortened.
  *
- * The quad's long side becomes the strip's width, so a line written down the page is read along its
- * own axis. Which end of that axis comes first cannot be known without an orientation classifier,
- * so it is fixed rather than guessed: the corner after the top-left leads.
+ * The quad's long side becomes the strip's width, so a line is read along its own axis — see
+ * [TextDetection.Quad.readingCorners], which is also how the line's highlight finds that axis.
  */
 internal fun cropQuad(image: Bitmap, quad: TextDetection.Quad, height: Int = CROP_HEIGHT): Bitmap? {
     val longSide = max(quad.width, quad.height)
@@ -79,12 +105,8 @@ internal fun cropQuad(image: Bitmap, quad: TextDetection.Quad, height: Int = CRO
     if (longSide < 2f || shortSide < 1f) return null
     val width = (height * longSide / shortSide).roundToInt().coerceIn(MIN_CROP_WIDTH, MAX_CROP_WIDTH)
 
-    // Rotate the source corners so the long side is the one that maps to the strip's width.
-    val ordered = if (quad.width >= quad.height) quad.corners else {
-        listOf(quad.corners[1], quad.corners[2], quad.corners[3], quad.corners[0])
-    }
     val source = FloatArray(8)
-    ordered.forEachIndexed { index, point ->
+    quad.readingCorners.forEachIndexed { index, point ->
         source[index * 2] = point.x
         source[index * 2 + 1] = point.y
     }

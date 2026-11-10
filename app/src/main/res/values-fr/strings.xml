@@ -717,6 +717,11 @@
     <string name="image_unreadable">Erreur : impossible de lire %1$s</string>
     <string name="image_description">Image</string>
     <string name="image_description_text">Image : %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="one">%d résultat de recherche</item>
+        <item quantity="many">%d résultats de recherche</item>
+        <item quantity="other">%d résultats de recherche</item>
+    </plurals>
     <string name="ink_description">Écriture manuscrite</string>
     <string name="ink_description_text">Écriture manuscrite : %1$s</string>
 
@@ -777,6 +782,7 @@
     <string name="transfer_failed">Échec du transfert du carnet</string>
     <string name="transfer_complete">Transfert du carnet terminé</string>
     <string name="transfer_preparing">Vérification et préparation du carnet…</string>
+    <string name="transfer_converting_onenote">Conversion du bloc-notes OneNote…</string>
     <string name="transfer_ok">OK</string>
 
     <plurals name="count_sections">
@@ -833,4 +839,27 @@
     <string name="graph_sliders_apply">Appliquer</string>
     <string name="graph_sliders_cancel">Annuler</string>
     <string name="recognition_graph_parameters">Tracé avec %1$s. Chacun aura un curseur une fois placé.</string>
+    <string name="file_import_notebook">Carnet</string>
+    <string name="file_import_file">Fichier</string>
+    <string name="import_file_title">Importer un fichier</string>
+    <string name="import_file_close">Fermer</string>
+    <string name="import_file_insert">Insérer</string>
+    <plurals name="import_file_selected">
+        <item quantity="one">%1$d sur %2$d page sélectionnée</item>
+        <item quantity="other">%1$d sur %2$d pages sélectionnées</item>
+    </plurals>
+    <string name="import_file_page">Page %1$d</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">Pages</string>
+    <string name="import_file_select_all">Tout sélectionner</string>
+    <string name="import_file_select_none">Tout désélectionner</string>
+    <string name="import_file_as">Insérer en tant que</string>
+    <string name="import_file_as_objects">Texte et tableaux</string>
+    <string name="import_file_as_pictures">Image de chaque page</string>
+    <string name="import_file_as_info">Le texte et les tableaux restent modifiables sur le canevas. Une image montre la page telle qu’elle apparaît ici, prête à être annotée.</string>
+    <string name="import_file_not_word">Seuls les documents Word (.doc, .docx), les textes OpenDocument (.odt), les présentations PowerPoint (.pptx) et les PDF peuvent être importés.</string>
+    <string name="import_file_password">Ce fichier est protégé par mot de passe.</string>
+    <string name="import_file_too_large">Ce fichier est trop volumineux pour être importé.</string>
+    <string name="import_file_unreadable">Ce fichier n’a pas pu être lu.</string>
+    <string name="import_file_insert_failed">Les pages n’ont pas pu être placées sur cette page.</string>
 </resources>

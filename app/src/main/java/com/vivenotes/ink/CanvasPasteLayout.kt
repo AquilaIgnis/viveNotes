@@ -8,7 +8,12 @@ internal const val CANVAS_PASTE_MARGIN = 24f
  * How tall each pasted outline is drawn, by id, and how far below its y what is drawn begins: a
  * text box keeps a strip for its move grip above its frame, a table a gutter for its handles.
  */
-data class PasteFrames(val heights: Map<String, Float>, val insets: Map<String, Float> = emptyMap())
+data class PasteFrames(
+    val heights: Map<String, Float>,
+    val insets: Map<String, Float> = emptyMap(),
+    /** How far down the page what is already on it reaches, as the canvas drew it. */
+    val contentBottom: Float? = null,
+)
 
 /**
  * Stacks [outlines] down from the first one's y, leaving [CANVAS_PASTE_MARGIN] between each one's
@@ -42,7 +47,7 @@ internal fun stackPastedOutlines(
 
 /** A paste of several objects, waiting for the canvas to say how tall each one is drawn. */
 class CanvasPasteLayoutRequest internal constructor(val outlines: List<Outline>) {
-    internal val result = kotlinx.coroutines.CompletableDeferred<List<Outline>>()
+    internal val result = kotlinx.coroutines.CompletableDeferred<PasteFrames>()
 }
 
 /**

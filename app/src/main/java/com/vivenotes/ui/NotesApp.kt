@@ -32,8 +32,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -133,6 +134,8 @@ import com.vivenotes.ui.editor.AiActions
 import com.vivenotes.ui.editor.CalculatorAnswer
 import com.vivenotes.ui.editor.EditorPane
 import com.vivenotes.ui.editor.ExportPdfDialog
+import com.vivenotes.ui.editor.ImportFileDialog
+import com.vivenotes.fileimport.FileImporter
 import com.vivenotes.ui.editor.FileActions
 import com.vivenotes.ui.editor.FloatingCalculator
 import com.vivenotes.ui.editor.LocalKeyBindings
@@ -228,6 +231,7 @@ fun NotesApp(
     syncAccounts: SyncAccounts,
     managedSubscription: ManagedSubscriptionController,
     pdfExporter: PdfExporter,
+    fileImporter: FileImporter,
     onlineImages: OnlineImages,
     onNotebookClosed: () -> Unit,
 ) {
@@ -404,6 +408,7 @@ fun NotesApp(
                     recognitionEngine = recognitionEngine,
                     mathEngine = mathEngine,
                     pdfExporter = pdfExporter,
+                    fileImporter = fileImporter,
                     onlineImages = onlineImages,
                     onNotebookClosed = onNotebookClosed,
                     onOpenAccount = {
@@ -774,6 +779,7 @@ private fun NotesWorkspace(
     recognitionEngine: InkRecognitionEngine,
     mathEngine: MathEngine,
     pdfExporter: PdfExporter,
+    fileImporter: FileImporter,
     onlineImages: OnlineImages,
     onNotebookClosed: () -> Unit,
     onOpenAccount: () -> Unit,
@@ -835,6 +841,11 @@ private fun NotesWorkspace(
     val importNotebook = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(viewModel::importNotebook) }
+    /** The document whose pages are being chosen — `ui/editor/ImportFileDialog.kt`. */
+    var importFileSource by remember { mutableStateOf<Uri?>(null) }
+    val importFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { importFileSource = it } }
     val strokes by viewModel.strokes.collectAsStateWithLifecycle()
     val inkReadyPageId by viewModel.inkReadyPageId.collectAsStateWithLifecycle()
     val aiModels by aiModelStore.state.collectAsStateWithLifecycle()
@@ -890,6 +901,7 @@ private fun NotesWorkspace(
     }
     /** The docked pane, if any. Deliberately not persisted: it is where you are, not what you have. */
     var openPane by remember { mutableStateOf<ToolPane?>(null) }
+    LaunchedEffect(openPane) { viewModel.setContentPanelOpen(openPane == ToolPane.Content) }
     /** Ctrl+F's: the query field takes the focus once the Content pane is up, and clears this. */
     var searchFocusRequested by remember { mutableStateOf(false) }
     LaunchedEffect(viewModel) {
@@ -1197,6 +1209,9 @@ private fun NotesWorkspace(
             },
             importNotebook = {
                 importNotebook.launch(NotebookTransferManager.importMimeTypes())
+            },
+            importFile = {
+                importFile.launch(FileImporter.MIME_TYPES)
             },
             deleteNotebook = {
                 pendingNotebookDelete = currentNotebook
@@ -1604,6 +1619,15 @@ private fun NotesWorkspace(
         )
     }
 
+    importFileSource?.let { source ->
+        ImportFileDialog(
+            importer = fileImporter,
+            open = { fileImporter.open(source) },
+            onInsert = { file, pages, mode -> viewModel.insertImportedPages(fileImporter, file, pages, mode) },
+            onDismiss = { importFileSource = null },
+        )
+    }
+
     if (onlineImageSearchOpen) {
         OnlineImageDialog(
             images = onlineImages,
@@ -1700,6 +1724,8 @@ private fun String.viveFileName(fallback: String): String {
     return "$safe${NotebookTransferManager.EXTENSION}"
 }
 
+/** The opt-in is for [LoadingIndicator], still gated in material3 1.5.0-alpha25. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun NotebookTransferDialog(
     state: NotebookTransferState,
@@ -1721,8 +1747,14 @@ private fun NotebookTransferDialog(
         text = {
             if (state.running) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                    Text(stringResource(R.string.transfer_preparing), Modifier.padding(start = 12.dp))
+                    LoadingIndicator()
+                    Text(
+                        stringResource(
+                            if (state.converting) R.string.transfer_converting_onenote
+                            else R.string.transfer_preparing,
+                        ),
+                        Modifier.padding(start = 12.dp),
+                    )
                 }
             } else {
                 Text(state.error ?: state.message.orEmpty())
@@ -2059,8 +2091,12 @@ private fun PageEditor(
     onOpenEquationInMath: (Outline.Equation) -> Unit,
 ) {
     val pictureText by viewModel.pictureText.collectAsStateWithLifecycle()
+    // Not delegated: the canvas reads this while drawing, so a new set of boxes repaints one layer
+    // and leaves this composable, and the whole page under it, alone.
+    val pictureHighlights = viewModel.pictureHighlights.collectAsStateWithLifecycle()
     val inkDescriptions by viewModel.inkDescriptions.collectAsStateWithLifecycle()
     val pendingPasteLayout by viewModel.pendingPasteLayout.collectAsStateWithLifecycle()
+    val scrollTarget by viewModel.canvasScrollTarget.collectAsStateWithLifecycle()
     val pendingPastes by viewModel.pendingPastes.collectAsStateWithLifecycle()
     val accessibilityOn = rememberAccessibilityServiceOn()
     LaunchedEffect(accessibilityOn) { viewModel.setDescribingPage(accessibilityOn) }
@@ -2149,6 +2185,7 @@ private fun PageEditor(
         images = state.images,
         attachments = attachments,
         pictureText = pictureText,
+        pictureHighlights = { pictureHighlights.value },
         inkRegions = inkDescriptions,
         onMoveImages = viewModel::moveImages,
         onResizeImages = viewModel::resizeImages,
@@ -2213,6 +2250,8 @@ private fun PageEditor(
         showPrintMargins = showPrintMargins,
         reveal = reveal,
         onRevealHandled = onRevealHandled,
+        scrollTarget = scrollTarget,
+        onScrollTargetHandled = viewModel::onCanvasScrollTargetHandled,
         modifier = Modifier.fillMaxSize(),
     )
 }

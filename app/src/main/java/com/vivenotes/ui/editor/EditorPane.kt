@@ -141,6 +141,7 @@ import com.vivenotes.model.PrintMargins
 import com.vivenotes.model.RuleLines
 import com.vivenotes.model.SpaceCut
 import androidx.compose.ui.text.TextRange
+import com.vivenotes.model.ocr.PictureHighlight
 import com.vivenotes.model.search.ContentKind
 import com.vivenotes.richtext.EditorStyle
 import com.vivenotes.richtext.FormatCommand
@@ -149,6 +150,8 @@ import com.vivenotes.richtext.QUOTE_STRIPE_COLOR
 import com.vivenotes.richtext.SelectionState
 import com.vivenotes.richtext.TextEdit
 import com.vivenotes.ink.CanvasPasteLayoutRequest
+import kotlinx.coroutines.flow.first
+import com.vivenotes.ui.CanvasScrollTarget
 import com.vivenotes.ink.PasteFrames
 import com.vivenotes.ui.TextRestore
 import com.vivenotes.ui.ContentReveal
@@ -178,7 +181,13 @@ private val CANVAS_MIN_WIDTH = 720.dp
  * its left rule off screen, and a result that lands there reads as having overshot.
  */
 private val REVEAL_MARGIN = 48.dp
-private const val INK_SEARCH_HIGHLIGHT_MS = 1_800L
+
+/** How far down the window something can land and still count as in view. */
+private const val SCROLL_TARGET_COMFORTABLE = 0.6f
+
+/** Long enough for the canvas to grow to hold what just landed; a scroll can only wait so long. */
+private const val SCROLL_RANGE_WAIT_MS = 1_000L
+private const val SEARCH_HIGHLIGHT_MS = 1_800L
 internal val GRIP_HEIGHT = 18.dp
 
 /** Between a container's border and its text. */
@@ -339,6 +348,9 @@ fun EditorPane(
      */
     reveal: ContentReveal? = null,
     onRevealHandled: () -> Unit = {},
+    /** A height on the page to bring into view, standing until [onScrollTargetHandled] takes it. */
+    scrollTarget: CanvasScrollTarget? = null,
+    onScrollTargetHandled: () -> Unit = {},
     /**
      * The page's ink, and what the armed tool does with it.
      *
@@ -376,6 +388,8 @@ fun EditorPane(
     attachments: AttachmentStore? = null,
     /** The text read out of each picture, by attachment id — see [ImageLayer.pictureText]. */
     pictureText: Map<String, String> = emptyMap(),
+    /** Where the current search lands on each picture — see [ImageLayer.pictureHighlights]. */
+    pictureHighlights: () -> Map<String, PictureHighlight> = { emptyMap() },
     /** The handwriting's recognized lines, for a screen reader — see [InkDescriptions]. */
     inkRegions: List<InkTextRegion> = emptyList(),
     onMoveImages: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
@@ -383,7 +397,7 @@ fun EditorPane(
     onDeleteImages: (Set<String>) -> Unit = {},
     onSetImageBackground: (Set<String>, Int?) -> Unit = { _, _ -> },
     /** The page's top-left corner in page units, reported as it scrolls. See the `snapshotFlow`. */
-    onViewport: (Float, Float) -> Unit = { _, _ -> },
+    onViewport: (Float, Float, Float) -> Unit = { _, _, _ -> },
     tables: List<Outline.Table> = emptyList(),
     tableArmed: Boolean = false,
     onInsertTable: (Float, Float) -> String? = { _, _ -> null },
@@ -650,6 +664,9 @@ fun EditorPane(
 
     /** Search feedback is emphasis, not an editable object selection. It therefore has no tooltip. */
     var inkSearchHighlight by remember(pageId) { mutableStateOf<InkBounds?>(null) }
+
+    /** The picture hit just opened, shown strongly for a moment. Emphasis again, not a selection. */
+    var imageSearchFocus by remember(pageId) { mutableStateOf<ImageSearchFocus?>(null) }
     val lassoGesture = remember { LassoGesture() }
 
     /**
@@ -704,8 +721,14 @@ fun EditorPane(
     }
     LaunchedEffect(inkSearchHighlight) {
         if (inkSearchHighlight != null) {
-            delay(INK_SEARCH_HIGHLIGHT_MS)
+            delay(SEARCH_HIGHLIGHT_MS)
             inkSearchHighlight = null
+        }
+    }
+    LaunchedEffect(imageSearchFocus) {
+        if (imageSearchFocus != null) {
+            delay(SEARCH_HIGHLIGHT_MS)
+            imageSearchFocus = null
         }
     }
 
@@ -727,13 +750,6 @@ fun EditorPane(
                 quoteGapPx = 11.dp.roundToPx(),
             )
         }
-    }
-
-    // Measured here because only the canvas knows how its text wraps: in an editor styled as these
-    // are, at the same widths, so each pasted object keeps its margin from the next.
-    LaunchedEffect(pendingPasteLayout, editorStyle) {
-        val request = pendingPasteLayout ?: return@LaunchedEffect
-        onPasteMeasured(request, measurePastedOutlines(hostContext, density, editorStyle, request.outlines))
     }
 
     // Delete and Esc ask the ViewModel whether anything is selected before they take the key.
@@ -883,6 +899,15 @@ fun EditorPane(
         }
     }
 
+    // Measured here because only the canvas knows how its text wraps: in an editor styled as these
+    // are, at the same widths, so each pasted object keeps its margin from the next. Where the content
+    // above them ends is a fact only this knows too, for the same reason.
+    LaunchedEffect(pendingPasteLayout, editorStyle) {
+        val request = pendingPasteLayout ?: return@LaunchedEffect
+        val frames = measurePastedOutlines(hostContext, density, editorStyle, request.outlines)
+        onPasteMeasured(request, frames.copy(contentBottom = contentBounds.height.value))
+    }
+
     // A chosen paper size binds the page only while the page can hold the content. Once something
     // sits outside it, clipping to it would hide the user's work, so the sheet steps back to being
     // a guide and the canvas covers the content instead. Live state, so dragging a container over
@@ -927,6 +952,7 @@ fun EditorPane(
         if (target.pageId != pageId) return@LaunchedEffect
         if (target.kind == ContentKind.Ink && !inkReady) return@LaunchedEffect
         inkSearchHighlight = null
+        imageSearchFocus = null
         val corner = when (target.kind) {
             // The title is the page's own header, which is at the origin whatever else has moved.
             ContentKind.Title -> InkPoint(0f, 0f)
@@ -935,8 +961,19 @@ fun EditorPane(
             // A cell has no geometry of its own, so the canvas scrolls to its table.
             ContentKind.Cell -> tables.firstOrNull { it.id == target.tableId }
                 ?.let { InkPoint(it.x, it.y) }
-            ContentKind.Image -> images.firstOrNull { it.id == target.boxId }
-                ?.let { InkPoint(it.x, it.y) }
+            // The line rather than the picture's corner, when it is known where the line is: a long
+            // screenshot's match can be pages below its top.
+            ContentKind.Image -> images.firstOrNull { it.id == target.boxId }?.let { image ->
+                val highlight = target.imageHighlight
+                if (highlight == null) {
+                    InkPoint(image.x, image.y)
+                } else {
+                    InkPoint(
+                        image.x + highlight.left * image.width,
+                        image.y + highlight.top * image.height,
+                    )
+                }
+            }
             ContentKind.Ink -> target.inkBounds?.let { InkPoint(it.left, it.top) }
         } ?: run {
             // The page is open — `pageId` matching means these outlines are its own, since a page
@@ -964,11 +1001,20 @@ fun EditorPane(
                 cellId = target.boxId,
                 selection = TextRange(target.start, target.end),
             )
-            // A picture has no caret to put the match in — the line that matched is in the panel,
-            // which is where it can be read. Selecting the picture is the honest equivalent of
-            // putting the caret on a word: it says *this* is the thing you were sent to.
-            ContentKind.Image -> images.firstOrNull { it.id == target.boxId }
-                ?.let { selection = CanvasSelection.ofImage(it) }
+            // The words themselves when it is known where they are, without selecting anything: as
+            // with handwriting, opening a result is navigation, and a selection would put delete and
+            // recolour on the picture merely because someone opened a hit. A picture not yet read
+            // for positions still gets the selection, which at least says *this* is the one.
+            ContentKind.Image -> images.firstOrNull { it.id == target.boxId }?.let { image ->
+                val highlight = target.imageHighlight
+                if (highlight == null) {
+                    selection = CanvasSelection.ofImage(image)
+                } else {
+                    selection = null
+                    lassoGesture.clear()
+                    imageSearchFocus = ImageSearchFocus(image.id, highlight)
+                }
+            }
             ContentKind.Ink -> {
                 // A search result is navigation, not an editing gesture. Reusing CanvasSelection
                 // here exposed delete/recolour/formula actions merely because someone opened a hit.
@@ -1000,6 +1046,24 @@ fun EditorPane(
      * straightedge's length is measured from it.
      */
     var viewport by remember { mutableStateOf(DpSize.Zero) }
+
+    // Something landed from outside the canvas — a document's pages, which go under what is already
+    // here and so usually below the window, where nothing on screen would say that they arrived. Left
+    // alone when it is already where the eye is, so importing onto a fresh page does not move the title.
+    LaunchedEffect(scrollTarget, pageId) {
+        val target = scrollTarget ?: return@LaunchedEffect
+        if (target.pageId != pageId) return@LaunchedEffect
+        val top = target.y * zoom * density.density
+        val windowHeight = viewport.height.value * density.density
+        if (top < vertical.value || top > vertical.value + windowHeight * SCROLL_TARGET_COMFORTABLE) {
+            val destination = (top - with(density) { REVEAL_MARGIN.toPx() }).roundToInt().coerceAtLeast(0)
+            // The objects arrive a frame or two before the canvas has grown to hold them, and a scroll
+            // asked for sooner stops at the page's old end.
+            withTimeoutOrNull(SCROLL_RANGE_WAIT_MS) { snapshotFlow { vertical.maxValue }.first { it >= destination } }
+            vertical.animateScrollTo(destination)
+        }
+        onScrollTargetHandled()
+    }
 
     val laidRuler = ruler?.let { settings ->
         rulerPlacement?.let {
@@ -1176,13 +1240,14 @@ fun EditorPane(
         // tap to take a position from. A `snapshotFlow` rather than a read during composition: this
         // observes the scroll inside a coroutine, so keeping it current recomposes nothing — the same
         // property `visibleWindow` gets by being a lambda called in the draw.
-        LaunchedEffect(horizontal, vertical, zoom, density) {
+        LaunchedEffect(horizontal, vertical, zoom, density, window) {
             snapshotFlow { horizontal.value to vertical.value }
                 .conflate()
                 .collect { (scrollX, scrollY) ->
                     onViewport(
                         scrollX / (zoom * density.density),
                         scrollY / (zoom * density.density),
+                        window.width.value / zoom,
                     )
                 }
         }
@@ -1508,6 +1573,8 @@ fun EditorPane(
                                 },
                                 density = density.density,
                                 pictureText = pictureText,
+                                pictureHighlights = pictureHighlights,
+                                searchFocus = imageSearchFocus,
                                 canvasExtent = canvasSize,
                                 beneath = shapesAndFormulas,
                             )

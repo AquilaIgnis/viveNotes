@@ -57,10 +57,14 @@ class MigrationTest {
      */
     @Test
     fun theNewestCommittedSchemaIsTheSchemaTheEntitiesCompileTo() {
-        helper.createDatabase(BASELINE_DB, 3).close()
+        helper.createDatabase(BASELINE_DB, 4).close()
 
         val database = Room.databaseBuilder(context, NotesDatabase::class.java, BASELINE_DB)
-            .addMigrations(NotesDatabase.MIGRATION_1_2, NotesDatabase.MIGRATION_2_3)
+            .addMigrations(
+                NotesDatabase.MIGRATION_1_2,
+                NotesDatabase.MIGRATION_2_3,
+                NotesDatabase.MIGRATION_3_4,
+            )
             .addCallback(NotesDatabase.SYNC_TRIGGER_CALLBACK)
             .build()
         try {
@@ -102,6 +106,36 @@ class MigrationTest {
 
             migrated.execSQL("UPDATE attachments SET releasedAt = 99 WHERE id = 'sha-one'")
             assertEquals(1, outboxRows(migrated))
+        } finally {
+            migrated.close()
+        }
+    }
+
+    /**
+     * Version 4 adds the layout column and touches nothing else: a picture read before positions were
+     * kept keeps its text, so it goes on answering searches until the indexer has read it again.
+     */
+    @Test
+    fun versionThreeMigratesKeepingEveryReadingWithNoLayoutYet() {
+        helper.createDatabase(BASELINE_DB, 3).apply {
+            execSQL(
+                "INSERT INTO attachments(id, mimeType, pixelWidth, pixelHeight, byteCount, refCount, createdAt) " +
+                    "VALUES('sha-one', 'image/webp', 8, 8, 10, 1, 42)",
+            )
+            execSQL(
+                "INSERT INTO attachment_text(attachmentId, text, lineCount, confidence, engine, status, " +
+                    "durationMs, updatedAt) VALUES('sha-one', 'hello', 1, 0.9, 'ppocrv5-en/1', 'Read', 5, 42)",
+            )
+            close()
+        }
+
+        val migrated = helper.runMigrationsAndValidate(BASELINE_DB, 4, true, NotesDatabase.MIGRATION_3_4)
+        try {
+            migrated.query("SELECT text, layout FROM attachment_text WHERE attachmentId = 'sha-one'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("hello", cursor.getString(0))
+                assertTrue("an existing reading has no layout yet", cursor.isNull(1))
+            }
         } finally {
             migrated.close()
         }

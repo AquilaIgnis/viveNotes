@@ -717,6 +717,10 @@
     <string name="image_unreadable">Fehler: %1$s konnte nicht gelesen werden</string>
     <string name="image_description">Bild</string>
     <string name="image_description_text">Bild: %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="one">%d Suchtreffer</item>
+        <item quantity="other">%d Suchtreffer</item>
+    </plurals>
     <string name="ink_description">Handschrift</string>
     <string name="ink_description_text">Handschrift: %1$s</string>
 
@@ -777,6 +781,7 @@
     <string name="transfer_failed">Notizbuchübertragung fehlgeschlagen</string>
     <string name="transfer_complete">Notizbuchübertragung abgeschlossen</string>
     <string name="transfer_preparing">Notizbuch wird überprüft und vorbereitet…</string>
+    <string name="transfer_converting_onenote">OneNote-Notizbuch wird umgewandelt…</string>
     <string name="transfer_ok">OK</string>
 
     <plurals name="count_sections">
@@ -833,4 +838,27 @@
     <string name="graph_sliders_apply">Übernehmen</string>
     <string name="graph_sliders_cancel">Abbrechen</string>
     <string name="recognition_graph_parameters">Gezeichnet mit %1$s. Nach dem Platzieren erhält jeder Wert einen Schieberegler.</string>
+    <string name="file_import_notebook">Notizbuch</string>
+    <string name="file_import_file">Datei</string>
+    <string name="import_file_title">Datei importieren</string>
+    <string name="import_file_close">Schließen</string>
+    <string name="import_file_insert">Einfügen</string>
+    <plurals name="import_file_selected">
+        <item quantity="one">%1$d von %2$d Seite ausgewählt</item>
+        <item quantity="other">%1$d von %2$d Seiten ausgewählt</item>
+    </plurals>
+    <string name="import_file_page">Seite %1$d</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">Seiten</string>
+    <string name="import_file_select_all">Alle auswählen</string>
+    <string name="import_file_select_none">Auswahl aufheben</string>
+    <string name="import_file_as">Einfügen als</string>
+    <string name="import_file_as_objects">Text und Tabellen</string>
+    <string name="import_file_as_pictures">Bild jeder Seite</string>
+    <string name="import_file_as_info">Text und Tabellen lassen sich auf der Zeichenfläche bearbeiten. Ein Bild zeigt die Seite wie hier angeordnet, bereit zum Beschriften.</string>
+    <string name="import_file_not_word">Nur Word-Dokumente (.doc, .docx), OpenDocument-Texte (.odt), PowerPoint-Präsentationen (.pptx) und PDFs können importiert werden.</string>
+    <string name="import_file_password">Diese Datei ist passwortgeschützt.</string>
+    <string name="import_file_too_large">Diese Datei ist zu groß zum Importieren.</string>
+    <string name="import_file_unreadable">Diese Datei konnte nicht gelesen werden.</string>
+    <string name="import_file_insert_failed">Die Seiten konnten nicht auf dieser Seite platziert werden.</string>
 </resources>

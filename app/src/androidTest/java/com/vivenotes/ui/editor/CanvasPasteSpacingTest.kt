@@ -1,5 +1,6 @@
 package com.vivenotes.ui.editor
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -16,10 +17,12 @@ import com.vivenotes.model.BlockType
 import com.vivenotes.model.Outline
 import com.vivenotes.model.PageStyle
 import com.vivenotes.model.newTable
+import com.vivenotes.ui.CanvasScrollTarget
 import com.vivenotes.ui.OutlineBox
 import com.vivenotes.ui.theme.ViveNotesTheme
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -98,6 +101,107 @@ class CanvasPasteSpacingTest {
         frames.zipWithNext().forEach { (upper, lower) ->
             assertEquals("each frame leaves the paste margin to the next", margin, lower.top - upper.bottom, 1.5f)
         }
+    }
+
+    @Composable
+    private fun Editor(
+        outlines: List<OutlineBox>,
+        blocks: Map<String, List<Block>> = emptyMap(),
+        request: CanvasPasteLayoutRequest? = null,
+        onMeasured: (PasteFrames) -> Unit = {},
+        scrollTarget: CanvasScrollTarget? = null,
+        onScrollTargetHandled: () -> Unit = {},
+        onViewport: (Float, Float, Float) -> Unit = { _, _, _ -> },
+    ) {
+        ViveNotesTheme {
+            EditorPane(
+                title = "",
+                createdAt = 0L,
+                defaults = EditorDefaults(),
+                style = PageStyle(hideTitle = true),
+                zoom = 1f,
+                pageId = "page",
+                onTitleChange = {},
+                outlines = outlines,
+                pageRevision = 0,
+                initialBlocksFor = { blocks[it] ?: listOf(Block.empty()) },
+                commands = MutableSharedFlow(),
+                onBlocksChanged = { _, _ -> },
+                onSelectionChanged = {},
+                onMarkArmed = {},
+                onCreateOutline = { _, _ -> "" },
+                textArmed = false,
+                onMoveOutline = { _, _, _ -> },
+                onResizeOutline = { _, _ -> },
+                onSetOutlineMinHeight = { _, _ -> },
+                onOutlineBlurred = {},
+                onCanvasMeasured = { _, _ -> },
+                showPrintMargins = false,
+                pendingPasteLayout = request,
+                onPasteMeasured = { _, frames -> onMeasured(frames) },
+                scrollTarget = scrollTarget,
+                onScrollTargetHandled = onScrollTargetHandled,
+                onViewport = onViewport,
+            )
+        }
+    }
+
+    /** Where an import goes depends on this, and it has to count the lines the text wrapped to. */
+    @Test
+    fun theCanvasSaysWhereItsContentEnds() {
+        val box = OutlineBox("existing", 40f, 300f, 400f, 0f)
+        val blocks = mapOf("existing" to listOf(Block.of("A line of text that wraps. ".repeat(30))))
+        val request = mutableStateOf<CanvasPasteLayoutRequest?>(null)
+        var answer: PasteFrames? = null
+        lateinit var density: Density
+        compose.setContent {
+            density = LocalDensity.current
+            Editor(listOf(box), blocks, request.value, onMeasured = { answer = it })
+        }
+        compose.waitForIdle()
+
+        // After the first layout, as in the app: nothing imports onto a page that has not been drawn.
+        request.value = CanvasPasteLayoutRequest(listOf(Outline.Text.empty().copy(blocks = listOf(Block.of("new")))))
+        compose.waitUntil(5_000) { answer != null }
+
+        val editorBottom = compose.onNodeWithTag(OutlineTags.EDITOR).fetchSemanticsNode().boundsInRoot.bottom / density.density
+        assertTrue("the box should have wrapped well past one line", editorBottom > 400f)
+        // Past the text by the box's own frame around it, and no further.
+        val bottom = answer!!.contentBottom!!
+        assertTrue("$bottom should be just under the text at $editorBottom", bottom >= editorBottom && bottom <= editorBottom + 24f)
+    }
+
+    private fun scrollTest(targetY: Float): Float {
+        val box = OutlineBox("tall", 40f, 200f, 400f, 6000f)
+        val target = mutableStateOf<CanvasScrollTarget?>(null)
+        var handled = false
+        var top = 0f
+        compose.setContent {
+            Editor(
+                outlines = listOf(box),
+                scrollTarget = target.value,
+                onScrollTargetHandled = { handled = true },
+                onViewport = { _, y, _ -> top = y },
+            )
+        }
+        compose.waitForIdle()
+
+        target.value = CanvasScrollTarget("page", targetY)
+        compose.waitUntil(5_000) { handled }
+        compose.waitForIdle()
+        return top
+    }
+
+    /** Below the window nothing on screen would say the import arrived. */
+    @Test
+    fun aLandingBelowTheWindowIsScrolledTo() {
+        assertEquals(4952f, scrollTest(5000f), 8f)
+    }
+
+    /** A fresh page must not jump: there is nothing to go and find. */
+    @Test
+    fun aLandingAlreadyInViewLeavesThePageWhereItIs() {
+        assertEquals(0f, scrollTest(150f), 0.01f)
     }
 
     private fun Outline.atPastePoint(): Outline = when (this) {

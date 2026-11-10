@@ -52,6 +52,7 @@ import com.vivenotes.data.ContentSearchIndex
 import com.vivenotes.data.ContentSearchOutcome
 import com.vivenotes.data.ContentSearchResults
 import com.vivenotes.data.ImageTextIndexer
+import com.vivenotes.data.PictureTextHighlighter
 import com.vivenotes.data.ImportedAttachment
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.InkPageLoader
@@ -150,6 +151,7 @@ import com.vivenotes.model.RuleLines
 import com.vivenotes.model.SpaceCut
 import com.vivenotes.model.newId
 import com.vivenotes.model.newTable
+import com.vivenotes.model.ocr.PictureHighlight
 import com.vivenotes.model.search.ContentHit
 import com.vivenotes.model.search.ContentKind
 import com.vivenotes.model.search.ContentUnit
@@ -169,6 +171,9 @@ import com.vivenotes.model.withRowMinHeight
 import com.vivenotes.model.withRowRemoved
 import com.vivenotes.richtext.CanvasPasteItem
 import com.vivenotes.richtext.CanvasPastePlan
+import com.vivenotes.fileimport.FileImportMode
+import com.vivenotes.fileimport.FileImporter
+import com.vivenotes.fileimport.ImportedFile
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.richtext.plainPasteBlocks
 import com.vivenotes.richtext.Keystroke
@@ -208,7 +213,12 @@ data class ContentReveal(
     val end: Int,
     val inkStrokeIds: Set<String> = emptySet(),
     val inkBounds: InkBounds? = null,
+    /** Where a picture hit's matched words are. Null when the picture has no layout yet. */
+    val imageHighlight: PictureHighlight? = null,
 )
+
+/** A height on the open page for the canvas to bring into view, because something just landed there. */
+data class CanvasScrollTarget(val pageId: String, val y: Float)
 
 /** What the Content panel is showing: a query, whether it is still running, and what it found. */
 data class ContentSearchState(
@@ -432,6 +442,8 @@ private val DeletedItemKind.displayName: String
 /** Progress and the one-shot result message for File-tab notebook transfers. */
 data class NotebookTransferState(
     val running: Boolean = false,
+    /** The running import is converting a OneNote file, which takes seconds rather than moments. */
+    val converting: Boolean = false,
     val message: String? = null,
     val error: String? = null,
 )
@@ -896,6 +908,9 @@ class NotesViewModel(
      */
     private var viewportOrigin = InkPoint(0f, 0f)
 
+    /** How wide the canvas's view is, in page units; zero until it has said. */
+    private var viewportWidth = 0f
+
     /** Commands travel to the focused editor, the only thing that can act on them. */
     private val _commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 32)
     val commands: SharedFlow<FormatCommand> = _commands
@@ -1099,7 +1114,9 @@ class NotesViewModel(
             try {
                 val selectedSectionId = _uiState.value.selectedSectionId
                 persist()
-                val result = manager.importNotebook(source)
+                val result = manager.importNotebook(source) {
+                    _notebookTransfer.value = NotebookTransferState(running = true, converting = true)
+                }
                 // An explicit import always opens what it imported, so an authoritative archive
                 // document replaces a stale open editor immediately.
                 result.firstSectionId?.let { importedSectionId ->
@@ -1119,7 +1136,9 @@ class NotesViewModel(
                     }
                 }
                 _notebookTransfer.value = NotebookTransferState(
-                    message = when {
+                    message = result.oneNote?.let { conversion ->
+                        oneNoteImportMessage(result.notebookName, conversion.warnings)
+                    } ?: when {
                         result.created -> "${result.notebookName} was imported."
                         result.restored -> "${result.notebookName} was restored from the .vive notebook."
                         else -> "${result.notebookName} was updated from the .vive notebook."
@@ -1133,6 +1152,20 @@ class NotesViewModel(
                 )
             }
         }
+    }
+
+    /**
+     * What a OneNote import says when it is done. Whatever the converter left out is listed, once
+     * per kind with a count, since a notebook with many attachments repeats the same line.
+     */
+    private fun oneNoteImportMessage(notebookName: String, warnings: List<String>): String {
+        if (warnings.isEmpty()) return "$notebookName was imported from OneNote."
+        val kinds = warnings.groupingBy { it }.eachCount().entries.joinToString("\n") { (warning, count) ->
+            val line = warning.replaceFirstChar(Char::uppercaseChar)
+            if (count == 1) "• $line" else "• $line ($count×)"
+        }
+        val total = if (warnings.size == 1) "1 item was" else "${warnings.size} items were"
+        return "$notebookName was imported from OneNote. $total left out:\n$kinds"
     }
 
     fun clearNotebookTransferStatus() {
@@ -1667,6 +1700,51 @@ class NotesViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ContentSearchState())
 
+    /** Whether the Content pane is up, which is the only time a picture shows its search matches. */
+    private val contentPanelOpen = MutableStateFlow(false)
+
+    fun setContentPanelOpen(open: Boolean) {
+        contentPanelOpen.value = open
+    }
+
+    private val pictureHighlighter = PictureTextHighlighter(repository)
+
+    private val indexedPictures: StateFlow<Long> = imageText?.version ?: MutableStateFlow(0L)
+
+    /** The pictures on the open page, by attachment id. */
+    private val openPagePictures: Flow<Set<String>> = _uiState
+        .map { state -> state.images.mapTo(mutableSetOf()) { it.attachmentId } }
+        .distinctUntilChanged()
+
+    /**
+     * Where the current search lands on the open page's pictures, by attachment id.
+     *
+     * Costs nothing until the pane is open with a query in it. After that a keystroke runs the
+     * matcher over the lines of this one page, from memory: the wait is the panel's own, so the boxes
+     * and the list change together, and the database is asked only when the page's pictures change or
+     * the indexer writes something new.
+     */
+    val pictureHighlights: StateFlow<Map<String, PictureHighlight>> = combine(
+        combine(_searchQuery, contentPanelOpen) { query, open -> if (open) query.trim() else "" }
+            .distinctUntilChanged()
+            .transformLatest { query ->
+                if (query.isNotEmpty()) delay(SEARCH_DEBOUNCE_MS)
+                emit(query)
+            },
+        openPagePictures,
+        indexedPictures,
+    ) { query, pictures, version -> Triple(query, pictures, version) }
+        .mapLatest { (query, pictures, version) ->
+            if (query.isEmpty() || pictures.isEmpty()) {
+                emptyMap()
+            } else {
+                withContext(Dispatchers.Default) {
+                    pictureHighlighter.forQuery(pictures, query, version)
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     /** How far reading this notebook's pictures has got, for the Content and Integrated AI panes. */
     val imageTextProgress: StateFlow<ImageTextProgress> =
         imageText?.progress ?: MutableStateFlow(ImageTextProgress(enabled = false))
@@ -1711,8 +1789,7 @@ class NotesViewModel(
      * new requests, and the bump that ends it is the next chance.
      */
     val pictureText: StateFlow<Map<String, String>> = combine(
-        _uiState.map { state -> state.images.mapTo(mutableSetOf()) { it.attachmentId } }
-            .distinctUntilChanged(),
+        openPagePictures,
         describingPage,
         imageText?.version ?: MutableStateFlow(0L),
     ) { ids, describing, _ -> ids to describing }
@@ -1846,6 +1923,15 @@ class NotesViewModel(
     /** The hit the canvas has been asked to show, until it has shown it. */
     val reveal: StateFlow<ContentReveal?> = _reveal.asStateFlow()
 
+    private val _canvasScrollTarget = MutableStateFlow<CanvasScrollTarget?>(null)
+
+    /** Where the canvas has been asked to scroll to, until it has. */
+    val canvasScrollTarget: StateFlow<CanvasScrollTarget?> = _canvasScrollTarget.asStateFlow()
+
+    fun onCanvasScrollTargetHandled() {
+        _canvasScrollTarget.value = null
+    }
+
     /**
      * Goes to a hit: its section, its page, and then the box that holds it.
      *
@@ -1853,6 +1939,27 @@ class NotesViewModel(
      * picks up once that page is open and the container it names has been laid out.
      */
     fun openSearchHit(hit: ContentHit) {
+        val unit = hit.unit
+        val attachmentId = unit.attachmentId
+        if (unit.kind != ContentKind.Image || attachmentId == null) {
+            goToHit(hit, highlight = null)
+            return
+        }
+        // Looked up before the reveal is set, because it decides where the reveal scrolls to: the
+        // line, which on a long screenshot is pages below the picture's corner. One row by primary
+        // key, so this is not a wait anyone can see.
+        viewModelScope.launch {
+            val highlight = pictureHighlighter.forLine(
+                attachmentId = attachmentId,
+                lineIndex = unit.blockIndex,
+                spans = hit.spans,
+                indexerVersion = indexedPictures.value,
+            )
+            goToHit(hit, highlight)
+        }
+    }
+
+    private fun goToHit(hit: ContentHit, highlight: PictureHighlight?) {
         val unit = hit.unit
         _reveal.value = ContentReveal(
             pageId = unit.pageId,
@@ -1863,6 +1970,7 @@ class NotesViewModel(
             end = hit.editorEnd,
             inkStrokeIds = unit.inkStrokeIds,
             inkBounds = unit.inkBounds,
+            imageHighlight = highlight,
         )
         val state = _uiState.value
         when {
@@ -2733,8 +2841,9 @@ class NotesViewModel(
     }
 
     /** Where the canvas is currently looking, in page units. Reported by `EditorPane` as it scrolls. */
-    fun reportViewport(x: Float, y: Float) {
+    fun reportViewport(x: Float, y: Float, width: Float = viewportWidth) {
         viewportOrigin = InkPoint(x, y)
+        viewportWidth = width
     }
 
     fun moveImages(imageIds: Set<String>, dx: Float, dy: Float) {
@@ -3821,7 +3930,7 @@ class NotesViewModel(
                     }
                 }
             }
-            val placed = if (outlines.size < 2) outlines else laidOut(outlines)
+            val placed = if (outlines.size < 2) outlines else laidOut(outlines).outlines
             if (placed.isNotEmpty() && insertClipboardOutlines(pageId, placed, at.x, at.y)) {
                 // Placed now, so kept; whatever was fetched and not placed is let go below.
                 placed.filterIsInstance<Outline.Image>().forEach { imported.remove(it.attachmentId) }
@@ -3872,21 +3981,135 @@ class NotesViewModel(
      * [outlines] stacked by the heights the canvas measures them at. Should no canvas answer — the
      * editor left the screen mid-paste — the document's own sizes stand in.
      */
-    private suspend fun laidOut(outlines: List<Outline>): List<Outline> {
+    private suspend fun laidOut(outlines: List<Outline>, timeoutMs: Long = PASTE_LAYOUT_TIMEOUT_MS): StackedPaste {
         val request = CanvasPasteLayoutRequest(outlines)
         _pendingPasteLayout.value = request
         return try {
-            withTimeoutOrNull(PASTE_LAYOUT_TIMEOUT_MS) { request.result.await() }
-                ?: stackPastedOutlines(outlines, outlines.associate { it.id to it.documentHeight() })
+            val frames = withTimeoutOrNull(timeoutMs) { request.result.await() }
+                ?: PasteFrames(outlines.associate { it.id to it.documentHeight() })
+            StackedPaste(stackPastedOutlines(outlines, frames.heights, frames.insets), frames.contentBottom)
         } finally {
             if (_pendingPasteLayout.value === request) _pendingPasteLayout.value = null
         }
     }
 
+    /**
+     * Puts [pages] of an open document on the canvas, under whatever is already there, as one step of
+     * Undo. A second document therefore follows the first instead of landing on top of it.
+     *
+     * From here it is the road a paste takes: the pieces are stacked by the heights the canvas measures
+     * and placed by [insertClipboardOutlines]. False when nothing landed — the page changed while the
+     * document was being read, or there was nothing on the chosen pages to place.
+     */
+    suspend fun insertImportedPages(
+        importer: FileImporter,
+        file: ImportedFile,
+        pages: List<Int>,
+        mode: FileImportMode,
+    ): Boolean {
+        val pageId = _uiState.value.selectedPageId ?: return false
+        if (readOnlyPageId == pageId) return false
+        val imported = mutableListOf<String>()
+        try {
+            val outlines = when (mode) {
+                FileImportMode.Objects -> importedObjects(importer, file, pages, imported)
+                FileImportMode.Pictures -> importedPagePictures(importer, file, pages, imported)
+            }
+            if (outlines.isEmpty()) return false
+            // Asked even of a single object, because the same answer says where the page's content
+            // ends. Given longer than a paste: a long document is many text boxes to measure, and the
+            // estimate this falls back on would stack them on top of one another.
+            val layout = laidOut(outlines, PASTE_LAYOUT_TIMEOUT_MS + outlines.size * MEASURE_ALLOWANCE_MS)
+            val top = importTop(layout.contentBottom)
+            val landed = insertClipboardOutlines(pageId, layout.outlines, viewportOrigin.x + INSERT_MARGIN, top)
+            if (landed) {
+                layout.outlines.filterIsInstance<Outline.Image>().forEach { imported.remove(it.attachmentId) }
+                _canvasScrollTarget.value = CanvasScrollTarget(pageId, top)
+            }
+            return landed
+        } finally {
+            if (imported.isNotEmpty()) withContext(NonCancellable) { imported.forEach { attachments.release(it) } }
+        }
+    }
+
+    /**
+     * The height an imported document starts at: a margin under the page's last content, or on a page
+     * with nothing on it, where the user is looking.
+     *
+     * [contentBottom] is the canvas's own figure, which knows how its text wrapped. A page no canvas
+     * answered for gets the document's estimate; better a rough place below the content than on top.
+     */
+    private fun importTop(contentBottom: Float?): Float {
+        val saved = currentPageSave()?.doc
+        if (saved != null && saved.outlines.isEmpty() && _strokes.value.isEmpty()) {
+            val titleFloor = if (_uiState.value.pageStyle.hideTitle) 0f else PageStyle.TITLE_BAND_DP
+            return maxOf(viewportOrigin.y + INSERT_MARGIN, titleFloor)
+        }
+        val bottom = contentBottom ?: maxOf(
+            saved?.outlines?.maxOfOrNull { it.y + it.documentHeight() } ?: 0f,
+            _strokes.value.maxOfOrNull { it.pageBounds?.bottom ?: 0f } ?: 0f,
+        )
+        return bottom + INSERT_MARGIN
+    }
+
+    private suspend fun importedObjects(
+        importer: FileImporter,
+        file: ImportedFile,
+        pages: List<Int>,
+        imported: MutableList<String>,
+    ): List<Outline> = importer.objects(file, pages, editorDefaults.value.asEditorMarks()).mapNotNull { item ->
+        when (item) {
+            is CanvasPasteItem.Text -> Outline.Text.empty().copy(blocks = item.blocks)
+            is CanvasPasteItem.Table -> item.outline
+            is CanvasPasteItem.Image -> {
+                val stored = item.bytes?.let { attachments.import(it) } ?: return@mapNotNull null
+                imported += stored.id
+                val width = item.widthDp ?: Outline.Image.DEFAULT_WIDTH
+                Outline.Image(
+                    id = newId(),
+                    attachmentId = stored.id,
+                    width = width,
+                    height = item.heightDp ?: (width * stored.pixelHeight / stored.pixelWidth.coerceAtLeast(1))
+                        .coerceAtLeast(Outline.Image.MIN_SIZE),
+                )
+            }
+        }
+    }
+
+    private suspend fun importedPagePictures(
+        importer: FileImporter,
+        file: ImportedFile,
+        pages: List<Int>,
+        imported: MutableList<String>,
+    ): List<Outline> = pages.sorted().mapNotNull { index ->
+        val size = file.pages.getOrNull(index) ?: return@mapNotNull null
+        val bitmap = importer.pagePicture(file, index) ?: return@mapNotNull null
+        val stored = attachments.importDrawn(bitmap)
+        bitmap.recycle()
+        imported += stored.id
+        val width = pagePictureWidth(size.widthDp)
+        Outline.Image(
+            id = newId(),
+            attachmentId = stored.id,
+            width = width,
+            height = width * size.heightDp / size.widthDp.coerceAtLeast(1f),
+        )
+    }
+
+    /**
+     * How wide a page of a document lands: across the view, up to its real size, and never so small
+     * that it is narrower than a text box. Real size is what an A4 page is at 100%, and a picture of a
+     * page bigger than that would only be a blurrier one.
+     */
+    private fun pagePictureWidth(pageWidthDp: Float): Float {
+        val room = viewportWidth - INSERT_MARGIN * 2
+        return minOf(pageWidthDp, maxOf(Outline.Text.DEFAULT_WIDTH, room))
+    }
+
     /** The canvas's answer to [pendingPasteLayout]: how tall it draws each outline. */
     fun completePasteLayout(request: CanvasPasteLayoutRequest, frames: PasteFrames) {
         if (_pendingPasteLayout.value !== request) return
-        request.result.complete(stackPastedOutlines(request.outlines, frames.heights, frames.insets))
+        request.result.complete(frames)
     }
 
     /**
@@ -4671,6 +4894,9 @@ class NotesViewModel(
         )
     }
 
+    /** Objects stacked for a paste or an import, and where the canvas said the page's content ends. */
+    private class StackedPaste(val outlines: List<Outline>, val contentBottom: Float?)
+
     /** Writes the current document, so switching pages cannot lose the last keystrokes. */
     private suspend fun persist() {
         val save = currentPageSave() ?: return
@@ -4795,6 +5021,9 @@ class NotesViewModel(
 
         /** How long a paste of several objects waits for the canvas to measure them. */
         private const val PASTE_LAYOUT_TIMEOUT_MS = 2_000L
+
+        /** A generous per-object price for measuring text the canvas has not drawn yet. */
+        private const val MEASURE_ALLOWANCE_MS = 40L
 
         /** Pages whose undo history is kept; see [canvasHistoryByPage]. */
         private const val CANVAS_HISTORY_PAGES = 3

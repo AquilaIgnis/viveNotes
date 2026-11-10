@@ -446,7 +446,9 @@ private class Inline(
 }
 
 private const val NO_COLOR = 0
-private const val HIGHLIGHT_ALPHA = 0x66000000
+
+/** How see-through a highlight is stored, so text can be read through it. */
+internal const val HIGHLIGHT_ALPHA = 0x66000000
 private const val MAX_INDENT = 8
 
 /** Browsers' default margins, in CSS pixels at their 16 px text: a paragraph's 1em, about a heading's. */
@@ -597,7 +599,7 @@ private fun backgroundColor(value: String): Int? {
 private val ColorToken = Regex("""(?:rgba?|hsla?)\([^)]*\)|#[0-9a-fA-F]{3,8}|[a-zA-Z]+""")
 
 /** A colour that is a colour — not a grey, black or white — and mostly opaque. */
-private fun Int.isChromatic(): Boolean {
+internal fun Int.isChromatic(): Boolean {
     val alpha = this ushr 24
     val red = (this shr 16) and 0xFF
     val green = (this shr 8) and 0xFF

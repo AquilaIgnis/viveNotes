@@ -118,7 +118,24 @@ class AttachmentStore(
         // the whole picture, and the caller has no use for it — what goes on the page is drawn from
         // the stored file, at the size the page needs.
         decoded.recycle()
+        store(bytes, decoded.width, decoded.height)
+    }
 
+    /**
+     * Stores a picture this app drew rather than one it was given — a page of an imported document.
+     *
+     * Lossless, unlike everything else that comes in here: a page is black text on white, which lossy
+     * WebP smears and lossless packs smaller anyway. The caller keeps [bitmap].
+     */
+    suspend fun importDrawn(bitmap: Bitmap): ImportedAttachment = withContext(io) {
+        val bytes = ByteArrayOutputStream().use { out ->
+            bitmap.compress(Bitmap.CompressFormat.WEBP_LOSSLESS, 100, out)
+            out.toByteArray()
+        }
+        store(bytes, bitmap.width, bitmap.height)
+    }
+
+    private suspend fun store(bytes: ByteArray, width: Int, height: Int): ImportedAttachment {
         val id = bytes.sha256()
         val file = fileFor(id)
         // Content-addressed, so a file that is already there is already correct. Rewriting it would
@@ -136,8 +153,8 @@ class AttachmentStore(
                 AttachmentEntity(
                     id = id,
                     mimeType = MIME_TYPE,
-                    pixelWidth = decoded.width,
-                    pixelHeight = decoded.height,
+                    pixelWidth = width,
+                    pixelHeight = height,
                     byteCount = bytes.size.toLong(),
                     refCount = 0,
                     createdAt = System.currentTimeMillis(),
@@ -146,9 +163,9 @@ class AttachmentStore(
             attachments.retain(id)
         }
         DebugLog.i(DebugLog.DB) {
-            "Stored picture $id (${decoded.width}x${decoded.height}, ${bytes.size} bytes)"
+            "Stored picture $id (${width}x$height, ${bytes.size} bytes)"
         }
-        ImportedAttachment(id, decoded.width, decoded.height)
+        return ImportedAttachment(id, width, height)
     }
 
     /** Claims a reference — a picture pasted or duplicated shares the file rather than copying it. */

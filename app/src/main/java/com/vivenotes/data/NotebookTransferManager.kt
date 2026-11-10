@@ -5,6 +5,7 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.room.withTransaction
 import com.vivenotes.data.db.AttachmentEntity
 import com.vivenotes.data.db.BODY_PIECE_CHARS
@@ -21,6 +22,9 @@ import com.vivenotes.data.db.PageEntity
 import com.vivenotes.data.db.PageRevisionEntity
 import com.vivenotes.data.db.SectionEntity
 import com.vivenotes.data.db.deferredNotebookContentKey
+import com.vivenotes.data.onenote.OneNoteConversion
+import com.vivenotes.data.onenote.OneNoteConversionException
+import com.vivenotes.data.onenote.OneNoteConverter
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.model.DocumentCodecs
 import com.vivenotes.model.Outline
@@ -60,6 +64,8 @@ data class NotebookImportResult(
     val created: Boolean,
     /** At least one live notebook, section, or page in the archive replaced a local tombstone. */
     val restored: Boolean,
+    /** Set when the file was OneNote's, converted on the way in. */
+    val oneNote: OneNoteConversion? = null,
 )
 
 data class NotebookExportResult(val notebookName: String, val byteCount: Long)
@@ -96,15 +102,23 @@ class NotebookTransferManager(
             }
         }
 
-    suspend fun importNotebook(source: Uri): NotebookImportResult = mutex.withLock {
-        withContext(io) {
-            logged({ "Import from $source" }) {
-                context.contentResolver.openInputStream(source)?.use { input ->
-                    importNotebookLocked(input)
-                } ?: throw NotebookTransferException("The selected notebook file could not be opened.")
+    /**
+     * Imports a `.vive`, or a OneNote `.onepkg` or `.one` converted into one first.
+     *
+     * [onConverting] is called, on the IO thread, once the file turns out to be OneNote's and
+     * before the conversion starts, which is the slow part.
+     */
+    suspend fun importNotebook(source: Uri, onConverting: () -> Unit = {}): NotebookImportResult =
+        mutex.withLock {
+            withContext(io) {
+                logged({ "Import from $source" }) {
+                    val fileName = displayNameOf(source)
+                    context.contentResolver.openInputStream(source)?.use { input ->
+                        importNotebookLocked(input, fileName, onConverting)
+                    } ?: throw NotebookTransferException("The selected notebook file could not be opened.")
+                }
             }
         }
-    }
 
     /** Test seam which exercises the exact package writer without a document provider. */
     internal suspend fun exportNotebook(notebookId: String, output: OutputStream): NotebookExportResult =
@@ -115,8 +129,10 @@ class NotebookTransferManager(
         }
 
     /** Test seam which still stages and validates every byte before importing. */
-    internal suspend fun importNotebook(input: InputStream): NotebookImportResult =
-        mutex.withLock { withContext(io) { logged({ "Import" }) { importNotebookLocked(input) } } }
+    internal suspend fun importNotebook(input: InputStream, fileName: String? = null): NotebookImportResult =
+        mutex.withLock {
+            withContext(io) { logged({ "Import" }) { importNotebookLocked(input, fileName) {} } }
+        }
 
     /**
      * Runs one transfer and, in debug builds, says how it ended.
@@ -224,27 +240,106 @@ class NotebookTransferManager(
         }
     }
 
-    private suspend fun importNotebookLocked(input: InputStream): NotebookImportResult {
+    /**
+     * Stages the file, then goes by its first bytes: a ZIP is a `.vive`, and anything else is
+     * handed to the OneNote converter, which knows a package and a section by their contents and
+     * refuses the rest. A provider's MIME type and display name decide nothing.
+     *
+     * A converted notebook is a `.vive` written into the same private directory, and it passes the
+     * same validation and install as one the user picked. It is never written anywhere else.
+     */
+    private suspend fun importNotebookLocked(
+        input: InputStream,
+        fileName: String?,
+        onConverting: () -> Unit,
+    ): NotebookImportResult {
         val root = freshDirectory("import")
+        var converted = false
         try {
-            val archive = File(root, "incoming.vive")
-            FileOutputStream(archive).use { output ->
+            val incoming = File(root, "incoming")
+            FileOutputStream(incoming).use { output ->
                 input.copyBounded(output, MAX_ARCHIVE_BYTES, "The notebook file is too large.")
             }
             DebugLog.d(DebugLog.TRANSFER) {
-                "Copied the ${archive.length()}-byte file into ${root.absolutePath} for validation"
+                "Copied the ${incoming.length()}-byte file into ${root.absolutePath} for validation"
             }
+            if (isVive(incoming.head(VIVE_SIGNATURE.size))) {
+                val validated = validateArchive(incoming, root)
+                DebugLog.d(DebugLog.TRANSFER) { "The archive is valid; installing it" }
+                return install(validated)
+            }
+            onConverting()
+            val archive = File(root, "converted$EXTENSION")
+            val conversion = convertOneNote(incoming, fileName, archive)
+            converted = true
+            incoming.delete()
             val validated = validateArchive(archive, root)
-            DebugLog.d(DebugLog.TRANSFER) { "The archive is valid; installing it" }
-            return install(validated)
+            DebugLog.d(DebugLog.TRANSFER) { "The converted archive is valid; installing it" }
+            return install(validated).copy(oneNote = conversion)
         } catch (failure: NotebookTransferException) {
             throw failure
         } catch (failure: Throwable) {
-            throw NotebookTransferException("This .vive file is damaged or unsafe and was not imported.", failure)
+            throw NotebookTransferException(
+                if (converted) {
+                    "The OneNote notebook was converted, but the result did not pass the import checks."
+                } else {
+                    "This .vive file is damaged or unsafe and was not imported."
+                },
+                failure,
+            )
         } finally {
             root.deleteRecursively()
         }
     }
+
+    private fun convertOneNote(input: File, fileName: String?, output: File): OneNoteConversion {
+        if (!OneNoteConverter.available) {
+            fail("This file is not a .vive notebook, and this build of ViveNotes cannot convert OneNote files.")
+        }
+        val name = fileName?.takeIf(String::isNotBlank) ?: "OneNote notebook"
+        val started = System.nanoTime()
+        val conversion = try {
+            // A fresh seed: importing the same file twice gives two notebooks. A seed taken from
+            // the name would make the second import a restore over the first, and two notebooks
+            // that happen to share a file name would replace each other.
+            OneNoteConverter.toBundle(input, name, seed = newId(), output = output)
+        } catch (refused: OneNoteConversionException) {
+            fail(
+                when (refused.reason) {
+                    OneNoteConversionException.Reason.TableOfContents ->
+                        "This is a OneNote table of contents (.onetoc2), which only lists the section " +
+                            "files kept beside it. In OneNote, export the notebook as a .onepkg file and " +
+                            "import that."
+                    OneNoteConversionException.Reason.Unreadable ->
+                        "This file is neither a .vive notebook nor a OneNote notebook or section that " +
+                            "ViveNotes can read."
+                    OneNoteConversionException.Reason.NoSections ->
+                        "This OneNote file has no sections to import."
+                    OneNoteConversionException.Reason.Failed ->
+                        "The OneNote notebook could not be converted."
+                },
+                refused,
+            )
+        } catch (failure: Throwable) {
+            // Not the file's fault: a report that would not parse, or a library that loaded
+            // without the method. Either way, not a damaged .vive, which is what the caller says.
+            fail("The OneNote notebook could not be converted.", failure)
+        }
+        DebugLog.i(DebugLog.TRANSFER) {
+            "Converted OneNote \"$name\" in ${(System.nanoTime() - started) / 1_000_000} ms: " +
+                "${conversion.sections} sections, ${conversion.pages} pages, ${conversion.strokes} " +
+                "strokes, ${conversion.attachments} pictures, ${output.length()} bytes"
+        }
+        conversion.warnings.forEach { warning ->
+            DebugLog.d(DebugLog.TRANSFER) { "Left out of the conversion: $warning" }
+        }
+        return conversion
+    }
+
+    private fun displayNameOf(source: Uri): String? = runCatching {
+        context.contentResolver.query(source, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+    }.getOrNull() ?: source.lastPathSegment
 
     private fun createConsistentSnapshot(target: File) {
         db.openHelper.writableDatabase.compileStatement("VACUUM INTO ?").use { statement ->
@@ -1460,12 +1555,28 @@ class NotebookTransferManager(
          * for example, exposes a newly created `.vive` document as `application/octet-stream`.
          * ZIP is included for providers which inspect the container. Document-provider display
          * names are not authoritative, so the complete staged bundle is validated after selection.
+         *
+         * `application/onenote` is what Android's own MIME map gives `.one`, `.onetoc2` and
+         * `.onepkg`. `application/msonenote` is the unregistered name some providers use instead.
          */
         fun importMimeTypes(): Array<String> = arrayOf(
             MIME_TYPE,
             "application/octet-stream",
             "application/zip",
+            "application/onenote",
+            "application/msonenote",
         )
+
+        /**
+         * Whether a staged file's first bytes are a ZIP's, and so a `.vive` to validate rather
+         * than a OneNote file to convert. Neither OneNote container begins with them: a package is
+         * a cabinet (`MSCF`) and a section begins with its file-type GUID.
+         */
+        internal fun isVive(head: ByteArray): Boolean =
+            head.size >= VIVE_SIGNATURE.size && VIVE_SIGNATURE.indices.all { head[it] == VIVE_SIGNATURE[it] }
+
+        /** `PK`, which every ZIP record begins with. */
+        private val VIVE_SIGNATURE = byteArrayOf(0x50, 0x4B)
 
         /** `HierarchySync.SyncKind.Notebook.wire`, which is private to it. */
         private const val SYNC_KIND_NOTEBOOK = "notebook"
@@ -1708,6 +1819,9 @@ private fun File.hasSQLiteHeader(): Boolean = FileInputStream(this).use { input 
     val header = ByteArray(SQLITE_HEADER.size)
     input.read(header) == header.size && header.contentEquals(SQLITE_HEADER)
 }
+
+/** Up to the first [count] bytes: fewer when the file is shorter. */
+private fun File.head(count: Int): ByteArray = FileInputStream(this).use { input -> input.readNBytes(count) }
 private fun ByteArray.sha256(): String = ByteArrayInputStream(this).sha256()
 private fun InputStream.sha256(): String {
     val digest = MessageDigest.getInstance("SHA-256")

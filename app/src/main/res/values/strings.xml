@@ -779,6 +779,10 @@
     <!-- What a screen reader says for a picture or a line of handwriting, given the text read out of it. -->
     <string name="image_description">Picture</string>
     <string name="image_description_text">Picture: %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="one">%d search match</item>
+        <item quantity="other">%d search matches</item>
+    </plurals>
     <string name="ink_description">Handwriting</string>
     <string name="ink_description_text">Handwriting: %1$s</string>
 
@@ -847,6 +851,7 @@
     <string name="transfer_failed">Notebook transfer failed</string>
     <string name="transfer_complete">Notebook transfer complete</string>
     <string name="transfer_preparing">Checking and preparing the notebook…</string>
+    <string name="transfer_converting_onenote">Converting the OneNote notebook…</string>
     <string name="transfer_ok">OK</string>
 
     <plurals name="count_sections">
@@ -911,4 +916,27 @@
     <string name="graph_sliders_apply">Apply</string>
     <string name="graph_sliders_cancel">Cancel</string>
     <string name="recognition_graph_parameters">Drawn at %1$s. Each gets a slider once placed.</string>
+    <string name="file_import_notebook">Notebook</string>
+    <string name="file_import_file">File</string>
+    <string name="import_file_title">Import file</string>
+    <string name="import_file_close">Close</string>
+    <string name="import_file_insert">Insert</string>
+    <plurals name="import_file_selected">
+        <item quantity="one">%1$d of %2$d page selected</item>
+        <item quantity="other">%1$d of %2$d pages selected</item>
+    </plurals>
+    <string name="import_file_page">Page %1$d</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">Pages</string>
+    <string name="import_file_select_all">Select all</string>
+    <string name="import_file_select_none">Clear</string>
+    <string name="import_file_as">Insert as</string>
+    <string name="import_file_as_objects">Text and tables</string>
+    <string name="import_file_as_pictures">Picture of each page</string>
+    <string name="import_file_as_info">Text and tables can be edited on the canvas. A picture shows the page as laid out here, ready to write over.</string>
+    <string name="import_file_not_word">Only Word documents (.doc, .docx), OpenDocument text (.odt), PowerPoint presentations (.pptx) and PDFs can be imported.</string>
+    <string name="import_file_password">This file is password-protected.</string>
+    <string name="import_file_too_large">This file is too large to import.</string>
+    <string name="import_file_unreadable">This file could not be read.</string>
+    <string name="import_file_insert_failed">The pages could not be placed on this page.</string>
 </resources>

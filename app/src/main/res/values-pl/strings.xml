@@ -740,6 +740,12 @@
     <string name="image_unreadable">Błąd: nie można odczytać %1$s</string>
     <string name="image_description">Zdjęcie</string>
     <string name="image_description_text">Zdjęcie: %1$s</string>
+    <plurals name="image_search_matches">
+        <item quantity="one">%d trafienie wyszukiwania</item>
+        <item quantity="few">%d trafienia wyszukiwania</item>
+        <item quantity="many">%d trafień wyszukiwania</item>
+        <item quantity="other">%d trafienia wyszukiwania</item>
+    </plurals>
     <string name="ink_description">Pismo odręczne</string>
     <string name="ink_description_text">Pismo odręczne: %1$s</string>
 
@@ -802,6 +808,7 @@
     <string name="transfer_failed">Przenoszenie notesu nie powiodło się</string>
     <string name="transfer_complete">Zakończono przenoszenie notesu</string>
     <string name="transfer_preparing">Sprawdzanie i przygotowywanie notesu…</string>
+    <string name="transfer_converting_onenote">Konwertowanie notesu programu OneNote…</string>
     <string name="transfer_ok">OK</string>
 
     <plurals name="count_sections">
@@ -864,4 +871,29 @@
     <string name="graph_sliders_apply">Zastosuj</string>
     <string name="graph_sliders_cancel">Anuluj</string>
     <string name="recognition_graph_parameters">Narysowano dla %1$s. Po umieszczeniu każdy parametr dostanie suwak.</string>
+    <string name="file_import_notebook">Notes</string>
+    <string name="file_import_file">Plik</string>
+    <string name="import_file_title">Importuj plik</string>
+    <string name="import_file_close">Zamknij</string>
+    <string name="import_file_insert">Wstaw</string>
+    <plurals name="import_file_selected">
+        <item quantity="one">Wybrano %1$d z %2$d strony</item>
+        <item quantity="few">Wybrano %1$d z %2$d stron</item>
+        <item quantity="many">Wybrano %1$d z %2$d stron</item>
+        <item quantity="other">Wybrano %1$d z %2$d stron</item>
+    </plurals>
+    <string name="import_file_page">Strona %1$d</string>
+    <string name="import_file_page_of">%1$d / %2$d</string>
+    <string name="import_file_pages">Strony</string>
+    <string name="import_file_select_all">Zaznacz wszystko</string>
+    <string name="import_file_select_none">Odznacz wszystko</string>
+    <string name="import_file_as">Wstaw jako</string>
+    <string name="import_file_as_objects">Tekst i tabele</string>
+    <string name="import_file_as_pictures">Obraz każdej strony</string>
+    <string name="import_file_as_info">Tekst i tabele można edytować na płótnie. Obraz pokazuje stronę tak, jak wygląda tutaj, gotową do pisania po niej.</string>
+    <string name="import_file_not_word">Można importować tylko dokumenty Word (.doc, .docx), teksty OpenDocument (.odt), prezentacje PowerPoint (.pptx) i pliki PDF.</string>
+    <string name="import_file_password">Ten plik jest chroniony hasłem.</string>
+    <string name="import_file_too_large">Ten plik jest zbyt duży, aby go zaimportować.</string>
+    <string name="import_file_unreadable">Nie można odczytać tego pliku.</string>
+    <string name="import_file_insert_failed">Nie udało się umieścić stron na tej stronie.</string>
 </resources>

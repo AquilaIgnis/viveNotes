@@ -57,6 +57,12 @@ import com.vivenotes.keyboard.ShortcutScope
 import com.vivenotes.richtext.SelectionState
 import android.view.KeyEvent
 import com.vivenotes.data.DeletedItemKind
+import com.vivenotes.fileimport.DocxTestFile
+import com.vivenotes.fileimport.FileImportMode
+import com.vivenotes.fileimport.FileImporter
+import com.vivenotes.ink.PasteFrames
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.flow.filterNotNull
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.NotesRepository
@@ -94,6 +100,12 @@ import com.vivenotes.model.PaperSize
 import com.vivenotes.model.SpaceCut
 import com.vivenotes.model.RuleLines
 import com.vivenotes.model.plainText
+import com.vivenotes.model.ocr.ImageLineLayout
+import com.vivenotes.model.ocr.ImageTextLayout
+import com.vivenotes.model.search.ContentHit
+import com.vivenotes.model.search.ContentKind
+import com.vivenotes.model.search.ContentUnit
+import com.vivenotes.model.search.MatchSpan
 import com.vivenotes.richtext.FormatCommand
 
 /**
@@ -634,6 +646,138 @@ class NotesViewModelTest {
         collecting.cancel()
     }
 
+    /** The boxes on a picture exist only while the Content pane is up with a query in it. */
+    @Test
+    fun aPictureCarriesTheMatchesOfASearchOnlyWhileThePaneIsOpen() = runTest(dispatcher) {
+        seedReadPicture("sha-boxes", "Quarterly totals", "Grand total")
+        val vm = NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+        )
+        val collecting = launch { vm.pictureHighlights.collect {} }
+        advanceUntilIdle()
+
+        vm.setSearchQuery("total")
+        advanceUntilIdle()
+        assertTrue("no boxes with the pane shut", vm.pictureHighlights.value.isEmpty())
+
+        vm.setContentPanelOpen(true)
+        val boxes = vm.pictureHighlights.first { it.isNotEmpty() }
+        assertEquals("one match on each line", 2, boxes.getValue("sha-boxes").count)
+
+        vm.setSearchQuery("")
+        assertTrue(vm.pictureHighlights.first { it.isEmpty() }.isEmpty())
+
+        vm.setSearchQuery("grand")
+        assertEquals(1, vm.pictureHighlights.first { it.isNotEmpty() }.getValue("sha-boxes").count)
+
+        vm.setContentPanelOpen(false)
+        assertTrue(vm.pictureHighlights.first { it.isEmpty() }.isEmpty())
+        collecting.cancel()
+    }
+
+    /** Opening a picture hit says where its words are, so the canvas can scroll to that line. */
+    @Test
+    fun openingAPictureHitCarriesWhereItsWordsAre() = runTest(dispatcher) {
+        seedReadPicture("sha-reveal", "Quarterly totals", "Grand total")
+        val vm = NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+        )
+        advanceUntilIdle()
+
+        vm.openSearchHit(pictureHit(vm, "sha-reveal", lineIndex = 1, text = "Grand total", MatchSpan(6, 11)))
+
+        val highlight = vm.reveal.first { it != null }!!.imageHighlight
+        assertEquals(1, highlight?.count)
+        assertEquals(0.1f + 0.8f * 6f / 11f, highlight!!.left, 0.001f)
+        assertEquals(0.2f, highlight.top, 0.001f)
+    }
+
+    /** A picture not yet read for positions still opens; there is just nothing to draw on it. */
+    @Test
+    fun openingAPictureHitWithNoLayoutStillOpens() = runTest(dispatcher) {
+        seedPicture("sha-unplaced")
+        repository.saveImageText(
+            AttachmentTextEntity(
+                attachmentId = "sha-unplaced",
+                text = "Grand total",
+                lineCount = 1,
+                confidence = 0.9f,
+                engine = ImageTextIndexer.ENGINE,
+                status = ImageTextStatus.Read,
+                durationMs = 0,
+                updatedAt = 0,
+            ),
+        )
+        val vm = NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+        )
+        advanceUntilIdle()
+
+        vm.openSearchHit(pictureHit(vm, "sha-unplaced", lineIndex = 0, text = "Grand total", MatchSpan(0, 5)))
+
+        assertNull(vm.reveal.first { it != null }!!.imageHighlight)
+    }
+
+    private fun pictureHit(
+        vm: NotesViewModel,
+        attachmentId: String,
+        lineIndex: Int,
+        text: String,
+        span: MatchSpan,
+    ) = ContentHit(
+        unit = ContentUnit(
+            pageId = firstPageId(),
+            sectionId = vm.uiState.value.selectedSectionId!!,
+            kind = ContentKind.Image,
+            boxId = "picture-1",
+            blockIndex = lineIndex,
+            text = text,
+            attachmentId = attachmentId,
+        ),
+        score = 100,
+        spans = listOf(span),
+    )
+
+    /** A picture whose text has been read, each line laid out straight across it, evenly spaced. */
+    private suspend fun seedReadPicture(attachmentId: String, vararg lines: String) {
+        seedPicture(attachmentId)
+        repository.saveImageText(
+            AttachmentTextEntity(
+                attachmentId = attachmentId,
+                text = lines.joinToString("\n"),
+                lineCount = lines.size,
+                confidence = 0.9f,
+                engine = ImageTextIndexer.ENGINE,
+                status = ImageTextStatus.Read,
+                durationMs = 0,
+                updatedAt = 0,
+                layout = ImageTextLayout.encode(
+                    lines.map { line ->
+                        ImageLineLayout(
+                            corners = floatArrayOf(0.1f, 0.2f, 0.9f, 0.2f, 0.9f, 0.3f, 0.1f, 0.3f),
+                            edges = FloatArray(line.length + 1) { it.toFloat() / line.length },
+                        )
+                    },
+                ),
+            ),
+        )
+    }
+
     /**
      * The open page's pictures are read as it is shown only while an accessibility service is on.
      * Reading one costs a hundred searches, and with nothing listening nobody hears the result.
@@ -718,6 +862,146 @@ class NotesViewModelTest {
             inkDispatcher = dispatcher,
             inkText = inkText,
         )
+
+    /** A document's pages arrive the way a paste does: separate objects, one step of Undo. */
+    @Test
+    fun aFilesPagesLandAsObjectsInOneStepOfUndo() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val importer = FileImporter(context)
+        val docx = java.io.File(context.cacheDir, "view-model-import-objects.docx")
+        DocxTestFile.write(
+            docx,
+            DocxTestFile.paragraph("from the file") +
+                DocxTestFile.table(
+                    2,
+                    DocxTestFile.row(
+                        DocxTestFile.cell(DocxTestFile.paragraph("left")),
+                        DocxTestFile.cell(DocxTestFile.paragraph("right")),
+                    ),
+                ),
+        )
+        val opened = importer.openFile(docx, docx.name)
+        val before = vm.uiState.value.outlines.size
+
+        val landed = vm.insertImportedPages(importer, opened, listOf(0), FileImportMode.Objects)
+        advanceUntilIdle()
+
+        assertTrue(landed)
+        assertEquals(before + 1, vm.uiState.value.outlines.size)
+        assertEquals("left", vm.uiState.value.tables.single().rows[0].cells[0].plainText)
+
+        vm.undoCanvas()
+        advanceUntilIdle()
+
+        assertEquals(before, vm.uiState.value.outlines.size)
+        assertTrue(vm.uiState.value.tables.isEmpty())
+        importer.release()
+        docx.delete()
+    }
+
+    /** Chosen as pictures, each page is one picture, in its own proportions, stacked down the canvas. */
+    @Test
+    fun aFilesPagesLandAsOnePicturePerPage() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val importer = FileImporter(context)
+        val docx = java.io.File(context.cacheDir, "view-model-import-pictures.docx")
+        DocxTestFile.write(
+            docx,
+            DocxTestFile.paragraph("first") + DocxTestFile.paragraph("second", "<w:pageBreakBefore/>"),
+        )
+        val opened = importer.openFile(docx, docx.name)
+
+        val landed = vm.insertImportedPages(importer, opened, listOf(0, 1), FileImportMode.Pictures)
+        advanceUntilIdle()
+
+        assertTrue(landed)
+        val images = vm.uiState.value.images
+        assertEquals(2, images.size)
+        assertEquals(1760f / 1360f, images[0].height / images[0].width, 0.01f)
+        assertTrue("the second page should be below the first", images[1].y >= images[0].y + images[0].height)
+
+        // They are real attachment files; this test should not leave them in the app's directory.
+        images.forEach { attachments.fileFor(it.attachmentId).delete() }
+        importer.release()
+        docx.delete()
+    }
+
+    /** A one-page document, ready to import, cleaned up by [closeImport]. */
+    private suspend fun openedImport(name: String): Pair<FileImporter, com.vivenotes.fileimport.ImportedFile> {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val importer = FileImporter(context)
+        val docx = java.io.File(context.cacheDir, name)
+        DocxTestFile.write(docx, DocxTestFile.paragraph("from the file"))
+        return importer to importer.openFile(docx, name).also { docx.delete() }
+    }
+
+    private fun closeImport(importer: FileImporter, vm: NotesViewModel) {
+        importer.release()
+        // They are real attachment files; these tests should not leave them in the app's directory.
+        vm.uiState.value.images.forEach { attachments.fileFor(it.attachmentId).delete() }
+    }
+
+    /** The bug this pins: both landed at the top of the view, one on top of the other. */
+    @Test
+    fun aSecondImportLandsBelowTheFirst() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val (importer, opened) = openedImport("second-import.docx")
+
+        assertTrue(vm.insertImportedPages(importer, opened, listOf(0), FileImportMode.Pictures))
+        advanceUntilIdle()
+        assertTrue(vm.insertImportedPages(importer, opened, listOf(0), FileImportMode.Pictures))
+        advanceUntilIdle()
+
+        val (first, second) = vm.uiState.value.images
+        assertTrue("the second document overlaps the first", second.y >= first.y + first.height)
+        closeImport(importer, vm)
+    }
+
+    /** The canvas's own figure wins: only it knows how the page's text wrapped. */
+    @Test
+    fun anImportLandsBelowWhereTheCanvasSaysTheContentEnds() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        val (importer, opened) = openedImport("below-the-content.docx")
+        val answering = launch(start = CoroutineStart.UNDISPATCHED) {
+            val request = vm.pendingPasteLayout.filterNotNull().first()
+            vm.completePasteLayout(request, PasteFrames(request.outlines.associate { it.id to 500f }, contentBottom = 3000f))
+        }
+
+        assertTrue(vm.insertImportedPages(importer, opened, listOf(0), FileImportMode.Pictures))
+        advanceUntilIdle()
+        answering.cancel()
+
+        val landed = vm.uiState.value.images.single()
+        assertEquals(3024f, landed.y, 0.01f)
+        assertEquals("the canvas should be sent to it", CanvasScrollTarget(pageId, 3024f), vm.canvasScrollTarget.value)
+        vm.onCanvasScrollTargetHandled()
+        assertNull(vm.canvasScrollTarget.value)
+        closeImport(importer, vm)
+    }
+
+    /** An empty text box is a place for a caret, not content to go below. */
+    @Test
+    fun anImportOntoABlankPageStartsUnderTheTitle() = runTest(dispatcher) {
+        repository.seedIfEmpty()
+        val vm = viewModelWith()
+        advanceUntilIdle()
+        val (importer, opened) = openedImport("blank-page.docx")
+        val answering = launch(start = CoroutineStart.UNDISPATCHED) {
+            val request = vm.pendingPasteLayout.filterNotNull().first()
+            // What the canvas reports for a blank page: the empty box still occupies its line.
+            vm.completePasteLayout(request, PasteFrames(request.outlines.associate { it.id to 500f }, contentBottom = 180f))
+        }
+
+        assertTrue(vm.insertImportedPages(importer, opened, listOf(0), FileImportMode.Pictures))
+        advanceUntilIdle()
+        answering.cancel()
+
+        assertEquals(PageStyle.TITLE_BAND_DP, vm.uiState.value.images.single().y, 0.01f)
+        closeImport(importer, vm)
+    }
 
     /** A screen reader is given the open page's handwriting line by line; a blank line says nothing. */
     @Test

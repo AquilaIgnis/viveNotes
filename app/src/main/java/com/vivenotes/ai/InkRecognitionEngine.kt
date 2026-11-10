@@ -7,6 +7,8 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
+import com.vivenotes.model.ocr.CtcDecoder
+import com.vivenotes.model.ocr.CtcReading
 import com.vivenotes.model.ocr.TextDetection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -106,7 +108,10 @@ class OnnxInkRecognitionEngine(
     private var formulaHolds = 0
 
     override suspend fun recognizeText(image: Bitmap): TextRecognitionResult =
-        withContext(inferenceDispatcher) { readLine(image) }
+        withContext(inferenceDispatcher) {
+            val line = readLine(image).reading
+            TextRecognitionResult(line.text, line.confidence)
+        }
 
     override suspend fun recognizeFormula(image: Bitmap): FormulaRecognitionResult =
         when (val engine = formulaEngine()) {
@@ -312,14 +317,20 @@ class OnnxInkRecognitionEngine(
                             ensureActive()
                             val quad = detected.scaled(scaleX, scaleY)
                             val strip = cropQuad(image, quad) ?: return@withPermit null
-                            val reading = try {
+                            val line = try {
                                 readLine(strip)
                             } finally {
                                 strip.recycle()
                             }
+                            val reading = line.reading
                             val text = reading.text.trim()
                             if (isSearchableReading(text) && reading.confidence >= MIN_LINE_CONFIDENCE) {
-                                ImageTextLine(text, reading.confidence, quad.corners)
+                                ImageTextLine(
+                                    text = text,
+                                    confidence = reading.confidence,
+                                    corners = quad.corners,
+                                    edges = reading.edges(line.columnShare, line.lineShare).asList(),
+                                )
                             } else {
                                 null
                             }
@@ -343,8 +354,11 @@ class OnnxInkRecognitionEngine(
         }
     }
 
+    /** A strip's reading, plus how much of the strip one output column and its own height span. */
+    private class LineReading(val reading: CtcReading, val columnShare: Float, val lineShare: Float)
+
     /** One line through the recognizer: the tensor is built and decoded outside the lane. */
-    private suspend fun readLine(image: Bitmap): TextRecognitionResult {
+    private suspend fun readLine(image: Bitmap): LineReading {
         val input = preprocessText(image)
         val logits = inLane {
             val session = session(ModelKind.Text)
@@ -360,7 +374,12 @@ class OnnxInkRecognitionEngine(
                 }
             }
         }
-        return decodeCtc(logits, textCharacters)
+        return LineReading(
+            reading = CtcDecoder.decode(logits, textCharacters),
+            // Padding is the tail of the tensor, so a column is a larger share of a short line.
+            columnShare = input.width.toFloat() / logits.size.coerceAtLeast(1) / input.contentWidth,
+            lineShare = TEXT_HEIGHT.toFloat() / input.contentWidth,
+        )
     }
 
     /** Runs [block] holding one inference lane. Every OCR `run` goes through here. */
@@ -545,7 +564,8 @@ class OnnxInkRecognitionEngine(
     }
 }
 
-internal data class TextTensor(val values: FloatArray, val width: Int)
+/** A recognizer input. [contentWidth] is how much of [width] is the line, the rest being padding. */
+internal data class TextTensor(val values: FloatArray, val width: Int, val contentWidth: Int)
 
 /**
  * PP-OCRv5 line resize, BGR channel order, `[-1, 1]` normalization and zero padding.
@@ -585,7 +605,7 @@ internal fun preprocessText(image: Bitmap): TextTensor {
             values[plane * 2 + target + x] = normalizeText(Color.red(color))
         }
     }
-    return TextTensor(values, width)
+    return TextTensor(values, width, resizedWidth)
 }
 
 /** FormulaNet's margin crop, 384-square white pad and one-channel normalization. */
@@ -690,33 +710,6 @@ private fun cropToInk(image: Bitmap): Bitmap {
     } else {
         image
     }
-}
-
-private fun decodeCtc(logits: Array<FloatArray>, characters: List<String>): TextRecognitionResult {
-    val result = StringBuilder()
-    var previous = 0
-    var confidence = 0f
-    var charactersRead = 0
-    logits.forEach { row ->
-        var bestIndex = 0
-        var bestScore = Float.NEGATIVE_INFINITY
-        row.forEachIndexed { index, score ->
-            if (score > bestScore) {
-                bestScore = score
-                bestIndex = index
-            }
-        }
-        if (bestIndex != 0 && bestIndex != previous && bestIndex < characters.size) {
-            result.append(characters[bestIndex])
-            confidence += bestScore
-            charactersRead++
-        }
-        previous = bestIndex
-    }
-    return TextRecognitionResult(
-        text = result.toString(),
-        confidence = if (charactersRead == 0) 0f else confidence / charactersRead,
-    )
 }
 
 private fun normalizeText(channel: Int): Float = (channel / 255f - 0.5f) / 0.5f
