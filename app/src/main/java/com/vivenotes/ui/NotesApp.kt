@@ -32,8 +32,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -1723,6 +1724,8 @@ private fun String.viveFileName(fallback: String): String {
     return "$safe${NotebookTransferManager.EXTENSION}"
 }
 
+/** The opt-in is for [LoadingIndicator], still gated in material3 1.5.0-alpha25. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun NotebookTransferDialog(
     state: NotebookTransferState,
@@ -1744,7 +1747,7 @@ private fun NotebookTransferDialog(
         text = {
             if (state.running) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                    LoadingIndicator()
                     Text(
                         stringResource(
                             if (state.converting) R.string.transfer_converting_onenote
