@@ -1492,7 +1492,7 @@ class SyncServerClient(
                 method = "DELETE",
             )
         ) {
-            is RawServerResult.Response -> decodeAuthenticated(raw) { Unit }
+            is RawServerResult.Response -> decodeAuthenticated(raw) { }
             RawServerResult.InvalidAddress -> invalidAddress()
             RawServerResult.Unreachable -> unreachable()
         }

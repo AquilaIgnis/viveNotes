@@ -32,7 +32,7 @@ class SympyMathEngineTest {
         org.junit.Assert.assertNotNull(com.vivenotes.graph.GraphExpression.parse(graph!!.expression!!))
 
         val moved = engine.mutateGraph(
-            graph.expression!!,
+            graph.expression,
             "x",
             """{"kind":"root","root":"2.0","to":"3.5"}""",
         )
@@ -52,7 +52,7 @@ class SympyMathEngineTest {
         org.junit.Assert.assertEquals(1.0, function.evaluate(Math.PI / 2), 1e-12)
 
         val shifted = engine.mutateGraph(
-            graph.expression!!,
+            graph.expression,
             "t",
             """{"kind":"shift","h":"0.5","k":"0"}""",
             graph.parameters.map { it.symbol },

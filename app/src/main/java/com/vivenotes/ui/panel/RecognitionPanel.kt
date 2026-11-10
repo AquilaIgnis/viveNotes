@@ -528,7 +528,7 @@ private fun MathGraphPreview(graph: MathGraph) {
             } else {
                 val x = mapX(xValue)
                 val y = mapY(yValue)
-                if (previousY == null || abs(y - previousY!!) > size.height * 1.5f) {
+                if (previousY == null || abs(y - previousY) > size.height * 1.5f) {
                     path.moveTo(x, y)
                 } else {
                     path.lineTo(x, y)

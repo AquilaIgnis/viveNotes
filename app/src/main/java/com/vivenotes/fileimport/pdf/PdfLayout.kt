@@ -659,7 +659,7 @@ private fun inlinesOf(lines: List<List<PdfLine>>, bodyEm: Float, skipFirstWord: 
             val hyphenated = last != null && last.text.endsWith("-") && next.firstOrNull()?.isLowerCase() == true
             val softHyphen = lines[row].last().words.last().glyphs.lastOrNull()?.char == SOFT_HYPHEN_MARK
             when {
-                hyphenated -> out[out.lastIndex] = WordText(last!!.text.dropLast(1), last.style, last.link)
+                hyphenated -> out[out.lastIndex] = WordText(last.text.dropLast(1), last.style, last.link)
                 !softHyphen -> add(" ", WordRunStyle(), null)
             }
         }

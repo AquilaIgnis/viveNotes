@@ -126,7 +126,7 @@ internal val TEXT_COLORS = listOf(
 internal val HIGHLIGHT_COLORS = listOf(
     0x66FFEB3B, 0x6676FF03, 0x6640C4FF, 0x66FF4081,
     0x66FF9100, 0x66B388FF, 0x66FFFFFF, 0x00000000,
-).map { it.toInt() }
+)
 
 // 15 is not a size Word or OneNote offers, but it is this editor's default, and now that the
 // default persists a user who changes it could otherwise never get back to it.

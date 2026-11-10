@@ -730,21 +730,21 @@ internal class WordLayoutEngine(
                         break
                     }
                 }
-                val frame = frames!!
+                val frame: Frames = frames
                 return y + needed <= frame.bottom || needed > frame.bottom - frame.top
             }
 
             for (index in blocks.indices) {
                 coroutineContext.ensureActive()
                 val block = blocks[index]
-                if (block.pageBreakBefore && (draft!!.pieces.isNotEmpty() || y > frames!!.top)) newPage(section)
+                if (block.pageBreakBefore && (draft!!.pieces.isNotEmpty() || y > frames.top)) newPage(section)
                 if (block.columnBreakBefore && y > frameTop) nextFrame(section)
                 if (block.keepWithNext && y > frameTop && !keepNextFits(index)) nextFrame(section)
                 // Where Word itself broke the page, and this page is well on its way, take its word
                 // for it: a font we only approximate then drifts by a few lines and no further. A
                 // stale marker can do no worse than end one page a little early.
-                if (block.wordBrokeHere && column + 1 == frames!!.columns &&
-                    y - frameTop > (frames!!.bottom - frameTop) * WORD_BREAK_MIN_FILL
+                if (block.wordBrokeHere && column + 1 == frames.columns &&
+                    y - frameTop > (frames.bottom - frameTop) * WORD_BREAK_MIN_FILL
                 ) {
                     nextFrame(section)
                 }
@@ -752,7 +752,7 @@ internal class WordLayoutEngine(
                 var from = 0
                 var first = true
                 while (true) {
-                    val frame = frames!!
+                    val frame: Frames = frames
                     val repeat = if (from > 0) block.repeatHeight else 0
                     val before = if (first && !(y == frameTop && afterAutoBreak)) block.spaceBefore else 0
                     val top = y + before

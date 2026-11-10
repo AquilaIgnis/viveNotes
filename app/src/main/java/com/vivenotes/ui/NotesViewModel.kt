@@ -4452,23 +4452,23 @@ class NotesViewModel(
             entry.atMillis - previous.atMillis <= SHAPE_COALESCE_MS
 
         if (graphsCoalesce) {
-            history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Graphs).copy(
-                after = (entry as CanvasHistoryEntry.Graphs).after,
+            history.undo[history.undo.lastIndex] = previous.copy(
+                after = entry.after,
                 atMillis = entry.atMillis,
             )
         } else if (equationsCoalesce) {
-            history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Equations).copy(
-                after = (entry as CanvasHistoryEntry.Equations).after,
+            history.undo[history.undo.lastIndex] = previous.copy(
+                after = entry.after,
                 atMillis = entry.atMillis,
             )
         } else if (shapesCoalesce) {
-            history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Shapes).copy(
-                after = (entry as CanvasHistoryEntry.Shapes).after,
+            history.undo[history.undo.lastIndex] = previous.copy(
+                after = entry.after,
                 atMillis = entry.atMillis,
             )
         } else if (tablesCoalesce) {
-            history.undo[history.undo.lastIndex] = (previous as CanvasHistoryEntry.Tables).copy(
-                after = (entry as CanvasHistoryEntry.Tables).after,
+            history.undo[history.undo.lastIndex] = previous.copy(
+                after = entry.after,
                 atMillis = entry.atMillis,
             )
         } else {

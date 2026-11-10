@@ -918,7 +918,7 @@ fun EditorPane(
     // What the page *is*, as opposed to how much of it can be scrolled: the sheet when one holds
     // the content, otherwise whatever the content needs. This is what Zoom to Page Width fits.
     val pageSize = if (fits) {
-        sheet!!
+        sheet
     } else {
         DpSize(
             maxOf(contentBounds.width, sheet?.width ?: 0.dp, CANVAS_MIN_WIDTH),

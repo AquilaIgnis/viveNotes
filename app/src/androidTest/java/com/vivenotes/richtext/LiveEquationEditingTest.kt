@@ -149,7 +149,7 @@ class LiveEquationEditingTest {
         }
         compose.waitUntil(timeoutMillis = 2_000) {
             editor?.liveEquations()?.isEmpty() == true &&
-                editor?.hiddenEquationSources()?.isEmpty() == true
+                editor.hiddenEquationSources().isEmpty()
         }
         compose.runOnIdle {
             assertEquals(source, checkNotNull(editor).text.toString())

@@ -1,7 +1,9 @@
 [versions]
 agp = "9.5.1"
-# Kotlin version bundled by AGP 9.2.1's built-in Kotlin support. The compose and
-# serialization compiler plugins must track this exactly. See memory/plan.md §11.
+# The Kotlin compiler for AGP's built-in Kotlin. AGP itself pulls in an older KGP (2.2.10 as of
+# AGP 9.5.1); the compose and serialization plugins carry this KGP onto the root classpath, where
+# it wins, so they must stay declared in the root build.gradle.kts. Verify a bump with
+# `./gradlew :app:dependencies --configuration kotlinCompilerClasspath`.
 kotlin = "2.4.21"
 # Independently versioned since KSP 2.3.0 — it no longer tracks `kotlin` above. 2.3.6 is the
 # minimum that registers generated sources without `android.disallowKotlinSourceSets=false`.

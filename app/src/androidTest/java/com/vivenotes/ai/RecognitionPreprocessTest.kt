@@ -88,7 +88,7 @@ class RecognitionPreprocessTest {
         // A 60x20 rectangle is 3:1, so it fits to 384x128 and is centred: the middle row crosses
         // both of its uprights, and the rows a third of the way down the frame are still padding.
         val middleRow = tensor.asList().subList(192 * 384, 193 * 384)
-        assertTrue("the crop did not land in the middle of the frame", middleRow.min()!! < paper - 1f)
+        assertTrue("the crop did not land in the middle of the frame", middleRow.min() < paper - 1f)
         assertEquals(paper, tensor[20 * 384 + 192], 1e-4f)
     }
 

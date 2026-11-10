@@ -740,7 +740,7 @@ internal class WordNumbering(root: Element?, private val styles: WordStyles) {
         val startOverride = instance.starts[level]
         val freshInstance = startOverride != null && startsConsumed.add(numId * MAX_LEVELS + level)
         counts[level] = when {
-            freshInstance -> startOverride!!
+            freshInstance -> startOverride
             counts[level] == UNSTARTED -> definition.start
             else -> counts[level] + 1
         }

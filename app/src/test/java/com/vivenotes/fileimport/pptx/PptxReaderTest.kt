@@ -313,7 +313,7 @@ class PptxReaderTest {
 
         assertEquals("ppt/media/a.png", picture.part)
         assertEquals(0.1f, picture.crop!!.left, 0.001f)
-        assertEquals(0.2f, picture.crop!!.right, 0.001f)
+        assertEquals(0.2f, picture.crop.right, 0.001f)
     }
 
     @Test

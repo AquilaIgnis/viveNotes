@@ -141,7 +141,7 @@ internal fun ShortcutCaptureDialog(
                     text = when {
                         refused != null -> stringResource(R.string.shortcut_capture_needs_modifier, refused.label)
                         conflict != null ->
-                            stringResource(R.string.shortcut_capture_conflict, held?.label.orEmpty(), stringResource(conflict.label))
+                            stringResource(R.string.shortcut_capture_conflict, held.label, stringResource(conflict.label))
                         else -> stringResource(
                             R.string.shortcut_capture_now,
                             bindings.primary(action)?.label ?: stringResource(R.string.hardware_shortcut_disabled),

@@ -7,7 +7,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.hypot
 import kotlin.math.sin
 
 /**
@@ -234,6 +233,4 @@ class TextDetectionTest {
         }
         return total / 2f
     }
-
-    private fun Point.distanceTo(other: Point) = hypot(other.x - x, other.y - y)
 }
