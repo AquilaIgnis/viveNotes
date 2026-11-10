@@ -442,6 +442,8 @@ private val DeletedItemKind.displayName: String
 /** Progress and the one-shot result message for File-tab notebook transfers. */
 data class NotebookTransferState(
     val running: Boolean = false,
+    /** The running import is converting a OneNote file, which takes seconds rather than moments. */
+    val converting: Boolean = false,
     val message: String? = null,
     val error: String? = null,
 )
@@ -1112,7 +1114,9 @@ class NotesViewModel(
             try {
                 val selectedSectionId = _uiState.value.selectedSectionId
                 persist()
-                val result = manager.importNotebook(source)
+                val result = manager.importNotebook(source) {
+                    _notebookTransfer.value = NotebookTransferState(running = true, converting = true)
+                }
                 // An explicit import always opens what it imported, so an authoritative archive
                 // document replaces a stale open editor immediately.
                 result.firstSectionId?.let { importedSectionId ->
@@ -1132,7 +1136,9 @@ class NotesViewModel(
                     }
                 }
                 _notebookTransfer.value = NotebookTransferState(
-                    message = when {
+                    message = result.oneNote?.let { conversion ->
+                        oneNoteImportMessage(result.notebookName, conversion.warnings)
+                    } ?: when {
                         result.created -> "${result.notebookName} was imported."
                         result.restored -> "${result.notebookName} was restored from the .vive notebook."
                         else -> "${result.notebookName} was updated from the .vive notebook."
@@ -1146,6 +1152,20 @@ class NotesViewModel(
                 )
             }
         }
+    }
+
+    /**
+     * What a OneNote import says when it is done. Whatever the converter left out is listed, once
+     * per kind with a count, since a notebook with many attachments repeats the same line.
+     */
+    private fun oneNoteImportMessage(notebookName: String, warnings: List<String>): String {
+        if (warnings.isEmpty()) return "$notebookName was imported from OneNote."
+        val kinds = warnings.groupingBy { it }.eachCount().entries.joinToString("\n") { (warning, count) ->
+            val line = warning.replaceFirstChar(Char::uppercaseChar)
+            if (count == 1) "• $line" else "• $line ($count×)"
+        }
+        val total = if (warnings.size == 1) "1 item was" else "${warnings.size} items were"
+        return "$notebookName was imported from OneNote. $total left out:\n$kinds"
     }
 
     fun clearNotebookTransferStatus() {

@@ -782,6 +782,7 @@
     <string name="transfer_failed">Trasferimento notebook non riuscito</string>
     <string name="transfer_complete">Trasferimento notebook completato</string>
     <string name="transfer_preparing">Controllo e preparazione del notebook in corso…</string>
+    <string name="transfer_converting_onenote">Conversione del blocco appunti di OneNote in corso…</string>
     <string name="transfer_ok">OK</string>
 
     <plurals name="count_sections">

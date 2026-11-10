@@ -768,6 +768,7 @@
     <string name="transfer_failed">노트북 전송 실패</string>
     <string name="transfer_complete">노트북 전송 완료</string>
     <string name="transfer_preparing">노트북 확인 및 준비 중…</string>
+    <string name="transfer_converting_onenote">OneNote 전자 필기장 변환 중…</string>
     <string name="transfer_ok">확인</string>
 
     <plurals name="count_sections">

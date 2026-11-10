@@ -1745,7 +1745,13 @@ private fun NotebookTransferDialog(
             if (state.running) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                    Text(stringResource(R.string.transfer_preparing), Modifier.padding(start = 12.dp))
+                    Text(
+                        stringResource(
+                            if (state.converting) R.string.transfer_converting_onenote
+                            else R.string.transfer_preparing,
+                        ),
+                        Modifier.padding(start = 12.dp),
+                    )
                 }
             } else {
                 Text(state.error ?: state.message.orEmpty())

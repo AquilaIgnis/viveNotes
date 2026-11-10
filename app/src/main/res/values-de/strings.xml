@@ -781,6 +781,7 @@
     <string name="transfer_failed">Notizbuchübertragung fehlgeschlagen</string>
     <string name="transfer_complete">Notizbuchübertragung abgeschlossen</string>
     <string name="transfer_preparing">Notizbuch wird überprüft und vorbereitet…</string>
+    <string name="transfer_converting_onenote">OneNote-Notizbuch wird umgewandelt…</string>
     <string name="transfer_ok">OK</string>
 
     <plurals name="count_sections">

@@ -1,0 +1,10 @@
+These fixtures come from onenote.rs (https://github.com/msiemens/onenote.rs), licensed under the
+Mozilla Public License 2.0, from crates/parser/tests/samples/ at v2.0.0:
+
+  section.one      "New Section 1.one"
+  toc.onetoc2      "Open Notebook.onetoc2"
+  notebook.onepkg  a cabinet of "New Section Group/Open Notebook.onetoc2",
+                   "New Section Group/New Section 1.one" and "New Section Group/New Section 2.one",
+                   written with the `cab` crate (MSZIP), which is how OneNote packages them
+
+They are test data only and are not part of the app.

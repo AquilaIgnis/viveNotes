@@ -768,6 +768,7 @@
     <string name="transfer_failed">ノートブックの転送に失敗しました</string>
     <string name="transfer_complete">ノートブックの転送が完了しました</string>
     <string name="transfer_preparing">ノートブックを確認および準備中…</string>
+    <string name="transfer_converting_onenote">OneNote のノートブックを変換中…</string>
     <string name="transfer_ok">OK</string>
 
     <plurals name="count_sections">

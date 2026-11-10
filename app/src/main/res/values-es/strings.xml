@@ -810,6 +810,7 @@
     <string name="transfer_failed">Error en la transferencia del cuaderno</string>
     <string name="transfer_complete">Transferencia del cuaderno completada</string>
     <string name="transfer_preparing">Comprobando y preparando el cuaderno…</string>
+    <string name="transfer_converting_onenote">Convirtiendo el cuaderno de OneNote…</string>
     <string name="transfer_ok">Aceptar</string>
 
     <plurals name="count_sections">

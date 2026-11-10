@@ -24,6 +24,18 @@ Before planning, diagnosing, or modifying this project:
     `$HOME/.codex/skills/android-cli/SKILL.md` or `$HOME/.claude/skills/android-cli/SKILL.md`
     before performing those operations.
 
+# OneNote converter
+
+File ▸ Import ▸ Notebook converts OneNote files with a Rust library from
+`~/repos/viveHub/converter/vive-converter` (with `onenote.rs` beside it). `app/build.gradle.kts`
+builds it with cargo-ndk, so builds need Rust, the two Android targets and `cargo-ndk`.
+
+- A release build fails without the checkout, rather than shipping without OneNote import. Debug
+  builds leave the library out with a warning.
+- `-PviveConverterDir=…` points at another checkout. `-PnoOneNote` builds without it.
+- The JNI symbol is named after `com.vivenotes.data.onenote.OneNoteConverter.convert`. Rename the
+  Kotlin and Rust sides together, because a mismatch only fails when the method is called.
+
 # Release signing
 
 The upload key's four values are read from a gitignored `.env` at the repo root; `.env.example`

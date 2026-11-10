@@ -1,6 +1,7 @@
 import com.android.build.api.artifact.SingleArtifact
 import java.io.File
 import java.util.Properties
+import javax.inject.Inject
 
 plugins {
     alias(libs.plugins.android.application)
@@ -111,6 +112,104 @@ abstract class NameBundleTask : DefaultTask() {
     @TaskAction
     fun rename() {
         bundle.get().asFile.copyTo(renamed.get().asFile, overwrite = true)
+    }
+}
+
+/**
+ * The OneNote converter's checkout, `github.com/AquilaIgnis/vive-converter`, with
+ * `github.com/msiemens/onenote.rs` cloned beside it as `onenote.rs`: the converter's Cargo.toml
+ * names the parser by that relative path. File ▸ Import ▸ Notebook hands every file that is not a
+ * `.vive` to its Rust library.
+ *
+ * `-PviveConverterDir=…` (or the same key in `local.properties`) moves it. `-PnoOneNote` builds
+ * without it, and the import then says that this build cannot convert OneNote files.
+ */
+private val viveConverterDir: File? =
+    if (project.hasProperty("noOneNote")) null
+    else rootProject.file(
+        localSetting(
+            "viveConverterDir",
+            "${System.getProperty("user.home")}/repos/viveHub/converter/vive-converter",
+        ),
+    )
+
+/**
+ * Builds the converter's `libvive_converter.so` for [abis] with cargo-ndk, into [libraries] laid
+ * out as `jniLibs` expects (`<abi>/libvive_converter.so`).
+ *
+ * Only that library is copied. `onenote_parser` declares a cdylib of its own, which cargo-ndk's
+ * `-o` would copy as well; the converter links the parser statically, and the APK must not carry
+ * a second copy. Cargo's target directory stays in the checkout, so `./gradlew clean` does not
+ * cost a rebuild of SQLite.
+ *
+ * Without a checkout, a variant that is not [required] builds without the library (the debug
+ * build on CI), and one that is fails, so that a release cannot quietly ship without OneNote import.
+ */
+abstract class ViveConverterTask : DefaultTask() {
+    @get:Internal
+    abstract val converter: Property<File>
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sources: ConfigurableFileCollection
+
+    @get:Input
+    abstract val abis: ListProperty<String>
+
+    @get:Input
+    abstract val platform: Property<Int>
+
+    @get:Input
+    abstract val required: Property<Boolean>
+
+    @get:Internal
+    abstract val sdk: Property<File>
+
+    @get:OutputDirectory
+    abstract val libraries: DirectoryProperty
+
+    @get:Inject
+    abstract val execOperations: ExecOperations
+
+    @TaskAction
+    fun build() {
+        val checkout = converter.get()
+        val output = libraries.get().asFile.apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        if (!File(checkout, "Cargo.toml").isFile) {
+            val missing = "There is no OneNote converter at $checkout. Clone " +
+                "github.com/AquilaIgnis/vive-converter there, with github.com/msiemens/onenote.rs " +
+                "beside it as onenote.rs; or set viveConverterDir; or pass -PnoOneNote to build " +
+                "without OneNote import."
+            if (required.get()) throw GradleException(missing)
+            logger.warn("$missing This build leaves OneNote import out.")
+            return
+        }
+        // A Gradle daemon started by Android Studio from a desktop launcher has no ~/.cargo/bin.
+        val cargoBin = File(System.getProperty("user.home"), ".cargo/bin")
+        execOperations.exec {
+            workingDir = checkout
+            environment("PATH", "${cargoBin.path}${File.pathSeparator}${System.getenv("PATH")}")
+            environment("ANDROID_HOME", sdk.get().path)
+            commandLine(
+                listOf("cargo", "ndk") +
+                    abis.get().flatMap { abi -> listOf("-t", abi) } +
+                    listOf("--platform", platform.get().toString()) +
+                    listOf("build", "--profile", "android", "--lib") +
+                    listOf("--target-dir", File(checkout, "target").path),
+            )
+        }
+        abis.get().forEach { abi ->
+            val triple = when (abi) {
+                "arm64-v8a" -> "aarch64-linux-android"
+                "x86_64" -> "x86_64-linux-android"
+                else -> throw GradleException("The OneNote converter has no Rust target for $abi.")
+            }
+            File(checkout, "target/$triple/android/libvive_converter.so")
+                .copyTo(File(output, "$abi/libvive_converter.so"), overwrite = true)
+        }
     }
 }
 
@@ -245,6 +344,29 @@ android {
 }
 
 androidComponents {
+    // The OneNote converter, for the ABIs each variant ships: both for debug, [releaseAbis] for
+    // release. One task per variant, because a generated source directory belongs to one variant.
+    onVariants { variant ->
+        val checkout = viveConverterDir ?: return@onVariants
+        val release = variant.buildType == "release"
+        val task = tasks.register<ViveConverterTask>(
+            "buildViveConverter${variant.name.replaceFirstChar(Char::uppercaseChar)}",
+        ) {
+            converter.set(checkout)
+            sources.from(
+                fileTree(checkout) { include("src/**", "Cargo.toml", "Cargo.lock") },
+                fileTree(File(checkout.parentFile, "onenote.rs/crates")) {
+                    exclude("**/target/**", "*/tests/**", "*/benches/**")
+                },
+            )
+            abis.set(if (release) releaseAbis else allAbis)
+            platform.set(variant.minSdk.apiLevel)
+            required.set(release)
+            sdk.set(sdkComponents.sdkDirectory.map { it.asFile })
+        }
+        variant.sources.jniLibs?.addGeneratedSourceDirectory(task, ViveConverterTask::libraries)
+    }
+
     onVariants(selector().withBuildType("release")) { variant ->
         val droppedAbis = allAbis - releaseAbis.toSet()
         //Drops whatever [releaseAbis] leaves out of the release APK.
