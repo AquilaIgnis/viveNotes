@@ -103,4 +103,16 @@ class PptxGeometryTest {
 
         assertEquals(3, out.size)
     }
+
+    /** DrawingML sweeps at most a turn either way; a file's 1e30 was a curve for every quarter turn of it. */
+    @Test(timeout = 5_000)
+    fun anArcPastAFullTurnIsOneTurnAndNoNumberIsNoArc() {
+        val huge = ArrayList<WordPathCommand>()
+        arcCommands(10f, 0f, 10f, 10f, 0f, 1e30f, huge)
+        assertEquals(4, huge.size)
+
+        val none = ArrayList<WordPathCommand>()
+        arcCommands(10f, 0f, 10f, 10f, 0f, Float.NaN, none)
+        assertTrue(none.all { (it as WordCubicTo).x.isFinite() && it.y.isFinite() })
+    }
 }

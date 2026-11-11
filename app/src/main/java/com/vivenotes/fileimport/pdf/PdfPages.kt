@@ -76,7 +76,8 @@ internal class PdfPages private constructor(
             },
         )
         val document = WordDocument(emptyList(), emptyMap(), emptyMap(), WordSettings())
-        return WordObjects(document, marks) { part -> figures[part]?.let { (page, box) -> figureBytes(page, box) } }.items(pieces)
+        val pictureBytes = { part: String -> figures[part]?.let { (page, box) -> figureBytes(page, box) } }
+        return WordObjects(document, marks, pictureBytes).items(pieces)
     }
 
     /** A sample spread through the file: what repeats on every page shows up in any of them. */
@@ -147,20 +148,29 @@ internal class PdfPages private constructor(
                 }
             }
             settleMonospace(lines)
-            val scale = LAYOUT_PIXELS_PER_POINT
-            val bitmap = drawn(
-                page,
-                (width * scale).roundToInt().coerceAtLeast(1),
-                (height * scale).roundToInt().coerceAtLeast(1),
-                Matrix().apply { setScale(scale, scale) },
-            )
-            val pixels = IntArray(bitmap.width * bitmap.height)
-            bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-            val raster = PdfRaster(pixels, bitmap.width, bitmap.height, scale)
-            bitmap.recycle()
-            readWordLooks(raster, lines)
-            // Masked including what is left out of the text, or a margin stamp would read as a figure.
-            PdfPageInput(width, height, lines, readInk(raster, everyLine.flatMap { it.words })) { figure ->
+            // Looking at the pixels takes some sixty bytes for each square point of page. A poster is
+            // past what a phone can spare for that, and comes in as its words without their look. A
+            // page that size with no words at all is a scan, or a photo some tool sized at 72 dpi,
+            // and is one picture.
+            val ink = if (width * height > MAX_INSPECTED_PAGE_AREA) {
+                PdfInk(emptyList(), if (lines.isEmpty()) listOf(PdfRect(0f, 0f, width, height)) else emptyList())
+            } else {
+                val scale = LAYOUT_PIXELS_PER_POINT
+                val bitmap = drawn(
+                    page,
+                    (width * scale).roundToInt().coerceAtLeast(1),
+                    (height * scale).roundToInt().coerceAtLeast(1),
+                    Matrix().apply { setScale(scale, scale) },
+                )
+                val pixels = IntArray(bitmap.width * bitmap.height)
+                bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                val raster = PdfRaster(pixels, bitmap.width, bitmap.height, scale)
+                bitmap.recycle()
+                readWordLooks(raster, lines)
+                // Masked including what is left out of the text, or a margin stamp would read as a figure.
+                readInk(raster, everyLine.flatMap { it.words })
+            }
+            PdfPageInput(width, height, lines, ink) { figure ->
                 val part = "page-$index-figure-${figures.size}"
                 figures[part] = index to figure
                 part
@@ -202,25 +212,26 @@ internal class PdfPages private constructor(
 
         fun open(file: File): PdfPages {
             val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            var renderer: PdfRenderer? = null
             try {
-                val renderer = try {
+                val opened = try {
                     PdfRenderer(descriptor)
                 } catch (locked: SecurityException) {
                     throw ImportException(ImportFailure.PasswordProtected, locked)
                 } catch (broken: IOException) {
                     throw ImportException(ImportFailure.Unreadable, broken)
                 }
-                if (renderer.pageCount > MAX_PAGES) {
-                    renderer.close()
-                    throw ImportException(ImportFailure.TooLarge)
-                }
-                val sizes = (0 until renderer.pageCount).map { index ->
-                    renderer.openPage(index).use { page ->
+                renderer = opened
+                if (opened.pageCount > MAX_PAGES) throw ImportException(ImportFailure.TooLarge)
+                val sizes = (0 until opened.pageCount).map { index ->
+                    opened.openPage(index).use { page ->
                         ImportedPageSize(page.width.toDp(), page.height.toDp())
                     }
                 }
-                return PdfPages(descriptor, renderer, sizes)
+                return PdfPages(descriptor, opened, sizes)
             } catch (failure: Throwable) {
+                // A page that will not open is as broken as a file that will not; neither keeps the file.
+                runCatching { renderer?.close() }
                 descriptor.close()
                 throw failure
             }
@@ -233,6 +244,9 @@ internal class PdfPages private constructor(
 
         /** Two to the point: a hairline survives, and a page is still under 2 MP. */
         private const val LAYOUT_PIXELS_PER_POINT = 2f
+
+        /** Square points of page whose pixels are looked at: A3 and tabloid are inside, an A2 poster is not. */
+        private const val MAX_INSPECTED_PAGE_AREA = 1_100_000f
         private const val FIGURE_PIXELS_PER_POINT = 4f
         private const val FIGURE_LONGEST_PX = 2048f
         private const val FURNITURE_SAMPLE_PAGES = 24

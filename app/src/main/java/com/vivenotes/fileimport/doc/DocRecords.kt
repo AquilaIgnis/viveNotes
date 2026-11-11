@@ -526,7 +526,8 @@ internal fun applyParagraph(start: DocPara, grpprl: ByteArray?, from: Int): DocP
             }
             Sprm.P_BEFORE -> out.copy(before = grpprl.u16(at))
             Sprm.P_AFTER -> out.copy(after = grpprl.u16(at))
-            Sprm.P_CHG_TABS, Sprm.P_CHG_TABS_PAPX -> out.copy(tabs = changedTabs(out.tabs, grpprl, at))
+            Sprm.P_CHG_TABS -> out.copy(tabs = changedTabs(out.tabs, grpprl, at, closeTolerances = true))
+            Sprm.P_CHG_TABS_PAPX -> out.copy(tabs = changedTabs(out.tabs, grpprl, at, closeTolerances = false))
             Sprm.P_IN_TABLE -> out.copy(inTable = flag(at))
             Sprm.P_TTP -> out.copy(rowEnd = flag(at))
             Sprm.P_ITAP -> out.copy(depth = grpprl.i32(at))
@@ -551,12 +552,17 @@ private fun alignOf(value: Int): WordAlign = when (value) {
     else -> WordAlign.Left
 }
 
-private fun changedTabs(tabs: List<WordTabStop>, bytes: ByteArray, operand: Int): List<WordTabStop> {
+/**
+ * A tab change: stops taken away, then stops added. The paragraph-style form lists only where each
+ * taken stop was; the direct form ([closeTolerances]) follows that with how near counts as there,
+ * one more number per stop, which has to be stepped over to reach the added ones.
+ */
+private fun changedTabs(tabs: List<WordTabStop>, bytes: ByteArray, operand: Int, closeTolerances: Boolean): List<WordTabStop> {
     var at = operand + 1
     val deletedCount = bytes.u8(at)
     at += 1
     val deleted = (0 until deletedCount).map { bytes.s16(at + it * 2) }.toSet()
-    at += deletedCount * 2
+    at += deletedCount * if (closeTolerances) 4 else 2
     val addedCount = bytes.u8(at)
     at += 1
     val kept = tabs.filter { it.positionTwips !in deleted }.toMutableList()

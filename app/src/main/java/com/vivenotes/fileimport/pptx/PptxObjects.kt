@@ -73,6 +73,10 @@ internal fun arrangeSlide(elements: List<PptxElement>, slideWidth: Int, slideHei
     val pictures = present.filter { it.role == PptxRole.Picture }
     val annotated = pictures.filter { picture -> drawings.any { touching(picture, it, 0) } }
     val pool = drawings + annotated
+    // Looked up rather than searched for: a plotted chart can be thousands of shapes in one group.
+    val pooled = pool.toHashSet()
+    val order = HashMap<PptxElement, Int>(elements.size * 2)
+    elements.forEachIndexed { index, element -> order.putIfAbsent(element, index) }
     val parent = IntArray(pool.size) { it }
     fun find(item: Int): Int {
         var at = item
@@ -115,13 +119,13 @@ internal fun arrangeSlide(elements: List<PptxElement>, slideWidth: Int, slideHei
                     right = max(right, label.right)
                     bottom = max(bottom, label.bottom)
                 }
-                val members = (cluster + labels).sortedBy { elements.indexOf(it) }
+                val members = (cluster + labels).sortedBy { order[it] ?: -1 }
                 out += cluster.first() to PptxObject.Figure(members, left, top, right, bottom)
             }
         }
     }
     for (element in present) {
-        if (element in absorbed || element in pool) continue
+        if (element in absorbed || element in pooled) continue
         when (element.role) {
             PptxRole.Title, PptxRole.Body, PptxRole.TextBox -> if (element.paragraphs.isNotEmpty()) out += element to PptxObject.Text(element.paragraphs)
             PptxRole.Table -> element.table?.let { out += element to PptxObject.Table(it, element.tableEm) }
@@ -156,7 +160,9 @@ private fun touching(a: PptxElement, b: PptxElement, reach: Int): Boolean {
 /** A shape with nothing to say that is either a thin rule or a panel the size of the slide. */
 private fun isDecoration(element: PptxElement, slideWidth: Int, slideHeight: Int): Boolean {
     if (element.role != PptxRole.Drawing || element.paragraphs.isNotEmpty() || element.connector) return false
-    val panel = element.width * element.height >= slideWidth * slideHeight * PANEL_SHARE
+    // In floating point: a poster's area in square twips is past what an Int holds, and wrapped round
+    // to below zero it made every drawing on the slide a "panel".
+    val panel = element.width.toFloat() * element.height >= slideWidth.toFloat() * slideHeight * PANEL_SHARE
     val rule = min(element.width, element.height) < MIN_DRAWING_SIDE_TWIPS
     return panel || rule
 }

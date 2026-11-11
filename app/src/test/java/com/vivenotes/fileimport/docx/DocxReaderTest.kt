@@ -379,6 +379,85 @@ class DocxReaderTest {
         assertEquals(4000, shape.widthTwips)
     }
 
+    /** A child space under a twip across rounded to nothing, and dividing by it made the whole file unreadable. */
+    @Test
+    fun aGroupWithATinyChildSpaceStillReads() {
+        val group = """
+            <w:p><w:r><w:drawing><wp:inline><wp:extent cx="0" cy="0"/>
+                <a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup">
+                    <wpg:wgp><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="300" cy="300"/></a:xfrm></wpg:grpSpPr>
+                        <wps:wsp><wps:spPr><a:xfrm><a:off x="100" y="100"/><a:ext cx="100" cy="100"/></a:xfrm></wps:spPr><wps:bodyPr/></wps:wsp>
+                    </wpg:wgp>
+                </a:graphicData></a:graphic>
+            </wp:inline></w:drawing></w:r></w:p>
+        """
+        val read = read(group).paragraphs().single().inlines.single() as WordGroup
+        assertEquals(0, read.children.single().boxed.widthTwips)
+    }
+
+    @Test
+    fun behindTextIsReadWhicheverWayTheBooleanIsSpelt() {
+        fun behind(value: String): Boolean {
+            val anchored = """
+                <w:p><w:r><w:drawing><wp:anchor behindDoc="$value"><wp:extent cx="914400" cy="457200"/><wp:wrapNone/></wp:anchor></w:drawing></w:r></w:p>
+            """
+            return (read(anchored).paragraphs().single().inlines.single() as WordBoxed).anchor!!.behindText
+        }
+        assertTrue(behind("1"))
+        assertTrue(behind("true"))
+        assertFalse(behind("0"))
+    }
+
+    /** A header is read where its section ends, which can be in the middle of a field in the body. */
+    @Test
+    fun aFieldOpenAcrossASectionBreakKeepsItsLinkPastTheHeader() {
+        val header = """<w:hdr ${DocxFixture.NAMESPACES}>${paragraph("the header")}</w:hdr>"""
+        val document = read(
+            """<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText>HYPERLINK "https://example.com"</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>${run("one")}</w:p>""" +
+                """<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="hdr"/></w:sectPr></w:pPr>${run("two")}</w:p>""" +
+                """<w:p>${run("three")}<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>""",
+            relationships = listOf(DocxFixture.Rel("hdr", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header", "header1.xml")),
+            parts = mapOf("word/header1.xml" to header.toByteArray()),
+        )
+        val last = document.sections.last().blocks.filterIsInstance<WordParagraph>().single()
+        assertEquals("https://example.com", (last.inlines.first() as WordText).link)
+        val headerText = (document.sections.first().headers.default!!.single() as WordParagraph).inlines.single() as WordText
+        assertNull(headerText.link)
+    }
+
+    @Test
+    fun aSpanPastAnyTableIsHeldToTheWidestOne() {
+        val table = read(
+            """<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="2147483647"/></w:tcPr>${paragraph("x")}</w:tc><w:tc><w:tcPr><w:gridSpan w:val="2147483647"/></w:tcPr>${paragraph("y")}</w:tc></w:tr></w:tbl>""",
+        ).blocks().single() as WordTable
+        assertEquals(MAX_GRID_COLUMNS, table.rows.single().cells.first().gridSpan)
+        assertEquals(MAX_GRID_COLUMNS, table.columnCount)
+    }
+
+    /** Only a byte, or one moved into the private-use area, is a symbol font's; Unicode is left as it is. */
+    @Test
+    fun aSymbolFontRunKeepsTheUnicodeItAlreadyHas() {
+        assertEquals("π", decodeSymbolFont("Symbol", "p"))
+        assertEquals("π", decodeSymbolFont("Symbol", ""))
+        assertEquals("α•", decodeSymbolFont("Symbol", "α•"))
+        assertEquals("✓", decodeSymbolFont("Wingdings", "✓"))
+        assertEquals("✓", decodeSymbolFont("Wingdings", ""))
+    }
+
+    @Test
+    fun aListCountingInLettersPastAnyListFallsBackToDigits() {
+        assertEquals("aa", formatNumber(27, "lowerLetter"))
+        assertEquals("2000000000", formatNumber(2_000_000_000, "lowerLetter"))
+    }
+
+    @Test
+    fun aPageOfNoSizeIsHeldToTheSmallestPage() {
+        val page = WordPageGeometry(0, -5, 0, 0, 0, 0, 0, 0)
+        assertEquals(144, page.widthTwips)
+        assertEquals(144, page.heightTwips)
+        assertEquals(80_640, WordPageGeometry(Int.MAX_VALUE, 1440, 0, 0, 0, 0, 0, 0).widthTwips)
+    }
+
     @Test
     fun aSchemeColourTakesItsThemeTint() {
         val theme = WordTheme(WordTheme.DEFAULT.colors + mapOf("lt2" to 0xFFE8E8E8.toInt()), null, null)

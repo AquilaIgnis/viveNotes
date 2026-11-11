@@ -192,6 +192,8 @@ private fun textMask(raster: PdfRaster, words: List<PdfRect>): BooleanArray {
         val right = ceil(word.right * scale).toInt().coerceIn(0, raster.width)
         val top = (word.top * scale).toInt().coerceIn(0, raster.height)
         val bottom = ceil(word.bottom * scale).toInt().coerceIn(0, raster.height)
+        // A box the renderer gave the wrong way round would make the fill throw.
+        if (right <= left) continue
         for (y in top until bottom) mask.fill(true, y * raster.width + left, y * raster.width + right)
     }
     return mask

@@ -5,6 +5,7 @@ import com.vivenotes.fileimport.ImportFailure
 import com.vivenotes.fileimport.docx.DocxPackage
 import com.vivenotes.fileimport.docx.WordAlign
 import com.vivenotes.fileimport.docx.WordParagraph
+import com.vivenotes.fileimport.docx.WordPlaceholder
 import com.vivenotes.fileimport.docx.WordText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -370,5 +371,49 @@ class PptxReaderTest {
 
         assertTrue(DocxPackage.isPresentation(file))
         assertNotNull(assertThrows(ImportException::class.java) { DocxPackage.open(file) })
+    }
+
+    @Test
+    fun aSlideOfNoSizeIsPowerPointsDefault() {
+        val deck = presentation(
+            titleSp("T"),
+            extra = mapOf("ppt/presentation.xml" to """<p:presentation $ns><p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst><p:sldSz cx="0" cy="0"/></p:presentation>"""),
+        )
+        val page = read(deck).document.sections.single().page
+
+        assertEquals(14400, page.widthTwips)
+        assertEquals(10800, page.heightTwips)
+    }
+
+    /** A table with no rows has no shape to lay out; it would have stopped the whole deck opening. */
+    @Test
+    fun aTableWithNoRowsIsNothing() {
+        val frame = """<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="4" name="t"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></p:xfrm><a:graphic><a:graphicData uri="x"><a:tbl><a:tblGrid><a:gridCol w="914400"/></a:tblGrid></a:tbl></a:graphicData></a:graphic></p:graphicFrame>"""
+
+        assertTrue(objects(read(presentation(frame))).isEmpty())
+    }
+
+    /**
+     * An A0 poster is 47,685 by 67,415 twips, an area past what an Int holds. Wrapped round below zero,
+     * it made every drawing on the slide a background panel, and the drawings came to nothing.
+     */
+    @Test
+    fun aDrawingOnAPosterSizeSlideIsStillADrawing() {
+        val drawing = PptxElement(PptxRole.Drawing, 1000, 1000, 6000, 6000, group = null) { _, _ -> WordPlaceholder(5000, 5000, null) }
+
+        assertTrue(arrangeSlide(listOf(drawing), 47_685, 67_415).single() is PptxObject.Figure)
+    }
+
+    /** A plotted chart can arrive as thousands of shapes in one group, and is still one picture. */
+    @Test(timeout = 10_000)
+    fun aDrawingOfThousandsOfShapesIsOnePictureInGoodTime() {
+        val shapes = List(6000) { index ->
+            val x = (index % 60) * 320
+            val y = (index / 60) * 320
+            PptxElement(PptxRole.Drawing, x, y, x + 300, y + 300, group = 1) { _, _ -> WordPlaceholder(300, 300, null) }
+        }
+
+        val figure = arrangeSlide(shapes, 14400, 10800).single() as PptxObject.Figure
+        assertEquals(shapes, figure.members)
     }
 }

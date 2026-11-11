@@ -145,6 +145,30 @@ class PdfImportTest {
         assertEquals(200f / 140f, picture.widthDp!! / picture.heightDp!!, 0.05f)
     }
 
+    /**
+     * A poster's pixels are more than a phone can spare to look at, so its words come in without the
+     * look the pixels would have given them, and without running out of memory on the way.
+     */
+    @Test
+    fun aPosterSizePageComesInAsItsWords() {
+        writePdf(1700, 2400, { canvas: Canvas -> canvas.drawText("Findings, in large print.", 200f, 300f, ink) })
+
+        val text = objects(0).single() as CanvasPasteItem.Text
+
+        assertEquals(listOf("Findings, in large print."), text.blocks.map { it.text })
+    }
+
+    /** A photograph made into a PDF at 72 dpi is a page the size of its pixels, with nothing on it but itself. */
+    @Test
+    fun aPosterSizePageWithNoWordsIsOnePicture() {
+        val fill = Paint().apply { color = Color.rgb(68, 114, 196) }
+        writePdf(2400, 1800, { canvas: Canvas -> canvas.drawRect(0f, 0f, 2400f, 1800f, fill) })
+
+        val picture = objects(0).single() as CanvasPasteItem.Image
+
+        assertEquals(2400f / 1800f, picture.widthDp!! / picture.heightDp!!, 0.01f)
+    }
+
     @Test
     fun onlyTheChosenPagesComeIn() {
         writePdf(

@@ -519,10 +519,7 @@ internal class WordLayoutEngine(
         ink: Int,
         fields: FieldValues?,
     ): LaidTable {
-        val columnCount = maxOf(
-            table.gridTwips.size,
-            table.rows.maxOf { row -> row.gridBefore + row.gridAfter + row.cells.sumOf { it.gridSpan } },
-        )
+        val columnCount = table.columnCount
         val columns = tableColumns(table, columnCount, available)
         val columnX = IntArray(columnCount + 1)
         for (index in 0 until columnCount) columnX[index + 1] = columnX[index] + columns[index]
@@ -551,7 +548,8 @@ internal class WordLayoutEngine(
                     LaidFlow(layoutBlocks(cell.blocks, inner, maxHeight, cellInk, fields, promoteFloats = false))
                 }
                 val laid = LaidCell(cell, column, x, end - x, flow)
-                column += cell.gridSpan
+                // Past the grid, cells pile up at its edge rather than run off the end of it.
+                column = (column + cell.gridSpan).coerceAtMost(columnCount)
                 laid
             }
             LaidRow(row, cells)
@@ -653,7 +651,7 @@ internal class WordLayoutEngine(
             val top = max(twipsToUnits(page.topTwips), twipsToUnits(page.headerTwips) + headerHeight)
             val bottom = twipsToUnits(page.heightTwips) -
                 max(twipsToUnits(page.bottomTwips), twipsToUnits(page.footerTwips) + footerHeight)
-            val columns = section.columns.coerceAtLeast(1)
+            val columns = section.columns.coerceIn(1, MAX_SECTION_COLUMNS)
             val gap = twipsToUnits(section.columnGapTwips)
             val columnWidth = (twipsToUnits(textWidth) - gap * (columns - 1)) / columns
             frames = Frames(twipsToUnits(page.leftTwips), columnWidth, gap, columns, top, bottom)
@@ -694,7 +692,7 @@ internal class WordLayoutEngine(
                     val current = frames!!
                     val page = section.page
                     val textWidth = page.widthTwips - page.leftTwips - page.rightTwips
-                    val columns = section.columns.coerceAtLeast(1)
+                    val columns = section.columns.coerceIn(1, MAX_SECTION_COLUMNS)
                     val gap = twipsToUnits(section.columnGapTwips)
                     val columnWidth = (twipsToUnits(textWidth) - gap * (columns - 1)) / columns
                     frames = Frames(twipsToUnits(page.leftTwips), columnWidth, gap, columns, current.top, current.bottom)
@@ -901,6 +899,9 @@ internal class WordLayoutEngine(
         /** A table a sliver wider than its room is what Word computed; only a real overflow is scaled. */
         const val TABLE_OVERFLOW_TOLERANCE = 1.02f
         const val MIN_FORCED_CUT = 200
+
+        /** More columns than this to a page leaves none wide enough to read; Word's own limit is lower. */
+        const val MAX_SECTION_COLUMNS = 16
     }
 }
 

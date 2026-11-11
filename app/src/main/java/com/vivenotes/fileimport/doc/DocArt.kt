@@ -209,7 +209,8 @@ internal class DocArt(private val table: ByteArray, private val word: ByteArray,
                 val type = bytes.u16(at + 2)
                 val length = bytes.i32(at + 4)
                 val body = at + HEADER
-                if (length < 0 || body + length > to) return
+                // Compared the way round that cannot overflow: a length near the top of an Int would.
+                if (length < 0 || length > to - body) return
                 visit(type, instance, body, body + length)
                 at = body + length
             }

@@ -14,8 +14,11 @@ import com.vivenotes.fileimport.pdf.PdfPages
 import com.vivenotes.fileimport.pptx.PptxPages
 import com.vivenotes.model.Mark
 import com.vivenotes.richtext.CanvasPasteItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -111,11 +114,22 @@ class FileImporter(
                 val input = appContext.contentResolver.openInputStream(source)
                     ?: throw ImportException(ImportFailure.Unreadable)
                 input.use { copyBounded(it, staged) }
-                openStaged(staged, displayNameOf(source))
+                openStaged(staged, displayNameOf(source)).also { abandonedWhileOpening() }
             } catch (failure: Throwable) {
                 staged.delete()
                 throw translated(failure)
             }
+        }
+    }
+
+    /**
+     * Reading takes seconds, and the window can close in them. Nothing would then ever release what
+     * was read — its staged copy, its pictures, a renderer holding the file open — so it goes now.
+     */
+    private suspend fun abandonedWhileOpening() {
+        if (releaseRequested || !currentCoroutineContext().isActive) {
+            closeOpen()
+            throw CancellationException("The import window closed while the file was being read")
         }
     }
 
@@ -139,12 +153,21 @@ class FileImporter(
         // Exact signatures first: a PDF's marker may sit anywhere in its opening kilobyte.
         CompoundFile.isCompoundFile(file) -> readCompound(CompoundFile.open(file))
         PdfPages.isPdf(file) -> PdfPages.open(file)
-        OdtPackage.isOdt(file) -> OdtPackage.open(file).let { odt ->
+        OdtPackage.isOdt(file) -> OdtPackage.open(file).closedOnFailure { odt ->
             val read = OdtReader(odt).read()
             DocxPages.of(appContext, read.document, { odt.bytes(it) }, read.fontFamilies, odt)
         }
-        DocxPackage.isPresentation(file) -> PptxPages.open(appContext, DocxPackage.open(file, DocxPackage.PRESENTATION_CONTENT_TYPES))
-        else -> DocxPages.open(appContext, DocxPackage.open(file))
+        DocxPackage.isPresentation(file) ->
+            DocxPackage.open(file, DocxPackage.PRESENTATION_CONTENT_TYPES).closedOnFailure { PptxPages.open(appContext, it) }
+        else -> DocxPackage.open(file).closedOnFailure { DocxPages.open(appContext, it) }
+    }
+
+    /** Hands [this] to [read], which keeps it open from then on; a read that fails leaves it shut. */
+    private inline fun <C : Closeable, T> C.closedOnFailure(read: (C) -> T): T = try {
+        read(this)
+    } catch (failure: Throwable) {
+        runCatching { close() }
+        throw failure
     }
 
     /** One container, three things it can be: an old Word file, an encrypted new one, or neither. */
@@ -200,10 +223,17 @@ class FileImporter(
         pagesOf(file)?.render(index, widthPx)
     }
 
+    /**
+     * Runs [action] on the open document. What a damaged or enormous file does to it comes out as an
+     * [ImportException], as it does from [open]: running out of memory on a page is an import that
+     * failed, which the window can say, and not an error to bring the app down with.
+     */
     private suspend fun <T> job(action: suspend () -> T): T = withContext(dispatcher) {
         mutex.withLock {
             try {
                 action()
+            } catch (failure: Throwable) {
+                throw translated(failure)
             } finally {
                 if (releaseRequested) closeOpen()
             }
@@ -257,12 +287,23 @@ class FileImporter(
     }
 
     companion object {
-        /** What the file picker offers; more as they are built. */
+        /**
+         * What the file picker offers; more as they are built. The templates, slideshows and
+         * macro-enabled forms are the same files inside, and the readers take them, so the picker
+         * offers them too.
+         */
         val MIME_TYPES: Array<String> = arrayOf(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+            "application/vnd.ms-word.document.macroEnabled.12",
+            "application/vnd.ms-word.template.macroEnabled.12",
             "application/msword",
             "application/vnd.oasis.opendocument.text",
+            "application/vnd.oasis.opendocument.text-template",
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+            "application/vnd.openxmlformats-officedocument.presentationml.template",
+            "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
             "application/pdf",
         )
 

@@ -20,16 +20,31 @@ internal class WordSettings(
     val compatibilityMode: Int = 15,
 )
 
+/**
+ * A page's size and margins. The size is held to what a word processor or presentation program can
+ * make, since a page of nothing or of miles would be no page to draw or to show in the picker.
+ */
 internal class WordPageGeometry(
-    val widthTwips: Int,
-    val heightTwips: Int,
+    widthTwips: Int,
+    heightTwips: Int,
     val topTwips: Int,
     val bottomTwips: Int,
     val leftTwips: Int,
     val rightTwips: Int,
     val headerTwips: Int,
     val footerTwips: Int,
-)
+) {
+    val widthTwips: Int = widthTwips.coerceIn(MIN_PAGE_TWIPS, MAX_PAGE_TWIPS)
+    val heightTwips: Int = heightTwips.coerceIn(MIN_PAGE_TWIPS, MAX_PAGE_TWIPS)
+
+    private companion object {
+        /** Word's smallest page, a tenth of an inch. */
+        const val MIN_PAGE_TWIPS = 144
+
+        /** PowerPoint's largest slide, 56 inches. */
+        const val MAX_PAGE_TWIPS = 80_640
+    }
+}
 
 internal enum class WordSectionStart { NextPage, Continuous, OddPage, EvenPage, NextColumn }
 
@@ -190,7 +205,12 @@ internal sealed interface WordBoxed : WordInline {
     val anchor: WordAnchor?
 }
 
-internal class WordCrop(val left: Float, val top: Float, val right: Float, val bottom: Float)
+/** What is cut off each side of a picture, as shares of it. Negative is padding, which is not cropping. */
+internal class WordCrop(val left: Float, val top: Float, val right: Float, val bottom: Float) {
+    /** Whether any of the picture is cut away, so that what shows is not the whole of it. */
+    val cutsAnything: Boolean
+        get() = left > 0f || top > 0f || right > 0f || bottom > 0f
+}
 
 internal class WordPicture(
     /** The media part, or null for a picture linked from outside, which is never fetched. */
@@ -280,9 +300,12 @@ internal enum class WordVerticalMerge { None, Restart, Continue }
 
 internal enum class WordCellAlign { Top, Center, Bottom }
 
+/** No word processor makes a table this wide; a file that claims to is held to it. */
+internal const val MAX_GRID_COLUMNS = 1024
+
 internal class WordCell(
     val blocks: List<WordBlock>,
-    val gridSpan: Int,
+    gridSpan: Int,
     val verticalMerge: WordVerticalMerge,
     val widthTwips: Int?,
     val shadingArgb: Int?,
@@ -292,7 +315,9 @@ internal class WordCell(
     val marginRightTwips: Int,
     val marginBottomTwips: Int,
     val align: WordCellAlign,
-)
+) {
+    val gridSpan: Int = gridSpan.coerceIn(1, MAX_GRID_COLUMNS)
+}
 
 internal class WordRow(
     val cells: List<WordCell>,
@@ -300,9 +325,16 @@ internal class WordRow(
     val exactHeight: Boolean,
     val isHeader: Boolean,
     val cantSplit: Boolean,
-    val gridBefore: Int,
-    val gridAfter: Int,
-)
+    gridBefore: Int,
+    gridAfter: Int,
+) {
+    val gridBefore: Int = gridBefore.coerceIn(0, MAX_GRID_COLUMNS)
+    val gridAfter: Int = gridAfter.coerceIn(0, MAX_GRID_COLUMNS)
+
+    /** How many grid columns the row reaches across, counted so that no file can overflow it. */
+    val gridColumns: Int
+        get() = (gridBefore.toLong() + gridAfter + cells.sumOf { it.gridSpan.toLong() }).coerceAtMost(MAX_GRID_COLUMNS.toLong()).toInt()
+}
 
 internal class WordTable(
     val gridTwips: IntArray,
@@ -314,6 +346,10 @@ internal class WordTable(
     val widthTwips: Int?,
     val widthPercent: Float?,
 ) : WordBlock {
+    /** Columns enough for the grid and for the widest row; none for a table with neither. */
+    val columnCount: Int
+        get() = maxOf(gridTwips.size.coerceAtMost(MAX_GRID_COLUMNS), rows.maxOfOrNull { it.gridColumns } ?: 0)
+
     /**
      * Each column's width. The grid says, and for a file written without one the first row's own
      * widths do; all zero when neither has an opinion.

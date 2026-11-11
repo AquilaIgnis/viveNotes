@@ -785,10 +785,13 @@ private fun ordinalSuffix(value: Int): String = when {
 }
 
 private fun letters(value: Int): String {
-    if (value < 1) return "$value"
+    // Past "zzz…" a few dozen long no list is counting in letters, and a file's start value can be anything.
+    if (value < 1 || (value - 1) / 26 >= MAX_LETTER_REPEATS) return "$value"
     val letter = 'a' + (value - 1) % 26
     return letter.toString().repeat((value - 1) / 26 + 1)
 }
+
+private const val MAX_LETTER_REPEATS = 32
 
 private fun roman(value: Int): String {
     if (value !in 1..3999) return "$value"

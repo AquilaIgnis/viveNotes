@@ -232,6 +232,7 @@ internal fun customOutline(geometry: Element, boxWidth: Float, boxHeight: Float)
     }
 
 private const val ANGLE_UNITS = 60_000f
+private const val FULL_TURN = 360f
 
 /** An arc from ([x], [y]) in up-to-quarter-turn curves; DrawingML gives angles in degrees here. */
 internal fun arcCommands(
@@ -246,8 +247,11 @@ internal fun arcCommands(
     val start = Math.toRadians(startDegrees.toDouble())
     val centerX = x - radiusX * cos(start).toFloat()
     val centerY = y - radiusY * sin(start).toFloat()
-    val pieces = ceil(abs(sweepDegrees) / 90f).toInt().coerceAtLeast(1)
-    val step = Math.toRadians((sweepDegrees / pieces).toDouble())
+    // DrawingML allows a sweep of one turn either way. A file's 1e30 would otherwise be a curve per
+    // quarter turn of it, and its NaN no number of curves at all.
+    val sweep = if (sweepDegrees.isNaN()) 0f else sweepDegrees.coerceIn(-FULL_TURN, FULL_TURN)
+    val pieces = ceil(abs(sweep) / 90f).toInt().coerceAtLeast(1)
+    val step = Math.toRadians((sweep / pieces).toDouble())
     val handle = (4.0 / 3.0 * tan(step / 4.0)).toFloat()
     var angle = start
     var endX = x

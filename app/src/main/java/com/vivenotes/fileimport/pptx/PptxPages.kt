@@ -7,6 +7,7 @@ import com.vivenotes.fileimport.ImportedPageSize
 import com.vivenotes.fileimport.docx.DocxPackage
 import com.vivenotes.fileimport.docx.DocxPages
 import com.vivenotes.fileimport.docx.WordObjects
+import com.vivenotes.fileimport.docx.croppedPicture
 import com.vivenotes.model.Mark
 import com.vivenotes.richtext.CanvasPasteItem
 import java.io.ByteArrayOutputStream
@@ -37,7 +38,7 @@ internal class PptxPages private constructor(
         val parts = read.figureParts
         val chosen = pages.sorted().mapNotNull { read.slides.getOrNull(it) }
         val pieces = joinSlides(chosen.map { piecesOf(it, read.slideWidthTwips, parts) })
-        return WordObjects(read.document, marks) { part -> figureBytes(part) ?: pkg.bytes(part) }.items(pieces)
+        return WordObjects(read.document, marks, { part -> figureBytes(part) ?: pkg.bytes(part) }, ::croppedPicture).items(pieces)
     }
 
     /** The drawing named [part], drawn as sharply as is any use once it reaches the attachment store. */

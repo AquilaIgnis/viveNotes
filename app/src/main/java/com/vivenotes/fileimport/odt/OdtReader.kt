@@ -135,8 +135,8 @@ internal class OdtReader(private val pkg: OdtPackage) {
         val columns = properties?.child(NS_STYLE, "columns")
         return WordSection(
             page = WordPageGeometry(
-                widthTwips = length("page-width", LETTER_WIDTH),
-                heightTwips = length("page-height", LETTER_HEIGHT),
+                widthTwips = length("page-width", LETTER_WIDTH).takeIf { it > 0 } ?: LETTER_WIDTH,
+                heightTwips = length("page-height", LETTER_HEIGHT).takeIf { it > 0 } ?: LETTER_HEIGHT,
                 // The page margin is where a header starts; the text starts below that header.
                 topTwips = top + if (hasHeader) reserved("header-style") else 0,
                 bottomTwips = bottom + if (hasFooter) reserved("footer-style") else 0,
@@ -547,8 +547,10 @@ internal class OdtReader(private val pkg: OdtPackage) {
                 for (child in parent.childElements) {
                     when {
                         child.isTablePart("table-column") -> {
+                            val room = MAX_TABLE_COLUMNS - columns.size
+                            if (room <= 0) continue
                             val width = parseTwips(styles.property("table-column", child.attr(NS_TABLE, "style-name"), "table-column-properties", NS_STYLE, "column-width")) ?: 0
-                            repeat((child.attr(NS_TABLE, "number-columns-repeated")?.toIntOrNull() ?: 1).coerceIn(1, MAX_TABLE_COLUMNS - columns.size)) { columns += width }
+                            repeat((child.attr(NS_TABLE, "number-columns-repeated")?.toIntOrNull() ?: 1).coerceIn(1, room)) { columns += width }
                         }
                         child.localName in COLUMN_GROUPS && child.isTablePart(child.localName) -> walkColumns(child)
                     }
@@ -586,7 +588,9 @@ internal class OdtReader(private val pkg: OdtPackage) {
                     else -> WordAlign.Left
                 },
                 widthTwips = parseTwips(tableAttr(NS_STYLE, "width")),
-                widthPercent = tableAttr(NS_STYLE, "rel-width")?.removeSuffix("%")?.toFloatOrNull(),
+                // A share of the room, as the model holds one: LibreOffice's "100%" is the whole of it.
+                widthPercent = tableAttr(NS_STYLE, "rel-width")?.removeSuffix("%")?.trim()?.toFloatOrNull()
+                    ?.div(100f)?.takeIf { it > 0f },
             )
         }
 
@@ -596,6 +600,8 @@ internal class OdtReader(private val pkg: OdtPackage) {
             val fixed = parseTwips(rowAttr("row-height"))
             val minimum = parseTwips(rowAttr("min-row-height"))
             val cells = ArrayList<WordCell>()
+            // ODF writes one element for every place in the grid, a covered cell for each a span
+            // takes up, so the place is counted by elements and not by how far a cell spans.
             var column = 0
             for (child in row.childElements) {
                 val covered = child.isTablePart("covered-table-cell")
@@ -619,7 +625,7 @@ internal class OdtReader(private val pkg: OdtPackage) {
                         }
                         val merge = if (down > 1) WordVerticalMerge.Restart else WordVerticalMerge.None
                         cells += readCell(child, styles, columns, column, across, merge)
-                        column += across
+                        column++
                     }
                 }
             }

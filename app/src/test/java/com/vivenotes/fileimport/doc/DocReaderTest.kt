@@ -4,6 +4,8 @@ import com.vivenotes.fileimport.ImportException
 import com.vivenotes.fileimport.ImportFailure
 import com.vivenotes.fileimport.docx.WordParagraph
 import com.vivenotes.fileimport.docx.WordPicture
+import com.vivenotes.fileimport.docx.WordTabKind
+import com.vivenotes.fileimport.docx.WordTabStop
 import com.vivenotes.fileimport.docx.WordTable
 import com.vivenotes.fileimport.docx.WordText
 import org.junit.Assert.assertArrayEquals
@@ -121,6 +123,26 @@ class DocReaderTest {
         val thrown = assertThrows(ImportException::class.java) { readBytes(file) }
 
         assertEquals(ImportFailure.Unreadable, thrown.failure)
+    }
+
+    private fun tabChange(sprm: Int, vararg operand: Int): ByteArray =
+        byteArrayOf((sprm and 0xFF).toByte(), (sprm ushr 8).toByte(), operand.size.toByte()) + ByteArray(operand.size) { operand[it].toByte() }
+
+    /**
+     * The direct form of a tab change lists, after the stops it takes away, how near each counts as
+     * there. Read as the paragraph-style form, those numbers were taken for the stops to add.
+     */
+    @Test
+    fun bothFormsOfATabChangeTakeAwayAndAddTheSameStops() {
+        val start = DocPara(tabs = listOf(WordTabStop(720, WordTabKind.Left, null)))
+        // Take away 720 (0x02D0) and add a centred stop at 1440 (0x05A0).
+        val direct = tabChange(Sprm.P_CHG_TABS, 1, 0xD0, 0x02, 0x32, 0x00, 1, 0xA0, 0x05, 1)
+        val fromStyle = tabChange(Sprm.P_CHG_TABS_PAPX, 1, 0xD0, 0x02, 1, 0xA0, 0x05, 1)
+
+        for (change in listOf(direct, fromStyle)) {
+            val tabs = applyParagraph(start, change, 0).tabs
+            assertEquals(listOf(1440 to WordTabKind.Center), tabs.map { it.positionTwips to it.kind })
+        }
     }
 }
 

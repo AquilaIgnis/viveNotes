@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ImageDecoder
+import com.vivenotes.fileimport.FileImporter
 import com.vivenotes.fileimport.ImportedDocument
 import com.vivenotes.fileimport.ImportedPageSize
 import com.vivenotes.model.Mark
@@ -13,6 +14,53 @@ import java.io.Closeable
 import kotlin.math.max
 import kotlin.math.roundToInt
 import java.nio.ByteBuffer
+
+/**
+ * [bytes] with [crop] cut away, as a PNG; null when they will not decode, which is EMF and WMF, or
+ * when the crop leaves nothing.
+ *
+ * What the page shows is the cropped picture at the crop's shape. Handed over whole, the canvas
+ * would stretch all of it to that shape, cut-off parts and all. No sharper than the attachment
+ * store keeps, since it would only be scaled down again on the way in.
+ */
+internal fun croppedPicture(bytes: ByteArray, crop: WordCrop): ByteArray? {
+    // A negative side is padding around the picture; there is nothing there to keep.
+    val left = crop.left.coerceIn(0f, 1f)
+    val top = crop.top.coerceIn(0f, 1f)
+    val right = crop.right.coerceIn(0f, 1f)
+    val bottom = crop.bottom.coerceIn(0f, 1f)
+    if (left + right >= 1f || top + bottom >= 1f) return null
+    return runCatching { decodeCropped(bytes, left, top, right, bottom) }.getOrNull()
+}
+
+private fun decodeCropped(bytes: ByteArray, left: Float, top: Float, right: Float, bottom: Float): ByteArray {
+    val bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(ByteBuffer.wrap(bytes))) { decoder, info, _ ->
+        val shownWidth = info.size.width * (1f - left - right)
+        val shownHeight = info.size.height * (1f - top - bottom)
+        val scale = minOf(1f, FileImporter.PICTURE_LONGEST_PX / max(shownWidth, shownHeight))
+        val width = (info.size.width * scale).roundToInt().coerceAtLeast(1)
+        val height = (info.size.height * scale).roundToInt().coerceAtLeast(1)
+        if (scale < 1f) decoder.setTargetSize(width, height)
+        val area = android.graphics.Rect(
+            (width * left).roundToInt(),
+            (height * top).roundToInt(),
+            (width * (1f - right)).roundToInt(),
+            (height * (1f - bottom)).roundToInt(),
+        )
+        // Never empty, and never past the picture, which the decoder refuses.
+        area.right = area.right.coerceIn(area.left + 1, width)
+        area.bottom = area.bottom.coerceIn(area.top + 1, height)
+        area.left = area.left.coerceAtMost(area.right - 1)
+        area.top = area.top.coerceAtMost(area.bottom - 1)
+        decoder.crop = area
+        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+    }
+    return java.io.ByteArrayOutputStream().use { out ->
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        bitmap.recycle()
+        out.toByteArray()
+    }
+}
 
 /** The pictures inside the document, decoded when a page first needs them. */
 internal class DocxMedia(private val read: (String) -> ByteArray?) {
@@ -146,7 +194,7 @@ internal class DocxPages private constructor(
     /** What the chosen [pages] hold as canvas objects; see [WordObjects]. */
     override suspend fun items(pages: List<Int>, marks: Set<Mark>): List<CanvasPasteItem> {
         val pieces = pages.sorted().flatMap { index -> sheets.getOrNull(index)?.objectPieces().orEmpty() }
-        return WordObjects(document, marks, media::bytes).items(pieces)
+        return WordObjects(document, marks, media::bytes, ::croppedPicture).items(pieces)
     }
 
     override fun close() = source.close()

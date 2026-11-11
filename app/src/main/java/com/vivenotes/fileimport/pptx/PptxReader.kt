@@ -109,8 +109,9 @@ internal class PptxReader(private val pkg: DocxPackage) {
 
     init {
         val size = presentation.child(NS_P, "sldSz")
-        slideWidth = emuToTwips(size?.emu("cx") ?: DEFAULT_SLIDE_WIDTH)
-        slideHeight = emuToTwips(size?.emu("cy") ?: DEFAULT_SLIDE_HEIGHT)
+        // A slide of no size is a damaged file; PowerPoint's own default stands in for it.
+        slideWidth = emuToTwips(size?.emu("cx")?.takeIf { it > 0 } ?: DEFAULT_SLIDE_WIDTH)
+        slideHeight = emuToTwips(size?.emu("cy")?.takeIf { it > 0 } ?: DEFAULT_SLIDE_HEIGHT)
         val stylesPart = presentationRels.values.firstOrNull { it.type.endsWith("/tableStyles") }?.target
         tableStyles = stylesPart?.let(pkg::xml)?.children(NS_A, "tblStyle").orEmpty().associateBy { it.plain("styleId").orEmpty() }
     }
@@ -584,7 +585,8 @@ internal class PptxReader(private val pkg: DocxPackage) {
         val table = data.child(NS_A, "tbl")
         val diagram = data.child(NS_DGM, "relIds")
         when {
-            table != null -> out += tableElement(table, box, context, group)
+            // A table with no rows has nothing to show or bring in.
+            table != null -> if (table.child(NS_A, "tr") != null) out += tableElement(table, box, context, group)
             diagram != null -> diagramInto(diagram, box, context, transform, group ?: ++groups, out)
             else -> {
                 // Whatever else a frame holds keeps its place on the slide and has no picture to show.

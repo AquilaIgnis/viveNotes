@@ -235,6 +235,62 @@ class WordObjectsTest {
         assertTrue(paragraphs(paragraph).isEmpty())
     }
 
+    private fun pictureItems(picture: WordPicture, cropped: (ByteArray, WordCrop) -> ByteArray?): List<CanvasPasteItem> {
+        val paragraph = WordParagraph(WordParagraphStyle(), WordRunStyle(), listOf(picture), null)
+        return WordObjects(document, emptySet(), { byteArrayOf(7) }, cropped).items(listOf(ParagraphPiece(paragraph, bodyWidth)))
+    }
+
+    /**
+     * The canvas stretches a picture to its frame. Handed the whole picture at the crop's shape, it
+     * would show the parts the document cuts away, squeezed in. Trees-1.pptx crops some to a third.
+     */
+    @Test
+    fun aCroppedPictureComesInCroppedAtTheShapeThePageShows() {
+        val crop = WordCrop(0f, 0f, 0.6f, 0.7f)
+        var asked: WordCrop? = null
+        val image = pictureItems(WordPicture("word/media/a.png", 4680, 2340, crop, null)) { bytes, wanted ->
+            asked = wanted
+            bytes + 1
+        }.single() as CanvasPasteItem.Image
+
+        assertTrue(asked === crop)
+        assertEquals(listOf<Byte>(7, 1), image.bytes!!.toList())
+        assertEquals(360f, image.widthDp!!, 0.5f)
+        assertEquals(180f, image.heightDp!!, 0.5f)
+    }
+
+    /** Where it cannot be cut, as for a metafile, the picture keeps its own shape rather than the crop's. */
+    @Test
+    fun aPictureThatCannotBeCroppedKeepsItsOwnShape() {
+        val image = pictureItems(WordPicture("word/media/a.emf", 4680, 2340, WordCrop(0.25f, 0f, 0f, 0f), null)) { _, _ -> null }
+            .single() as CanvasPasteItem.Image
+
+        assertEquals(listOf<Byte>(7), image.bytes!!.toList())
+        assertEquals(360f, image.widthDp!!, 0.5f)
+        assertEquals(null, image.heightDp)
+    }
+
+    /** PowerPoint writes a crop of nothing on most pictures; that is no reason to decode one. */
+    @Test
+    fun aCropOfNothingIsNoCrop() {
+        var asked = false
+        pictureItems(WordPicture("word/media/a.png", 4680, 2340, WordCrop(0f, 0f, 0f, 0f), null)) { _, _ ->
+            asked = true
+            null
+        }
+
+        assertFalse(asked)
+    }
+
+    /** A drawing that gives no size would otherwise be a sliver as tall as its height times the narrowest width. */
+    @Test
+    fun aPictureWithNoSizeTakesItsOwn() {
+        val image = pictureItems(WordPicture("word/media/a.png", 0, 2340, null, null)) { _, _ -> null }.single() as CanvasPasteItem.Image
+
+        assertEquals(null, image.widthDp)
+        assertEquals(null, image.heightDp)
+    }
+
     private fun shape(vararg blocks: WordBlock) =
         WordShape(blocks.toList(), 4000, 2000, null, null, WordShapeForm.Rectangle, 0, 0, 0, 0, null)
 
@@ -270,6 +326,27 @@ class WordObjectsTest {
         WordTable(grid, rows.toList(), null, 0, WordAlign.Left, null, null)
 
     private fun piece(table: WordTable, first: Int = 0, end: Int = table.rows.size) = TablePiece(table, first, end, bodyWidth)
+
+    /** A file can hold a table of rows with no cells in them, or of no rows; there is no table to make of it. */
+    @Test
+    fun aTableWithNoCellsOrNoRowsBringsNothing() {
+        val empty = WordRow(emptyList(), null, false, false, false, 0, 0)
+
+        assertTrue(items(piece(table(IntArray(0), empty, empty))).isEmpty())
+        assertTrue(items(piece(table(intArrayOf(1000)))).isEmpty())
+    }
+
+    /** Spans are a file's word for it; added up across a row they must not wrap round to a small number. */
+    @Test
+    fun spansTooWideToCountAreHeldToTheWidestTable() {
+        val wide = WordCell(listOf(para("x")), Int.MAX_VALUE, WordVerticalMerge.None, null, null, null, 0, 0, 0, 0, WordCellAlign.Top)
+        val built = table(intArrayOf(1000), WordRow(listOf(wide, wide, wide), null, false, false, false, Int.MAX_VALUE, -5))
+
+        assertEquals(MAX_GRID_COLUMNS, built.columnCount)
+        assertEquals(0, built.rows.single().gridAfter)
+        // Too wide to be a table on the canvas, it is still its text.
+        assertEquals(listOf("x\tx\tx"), textOf(items(piece(built)).single()))
+    }
 
     @Test
     fun aTableKeepsItsProportionsAtTheScaleOfTheText() {

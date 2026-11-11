@@ -166,8 +166,9 @@ internal class DocReader(compound: CompoundFile) {
                     Sprm.S_TITLE_PAGE -> titlePage = grpprl.u8(at) != 0
                     Sprm.S_COLUMNS -> columns = grpprl.u16(at) + 1
                     Sprm.S_COLUMN_GAP -> gap = grpprl.u16(at)
-                    Sprm.S_WIDTH -> width = grpprl.u16(at)
-                    Sprm.S_HEIGHT -> height = grpprl.u16(at)
+                    // A page of no size is a damaged header, not a page; it keeps the default.
+                    Sprm.S_WIDTH -> width = grpprl.u16(at).takeIf { it > 0 } ?: width
+                    Sprm.S_HEIGHT -> height = grpprl.u16(at).takeIf { it > 0 } ?: height
                     Sprm.S_LEFT -> left = grpprl.u16(at)
                     Sprm.S_RIGHT -> right = grpprl.u16(at)
                     Sprm.S_TOP -> top = abs(grpprl.s16(at))
@@ -344,6 +345,9 @@ internal class DocReader(compound: CompoundFile) {
     private class Story(val kind: StoryKind) {
         val fields = ArrayList<OpenField>()
 
+        /** Fields opened inside the deepest one kept, waiting for their ends. */
+        var uncounted = 0
+
         val hidingCode: Boolean get() = fields.any { !it.inResult }
         val link: String? get() = fields.lastOrNull { it.link != null }?.link
     }
@@ -475,14 +479,21 @@ internal class DocReader(compound: CompoundFile) {
         private fun character(char: Char, cp: Int, istd: Int) {
             when (char) {
                 FIELD_BEGIN -> {
-                    story.fields += OpenField()
+                    // Every character asks about the open fields, so a damaged file's thousands of
+                    // unclosed ones would make reading it quadratic. Those past the cap are counted,
+                    // so that their ends close them and not the fields they sit in.
+                    if (story.fields.size < MAX_OPEN_FIELDS) story.fields += OpenField() else story.uncounted++
                     return
                 }
                 FIELD_SEPARATOR -> {
-                    story.fields.lastOrNull()?.let(::separate)
+                    if (story.uncounted == 0) story.fields.lastOrNull()?.let(::separate)
                     return
                 }
                 FIELD_END -> {
+                    if (story.uncounted > 0) {
+                        story.uncounted--
+                        return
+                    }
                     val field = story.fields.removeLastOrNull() ?: return
                     if (!field.inResult) separate(field)
                     return
@@ -631,9 +642,12 @@ internal class DocReader(compound: CompoundFile) {
             if (at + PICTURE_HEADER > data.size) return null
             val width = data.s16(at + 28) * data.u16(at + 32) / 1000
             val height = data.s16(at + 30) * data.u16(at + 34) / 1000
-            var blob = at + data.u16(at + 4)
-            if (data.u16(at + 6) == PICTURE_WITH_NAME) blob += 1 + data.u8(blob)
-            val bytes = art.inlineBlip(data, blob, min(data.size, at + data.i32(at)))
+            // A picture whose records run off the end costs itself, not the document around it.
+            val bytes = runCatching {
+                var blob = at + data.u16(at + 4)
+                if (data.u16(at + 6) == PICTURE_WITH_NAME) blob += 1 + data.u8(blob)
+                art.inlineBlip(data, blob, min(data.size.toLong(), at.toLong() + data.i32(at)).toInt())
+            }.getOrNull()
             return pictureOf(bytes, at, width, height, null)
         }
 
@@ -983,6 +997,7 @@ internal class DocReader(compound: CompoundFile) {
         const val HEADER_SEPARATORS = 6
         const val HEADER_STORIES_PER_SECTION = 6
         const val MAX_LIST_LEVELS = 9
+        const val MAX_OPEN_FIELDS = 32
         const val BULLET = 23
         const val NO_NUMBER = 255
         const val PICTURE_HEADER = 68

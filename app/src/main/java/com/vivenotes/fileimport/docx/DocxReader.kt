@@ -131,9 +131,17 @@ internal class DocxReader(private val pkg: DocxPackage) {
             val id = reference.attr(NS_R, "id") ?: return@forEach
             val part = mainRelationships[id]?.takeUnless { it.external }?.target ?: return@forEach
             val blocks = headerParts.getOrPut(part) {
+                // Read in between paragraphs of the body, where a field such as a table of contents can
+                // still be open; the header starts with none and the body gets its own back.
+                val bodyFields = ArrayList(fields)
                 fields.clear()
-                val root = pkg.xml(part)
-                if (root == null) emptyList() else readBlocks(root, ReadContext(pkg.relationships(part)))
+                try {
+                    val root = pkg.xml(part)
+                    if (root == null) emptyList() else readBlocks(root, ReadContext(pkg.relationships(part)))
+                } finally {
+                    fields.clear()
+                    fields.addAll(bodyFields)
+                }
             }
             set = when (reference.w("type")) {
                 "first" -> WordHeaderSet(set.default, blocks, set.even)
@@ -529,7 +537,7 @@ internal class DocxReader(private val pkg: DocxPackage) {
             if (rowElements.isEmpty()) return null
             val columnCount = maxOf(
                 grid.size,
-                rowElements.maxOf { row -> rowCells(row).sumOf { it.wChild("tcPr")?.wVal("gridSpan")?.toIntOrNull() ?: 1 } },
+                rowElements.maxOf { row -> rowCells(row).sumOf { gridSpanOf(it).toLong() } }.coerceAtMost(MAX_GRID_COLUMNS.toLong()).toInt(),
             )
 
             val shared = SharedTableFormat(chain, look, overlay, columnCount, rowElements.size, context)
@@ -611,8 +619,8 @@ internal class DocxReader(private val pkg: DocxPackage) {
         val gridBefore = properties?.wVal("gridBefore")?.toIntOrNull() ?: 0
         var column = gridBefore
         val cells = rowCells(row).map { cell ->
-            val span = cell.wChild("tcPr")?.wVal("gridSpan")?.toIntOrNull()?.coerceAtLeast(1) ?: 1
-            readCell(cell, index, column, span, shared).also { column += span }
+            val span = gridSpanOf(cell)
+            readCell(cell, index, column, span, shared).also { column = (column + span).coerceAtMost(MAX_GRID_COLUMNS) }
         }
         return WordRow(
             cells = cells,
@@ -624,6 +632,9 @@ internal class DocxReader(private val pkg: DocxPackage) {
             gridAfter = properties?.wVal("gridAfter")?.toIntOrNull() ?: 0,
         )
     }
+
+    private fun gridSpanOf(cell: Element): Int =
+        cell.wChild("tcPr")?.wVal("gridSpan")?.toIntOrNull()?.coerceIn(1, MAX_GRID_COLUMNS) ?: 1
 
     private fun readCell(cell: Element, row: Int, column: Int, span: Int, shared: SharedTableFormat): WordCell {
         val properties = cell.wChild("tcPr")
@@ -792,8 +803,10 @@ internal class DocxReader(private val pkg: DocxPackage) {
             val childExtent = transform?.child(NS_A, "chExt")
             val originX = childOffset?.emu("x") ?: 0L
             val originY = childOffset?.emu("y") ?: 0L
-            val scaleX = childExtent?.emu("cx")?.takeIf { it > 0 }?.let { width / emuToTwips(it).toFloat() } ?: 1f
-            val scaleY = childExtent?.emu("cy")?.takeIf { it > 0 }?.let { height / emuToTwips(it).toFloat() } ?: 1f
+            // In EMU on both sides: a child space under a twip across would round to nothing, and a
+            // division by it to infinity, which turns into no number at all on the way to a twip.
+            val scaleX = childExtent?.emu("cx")?.takeIf { it > 0 }?.let { width * EMU_PER_TWIP / it } ?: 1f
+            val scaleY = childExtent?.emu("cy")?.takeIf { it > 0 }?.let { height * EMU_PER_TWIP / it } ?: 1f
             val children = group.childElements.mapNotNull { child ->
                 val own = when {
                     child.isIn(NS_WPS, "wsp") -> child.child(NS_WPS, "spPr")
@@ -829,7 +842,7 @@ internal class DocxReader(private val pkg: DocxPackage) {
             position?.child(NS_WP, "posOffset")?.textContent?.trim()?.toLongOrNull()?.let(::emuToTwips)
         fun align(position: Element?): String? = position?.child(NS_WP, "align")?.textContent?.trim()
         return WordAnchor(
-            behindText = anchor.plain("behindDoc") == "1",
+            behindText = anchor.plain("behindDoc").let { it == "1" || it.equals("true", ignoreCase = true) },
             wrap = when {
                 anchor.child(NS_WP, "wrapNone") != null -> WordWrap.None
                 anchor.child(NS_WP, "wrapTopAndBottom") != null -> WordWrap.TopAndBottom
@@ -893,6 +906,7 @@ internal class DocxReader(private val pkg: DocxPackage) {
         const val DEFAULT_SIDE_INSET = 91_440L
         const val DEFAULT_TOP_INSET = 45_720L
         const val DEFAULT_LINE_EMU = 9_525L
+        const val EMU_PER_TWIP = 635f
         const val DEFAULT_VML_WIDTH = 4320
         const val DEFAULT_VML_HEIGHT = 2880
 
@@ -929,6 +943,12 @@ internal fun decodeSymbolFont(font: String?, text: String): String? {
     val symbol = font.equals("Symbol", ignoreCase = true)
     return buildString {
         text.forEach { char ->
+            // Only a byte, or a byte moved up into the private-use area, is a symbol font's own code.
+            // Anything else is already Unicode, such as an `α` typed where the run says Symbol.
+            if (char.code > 0xFF && char.code !in SYMBOL_FONT_PRIVATE_USE) {
+                append(char)
+                return@forEach
+            }
             val code = char.code and 0xFF
             when {
                 symbol && code in 0x20..0x7E -> append(SYMBOL_LOW[code - 0x20])
@@ -939,6 +959,9 @@ internal fun decodeSymbolFont(font: String?, text: String): String? {
         }
     }
 }
+
+/** Where Word puts a symbol font's byte to keep it from being read as a letter. */
+private val SYMBOL_FONT_PRIVATE_USE = 0xF000..0xF0FF
 
 /** Adobe's Symbol encoding, 0x20 to 0x7E. */
 internal const val SYMBOL_LOW: String =

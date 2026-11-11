@@ -59,6 +59,8 @@ internal class WordObjects(
     private val document: WordDocument,
     textMarks: Set<Mark>,
     private val pictureBytes: (String) -> ByteArray?,
+    /** A picture's bytes with its crop cut away, or null where that cannot be done, as off a device. */
+    private val croppedPicture: (ByteArray, WordCrop) -> ByteArray? = { _, _ -> null },
 ) {
     private val base: Set<Mark> = textMarks.filterTo(mutableSetOf()) { it is Mark.FontFamily || it is Mark.FontSize }
     private val items = ArrayList<CanvasPasteItem>()
@@ -267,12 +269,26 @@ internal class WordObjects(
         }
     }
 
+    /**
+     * A picture as the page shows it: cropped as the document crops it, at the size it has there. The
+     * canvas stretches a picture to its frame, so the frame only takes the document's shape when
+     * the bytes are of that shape too.
+     */
     private fun pictureItem(picture: WordPicture, bodyWidth: Int): CanvasPasteItem.Image? {
-        val bytes = picture.part?.let(pictureBytes) ?: return null
+        val whole = picture.part?.let(pictureBytes) ?: return null
+        val crop = picture.crop?.takeIf { it.cutsAnything }
+        val cropped = crop?.let { croppedPicture(whole, it) }
+        val bytes = cropped ?: whole
+        // A file that gives no size leaves it to the picture's own.
+        if (picture.widthTwips <= 0 || picture.heightTwips <= 0) return CanvasPasteItem.Image(bytes = bytes)
         val scale = writingScale(bodyWidth)
         val width = (picture.widthTwips * scale).coerceIn(Outline.Image.MIN_SIZE, Outline.Text.DEFAULT_WIDTH)
-        val height = (picture.heightTwips * (width / picture.widthTwips.coerceAtLeast(1)))
-            .coerceAtLeast(Outline.Image.MIN_SIZE)
+        // Not cropped after all, it keeps its own shape rather than take on the crop's.
+        val height = if (crop != null && cropped == null) {
+            null
+        } else {
+            (picture.heightTwips * (width / picture.widthTwips)).coerceAtLeast(Outline.Image.MIN_SIZE)
+        }
         return CanvasPasteItem.Image(bytes = bytes, widthDp = width, heightDp = height)
     }
 
@@ -296,11 +312,14 @@ internal class WordObjects(
             unwrap(table, bodyWidth)
             return
         }
-        val columnCount = maxOf(
-            table.gridTwips.size,
-            table.rows.maxOf { row -> row.gridBefore + row.gridAfter + row.cells.sumOf { it.gridSpan } },
-        )
+        val columnCount = table.columnCount
         flush()
+        // A table with no rows or no cells has nothing to bring, and no shape to bring it in.
+        if (rows.isEmpty() || columnCount == 0) {
+            items += spilled
+            spilled.clear()
+            return
+        }
         if (columnCount > Outline.Table.MAX_COLUMNS) {
             tableAsText(rows)
         } else {

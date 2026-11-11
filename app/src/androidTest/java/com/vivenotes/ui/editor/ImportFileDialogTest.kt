@@ -14,6 +14,7 @@ import com.vivenotes.fileimport.DocxTestFile
 import com.vivenotes.fileimport.FileImportMode
 import com.vivenotes.fileimport.FileImporter
 import com.vivenotes.fileimport.ImportedFile
+import com.vivenotes.fileimport.ImportedPageSize
 import com.vivenotes.fileimport.ImportException
 import com.vivenotes.fileimport.ImportFailure
 import com.vivenotes.R
@@ -178,6 +179,15 @@ class ImportFileDialogTest {
 
         compose.onNodeWithText(context.getString(R.string.import_file_too_large)).assertIsDisplayed()
         compose.onNodeWithTag(ImportFileTags.INSERT).assertIsNotEnabled()
+    }
+
+    /** A ratio of nothing over nothing threw on the main thread before the grid was drawn. */
+    @Test
+    fun aPageOfNoSizeStillTakesAPlaceInTheGrid() {
+        setDialog(open = { ImportedFile("broken.pdf", listOf(ImportedPageSize(0f, 0f), ImportedPageSize(612f, 0f)), Any()) })
+
+        compose.onNodeWithTag(ImportFileTags.page(0)).assertIsDisplayed()
+        compose.onNodeWithTag(ImportFileTags.page(1)).assertExists()
     }
 
     @Test

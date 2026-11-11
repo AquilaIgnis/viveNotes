@@ -190,6 +190,57 @@ class OdtReaderTest {
         assertEquals(2, table.rows[1].cells.size)
     }
 
+    /**
+     * ODF writes a covered cell for every column a span takes up. Counted on top of the span, every cell
+     * after a wide one sat a column too far right, and a merge down from one of them was lost.
+     */
+    @Test
+    fun aCellAfterAWideOneKeepsItsPlaceAndItsMergeDown() {
+        val table = section(
+            """<table:table><table:table-column table:number-columns-repeated="3"/>
+               <table:table-row><table:table-cell table:number-columns-spanned="2"><text:p>wide</text:p></table:table-cell><table:covered-table-cell/><table:table-cell table:number-rows-spanned="2"><text:p>tall</text:p></table:table-cell></table:table-row>
+               <table:table-row><table:table-cell><text:p>a</text:p></table:table-cell><table:table-cell><text:p>b</text:p></table:table-cell><table:covered-table-cell/></table:table-row></table:table>""",
+        ).blocks.single() as WordTable
+
+        assertEquals(listOf(2, 1), table.rows[0].cells.map { it.gridSpan })
+        assertEquals(WordVerticalMerge.Restart, table.rows[0].cells[1].verticalMerge)
+        assertEquals(listOf(WordVerticalMerge.None, WordVerticalMerge.None, WordVerticalMerge.Continue), table.rows[1].cells.map { it.verticalMerge })
+    }
+
+    /** LibreOffice writes "100%" for a table as wide as the text; the model holds that as the whole of it. */
+    @Test
+    fun aRelativeWidthIsAShareOfTheRoom() {
+        val table = section(
+            """<table:table table:style-name="T"><table:table-column/><table:table-row><table:table-cell><text:p>x</text:p></table:table-cell></table:table-row></table:table>""",
+            automatic = """<style:style style:name="T" style:family="table"><style:table-properties style:rel-width="100%" table:align="left"/></style:style>""",
+        ).blocks.single() as WordTable
+
+        assertEquals(1f, table.widthPercent!!, 0.0001f)
+    }
+
+    @Test
+    fun aTableWithMoreColumnsThanAnyIsCutOffRatherThanUnreadable() {
+        val table = section(
+            """<table:table><table:table-column table:number-columns-repeated="1024"/><table:table-column/><table:table-row><table:table-cell><text:p>x</text:p></table:table-cell></table:table-row></table:table>""",
+        ).blocks.single() as WordTable
+
+        assertEquals(1024, table.gridTwips.size)
+    }
+
+    @Test
+    fun aPageOfNoSizeIsALetterPage() {
+        val file = documentWith(
+            "<text:p>x</text:p>",
+            extra = mapOf(
+                "styles.xml" to """<office:document-styles $namespaces><office:automatic-styles><style:page-layout style:name="pm1"><style:page-layout-properties fo:page-width="0in" fo:page-height="0in"/></style:page-layout></office:automatic-styles><office:master-styles><style:master-page style:name="Standard" style:page-layout-name="pm1"/></office:master-styles></office:document-styles>""",
+            ),
+        )
+
+        val page = read(file).document.sections.single().page
+        assertEquals(12240, page.widthTwips)
+        assertEquals(15840, page.heightTwips)
+    }
+
     /** LibreOffice writes a table inside a text box under its own namespace. */
     @Test
     fun aTableInLibreOfficesOwnNamespaceIsStillATable() {

@@ -68,6 +68,7 @@ import com.vivenotes.R
 import com.vivenotes.fileimport.FileImportMode
 import com.vivenotes.fileimport.FileImporter
 import com.vivenotes.fileimport.ImportedFile
+import com.vivenotes.fileimport.ImportedPageSize
 import com.vivenotes.fileimport.ImportException
 import com.vivenotes.fileimport.ImportFailure
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -76,6 +77,7 @@ import com.vivenotes.ui.panel.PanelChoice
 import com.vivenotes.ui.panel.PanelSection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 internal object ImportFileTags {
     const val DIALOG = "import-file-dialog"
@@ -351,14 +353,16 @@ private fun PageSheet(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(page.widthDp / page.heightDp)
+                .aspectRatio(sheetRatio(page))
                 .background(SHEET_PAPER)
                 .border(border, borderColor)
                 .toggleable(value = selected, role = Role.Checkbox, onValueChange = onToggle)
                 .testTag(ImportFileTags.page(index)),
             contentAlignment = Alignment.Center,
         ) {
+            // A page letterboxed in its place is drawn at the width it shows at, not the place's.
             val widthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
+                .let { (it * shownShare(page)).roundToInt() }
             var bitmap by remember(file, index, widthPx) { mutableStateOf<Bitmap?>(null) }
             LaunchedEffect(file, index, widthPx) {
                 if (widthPx > 0) bitmap = runCatching { importer.preview(file, index, widthPx) }.getOrNull()
@@ -390,6 +394,22 @@ private fun PageSheet(
         )
     }
 }
+
+/**
+ * The shape of a page's place in the grid. A page far longer than it is wide, a receipt or a web page
+ * saved as one sheet, is shown inside a shape the grid can lay out; [ContentScale.Fit] keeps the
+ * picture itself true. A file that gives a page no size gets a square, where a ratio of nothing or
+ * of infinity would throw before anything is drawn.
+ */
+private fun sheetRatio(page: ImportedPageSize): Float = pageRatio(page).coerceIn(MIN_SHEET_RATIO, MAX_SHEET_RATIO)
+
+private fun pageRatio(page: ImportedPageSize): Float {
+    val ratio = page.widthDp / page.heightDp
+    return if (ratio.isFinite() && ratio > 0f) ratio else 1f
+}
+
+/** How much of its place's width a page fills: all of it, unless it is too tall for the place. */
+private fun shownShare(page: ImportedPageSize): Float = minOf(1f, pageRatio(page) / sheetRatio(page))
 
 @Composable
 private fun ImportFileOptions(
@@ -476,6 +496,10 @@ private val OPTIONS_HEIGHT = 200.dp
 
 /** Several pages in view on a tablet, while each stays recognisable. */
 private val SHEET_MIN_WIDTH = 240.dp
+
+/** Taller or wider than this, a page is letterboxed within its place rather than given its own shape. */
+private const val MIN_SHEET_RATIO = 0.25f
+private const val MAX_SHEET_RATIO = 4f
 private val GRID_PADDING = 20.dp
 private val SELECTED_BORDER = 3.dp
 private val UNSELECTED_BORDER = 1.dp
