@@ -21,7 +21,8 @@ import androidx.test.runner.AndroidJUnitRunner
  * activity is destroyed, and no test typed anything to trigger it. Once the dialog is up, every
  * test after it is paused under it: "No compose hierarchies found", and screenshots that
  * capture the dialog instead of the page. [finish] puts the service back. A run killed before
- * `finish` leaves autofill off, so the original service is logged under [TAG] to restore by hand.
+ * `finish` (an emulator crash, Ctrl-C) leaves autofill off. The service is also written to the
+ * global setting [PAUSED_MARKER], and the next run restores that value rather than the null it finds.
  */
 class ViveNotesTestRunner : AndroidJUnitRunner() {
 
@@ -54,9 +55,11 @@ class ViveNotesTestRunner : AndroidJUnitRunner() {
     }
 
     private fun pauseAutofill() {
-        val service = shell("settings get secure $AUTOFILL_SERVICE").trim()
-        if (service.isEmpty() || service == "null") return
+        // A marker means an earlier run was killed mid-pause: the null it left is not the
+        // device's own choice.
+        val service = setting("global", PAUSED_MARKER) ?: setting("secure", AUTOFILL_SERVICE) ?: return
         Log.i(TAG, "pausing autofill service $service for the run")
+        shell("settings put global $PAUSED_MARKER $service")
         shell("settings delete secure $AUTOFILL_SERVICE")
         pausedAutofillService = service
     }
@@ -65,8 +68,13 @@ class ViveNotesTestRunner : AndroidJUnitRunner() {
         val service = pausedAutofillService ?: return
         pausedAutofillService = null
         shell("settings put secure $AUTOFILL_SERVICE $service")
+        shell("settings delete global $PAUSED_MARKER")
         Log.i(TAG, "restored autofill service $service")
     }
+
+    /** The setting's value, or null when it is unset; `settings get` prints "null" for that. */
+    private fun setting(table: String, key: String): String? =
+        shell("settings get $table $key").trim().takeUnless { it.isEmpty() || it == "null" }
 
     /**
      * Runs [command] as the shell user, which may write secure settings, and waits for its output.
@@ -84,6 +92,9 @@ class ViveNotesTestRunner : AndroidJUnitRunner() {
 
         /** `Settings.Secure.AUTOFILL_SERVICE`, which the SDK hides. */
         const val AUTOFILL_SERVICE = "autofill_service"
+
+        /** Holds the paused service until [finish] restores it. */
+        const val PAUSED_MARKER = "vivenotes_paused_autofill_service"
 
         /** Well above the current ~20-minute suite, but still bounded if the runner hangs. */
         const val MAX_SUITE_DURATION_MS = 60L * 60L * 1000L

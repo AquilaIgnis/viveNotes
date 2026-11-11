@@ -445,16 +445,23 @@ internal class LaserPointer {
     private class Trace(val stroke: InProgressStroke, val brush: Brush, var startedAt: Long) {
         val marks = ArrayDeque<Mark>()
 
-        /** The last input handed to the stroke, which the next one may not repeat or precede. */
+        /**
+         * The last input handed to the stroke, which the next one must come after. A millisecond
+         * before [startedAt] to begin with, so the first input is the stroke's time zero.
+         */
         private var lastX = Float.NaN
         private var lastY = Float.NaN
-        private var lastTime = startedAt
+        private var lastTime = startedAt - 1
 
         fun add(point: InkPoint, time: Long, into: MutableStrokeInputBatch) {
-            // Ink takes inputs in order and refuses an exact repeat. Stamps measured back from two
-            // different events can cross by a millisecond or two, so they are held to the last one.
-            val at = maxOf(time, lastTime)
-            if (at == lastTime && point.x == lastX && point.y == lastY) return
+            // Ink takes inputs in order. Stamps measured back from two different events can cross
+            // by a millisecond or two, and a down and a move handled within one millisecond share
+            // a stamp. Inputs sharing a stamp are one instant to the sliding window: a live trace
+            // made of them is modelled at the pen, and nothing is drawn between its samples until
+            // a later one arrives. So a stamp that does not come after the last one goes a
+            // millisecond past it, unless the input is the last one repeated.
+            if (time <= lastTime && point.x == lastX && point.y == lastY) return
+            val at = maxOf(time, lastTime + 1)
             dropMarksBefore(at - TRAIL_MILLIS)
             marks.addLast(Mark(point.x, point.y, at))
             into.add(InputToolType.UNKNOWN, point.x, point.y, at - startedAt)
@@ -480,7 +487,7 @@ internal class LaserPointer {
             stroke.start(brush)
             lastX = Float.NaN
             lastY = Float.NaN
-            lastTime = startedAt
+            lastTime = startedAt - 1
             val alive = marks.toList()
             marks.clear()
             val batch = MutableStrokeInputBatch()
