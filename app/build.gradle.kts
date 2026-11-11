@@ -18,6 +18,10 @@ room {
 
 private val allAbis = listOf("arm64-v8a", "x86_64")
 
+
+
+private val appVersionName = "1.4.0"
+
 /**
 
 Points the instrumented suite at the  `./gradlew connectedAndroidTest PtestRelease`,
@@ -90,7 +94,6 @@ private val releaseKeystore: File? =
 private val signedRelease: Boolean = releaseKeystore != null && !testRelease
 
 // Single source of truth for `versionName` and for the [releaseArtifactName] built from it.
-private val appVersionName = "1.3.3-dev.0"
 
 // `vivenotes-1.2.2.apk` / `.aab`, the names a signed release is published under.
 private val releaseArtifactName = "vivenotes-$appVersionName"
@@ -213,6 +216,7 @@ abstract class ViveConverterTask : DefaultTask() {
     }
 }
 
+
 android {
     namespace = "com.vivenotes"
     // 37, because Compose 1.12 refuses to be compiled against anything older — see the material3
@@ -228,7 +232,7 @@ android {
         applicationId = "com.vivenotes"
         minSdk = 35
         targetSdk = 36
-        versionCode = 11
+        versionCode = 12
         versionName = appVersionName
 
         testInstrumentationRunner = "com.vivenotes.ViveNotesTestRunner"
