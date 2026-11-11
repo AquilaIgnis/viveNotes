@@ -35,9 +35,18 @@ junitVersion = "1.3.0"
 # Room 2.8's migration-test serializers require the default interface methods added in 1.8.
 kotlinxSerialization = "1.12.0"
 lifecycle = "2.8.7"
+# kotlinx-coroutines-test only. It must equal the coroutines-core the app resolves (transitively,
+# 1.9.0 through androidx), because AGP holds the androidTest runtime to the app's versions: a newer
+# test lib compiles but every `runBlocking` dies with `NoSuchMethodError: runBlockingK`. Check with
+# `./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency kotlinx-coroutines-core`.
+kotlinxCoroutines = "1.9.0"
 room = "2.8.5"
 ratex = "0.1.15"
-onnxRuntime = "1.31.1"
+# Held below 1.29, which added Microsoft telemetry: a `TelemetryInitializer` provider that loads
+# libonnxruntime.so at process start (SIGSEGV there under the emulator's arm64 translation) and a
+# 1DS uploader inside the library. The app is offline-first with no telemetry. Remove the provider
+# and set ORT_DISABLE_TELEMETRY before raising this.
+onnxRuntime = "1.27.0"
 chaquopy = "17.2.0"
 work = "2.12.0"
 
@@ -76,7 +85,7 @@ google-identity-googleid = { group = "com.google.android.libraries.identity.goog
 google-play-billing = { group = "com.android.billingclient", name = "billing", version.ref = "playBilling" }
 google-play-review-ktx = { group = "com.google.android.play", name = "review-ktx", version.ref = "playReview" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
-kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version = "1.11.0" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 kotlinx-serialization-cbor = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-cbor", version.ref = "kotlinxSerialization" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 ratex-android = { group = "io.github.erweixin", name = "ratex-android", version.ref = "ratex" }

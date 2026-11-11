@@ -8,6 +8,13 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+    # Must equal the coroutines-core the app resolves through androidx, not the newest release;
+    # see `kotlinxCoroutines` in gradle/libs.versions.toml.
+    ignore:
+      - dependency-name: 'org.jetbrains.kotlinx:kotlinx-coroutines-test'
+      # 1.29 added telemetry; see `onnxRuntime` in gradle/libs.versions.toml.
+      - dependency-name: 'com.microsoft.onnxruntime:onnxruntime-android'
+        versions: ['>= 1.29']
     groups:
       minor-and-patch:
         patterns:

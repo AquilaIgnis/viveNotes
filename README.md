@@ -81,6 +81,8 @@ and all AI features run entirely on-device.
 - Automatic database snapshots, and revision restoration.
 - Open source export file format .vive , [docs](docs/viveFormat.md).
 - Hardware keyboard shortcuts and configurable stylus buttons mappings.
+- Import documents directly into canvas [ doc, docx , odt, pptx, pdf ].
+- Import your OneNote saved notebook directly into ViveNotes.
 
 # Gallery
 
