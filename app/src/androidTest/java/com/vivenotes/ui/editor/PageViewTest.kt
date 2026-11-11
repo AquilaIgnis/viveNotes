@@ -1,9 +1,12 @@
 package com.vivenotes.ui.editor
 
+import android.app.Activity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
@@ -18,6 +21,9 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.junit.Assert.assertEquals
@@ -71,6 +77,7 @@ class PageViewTest {
     private val shapes = mutableStateOf(emptyList<Outline.Shape>())
     private var composed = false
     private lateinit var density: Density
+    private lateinit var activity: Activity
     private var created: Pair<Float, Float>? = null
     private var pasted: InkPoint? = null
     private var pinched: Float? = null
@@ -106,6 +113,7 @@ class PageViewTest {
             composed = true
             compose.setContent {
                 density = LocalDensity.current
+                activity = checkNotNull(LocalActivity.current)
                 ViveNotesTheme {
                     EditorPane(
                         title = this.title.value,
@@ -633,16 +641,21 @@ class PageViewTest {
     // **Flatness is measured by how much of the sheet one colour covers, not by a count of one.**
     // `InkOverlay` holds its authoring view for as long as the page is open now, and that view
     // brings a `SurfaceView` with it — which switches `captureToImage` off the render-node path and
-    // onto `PixelCopy` of the whole window. What comes back then has the status bar's clock and the
-    // navigation handle painted over the page, a few thousand pixels of system chrome this test
-    // never asked for and cannot turn off. Everything the assertion is actually about survives:
-    // anything *painted on the page* would cover far more than the slack below, and the ruled cases
-    // beside this one still only ask for more than one colour.
+    // onto a capture of the screen. Whatever system UI floats over the sheet comes back as paint:
+    // the status bar's clock, the app handle, and on a tablet left on its home screen the floating
+    // taskbar, which alone covers 7% of an A6 sheet and is in no inset. So this test puts the bars
+    // away first, and keeps capturing while they animate off.
     @Test
     fun anUnruledPageIsOneFlatColour() {
         setPage(style = PageStyle(hideTitle = true, paper = PaperSize.A6, ruleLines = RuleLines.None))
+        hideSystemBars()
 
-        val flattest = largestColourShareInsideThePage()
+        var flattest = 0f
+        try {
+            compose.waitUntil(5_000) { largestColourShareInsideThePage().also { flattest = it } > 0.99f }
+        } catch (_: ComposeTimeoutException) {
+            // Reported below, with the share the last capture found.
+        }
         assertTrue("an unruled page should be one flat colour, was $flattest of it", flattest > 0.99f)
     }
 
@@ -695,6 +708,16 @@ class PageViewTest {
             "hexagonal paper has no continuous vertical side: $paintedRows/$sampledRows rows painted",
             paintedRows >= sampledRows * 3 / 4,
         )
+    }
+
+    /** Takes the status bar, the taskbar and the app handle off the screen, for this test's window only. */
+    private fun hideSystemBars() {
+        compose.runOnIdle {
+            WindowCompat.getInsetsController(activity.window, activity.window.decorView).run {
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                hide(WindowInsetsCompat.Type.systemBars())
+            }
+        }
     }
 
     /** The share of the sheet held by its commonest colour — 1f for a page nothing is painted on. */
