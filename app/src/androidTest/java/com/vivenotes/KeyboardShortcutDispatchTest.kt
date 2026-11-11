@@ -4,7 +4,7 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.isFocused
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.vivenotes.ui.panel.ContentPanelTags
 import org.junit.Assert.assertTrue
@@ -34,6 +34,9 @@ class KeyboardShortcutDispatchTest {
     /** Ctrl+F goes ahead of the focused view and opens the Content pane with its query focused. */
     @Test
     fun ctrlFOpensSearchWithTheQueryFocused() {
+        // The search request is collected from a LaunchedEffect, which the rule's dispatcher has
+        // only queued at launch; a request sent before the collector starts is dropped.
+        compose.waitForIdle()
         compose.runOnUiThread {
             assertTrue(compose.activity.dispatchKeyEvent(key(KeyEvent.KEYCODE_F, KeyEvent.META_CTRL_ON)))
         }

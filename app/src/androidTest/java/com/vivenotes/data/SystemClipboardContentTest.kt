@@ -3,7 +3,7 @@ package com.vivenotes.data
 import android.content.ClipData
 import android.content.ClipboardManager
 import androidx.compose.material3.Text
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.richtext.CanvasPasteItem
 import com.vivenotes.richtext.canvasPasteItems

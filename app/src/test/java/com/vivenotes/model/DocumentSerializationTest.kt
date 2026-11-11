@@ -165,8 +165,16 @@ class DocumentSerializationTest {
 
     @Test
     fun `ids are unique and time ordered`() {
+        // Ordered to the millisecond only: the 12 bits under the timestamp are random, so ids made
+        // in the same millisecond sort in no particular order — and 500 of them usually are.
         val ids = List(500) { newId() }
         assertEquals(500, ids.toSet().size)
-        assertTrue("ids should sort by creation order", ids == ids.sorted() || ids.first() <= ids.last())
+        val millis = ids.map { it.substring(0, 13) }
+        assertEquals("the timestamp prefix should never go backwards", millis.sorted(), millis)
+
+        val earlier = newId()
+        val issued = System.currentTimeMillis()
+        while (System.currentTimeMillis() <= issued) Thread.onSpinWait()
+        assertTrue("an id from a later millisecond should sort after", earlier < newId())
     }
 }

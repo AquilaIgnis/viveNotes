@@ -1,7 +1,7 @@
 package com.vivenotes.richtext
 
 import android.view.KeyEvent
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.viewinterop.AndroidView
 import com.vivenotes.keyboard.ShortcutAction
 import com.vivenotes.model.Block

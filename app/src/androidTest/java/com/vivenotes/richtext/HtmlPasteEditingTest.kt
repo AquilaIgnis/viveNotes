@@ -2,7 +2,7 @@ package com.vivenotes.richtext
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.viewinterop.AndroidView
 import com.vivenotes.model.Block
 import com.vivenotes.model.BlockType
@@ -119,7 +119,9 @@ class HtmlPasteEditingTest {
                 })
             }
         }
-        compose.waitUntil(5_000) { (editor?.width ?: 0) > 0 }
+        // Laid out is not enough: ClipboardService refuses a window that has not been given focus
+        // yet, and the paste then finds nothing.
+        compose.waitUntil(5_000) { editor.let { it != null && it.width > 0 && it.hasWindowFocus() } }
         compose.runOnIdle {
             val view = checkNotNull(editor)
             view.requestFocus()

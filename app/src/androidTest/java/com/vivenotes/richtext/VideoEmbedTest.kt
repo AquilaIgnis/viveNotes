@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import android.os.SystemClock
 import android.text.style.ForegroundColorSpan
 import android.view.MotionEvent
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.viewinterop.AndroidView
 import com.vivenotes.model.Block
 import com.vivenotes.ui.theme.ViveNotesTheme
