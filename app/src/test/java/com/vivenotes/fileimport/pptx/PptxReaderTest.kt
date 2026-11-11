@@ -416,4 +416,14 @@ class PptxReaderTest {
         val figure = arrangeSlide(shapes, 14400, 10800).single() as PptxObject.Figure
         assertEquals(shapes, figure.members)
     }
+
+    /** An arrow is a drawing on its own, as the sample deck's is, unless it has no breadth: then it is a rule. */
+    @Test
+    fun anArrowWithNoBreadthIsARuleAndComesToNothing() {
+        val down = PptxElement(PptxRole.Drawing, 0, 0, 0, 840, group = null, connector = true) { _, _ -> WordPlaceholder(0, 840, null) }
+        val slanted = PptxElement(PptxRole.Drawing, 0, 0, 840, 400, group = null, connector = true) { _, _ -> WordPlaceholder(840, 400, null) }
+
+        assertTrue(arrangeSlide(listOf(down), 14400, 10800).isEmpty())
+        assertEquals(listOf(slanted), (arrangeSlide(listOf(slanted), 14400, 10800).single() as PptxObject.Figure).members)
+    }
 }

@@ -341,6 +341,12 @@ android {
         // caller. A runtime `FLAG_DEBUGGABLE` check would read the same and strip nothing.
         buildConfig = true
     }
+    // Real documents File ▸ Import is checked against, kept once for both kinds of test: the JVM
+    // tests CI runs read the Word and PowerPoint files, and only a device can render the PDFs.
+    sourceSets {
+        getByName("test").resources.srcDir("src/realDocuments")
+        getByName("androidTest").assets.srcDir("src/realDocuments")
+    }
 }
 
 androidComponents {

@@ -99,14 +99,18 @@ internal fun arrangeSlide(elements: List<PptxElement>, slideWidth: Int, slideHei
     val absorbed = HashSet<PptxElement>()
     for (cluster in clusters) {
         val only = cluster.singleOrNull()
+        var left = cluster.minOf { it.left }
+        var top = cluster.minOf { it.top }
+        var right = cluster.maxOf { it.right }
+        var bottom = cluster.maxOf { it.bottom }
         when {
             // A lone shape with words in it is a callout: what it says is what matters.
             only != null && only.paragraphs.isNotEmpty() && !only.connector -> out += only to PptxObject.Text(only.paragraphs)
+            // A drawing with no breadth is a rule, as a thin shape is, however it was drawn. Cut out, it
+            // is a picture no pixels wide that the canvas stretches to a text box's width: Graphs-1's
+            // slide 31 has an arrow straight down between two text boxes.
+            min(right - left, bottom - top) < MIN_DRAWING_SIDE_TWIPS -> Unit
             else -> {
-                var left = cluster.minOf { it.left }
-                var top = cluster.minOf { it.top }
-                var right = cluster.maxOf { it.right }
-                var bottom = cluster.maxOf { it.bottom }
                 // Labels laid over a drawing are part of it, and are in the picture anyway.
                 val labels = present.filter { element ->
                     element.role == PptxRole.TextBox && element.wordCount <= MAX_LABEL_WORDS &&
