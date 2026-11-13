@@ -8,7 +8,7 @@ of digital documents.
 All features are completely free, including cross-device sync. Your notes stay private: no data leaves your device,
 and all AI features run entirely on-device.
 
-[Demo Video](https://youtu.be/QZ6rd2uQD9E)
+[Demo Video](https://www.youtube.com/watch?v=Ir1Snc3FUM4)
 
 > The desktop repo is [here](https://github.com/CrownByte0b/viveNotes-multiplataform)
 
