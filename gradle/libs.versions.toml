@@ -15,7 +15,7 @@ browser = "1.10.0"
 composeBom = "2026.09.00"
 
 material3 = "1.5.0-alpha25"
-composeCore = "1.12.0-rc01"
+composeCore = "1.13.0-rc01"
 coreKtx = "1.19.1"
 credentials = "1.6.0"
 datastore = "1.3.0"
@@ -46,7 +46,7 @@ ratex = "0.1.15"
 # libonnxruntime.so at process start (SIGSEGV there under the emulator's arm64 translation) and a
 # 1DS uploader inside the library. The app is offline-first with no telemetry. Remove the provider
 # and set ORT_DISABLE_TELEMETRY before raising this.
-onnxRuntime = "1.27.0"
+onnxRuntime = "1.28.0"
 chaquopy = "17.2.0"
 work = "2.12.0"
 
