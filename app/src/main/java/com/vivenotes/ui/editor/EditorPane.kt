@@ -126,6 +126,7 @@ import com.vivenotes.graph.GraphDrag
 import com.vivenotes.graph.GraphPainter
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.isInkAndLines
+import com.vivenotes.ink.selectByFingerTap
 import com.vivenotes.ink.InkLassoMove
 import com.vivenotes.ink.InkLassoResize
 import com.vivenotes.ink.InkLassoSelection
@@ -1772,6 +1773,24 @@ fun EditorPane(
                 modifier = Modifier.fillMaxSize(),
                 hasClipboard = hasClipboard,
                 onRequestPaste = requestPasteAt,
+                // The free hand points while the other holds a tool. Its tap does the two things a
+                // tap does with nothing armed — picks up the object under it, and on bare page puts
+                // down whatever was held — and not the third: it never opens a text container.
+                //
+                // No tables under the lasso or Insert Space, which is the condition a table's own
+                // chrome is drawn on below; `selectByFingerTap` says why the lasso in particular
+                // must not come to hold one by a tap.
+                onFingerTap = { point ->
+                    dismissTextInput()
+                    selection = selectByFingerTap(
+                        tables = if (lassoing || insertingSpace) emptyList() else tableBounds,
+                        shapes = shapes,
+                        equations = equations,
+                        images = images,
+                        graphs = graphs,
+                        point = point,
+                    )
+                },
             )
 
             slidersOf?.let { id -> graphs.firstOrNull { it.id == id } }?.let { graph ->

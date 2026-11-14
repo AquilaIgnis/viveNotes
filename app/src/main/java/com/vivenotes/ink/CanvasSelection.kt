@@ -603,6 +603,30 @@ internal fun selectByTap(
         ?.let(CanvasSelection::ofGraph)
 }
 
+/**
+ * The object under the free hand's tap — [selectByTap], and tables.
+ *
+ * With a tool in the other hand, a finger that may not draw points instead. What it points at is
+ * judged as [selectByTap] judges it, so an object is picked up by the same rule whichever tool is
+ * armed. Tables are asked first because that is the order the page hit-tests them in: a grid is laid
+ * over the object layers and answers before them.
+ *
+ * A table can be taken here, where the lasso's tap has to leave it alone, because pointing holds
+ * without grabbing. The lasso moves what it holds on the next press inside it, and that is what would
+ * put the ink in a held table's cells out of a loop's reach; a pointing finger changes nothing about
+ * what the pen does next. A caller for whom that is not true passes no tables.
+ */
+internal fun selectByFingerTap(
+    tables: List<TableBounds>,
+    shapes: List<Outline.Shape>,
+    equations: List<Outline.Equation>,
+    images: List<Outline.Image>,
+    graphs: List<Outline.Graph>,
+    point: InkPoint,
+): CanvasSelection? =
+    tables.asReversed().firstOrNull { it.bounds.contains(point) }?.let(CanvasSelection::ofTable)
+        ?: selectByTap(shapes, equations, images, point, graphs)
+
 /** A shape is its outline and not the rectangle around it — `ShapeLayer.topmostNear`'s rule. */
 private fun Outline.Shape.isUnderTap(point: InkPoint): Boolean =
     segments.any { it.distanceTo(point.x, point.y) <= TAP_REACH + borderWidth / 2f }

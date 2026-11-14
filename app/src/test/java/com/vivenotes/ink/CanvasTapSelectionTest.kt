@@ -128,4 +128,72 @@ class CanvasTapSelectionTest {
             ),
         )
     }
+
+    // --- The free hand -----------------------------------------------------------------------
+    //
+    // A finger pointing while the other hand holds a tool. The same rules, and tables as well.
+
+    private fun grid(id: String, left: Float, top: Float, side: Float) =
+        TableBounds(id, InkBounds(left, top, left + side, top + side))
+
+    private fun point(
+        x: Float,
+        y: Float,
+        tables: List<TableBounds> = emptyList(),
+        shapes: List<Outline.Shape> = emptyList(),
+        images: List<Outline.Image> = emptyList(),
+    ): CanvasSelection? = selectByFingerTap(
+        tables = tables,
+        shapes = shapes,
+        equations = emptyList(),
+        images = images,
+        graphs = emptyList(),
+        point = InkPoint(x, y),
+    )
+
+    @Test
+    fun `a pointing finger takes the table it lands in`() {
+        val held = point(100f, 100f, tables = listOf(grid("grid", 40f, 40f, 200f)))
+
+        assertEquals(setOf("grid"), held?.tableIds)
+    }
+
+    @Test
+    fun `a table answers before a picture lying under it`() {
+        // The page's own order: a grid is laid over the object layers and is hit-tested first.
+        val held = point(
+            100f,
+            100f,
+            tables = listOf(grid("grid", 40f, 40f, 200f)),
+            images = listOf(picture("photo", 60f, 60f, 80f)),
+        )
+
+        assertEquals(setOf("grid"), held?.tableIds)
+        assertEquals(emptySet<String>(), held?.imageIds)
+    }
+
+    @Test
+    fun `off the table a pointing finger takes what any tap would`() {
+        val held = point(
+            320f,
+            320f,
+            tables = listOf(grid("grid", 40f, 40f, 200f)),
+            images = listOf(picture("photo", 300f, 300f, 60f)),
+        )
+
+        assertEquals(setOf("photo"), held?.imageIds)
+    }
+
+    @Test
+    fun `a pointing finger on bare canvas takes nothing, which is what puts a selection down`() {
+        assertNull(
+            point(
+                500f,
+                500f,
+                tables = listOf(grid("grid", 40f, 40f, 200f)),
+                shapes = listOf(square("box", 300f, 40f, 120f)),
+                images = listOf(picture("photo", 300f, 300f, 60f)),
+            ),
+        )
+    }
 }

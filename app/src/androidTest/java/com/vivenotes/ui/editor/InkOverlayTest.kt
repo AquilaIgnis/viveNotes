@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithTag
@@ -85,6 +86,7 @@ class InkOverlayTest {
     private var deletedIds = emptySet<String>()
     private var recolorArgb: Int? = null
     private var requestedPaste: InkPoint? = null
+    private var fingerTapped: InkPoint? = null
     private var spaceCut: SpaceCut? = null
     private var straightened: Pair<InkPoint, InkPoint>? = null
 
@@ -152,6 +154,7 @@ class InkOverlayTest {
                         onRecolorSelection = { _, color -> recolorArgb = color },
                         hasClipboard = hasClipboard,
                         onRequestPaste = { requestedPaste = it },
+                        onFingerTap = { fingerTapped = it },
                         pan = recordingPan,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -607,6 +610,123 @@ class InkOverlayTest {
         assertEquals(160f, requestedPaste?.x ?: Float.NaN, 1f)
         assertEquals(180f, requestedPaste?.y ?: Float.NaN, 1f)
         assertEquals("the paste gesture drew ink", 0, strokes)
+    }
+
+    // --- The free hand: a tap is not a touch ------------------------------------------------
+    //
+    // With a pen armed and finger drawing off, a finger used to do one thing, which was pan. These
+    // hold the line between the press that points and the press that moves the page.
+
+    @Test
+    fun aFingerTapPointsAtThePageWhileAPenIsInHand() {
+        setOverlay(allowFinger = false)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { click(Offset(160f, 180f)) }
+        compose.waitForIdle()
+
+        assertEquals(160f, fingerTapped?.x ?: Float.NaN, 1f)
+        assertEquals(180f, fingerTapped?.y ?: Float.NaN, 1f)
+        assertEquals("pointing at the page drew on it", 0, strokes)
+    }
+
+    @Test
+    fun aFingerDragMovesThePageAndPointsAtNothing() {
+        setOverlay(allowFinger = false)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { swipeUp() }
+        compose.waitForIdle()
+
+        assertTrue("the drag did not pan", dragged != 0f)
+        assertNull("a drag across the page was read as a tap on it", fingerTapped)
+    }
+
+    /** A finger that draws puts a dot down with its tap, so the same tap must not also select. */
+    @Test
+    fun aFingerThatMayDrawDoesNotPoint() {
+        setOverlay(allowFinger = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { click(Offset(160f, 180f)) }
+        compose.waitForIdle()
+
+        assertNull("a drawing finger's tap was also read as pointing", fingerTapped)
+    }
+
+    /** One press through [FingerTapGesture]: where it was aimed, or null when it was not a tap. */
+    private fun pressWith(
+        toolType: Int,
+        vararg steps: Triple<Int, Float, Long>,
+    ): InkPoint? {
+        val gesture = FingerTapGesture(timeoutMillis = 400L, touchSlop = 8f)
+        var aimed: InkPoint? = null
+        steps.forEach { (action, x, at) ->
+            val event = toolMotion(action, x, 140f, toolType, at)
+            gesture.observe(event) { Matrix() }?.let { aimed = it }
+            event.recycle()
+        }
+        return aimed
+    }
+
+    @Test
+    fun aPressThatLandsAndLiftsIsATapAimedWhereItLanded() {
+        // Lifted a few pixels from where it came down, as a real finger does: the aim is the down.
+        val aimed = pressWith(
+            MotionEvent.TOOL_TYPE_FINGER,
+            Triple(MotionEvent.ACTION_DOWN, 120f, 0L),
+            Triple(MotionEvent.ACTION_MOVE, 123f, 40L),
+            Triple(MotionEvent.ACTION_UP, 124f, 90L),
+        )
+
+        assertEquals(120f, aimed?.x ?: Float.NaN, 0.01f)
+        assertEquals(140f, aimed?.y ?: Float.NaN, 0.01f)
+    }
+
+    @Test
+    fun aPressThatTravelsIsNotATapEvenIfItComesBack() {
+        assertNull(
+            pressWith(
+                MotionEvent.TOOL_TYPE_FINGER,
+                Triple(MotionEvent.ACTION_DOWN, 120f, 0L),
+                Triple(MotionEvent.ACTION_MOVE, 160f, 40L),
+                Triple(MotionEvent.ACTION_UP, 120f, 90L),
+            ),
+        )
+    }
+
+    /** A hand laid on the glass and lifted again has not travelled either. */
+    @Test
+    fun aPressHeldPastTheLongPressTimeoutIsNotATap() {
+        assertNull(
+            pressWith(
+                MotionEvent.TOOL_TYPE_FINGER,
+                Triple(MotionEvent.ACTION_DOWN, 120f, 0L),
+                Triple(MotionEvent.ACTION_UP, 120f, 900L),
+            ),
+        )
+    }
+
+    /** A second contact is a pinch or a pen landing, and either way the first was not pointing. */
+    @Test
+    fun aSecondPointerEndsTheTap() {
+        assertNull(
+            pressWith(
+                MotionEvent.TOOL_TYPE_FINGER,
+                Triple(MotionEvent.ACTION_DOWN, 120f, 0L),
+                Triple(MotionEvent.ACTION_POINTER_DOWN, 120f, 30L),
+                Triple(MotionEvent.ACTION_UP, 120f, 90L),
+            ),
+        )
+    }
+
+    /** The pen's tap is a mark on the page, and is never the free hand's. */
+    @Test
+    fun aStylusTapIsNotThePointingHand() {
+        assertNull(
+            pressWith(
+                MotionEvent.TOOL_TYPE_STYLUS,
+                Triple(MotionEvent.ACTION_DOWN, 120f, 0L),
+                Triple(MotionEvent.ACTION_UP, 120f, 90L),
+            ),
+        )
     }
 
     /** With finger drawing on, the same gesture is ink — so it must *not* also move the page. */

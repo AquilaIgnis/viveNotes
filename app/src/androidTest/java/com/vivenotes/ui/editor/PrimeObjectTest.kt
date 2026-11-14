@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.down
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.moveTo
@@ -11,9 +12,12 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.up
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.ink.brush.Brush
+import androidx.ink.brush.StockBrushes
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.MutableSharedFlow
 import org.junit.Assert.assertEquals
@@ -52,6 +56,7 @@ class PrimeObjectTest {
     private val shapes = mutableStateOf(emptyList<Outline.Shape>())
     private val outlines = mutableStateOf(emptyList<OutlineBox>())
     private val textArmed = mutableStateOf(false)
+    private val penInHand = mutableStateOf(false)
     private val commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 4)
     private var created: Pair<Float, Float>? = null
     private var deleted: Set<String>? = null
@@ -65,10 +70,12 @@ class PrimeObjectTest {
         shapes: List<Outline.Shape>,
         textArmed: Boolean = false,
         outlines: List<OutlineBox> = emptyList(),
+        penInHand: Boolean = false,
     ) {
         this.shapes.value = shapes
         this.outlines.value = outlines
         this.textArmed.value = textArmed
+        this.penInHand.value = penInHand
         created = null
         moved = null
         deleted = null
@@ -103,6 +110,18 @@ class PrimeObjectTest {
                     onSetOutlineMinHeight = { _, _ -> },
                     onOutlineBlurred = {},
                     shapes = this@PrimeObjectTest.shapes.value,
+                    // Stylus-only is the pane's default, so with this the overlay owns every touch
+                    // and a finger is the hand that is not drawing.
+                    brush = if (this@PrimeObjectTest.penInHand.value) {
+                        Brush.createWithColorIntArgb(
+                            family = StockBrushes.pressurePen(StockBrushes.PressurePenVersion.V1),
+                            colorIntArgb = android.graphics.Color.BLACK,
+                            size = 5f,
+                            epsilon = 0.25f,
+                        )
+                    } else {
+                        null
+                    },
                     onMoveShape = { _, dx, dy -> moved = dx to dy },
                     onDeleteShapes = { deleted = it },
                     // The ViewModel's edit in one line: the group *is* the lock, so a lock stamps
@@ -163,6 +182,19 @@ class PrimeObjectTest {
         compose.waitForIdle()
     }
 
+    /**
+     * A finger tap at a point in page coordinates, with a tool in the other hand.
+     *
+     * On the ink overlay, because that is what a touch lands on once a tool is armed: it lies over
+     * the whole window at 1:1, and with the page at its origin and zoom 1 a page dp is a density's
+     * worth of its pixels.
+     */
+    private fun fingerTapPage(xDp: Float, yDp: Float) {
+        val offset = with(density) { Offset(xDp.dp.toPx(), yDp.dp.toPx()) }
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { click(offset) }
+        compose.waitForIdle()
+    }
+
     /** Down the same bus the ribbon uses, on the main thread, as `selectTool` emits it. */
     private fun pickAnotherTool() {
         var emitted = false
@@ -220,6 +252,41 @@ class PrimeObjectTest {
         // The bar is the half of the selection with a semantics node to assert on; the dashed box
         // and its four handles are painted into the layer's canvas from the same `selection`.
         compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
+    }
+
+    /**
+     * The ask: *"if am drawing with stylus i should be able to tap on an image or table or any
+     * object to select it and then tap on an empty space to deselect"*.
+     *
+     * With a pen armed the overlay takes every touch and a finger pans, so a tap never reached the
+     * layers that select. The overlay now tells the tap from the drag and the page answers it.
+     */
+    @Test
+    fun aFingerTapSelectsAnObjectWhileAPenIsInHandAndATapOnBarePagePutsItDown() {
+        setPage(listOf(square(left = 60f, top = 60f, side = 120f)), penInHand = true)
+
+        fingerTapPage(120f, 60f)
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+        assertTrue("the pane did not report the selection the tap made", holdsSelection)
+
+        // The empty middle of the square is the page, not the shape, and so is everywhere else.
+        fingerTapPage(400f, 400f)
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
+        assertNull("a tap on bare page opened a text container with a pen in hand", created)
+    }
+
+    /** The other half of telling them apart: moving the page over an object picks nothing up. */
+    @Test
+    fun aFingerDragAcrossAnObjectMovesThePageAndSelectsNothing() {
+        setPage(listOf(square(left = 60f, top = 60f, side = 120f)), penInHand = true)
+
+        val from = with(density) { Offset(120.dp.toPx(), 60.dp.toPx()) }
+        val to = with(density) { Offset(120.dp.toPx(), 260.dp.toPx()) }
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { swipe(from, to) }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
+        assertNull("panning the page dragged the shape under the finger", moved)
     }
 
     /**

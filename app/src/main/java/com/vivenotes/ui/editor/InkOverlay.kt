@@ -223,6 +223,16 @@ internal fun InkOverlay(
     onDeleteSelection: (InkLassoSelection) -> Unit = {},
     hasClipboard: Boolean = false,
     onRequestPaste: (InkPoint) -> Unit = {},
+    /**
+     * A tap by a hand that may not draw, at the page point it was aimed at.
+     *
+     * With finger drawing off, the finger is the hand that is not holding the tool. It pans, and
+     * that used to be all it did: a press and a drag were the same gesture, so pointing at an object
+     * with a pen armed selected nothing. The overlay only says that a tap happened and where; what
+     * was under it is the page's to decide. Never called while a finger may draw — a tap is a dot
+     * of ink then. See [FingerTapGesture].
+     */
+    onFingerTap: (InkPoint) -> Unit = {},
     onRecolorSelection: (Set<String>, Int) -> Unit = { _, _ -> },
     onGroupSelection: (Set<String>) -> Unit = {},
     onUngroupSelection: (Set<String>) -> Unit = {},
@@ -293,6 +303,7 @@ internal fun InkOverlay(
     val currentOnDeleteSelection by rememberUpdatedState(onDeleteSelection)
     val currentHasInkClipboard by rememberUpdatedState(hasClipboard)
     val currentOnRequestPaste by rememberUpdatedState(onRequestPaste)
+    val currentOnFingerTap by rememberUpdatedState(onFingerTap)
     val currentOnRecolorSelection by rememberUpdatedState(onRecolorSelection)
     val currentOnGroupSelection by rememberUpdatedState(onGroupSelection)
     val currentOnUngroupSelection by rememberUpdatedState(onUngroupSelection)
@@ -326,12 +337,22 @@ internal fun InkOverlay(
             touchSlop = viewConfiguration.touchSlop,
         )
     }
+    val fingerTap = remember(viewConfiguration) {
+        FingerTapGesture(
+            timeoutMillis = viewConfiguration.longPressTimeoutMillis,
+            touchSlop = viewConfiguration.touchSlop,
+        )
+    }
 
     LaunchedEffect(lassoing) {
         if (!lassoing) lassoGesture.clear()
         // Switching the lasso on or off changes which pointers `doubleTap` admits, so a tap already
         // banked under the old rule would pair with one made under the new one.
         doubleTap.reset()
+    }
+    LaunchedEffect(allowFinger) {
+        // A press begun as pointing must not lift as one once the same finger is drawing.
+        fingerTap.reset()
     }
     LaunchedEffect(shaping == null) {
         if (shaping == null) shapeGesture.clear()
@@ -647,6 +668,16 @@ internal fun InkOverlay(
                         } else {
                             null
                         }
+                        // Watched beside the gesture rather than inside it: a finger that may not
+                        // draw pans under every tool, so the pan below runs exactly as it did and
+                        // this only notices when the press it was given turned out to be a tap.
+                        val tappedAt = if (currentAllowFinger) {
+                            null
+                        } else {
+                            fingerTap.observe(event) {
+                                Matrix().also { currentTransform().invert(it) }
+                            }
+                        }
                         val handled = handleInk(
                             event = event,
                             view = wetView,
@@ -710,6 +741,9 @@ internal fun InkOverlay(
                             laserWidth = laserPaint.traceWidth,
                             touchSlop = viewConfiguration.touchSlop,
                         )
+                        // Ahead of the paste: the second tap of a double tap is still a tap, and the
+                        // menu it raises has to come after whatever that tap put down.
+                        tappedAt?.let(currentOnFingerTap)
                         pastePoint?.let(currentOnRequestPaste)
                         handled
                     },
@@ -849,6 +883,91 @@ internal class DoubleTapGesture(
 }
 
 /**
+ * Tells a tap from a touch, for the hand that is not holding the tool.
+ *
+ * A finger that may not draw pans the page — [panPage] — and a press and a drag used to be the same
+ * gesture to it, so pointing at a picture with the free hand did nothing at all. This is what
+ * separates them: one pointer, never further than the touch slop from where it landed, lifted
+ * before it would have been a long press, was aimed at something. Anything else is the page being
+ * moved.
+ *
+ * It watches and never claims, as [DoubleTapGesture] does. The pan underneath still runs, and the
+ * few pixels a tap travels are panned like any others.
+ *
+ * Only a gesture that *begins* with the finger counts. One that lands while the pen is down arrives
+ * as a second pointer and is a resting palm, and a pen that lands during the press ends it for the
+ * same reason. The time limit is the other half of that: a hand laid on the glass and lifted again
+ * has not travelled either.
+ *
+ * That limit is [ViewConfiguration]'s long-press timeout rather than a constant of our own — it is
+ * where the system already stops calling a press a tap, and it is the setting someone who needs
+ * longer presses has already changed.
+ */
+internal class FingerTapGesture(
+    private val timeoutMillis: Long,
+    private val touchSlop: Float,
+) {
+    /** Where the press in progress landed, in page units, or null when it is no longer a tap. */
+    private var aim: InkPoint? = null
+    private var downAt = 0L
+    private var downX = 0f
+    private var downY = 0f
+
+    /**
+     * Feeds one event, and returns where a tap was aimed on the lift that completes one.
+     *
+     * The point is the one the finger came down on, not the one it left: the page pans under a
+     * finger from its first sample, so by the lift the paper beneath it may have moved.
+     *
+     * [toPage] is asked on the down only, and only for a pointer this admits, so a stroke's worth of
+     * pen samples costs no matrix.
+     */
+    fun observe(event: MotionEvent, toPage: () -> Matrix): InkPoint? {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                aim = null
+                val index = event.actionIndex
+                if (!hasNoPenBehind(event.getToolType(index))) return null
+                downAt = event.eventTime
+                downX = event.x
+                downY = event.y
+                aim = event.pagePoint(index, toPage())
+            }
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> aim = null
+            MotionEvent.ACTION_MOVE -> if (travelled(event)) aim = null
+            MotionEvent.ACTION_UP -> {
+                val aimed = aim
+                aim = null
+                // Palm rejection can arrive as an ordinary up carrying this flag instead of as a
+                // cancel, and it means the same thing: that was not a touch.
+                val rejected = (event.flags and MotionEvent.FLAG_CANCELED) != 0
+                val held = event.eventTime - downAt > timeoutMillis
+                return aimed.takeUnless { rejected || held || travelled(event) }
+            }
+        }
+        return null
+    }
+
+    fun reset() {
+        aim = null
+    }
+
+    private fun travelled(event: MotionEvent): Boolean =
+        hypot(event.x - downX, event.y - downY) > touchSlop
+}
+
+/**
+ * Whether a pointer has no pen behind it, which is what the finger setting is about.
+ *
+ * A mouse is here for the emulator, though not because the emulator reports one: on the
+ * `Medium_Tablet` AVD `dumpsys input` lists only `virtio_input_multi_touch` devices, so a host click
+ * arrives as a finger. Other configurations do deliver a real mouse; either way the answer is the
+ * same.
+ */
+private fun hasNoPenBehind(toolType: Int): Boolean =
+    toolType == MotionEvent.TOOL_TYPE_FINGER || toolType == MotionEvent.TOOL_TYPE_MOUSE
+
+/**
  * Turns one motion event into ink.
  *
  * Returns false to let the gesture through — a finger on a stylus-only canvas has to reach the
@@ -914,13 +1033,7 @@ private fun handleInk(
 ): Boolean {
     val index = event.actionIndex
     val toolType = event.getToolType(index)
-    // Both count as "a pointer with no pen behind it", which is what the finger setting is about.
-    // A mouse is here for the emulator, though not because the emulator reports one: on the
-    // `Medium_Tablet` AVD `dumpsys input` lists only `virtio_input_multi_touch` devices, so a host
-    // click arrives as a finger. Other configurations do deliver a real mouse; either way the
-    // answer is the same.
-    val isDirectTouch = toolType == MotionEvent.TOOL_TYPE_FINGER ||
-        toolType == MotionEvent.TOOL_TYPE_MOUSE
+    val isDirectTouch = hasNoPenBehind(toolType)
 
     // Lasso follows the same finger setting as ink and the eraser: stylus always selects, while a
     // disallowed finger moves the page. It used to claim every finger drag even in stylus-only
