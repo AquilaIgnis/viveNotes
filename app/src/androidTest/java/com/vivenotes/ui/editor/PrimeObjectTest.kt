@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.down
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.moveTo
@@ -57,6 +58,7 @@ class PrimeObjectTest {
     private val outlines = mutableStateOf(emptyList<OutlineBox>())
     private val textArmed = mutableStateOf(false)
     private val penInHand = mutableStateOf(false)
+    private val hasClipboard = mutableStateOf(false)
     private val commands = MutableSharedFlow<FormatCommand>(extraBufferCapacity = 4)
     private var created: Pair<Float, Float>? = null
     private var deleted: Set<String>? = null
@@ -64,6 +66,9 @@ class PrimeObjectTest {
 
     /** The travel a shape drag reported, and null when the drag moved nothing. */
     private var moved: Pair<Float, Float>? = null
+
+    /** The scale a corner drag reported, and null when nothing was resized. */
+    private var resized: Pair<Float, Float>? = null
     private lateinit var density: Density
 
     private fun setPage(
@@ -71,13 +76,16 @@ class PrimeObjectTest {
         textArmed: Boolean = false,
         outlines: List<OutlineBox> = emptyList(),
         penInHand: Boolean = false,
+        hasClipboard: Boolean = false,
     ) {
         this.shapes.value = shapes
         this.outlines.value = outlines
         this.textArmed.value = textArmed
         this.penInHand.value = penInHand
+        this.hasClipboard.value = hasClipboard
         created = null
         moved = null
+        resized = null
         deleted = null
         compose.setContent {
             density = LocalDensity.current
@@ -123,6 +131,9 @@ class PrimeObjectTest {
                         null
                     },
                     onMoveShape = { _, dx, dy -> moved = dx to dy },
+                    onMoveShapes = { _, dx, dy -> moved = dx to dy },
+                    onResizeShapes = { _, _, _, scaleX, scaleY -> resized = scaleX to scaleY },
+                    hasClipboard = this@PrimeObjectTest.hasClipboard.value,
                     onDeleteShapes = { deleted = it },
                     // The ViewModel's edit in one line: the group *is* the lock, so a lock stamps
                     // one id on what is held and an unlock clears it — `setSelectionLocked`.
@@ -192,6 +203,19 @@ class PrimeObjectTest {
     private fun fingerTapPage(xDp: Float, yDp: Float) {
         val offset = with(density) { Offset(xDp.dp.toPx(), yDp.dp.toPx()) }
         compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { click(offset) }
+        compose.waitForIdle()
+    }
+
+    /** A finger drag between two page points, on the overlay [fingerTapPage] taps. */
+    private fun fingerDragPage(fromX: Float, fromY: Float, toX: Float, toY: Float) {
+        val from = with(density) { Offset(fromX.dp.toPx(), fromY.dp.toPx()) }
+        val to = with(density) { Offset(toX.dp.toPx(), toY.dp.toPx()) }
+        val overlay = compose.onNodeWithTag(INK_OVERLAY_TAG)
+        overlay.performTouchInput { down(from) }
+        compose.waitForIdle()
+        overlay.performTouchInput { moveTo(to) }
+        compose.waitForIdle()
+        overlay.performTouchInput { up() }
         compose.waitForIdle()
     }
 
@@ -273,6 +297,97 @@ class PrimeObjectTest {
         fingerTapPage(400f, 400f)
         compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
         assertNull("a tap on bare page opened a text container with a pen in hand", created)
+    }
+
+    /**
+     * What a selection is for. Picked up by a tap, an object has to answer the hand that picked it
+     * up: with a pen armed the layers never see a touch, so its handles were drawn and dead — the
+     * finger panned the page out from under them and the pen drew over them.
+     */
+    @Test
+    fun aFingerDragOnWhatItSelectedMovesItWithAPenInHand() {
+        setPage(listOf(square(left = 60f, top = 60f, side = 120f)), penInHand = true)
+        fingerTapPage(120f, 60f)
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+
+        // From the empty middle of the square: the whole of a selection's rectangle is its body.
+        fingerDragPage(120f, 120f, 160f, 150f)
+
+        val (dx, dy) = moved ?: error("the selected shape did not follow the finger")
+        assertEquals(40f, dx, 1f)
+        assertEquals(30f, dy, 1f)
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    fun aFingerDragOnASelectedObjectsCornerResizesIt() {
+        setPage(listOf(square(left = 60f, top = 60f, side = 120f)), penInHand = true)
+        fingerTapPage(120f, 60f)
+
+        // The bottom-right handle sits on the padded rectangle, a little outside the square.
+        val corner = 180f + SelectionChrome.PADDING.value
+        fingerDragPage(corner, corner, corner + 60f, corner + 60f)
+
+        val (scaleX, scaleY) = resized ?: error("dragging a corner handle resized nothing")
+        assertTrue("the corner drag did not grow the shape", scaleX > 1.2f && scaleY > 1.2f)
+        assertNull("a corner drag was also read as a move", moved)
+    }
+
+    /** A tap inside what is held is not a tap on bare page, even over the hollow of a shape. */
+    @Test
+    fun aFingerTapInsideTheSelectedObjectKeepsItSelected() {
+        setPage(listOf(square(left = 60f, top = 60f, side = 120f)), penInHand = true)
+        fingerTapPage(120f, 60f)
+
+        fingerTapPage(120f, 120f)
+
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+        assertNull(moved)
+    }
+
+    /** Selecting something must not turn every drag into a move: off it, the page still pans. */
+    @Test
+    fun aFingerDragBesideTheSelectionLeavesItWhereItIs() {
+        setPage(listOf(square(left = 60f, top = 60f, side = 120f)), penInHand = true)
+        fingerTapPage(120f, 60f)
+
+        fingerDragPage(400f, 400f, 400f, 300f)
+
+        assertNull("a drag on bare page moved the selected shape", moved)
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+    }
+
+    /** The paste gesture is two of those taps, and pointing must not have cost it its menu. */
+    @Test
+    fun aFingerDoubleTapStillOffersPasteWithAPenInHand() {
+        setPage(
+            listOf(square(left = 60f, top = 60f, side = 120f)),
+            penInHand = true,
+            hasClipboard = true,
+        )
+        val bare = with(density) { Offset(400.dp.toPx(), 400.dp.toPx()) }
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { doubleClick(bare) }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(PageTags.PASTE).assertIsDisplayed()
+    }
+
+    @Test
+    fun aFingerDoubleTapOffersPasteWithSomethingStillSelected() {
+        setPage(
+            listOf(square(left = 60f, top = 60f, side = 120f)),
+            penInHand = true,
+            hasClipboard = true,
+        )
+        fingerTapPage(120f, 60f)
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+        val bare = with(density) { Offset(400.dp.toPx(), 400.dp.toPx()) }
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { doubleClick(bare) }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag(PageTags.PASTE).assertIsDisplayed()
     }
 
     /** The other half of telling them apart: moving the page over an object picks nothing up. */

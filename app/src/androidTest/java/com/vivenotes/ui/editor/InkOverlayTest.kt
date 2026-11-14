@@ -651,6 +651,20 @@ class InkOverlayTest {
         assertNull("a drawing finger's tap was also read as pointing", fingerTapped)
     }
 
+    /**
+     * The lasso selects for itself, and what it holds is about to be dragged by the pen. A resting
+     * hand brushing the glass must not be read as a tap on bare page that drops it.
+     */
+    @Test
+    fun aFingerTapUnderTheLassoIsOnlyAPanThatWentNowhere() {
+        setOverlay(allowFinger = false, lassoing = true)
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput { click(Offset(160f, 180f)) }
+        compose.waitForIdle()
+
+        assertNull("a finger pointed while the lasso owned selecting", fingerTapped)
+    }
+
     /** One press through [FingerTapGesture]: where it was aimed, or null when it was not a tap. */
     private fun pressWith(
         toolType: Int,
@@ -715,6 +729,21 @@ class InkOverlayTest {
                 Triple(MotionEvent.ACTION_UP, 120f, 90L),
             ),
         )
+    }
+
+    /** A press on what is selected takes hold of it; lifting without moving must not let go. */
+    @Test
+    fun aPressOnTheSelectionIsNotATap() {
+        val gesture = FingerTapGesture(timeoutMillis = 400L, touchSlop = 8f)
+        val down = toolMotion(MotionEvent.ACTION_DOWN, 120f, 140f, MotionEvent.TOOL_TYPE_FINGER, 0L)
+        val up = toolMotion(MotionEvent.ACTION_UP, 120f, 140f, MotionEvent.TOOL_TYPE_FINGER, 90L)
+
+        assertNull(gesture.observe(down) { Matrix() })
+        gesture.onSelection = true
+        assertNull("a press on the selection lifted as a tap", gesture.observe(up) { Matrix() })
+
+        down.recycle()
+        up.recycle()
     }
 
     /** The pen's tap is a mark on the page, and is never the free hand's. */

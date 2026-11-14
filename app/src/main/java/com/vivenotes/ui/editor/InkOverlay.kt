@@ -224,13 +224,14 @@ internal fun InkOverlay(
     hasClipboard: Boolean = false,
     onRequestPaste: (InkPoint) -> Unit = {},
     /**
-     * A tap by a hand that may not draw, at the page point it was aimed at.
+     * A tap by the free hand, at the page point it was aimed at — see [fingerPoints] for when a
+     * finger is that hand.
      *
-     * With finger drawing off, the finger is the hand that is not holding the tool. It pans, and
-     * that used to be all it did: a press and a drag were the same gesture, so pointing at an object
-     * with a pen armed selected nothing. The overlay only says that a tap happened and where; what
-     * was under it is the page's to decide. Never called while a finger may draw — a tap is a dot
-     * of ink then. See [FingerTapGesture].
+     * It pans, and that used to be all it did: a press and a drag were the same gesture, so
+     * pointing at an object with a pen armed selected nothing. The overlay only says that a tap
+     * happened and where; what was under it is the page's to decide. A press on what is already
+     * selected is not reported: that one takes hold of the selection and moves it, as the lasso
+     * does. See [FingerTapGesture].
      */
     onFingerTap: (InkPoint) -> Unit = {},
     onRecolorSelection: (Set<String>, Int) -> Unit = { _, _ -> },
@@ -350,8 +351,18 @@ internal fun InkOverlay(
         // banked under the old rule would pair with one made under the new one.
         doubleTap.reset()
     }
-    LaunchedEffect(allowFinger) {
-        // A press begun as pointing must not lift as one once the same finger is drawing.
+    val pointing = fingerPoints(
+        allowFinger = allowFinger,
+        drawing = brush != null || erasing || laserPointing,
+        lassoing = lassoing,
+        shaping = shaping != null,
+        insertingSpace = insertingSpace,
+    )
+    val currentPointing by rememberUpdatedState(pointing)
+    LaunchedEffect(pointing) {
+        // A press begun as pointing must not lift as one once the same finger is drawing, and a
+        // selection it was moving is not left half moved under the tool that replaced the pen.
+        if (!pointing && fingerTap.onSelection) lassoGesture.clear()
         fingerTap.reset()
     }
     LaunchedEffect(shaping == null) {
@@ -549,7 +560,9 @@ internal fun InkOverlay(
                     renderer.draw(native, inkPainter.paint(pageStroke), strokeMatrix)
                     native.restoreToCount(checkpoint)
                 }
-                if (currentLassoing && gestureRevision >= 0) {
+                // Under the lasso, and under a pointing finger: in both the selection is moved from
+                // here, so its rectangle and corners are drawn here and the layers leave theirs out.
+                if ((currentLassoing || currentPointing) && gestureRevision >= 0) {
                     drawLasso(
                         native, matrix, lassoGesture, currentSelection, currentShapes,
                         lassoColor, lassoHandleFill,
@@ -668,15 +681,15 @@ internal fun InkOverlay(
                         } else {
                             null
                         }
-                        // Watched beside the gesture rather than inside it: a finger that may not
-                        // draw pans under every tool, so the pan below runs exactly as it did and
-                        // this only notices when the press it was given turned out to be a tap.
-                        val tappedAt = if (currentAllowFinger) {
-                            null
-                        } else {
+                        // Watched beside the gesture rather than inside it: the pan below runs as
+                        // it always did, and this only notices when the press it was given turned
+                        // out to be a tap.
+                        val tappedAt = if (currentPointing) {
                             fingerTap.observe(event) {
                                 Matrix().also { currentTransform().invert(it) }
                             }
+                        } else {
+                            null
                         }
                         val handled = handleInk(
                             event = event,
@@ -740,6 +753,7 @@ internal fun InkOverlay(
                             laser = laser.takeIf { currentLaserPointing },
                             laserWidth = laserPaint.traceWidth,
                             touchSlop = viewConfiguration.touchSlop,
+                            freeHand = fingerTap,
                         )
                         // Ahead of the paste: the second tap of a double tap is still a tap, and the
                         // menu it raises has to come after whatever that tap put down.
@@ -909,6 +923,16 @@ internal class FingerTapGesture(
 ) {
     /** Where the press in progress landed, in page units, or null when it is no longer a tap. */
     private var aim: InkPoint? = null
+
+    /**
+     * Whether the press in progress landed on what is already selected.
+     *
+     * Set by the caller on the down, since only it knows what is selected. Such a press belongs to
+     * the selection — it drags it, or a corner of it — so it neither pans the page nor counts as a
+     * tap. Without the second half, a tap in the empty middle of a selected shape would be read as
+     * a tap on bare page and put down the very thing it was aimed at.
+     */
+    var onSelection = false
     private var downAt = 0L
     private var downX = 0f
     private var downY = 0f
@@ -926,6 +950,7 @@ internal class FingerTapGesture(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 aim = null
+                onSelection = false
                 val index = event.actionIndex
                 if (!hasNoPenBehind(event.getToolType(index))) return null
                 downAt = event.eventTime
@@ -938,11 +963,10 @@ internal class FingerTapGesture(
             MotionEvent.ACTION_UP -> {
                 val aimed = aim
                 aim = null
-                // Palm rejection can arrive as an ordinary up carrying this flag instead of as a
-                // cancel, and it means the same thing: that was not a touch.
-                val rejected = (event.flags and MotionEvent.FLAG_CANCELED) != 0
+                // A rejected palm needs no test of its own here. As the only pointer it ends in
+                // ACTION_CANCEL, and beside another it was already ruled out when that one landed.
                 val held = event.eventTime - downAt > timeoutMillis
-                return aimed.takeUnless { rejected || held || travelled(event) }
+                return aimed.takeUnless { onSelection || held || travelled(event) }
             }
         }
         return null
@@ -950,11 +974,34 @@ internal class FingerTapGesture(
 
     fun reset() {
         aim = null
+        onSelection = false
     }
 
     private fun travelled(event: MotionEvent): Boolean =
         hypot(event.x - downX, event.y - downY) > touchSlop
 }
+
+/**
+ * Whether a finger points at the page instead of drawing on it or only panning it.
+ *
+ * True for the hand that is not holding a drawing tool: finger drawing is off, and what is armed is
+ * a pen, a highlighter, the eraser or the laser. That hand taps to pick an object up, drags what it
+ * picked up, and pans everywhere else.
+ *
+ * Not under the lasso, Insert Shape or Insert Space. Those own selecting and placing themselves, and
+ * the lasso in particular holds a selection the pen is about to drag: a stray touch of the resting
+ * hand read as a tap on bare page would drop it. There a finger only pans, as it always has.
+ *
+ * One function because two places have to agree on it. The overlay acts on it, and the page decides
+ * from it which layer draws the selection's handles — whichever one answers a touch on them.
+ */
+internal fun fingerPoints(
+    allowFinger: Boolean,
+    drawing: Boolean,
+    lassoing: Boolean,
+    shaping: Boolean,
+    insertingSpace: Boolean,
+): Boolean = !allowFinger && drawing && !lassoing && !shaping && !insertingSpace
 
 /**
  * Whether a pointer has no pen behind it, which is what the finger setting is about.
@@ -1030,38 +1077,17 @@ private fun handleInk(
     /** The laser trace's width, in view pixels. */
     laserWidth: Float,
     touchSlop: Float,
+    /** The pointing hand's press, told here whether it landed on the selection. */
+    freeHand: FingerTapGesture,
 ): Boolean {
     val index = event.actionIndex
     val toolType = event.getToolType(index)
     val isDirectTouch = hasNoPenBehind(toolType)
 
-    // Lasso follows the same finger setting as ink and the eraser: stylus always selects, while a
-    // disallowed finger moves the page. It used to claim every finger drag even in stylus-only
-    // mode, which made the page impossible to pan one-handed with the lasso armed. Ahead of every
-    // other mode because it owns the whole gesture, and a shape drag must not also start a stroke.
-    if (shaping != null) {
-        if (isDirectTouch && !allowFinger) {
-            return panPage(event, pan, velocity, panning, lastPan, setPanning)
-        }
-        val toPage = Matrix().also { transform.invert(it) }
-        return shapeGesture.handle(event, toPage, touchSlop, onInsertShape)
-    }
-
-    // Ahead of the lasso for the same reason the shape tool is ahead of both: a tool that owns the
-    // whole gesture must be asked before anything that would also like part of it. A disallowed
-    // finger pans, so the page can still be moved one-handed with the tool in hand.
-    if (insertingSpace) {
-        if (isDirectTouch && !allowFinger) {
-            return panPage(event, pan, velocity, panning, lastPan, setPanning)
-        }
-        val toPage = Matrix().also { transform.invert(it) }
-        return insertSpaceGesture.handle(event, toPage, touchSlop, onInsertSpace)
-    }
-
-    if (lassoing) {
-        if (isDirectTouch && !allowFinger) {
-            return panPage(event, pan, velocity, panning, lastPan, setPanning)
-        }
+    // The selection's own gesture: a press on it moves it, a press on a corner scales it. Two hands
+    // reach it — the lasso tool, and a finger pointing under a drawing tool — and both get exactly
+    // this, so an object dragged by one behaves as it does dragged by the other.
+    fun onSelection(): Boolean {
         val toPage = Matrix().also { transform.invert(it) }
         return lassoGesture.handle(
             event = event,
@@ -1091,22 +1117,63 @@ private fun handleInk(
         )
     }
 
-    // The tip only. Turning the pen over still erases, as it does with a pen in hand: the laser
-    // leaves nothing on the page, so the flip cannot mean anything else.
-    if (laser != null && toolType != MotionEvent.TOOL_TYPE_ERASER) {
+    // Lasso follows the same finger setting as ink and the eraser: stylus always selects, while a
+    // disallowed finger moves the page. It used to claim every finger drag even in stylus-only
+    // mode, which made the page impossible to pan one-handed with the lasso armed. Ahead of every
+    // other mode because it owns the whole gesture, and a shape drag must not also start a stroke.
+    if (shaping != null) {
         if (isDirectTouch && !allowFinger) {
             return panPage(event, pan, velocity, panning, lastPan, setPanning)
         }
+        val toPage = Matrix().also { transform.invert(it) }
+        return shapeGesture.handle(event, toPage, touchSlop, onInsertShape)
+    }
+
+    // Ahead of the lasso for the same reason the shape tool is ahead of both: a tool that owns the
+    // whole gesture must be asked before anything that would also like part of it. A disallowed
+    // finger pans, so the page can still be moved one-handed with the tool in hand.
+    if (insertingSpace) {
+        if (isDirectTouch && !allowFinger) {
+            return panPage(event, pan, velocity, panning, lastPan, setPanning)
+        }
+        val toPage = Matrix().also { transform.invert(it) }
+        return insertSpaceGesture.handle(event, toPage, touchSlop, onInsertSpace)
+    }
+
+    if (lassoing) {
+        if (isDirectTouch && !allowFinger) {
+            return panPage(event, pan, velocity, panning, lastPan, setPanning)
+        }
+        return onSelection()
+    }
+
+    // Past the three tools above, a finger that may not draw is the free hand — [fingerPoints].
+    // Where it comes down decides the whole gesture: on what is selected it takes hold of it, and
+    // anywhere else it moves the page. Decided on the down and never again, so a drag that began on
+    // the page cannot pick an object up by passing over it.
+    //
+    // Ahead of the wet view's own check below, which is about ink: the page pans without it.
+    if (isDirectTouch && !allowFinger) {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            val toPage = Matrix().also { transform.invert(it) }
+            freeHand.onSelection =
+                lassoGesture.reaches(selection, shapes, event.pagePoint(index, toPage))
+        }
+        return if (freeHand.onSelection) {
+            onSelection()
+        } else {
+            panPage(event, pan, velocity, panning, lastPan, setPanning)
+        }
+    }
+
+    // The tip only. Turning the pen over still erases, as it does with a pen in hand: the laser
+    // leaves nothing on the page, so the flip cannot mean anything else.
+    if (laser != null && toolType != MotionEvent.TOOL_TYPE_ERASER) {
         val toPage = Matrix().also { transform.invert(it) }
         return laser.handle(event, toPage, laserWidth)
     }
 
     if (view == null) return false
-
-    // A touch that is not allowed to draw pans instead. Consumed rather than declined, because
-    // declining leaves it with nobody: the scroll container is a sibling, and a sibling under a hit
-    // pointer node never sees the gesture.
-    if (isDirectTouch && !allowFinger) return panPage(event, pan, velocity, panning, lastPan, setPanning)
 
     // A press is always the start of a new gesture, whatever became of the last one. Android has to
     // work quite hard to lose an up — a disposed filter, a torn-down window — but the failure if it
@@ -2275,52 +2342,34 @@ internal class LassoGesture {
             MotionEvent.ACTION_DOWN -> {
                 pointerId = event.getPointerId(event.actionIndex)
                 val point = event.pagePoint(event.actionIndex, toPage)
-                // One line held alone has ends where everything else has corners, and never both —
-                // the same question `ShapeLayer.handleNear` asks of a tapped one.
-                val line = selection.lineShape(shapes)
-                // Locked: no handle answers, because none is drawn. Both grabs are refused here
-                // rather than at the point of applying them, so the gesture never enters a mode
-                // whose whole job is to preview an edit that will not happen.
-                val locked = selection?.isLocked == true
-                val grabbedEnd = if (locked) {
-                    null
-                } else {
-                    line?.endNear(point.x, point.y, SelectionChrome.HANDLE_REACH.value)
-                }
-                val corner = if (line == null && !locked) {
-                    selection?.bounds?.cornerNear(point)
-                } else {
-                    null
-                }
                 startBounds = selection?.bounds
-                if (line != null && grabbedEnd != null) {
-                    mode = Mode.LineEnd
-                    endShape = line
-                    endHandle = grabbedEnd
-                    endGrab = InkPoint(grabbedEnd.x - point.x, grabbedEnd.y - point.y)
-                    endAt = InkPoint(grabbedEnd.x, grabbedEnd.y)
-                    endPreview = line
-                    preview = InkPoint(0f, 0f)
-                } else if (selection != null && corner != null) {
-                    mode = Mode.Resizing
-                    resizeStart = corner.point(selection.bounds)
-                    resizeAnchor = corner.opposite().point(selection.bounds)
-                    resizeScale = InkPoint(1f, 1f)
-                    preview = InkPoint(0f, 0f)
-                } else if (
-                    selection != null &&
-                    selection.bounds.holdsBody(point, if (line != null) TAP_REACH else 0f)
-                ) {
-                    mode = if (locked) Mode.Held else Mode.Moving
-                    start = point
-                    preview = InkPoint(0f, 0f)
-                } else {
-                    mode = Mode.Drawing
-                    onSelect(null)
-                    path.clear()
-                    path += point
-                    preview = InkPoint(0f, 0f)
+                when (val grip = gripAt(selection, shapes, point)) {
+                    is Grip.End -> {
+                        mode = Mode.LineEnd
+                        endShape = grip.line
+                        endHandle = grip.end
+                        endGrab = InkPoint(grip.end.x - point.x, grip.end.y - point.y)
+                        endAt = InkPoint(grip.end.x, grip.end.y)
+                        endPreview = grip.line
+                    }
+                    is Grip.Scale -> {
+                        mode = Mode.Resizing
+                        resizeStart = grip.corner.point(grip.bounds)
+                        resizeAnchor = grip.corner.opposite().point(grip.bounds)
+                        resizeScale = InkPoint(1f, 1f)
+                    }
+                    is Grip.Body -> {
+                        mode = if (grip.locked) Mode.Held else Mode.Moving
+                        start = point
+                    }
+                    null -> {
+                        mode = Mode.Drawing
+                        onSelect(null)
+                        path.clear()
+                        path += point
+                    }
                 }
+                preview = InkPoint(0f, 0f)
                 invalidateDraw()
                 true
             }
@@ -2482,6 +2531,58 @@ internal class LassoGesture {
             else -> false
         }
     }
+
+    /** What a press on the selection takes hold of. */
+    private sealed interface Grip {
+        /** One end of a line held alone. */
+        data class End(val line: Outline.Shape, val end: ShapeEnd) : Grip
+
+        /** A corner handle, and the rectangle it is a corner of. */
+        data class Scale(val corner: Corner, val bounds: InkBounds) : Grip
+
+        /** The body. A locked one is still held, so the press is ours, but it will not move. */
+        data class Body(val locked: Boolean) : Grip
+    }
+
+    /**
+     * What a press at [point] takes hold of, or null when it lands off the selection.
+     *
+     * One line held alone has ends where everything else has corners, and never both — the same
+     * question `ShapeLayer.handleNear` asks of a tapped one.
+     *
+     * Locked: no handle answers, because none is drawn. Both grabs are refused here rather than at
+     * the point of applying them, so the gesture never enters a mode whose whole job is to preview
+     * an edit that will not happen.
+     */
+    private fun gripAt(
+        selection: CanvasSelection?,
+        shapes: List<Outline.Shape>,
+        point: InkPoint,
+    ): Grip? {
+        if (selection == null) return null
+        val line = selection.lineShape(shapes)
+        val locked = selection.isLocked
+        if (!locked) {
+            if (line != null) {
+                line.endNear(point.x, point.y, SelectionChrome.HANDLE_REACH.value)
+                    ?.let { return Grip.End(line, it) }
+            } else {
+                selection.bounds.cornerNear(point)?.let { return Grip.Scale(it, selection.bounds) }
+            }
+        }
+        val onBody = selection.bounds.holdsBody(point, if (line != null) TAP_REACH else 0f)
+        return if (onBody) Grip.Body(locked) else null
+    }
+
+    /**
+     * Whether a press at [point] would take hold of [selection] rather than start something new.
+     *
+     * Asked by a caller that has another use for a press landing anywhere else — a pointing finger
+     * pans the page with it — and must not hand this gesture a down it would answer by clearing the
+     * selection and beginning a loop.
+     */
+    fun reaches(selection: CanvasSelection?, shapes: List<Outline.Shape>, point: InkPoint): Boolean =
+        gripAt(selection, shapes, point) != null
 
     private fun appendSamples(event: MotionEvent, index: Int, toPage: Matrix) {
         repeat(event.historySize) { history ->

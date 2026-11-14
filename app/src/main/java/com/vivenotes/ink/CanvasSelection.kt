@@ -354,10 +354,16 @@ data class CanvasClipboard(
     val equations: List<Outline.Equation> = emptyList(),
     /** Graphs, likewise: the function and the window are the whole of one. */
     val graphs: List<Outline.Graph> = emptyList(),
+    /**
+     * Pictures, as their frames. The pixels are not here and are not copied: a frame names its file
+     * by `attachmentId`, and a pasted frame names the same one — the store is content-addressed, so
+     * the same picture twice was always one file.
+     */
+    val images: List<Outline.Image> = emptyList(),
 ) {
     val isEmpty: Boolean
         get() = strokes.isEmpty() && shapes.isEmpty() && texts.isEmpty() && tables.isEmpty() &&
-            equations.isEmpty() && graphs.isEmpty()
+            equations.isEmpty() && graphs.isEmpty() && images.isEmpty()
 }
 
 /**
@@ -611,10 +617,10 @@ internal fun selectByTap(
  * armed. Tables are asked first because that is the order the page hit-tests them in: a grid is laid
  * over the object layers and answers before them.
  *
- * A table can be taken here, where the lasso's tap has to leave it alone, because pointing holds
- * without grabbing. The lasso moves what it holds on the next press inside it, and that is what would
- * put the ink in a held table's cells out of a loop's reach; a pointing finger changes nothing about
- * what the pen does next. A caller for whom that is not true passes no tables.
+ * A table can be taken here, where the lasso's tap has to leave it alone, because the hand that
+ * holds it is not the hand that writes. The lasso moves what it holds on the next press inside it,
+ * which would put the ink in a held table's cells out of a loop's reach. A finger that holds a table
+ * moves it with the finger, and the pen goes on writing in its cells exactly as before.
  */
 internal fun selectByFingerTap(
     tables: List<TableBounds>,

@@ -1660,6 +1660,59 @@ class NotesViewModelTest {
         assertEquals("the paste changed size", source.height, pasted.height, 0.5f)
     }
 
+    /**
+     * The bar offers Copy over a picture, and it used to copy nothing: the paste menu that Copy is
+     * paired with never came up, and nothing said why.
+     *
+     * The copy is a second frame over the same file, so the two share one attachment.
+     */
+    @Test
+    fun copyingAPictureOffersItToPasteAndThePasteSharesItsFile() = runTest(dispatcher) {
+        seedStarterText()
+        val pageId = db.query("SELECT id FROM pages ORDER BY sortIndex LIMIT 1", emptyArray())
+            .use { cursor ->
+                cursor.moveToFirst()
+                cursor.getString(0)
+            }
+        val picture = Outline.Image(
+            id = "picture-1",
+            x = 40f,
+            y = 200f,
+            width = 120f,
+            height = 80f,
+            attachmentId = "sha-copied",
+            lockGroup = "pinned",
+        )
+        val loaded = repository.loadDoc(pageId) as PageLoad.Loaded
+        repository.saveDoc(pageId, loaded.doc.copy(outlines = loaded.doc.outlines + picture))
+        val vm = NotesViewModel(
+            repository,
+            attachments,
+            editorDefaults,
+            viewSettings,
+            penSettings,
+            inkDispatcher = dispatcher,
+        )
+        advanceUntilIdle()
+
+        vm.copySelection(
+            CanvasSelection(imageIds = setOf("picture-1"), bounds = InkBounds(0f, 0f, 0f, 0f)),
+        )
+        assertTrue("copying a picture put nothing on the clipboard", vm.hasClipboard.value)
+
+        vm.pasteObjects(InkPoint(400f, 500f))
+        advanceUntilIdle()
+
+        val pasted = vm.uiState.value.images.single { it.id != "picture-1" }
+        assertEquals("the copy does not show the same picture", "sha-copied", pasted.attachmentId)
+        assertEquals("the paste did not start at the tap", 500f, pasted.y, 0.5f)
+        assertEquals(400f, pasted.x + pasted.width / 2f, 0.5f)
+        assertEquals(120f, pasted.width, 0.5f)
+        assertEquals(80f, pasted.height, 0.5f)
+        // Unlocked, like every pasted copy: one that arrived immovable could not be put in place.
+        assertNull(pasted.lockGroup)
+    }
+
     @Test
     fun copyingAShapeLeavesThePageAloneUntilItIsPasted() = runTest(dispatcher) {
         // It used to drop a duplicate 16dp down and right the moment Copy was pressed.

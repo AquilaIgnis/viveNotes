@@ -720,6 +720,23 @@ fun EditorPane(
     LaunchedEffect(lassoing) {
         if (!lassoing) lassoGesture.clear()
     }
+
+    /**
+     * Whether the ink overlay is the one moving what is selected, and so the one drawing its
+     * rectangle and corners.
+     *
+     * Under the lasso it always was. It is now also while a finger points under a drawing tool
+     * ([fingerPoints]): the overlay takes every touch then, so handles drawn by an object's own
+     * layer would be handles nothing could reach. Each layer is handed the lasso's gesture on this
+     * condition, which is what makes it follow the drag and leave its own chrome out.
+     */
+    val overlayHoldsSelection = lassoing || fingerPoints(
+        allowFinger = allowFinger,
+        drawing = brush != null || erasing || laserPointing,
+        lassoing = lassoing,
+        shaping = shaping != null,
+        insertingSpace = insertingSpace,
+    )
     LaunchedEffect(inkSearchHighlight) {
         if (inkSearchHighlight != null) {
             delay(SEARCH_HIGHLIGHT_MS)
@@ -1476,7 +1493,7 @@ fun EditorPane(
                                 equations = equations,
                                 selection = selection,
                                 canvasTextColor = canvas.text,
-                                lassoGesture = lassoGesture.takeIf { lassoing },
+                                lassoGesture = lassoGesture.takeIf { overlayHoldsSelection },
                                 interactive = shaping == null && !lassoing && !equationArmed &&
                                     !tableArmed && !insertingSpace,
                                 visibleWindow = visibleWindow,
@@ -1493,7 +1510,7 @@ fun EditorPane(
                                 ShapeLayer(
                                     shapes = shapes,
                                     selection = selection,
-                                    lassoGesture = lassoGesture.takeIf { lassoing },
+                                    lassoGesture = lassoGesture.takeIf { overlayHoldsSelection },
                                     // While the shape tool is armed a drag draws a new shape, and
                                     // while the lasso or Insert Space is, the overlay owns every
                                     // gesture on the page — in none of the three may this layer
@@ -1521,7 +1538,7 @@ fun EditorPane(
                                         selection = selection,
                                         canvasTextColor = canvas.text,
                                         paperColor = canvas.background,
-                                        lassoGesture = lassoGesture.takeIf { lassoing },
+                                        lassoGesture = lassoGesture.takeIf { overlayHoldsSelection },
                                         interactive = shaping == null && !lassoing && !equationArmed &&
                                             !tableArmed && !insertingSpace,
                                         visibleWindow = visibleWindow,
@@ -1560,7 +1577,7 @@ fun EditorPane(
                                 attachments = store,
                                 images = images,
                                 selection = selection,
-                                lassoGesture = lassoGesture.takeIf { lassoing },
+                                lassoGesture = lassoGesture.takeIf { overlayHoldsSelection },
                                 interactive = shaping == null && !lassoing &&
                                     !equationArmed && !tableArmed && !insertingSpace,
                                 visibleWindow = visibleWindow,
@@ -1604,14 +1621,15 @@ fun EditorPane(
                         key(pageRevision, table.id) {
                             TableContainer(
                                 table = table,
-                                // Not while the lasso is armed, the condition the object layers
-                                // above take as `interactive`: the overlay covers the page then and
+                                // Not while the overlay holds the selection — the lasso, or a
+                                // finger pointing under a drawing tool. It covers the page then and
                                 // takes every touch, so a table's gutter handles, move grip and
-                                // scale handle would be drawn live and be unreachable. Insert Space
+                                // scale handle would be drawn live and be unreachable; the overlay
+                                // draws the rectangle it can actually move instead. Insert Space
                                 // is here for the same reason. The ribbon still reads `selection`,
                                 // so its Row and Column verbs are unaffected.
-                                selected = selection?.holdsTable(table.id) == true && !lassoing &&
-                                    !insertingSpace,
+                                selected = selection?.holdsTable(table.id) == true &&
+                                    !overlayHoldsSelection && !insertingSpace,
                                 editorStyle = editorStyle,
                                 defaults = defaults,
                                 initialBlocksFor = initialBlocksFor,
@@ -1773,17 +1791,14 @@ fun EditorPane(
                 modifier = Modifier.fillMaxSize(),
                 hasClipboard = hasClipboard,
                 onRequestPaste = requestPasteAt,
-                // The free hand points while the other holds a tool. Its tap does the two things a
-                // tap does with nothing armed — picks up the object under it, and on bare page puts
-                // down whatever was held — and not the third: it never opens a text container.
-                //
-                // No tables under the lasso or Insert Space, which is the condition a table's own
-                // chrome is drawn on below; `selectByFingerTap` says why the lasso in particular
-                // must not come to hold one by a tap.
+                // The free hand points while the other holds a drawing tool. Its tap does the two
+                // things a tap does with nothing armed — picks up the object under it, and on bare
+                // page puts down whatever was held — and not the third: it never opens a text
+                // container. What it picked up it can then drag, which the overlay does itself.
                 onFingerTap = { point ->
                     dismissTextInput()
                     selection = selectByFingerTap(
-                        tables = if (lassoing || insertingSpace) emptyList() else tableBounds,
+                        tables = tableBounds,
                         shapes = shapes,
                         equations = equations,
                         images = images,

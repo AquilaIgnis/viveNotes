@@ -3715,8 +3715,12 @@ class NotesViewModel(
         // is no second half of it anywhere else to go stale.
         val equations = _uiState.value.equations.filter { it.id in selection.equationIds }
         val graphs = _uiState.value.graphs.filter { it.id in selection.graphIds }
+        // The bar offers Copy over a picture as it does over everything else, and it used to take
+        // nothing: the selection held the picture and this did not ask for it, so the paste menu
+        // that Copy is paired with never came up.
+        val images = _uiState.value.images.filter { it.id in selection.imageIds }
         if (strokes.isEmpty() && shapes.isEmpty() && tables.isEmpty() && equations.isEmpty() &&
-            graphs.isEmpty()
+            graphs.isEmpty() && images.isEmpty()
         ) {
             return
         }
@@ -3726,6 +3730,7 @@ class NotesViewModel(
             tables = tables,
             equations = equations,
             graphs = graphs,
+            images = images,
         )
         systemClipboard?.markInternalCopy()
         publishClipboard()
@@ -3754,8 +3759,10 @@ class NotesViewModel(
         val sourceTables = clipboard.tables
         val sourceEquations = clipboard.equations
         val sourceGraphs = clipboard.graphs
+        val sourceImages = clipboard.images
         if (sources.isEmpty() && sourceShapes.isEmpty() && sourceTexts.isEmpty() &&
-            sourceTables.isEmpty() && sourceEquations.isEmpty() && sourceGraphs.isEmpty()
+            sourceTables.isEmpty() && sourceEquations.isEmpty() && sourceGraphs.isEmpty() &&
+            sourceImages.isEmpty()
         ) {
             return
         }
@@ -3765,6 +3772,7 @@ class NotesViewModel(
             // Exact, unlike the two approximations below it: an equation's box is its geometry.
             sourceEquations.map(Outline.Equation::pageBounds) +
             sourceGraphs.map(Outline.Graph::pageBounds) +
+            sourceImages.map(Outline.Image::pageBounds) +
             // The sum of the row floors, which is the height the document can know. Off by however
             // far a cell's text runs past its row, exactly as a text box's floor is.
             sourceTables.map { InkBounds(it.x, it.y, it.x + it.width, it.y + it.height) } +
@@ -3844,6 +3852,16 @@ class NotesViewModel(
                 source.translated(dx, dy).copy(id = newId(), lockGroup = null)
             }
             editGraphs { it + pastedGraphs }
+        }
+
+        if (sourceImages.isNotEmpty()) {
+            // A new frame over the same file. Nothing is retained for it: which pictures are still
+            // wanted is read off the documents by `AttachmentSweep`, not off a count, and until the
+            // paste lands the clipboard itself answers for them — [picturesHeldByEditor].
+            val pastedImages = sourceImages.map { source ->
+                source.translated(dx, dy).copy(id = newId(), lockGroup = null)
+            }
+            editImages { it + pastedImages }
         }
 
         if (sources.isEmpty()) return
@@ -4488,6 +4506,9 @@ class NotesViewModel(
      */
     private fun picturesHeldByEditor(): Set<String> = buildSet {
         _uiState.value.images.forEach { add(it.attachmentId) }
+        // A copied picture can outlive the frame it was copied from: deleting the original and
+        // pasting on another page is cut and paste by hand, and the paste must still find the file.
+        clipboard.images.forEach { add(it.attachmentId) }
         canvasHistoryByPage.values.forEach { history ->
             history.undo.forEach { addPicturesOf(it) }
             history.redo.forEach { addPicturesOf(it) }
