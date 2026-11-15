@@ -259,10 +259,9 @@ sealed interface Outline {
     /**
      * The locked group this object belongs to, or null when it is unlocked.
      *
-     * One nullable field says both things: locking a selection groups it and unlocking ungroups it,
-     * so an object is grouped exactly while it is locked. A `locked` flag beside a `groupId` would
-     * be two fields that can only disagree by being wrong. Locking a lone object stamps a group of
-     * one.
+     * Locking a selection gives it one lock group; unlocking clears that lock group. The movable
+     * selection group in [groupId] is independent and survives both operations. A lone object can
+     * have a lock group of one.
      *
      * Locked means move and resize and nothing else — a lasso passes over it unless the loop caught
      * nothing but locked objects. Copy, recolour and delete are untouched.
@@ -275,6 +274,9 @@ sealed interface Outline {
      * the selection code reads it without caring which kind it holds.
      */
     val lockGroup: String?
+
+    /** Objects sharing this ID are selected together, independently of their locks. */
+    val groupId: String?
 
     @Serializable
     @SerialName("text")
@@ -290,6 +292,7 @@ sealed interface Outline {
         val minHeight: Float = 0f,
         val blocks: List<Block>,
         override val lockGroup: String? = null,
+        override val groupId: String? = null,
     ) : Outline {
         companion object {
             const val DEFAULT_WIDTH = 720f
@@ -328,6 +331,7 @@ sealed interface Outline {
         val attachmentId: String,
         val height: Float,
         override val lockGroup: String? = null,
+        override val groupId: String? = null,
         val backgroundArgb: Int? = null,
     ) : Outline {
 
@@ -406,6 +410,7 @@ sealed interface Outline {
         val lineType: LineType = LineType.Solid,
         val fillArgb: Int? = null,
         override val lockGroup: String? = null,
+        override val groupId: String? = null,
     ) : Outline {
 
         /** Recomputed after any segment moves, so the stored bounds never drift from the geometry. */
@@ -489,6 +494,7 @@ sealed interface Outline {
         val latex: String = "",
         val colorArgb: Int? = null,
         override val lockGroup: String? = null,
+        override val groupId: String? = null,
     ) : Outline {
 
         fun translated(dx: Float, dy: Float): Equation = copy(x = x + dx, y = y + dy)
@@ -592,6 +598,7 @@ sealed interface Outline {
         val colorArgb: Int? = null,
         val parameters: List<GraphParameter> = emptyList(),
         override val lockGroup: String? = null,
+        override val groupId: String? = null,
     ) : Outline {
 
         val isMutated: Boolean get() = originalExpression != null && originalExpression != expression
@@ -707,6 +714,7 @@ sealed interface Outline {
          */
         val inkOnly: Boolean = false,
         override val lockGroup: String? = null,
+        override val groupId: String? = null,
     ) : Outline {
 
         val columnCount: Int get() = columns.size
@@ -833,6 +841,7 @@ sealed interface Outline {
         override val width: Float = Text.DEFAULT_WIDTH,
         val height: Float = 0f,
         override val lockGroup: String? = null,
+        override val groupId: String? = null,
     ) : Outline
 }
 

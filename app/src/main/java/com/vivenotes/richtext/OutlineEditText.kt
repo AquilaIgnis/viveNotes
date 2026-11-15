@@ -181,6 +181,20 @@ class OutlineEditText @JvmOverloads constructor(
      * document at all. It is also the last thing consulted — see [carryFontForward].
      */
     var defaultMarks: Set<Mark> = emptySet()
+        set(value) {
+            if (field == value) return
+            if (initialised && selectionStart == selectionEnd && text?.let {
+                    emptyParagraphAt(it, selectionStart.coerceIn(0, it.length)) } == true) {
+                val base = setOf<Mark>(Mark.FontSize(baseFontSize), Mark.FontFamily(baseFontFamily))
+                val old = base.overriddenBy(field)
+                val next = base.overriddenBy(value)
+                pendingMarks = pendingMarks.mapTo(mutableSetOf()) { mark ->
+                    if (mark in old) next.firstOrNull { it.sameKindAs(mark) } ?: mark else mark
+                }
+            }
+            field = value
+            if (initialised) emitSelectionState()
+        }
 
     /**
      * Font id of the view's own typeface, so text carrying no font mark can be named rather than
@@ -225,6 +239,32 @@ class OutlineEditText @JvmOverloads constructor(
      * inherit from itself and the first one would decide the rest of the word.
      */
     private var inheritedAtInsert: Set<Mark> = emptySet()
+    private var emptyCaretUsesDefaults = false
+    private var automaticCaret: Int? = null
+
+    private fun emptyParagraphAt(editable: CharSequence, at: Int): Boolean =
+        (at == 0 || editable[at - 1] == '\n') && (at == editable.length || editable[at] == '\n')
+
+    private fun caretMarks(editable: Spanned, at: Int): Set<Mark> {
+        val inherited = SpannableCodec.inheritedMarks(editable, at)
+        if (emptyParagraphAt(editable, at) && (emptyCaretUsesDefaults || at == 0 || inherited.isEmpty()))
+            return defaultMarks
+        return if (editable.isNotEmpty()) inherited.preservingBaseFont() else inherited
+    }
+
+    /** An unmarked neighbour is drawn in the fixed base font, even after defaults change. */
+    private fun Set<Mark>.preservingBaseFont(): Set<Mark> = this + defaultMarks.mapNotNull { mark ->
+        if (any { it.sameKindAs(mark) }) null else when (mark) {
+            is Mark.FontSize -> Mark.FontSize(baseFontSize).takeIf { it != mark }
+            is Mark.FontFamily -> Mark.FontFamily(baseFontFamily).takeIf { it != mark }
+            else -> null
+        }
+    }
+
+    private fun insertionMarks(editable: Spanned, from: Int, to: Int): Set<Mark> {
+        val marks = SpannableCodec.insertionMarks(editable, from, to)
+        return if ((from until to).any { editable[it] != '\n' }) marks.preservingBaseFont() else marks
+    }
 
     /** Guards the [TextWatcher] against the edits that normalisation itself makes. */
     private var suppressWatcher = false
@@ -292,10 +332,11 @@ class OutlineEditText @JvmOverloads constructor(
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
             textChanges++
             inheritedAtInsert = if (!suppressWatcher && after > 0 && s is Spanned) {
-                SpannableCodec.inheritedMarks(s, start)
+                if (count == 0) caretMarks(s, start) else insertionMarks(s, start, start + count)
             } else {
                 emptySet()
             }
+            if (!suppressWatcher) emptyCaretUsesDefaults = false
             // Even while suppressed: an empty line deleted by a programmatic replace, such as an
             // link inserted over a selection, must not hand its style to the replacement.
             if (count > 0 && s is Spannable) {
@@ -320,6 +361,19 @@ class OutlineEditText @JvmOverloads constructor(
 
             if (insertCount > 0) {
                 val to = insertStart + insertCount
+                // An inline equation never extends to text typed beside its object character.
+                s.getSpans(insertStart, to, EquationSpan::class.java).forEach { span ->
+                    val end = s.getSpanEnd(span)
+                    val start = s.getSpanStart(span)
+                    if (start < insertStart && end > insertStart) {
+                        s.setSpan(span, start, insertStart, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                }
+                inheritedAtInsert.filterNot { it is Mark.FontSize || it is Mark.FontFamily }
+                    .forEach { mark ->
+                        if (SpannableCodec.marksTouching(s, insertStart, to).none { it.sameKindAs(mark) })
+                            SpannableCodec.applyMark(s, mark, insertStart, to)
+                    }
                 pendingMarks.forEach { SpannableCodec.applyMark(s, it, insertStart, to) }
                 suppressedMarks.forEach { SpannableCodec.removeMark(s, it, insertStart, to) }
                 carryFontForward(s, insertStart, to)
@@ -335,6 +389,7 @@ class OutlineEditText @JvmOverloads constructor(
                 // The next edit in the same batch replaces what this one left selected.
                 if (batchEdits > 0) selectionAtBatch = currentSelection()
             }
+            automaticCaret = insertStart + insertCount
             emitSelectionState()
             refreshAutoEquations()
             refreshLinkStyles()
@@ -519,6 +574,7 @@ class OutlineEditText @JvmOverloads constructor(
     /** Replaces the whole outline. Used when a different page is opened, not while typing. */
     fun setBlocks(blocks: List<Block>) {
         suppressWatcher = true
+        automaticCaret = null
         pendingMarks.clear()
         suppressedMarks.clear()
         setText(SpannableCodec.render(blocks, editorStyle))
@@ -537,9 +593,16 @@ class OutlineEditText @JvmOverloads constructor(
         super.onSelectionChanged(selStart, selEnd)
         if (!initialised) return
         if (textChanges == 0 && commandDepth == 0 && batchEdits == 0) onSelectionMoved?.invoke(currentSelection())
-        // Moving the caret discards formatting that was armed or suppressed but never typed.
-        if (pendingMarks.isNotEmpty()) pendingMarks.clear()
-        if (suppressedMarks.isNotEmpty()) suppressedMarks.clear()
+        // Editable can move the caret after afterTextChanged has returned. That movement still
+        // belongs to the keystroke, so Enter continues its line instead of choosing the default.
+        val followsEdit = selStart == selEnd && selStart == automaticCaret
+        automaticCaret = null
+        // A real caret move drops armed marks; selection updates during a keystroke keep them.
+        if (!followsEdit && textChanges == 0 && commandDepth == 0 && batchEdits == 0) {
+            pendingMarks.clear()
+            suppressedMarks.clear()
+            emptyCaretUsesDefaults = selStart == selEnd && text?.let { emptyParagraphAt(it, selStart.coerceIn(0, it.length)) } == true
+        }
         emitSelectionState()
         refreshAutoEquations()
         refreshVideoEmbeds()
@@ -751,6 +814,7 @@ class OutlineEditText @JvmOverloads constructor(
         // command surface exhaustive without turning panel lifetime into a document edit.
         if (
             command == FormatCommand.DeactivateTextInput ||
+            command == FormatCommand.RestoreTextFocus ||
             command == FormatCommand.RetainInlineTarget ||
             command == FormatCommand.ReleaseInlineTarget ||
             command == FormatCommand.ClearCanvasSelection ||
@@ -830,6 +894,7 @@ class OutlineEditText @JvmOverloads constructor(
             // and the toolkit see change.
             FormatCommand.SelectAll -> selectAll()
             FormatCommand.DeactivateTextInput,
+            FormatCommand.RestoreTextFocus,
             FormatCommand.RetainInlineTarget,
             FormatCommand.ReleaseInlineTarget,
             // The canvas's selection, not this view's — `EditorPane` holds it and consumes these.
@@ -901,8 +966,10 @@ class OutlineEditText @JvmOverloads constructor(
     /** What typing at the caret would be drawn in: what [carryFontForward] gives a new character. */
     private fun typingMarks(): Set<Mark> {
         val editable = text ?: return defaultMarks
-        val inherited = SpannableCodec.inheritedMarks(editable, minOf(selectionStart, selectionEnd).coerceAtLeast(0))
-            .overriddenBy(pendingMarks)
+        val from = minOf(selectionStart, selectionEnd).coerceAtLeast(0)
+        val to = maxOf(selectionStart, selectionEnd).coerceAtLeast(0)
+        val inherited = (if (from == to) caretMarks(editable, from) else insertionMarks(editable, from, to))
+            .overriddenBy(pendingMarks) - suppressedMarks
         return inherited + defaultMarks.filterNot { default -> inherited.any { it.sameKindAs(default) } }
     }
 
@@ -1441,7 +1508,7 @@ class OutlineEditText @JvmOverloads constructor(
         // has to describe what typing would produce, which is exactly what [carryFontForward]
         // applies — so the two read from the same place and cannot drift apart.
         val marks = if (caret) {
-            SpannableCodec.inheritedMarks(editable, from).overriddenBy(pendingMarks) - suppressedMarks
+            typingMarks()
         } else {
             SpannableCodec.marksAt(editable, from, to)
         }

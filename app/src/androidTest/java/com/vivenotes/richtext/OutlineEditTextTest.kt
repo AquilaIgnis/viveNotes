@@ -393,6 +393,75 @@ class OutlineEditTextTest {
         }
     }
 
+    @Test
+    fun aNewDefaultDoesNotChangeTheSizeOfUnmarkedTextBeingReplaced() {
+        withEditor { view ->
+            view.defaultMarks = setOf(Mark.FontSize(9))
+            view.setBlocks(listOf(Block.of("old text")))
+            view.setSelection(0, 8)
+            view.text!!.replace(0, 8, "new")
+            assertEquals(Run("new", setOf(Mark.FontSize(BASE_SIZE))), view.blocks().single().runs.single())
+        }
+    }
+
+    @Test
+    fun changingTheDefaultKeepsAnExplicitChoiceForAnEmptyBox() {
+        withEditor { view ->
+            view.defaultMarks = setOf(Mark.FontSize(9))
+            view.setBlocks(listOf(Block.empty()))
+            view.setSelection(0)
+            view.apply(FormatCommand.SetMark(Mark.FontSize(24)))
+            view.defaultMarks = setOf(Mark.FontSize(32))
+            view.text!!.insert(0, "chosen")
+            assertEquals(Run("chosen", setOf(Mark.FontSize(24))), view.blocks().single().runs.single())
+        }
+    }
+
+    @Test
+    fun replacingASelectionKeepsItsOwnFormattingAndFirstFont() {
+        withEditor { view ->
+            val first = setOf(Mark.Bold, Mark.FontSize(28), Mark.FontFamily("serif"))
+            view.defaultMarks = setOf(Mark.FontSize(9))
+            view.setBlocks(listOf(Block(id = "b", runs = listOf(Run("before "),
+                Run("one", first), Run("two", first - Mark.FontSize(28) + Mark.FontSize(36))))))
+            view.setSelection(7, 13)
+            view.text!!.replace(7, 13, "replacement")
+            assertEquals(Run("replacement", first), view.blocks().single().runs.last())
+        }
+    }
+
+    @Test
+    fun movingToAnEmptyLineUsesTheCurrentDefaultAndUpdatesImmediately() {
+        withEditor { view ->
+            view.defaultMarks = setOf(Mark.FontSize(24), Mark.FontFamily("serif"))
+            view.setBlocks(listOf(Block.of("before"), Block.empty(), Block.of("after")))
+            var state: SelectionState? = null
+            view.onSelectionStateChanged = { state = it }
+            view.setSelection(7)
+            assertEquals(24, state?.fontSize)
+            view.defaultMarks = setOf(Mark.FontSize(32), Mark.FontFamily("monospace"))
+            assertEquals(32, state?.fontSize)
+            assertEquals("monospace", state?.fontFamily)
+            view.text!!.insert(7, "new")
+            assertEquals(setOf<Mark>(Mark.FontSize(32), Mark.FontFamily("monospace")), view.blocks()[1].runs.single().marks)
+        }
+    }
+
+    @Test
+    fun typingAfterAnInlineEquationCreatesOrdinaryText() {
+        withEditor { view ->
+            val equation = Mark.Equation("x^2")
+            view.setBlocks(listOf(Block(id = "b", runs = listOf(
+                Run(OBJECT_REPLACEMENT_CHARACTER.toString(), setOf(equation, Mark.FontSize(28)))))))
+            view.setSelection(1)
+            view.text!!.insert(1, "after")
+            val runs = view.blocks().single().runs
+            assertEquals(2, runs.size)
+            assertEquals(Run("after", setOf(Mark.FontSize(28))), runs.last())
+            assertEquals(OBJECT_REPLACEMENT_CHARACTER.toString(), runs.first().text)
+        }
+    }
+
     private fun withEditor(body: (OutlineEditText) -> Unit) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync {

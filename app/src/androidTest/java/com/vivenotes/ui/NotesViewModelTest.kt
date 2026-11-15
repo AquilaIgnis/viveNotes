@@ -1408,6 +1408,82 @@ class NotesViewModelTest {
     }
 
     @Test
+    fun mixedGroupsPersistUndoTogetherAndPasteWithFreshSharedIds() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        val textId = vm.uiState.value.outlines.first().id
+        val shapeId = vm.insertShape(ShapeSettings(), 40f, 200f, 80f, 240f)!!
+        val tableId = vm.insertTable(TableSettings(), 140f, 200f)!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(240f to 200f, 270f to 230f))
+        advanceUntilIdle()
+        val ink = vm.strokes.value.single()
+        val selected = CanvasSelection(textIds = setOf(textId), shapeIds = setOf(shapeId),
+            tableIds = setOf(tableId), inkIds = setOf(ink.id), projections = setOf(ink.projectionKey),
+            bounds = InkBounds(0f, 0f, 800f, 500f))
+        vm.toggleSelectionGroup(selected)
+        val group = vm.uiState.value.shapes.single().groupId!!
+        assertEquals(group, vm.uiState.value.outlines.first().groupId)
+        assertEquals(group, vm.uiState.value.tables.single().groupId)
+        assertEquals(group, vm.strokes.value.single().groupId)
+        vm.undoCanvas()
+        assertNull(vm.uiState.value.shapes.single().groupId)
+        assertNull(vm.uiState.value.tables.single().groupId)
+        assertNull(vm.uiState.value.outlines.first().groupId)
+        assertNull(vm.strokes.value.single().groupId)
+        vm.redoCanvas()
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals(group, vm.uiState.value.outlines.first().groupId)
+        assertEquals(group, vm.uiState.value.shapes.single().groupId)
+        assertEquals(group, vm.strokes.value.single().groupId)
+
+        vm.copySelection(selected.copy(groupId = group))
+        vm.pasteObjects(InkPoint(400f, 700f))
+        val pasted = vm.uiState.value.shapes.last().groupId!!
+        assertTrue(pasted != group)
+        assertEquals(pasted, vm.uiState.value.outlines.last().groupId)
+        assertEquals(pasted, vm.uiState.value.tables.last().groupId)
+        assertEquals(pasted, vm.strokes.value.last().groupId)
+        vm.undoCanvas()
+        assertEquals(1, vm.uiState.value.shapes.size)
+        assertEquals(1, vm.uiState.value.tables.size)
+        assertEquals(1, vm.strokes.value.size)
+        vm.redoCanvas()
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals(pasted, vm.uiState.value.outlines.last().groupId)
+        assertEquals(pasted, vm.uiState.value.shapes.last().groupId)
+        assertEquals(pasted, vm.strokes.value.last().groupId)
+
+        val held = selected.copy(groupId = group)
+        vm.toggleSelectionGroup(held)
+        assertNull(vm.uiState.value.shapes.first().groupId)
+        assertNull(vm.uiState.value.outlines.first().groupId)
+        assertNull(vm.strokes.value.first().groupId)
+        assertEquals(pasted, vm.uiState.value.shapes.last().groupId)
+    }
+
+    @Test
+    fun movingGroupedInkSelectedByAnObjectTapSurvivesReload() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        vm.selectTool(DrawTool.Pen(0))
+        vm.onStrokeFinished(inkStroke(400f to 400f, 440f to 440f))
+        advanceUntilIdle()
+        val ink = vm.strokes.value.single()
+        vm.moveInk(InkLassoMove(path = emptyList(), targetIds = setOf(ink.id),
+            projections = setOf(ink.projectionKey), dx = 40f, dy = 30f))
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals(40f, vm.strokes.value.single().offsetX, 0.01f)
+        assertEquals(30f, vm.strokes.value.single().offsetY, 0.01f)
+    }
+
+    @Test
     fun selectedInkCanBeRecoloredGroupedAndReloaded() = runTest(dispatcher) {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!

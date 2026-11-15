@@ -2,6 +2,7 @@ package com.vivenotes.ui.editor
 
 import android.content.ClipboardManager
 import android.graphics.RectF
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -69,6 +70,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -512,8 +514,9 @@ fun EditorPane(
     pastesLoadingAt: List<InkPoint> = emptyList(),
     onPasteMeasured: (CanvasPasteLayoutRequest, PasteFrames) -> Unit = { _, _ -> },
     onRecolorInkSelection: (Set<String>, Int) -> Unit = { _, _ -> },
-    onGroupInkSelection: (Set<String>) -> Unit = {},
-    onUngroupInkSelection: (Set<String>) -> Unit = {},
+    onToggleSelectionGroup: (CanvasSelection) -> Unit = {},
+    onMoveTexts: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeTexts: (Set<String>, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     formulaRecognitionAvailable: Boolean = false,
     recognitionRunning: Boolean = false,
     onRecognizeFormula: (CanvasSelection) -> Unit = {},
@@ -526,6 +529,8 @@ fun EditorPane(
 
     var focusedEditor by remember { mutableStateOf<OutlineEditText?>(null) }
     var focusedOutlineId by remember { mutableStateOf<String?>(null) }
+    var lastFocusedEditor by remember { mutableStateOf<OutlineEditText?>(null) }
+    var lastFocusedOutlineId by remember { mutableStateOf<String?>(null) }
 
     /**
      * The table cell with the caret in it, if any.
@@ -577,6 +582,8 @@ fun EditorPane(
      */
     val dismissTextInput: () -> Unit = {
         words.clear()
+        lastFocusedEditor = null
+        lastFocusedOutlineId = null
         focusedEditor?.let { editor ->
             editor.deactivateTextInput()
             // `clearFocus()` normally publishes this from the View's focus callback. A pointer
@@ -595,8 +602,6 @@ fun EditorPane(
      * `CanvasSelection` holds objects on the page, and this is a place inside one of them.
      */
     var heldAxis by remember(pageId) { mutableStateOf<TableAxis?>(null) }
-    var lastFocusedEditor by remember { mutableStateOf<OutlineEditText?>(null) }
-    var lastFocusedOutlineId by remember { mutableStateOf<String?>(null) }
     var retainedInlineEditor by remember { mutableStateOf<OutlineEditText?>(null) }
     var retainedInlineOutlineId by remember { mutableStateOf<String?>(null) }
     /** Container to grab focus once composed — the one the user just created by tapping. */
@@ -683,6 +688,7 @@ fun EditorPane(
             TableBounds(
                 id = table.id,
                 lockGroup = table.lockGroup,
+                groupId = table.groupId,
                 bounds = InkBounds(
                     left = table.x,
                     top = table.y,
@@ -693,6 +699,12 @@ fun EditorPane(
         }
     }
 
+    val textBounds = outlines.map { box ->
+        TableBounds(box.id, InkBounds(box.x, box.y, box.x + box.width,
+            box.y + (heights[box.id]?.let { with(density) { it.toDp().value } } ?: (box.minHeight + GRIP_HEIGHT.value))),
+            groupId = box.groupId)
+    }
+
     // Re-read against the page whenever any kind changes, so a deleted or undone object takes its
     // handles with it instead of leaving a rectangle over nothing.
     //
@@ -701,8 +713,8 @@ fun EditorPane(
     // this key nothing would re-read it until the *page* next changed, so the other members of a
     // locked pair would be left out of the rectangle they are part of. Idempotent, so the write of
     // an equal selection ends the loop rather than restarting the effect.
-    LaunchedEffect(selection, strokes, shapes, tableBounds, equations, images, graphs) {
-        selection = selection?.reconcile(strokes, shapes, tableBounds, equations, images, graphs)
+    LaunchedEffect(selection, strokes, shapes, tableBounds, equations, images, graphs, textBounds) {
+        selection = selection?.reconcile(strokes, shapes, tableBounds, equations, images, graphs, textBounds)
     }
 
     // A hold outlives neither its table's selection nor the row it named. Selecting something else
@@ -730,7 +742,7 @@ fun EditorPane(
      * layer would be handles nothing could reach. Each layer is handed the lasso's gesture on this
      * condition, which is what makes it follow the drag and leave its own chrome out.
      */
-    val overlayHoldsSelection = lassoing || fingerPoints(
+    val overlayHoldsSelection = selection?.let { it.canGroup || it.textIds.isNotEmpty() } == true || lassoing || fingerPoints(
         allowFinger = allowFinger,
         drawing = brush != null || erasing || laserPointing,
         lassoing = lassoing,
@@ -779,14 +791,17 @@ fun EditorPane(
 
     /** What the toolkit's trash does to [CanvasSelection], and the Delete key with it. */
     val deleteHeld: (CanvasSelection) -> Unit = { held ->
-        held.inkHalf()?.let(onDeleteInkSelection)
-        if (held.shapeIds.isNotEmpty()) onDeleteShapes(held.shapeIds)
-        if (held.tableIds.isNotEmpty()) onDeleteTables(held.tableIds)
-        if (held.equationIds.isNotEmpty()) onDeleteEquations(held.equationIds)
-        if (held.imageIds.isNotEmpty()) onDeleteImages(held.imageIds)
-        if (held.graphIds.isNotEmpty()) onDeleteGraphs(held.graphIds)
-        selection = null
-        lassoGesture.clear()
+        onTextEditsTogether {
+            held.inkHalf()?.let(onDeleteInkSelection)
+            if (held.shapeIds.isNotEmpty()) onDeleteShapes(held.shapeIds)
+            if (held.tableIds.isNotEmpty()) onDeleteTables(held.tableIds)
+            if (held.equationIds.isNotEmpty()) onDeleteEquations(held.equationIds)
+            if (held.imageIds.isNotEmpty()) onDeleteImages(held.imageIds)
+            if (held.graphIds.isNotEmpty()) onDeleteGraphs(held.graphIds)
+            if (held.textIds.isNotEmpty()) onDeleteOutlines(held.textIds)
+            selection = null
+            lassoGesture.clear()
+        }
     }
     // The collector below starts once, so it reaches the page's current selection through these.
     val currentDeleteHeld = rememberUpdatedState(deleteHeld)
@@ -825,6 +840,9 @@ fun EditorPane(
                 // Never over a caret: there Delete is the text's own.
                 FormatCommand.DeleteCanvasSelection -> if (focusedEditor == null) {
                     currentSelection.value?.takeIf { !it.isEmpty }?.let(currentDeleteHeld.value)
+                }
+                FormatCommand.RestoreTextFocus -> {
+                    (focusedEditor ?: lastFocusedEditor)?.let { editor -> editor.post { editor.requestFocus() } }
                 }
                 FormatCommand.RetainInlineTarget -> {
                     retainedInlineEditor = focusedEditor ?: lastFocusedEditor
@@ -1399,6 +1417,13 @@ fun EditorPane(
                         key(pageRevision, box.id) {
                             OutlineContainer(
                                 box = box,
+                                previewGesture = lassoGesture.takeIf { box.id in selection?.textIds.orEmpty() },
+                                onSelectGroup = {
+                                    dismissTextInput()
+                                    textBounds.firstOrNull { it.id == box.id }?.let {
+                                        selection = CanvasSelection(textIds = setOf(box.id), bounds = it.bounds)
+                                    }
+                                },
                                 initialBlocks = initialBlocksFor(box.id),
                                 editorStyle = editorStyle,
                                 defaults = defaults,
@@ -1714,6 +1739,7 @@ fun EditorPane(
                 tables = tableBounds,
                 equations = equations,
                 graphs = graphs,
+                texts = textBounds,
                 selection = selection,
                 searchHighlight = inkSearchHighlight,
                 onSelect = { selection = it },
@@ -1777,14 +1803,15 @@ fun EditorPane(
                 onResizeImages = { ids, anchor, scaleX, scaleY ->
                     onResizeImages(ids, anchor.x, anchor.y, scaleX, scaleY)
                 },
+                onMoveTexts = onMoveTexts,
+                onResizeTexts = { ids, anchor, sx, sy -> onResizeTexts(ids, anchor.x, anchor.y, sx, sy) },
                 onMoveGraphs = onMoveGraphs,
                 onResizeGraphs = { ids, anchor, scaleX, scaleY ->
                     onResizeGraphs(ids, anchor.x, anchor.y, scaleX, scaleY)
                 },
                 onDeleteSelection = onDeleteInkSelection,
                 onRecolorSelection = onRecolorInkSelection,
-                onGroupSelection = onGroupInkSelection,
-                onUngroupSelection = onUngroupInkSelection,
+                together = onTextEditsTogether,
                 pan = remember(horizontal, vertical, scope, flingSpec) {
                     ScrollStatePan(horizontal, vertical, scope, flingSpec)
                 },
@@ -1867,7 +1894,7 @@ fun EditorPane(
                     // to set, and a bar over a mixed loop must not offer an action half of what it
                     // holds would ignore. `isLocked` is all-or-nothing by the lasso's own rule, so
                     // there is no third state for the button to be in.
-                    locked = if (held.inkIds.isEmpty()) held.isLocked else null,
+                    locked = if (held.inkIds.isEmpty() && held.textIds.isEmpty()) held.isLocked else null,
                     onToggleLock = { onSetSelectionLocked(held, !held.isLocked) },
                     // The kind-specific half. Only a selection of one kind has one: over a mixed
                     // loop there is nothing both halves agree on, so the bar shows its base alone.
@@ -1881,11 +1908,11 @@ fun EditorPane(
                                 onFormula = { onRecognizeFormula(held) },
                             )
                         }
-                        if (held.isInkOnly && held.inkIds.size > 1) {
+                        if (held.canGroup) {
                             GroupAction(
-                                isOneGroup = held.isOneInkGroup(strokes),
-                                onGroup = { onGroupInkSelection(held.inkIds) },
-                                onUngroup = { onUngroupInkSelection(held.inkIds) },
+                                isOneGroup = held.groupId != null,
+                                onGroup = { onToggleSelectionGroup(held) },
+                                onUngroup = { onToggleSelectionGroup(held) },
                             )
                         }
                         if (held.isShapeOnly) {
@@ -2139,20 +2166,13 @@ private fun CanvasSelection.swatch(
     // Absent rather than disabled: a button that opens a palette which then changes nothing is worse
     // than no button. Only when the selection is nothing but pictures; mixed with ink or a shape
     // there is still something for a colour to mean.
-    if (isImageOnly) return null
+    if (isImageOnly || textIds.isNotEmpty() && memberCount == textIds.size) return null
     val inkColors = strokes.filter { it.id in inkIds }.map { it.stroke.brush.colorIntArgb }
     val shapeColors = shapes.filter { it.id in shapeIds }.map(Outline.Shape::borderArgb)
     val tableColors = tables.filter { it.id in tableIds }.map(Outline.Table::borderArgb)
     val graphColors = graphs.filter { it.id in graphIds }.map { it.colorArgb ?: GraphPainter.DEFAULT_CURVE_ARGB }
     return (inkColors + shapeColors + tableColors + graphColors).distinct().singleOrNull()?.let(::Color)
         ?: Color.White
-}
-
-/** Whether the ink held is one existing group, which is what makes the button say Ungroup. */
-private fun CanvasSelection.isOneInkGroup(strokes: List<PageStroke>): Boolean {
-    if (inkIds.size <= 1) return false
-    val groups = strokes.filter { it.id in inkIds }.map(PageStroke::groupId).distinct()
-    return groups.size == 1 && groups.single() != null
 }
 
 /**
@@ -2475,6 +2495,8 @@ internal fun OutlineEditText.select(range: TextRange) {
 @Composable
 internal fun OutlineContainer(
     box: OutlineBox,
+    previewGesture: LassoGesture? = null,
+    onSelectGroup: () -> Unit = {},
     initialBlocks: List<Block>,
     editorStyle: EditorStyle,
     /** Defaulted so the container can be exercised in isolation without a preferences store. */
@@ -2514,7 +2536,7 @@ internal fun OutlineContainer(
 
     // An empty container is just a caret position, so it shows no chrome at all. Otherwise
     // tapping around the page would litter it with empty rectangles.
-    val showChrome = focused && hasContent
+    val showChrome = (focused || box.groupId != null) && hasContent
 
     LaunchedEffect(requestFocus, view) {
         if (requestFocus && view != null) {
@@ -2527,6 +2549,20 @@ internal fun OutlineContainer(
     Box(
         modifier = Modifier
             .offset(x = box.x.dp, y = box.y.dp)
+            .graphicsLayer {
+                val gesture = previewGesture
+                val revision = gesture?.renderRevision ?: 0
+                if (revision >= 0 && gesture != null) {
+                    val moved = gesture.previewOffset()
+                    val scale = gesture.previewScale()
+                    val anchor = gesture.previewAnchor()
+                    translationX = (moved.x + (box.x - anchor.x) * (scale.x - 1f)) * density.density
+                    translationY = (moved.y + (box.y - anchor.y) * (scale.y - 1f)) * density.density
+                    scaleX = scale.x
+                    scaleY = scale.y
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
+                }
+            }
             .width(box.width.dp + RESIZE_HANDLE_WIDTH)
             .onSizeChanged { onMeasured(it.height) }
             .testTag(OutlineTags.CONTAINER),
@@ -2598,6 +2634,7 @@ internal fun OutlineContainer(
                         .testTag(OutlineTags.MOVE)
                         .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
                         .background(outline.copy(alpha = 0.24f))
+                        .then(if (box.groupId != null) Modifier.clickable(onClick = onSelectGroup) else Modifier)
                         .pointerInput(box.id) {
                             detectDragGestures { change, dragAmount ->
                                 change.consume()

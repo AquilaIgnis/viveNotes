@@ -10,6 +10,7 @@ import androidx.compose.ui.test.down
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.moveTo
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -69,6 +70,7 @@ class PrimeObjectTest {
 
     /** The scale a corner drag reported, and null when nothing was resized. */
     private var resized: Pair<Float, Float>? = null
+    private var movedTexts: Set<String>? = null
     private lateinit var density: Density
 
     private fun setPage(
@@ -77,6 +79,7 @@ class PrimeObjectTest {
         outlines: List<OutlineBox> = emptyList(),
         penInHand: Boolean = false,
         hasClipboard: Boolean = false,
+        lassoing: Boolean = false,
     ) {
         this.shapes.value = shapes
         this.outlines.value = outlines
@@ -118,6 +121,17 @@ class PrimeObjectTest {
                     onSetOutlineMinHeight = { _, _ -> },
                     onOutlineBlurred = {},
                     shapes = this@PrimeObjectTest.shapes.value,
+                    lassoing = lassoing,
+                    allowFinger = lassoing,
+                    onToggleSelectionGroup = { held ->
+                        val group = if (held.groupId == null) "mixed-group" else null
+                        this@PrimeObjectTest.shapes.value = this@PrimeObjectTest.shapes.value.map {
+                            if (it.id in held.shapeIds) it.copy(groupId = group) else it
+                        }
+                        this@PrimeObjectTest.outlines.value = this@PrimeObjectTest.outlines.value.map {
+                            if (it.id in held.textIds) it.copy(groupId = group) else it
+                        }
+                    },
                     // Stylus-only is the pane's default, so with this the overlay owns every touch
                     // and a finger is the hand that is not drawing.
                     brush = if (this@PrimeObjectTest.penInHand.value) {
@@ -132,6 +146,7 @@ class PrimeObjectTest {
                     },
                     onMoveShape = { _, dx, dy -> moved = dx to dy },
                     onMoveShapes = { _, dx, dy -> moved = dx to dy },
+                    onMoveTexts = { ids, _, _ -> movedTexts = ids },
                     onResizeShapes = { _, _, _, scaleX, scaleY -> resized = scaleX to scaleY },
                     hasClipboard = this@PrimeObjectTest.hasClipboard.value,
                     onDeleteShapes = { deleted = it },
@@ -153,6 +168,74 @@ class PrimeObjectTest {
             }
         }
         compose.waitForIdle()
+    }
+
+    @Test
+    fun restoringRibbonFocusReturnsToTheEditorUntilTheCanvasDismissesIt() {
+        setPage(shapes = listOf(square(60f, 80f, 80f)),
+            outlines = listOf(OutlineBox("text", 200f, 80f, 120f, 30f)))
+        compose.onNodeWithTag(OutlineTags.EDITOR).performTouchInput { click(center) }
+        var editor: com.vivenotes.richtext.OutlineEditText? = null
+        compose.runOnIdle {
+            fun find(view: android.view.View): com.vivenotes.richtext.OutlineEditText? {
+                if (view is com.vivenotes.richtext.OutlineEditText) return view
+                if (view is android.view.ViewGroup) for (i in 0 until view.childCount) {
+                    find(view.getChildAt(i))?.let { return it }
+                }
+                return null
+            }
+            editor = android.view.inspector.WindowInspector.getGlobalWindowViews().firstNotNullOfOrNull(::find)
+            assertTrue(editor?.hasFocus() == true)
+            editor!!.clearFocus()
+        }
+        compose.runOnIdle { commands.tryEmit(FormatCommand.RestoreTextFocus) }
+        compose.waitUntil(5_000) { editor?.hasFocus() == true }
+        tapPage(100f, 80f)
+        compose.runOnIdle { commands.tryEmit(FormatCommand.RestoreTextFocus) }
+        compose.waitForIdle()
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OutlineTags.MOVE).assertDoesNotExist()
+    }
+
+    @Test
+    fun aMixedLassoOffersGroupAndUngroupForShapesAndText() {
+        setPage(shapes = listOf(square(60f, 80f, 80f)),
+            outlines = listOf(OutlineBox("text", 200f, 80f, 120f, 30f)), lassoing = true)
+        val overlay = compose.onNodeWithTag(INK_OVERLAY_TAG)
+        fun at(x: Float, y: Float) = with(density) { Offset(x.dp.toPx(), y.dp.toPx()) }
+        overlay.performTouchInput {
+            down(at(40f, 60f))
+            moveTo(at(350f, 60f), 150)
+            moveTo(at(350f, 230f), 150)
+            moveTo(at(40f, 230f), 150)
+            moveTo(at(40f, 60f), 150)
+            up()
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag(OBJECT_GROUP_TAG).assertIsDisplayed().performClick()
+        compose.waitForIdle()
+        assertEquals("mixed-group", shapes.value.single().groupId)
+        assertEquals("mixed-group", outlines.value.single().groupId)
+        compose.onNodeWithText("Ungroup").assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_GROUP_TAG).performClick()
+        compose.waitForIdle()
+        assertNull(shapes.value.single().groupId)
+        assertNull(outlines.value.single().groupId)
+        compose.onNodeWithText("Group").assertIsDisplayed()
+    }
+
+    @Test
+    fun tappingAGroupedShapeSelectsTheGroupAndDraggingMovesItsTextToo() {
+        setPage(shapes = listOf(square(60f, 80f, 80f).copy(groupId = "mixed-group")),
+            outlines = listOf(OutlineBox("text", 200f, 80f, 120f, 30f, groupId = "mixed-group")))
+        tapPage(100f, 80f)
+        compose.onNodeWithText("Ungroup").assertIsDisplayed()
+        // The pointer's group drag goes through the shared overlay, rather than a shape's own handles.
+        fingerDragPage(120f, 120f, 150f, 145f)
+        assertNotNull(moved)
+        assertEquals(setOf("text"), movedTexts)
+        assertEquals(30f, moved!!.first, 1f)
+        assertEquals(25f, moved!!.second, 1f)
     }
 
     /**

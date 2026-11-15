@@ -1002,7 +1002,7 @@ private fun FontFamilyPicker(
                     dismiss()
                     onPick(family.id)
                 },
-                onLongClick = { onSetDefault(family.id) },
+                onLongClick = { dismiss(); onSetDefault(family.id) },
             )
         }
     }
@@ -1034,7 +1034,7 @@ private fun FontSizePicker(
                     dismiss()
                     onPick(size)
                 },
-                onLongClick = { onSetDefault(size) },
+                onLongClick = { dismiss(); onSetDefault(size) },
             )
         }
     }

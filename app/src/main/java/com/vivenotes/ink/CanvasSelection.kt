@@ -36,6 +36,9 @@ data class CanvasSelection(
     val imageIds: Set<String> = emptySet(),
     /** Graphs of functions, the sixth. */
     val graphIds: Set<String> = emptySet(),
+    val textIds: Set<String> = emptySet(),
+    /** Shared movable group, when every member belongs to the same group. */
+    val groupId: String? = null,
     /** Live ink projections, including pieces that share a row id after a partial erase. */
     val projections: Set<InkProjectionKey> = emptySet(),
     /**
@@ -45,9 +48,9 @@ data class CanvasSelection(
      * to every member of every group named here, which is what makes touching one of them hold all
      * of it — the same thing it does for an ink `groupId`.
      *
-     * Non-empty means everything held is locked, and that is an invariant: [selectWithLasso] drops
-     * locked objects from a loop that caught anything unlocked, so a selection is either free of
-     * locked objects or made of nothing else. [isLocked] can only be all-or-nothing because of that.
+     * A lasso initially excludes locked objects when it catches unlocked ones. Group expansion can
+     * reach a locked member afterwards; the entire selection then stays put until it is unlocked
+     * or ungrouped.
      *
      * More than one group, because a loop can close around two of them.
      */
@@ -56,7 +59,7 @@ data class CanvasSelection(
 ) {
     val isEmpty: Boolean
         get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isEmpty() &&
-            equationIds.isEmpty() && imageIds.isEmpty() && graphIds.isEmpty()
+            equationIds.isEmpty() && imageIds.isEmpty() && graphIds.isEmpty() && textIds.isEmpty()
 
     /**
      * Whether what is held is locked, and so refuses to be moved or resized.
@@ -82,7 +85,11 @@ data class CanvasSelection(
      * forgetting one would have claimed a mixed selection was pure. The next kind adds one line here.
      */
     private fun othersEmpty(own: Set<String>): Boolean =
-        listOf(inkIds, shapeIds, tableIds, equationIds, imageIds, graphIds).all { it === own || it.isEmpty() }
+        listOf(inkIds, shapeIds, tableIds, equationIds, imageIds, graphIds, textIds).all { it === own || it.isEmpty() }
+
+    val memberCount: Int get() = inkIds.size + shapeIds.size + tableIds.size + equationIds.size +
+        imageIds.size + graphIds.size + textIds.size
+    val canGroup: Boolean get() = groupId != null || memberCount > 1
 
     fun holdsShape(shapeId: String): Boolean = shapeId in shapeIds
 
@@ -142,82 +149,40 @@ data class CanvasSelection(
         equations: List<Outline.Equation> = emptyList(),
         images: List<Outline.Image> = emptyList(),
         graphs: List<Outline.Graph> = emptyList(),
+        texts: List<TableBounds> = emptyList(),
     ): CanvasSelection? {
-        val liveShapes = shapes.filter { it.id in shapeIds }
-        val liveTables = tables.filter { it.id in tableIds }
-        val liveEquations = equations.filter { it.id in equationIds }
-        val liveImages = images.filter { it.id in imageIds }
-        val liveGraphs = graphs.filter { it.id in graphIds }
-        val directInk = strokes.filter { it.projectionKey in projections }
-        if (liveShapes.isEmpty() && directInk.isEmpty() && liveTables.isEmpty() &&
-            liveEquations.isEmpty() && liveImages.isEmpty() && liveGraphs.isEmpty()
-        ) {
-            return null
-        }
-
-        val groups = directInk.mapNotNull(PageStroke::groupId).toSet()
-        val expandedInk = if (groups.isEmpty()) {
-            directInk
-        } else {
-            strokes.filter { it.projectionKey in projections || it.groupId != null && it.groupId in groups }
-        }
-        // A locked group is one object, so holding any member holds all of it — the same widening
-        // ink gets from `groupId` just above, and the reason this runs on a *fresh* selection too:
-        // a tap on one picture of a locked pair, or a loop that closed around half of one, arrives
-        // here naming only what it touched. Re-read rather than carried, so unlocking a group frees
-        // the selection on the same pass that clears the field.
-        val heldLocks = (
-            liveShapes.mapNotNull(Outline.Shape::lockGroup) +
-                liveTables.mapNotNull(TableBounds::lockGroup) +
-                liveEquations.mapNotNull(Outline.Equation::lockGroup) +
-                liveImages.mapNotNull(Outline.Image::lockGroup) +
-                liveGraphs.mapNotNull(Outline.Graph::lockGroup)
-            ).toSet()
-        val keptShapes = if (heldLocks.isEmpty()) {
-            liveShapes
-        } else {
-            shapes.filter { it.id in shapeIds || it.lockGroup.belongsTo(heldLocks) }
-        }
-        val keptTables = if (heldLocks.isEmpty()) {
-            liveTables
-        } else {
-            tables.filter { it.id in tableIds || it.lockGroup.belongsTo(heldLocks) }
-        }
-        val keptEquations = if (heldLocks.isEmpty()) {
-            liveEquations
-        } else {
-            equations.filter { it.id in equationIds || it.lockGroup.belongsTo(heldLocks) }
-        }
-        val keptImages = if (heldLocks.isEmpty()) {
-            liveImages
-        } else {
-            images.filter { it.id in imageIds || it.lockGroup.belongsTo(heldLocks) }
-        }
-        val keptGraphs = if (heldLocks.isEmpty()) {
-            liveGraphs
-        } else {
-            graphs.filter { it.id in graphIds || it.lockGroup.belongsTo(heldLocks) }
-        }
-
-        val measured = expandedInk.mapNotNull(PageStroke::pageBounds) +
-            keptShapes.map(Outline.Shape::pageBounds) +
-            keptTables.map(TableBounds::bounds) +
-            keptEquations.map(Outline.Equation::pageBounds) +
-            keptImages.map(Outline.Image::pageBounds) +
-            keptGraphs.map(Outline.Graph::pageBounds)
-        val union = measured.unionBounds() ?: return null
-
-        return copy(
-            inkIds = expandedInk.map(PageStroke::id).toSet(),
-            shapeIds = keptShapes.map(Outline.Shape::id).toSet(),
-            tableIds = keptTables.map(TableBounds::id).toSet(),
-            equationIds = keptEquations.map(Outline.Equation::id).toSet(),
-            imageIds = keptImages.map(Outline.Image::id).toSet(),
-            graphIds = keptGraphs.map(Outline.Graph::id).toSet(),
-            projections = expandedInk.map(PageStroke::projectionKey).toSet(),
-            lockGroups = heldLocks,
-            bounds = union,
-        )
+        val members = shapes.map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 0) } +
+            tables.map { SelectionMember(it.id, it.bounds, it.groupId, it.lockGroup, 1) } +
+            equations.map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 2) } +
+            images.map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 3) } +
+            graphs.map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 4) } +
+            texts.map { SelectionMember(it.id, it.bounds, it.groupId, null, 5) }
+        val ids = (shapeIds + tableIds + equationIds + imageIds + graphIds + textIds).toMutableSet()
+        ids.retainAll(members.map { it.id }.toSet())
+        val ink = strokes.filter { it.projectionKey in projections }.toMutableList()
+        if (ids.isEmpty() && ink.isEmpty()) return null
+        val groups = mutableSetOf<String>()
+        val locks = mutableSetOf<String>()
+        do {
+            val before = ids.size + ink.size
+            members.filter { it.id in ids }.forEach {
+                it.group?.let(groups::add)
+                it.lock?.let(locks::add)
+            }
+            ink.mapNotNullTo(groups) { it.groupId }
+            members.filter { it.group.belongsTo(groups) || it.lock.belongsTo(locks) }.forEach { ids += it.id }
+            val keys = ink.mapTo(HashSet()) { it.projectionKey }
+            ink += strokes.filter { it.projectionKey !in keys && it.groupId.belongsTo(groups) }
+        } while (before != ids.size + ink.size)
+        val held = members.filter { it.id in ids }
+        val union = (held.map { it.bounds } + ink.mapNotNull(PageStroke::pageBounds)).unionBounds() ?: return null
+        fun idsOf(kind: Int) = held.filter { it.kind == kind }.mapTo(LinkedHashSet()) { it.id }
+        val common = (held.map { it.group } + ink.distinctBy { it.id }.map { it.groupId }).distinct().singleOrNull()
+        return copy(inkIds = ink.mapTo(LinkedHashSet()) { it.id },
+            projections = ink.mapTo(LinkedHashSet()) { it.projectionKey },
+            shapeIds = idsOf(0), tableIds = idsOf(1), equationIds = idsOf(2), imageIds = idsOf(3),
+            graphIds = idsOf(4), textIds = idsOf(5), lockGroups = held.mapNotNullTo(mutableSetOf()) { it.lock },
+            groupId = common, bounds = union)
     }
 
     companion object {
@@ -294,7 +259,7 @@ fun CanvasSelection?.isInkAndLines(shapes: List<Outline.Shape>): Boolean {
     val held = this ?: return false
     if (held.inkIds.isEmpty()) return false
     if (held.tableIds.isNotEmpty() || held.equationIds.isNotEmpty() || held.imageIds.isNotEmpty() ||
-        held.graphIds.isNotEmpty()
+        held.graphIds.isNotEmpty() || held.textIds.isNotEmpty()
     ) {
         return false
     }
@@ -316,6 +281,7 @@ data class TableBounds(
     val bounds: InkBounds,
     /** The table's `Outline.Table.lockGroup`, carried because the lasso never sees the outline. */
     val lockGroup: String? = null,
+    val groupId: String? = null,
 )
 
 /**
@@ -388,6 +354,7 @@ internal fun selectWithLasso(
     graphs: List<Outline.Graph> = emptyList(),
     path: List<InkPoint>,
     edgeTolerance: Float = DEFAULT_LASSO_EDGE_TOLERANCE,
+    texts: List<TableBounds> = emptyList(),
 ): CanvasSelection? {
     if (path.size < 3 || !path.closesIntoALoop(edgeTolerance)) return null
     val ink = strokes.selectWithLasso(path, edgeTolerance)
@@ -399,6 +366,7 @@ internal fun selectWithLasso(
     // photograph of a circle is still a photograph, and half-circling one leaves it alone.
     val caughtImages = images.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
     val caughtGraphs = graphs.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
+    val caughtTexts = texts.filter { it.bounds.isInsideLasso(path, edgeTolerance) }
     // The loop passes over what is locked, unless locked is all it caught, which is how a locked
     // group is picked up again to be unlocked. Applied to the catch rather than to the hit test, so
     // the rule is stated once for every kind, and so the "unless" can be answered at all: whether a
@@ -406,7 +374,7 @@ internal fun selectWithLasso(
     //
     // Ink settles the question by being present. It has no lock of its own, so a loop that caught
     // ink has caught something unlocked by definition.
-    val caughtUnlocked = ink != null ||
+    val caughtUnlocked = ink != null || caughtTexts.isNotEmpty() ||
         caughtShapes.any { it.lockGroup == null } ||
         caughtTables.any { it.lockGroup == null } ||
         caughtEquations.any { it.lockGroup == null } ||
@@ -420,7 +388,7 @@ internal fun selectWithLasso(
     val heldGraphs = if (caughtUnlocked) caughtGraphs.filter { it.lockGroup == null } else caughtGraphs
 
     if (ink == null && heldShapes.isEmpty() && heldTables.isEmpty() &&
-        heldEquations.isEmpty() && heldImages.isEmpty() && heldGraphs.isEmpty()
+        heldEquations.isEmpty() && heldImages.isEmpty() && heldGraphs.isEmpty() && caughtTexts.isEmpty()
     ) {
         return null
     }
@@ -430,7 +398,7 @@ internal fun selectWithLasso(
         heldTables.map(TableBounds::bounds) +
         heldEquations.map(Outline.Equation::pageBounds) +
         heldImages.map(Outline.Image::pageBounds) +
-        heldGraphs.map(Outline.Graph::pageBounds)
+        heldGraphs.map(Outline.Graph::pageBounds) + caughtTexts.map(TableBounds::bounds)
     val union = measured.unionBounds() ?: return null
     return CanvasSelection(
         path = path,
@@ -440,6 +408,7 @@ internal fun selectWithLasso(
         equationIds = heldEquations.map(Outline.Equation::id).toSet(),
         imageIds = heldImages.map(Outline.Image::id).toSet(),
         graphIds = heldGraphs.map(Outline.Graph::id).toSet(),
+        textIds = caughtTexts.mapTo(LinkedHashSet()) { it.id },
         projections = ink?.projections.orEmpty(),
         // Whatever survived the rule above is either all unlocked or all locked, so this is empty or
         // it is the groups the loop closed around. `reconcile` widens it to whole groups.
@@ -707,3 +676,12 @@ internal fun List<InkBounds>.unionBounds(): InkBounds? {
         )
     }
 }
+
+private data class SelectionMember(
+    val id: String, val bounds: InkBounds, val group: String?, val lock: String?, val kind: Int,
+)
+
+internal fun InkBounds.enclosingPath(): List<InkPoint> = listOf(
+    InkPoint(left - 1f, top - 1f), InkPoint(right + 1f, top - 1f),
+    InkPoint(right + 1f, bottom + 1f), InkPoint(left - 1f, bottom + 1f), InkPoint(left - 1f, top - 1f),
+)

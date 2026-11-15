@@ -40,7 +40,7 @@ class PageListReorderTest {
         sectionId = "sec",
         title = title,
         sortIndex = index,
-        preview = "",
+        preview = "Preview for $id",
         createdAt = 0,
         updatedAt = updatedAt,
     )
@@ -67,6 +67,13 @@ class PageListReorderTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun rowsShowTitlesWithoutPreviewSnippets() {
+        setList()
+        compose.onNodeWithText("Alpha").assertIsDisplayed()
+        compose.onNodeWithText("Preview for a").assertDoesNotExist()
     }
 
     @Test

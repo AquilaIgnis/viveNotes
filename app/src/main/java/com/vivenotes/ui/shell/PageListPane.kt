@@ -326,16 +326,7 @@ private fun PageRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (page.preview.isNotBlank()) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = page.preview,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = relativeDate(page.updatedAt),

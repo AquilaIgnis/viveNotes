@@ -35,6 +35,9 @@ sealed interface FormatCommand {
     /** Puts the caret and IME away before a Draw-tab tool starts consuming page gestures. */
     data object DeactivateTextInput : FormatCommand
 
+    /** Returns keyboard focus after promoting a font or size to the default. */
+    data object RestoreTextFocus : FormatCommand
+
     /**
      * Drops whatever is selected on the canvas, because the user picked a different tool.
      *

@@ -187,20 +187,23 @@ class FontPickerTest {
 
         compose.onNodeWithTag(FontTags.SIZE).performClick()
         compose.onNodeWithText("36").performTouchInput { longClick() }
+        compose.onNodeWithText("Hold a size to start new text at it").assertDoesNotExist()
 
         assertEquals(Mark.FontSize(36), madeDefault)
         assertNull("holding a size sets the default; it does not restyle the selection", picked)
     }
 
-    /** The tag moving onto the held entry is the confirmation, so the menu has to stay up. */
+    /** Promoting a default releases the popup so keyboard focus can return to the editor. */
     @Test
-    fun holdingASizeLeavesTheMenuOpen() {
+    fun holdingASizeDismissesTheMenuSoTypingCanResume() {
         setRibbon(SelectionState(fontSize = 20, hasSelection = true), EditorDefaults(fontSize = 15))
 
         compose.onNodeWithTag(FontTags.SIZE).performClick()
         compose.onNodeWithText("36").performTouchInput { longClick() }
 
-        compose.onNodeWithText("36").assertIsDisplayed()
+        compose.onNodeWithText("36").assertDoesNotExist()
+        assertEquals(Mark.FontSize(36), madeDefault)
+        assertNull(picked)
     }
 
     @Test

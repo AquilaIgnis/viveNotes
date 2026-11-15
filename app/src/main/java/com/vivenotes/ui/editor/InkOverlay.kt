@@ -146,6 +146,7 @@ internal fun InkOverlay(
     images: List<Outline.Image> = emptyList(),
     /** Graphs, taken by their box. */
     graphs: List<Outline.Graph> = emptyList(),
+    texts: List<TableBounds> = emptyList(),
     /**
      * What is selected, across kinds. Owned by the page rather than this overlay: a shape can be in
      * it, and `ShapeLayer` has to draw the same selection. See [CanvasSelection].
@@ -218,6 +219,8 @@ internal fun InkOverlay(
     onResizeEquations: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onMoveImages: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeImages: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+    onMoveTexts: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+    onResizeTexts: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onMoveGraphs: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeGraphs: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onDeleteSelection: (InkLassoSelection) -> Unit = {},
@@ -235,8 +238,7 @@ internal fun InkOverlay(
      */
     onFingerTap: (InkPoint) -> Unit = {},
     onRecolorSelection: (Set<String>, Int) -> Unit = { _, _ -> },
-    onGroupSelection: (Set<String>) -> Unit = {},
-    onUngroupSelection: (Set<String>) -> Unit = {},
+    together: (() -> Unit) -> Unit = { it() },
     /**
      * Pans the page. The overlay owns this because it owns the gesture: a hit pointer node blocks
      * its siblings from seeing the event, so declining a touch is not enough to hand it to the
@@ -288,6 +290,7 @@ internal fun InkOverlay(
     val currentEquations by rememberUpdatedState(equations)
     val currentImages by rememberUpdatedState(images)
     val currentGraphs by rememberUpdatedState(graphs)
+    val currentTexts by rememberUpdatedState(texts)
     val currentOnMoveShapes by rememberUpdatedState(onMoveShapes)
     val currentOnResizeShapes by rememberUpdatedState(onResizeShapes)
     val currentOnMoveShapeEnd by rememberUpdatedState(onMoveShapeEnd)
@@ -296,6 +299,9 @@ internal fun InkOverlay(
     val currentOnMoveImages by rememberUpdatedState(onMoveImages)
     val currentOnResizeImages by rememberUpdatedState(onResizeImages)
     val currentOnMoveGraphs by rememberUpdatedState(onMoveGraphs)
+    val currentTogether by rememberUpdatedState(together)
+    val currentOnMoveTexts by rememberUpdatedState(onMoveTexts)
+    val currentOnResizeTexts by rememberUpdatedState(onResizeTexts)
     val currentOnResizeGraphs by rememberUpdatedState(onResizeGraphs)
     val currentOnMoveTables by rememberUpdatedState(onMoveTables)
     val currentOnResizeTables by rememberUpdatedState(onResizeTables)
@@ -306,8 +312,6 @@ internal fun InkOverlay(
     val currentOnRequestPaste by rememberUpdatedState(onRequestPaste)
     val currentOnFingerTap by rememberUpdatedState(onFingerTap)
     val currentOnRecolorSelection by rememberUpdatedState(onRecolorSelection)
-    val currentOnGroupSelection by rememberUpdatedState(onGroupSelection)
-    val currentOnUngroupSelection by rememberUpdatedState(onUngroupSelection)
 
     val currentPan by rememberUpdatedState(pan)
 
@@ -489,8 +493,10 @@ internal fun InkOverlay(
         )
     }
     /** Whether anything in hand owns the page's gestures — the condition the touch filter is on. */
+    val selectionGestures = selection?.let { it.canGroup || it.textIds.isNotEmpty() } == true
+    val currentSelectionGestures by rememberUpdatedState(selectionGestures)
     val armed = brush != null || erasing || lassoing || shaping != null || insertingSpace ||
-        laserPointing
+        laserPointing || selectionGestures
 
     Box(
         modifier
@@ -562,7 +568,7 @@ internal fun InkOverlay(
                 }
                 // Under the lasso, and under a pointing finger: in both the selection is moved from
                 // here, so its rectangle and corners are drawn here and the layers leave theirs out.
-                if ((currentLassoing || currentPointing) && gestureRevision >= 0) {
+                if ((currentLassoing || currentPointing || currentSelectionGestures) && gestureRevision >= 0) {
                     drawLasso(
                         native, matrix, lassoGesture, currentSelection, currentShapes,
                         lassoColor, lassoHandleFill,
@@ -672,6 +678,25 @@ internal fun InkOverlay(
                 Modifier
                     .fillMaxSize()
                     .pointerInteropFilter { event ->
+                        val pointerGroup = currentSelectionGestures && currentBrush == null && !currentErasing &&
+                            !currentLassoing && currentShaping == null && !currentInsertingSpace && !currentLaserPointing
+                        if (pointerGroup) {
+                            val toPage = Matrix().also { currentTransform().invert(it) }
+                            if (event.actionMasked == MotionEvent.ACTION_DOWN &&
+                                !lassoGesture.reaches(currentSelection, currentShapes, event.pagePoint(event.actionIndex, toPage)))
+                                return@pointerInteropFilter false
+                            return@pointerInteropFilter lassoGesture.handle(event, toPage, currentStrokes, currentShapes,
+                                tables = currentTables, equations = currentEquations, images = currentImages,
+                                graphs = currentGraphs, texts = currentTexts, touchSlop = viewConfiguration.touchSlop,
+                                selection = currentSelection, onSelect = currentOnSelect,
+                                onMove = currentOnMoveSelection, onResize = currentOnResizeSelection,
+                                onMoveShapes = currentOnMoveShapes, onResizeShapes = currentOnResizeShapes,
+                                onMoveTables = currentOnMoveTables, onResizeTables = currentOnResizeTables,
+                                onMoveEquations = currentOnMoveEquations, onResizeEquations = currentOnResizeEquations,
+                                onMoveImages = currentOnMoveImages, onResizeImages = currentOnResizeImages,
+                                onMoveGraphs = currentOnMoveGraphs, onResizeGraphs = currentOnResizeGraphs,
+                                onMoveTexts = currentOnMoveTexts, onResizeTexts = currentOnResizeTexts, together = currentTogether)
+                        }
                         val pastePoint = if (
                             currentHasInkClipboard &&
                             doubleTap.observe(event, acceptStylus = currentLassoing)
@@ -730,6 +755,8 @@ internal fun InkOverlay(
                             equations = currentEquations,
                             images = currentImages,
                             graphs = currentGraphs,
+                            texts = currentTexts,
+                            together = currentTogether,
                             selection = currentSelection,
                             onSelect = currentOnSelect,
                             onMoveShapes = currentOnMoveShapes,
@@ -741,6 +768,8 @@ internal fun InkOverlay(
                             onResizeEquations = currentOnResizeEquations,
                             onMoveImages = currentOnMoveImages,
                             onResizeImages = currentOnResizeImages,
+                            onMoveTexts = currentOnMoveTexts,
+                            onResizeTexts = currentOnResizeTexts,
                             onMoveGraphs = currentOnMoveGraphs,
                             onResizeGraphs = currentOnResizeGraphs,
                             shapeGesture = shapeGesture,
@@ -1035,6 +1064,8 @@ private fun handleInk(
     equations: List<Outline.Equation>,
     images: List<Outline.Image>,
     graphs: List<Outline.Graph>,
+    texts: List<TableBounds>,
+    together: (() -> Unit) -> Unit,
     selection: CanvasSelection?,
     onSelect: (CanvasSelection?) -> Unit,
     allowFinger: Boolean,
@@ -1052,6 +1083,8 @@ private fun handleInk(
     onResizeEquations: (Set<String>, InkPoint, Float, Float) -> Unit,
     onMoveImages: (Set<String>, Float, Float) -> Unit,
     onResizeImages: (Set<String>, InkPoint, Float, Float) -> Unit,
+    onMoveTexts: (Set<String>, Float, Float) -> Unit,
+    onResizeTexts: (Set<String>, InkPoint, Float, Float) -> Unit,
     onMoveGraphs: (Set<String>, Float, Float) -> Unit,
     onResizeGraphs: (Set<String>, InkPoint, Float, Float) -> Unit,
     liveStroke: InProgressStrokeId?,
@@ -1098,6 +1131,8 @@ private fun handleInk(
             equations = equations,
             images = images,
             graphs = graphs,
+            texts = texts,
+            together = together,
             touchSlop = touchSlop,
             selection = selection,
             onSelect = onSelect,
@@ -1112,6 +1147,8 @@ private fun handleInk(
             onResizeEquations = onResizeEquations,
             onMoveImages = onMoveImages,
             onResizeImages = onResizeImages,
+            onMoveTexts = onMoveTexts,
+            onResizeTexts = onResizeTexts,
             onMoveGraphs = onMoveGraphs,
             onResizeGraphs = onResizeGraphs,
         )
@@ -2321,6 +2358,7 @@ internal class LassoGesture {
         equations: List<Outline.Equation> = emptyList(),
         images: List<Outline.Image> = emptyList(),
         graphs: List<Outline.Graph> = emptyList(),
+        texts: List<TableBounds> = emptyList(),
         touchSlop: Float = 0f,
         selection: CanvasSelection?,
         onSelect: (CanvasSelection?) -> Unit,
@@ -2335,8 +2373,11 @@ internal class LassoGesture {
         onResizeEquations: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
         onMoveImages: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
         onResizeImages: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+        onMoveTexts: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
+        onResizeTexts: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
         onMoveGraphs: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
         onResizeGraphs: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
+        together: (() -> Unit) -> Unit = { it() },
     ): Boolean {
         return when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -2394,126 +2435,131 @@ internal class LassoGesture {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 if (event.getPointerId(event.actionIndex) != pointerId || mode == Mode.Idle) return false
-                when (mode) {
-                    Mode.Drawing -> {
-                        appendSamples(event, event.actionIndex, toPage)
-                        val drawn = path.toList()
-                        // A loop first, and a tap only when there was no loop. Read the other way
-                        // round, a deliberate circle drawn around empty paper next to a picture
-                        // would end by selecting the picture the finger happened to lift over.
-                        onSelect(
-                            selectWithLasso(
-                                strokes = strokes,
-                                shapes = shapes,
-                                tables = tables,
-                                equations = equations,
-                                images = images,
-                                graphs = graphs,
-                                path = drawn,
-                                edgeTolerance = lassoEdgeTolerance(toPage),
-                            ) ?: drawn.tapPoint(toPage.pageSpan(touchSlop))?.let { tap ->
-                                selectByTap(
+                together {
+                    when (mode) {
+                        Mode.Drawing -> {
+                            appendSamples(event, event.actionIndex, toPage)
+                            val drawn = path.toList()
+                            // A loop first, and a tap only when there was no loop. Read the other way
+                            // round, a deliberate circle drawn around empty paper next to a picture
+                            // would end by selecting the picture the finger happened to lift over.
+                            onSelect(
+                                selectWithLasso(
+                                    strokes = strokes,
                                     shapes = shapes,
+                                    tables = tables,
                                     equations = equations,
                                     images = images,
-                                    point = tap,
                                     graphs = graphs,
-                                )
-                            },
-                        )
-                        path.clear()
-                    }
-                    Mode.Moving -> {
-                        // The same clamp the preview was drawn with, so what is written down is
-                        // what the finger was shown — see [travelTo].
-                        val delta = travelTo(event.pagePoint(event.actionIndex, toPage))
-                        if (selection != null && (delta.x != 0f || delta.y != 0f)) {
-                            // One gesture, one payload per kind: ink persists a move for replay, a
-                            // shape translates its own segments. Move and resize are transforms on
-                            // an object rather than on its representation, so the gesture states
-                            // the delta once and lets each kind apply it its own way.
-                            selection.inkHalf()?.let { ink ->
-                                onMove(
-                                    InkLassoMove(
-                                        path = ink.path,
-                                        targetIds = ink.targetIds,
-                                        projections = ink.projections,
-                                        dx = delta.x,
-                                        dy = delta.y,
-                                    ),
-                                )
-                            }
-                            if (selection.shapeIds.isNotEmpty()) {
-                                onMoveShapes(selection.shapeIds, delta.x, delta.y)
-                            }
-                            if (selection.tableIds.isNotEmpty()) {
-                                onMoveTables(selection.tableIds, delta.x, delta.y)
-                            }
-                            if (selection.equationIds.isNotEmpty()) {
-                                onMoveEquations(selection.equationIds, delta.x, delta.y)
-                            }
-                            if (selection.imageIds.isNotEmpty()) {
-                                onMoveImages(selection.imageIds, delta.x, delta.y)
-                            }
-                            if (selection.graphIds.isNotEmpty()) {
-                                onMoveGraphs(selection.graphIds, delta.x, delta.y)
-                            }
-                            onSelect(selection.translated(delta.x, delta.y))
+                                    texts = texts,
+                                    path = drawn,
+                                    edgeTolerance = lassoEdgeTolerance(toPage),
+                                ) ?: drawn.tapPoint(toPage.pageSpan(touchSlop))?.let { tap ->
+                                    selectByTap(
+                                        shapes = shapes,
+                                        equations = equations,
+                                        images = images,
+                                        point = tap,
+                                        graphs = graphs,
+                                    )
+                                },
+                            )
+                            path.clear()
                         }
-                    }
-                    Mode.Resizing -> {
-                        updateResize(event.pagePoint(event.actionIndex, toPage))
-                        val scale = resizeScale
-                        if (selection != null && (scale.x != 1f || scale.y != 1f)) {
-                            selection.inkHalf()?.let { ink ->
-                                onResize(
-                                    InkLassoResize(
-                                        path = ink.path,
-                                        targetIds = ink.targetIds,
-                                        projections = ink.projections,
-                                        anchor = resizeAnchor,
-                                        scaleX = scale.x,
-                                        scaleY = scale.y,
-                                    ),
-                                )
+                        Mode.Moving -> {
+                            // The same clamp the preview was drawn with, so what is written down is
+                            // what the finger was shown — see [travelTo].
+                            val delta = travelTo(event.pagePoint(event.actionIndex, toPage))
+                            if (selection != null && (delta.x != 0f || delta.y != 0f)) {
+                                // One gesture, one payload per kind: ink persists a move for replay, a
+                                // shape translates its own segments. Move and resize are transforms on
+                                // an object rather than on its representation, so the gesture states
+                                // the delta once and lets each kind apply it its own way.
+                                selection.inkHalf()?.let { ink ->
+                                    onMove(
+                                        InkLassoMove(
+                                            path = ink.path,
+                                            targetIds = ink.targetIds,
+                                            projections = ink.projections,
+                                            dx = delta.x,
+                                            dy = delta.y,
+                                        ),
+                                    )
+                                }
+                                if (selection.shapeIds.isNotEmpty()) {
+                                    onMoveShapes(selection.shapeIds, delta.x, delta.y)
+                                }
+                                if (selection.tableIds.isNotEmpty()) {
+                                    onMoveTables(selection.tableIds, delta.x, delta.y)
+                                }
+                                if (selection.equationIds.isNotEmpty()) {
+                                    onMoveEquations(selection.equationIds, delta.x, delta.y)
+                                }
+                                if (selection.imageIds.isNotEmpty()) {
+                                    onMoveImages(selection.imageIds, delta.x, delta.y)
+                                }
+                                if (selection.textIds.isNotEmpty()) onMoveTexts(selection.textIds, delta.x, delta.y)
+                                if (selection.graphIds.isNotEmpty()) {
+                                    onMoveGraphs(selection.graphIds, delta.x, delta.y)
+                                }
+                                onSelect(selection.translated(delta.x, delta.y))
                             }
-                            if (selection.shapeIds.isNotEmpty()) {
-                                onResizeShapes(selection.shapeIds, resizeAnchor, scale.x, scale.y)
-                            }
-                            if (selection.tableIds.isNotEmpty()) {
-                                onResizeTables(selection.tableIds, resizeAnchor, scale.x, scale.y)
-                            }
-                            if (selection.equationIds.isNotEmpty()) {
-                                onResizeEquations(
-                                    selection.equationIds, resizeAnchor, scale.x, scale.y,
-                                )
-                            }
-                            if (selection.imageIds.isNotEmpty()) {
-                                onResizeImages(selection.imageIds, resizeAnchor, scale.x, scale.y)
-                            }
-                            if (selection.graphIds.isNotEmpty()) {
-                                onResizeGraphs(selection.graphIds, resizeAnchor, scale.x, scale.y)
-                            }
-                            onSelect(selection.scaled(resizeAnchor, scale.x, scale.y))
                         }
-                    }
-                    Mode.LineEnd -> {
-                        updateLineEnd(event.pagePoint(event.actionIndex, toPage))
-                        val shape = endShape
-                        val handle = endHandle
-                        val moved = endPreview
-                        // A press on the handle that never travelled is not an edit — and the
-                        // selection it would rewrite is the one already on screen.
-                        if (shape != null && handle != null && moved != null && moved != shape) {
-                            onMoveShapeEnd(shape.id, handle.atEnd, endAt.x, endAt.y)
-                            // The bounds are the new geometry's; the loop that made the selection is
-                            // kept, as the move and resize arms keep theirs.
-                            onSelect(selection?.copy(bounds = moved.pageBounds()))
+                        Mode.Resizing -> {
+                            updateResize(event.pagePoint(event.actionIndex, toPage))
+                            val scale = resizeScale
+                            if (selection != null && (scale.x != 1f || scale.y != 1f)) {
+                                selection.inkHalf()?.let { ink ->
+                                    onResize(
+                                        InkLassoResize(
+                                            path = ink.path,
+                                            targetIds = ink.targetIds,
+                                            projections = ink.projections,
+                                            anchor = resizeAnchor,
+                                            scaleX = scale.x,
+                                            scaleY = scale.y,
+                                        ),
+                                    )
+                                }
+                                if (selection.shapeIds.isNotEmpty()) {
+                                    onResizeShapes(selection.shapeIds, resizeAnchor, scale.x, scale.y)
+                                }
+                                if (selection.tableIds.isNotEmpty()) {
+                                    onResizeTables(selection.tableIds, resizeAnchor, scale.x, scale.y)
+                                }
+                                if (selection.equationIds.isNotEmpty()) {
+                                    onResizeEquations(
+                                        selection.equationIds, resizeAnchor, scale.x, scale.y,
+                                    )
+                                }
+                                if (selection.imageIds.isNotEmpty()) {
+                                    onResizeImages(selection.imageIds, resizeAnchor, scale.x, scale.y)
+                                }
+                                if (selection.textIds.isNotEmpty()) onResizeTexts(selection.textIds, resizeAnchor, scale.x, scale.y)
+                                if (selection.graphIds.isNotEmpty()) {
+                                    onResizeGraphs(selection.graphIds, resizeAnchor, scale.x, scale.y)
+                                }
+                                onSelect(selection.scaled(resizeAnchor, scale.x, scale.y))
+                            }
                         }
+                        Mode.LineEnd -> {
+                            updateLineEnd(event.pagePoint(event.actionIndex, toPage))
+                            val shape = endShape
+                            val handle = endHandle
+                            val moved = endPreview
+                            // A press on the handle that never travelled is not an edit — and the
+                            // selection it would rewrite is the one already on screen.
+                            if (shape != null && handle != null && moved != null && moved != shape) {
+                                onMoveShapeEnd(shape.id, handle.atEnd, endAt.x, endAt.y)
+                                // The bounds are the new geometry's; the loop that made the selection is
+                                // kept, as the move and resize arms keep theirs.
+                                onSelect(selection?.copy(bounds = moved.pageBounds()))
+                            }
+                        }
+                        // A press on something locked: the selection it landed on is already the
+                        // one on screen, so the lift has nothing to report.
+                        Mode.Held, Mode.Idle -> Unit
                     }
-                    // A press on something locked: the selection it landed on is already the
-                    // one on screen, so the lift has nothing to report.
-                    Mode.Held, Mode.Idle -> Unit
                 }
                 mode = Mode.Idle
                 pointerId = -1

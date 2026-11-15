@@ -410,11 +410,32 @@ object SpannableCodec {
      */
     fun inheritedMarks(text: Spanned, position: Int): Set<Mark> {
         val at = position.coerceIn(0, text.length)
-        if (at > 0) {
+        val marks = if (at > 0) {
             val behind = marksAt(text, at - 1, at)
-            if (behind.isNotEmpty() || text[at - 1] != '\n') return behind
+            if (behind.isNotEmpty() || text[at - 1] != '\n') behind
+            else if (at < text.length && text[at] != '\n') marksAt(text, at, at + 1) else emptySet()
+        } else if (at < text.length && text[at] != '\n') marksAt(text, at, at + 1) else emptySet()
+        return marks.filterNotTo(mutableSetOf()) { it is Mark.Equation }
+    }
+
+    /** Selected text's shared marks, with the first character's font and size for mixed ranges. */
+    fun insertionMarks(text: Spanned, start: Int, end: Int): Set<Mark> {
+        if (start == end) return inheritedMarks(text, start)
+        val pieces = mutableListOf<Set<Mark>>()
+        val source = text.toString()
+        var at = start
+        while (at < end) {
+            if (text[at] == '\n') { at++; continue }
+            val next = minOf(text.nextSpanTransition(at, end, Any::class.java),
+                source.indexOf('\n', at).takeIf { it >= 0 } ?: end)
+            pieces += marksAt(text, at, next)
+            at = next
         }
-        return if (at < text.length && text[at] != '\n') marksAt(text, at, at + 1) else emptySet()
+        val first = pieces.firstOrNull() ?: return inheritedMarks(text, start)
+        val shared = pieces.drop(1).fold(first) { common, marks -> common intersect marks }
+        return (shared + first.filter { mark ->
+            (mark is Mark.FontSize || mark is Mark.FontFamily) && shared.none { it.sameKindAs(mark) }
+        }).filterNotTo(mutableSetOf()) { it is Mark.Equation }
     }
 
     private fun markOf(span: Any): Mark? = when (span) {

@@ -45,6 +45,16 @@ class HtmlPasteEditingTest {
         assertEquals("Steps\n\nOpen it\nClose it".length, view.selectionStart)
     }
 
+    @Test
+    fun pastingOverASelectionUsesTheSelectedTextsFont() = withEditor(
+        Block(id = "b", runs = listOf(Run("before "), Run("replace", setOf(Mark.FontSize(28), Mark.FontFamily("serif"))))),
+    ) { view ->
+        view.defaultMarks = setOf(Mark.FontSize(9))
+        view.setSelection(7, 14)
+        view.paste("<b>pasted</b>", "pasted")
+        assertEquals(Run("pasted", setOf(Mark.Bold, Mark.FontSize(28), Mark.FontFamily("serif"))), view.blocks().single().runs.last())
+    }
+
     /** What another app copied as one heading or item is that paragraph, pasted where it fills one. */
     @Test
     fun aSingleParagraphKeepsItsStyleOnlyWhereItFillsTheLine() = withEditor(Block.of("before"), Block(id = "e"), Block.of("after")) { view ->

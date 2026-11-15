@@ -101,6 +101,7 @@ import com.vivenotes.ink.CanvasPasteLayoutRequest
 import com.vivenotes.ink.PasteFrames
 import com.vivenotes.ink.documentHeight
 import com.vivenotes.ink.stackPastedOutlines
+import com.vivenotes.ink.enclosingPath
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.InkLassoMove
@@ -196,6 +197,7 @@ data class OutlineBox(
     val y: Float,
     val width: Float,
     val minHeight: Float = 0f,
+    val groupId: String? = null,
 )
 
 /**
@@ -1485,7 +1487,7 @@ class NotesViewModel(
             selectedPageId = pageId,
             title = page?.title.orEmpty(),
             createdAt = page?.createdAt ?: System.currentTimeMillis(),
-            outlines = loaded.map { OutlineBox(it.id, it.x, it.y, it.width, it.minHeight) },
+            outlines = loaded.map { OutlineBox(it.id, it.x, it.y, it.width, it.minHeight, it.groupId) },
             shapes = doc.outlines.filterIsInstance<Outline.Shape>(),
             tables = tables,
             equations = doc.outlines.filterIsInstance<Outline.Equation>(),
@@ -2059,8 +2061,8 @@ class NotesViewModel(
     /**
      * Puts one container on the shared clipboard, text and all.
      *
-     * Separate from [copySelection] because a text box is not in a `CanvasSelection`: the toolkit
-     * acts on the focused container, which is an id rather than a selection.
+     * The text toolkit acts on the focused container. Mixed canvas selections instead carry text
+     * IDs through [copySelection].
      */
     fun copyOutline(outlineId: String) {
         val box = _uiState.value.outlines.firstOrNull { it.id == outlineId } ?: return
@@ -2075,6 +2077,7 @@ class NotesViewModel(
                     width = box.width,
                     minHeight = box.minHeight,
                     blocks = blocks,
+                    groupId = box.groupId,
                 ),
             ),
         )
@@ -2261,8 +2264,9 @@ class NotesViewModel(
             when (mark) {
                 is Mark.FontFamily -> editorDefaultsStore.setFontFamily(mark.name)
                 is Mark.FontSize -> editorDefaultsStore.setFontSize(mark.sp)
-                else -> Unit
+                else -> return@launch
             }
+            _commands.tryEmit(FormatCommand.RestoreTextFocus)
         }
     }
 
@@ -3477,6 +3481,22 @@ class NotesViewModel(
 
     /** Moves selected live projections immediately, then records the replayable lasso operation. */
     fun moveInk(move: InkLassoMove) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        val pieces = _strokes.value.filter { it.id in move.targetIds }.groupBy { it.id }
+        val whole = pieces.filterValues { row -> row.all { it.projectionKey in move.projections } }.keys
+        val partial = move.targetIds - whole
+        asOneAction(pageId) {
+            if (whole.isNotEmpty()) {
+                val bounds = pieces.filterKeys { it in whole }.values.flatten().mapNotNull(PageStroke::pageBounds).unionBounds()
+                if (bounds != null) commitInkMove(move.copy(targetIds = whole, path = bounds.enclosingPath(),
+                    projections = move.projections.filterTo(mutableSetOf()) { it.strokeId in whole }))
+            }
+            if (partial.isNotEmpty()) commitInkMove(move.copy(targetIds = partial,
+                projections = move.projections.filterTo(mutableSetOf()) { it.strokeId in partial }))
+        }
+    }
+
+    private fun commitInkMove(move: InkLassoMove) {
         if (move.projections.isEmpty() || (move.dx == 0f && move.dy == 0f)) return
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
@@ -3504,6 +3524,22 @@ class NotesViewModel(
 
     /** Commits one corner-handle drag as a replayable selection transform. */
     fun resizeInk(resize: InkLassoResize) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        val pieces = _strokes.value.filter { it.id in resize.targetIds }.groupBy { it.id }
+        val whole = pieces.filterValues { row -> row.all { it.projectionKey in resize.projections } }.keys
+        val partial = resize.targetIds - whole
+        asOneAction(pageId) {
+            if (whole.isNotEmpty()) {
+                val bounds = pieces.filterKeys { it in whole }.values.flatten().mapNotNull(PageStroke::pageBounds).unionBounds()
+                if (bounds != null) commitInkResize(resize.copy(targetIds = whole, path = bounds.enclosingPath(),
+                    projections = resize.projections.filterTo(mutableSetOf()) { it.strokeId in whole }))
+            }
+            if (partial.isNotEmpty()) commitInkResize(resize.copy(targetIds = partial,
+                projections = resize.projections.filterTo(mutableSetOf()) { it.strokeId in partial }))
+        }
+    }
+
+    private fun commitInkResize(resize: InkLassoResize) {
         if (resize.projections.isEmpty() || (resize.scaleX == 1f && resize.scaleY == 1f)) return
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
@@ -3719,13 +3755,18 @@ class NotesViewModel(
         // nothing: the selection held the picture and this did not ask for it, so the paste menu
         // that Copy is paired with never came up.
         val images = _uiState.value.images.filter { it.id in selection.imageIds }
-        if (strokes.isEmpty() && shapes.isEmpty() && tables.isEmpty() && equations.isEmpty() &&
+        val texts = _uiState.value.outlines.filter { it.id in selection.textIds }.map { box ->
+            Outline.Text(box.id, box.x, box.y, box.width, box.minHeight,
+                blocksById[box.id].orEmpty(), groupId = box.groupId)
+        }
+        if (texts.isEmpty() && strokes.isEmpty() && shapes.isEmpty() && tables.isEmpty() && equations.isEmpty() &&
             graphs.isEmpty() && images.isEmpty()
         ) {
             return
         }
         clipboard = CanvasClipboard(
             strokes = strokes,
+            texts = texts,
             shapes = shapes,
             tables = tables,
             equations = equations,
@@ -3742,9 +3783,8 @@ class NotesViewModel(
      * The centre is measured across all kinds, so a copied stroke-and-shape pair lands in the
      * arrangement it was copied in rather than each kind centring itself.
      *
-     * Each kind commits the way it already does — ink through `ink_strokes`, a shape through the
-     * document's autosave — and each leaves one entry on the history ring, so a paste of two kinds
-     * takes two presses of Undo. Each press visibly undoes half of it, so that is left as it is.
+     * Each kind commits through its existing store, wrapped in one history action so a pasted
+     * mixed group is undone and redone together.
      */
     fun pasteObjects(at: InkPoint) {
         val pageId = _uiState.value.selectedPageId ?: return
@@ -3791,111 +3831,116 @@ class NotesViewModel(
         val wanted = InkPoint(at.x - union.center.x, at.y - union.top)
         val (dx, dy) = PageBounds.clampTranslation(union, wanted.x, wanted.y)
 
-        if (sourceTexts.isNotEmpty()) {
-            val pasted = sourceTexts.map { source ->
-                source.copy(id = newId(), x = source.x + dx, y = source.y + dy)
-            }
-            editTexts(pasted.map { it.id }.toSet()) { outlines ->
-                pasted.forEach { blocksById[it.id] = it.blocks }
-                outlines + pasted.map { text ->
-                    OutlineBox(
-                        id = text.id,
-                        x = text.x,
-                        y = text.y,
-                        width = text.width,
-                        minHeight = text.minHeight,
-                    )
+        val pastedGroups = mutableMapOf<String, String>()
+        fun pastedGroup(id: String?): String? = id?.let { pastedGroups.getOrPut(it, ::newId) }
+        asOneAction(pageId) {
+            if (sourceTexts.isNotEmpty()) {
+                val pasted = sourceTexts.map { source ->
+                    source.copy(id = newId(), x = source.x + dx, y = source.y + dy,
+                        groupId = pastedGroup(source.groupId), blocks = source.blocks.map { it.copy(id = newId()) })
                 }
-            }
-        }
-
-        if (sourceTables.isNotEmpty()) {
-            // Fresh ids all the way down — table, rows and cells — or two tables would share a block
-            // map entry and typing in one would appear in the other. Unlocked, like every pasted
-            // copy: one that arrived immovable would have to be unlocked before it could be moved.
-            val pastedTables = sourceTables.map { source ->
-                source.withNewIds().copy(x = source.x + dx, y = source.y + dy, lockGroup = null)
-            }
-            editTables(pastedTables.flatMap { it.contentCellIds() }.toSet()) { tables ->
-                pastedTables.forEach { table ->
-                    val cells = table.contentCellIds().toSet()
-                    table.rows.forEach { row ->
-                        row.cells.forEach { if (it.id in cells) blocksById[it.id] = it.blocks }
+                editTexts(pasted.map { it.id }.toSet()) { outlines ->
+                    pasted.forEach { blocksById[it.id] = it.blocks }
+                    outlines + pasted.map { text ->
+                        OutlineBox(
+                            id = text.id,
+                            x = text.x,
+                            y = text.y,
+                            width = text.width,
+                            minHeight = text.minHeight,
+                            groupId = text.groupId,
+                        )
                     }
                 }
-                tables + pastedTables
             }
-        }
 
-        if (sourceShapes.isNotEmpty()) {
-            val pastedShapes = sourceShapes.map { source ->
-                source.translated(dx, dy).copy(
-                    id = newId(),
-                    lockGroup = null,
-                    segments = source.segments
-                        .map { it.copy(id = newId()) }
-                        .map { it.translated(dx, dy) },
+            if (sourceTables.isNotEmpty()) {
+                // Fresh ids all the way down — table, rows and cells — or two tables would share a block
+                // map entry and typing in one would appear in the other. Unlocked, like every pasted
+                // copy: one that arrived immovable would have to be unlocked before it could be moved.
+                val pastedTables = sourceTables.map { source ->
+                    source.withNewIds().copy(x = source.x + dx, y = source.y + dy, lockGroup = null, groupId = pastedGroup(source.groupId))
+                }
+                editTables(pastedTables.flatMap { it.contentCellIds() }.toSet()) { tables ->
+                    pastedTables.forEach { table ->
+                        val cells = table.contentCellIds().toSet()
+                        table.rows.forEach { row ->
+                            row.cells.forEach { if (it.id in cells) blocksById[it.id] = it.blocks }
+                        }
+                    }
+                    tables + pastedTables
+                }
+            }
+
+            if (sourceShapes.isNotEmpty()) {
+                val pastedShapes = sourceShapes.map { source ->
+                    source.translated(dx, dy).copy(
+                        id = newId(),
+                        lockGroup = null,
+                        groupId = pastedGroup(source.groupId),
+                        segments = source.segments
+                            .map { it.copy(id = newId()) }
+                            .map { it.translated(dx, dy) },
+                    )
+                }
+                editShapes { it + pastedShapes }
+            }
+
+            if (sourceEquations.isNotEmpty()) {
+                val pastedEquations = sourceEquations.map { source ->
+                    source.translated(dx, dy).copy(id = newId(), lockGroup = null, groupId = pastedGroup(source.groupId))
+                }
+                editEquations { it + pastedEquations }
+            }
+
+            if (sourceGraphs.isNotEmpty()) {
+                val pastedGraphs = sourceGraphs.map { source ->
+                    source.translated(dx, dy).copy(id = newId(), lockGroup = null, groupId = pastedGroup(source.groupId))
+                }
+                editGraphs { it + pastedGraphs }
+            }
+
+            if (sourceImages.isNotEmpty()) {
+                // A new frame over the same file. Nothing is retained for it: which pictures are still
+                // wanted is read off the documents by `AttachmentSweep`, not off a count, and until the
+                // paste lands the clipboard itself answers for them — [picturesHeldByEditor].
+                val pastedImages = sourceImages.map { source ->
+                    source.translated(dx, dy).copy(id = newId(), lockGroup = null, groupId = pastedGroup(source.groupId))
+                }
+                editImages { it + pastedImages }
+            }
+
+            if (sources.isEmpty()) return@asOneAction
+            val before = _strokes.value
+            val now = nextInkOperationTime()
+            val copies = sources.map { source ->
+                val stroke = source.translatedCopy(dx, dy)
+                val entity = InkCodec.encodeCopy(
+                    source = source,
+                    stroke = stroke,
+                    pageId = pageId,
+                    groupId = pastedGroup(source.groupId),
+                    now = now,
+                )
+                entity to PageStroke(
+                    id = entity.id,
+                    stroke = stroke,
+                    brushFamily = entity.brushFamily,
+                    brushVersion = entity.brushVersion,
+                    stabilization = entity.stabilization,
+                    colorFollowsTheme = entity.colorFollowsTheme,
+                    groupId = entity.groupId,
                 )
             }
-            editShapes { it + pastedShapes }
-        }
-
-        if (sourceEquations.isNotEmpty()) {
-            val pastedEquations = sourceEquations.map { source ->
-                source.translated(dx, dy).copy(id = newId(), lockGroup = null)
-            }
-            editEquations { it + pastedEquations }
-        }
-
-        if (sourceGraphs.isNotEmpty()) {
-            val pastedGraphs = sourceGraphs.map { source ->
-                source.translated(dx, dy).copy(id = newId(), lockGroup = null)
-            }
-            editGraphs { it + pastedGraphs }
-        }
-
-        if (sourceImages.isNotEmpty()) {
-            // A new frame over the same file. Nothing is retained for it: which pictures are still
-            // wanted is read off the documents by `AttachmentSweep`, not off a count, and until the
-            // paste lands the clipboard itself answers for them — [picturesHeldByEditor].
-            val pastedImages = sourceImages.map { source ->
-                source.translated(dx, dy).copy(id = newId(), lockGroup = null)
-            }
-            editImages { it + pastedImages }
-        }
-
-        if (sources.isEmpty()) return
-        val pastedGroups = sources.mapNotNull(PageStroke::groupId).distinct()
-            .associateWith { newId() }
-        val before = _strokes.value
-        val now = nextInkOperationTime()
-        val copies = sources.map { source ->
-            val stroke = source.translatedCopy(dx, dy)
-            val entity = InkCodec.encodeCopy(
-                source = source,
-                stroke = stroke,
+            commitInkEdit(
                 pageId = pageId,
-                groupId = source.groupId?.let(pastedGroups::get),
-                now = now,
+                before = before,
+                after = before + copies.map { it.second },
+                mutation = InkHistoryMutation.AddStrokes(copies.map { it.first.id }),
             )
-            entity to PageStroke(
-                id = entity.id,
-                stroke = stroke,
-                brushFamily = entity.brushFamily,
-                brushVersion = entity.brushVersion,
-                stabilization = entity.stabilization,
-                colorFollowsTheme = entity.colorFollowsTheme,
-                groupId = entity.groupId,
-            )
-        }
-        commitInkEdit(
-            pageId = pageId,
-            before = before,
-            after = before + copies.map { it.second },
-            mutation = InkHistoryMutation.AddStrokes(copies.map { it.first.id }),
-        )
-        viewModelScope.launch {
-            inkMutations.withLock { repository.addStrokes(copies.map { it.first }) }
+            viewModelScope.launch {
+                inkMutations.withLock { repository.addStrokes(copies.map { it.first }) }
+            }
         }
     }
 
@@ -4192,12 +4237,47 @@ class NotesViewModel(
         }
     }
 
-    fun groupInk(ids: Set<String>) = setInkGroup(ids, newId())
+    /** Groups document objects and ink together in one undo step, independently of locks. */
+    fun toggleSelectionGroup(selection: CanvasSelection) {
+        val pageId = _uiState.value.selectedPageId ?: return
+        if (readOnlyPageId == pageId || !selection.canGroup) return
+        val state = _uiState.value
+        val found = state.outlines.count { it.id in selection.textIds } +
+            state.shapes.count { it.id in selection.shapeIds } + state.tables.count { it.id in selection.tableIds } +
+            state.equations.count { it.id in selection.equationIds } + state.images.count { it.id in selection.imageIds } +
+            state.graphs.count { it.id in selection.graphIds } + _strokes.value.filter { it.id in selection.inkIds }.distinctBy { it.id }.size
+        if (found != selection.memberCount) return
+        val group = if (selection.groupId != null) null else newId()
+        asOneAction(pageId) {
+            editTexts(emptySet()) { boxes -> boxes.map { if (it.id in selection.textIds) it.copy(groupId = group) else it } }
+            editShapes { items -> items.map { if (it.id in selection.shapeIds) it.copy(groupId = group) else it } }
+            editTables { items -> items.map { if (it.id in selection.tableIds) it.copy(groupId = group) else it } }
+            editEquations { items -> items.map { if (it.id in selection.equationIds) it.copy(groupId = group) else it } }
+            editImages { items -> items.map { if (it.id in selection.imageIds) it.copy(groupId = group) else it } }
+            editGraphs { items -> items.map { if (it.id in selection.graphIds) it.copy(groupId = group) else it } }
+            setInkGroup(selection.inkIds, group)
+        }
+    }
+
+    fun moveTexts(ids: Set<String>, dx: Float, dy: Float) {
+        editTexts(emptySet()) { boxes -> boxes.map {
+            if (it.id in ids) it.copy(x = it.x + dx, y = it.y + dy) else it
+        } }
+    }
+
+    fun resizeTexts(ids: Set<String>, anchorX: Float, anchorY: Float, scaleX: Float, scaleY: Float) {
+        editTexts(emptySet()) { boxes -> boxes.map {
+            if (it.id in ids) it.copy(x = anchorX + (it.x - anchorX) * scaleX,
+                y = anchorY + (it.y - anchorY) * scaleY, width = (it.width * scaleX).coerceIn(MIN_OUTLINE_WIDTH, MAX_OUTLINE_WIDTH),
+                minHeight = (it.minHeight * scaleY).coerceIn(0f, MAX_OUTLINE_HEIGHT)) else it
+        } }
+    }
+
+    fun groupInk(ids: Set<String>) { if (ids.size > 1) setInkGroup(ids, newId()) }
 
     fun ungroupInk(ids: Set<String>) = setInkGroup(ids, null)
 
     private fun setInkGroup(ids: Set<String>, groupId: String?) {
-        if (ids.size < 2 && groupId != null) return
         val pageId = _uiState.value.selectedPageId ?: return
         if (readOnlyPageId == pageId) return
         val before = _strokes.value
@@ -4890,6 +4970,7 @@ class NotesViewModel(
                 width = box.width,
                 minHeight = box.minHeight,
                 blocks = blocks,
+                groupId = box.groupId,
             )
         }
 
