@@ -807,6 +807,7 @@
     <string name="pages_sort_title">By title</string>
     <string name="pages_sort_modified">By date modified</string>
     <string name="pages_untitled">Untitled page</string>
+    <string name="pages_rename">Rename page</string>
     <string name="pages_delete">Delete page</string>
     <string name="pages_edited_just_now">Just now</string>
     <plurals name="pages_edited_minutes_ago">
@@ -843,6 +844,7 @@
     <string name="name_dialog_new_section">New section</string>
     <string name="name_dialog_rename_notebook">Rename notebook</string>
     <string name="name_dialog_rename_section">Rename section</string>
+    <string name="name_dialog_rename_page">Rename page</string>
     <string name="name_dialog_create">Create</string>
     <string name="name_dialog_rename">Rename</string>
     <string name="name_dialog_hint">Name</string>

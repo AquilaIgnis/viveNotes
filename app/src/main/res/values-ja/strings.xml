@@ -730,6 +730,7 @@
     <string name="pages_sort_modified">更新日順</string>
     <string name="pages_untitled">無題のページ</string>
     <string name="pages_delete">ページを削除</string>
+    <string name="pages_rename">ページの名前を変更</string>
     <string name="pages_edited_just_now">たった今</string>
     <plurals name="pages_edited_minutes_ago">
         <item quantity="other">%d分前</item>
@@ -760,6 +761,7 @@
     <string name="name_dialog_new_section">新しいセクション</string>
     <string name="name_dialog_rename_notebook">ノートブックの名前を変更</string>
     <string name="name_dialog_rename_section">セクションの名前を変更</string>
+    <string name="name_dialog_rename_page">ページの名前を変更</string>
     <string name="name_dialog_create">作成</string>
     <string name="name_dialog_rename">名前を変更</string>
     <string name="name_dialog_hint">名前</string>

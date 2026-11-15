@@ -730,6 +730,7 @@
     <string name="pages_sort_modified">수정일순</string>
     <string name="pages_untitled">제목 없는 페이지</string>
     <string name="pages_delete">페이지 삭제</string>
+    <string name="pages_rename">페이지 이름 변경</string>
     <string name="pages_edited_just_now">방금 전</string>
     <plurals name="pages_edited_minutes_ago">
         <item quantity="other">%d분 전</item>
@@ -760,6 +761,7 @@
     <string name="name_dialog_new_section">새 섹션</string>
     <string name="name_dialog_rename_notebook">노트북 이름 변경</string>
     <string name="name_dialog_rename_section">섹션 이름 변경</string>
+    <string name="name_dialog_rename_page">페이지 이름 변경</string>
     <string name="name_dialog_create">만들기</string>
     <string name="name_dialog_rename">이름 변경</string>
     <string name="name_dialog_hint">이름</string>

@@ -81,6 +81,7 @@ fun PageListPane(
     onSelectPage: (String) -> Unit,
     onAddPage: () -> Unit,
     onDeletePage: (String) -> Unit,
+    onRenamePage: (PageEntity) -> Unit = {},
     onReorderPages: (List<String>) -> Unit = {},
     onSwipeLeft: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -191,6 +192,7 @@ fun PageListPane(
                     selected = page.id == selectedPageId,
                     dragging = reorder.draggedKey == page.id,
                     onClick = { onSelectPage(page.id) },
+                    onRename = { onRenamePage(page) },
                     onDelete = { onDeletePage(page.id) },
                     // Under the same sort as the handle, and for the same reason.
                     moves = if (sort == PageSort.Manual) reorder.moves(index, shown.size) else RowMoves.None,
@@ -279,6 +281,7 @@ private fun PageRow(
     selected: Boolean,
     dragging: Boolean,
     onClick: () -> Unit,
+    onRename: () -> Unit,
     onDelete: () -> Unit,
     moves: RowMoves,
     modifier: Modifier = Modifier,
@@ -338,6 +341,14 @@ private fun PageRow(
 
         // Long-press opens the per-page menu; the ribbon owns the primary actions.
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.pages_rename)) },
+                leadingIcon = { Icon(MaterialSymbols.Edit, contentDescription = null) },
+                onClick = {
+                    menuOpen = false
+                    onRename()
+                },
+            )
             MoveMenuItems(moves) { menuOpen = false }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.pages_delete)) },

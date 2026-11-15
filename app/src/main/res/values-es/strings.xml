@@ -769,6 +769,7 @@
     <string name="pages_sort_modified">Por fecha de modificación</string>
     <string name="pages_untitled">Página sin título</string>
     <string name="pages_delete">Eliminar página</string>
+    <string name="pages_rename">Cambiar nombre de la página</string>
     <string name="pages_edited_just_now">Hace un momento</string>
     <plurals name="pages_edited_minutes_ago">
         <item quantity="one">Hace %d min</item>
@@ -802,6 +803,7 @@
     <string name="name_dialog_new_section">Nueva sección</string>
     <string name="name_dialog_rename_notebook">Cambiar nombre del cuaderno</string>
     <string name="name_dialog_rename_section">Cambiar nombre de la sección</string>
+    <string name="name_dialog_rename_page">Cambiar nombre de la página</string>
     <string name="name_dialog_create">Crear</string>
     <string name="name_dialog_rename">Cambiar nombre</string>
     <string name="name_dialog_hint">Nombre</string>

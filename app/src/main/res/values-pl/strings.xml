@@ -767,6 +767,7 @@
     <string name="pages_sort_modified">Według daty modyfikacji</string>
     <string name="pages_untitled">Strona bez tytułu</string>
     <string name="pages_delete">Usuń stronę</string>
+    <string name="pages_rename">Zmień nazwę strony</string>
     <string name="pages_edited_just_now">Przed chwilą</string>
     <plurals name="pages_edited_minutes_ago">
         <item quantity="one">%d min temu</item>
@@ -800,6 +801,7 @@
     <string name="name_dialog_new_section">Nowa sekcja</string>
     <string name="name_dialog_rename_notebook">Zmień nazwę notesu</string>
     <string name="name_dialog_rename_section">Zmień nazwę sekcji</string>
+    <string name="name_dialog_rename_page">Zmień nazwę strony</string>
     <string name="name_dialog_create">Utwórz</string>
     <string name="name_dialog_rename">Zmień nazwę</string>
     <string name="name_dialog_hint">Nazwa</string>

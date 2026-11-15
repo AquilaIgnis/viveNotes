@@ -743,6 +743,7 @@
     <string name="pages_sort_modified">Per data di modifica</string>
     <string name="pages_untitled">Pagina senza titolo</string>
     <string name="pages_delete">Elimina pagina</string>
+    <string name="pages_rename">Rinomina pagina</string>
     <string name="pages_edited_just_now">Adesso</string>
     <plurals name="pages_edited_minutes_ago">
         <item quantity="one">%d min fa</item>
@@ -774,6 +775,7 @@
     <string name="name_dialog_new_section">Nuova sezione</string>
     <string name="name_dialog_rename_notebook">Rinomina notebook</string>
     <string name="name_dialog_rename_section">Rinomina sezione</string>
+    <string name="name_dialog_rename_page">Rinomina pagina</string>
     <string name="name_dialog_create">Crea</string>
     <string name="name_dialog_rename">Rinomina</string>
     <string name="name_dialog_hint">Nome</string>

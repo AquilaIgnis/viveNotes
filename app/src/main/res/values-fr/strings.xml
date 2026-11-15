@@ -743,6 +743,7 @@
     <string name="pages_sort_modified">Par date de modification</string>
     <string name="pages_untitled">Page sans titre</string>
     <string name="pages_delete">Supprimer la page</string>
+    <string name="pages_rename">Renommer la page</string>
     <string name="pages_edited_just_now">À l\'instant</string>
     <plurals name="pages_edited_minutes_ago">
         <item quantity="one">il y a %d min</item>
@@ -774,6 +775,7 @@
     <string name="name_dialog_new_section">Nouvelle section</string>
     <string name="name_dialog_rename_notebook">Renommer le carnet</string>
     <string name="name_dialog_rename_section">Renommer la section</string>
+    <string name="name_dialog_rename_page">Renommer la page</string>
     <string name="name_dialog_create">Créer</string>
     <string name="name_dialog_rename">Renommer</string>
     <string name="name_dialog_hint">Nom</string>

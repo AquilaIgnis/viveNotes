@@ -1363,6 +1363,9 @@ private fun NotesWorkspace(
                                     onSelectPage = viewModel::openPage,
                                     onAddPage = viewModel::addPage,
                                     onDeletePage = viewModel::deletePage,
+                                    onRenamePage = {
+                                        pendingDialog = NameDialog.RenamePage(it.id, it.title)
+                                    },
                                     onReorderPages = viewModel::reorderPages,
                                     onSwipeLeft = viewModel::hideNavigation,
                                     modifier = Modifier.width(PAGE_LIST_WIDTH),
@@ -1480,6 +1483,9 @@ private fun NotesWorkspace(
                                 onSelectPage = viewModel::openPage,
                                 onAddPage = viewModel::addPage,
                                 onDeletePage = viewModel::deletePage,
+                                onRenamePage = {
+                                    pendingDialog = NameDialog.RenamePage(it.id, it.title)
+                                },
                                 onReorderPages = viewModel::reorderPages,
                                 onSwipeLeft = { viewModel.showCompactPane(CompactPane.Editor) },
                                 modifier = Modifier.fillMaxSize(),
@@ -1644,17 +1650,20 @@ private fun NotesWorkspace(
                     is NameDialog.Section -> R.string.name_dialog_new_section
                     is NameDialog.RenameNotebook -> R.string.name_dialog_rename_notebook
                     is NameDialog.RenameSection -> R.string.name_dialog_rename_section
+                    is NameDialog.RenamePage -> R.string.name_dialog_rename_page
                 },
             ),
             confirmLabel = stringResource(
                 when (dialog) {
                     is NameDialog.Notebook, is NameDialog.Section -> R.string.name_dialog_create
-                    is NameDialog.RenameNotebook, is NameDialog.RenameSection -> R.string.name_dialog_rename
+                    is NameDialog.RenameNotebook, is NameDialog.RenameSection,
+                    is NameDialog.RenamePage -> R.string.name_dialog_rename
                 },
             ),
             initial = when (dialog) {
                 is NameDialog.RenameNotebook -> dialog.current
                 is NameDialog.RenameSection -> dialog.current
+                is NameDialog.RenamePage -> dialog.current
                 else -> ""
             },
             onDismiss = { pendingDialog = null },
@@ -1668,6 +1677,8 @@ private fun NotesWorkspace(
                         ?.let { viewModel.renameNotebook(dialog.id, it) }
                     is NameDialog.RenameSection -> name.trim().takeIf { it.isNotEmpty() }
                         ?.let { viewModel.renameSection(dialog.id, it) }
+                    is NameDialog.RenamePage -> name.trim().takeIf { it.isNotEmpty() }
+                        ?.let { viewModel.renamePage(dialog.id, it) }
                 }
                 pendingDialog = null
             },
@@ -2282,6 +2293,7 @@ private sealed interface NameDialog {
     data class Section(val notebookId: String) : NameDialog
     data class RenameNotebook(val id: String, val current: String) : NameDialog
     data class RenameSection(val id: String, val current: String) : NameDialog
+    data class RenamePage(val id: String, val current: String) : NameDialog
 }
 
 /**

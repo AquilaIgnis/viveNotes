@@ -4942,7 +4942,14 @@ class NotesViewModel(
 
     fun setTitle(title: String) {
         val pageId = _uiState.value.selectedPageId ?: return
-        _uiState.value = _uiState.value.copy(title = title)
+        renamePage(pageId, title)
+    }
+
+    /** Renames a list row without opening it, and keeps the open page's title in sync. */
+    fun renamePage(pageId: String, title: String) {
+        if (_uiState.value.selectedPageId == pageId) {
+            _uiState.value = _uiState.value.copy(title = title)
+        }
         viewModelScope.launch { repository.renamePage(pageId, title) }
     }
 
