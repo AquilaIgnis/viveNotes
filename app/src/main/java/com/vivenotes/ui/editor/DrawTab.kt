@@ -29,6 +29,7 @@ import com.vivenotes.R
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HighlighterSettings
+import com.vivenotes.data.LassoSettings
 import com.vivenotes.data.PenKind
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
@@ -40,6 +41,7 @@ import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.panel.EraserPanelContent
 import com.vivenotes.ui.panel.FloatingSettingsPanel
 import com.vivenotes.ui.panel.HighlighterPanelContent
+import com.vivenotes.ui.panel.LassoPanelContent
 import com.vivenotes.ui.panel.PenPanelContent
 import com.vivenotes.ui.panel.RulerPanelContent
 
@@ -53,6 +55,7 @@ data class DrawActions(
     val updatePen: (Int, PenPreset) -> Unit,
     val updateEraser: (EraserSettings) -> Unit,
     val updateHighlighter: (HighlighterSettings) -> Unit = {},
+    val updateLasso: (LassoSettings) -> Unit = {},
     val updateShape: (ShapeSettings) -> Unit = {},
     /** How the next table arrives. A preference, never an edit. */
     val updateTable: (TableSettings) -> Unit = {},
@@ -137,9 +140,11 @@ internal fun DrawTab(
     /** Whether the formula model is installed. Without it the calculator has nothing to read with. */
     calculatorAvailable: Boolean = false,
     calculatorOpen: Boolean = false,
+    lasso: LassoSettings = LassoSettings(),
 ) {
     var openPenIndex by remember { mutableStateOf<Int?>(null) }
     var eraserSettingsOpen by remember { mutableStateOf(false) }
+    var lassoSettingsOpen by remember { mutableStateOf(false) }
     var highlighterSettingsOpen by remember { mutableStateOf(false) }
     var rulerSettingsOpen by remember { mutableStateOf(false) }
 
@@ -210,14 +215,15 @@ internal fun DrawTab(
             onChange = actions.updateEraser,
         )
 
-        Box(Modifier.testTag(DrawTags.LASSO)) {
-            RibbonButton(
-                icon = MaterialSymbols.LassoSelect,
-                label = stringResource(R.string.draw_lasso),
-                active = tool == DrawTool.Lasso,
-                onClick = { actions.selectTool(DrawTool.Lasso) },
-            )
-        }
+        LassoButton(
+            settings = lasso,
+            selected = tool == DrawTool.Lasso,
+            settingsOpen = lassoSettingsOpen,
+            onSelect = { actions.selectTool(DrawTool.Lasso) },
+            onOpen = { lassoSettingsOpen = true },
+            onDismiss = { lassoSettingsOpen = false },
+            onChange = actions.updateLasso,
+        )
 
         // Beside the lasso rather than beside the shapes, because it belongs to the same half of the
         // tray: these two rearrange what is already on the page, while everything past the divider
@@ -417,6 +423,58 @@ private fun RulerButton(
             title = stringResource(R.string.draw_ruler),
         ) {
             RulerPanelContent(settings = settings, onChange = onChange)
+        }
+    }
+}
+
+/** Select on tap; configure on hold or on a second tap, like the other drawing tools. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun LassoButton(
+    settings: LassoSettings,
+    selected: Boolean,
+    settingsOpen: Boolean,
+    onSelect: () -> Unit,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+    onChange: (LassoSettings) -> Unit,
+) {
+    val label = stringResource(R.string.draw_lasso)
+    Box(Modifier.padding(horizontal = 1.dp)) {
+        HoverLabel(label) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .testTag(DrawTags.LASSO)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                    .combinedClickable(
+                        onClick = {
+                            onSelect()
+                            if (selected) onOpen()
+                        },
+                        onLongClick = {
+                            onSelect()
+                            onOpen()
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = MaterialSymbols.LassoSelect,
+                    contentDescription = label,
+                    tint = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+        FloatingSettingsPanel(
+            expanded = settingsOpen,
+            onDismissRequest = onDismiss,
+            title = label,
+        ) {
+            LassoPanelContent(settings, onChange)
         }
     }
 }

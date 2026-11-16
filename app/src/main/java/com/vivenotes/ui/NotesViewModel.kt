@@ -69,6 +69,7 @@ import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EditorDefaultsStore
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.LassoSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.NotesRepository
 import com.vivenotes.data.NotebookTransferManager
@@ -625,6 +626,9 @@ class NotesViewModel(
     /** Partial/object mode and diameter are user preferences, not properties of a page. */
     val eraser: StateFlow<EraserSettings> = penSettingsStore.eraser
         .stateIn(viewModelScope, SharingStarted.Eagerly, EraserSettings())
+
+    val lasso: StateFlow<LassoSettings> = penSettingsStore.lasso
+        .stateIn(viewModelScope, SharingStarted.Eagerly, LassoSettings())
 
     /** Colour and width of the one highlighter, on the same terms as the pens and the eraser. */
     val highlighter: StateFlow<HighlighterSettings> = penSettingsStore.highlighter
@@ -2441,6 +2445,10 @@ class NotesViewModel(
 
     fun updateEraser(settings: EraserSettings) {
         viewModelScope.launch { penSettingsStore.setEraser(settings) }
+    }
+
+    fun updateLasso(settings: LassoSettings) {
+        viewModelScope.launch { penSettingsStore.setLasso(settings) }
     }
 
     fun updateHighlighter(settings: HighlighterSettings) {

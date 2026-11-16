@@ -1,5 +1,6 @@
 package com.vivenotes.ink
 
+import com.vivenotes.data.LassoSettings
 import com.vivenotes.model.Outline
 import com.vivenotes.model.ink.ShapeKind
 import kotlin.math.floor
@@ -56,6 +57,8 @@ data class CanvasSelection(
      */
     val lockGroups: Set<String> = emptySet(),
     val bounds: InkBounds,
+    /** Keep excluded kinds out when reconciliation expands a lasso hit through a mixed group. */
+    val lassoFilter: LassoSettings = LassoSettings(),
 ) {
     val isEmpty: Boolean
         get() = inkIds.isEmpty() && shapeIds.isEmpty() && tableIds.isEmpty() &&
@@ -151,15 +154,16 @@ data class CanvasSelection(
         graphs: List<Outline.Graph> = emptyList(),
         texts: List<TableBounds> = emptyList(),
     ): CanvasSelection? {
-        val members = shapes.map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 0) } +
-            tables.map { SelectionMember(it.id, it.bounds, it.groupId, it.lockGroup, 1) } +
-            equations.map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 2) } +
-            images.map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 3) } +
-            graphs.map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 4) } +
-            texts.map { SelectionMember(it.id, it.bounds, it.groupId, null, 5) }
+        val allowedInk = strokes.takeIf { lassoFilter.ink }.orEmpty()
+        val members = shapes.filter(lassoFilter::allows).map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 0) } +
+            tables.filter { lassoFilter.tables }.map { SelectionMember(it.id, it.bounds, it.groupId, it.lockGroup, 1) } +
+            equations.filter(lassoFilter::allows).map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 2) } +
+            images.filter(lassoFilter::allows).map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 3) } +
+            graphs.filter(lassoFilter::allows).map { SelectionMember(it.id, it.pageBounds(), it.groupId, it.lockGroup, 4) } +
+            texts.filter { lassoFilter.text }.map { SelectionMember(it.id, it.bounds, it.groupId, null, 5) }
         val ids = (shapeIds + tableIds + equationIds + imageIds + graphIds + textIds).toMutableSet()
         ids.retainAll(members.map { it.id }.toSet())
-        val ink = strokes.filter { it.projectionKey in projections }.toMutableList()
+        val ink = allowedInk.filter { it.projectionKey in projections }.toMutableList()
         if (ids.isEmpty() && ink.isEmpty()) return null
         val groups = mutableSetOf<String>()
         val locks = mutableSetOf<String>()
@@ -172,7 +176,7 @@ data class CanvasSelection(
             ink.mapNotNullTo(groups) { it.groupId }
             members.filter { it.group.belongsTo(groups) || it.lock.belongsTo(locks) }.forEach { ids += it.id }
             val keys = ink.mapTo(HashSet()) { it.projectionKey }
-            ink += strokes.filter { it.projectionKey !in keys && it.groupId.belongsTo(groups) }
+            ink += allowedInk.filter { it.projectionKey !in keys && it.groupId.belongsTo(groups) }
         } while (before != ids.size + ink.size)
         val held = members.filter { it.id in ids }
         val union = (held.map { it.bounds } + ink.mapNotNull(PageStroke::pageBounds)).unionBounds() ?: return null
@@ -355,18 +359,19 @@ internal fun selectWithLasso(
     path: List<InkPoint>,
     edgeTolerance: Float = DEFAULT_LASSO_EDGE_TOLERANCE,
     texts: List<TableBounds> = emptyList(),
+    settings: LassoSettings = LassoSettings(),
 ): CanvasSelection? {
     if (path.size < 3 || !path.closesIntoALoop(edgeTolerance)) return null
-    val ink = strokes.selectWithLasso(path, edgeTolerance)
-    val caughtShapes = shapes.filter { it.isInsideLasso(path, edgeTolerance) }
-    val caughtTables = tables.filter { it.bounds.isInsideLasso(path, edgeTolerance) }
+    val ink = if (settings.ink) strokes.selectWithLasso(path, edgeTolerance) else null
+    val caughtShapes = shapes.filter { settings.allows(it) && it.isInsideLasso(path, edgeTolerance) }
+    val caughtTables = tables.filter { settings.tables && it.bounds.isInsideLasso(path, edgeTolerance) }
     // A rectangle, so the same four-corner rule a table is held to — see [isInsideLasso].
-    val caughtEquations = equations.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
+    val caughtEquations = equations.filter { settings.allows(it) && it.pageBounds().isInsideLasso(path, edgeTolerance) }
     // A picture is a rectangle too, and is caught by its frame rather than by what is in it: a
     // photograph of a circle is still a photograph, and half-circling one leaves it alone.
-    val caughtImages = images.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
-    val caughtGraphs = graphs.filter { it.pageBounds().isInsideLasso(path, edgeTolerance) }
-    val caughtTexts = texts.filter { it.bounds.isInsideLasso(path, edgeTolerance) }
+    val caughtImages = images.filter { settings.allows(it) && it.pageBounds().isInsideLasso(path, edgeTolerance) }
+    val caughtGraphs = graphs.filter { settings.allows(it) && it.pageBounds().isInsideLasso(path, edgeTolerance) }
+    val caughtTexts = texts.filter { settings.text && it.bounds.isInsideLasso(path, edgeTolerance) }
     // The loop passes over what is locked, unless locked is all it caught, which is how a locked
     // group is picked up again to be unlocked. Applied to the catch rather than to the hit test, so
     // the rule is stated once for every kind, and so the "unless" can be answered at all: whether a
@@ -420,6 +425,7 @@ internal fun selectWithLasso(
                 heldGraphs.mapNotNull(Outline.Graph::lockGroup)
             ).toSet(),
         bounds = union,
+        lassoFilter = settings,
     )
 }
 
@@ -565,17 +571,18 @@ internal fun selectByTap(
     images: List<Outline.Image>,
     point: InkPoint,
     graphs: List<Outline.Graph> = emptyList(),
+    settings: LassoSettings = LassoSettings(),
 ): CanvasSelection? {
-    images.asReversed().firstOrNull { it.pageBounds().contains(point) }
-        ?.let { return CanvasSelection.ofImage(it) }
-    equations.asReversed().firstOrNull { it.pageBounds().contains(point) }
-        ?.let { return CanvasSelection.ofEquation(it) }
+    images.asReversed().firstOrNull { settings.allows(it) && it.pageBounds().contains(point) }
+        ?.let { return CanvasSelection.ofImage(it).copy(lassoFilter = settings) }
+    equations.asReversed().firstOrNull { settings.allows(it) && it.pageBounds().contains(point) }
+        ?.let { return CanvasSelection.ofEquation(it).copy(lassoFilter = settings) }
     shapes.asReversed()
-        .firstOrNull { shape -> shape.isUnderTap(point) }
-        ?.let { return CanvasSelection.ofShape(it) }
+        .firstOrNull { shape -> settings.allows(shape) && shape.isUnderTap(point) }
+        ?.let { return CanvasSelection.ofShape(it).copy(lassoFilter = settings) }
     // Last: the layers nest graphs beneath shapes, so an arrow drawn over a graph is the arrow.
-    return graphs.asReversed().firstOrNull { it.pageBounds().contains(point) }
-        ?.let(CanvasSelection::ofGraph)
+    return graphs.asReversed().firstOrNull { settings.allows(it) && it.pageBounds().contains(point) }
+        ?.let { CanvasSelection.ofGraph(it).copy(lassoFilter = settings) }
 }
 
 /**

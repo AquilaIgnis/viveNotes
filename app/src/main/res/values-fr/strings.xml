@@ -864,4 +864,10 @@
     <string name="import_file_too_large">Ce fichier est trop volumineux pour être importé.</string>
     <string name="import_file_unreadable">Ce fichier n’a pas pu être lu.</string>
     <string name="import_file_insert_failed">Les pages n’ont pas pu être placées sur cette page.</string>
+    <string name="lasso_select_ink">Encre</string>
+    <string name="lasso_select_shapes">Formes</string>
+    <string name="lasso_select_text">Texte</string>
+    <string name="lasso_select_tables">Tableaux</string>
+    <string name="lasso_select_objects">Objets</string>
+    <string name="lasso_objects_description">Formules, images, graphiques et plus</string>
 </resources>

@@ -864,4 +864,10 @@
     <string name="import_file_too_large">Questo file è troppo grande per essere importato.</string>
     <string name="import_file_unreadable">Impossibile leggere questo file.</string>
     <string name="import_file_insert_failed">Impossibile inserire le pagine in questa pagina.</string>
+    <string name="lasso_select_ink">Inchiostro</string>
+    <string name="lasso_select_shapes">Forme</string>
+    <string name="lasso_select_text">Testo</string>
+    <string name="lasso_select_tables">Tabelle</string>
+    <string name="lasso_select_objects">Oggetti</string>
+    <string name="lasso_objects_description">Formule, immagini, grafici e altro</string>
 </resources>

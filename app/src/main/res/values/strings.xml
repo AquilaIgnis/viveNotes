@@ -941,4 +941,10 @@
     <string name="import_file_too_large">This file is too large to import.</string>
     <string name="import_file_unreadable">This file could not be read.</string>
     <string name="import_file_insert_failed">The pages could not be placed on this page.</string>
+    <string name="lasso_select_ink">Ink</string>
+    <string name="lasso_select_shapes">Shapes</string>
+    <string name="lasso_select_text">Text</string>
+    <string name="lasso_select_tables">Tables</string>
+    <string name="lasso_select_objects">Objects</string>
+    <string name="lasso_objects_description">Formulas, images, graphs, and more</string>
 </resources>

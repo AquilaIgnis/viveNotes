@@ -84,6 +84,7 @@ import com.vivenotes.data.CameraCapture
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.LassoSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.ImageTextProgress
 import com.vivenotes.data.InkTextProgress
@@ -797,6 +798,7 @@ private fun NotesWorkspace(
     val pens by viewModel.pens.collectAsStateWithLifecycle()
     val palette by viewModel.palette.collectAsStateWithLifecycle()
     val eraser by viewModel.eraser.collectAsStateWithLifecycle()
+    val lasso by viewModel.lasso.collectAsStateWithLifecycle()
     val highlighter by viewModel.highlighter.collectAsStateWithLifecycle()
     val shape by viewModel.shape.collectAsStateWithLifecycle()
     val table by viewModel.table.collectAsStateWithLifecycle()
@@ -1166,6 +1168,7 @@ private fun NotesWorkspace(
             },
             updatePen = viewModel::updatePen,
             updateEraser = viewModel::updateEraser,
+            updateLasso = viewModel::updateLasso,
             updateHighlighter = viewModel::updateHighlighter,
             updateShape = viewModel::updateShape,
             updateTable = viewModel::updateTable,
@@ -1294,6 +1297,7 @@ private fun NotesWorkspace(
                         pens = themedPens,
                         palette = palette,
                         eraser = eraser,
+                        lasso = lasso,
                         highlighter = highlighter,
                         shape = themedShape,
                         table = themedTable,
@@ -1387,6 +1391,7 @@ private fun NotesWorkspace(
                                 tool = tool,
                                 pens = themedPens,
                                 eraser = eraser,
+                                lasso = lasso,
                                 highlighter = highlighter,
                                 shape = themedShape,
                                 themedTable = themedTable,
@@ -1551,6 +1556,7 @@ private fun NotesWorkspace(
                                 tool = tool,
                                 pens = themedPens,
                                 eraser = eraser,
+                                lasso = lasso,
                                 highlighter = highlighter,
                                 shape = themedShape,
                                 themedTable = themedTable,
@@ -1932,6 +1938,7 @@ private fun EditorSurface(
     tool: DrawTool,
     pens: List<PenPreset>,
     eraser: EraserSettings,
+    lasso: LassoSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
     /** Themed for the canvas, like [shape] — a hairline grid the colour of the page is no grid. */
@@ -1980,6 +1987,7 @@ private fun EditorSurface(
                 tool = tool,
                 pens = pens,
                 eraser = eraser,
+                lasso = lasso,
                 highlighter = highlighter,
                 shape = shape,
                 themedTable = themedTable,
@@ -2081,6 +2089,7 @@ private fun PageEditor(
     tool: DrawTool,
     pens: List<PenPreset>,
     eraser: EraserSettings,
+    lasso: LassoSettings,
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
     themedTable: TableSettings,
@@ -2156,6 +2165,7 @@ private fun PageEditor(
         },
         erasing = tool == DrawTool.Eraser,
         lassoing = tool == DrawTool.Lasso,
+        lassoSettings = lasso,
         shaping = if (tool == DrawTool.Shape) shape else null,
         // No settings to pass with it: the drag is the whole of what Insert Space knows.
         insertingSpace = tool == DrawTool.InsertSpace,

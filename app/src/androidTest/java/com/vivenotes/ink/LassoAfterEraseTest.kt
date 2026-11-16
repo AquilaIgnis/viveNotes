@@ -3,6 +3,10 @@ package com.vivenotes.ink
 import androidx.ink.brush.InputToolType
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.vivenotes.data.LassoSettings
+import com.vivenotes.model.Outline
+import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.seedSegments
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -23,6 +27,22 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class LassoAfterEraseTest {
+
+    @Test
+    fun disabledInkCannotReenterThroughAMixedGroupAfterAnErase() {
+        val pieces = cutInHalf().map { it.copy(groupId = "mixed") }
+        var segmentId = 0
+        val shape = Outline.Shape("shape", x = 10f, y = 35f, width = 20f, height = 30f, groupId = "mixed",
+            segments = seedSegments(ShapeKind.Rectangle, 10f, 35f, 30f, 65f) { "segment-${segmentId++}" })
+        val selected = selectWithLasso(pieces, listOf(shape), path = InkBounds(0f, 30f, 45f, 70f).enclosingPath(),
+            settings = LassoSettings(ink = false))!!
+        val held = selected.reconcile(pieces, listOf(shape))!!
+
+        assertEquals(setOf(shape.id), held.shapeIds)
+        assertTrue(held.inkIds.isEmpty())
+        assertTrue(held.projections.isEmpty())
+        assertEquals(shape.pageBounds(), held.bounds)
+    }
 
     /** A stroke straight across the page, cut in two by an eraser through its middle. */
     private fun cutInHalf(): List<PageStroke> {

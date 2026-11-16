@@ -846,4 +846,10 @@
     <string name="import_file_too_large">このファイルは大きすぎてインポートできません。</string>
     <string name="import_file_unreadable">このファイルを読み取れませんでした。</string>
     <string name="import_file_insert_failed">このページにページを配置できませんでした。</string>
+    <string name="lasso_select_ink">インク</string>
+    <string name="lasso_select_shapes">図形</string>
+    <string name="lasso_select_text">テキスト</string>
+    <string name="lasso_select_tables">表</string>
+    <string name="lasso_select_objects">オブジェクト</string>
+    <string name="lasso_objects_description">数式、画像、グラフなど</string>
 </resources>

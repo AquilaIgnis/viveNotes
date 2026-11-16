@@ -73,6 +73,7 @@ import com.vivenotes.BuildConfig
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.LassoSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.RulerSettings
@@ -199,6 +200,7 @@ fun Ribbon(
     pens: List<PenPreset>,
     palette: List<Int>,
     eraser: EraserSettings,
+    lasso: LassoSettings = LassoSettings(),
     highlighter: HighlighterSettings,
     shape: ShapeSettings,
     /** How the next table arrives. Draw tab only. */
@@ -284,6 +286,7 @@ fun Ribbon(
                 pens = pens,
                 palette = palette,
                 eraser = eraser,
+                lasso = lasso,
                 highlighter = highlighter,
                 shape = shape,
                 table = table,

@@ -523,6 +523,10 @@ class PenSettingsStore(context: Context) {
         prefs[ERASER]?.let(::decodeEraser) ?: EraserSettings()
     }
 
+    val lasso: Flow<LassoSettings> = store.data.map { prefs ->
+        prefs[LASSO]?.let(::decodeLasso) ?: LassoSettings()
+    }
+
     val highlighter: Flow<HighlighterSettings> = store.data.map { prefs ->
         prefs[HIGHLIGHTER]?.let(::decodeHighlighter) ?: HighlighterSettings()
     }
@@ -618,6 +622,10 @@ class PenSettingsStore(context: Context) {
         store.edit { it[ERASER] = penSettingsJson.encodeToString(EraserSettings.serializer(), settings) }
     }
 
+    suspend fun setLasso(settings: LassoSettings) {
+        store.edit { it[LASSO] = penSettingsJson.encodeToString(LassoSettings.serializer(), settings) }
+    }
+
     suspend fun setHighlighter(settings: HighlighterSettings) {
         store.edit {
             it[HIGHLIGHTER] = penSettingsJson.encodeToString(HighlighterSettings.serializer(), settings)
@@ -652,6 +660,9 @@ class PenSettingsStore(context: Context) {
 
     private fun decodeEraser(text: String): EraserSettings? =
         runCatching { penSettingsJson.decodeFromString(EraserSettings.serializer(), text) }.getOrNull()
+
+    private fun decodeLasso(text: String): LassoSettings? =
+        runCatching { penSettingsJson.decodeFromString(LassoSettings.serializer(), text) }.getOrNull()
 
     private fun decodeHighlighter(text: String): HighlighterSettings? =
         runCatching { penSettingsJson.decodeFromString(HighlighterSettings.serializer(), text) }.getOrNull()
@@ -703,6 +714,7 @@ class PenSettingsStore(context: Context) {
         val KEY_BINDINGS = stringPreferencesKey("key_bindings")
         val KeyBindingsSerializer = MapSerializer(String.serializer(), ListSerializer(String.serializer()))
         val ERASER = stringPreferencesKey("eraser")
+        val LASSO = stringPreferencesKey("lasso")
         val HIGHLIGHTER = stringPreferencesKey("highlighter")
         val SHAPE = stringPreferencesKey("shape")
         val RULER = stringPreferencesKey("ruler")

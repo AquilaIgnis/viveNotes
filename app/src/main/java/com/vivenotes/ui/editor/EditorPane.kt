@@ -113,6 +113,7 @@ import com.vivenotes.ai.InkTextRegion
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.LassoSettings
 import com.vivenotes.data.RulerKind
 import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
@@ -470,6 +471,7 @@ fun EditorPane(
     onSetShapeFill: (Set<String>, Int?) -> Unit = { _, _ -> },
     erasing: Boolean = false,
     lassoing: Boolean = false,
+    lassoSettings: LassoSettings = LassoSettings(),
     /**
      * Insert Space in hand. A drag draws a line across the page and everything past it
      * moves; [onInsertSpace] receives the one completed cut. See `com.vivenotes.model.PageSpace`.
@@ -731,6 +733,14 @@ fun EditorPane(
     }
     LaunchedEffect(lassoing) {
         if (!lassoing) lassoGesture.clear()
+    }
+
+    // A new filter applies to the next selection. Do not leave an excluded object held for dragging.
+    LaunchedEffect(lassoSettings) {
+        if (lassoing) {
+            selection = null
+            lassoGesture.clear()
+        }
     }
 
     /**
@@ -1748,6 +1758,7 @@ fun EditorPane(
                 brush = brush,
                 erasing = erasing,
                 lassoing = lassoing,
+                lassoSettings = lassoSettings,
                 shaping = shaping,
                 insertingSpace = insertingSpace,
                 laserPointing = laserPointing,

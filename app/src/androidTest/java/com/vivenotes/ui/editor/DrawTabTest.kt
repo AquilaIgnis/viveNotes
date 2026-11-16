@@ -17,6 +17,8 @@ import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -39,6 +41,7 @@ import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
 import com.vivenotes.data.HIGHLIGHTER_COLORS
 import com.vivenotes.data.HighlighterSettings
+import com.vivenotes.data.LassoSettings
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.PenKind
@@ -253,6 +256,50 @@ class DrawTabTest {
         setTab()
         compose.onNodeWithTag(DrawTags.LASSO).performClick()
         assertEquals(DrawTool.Lasso, selected)
+    }
+
+    @Test
+    fun holdingTheLassoOpensItsFiltersAndSelectsTheTool() {
+        setTab()
+        compose.onNodeWithTag(DrawTags.LASSO).performTouchInput { longClick() }
+        assertEquals(DrawTool.Lasso, selected)
+        listOf("Ink", "Shapes", "Text", "Tables", "Objects").forEach {
+            compose.onNodeWithText(it).assertIsDisplayed().assertIsOn()
+        }
+    }
+
+    @Test
+    fun tappingTheSelectedLassoOpensItsFilters() {
+        setTab(tool = DrawTool.Lasso)
+        compose.onNodeWithTag(DrawTags.LASSO).performClick()
+        compose.onNodeWithText("Objects").assertIsDisplayed().assertIsOn()
+    }
+
+    @Test
+    fun lassoSwitchesKeepTheirOwnValuesAndLeaveTheMenuOpen() {
+        val current = mutableStateOf(LassoSettings())
+        compose.setContent {
+            ViveNotesTheme {
+                DrawTab(
+                    pens = List(PenPreset.COUNT) { PenPreset.starting(it) }, palette = PEN_COLORS,
+                    eraser = EraserSettings(), highlighter = HighlighterSettings(), shape = ShapeSettings(),
+                    lasso = current.value, tool = DrawTool.Lasso,
+                    actions = DrawActions(selectTool = {}, updatePen = { _, _ -> }, updateEraser = {},
+                        setDrawWithFinger = {}, updateLasso = { current.value = it }),
+                )
+            }
+        }
+        compose.onNodeWithTag(DrawTags.LASSO).performClick()
+        compose.onNodeWithText("Objects").performClick().assertIsOff()
+        assertEquals(LassoSettings(objects = false), current.value)
+        compose.onNodeWithText("Ink").assertIsOn().performClick().assertIsOff()
+        assertEquals(LassoSettings(ink = false, objects = false), current.value)
+        compose.onNodeWithText("Shapes").assertIsOn().performClick().assertIsOff()
+        compose.onNodeWithText("Text").assertIsOn().performClick().assertIsOff()
+        compose.onNodeWithText("Tables").assertIsOn().performClick().assertIsOff()
+        assertEquals(LassoSettings(false, false, false, false, false), current.value)
+        compose.onNodeWithText("Objects").performClick().assertIsOn()
+        assertEquals(LassoSettings(false, false, false, false, true), current.value)
     }
 
     @Test

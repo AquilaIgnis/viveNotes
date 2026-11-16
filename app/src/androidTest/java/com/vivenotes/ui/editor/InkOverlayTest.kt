@@ -36,6 +36,7 @@ import org.junit.Rule
 import org.junit.Test
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.LassoSettings
 import com.vivenotes.data.HighlighterSettings
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkLassoMove
@@ -104,6 +105,7 @@ class InkOverlayTest {
         allowFinger: Boolean,
         erasing: Boolean = false,
         lassoing: Boolean = false,
+        lassoSettings: LassoSettings = LassoSettings(),
         insertingSpace: Boolean = false,
         laserPointing: Boolean = false,
         eraser: EraserSettings = EraserSettings(),
@@ -132,6 +134,7 @@ class InkOverlayTest {
                         ),
                         erasing = erasing,
                         lassoing = lassoing,
+                        lassoSettings = lassoSettings,
                         shaping = null,
                         insertingSpace = insertingSpace,
                         laserPointing = laserPointing,
@@ -1008,6 +1011,32 @@ class InkOverlayTest {
         }
         compose.waitForIdle()
 
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun theLassoInkSwitchIsAppliedByTheOverlay() {
+        val ink = PageStroke(
+            "only",
+            InkCodec.eraseMask(
+                MutableStrokeInputBatch().apply {
+                    add(InputToolType.UNKNOWN, 90f, 100f, 0L)
+                    add(InputToolType.UNKNOWN, 110f, 100f, 10L)
+                }.toImmutable(),
+                6f,
+            ),
+        )
+        setOverlay(allowFinger = true, lassoing = true, pageStrokes = listOf(ink),
+            lassoSettings = LassoSettings(ink = false))
+
+        compose.onNodeWithTag(INK_OVERLAY_TAG).performTouchInput {
+            down(Offset(70f, 70f))
+            moveTo(Offset(130f, 70f))
+            moveTo(Offset(130f, 130f))
+            moveTo(Offset(70f, 130f))
+            moveTo(Offset(70f, 70f))
+            up()
+        }
         compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertDoesNotExist()
     }
 

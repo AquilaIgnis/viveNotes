@@ -50,6 +50,7 @@ import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import com.vivenotes.data.EraserMode
 import com.vivenotes.data.EraserSettings
+import com.vivenotes.data.LassoSettings
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.ink.CanvasSelection
@@ -161,6 +162,7 @@ internal fun InkOverlay(
     brush: Brush?,
     erasing: Boolean,
     lassoing: Boolean,
+    lassoSettings: LassoSettings = LassoSettings(),
     /** The armed shape's settings, or null when Insert Shape is not the tool in hand. */
     shaping: ShapeSettings?,
     /**
@@ -268,6 +270,7 @@ internal fun InkOverlay(
     val currentStrokes by rememberUpdatedState(strokes)
     val currentErasing by rememberUpdatedState(erasing)
     val currentLassoing by rememberUpdatedState(lassoing)
+    val currentLassoSettings by rememberUpdatedState(lassoSettings)
     val currentShaping by rememberUpdatedState(shaping)
     val currentInsertingSpace by rememberUpdatedState(insertingSpace)
     val currentOnInsertSpace by rememberUpdatedState(onInsertSpace)
@@ -722,6 +725,7 @@ internal fun InkOverlay(
                             brush = currentBrush,
                             erasing = currentErasing,
                             lassoing = currentLassoing,
+                            lassoSettings = currentLassoSettings,
                             shaping = currentShaping,
                             ruler = currentRuler,
                             eraser = currentEraser,
@@ -1055,6 +1059,7 @@ private fun handleInk(
     brush: Brush?,
     erasing: Boolean,
     lassoing: Boolean,
+    lassoSettings: LassoSettings,
     shaping: ShapeSettings?,
     ruler: Ruler?,
     eraser: EraserSettings,
@@ -1132,6 +1137,7 @@ private fun handleInk(
             images = images,
             graphs = graphs,
             texts = texts,
+            settings = if (lassoing) lassoSettings else LassoSettings(),
             together = together,
             touchSlop = touchSlop,
             selection = selection,
@@ -2359,6 +2365,7 @@ internal class LassoGesture {
         images: List<Outline.Image> = emptyList(),
         graphs: List<Outline.Graph> = emptyList(),
         texts: List<TableBounds> = emptyList(),
+        settings: LassoSettings = LassoSettings(),
         touchSlop: Float = 0f,
         selection: CanvasSelection?,
         onSelect: (CanvasSelection?) -> Unit,
@@ -2453,6 +2460,7 @@ internal class LassoGesture {
                                     graphs = graphs,
                                     texts = texts,
                                     path = drawn,
+                                    settings = settings,
                                     edgeTolerance = lassoEdgeTolerance(toPage),
                                 ) ?: drawn.tapPoint(toPage.pageSpan(touchSlop))?.let { tap ->
                                     selectByTap(
@@ -2460,6 +2468,7 @@ internal class LassoGesture {
                                         equations = equations,
                                         images = images,
                                         point = tap,
+                                        settings = settings,
                                         graphs = graphs,
                                     )
                                 },
