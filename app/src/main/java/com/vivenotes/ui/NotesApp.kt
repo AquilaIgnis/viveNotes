@@ -7,7 +7,6 @@ import android.view.accessibility.AccessibilityManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -818,12 +817,10 @@ private fun NotesWorkspace(
     val notebookTransfer by viewModel.notebookTransfer.collectAsStateWithLifecycle()
     val reveal by viewModel.reveal.collectAsStateWithLifecycle()
 
-    // The system photo picker. Chosen over `GetContent` and over `READ_MEDIA_IMAGES`
-    // deliberately: it needs **no runtime permission at all**, because the user picking a file *is*
-    // the grant, and it shows the same picker whether the photo is local or in the cloud. Asking for
-    // storage permission to insert one picture is the thing this API exists to stop.
+    // The document picker includes SVGs, which Android's photo picker does not expose.
+    // Selection grants access to this one image without a storage permission.
     val pickPicture = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
+        ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let(viewModel::insertImage) }
     // `TakePicture` reports only whether the photo was written, so where it was written is held
     // here. Saveable: the camera app in front is exactly when the system reclaims this process.
@@ -1269,9 +1266,7 @@ private fun NotesWorkspace(
                         onSetDefault = viewModel::setDefaultFont,
                         onInsertPicture = { source ->
                             when (source) {
-                                PictureSource.Device -> pickPicture.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                )
+                                PictureSource.Device -> pickPicture.launch(arrayOf("image/*"))
                                 PictureSource.Online -> onlineImageSearchOpen = true
                                 PictureSource.Camera -> {
                                     val target = CameraCapture.newTarget(context)

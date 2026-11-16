@@ -35,6 +35,7 @@ import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -99,6 +100,31 @@ class NotebookTransferManagerTest {
             NotebookTransferManager.importMimeTypes().contains("application/octet-stream"),
         )
         assertTrue(NotebookTransferManager.importMimeTypes().contains("application/zip"))
+    }
+
+    @Test
+    fun svgAttachmentsSurviveNotebookExportAndImportWithoutConversion() = runBlocking {
+        val source = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40"><path fill="red" d="M40 0h40v40H40z"/></svg>""".encodeToByteArray()
+        val picture = attachmentStore.import(source)!!
+        attachmentFile = attachmentStore.fileFor(picture.id)
+        val notebook = repository.createNotebook("Vectors")
+        val section = repository.createSection(notebook, "Art")
+        val page = repository.createPage(section, "SVG")
+        repository.saveDoc(page, PageDoc(outlines = listOf(
+            Outline.Image("svg", attachmentId = picture.id, width = 320f, height = 160f),
+        )))
+        val archive = ByteArrayOutputStream().also { transfers.exportNotebook(notebook, it) }.toByteArray()
+        attachmentStore.fileFor(picture.id).delete()
+        val destination = openDatabase("svg-destination.db")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val destinationStore = AttachmentStore(context, destination)
+        try {
+            NotebookTransferManager(context, destination, destinationStore, transferRoot = File(root, "svg-import"))
+                .importNotebook(ByteArrayInputStream(archive))
+            assertArrayEquals(source, destinationStore.fileFor(picture.id).readBytes())
+            assertEquals("image/svg+xml", destination.attachmentDao().byId(picture.id)!!.mimeType)
+            assertTrue(destinationStore.loadSvg(picture.id) != null)
+        } finally { destination.close() }
     }
 
     @Test

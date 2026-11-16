@@ -143,13 +143,14 @@ class PageRenderer(private val metrics: DisplayMetrics) {
             val shift = shiftOf(picture.id)
             if (!picture.pageRect().translated(shift.dx, shift.dy).overlaps(visible)) return@forEach
             val bitmap = page.images[picture.attachmentId]
+            val svg = page.vectorImages[picture.attachmentId]
             val target = RectF(
                 picture.x + shift.dx,
                 picture.y + shift.dy,
                 picture.x + picture.width + shift.dx,
                 picture.y + picture.height + shift.dy,
             )
-            if (bitmap == null) {
+            if (bitmap == null && svg == null) {
                 // A picture whose bytes cannot be reached is not a picture; its frame is still where
                 // the writer put it, so the space it holds is kept rather than silently closed up.
                 line.color = page.colors.ruleLineArgb
@@ -161,7 +162,8 @@ class PageRenderer(private val metrics: DisplayMetrics) {
                     fill.color = argb
                     canvas.drawRect(target, fill)
                 }
-                canvas.drawBitmap(bitmap, null, target, image)
+                if (svg != null) svg.draw(canvas, target.left, target.top, target.width(), target.height())
+                else if (bitmap != null) canvas.drawBitmap(bitmap, null, target, image)
             }
         }
 

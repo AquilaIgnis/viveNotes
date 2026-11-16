@@ -615,7 +615,7 @@ class NotebookTransferManager(
             requireValidAttachmentMetadata(metadata)
             val file = stagedAttachments[metadata.id] ?: fail("Attachment ${metadata.id} is absent.")
             if (file.sha256() != metadata.id) fail("Attachment ${metadata.id.take(12)} is damaged.")
-            val bounds = boundsOf(file) ?: fail("Attachment ${metadata.id.take(12)} is not a readable image.")
+            val bounds = boundsOf(file, metadata.mimeType) ?: fail("Attachment ${metadata.id.take(12)} is not a readable image.")
             if (bounds.width != metadata.pixelWidth || bounds.height != metadata.pixelHeight) {
                 fail("Attachment ${metadata.id.take(12)} has incorrect image dimensions.")
             }
@@ -1612,7 +1612,7 @@ class NotebookTransferManager(
         private val UUIDISH = Regex("[0-9a-fA-F-]{20,64}")
         private val ATTACHMENT_PATH = Regex("attachments/[0-9a-f]{64}")
         private val CHECKSUM_LINE = Regex("([0-9a-f]{64})  ([^\\r\\n]+)")
-        private val ALLOWED_IMAGE_TYPES = setOf("image/webp", "image/jpeg")
+        private val ALLOWED_IMAGE_TYPES = setOf("image/webp", "image/jpeg", SvgPictureSource.MIME_TYPE)
 
         private val EXPECTED_COLUMNS = linkedMapOf(
             "android_metadata" to listOf("locale"),

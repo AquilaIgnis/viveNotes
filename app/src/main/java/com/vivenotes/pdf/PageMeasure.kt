@@ -12,6 +12,7 @@ import android.text.style.AbsoluteSizeSpan
 import android.util.TypedValue
 import androidx.compose.ui.graphics.toArgb
 import com.vivenotes.data.AttachmentStore
+import com.vivenotes.data.SvgPicture
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.PageStroke
@@ -110,6 +111,7 @@ class MeasuredPage(
     val equations: Map<String, RaTeXRenderer>,
     val images: Map<String, Bitmap>,
     val header: PdfPageHeader?,
+    val vectorImages: Map<String, SvgPicture> = emptyMap(),
 ) {
     val style: PageStyle get() = doc.style
 
@@ -320,15 +322,18 @@ class PageMeasurer(
         }
 
         val images = mutableMapOf<String, Bitmap>()
+        val vectorImages = mutableMapOf<String, SvgPicture>()
         doc.outlines.filterIsInstance<Outline.Image>().forEach { image ->
             val store = attachments
-            if (loadPictures && store != null && image.attachmentId !in images) {
+            if (loadPictures && store != null && image.attachmentId !in images && image.attachmentId !in vectorImages) {
                 // Asked for at print resolution rather than at screen resolution: a picture that
                 // looked fine at 320 dp on a tablet is a 300-dpi block of paper here.
                 val target = (maxOf(image.width, image.height) * PRINT_PIXELS_PER_DP)
                     .roundToInt()
                     .coerceIn(1, MAX_IMAGE_EDGE)
-                store.loadBitmap(image.attachmentId, target)?.let { images[image.attachmentId] = it }
+                val svg = store.loadSvg(image.attachmentId)
+                if (svg != null) vectorImages[image.attachmentId] = svg
+                else store.loadBitmap(image.attachmentId, target)?.let { images[image.attachmentId] = it }
             }
             atoms += PdfAtom(
                 id = image.id,
@@ -376,6 +381,7 @@ class PageMeasurer(
             boundSheet = boundSheet,
             equations = equations,
             images = images,
+            vectorImages = vectorImages,
             header = header,
         )
     }

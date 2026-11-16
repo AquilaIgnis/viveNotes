@@ -27,7 +27,8 @@ import java.util.concurrent.ConcurrentHashMap
  * Bytes go to `filesDir/attachments/<sha256>`; what is known about them goes to the `attachments`
  * table. This class owns the other half of the decision: what gets stored in the first place.
  *
- * Every import is re-encoded. A phone camera produces something like 4000 × 3000 and a page shows
+ * Raster imports are re-encoded; SVG files retain their original bytes and are drawn as vectors.
+ * A phone camera produces something like 4000 × 3000 and a page shows
  * it about 700 dp wide, so storing the original would keep ten times the bytes and — the part that
  * hurts — every decode would allocate the full bitmap: 48 MB of native memory for one photograph,
  * against a couple of hundred kilobytes re-encoded. A page with a handful of those runs out of
@@ -105,20 +106,32 @@ class AttachmentStore(
      * whose content has since gone, and a placeholder outline pointing at nothing would be worse than
      * nothing on the page.
      */
-    suspend fun import(uri: Uri): ImportedAttachment? =
-        import(ImageDecoder.createSource(context.contentResolver, uri))
+    suspend fun import(uri: Uri): ImportedAttachment? = withContext(io) {
+        val source = runCatching { ImageDecoder.createSource(context.contentResolver, uri) }.getOrNull()
+            ?: return@withContext null
+        import(source) {
+            runCatching {
+                context.contentResolver.openInputStream(uri)?.use { it.readNBytes(SvgPictureSource.MAX_BYTES + 1) }
+            }.getOrNull()
+        }
+    }
 
     /** Imports a picture already in memory — one downloaded rather than picked. */
-    suspend fun import(bytes: ByteArray): ImportedAttachment? = import(ImageDecoder.createSource(bytes))
+    suspend fun import(bytes: ByteArray): ImportedAttachment? = import(ImageDecoder.createSource(bytes)) { bytes }
 
-    private suspend fun import(source: ImageDecoder.Source): ImportedAttachment? = withContext(io) {
-        val decoded = decodeDownscaled(source) ?: return@withContext null
-        val bytes = decoded.compress()
-        // Recycled here rather than left to the collector: this is a native allocation the size of
-        // the whole picture, and the caller has no use for it — what goes on the page is drawn from
-        // the stored file, at the size the page needs.
-        decoded.recycle()
-        store(bytes, decoded.width, decoded.height)
+    private suspend fun import(source: ImageDecoder.Source, svgBytes: () -> ByteArray?): ImportedAttachment? = withContext(io) {
+        val decoded = decodeDownscaled(source)
+        if (decoded == null) {
+            val bytes = svgBytes() ?: return@withContext null
+            val svg = SvgPicture.read(bytes) ?: return@withContext null
+            return@withContext store(bytes, svg.width, svg.height, SvgPictureSource.MIME_TYPE)
+        }
+        try {
+            val bytes = decoded.compress()
+            store(bytes, decoded.width, decoded.height)
+        } finally {
+            decoded.recycle()
+        }
     }
 
     /**
@@ -135,7 +148,7 @@ class AttachmentStore(
         store(bytes, bitmap.width, bitmap.height)
     }
 
-    private suspend fun store(bytes: ByteArray, width: Int, height: Int): ImportedAttachment {
+    private suspend fun store(bytes: ByteArray, width: Int, height: Int, mimeType: String = MIME_TYPE): ImportedAttachment {
         val id = bytes.sha256()
         val file = fileFor(id)
         // Content-addressed, so a file that is already there is already correct. Rewriting it would
@@ -152,7 +165,7 @@ class AttachmentStore(
             attachments.insert(
                 AttachmentEntity(
                     id = id,
-                    mimeType = MIME_TYPE,
+                    mimeType = mimeType,
                     pixelWidth = width,
                     pixelHeight = height,
                     byteCount = bytes.size.toLong(),
@@ -238,6 +251,14 @@ class AttachmentStore(
      */
     suspend fun hasFile(id: String): Boolean = withContext(io) { fileFor(id).exists() }
 
+    /** Parsed off the UI thread, then drawn directly by the canvas and PDF exporter. */
+    suspend fun loadSvg(id: String): SvgPicture? = withContext(io) {
+        if (attachments.byId(id)?.mimeType != SvgPictureSource.MIME_TYPE) return@withContext null
+        runCatching {
+            fileFor(id).inputStream().use { SvgPicture.read(it.readNBytes(SvgPictureSource.MAX_BYTES + 1)) }
+        }.getOrNull()
+    }
+
     /**
      * Reads a picture back at no more than [maxDimension] on its longer side.
      *
@@ -248,6 +269,7 @@ class AttachmentStore(
     suspend fun loadBitmap(id: String, maxDimension: Int): Bitmap? = withContext(io) {
         val file = fileFor(id)
         if (!file.exists()) return@withContext null
+        loadSvg(id)?.let { return@withContext runCatching { it.bitmap(maxDimension) }.getOrNull() }
         runCatching {
             ImageDecoder.decodeBitmap(ImageDecoder.createSource(file)) { decoder, info, _ ->
                 val sample = sampleFor(info.size, maxDimension)
@@ -336,7 +358,12 @@ class AttachmentStore(
 data class ImportedAttachment(val id: String, val pixelWidth: Int, val pixelHeight: Int)
 
 /** Kept so `BitmapFactory` stays available for anything that needs a header-only read. */
-internal fun boundsOf(file: File): Size? {
+internal fun boundsOf(file: File, mimeType: String? = null): Size? {
+    if (mimeType == SvgPictureSource.MIME_TYPE) {
+        return file.inputStream().use { input ->
+            SvgPicture.read(input.readNBytes(SvgPictureSource.MAX_BYTES + 1))?.let { Size(it.width, it.height) }
+        }
+    }
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.path, options)
     return if (options.outWidth > 0) Size(options.outWidth, options.outHeight) else null

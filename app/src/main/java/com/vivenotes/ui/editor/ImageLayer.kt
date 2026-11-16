@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -44,6 +46,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.data.AttachmentStore
+import com.vivenotes.data.SvgPicture
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkPoint
 import com.vivenotes.ink.PageBounds
@@ -312,7 +315,7 @@ internal fun ImageLayer(
                 )
                 // Straight after its own picture, so one lying over it covers its boxes too. Only
                 // over pixels: the words are not there on a loading or broken plate.
-                if (assets[image.attachmentId] !is ImageAsset.Ready) return@forEach
+                if (assets[image.attachmentId] !is ImageAsset.Ready && assets[image.attachmentId] !is ImageAsset.Vector) return@forEach
                 val matchStrength = highlights.matchStrength.value
                 if (matchStrength > 0f) {
                     highlights.matches[image.attachmentId]?.let { match ->
@@ -394,6 +397,8 @@ private sealed interface ImageAsset {
 
     data class Ready(val bitmap: ImageBitmap) : ImageAsset
 
+    data class Vector(val picture: SvgPicture) : ImageAsset
+
     /** No pixels, and the sentence the plate shows instead of them — see [drawBrokenImage]. */
     data class Broken(val reason: String) : ImageAsset
 }
@@ -432,7 +437,12 @@ private fun rememberPageAssets(
 
     LaunchedEffect(ids, target, arrivals) {
         ids.forEach { id ->
-            if (assets[id] is ImageAsset.Ready) return@forEach
+            if (assets[id] is ImageAsset.Ready || assets[id] is ImageAsset.Vector) return@forEach
+            val svg = attachments.loadSvg(id)
+            if (svg != null) {
+                assets[id] = ImageAsset.Vector(svg)
+                return@forEach
+            }
             // Decoded at the size the page needs rather than the size the file is; the store picks
             // the sample from the header, so a large photograph shown small is never fully decoded.
             val bitmap = attachments.loadBitmap(id, target)
@@ -511,6 +521,12 @@ private fun DrawScope.drawImage(
         null -> drawRect(color = placeholder, topLeft = topLeft, size = size)
         is ImageAsset.Broken ->
             drawBrokenImage(asset, topLeft, size, placeholder, brokenLabel, measurer)
+        is ImageAsset.Vector -> {
+            image.backgroundArgb?.let { drawRect(Color(it), topLeft, size) }
+            drawIntoCanvas { canvas ->
+                asset.picture.draw(canvas.nativeCanvas, topLeft.x, topLeft.y, size.width, size.height)
+            }
+        }
         is ImageAsset.Ready -> {
             val dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt())
             val dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())

@@ -18,5 +18,5 @@ interface CanvasClipboardSource {
     fun ownsInternalCopy(): Boolean
 }
 
-/** What a picture's file or address ends in, for the formats `ImageDecoder` reads. */
-val PictureFileExtensions = listOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "ico", "wbmp")
+/** Picture formats accepted by the attachment store. */
+val PictureFileExtensions = listOf("png", "jpg", "jpeg", "webp", "gif", "bmp", "ico", "wbmp", "svg")
