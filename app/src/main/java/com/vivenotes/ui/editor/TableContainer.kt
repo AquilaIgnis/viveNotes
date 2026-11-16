@@ -41,6 +41,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -122,6 +124,8 @@ internal object TableTags {
 @Composable
 internal fun TableContainer(
     table: Outline.Table,
+    /** Shared selection transform, applied only while drawing so cell measurements stay stable. */
+    previewGesture: LassoGesture? = null,
     selected: Boolean,
     editorStyle: EditorStyle,
     defaults: EditorDefaults = EditorDefaults(),
@@ -210,6 +214,20 @@ internal fun TableContainer(
     Box(
         modifier = Modifier
             .offset(x = live.x.dp, y = live.y.dp)
+            .graphicsLayer {
+                val gesture = previewGesture
+                val revision = gesture?.renderRevision ?: 0
+                if (revision >= 0 && gesture != null) {
+                    val moved = gesture.previewOffset()
+                    val scaling = gesture.previewScale()
+                    val anchor = gesture.previewAnchor()
+                    translationX = (moved.x + (live.x - anchor.x) * (scaling.x - 1f)) * density.density
+                    translationY = (moved.y + (live.y - anchor.y) * (scaling.y - 1f)) * density.density
+                    scaleX = scaling.x
+                    scaleY = scaling.y
+                    transformOrigin = TransformOrigin(0f, 0f)
+                }
+            }
             .testTag(TableTags.CONTAINER)
             .onSizeChanged { onMeasured(it.height) },
     ) {

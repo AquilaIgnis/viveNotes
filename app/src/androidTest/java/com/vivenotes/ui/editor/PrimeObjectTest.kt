@@ -12,6 +12,7 @@ import androidx.compose.ui.test.moveTo
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
@@ -36,6 +37,7 @@ import com.vivenotes.model.PageStyle
 import com.vivenotes.model.ink.ShapeKind
 import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.model.Run
+import com.vivenotes.model.newTable
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.ui.OutlineBox
 import com.vivenotes.ui.theme.ViveNotesTheme
@@ -57,6 +59,7 @@ class PrimeObjectTest {
 
     private val shapes = mutableStateOf(emptyList<Outline.Shape>())
     private val outlines = mutableStateOf(emptyList<OutlineBox>())
+    private val tables = mutableStateOf(emptyList<Outline.Table>())
     private val textArmed = mutableStateOf(false)
     private val penInHand = mutableStateOf(false)
     private val hasClipboard = mutableStateOf(false)
@@ -71,6 +74,7 @@ class PrimeObjectTest {
     /** The scale a corner drag reported, and null when nothing was resized. */
     private var resized: Pair<Float, Float>? = null
     private var movedTexts: Set<String>? = null
+    private var tableMoveCount = 0
     private lateinit var density: Density
 
     private fun setPage(
@@ -80,9 +84,11 @@ class PrimeObjectTest {
         penInHand: Boolean = false,
         hasClipboard: Boolean = false,
         lassoing: Boolean = false,
+        tables: List<Outline.Table> = emptyList(),
     ) {
         this.shapes.value = shapes
         this.outlines.value = outlines
+        this.tables.value = tables
         this.textArmed.value = textArmed
         this.penInHand.value = penInHand
         this.hasClipboard.value = hasClipboard
@@ -90,6 +96,7 @@ class PrimeObjectTest {
         moved = null
         resized = null
         deleted = null
+        tableMoveCount = 0
         compose.setContent {
             density = LocalDensity.current
             ViveNotesTheme {
@@ -121,6 +128,13 @@ class PrimeObjectTest {
                     onSetOutlineMinHeight = { _, _ -> },
                     onOutlineBlurred = {},
                     shapes = this@PrimeObjectTest.shapes.value,
+                    tables = this@PrimeObjectTest.tables.value,
+                    onMoveTables = { ids, dx, dy ->
+                        tableMoveCount++
+                        this@PrimeObjectTest.tables.value = this@PrimeObjectTest.tables.value.map {
+                            if (it.id in ids) it.translated(dx, dy) else it
+                        }
+                    },
                     lassoing = lassoing,
                     allowFinger = lassoing,
                     onToggleSelectionGroup = { held ->
@@ -236,6 +250,70 @@ class PrimeObjectTest {
         assertEquals(setOf("text"), movedTexts)
         assertEquals(30f, moved!!.first, 1f)
         assertEquals(25f, moved!!.second, 1f)
+    }
+
+    @Test
+    fun aLassoedTypedTableFollowsEachDragSampleBeforeTheMoveIsCommitted() {
+        assertLiveTableDrag(inkOnly = false)
+    }
+
+    @Test
+    fun aLassoedInkTableFollowsEachDragSampleBeforeTheMoveIsCommitted() {
+        assertLiveTableDrag(inkOnly = true)
+    }
+
+    private fun assertLiveTableDrag(inkOnly: Boolean) {
+        var nextId = 0
+        val table = newTable(columns = 2, rows = 2, x = 60f, y = 80f,
+            columnWidth = 80f, inkOnly = inkOnly) { "table-${nextId++}" }
+        val neighbour = newTable(columns = 2, rows = 2, x = 380f, y = 80f,
+            columnWidth = 80f, inkOnly = inkOnly) { "table-${nextId++}" }
+        setPage(shapes = emptyList(), tables = listOf(table, neighbour), lassoing = true)
+
+        val overlay = compose.onNodeWithTag(INK_OVERLAY_TAG)
+        val container = compose.onAllNodesWithTag(TableTags.CONTAINER)[0]
+        val grid = compose.onAllNodesWithTag(TableTags.GRID)[0]
+        val otherGrid = compose.onAllNodesWithTag(TableTags.GRID)[1]
+        val before = container.fetchSemanticsNode().boundsInRoot
+        val gridBefore = grid.fetchSemanticsNode().boundsInRoot
+        val otherBefore = otherGrid.fetchSemanticsNode().boundsInRoot
+        val overlayOrigin = overlay.fetchSemanticsNode().boundsInRoot.topLeft
+        val margin = with(density) { 20.dp.toPx() }
+        val loop = before.inflate(margin).translate(-overlayOrigin)
+        overlay.performTouchInput {
+            down(loop.topLeft)
+            moveTo(loop.topRight, 150)
+            moveTo(loop.bottomRight, 150)
+            moveTo(loop.bottomLeft, 150)
+            moveTo(loop.topLeft, 150)
+            up()
+        }
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+
+        val start = before.center - overlayOrigin
+        overlay.performTouchInput { down(start) }
+        for ((dx, dy) in listOf(40f to 30f, 80f to 55f)) {
+            val travel = with(density) { Offset(dx.dp.toPx(), dy.dp.toPx()) }
+            overlay.performTouchInput { moveTo(start + travel, 100) }
+            compose.waitForIdle()
+            val drawn = grid.fetchSemanticsNode().boundsInRoot
+            assertEquals("the grid must follow the selection before pointer-up",
+                gridBefore.left + travel.x, drawn.left, 1f)
+            assertEquals(gridBefore.top + travel.y, drawn.top, 1f)
+            assertEquals("an unselected table must stay put", otherBefore,
+                otherGrid.fetchSemanticsNode().boundsInRoot)
+            assertEquals("preview must not commit a move", 0, tableMoveCount)
+            assertEquals(table, tables.value.first())
+        }
+
+        overlay.performTouchInput { up() }
+        compose.waitForIdle()
+        assertEquals("one drag must commit once", 1, tableMoveCount)
+        assertEquals(table.x + 80f, tables.value.first().x, 1f)
+        assertEquals(table.y + 55f, tables.value.first().y, 1f)
+        val committed = grid.fetchSemanticsNode().boundsInRoot
+        assertEquals(gridBefore.left + with(density) { 80.dp.toPx() }, committed.left, 1f)
+        assertEquals(gridBefore.top + with(density) { 55.dp.toPx() }, committed.top, 1f)
     }
 
     /**

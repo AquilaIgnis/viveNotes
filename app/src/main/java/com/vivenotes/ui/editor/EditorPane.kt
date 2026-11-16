@@ -1646,6 +1646,7 @@ fun EditorPane(
                         key(pageRevision, table.id) {
                             TableContainer(
                                 table = table,
+                                previewGesture = lassoGesture.takeIf { table.id in selection?.tableIds.orEmpty() },
                                 // Not while the overlay holds the selection — the lasso, or a
                                 // finger pointing under a drawing tool. It covers the page then and
                                 // takes every touch, so a table's gutter handles, move grip and
