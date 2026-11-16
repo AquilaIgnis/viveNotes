@@ -870,4 +870,8 @@
     <string name="lasso_select_tables">Tableaux</string>
     <string name="lasso_select_objects">Objets</string>
     <string name="lasso_objects_description">Formules, images, graphiques et plus</string>
+    <string name="shape_hollow_cylinder">Cylindre creux</string>
+    <string name="shape_hemisphere">Hémisphère</string>
+    <string name="shape_frustum">Tronc de cône</string>
+    <string name="shape_wall_thickness" formatted="false">Épaisseur de paroi (%)</string>
 </resources>

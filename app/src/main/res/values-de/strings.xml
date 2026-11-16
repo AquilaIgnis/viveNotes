@@ -869,4 +869,8 @@
     <string name="lasso_select_tables">Tabellen</string>
     <string name="lasso_select_objects">Objekte</string>
     <string name="lasso_objects_description">Formeln, Bilder, Graphen und mehr</string>
+    <string name="shape_hollow_cylinder">Hohlzylinder</string>
+    <string name="shape_hemisphere">Halbkugel</string>
+    <string name="shape_frustum">Kegelstumpf</string>
+    <string name="shape_wall_thickness" formatted="false">Wandstärke (%)</string>
 </resources>

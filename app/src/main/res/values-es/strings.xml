@@ -898,4 +898,8 @@
     <string name="lasso_select_tables">Tablas</string>
     <string name="lasso_select_objects">Objetos</string>
     <string name="lasso_objects_description">Fórmulas, imágenes, gráficas y más</string>
+    <string name="shape_hollow_cylinder">Cilindro hueco</string>
+    <string name="shape_hemisphere">Hemisferio</string>
+    <string name="shape_frustum">Tronco de cono</string>
+    <string name="shape_wall_thickness" formatted="false">Grosor de pared (%)</string>
 </resources>

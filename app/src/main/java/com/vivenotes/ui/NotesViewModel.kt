@@ -2542,7 +2542,10 @@ class NotesViewModel(
         val pageId = _uiState.value.selectedPageId ?: return null
         if (readOnlyPageId == pageId) return null
 
-        val segments = seedSegments(shape.kind, startX, startY, endX, endY, ::newId)
+        val segments = seedSegments(
+            shape.kind, startX, startY, endX, endY,
+            wallThickness = shape.wallThickness, nextId = ::newId,
+        )
         if (segments.isEmpty()) return null
 
         val created = Outline.Shape(
@@ -2593,7 +2596,7 @@ class NotesViewModel(
         if (readOnlyPageId == pageId) return null
         val pen = activePen() ?: return null
 
-        val segments = seedSegments(ShapeKind.Line, startX, startY, endX, endY, ::newId)
+        val segments = seedSegments(ShapeKind.Line, startX, startY, endX, endY, nextId = ::newId)
         if (segments.isEmpty()) return null
 
         val created = Outline.Shape(

@@ -194,7 +194,7 @@ class ShapeToolTest {
         compose.onNodeWithTag(ShapePanelTags.page(PAGE_SOLID)).performClick()
 
         val solids = ShapeKind.onPage(PAGE_SOLID)
-        assertEquals(6, solids.size)
+        assertEquals(9, solids.size)
         solids.forEach { compose.onNodeWithTag(ShapePanelTags.kind(it)).assertIsDisplayed() }
         // Page 1's shapes are gone rather than merely scrolled past.
         compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.Rectangle)).assertDoesNotExist()
@@ -242,6 +242,30 @@ class ShapeToolTest {
 
         compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.Pyramid)).assertIsDisplayed()
         compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.Rectangle)).assertDoesNotExist()
+    }
+
+    @Test
+    fun theNewSolidsPickThemselvesAndOnlyHollowOnesOfferWallThickness() {
+        setPanel(ShapeSettings(kind = ShapeKind.HollowCylinder))
+        listOf(ShapeKind.HollowCylinder, ShapeKind.Hemisphere, ShapeKind.Frustum)
+            .forEach { kind ->
+                compose.onNodeWithTag(ShapePanelTags.kind(kind)).performClick()
+                assertEquals(kind, changed?.kind)
+                compose.onNodeWithTag(ShapePanelTags.kind(kind)).assertIsSelected()
+                val thickness = compose.onNodeWithText("Wall thickness (%)")
+                if (kind.hasWallThickness) thickness.assertIsDisplayed() else thickness.assertDoesNotExist()
+            }
+    }
+
+    @Test
+    fun wallThicknessCanBeAdjustedWithoutChangingTheBorder() {
+        setPanel(ShapeSettings(kind = ShapeKind.HollowCylinder, borderWidth = 3))
+        compose.onNodeWithContentDescription("Increase Wall thickness (%)").performClick()
+        assertEquals(30, changed?.wallThickness)
+        assertEquals(3, changed?.borderWidth)
+        compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.Hemisphere)).performClick()
+        compose.onNodeWithTag(ShapePanelTags.kind(ShapeKind.HollowCylinder)).performClick()
+        assertEquals(30, changed?.wallThickness)
     }
 
     @Test

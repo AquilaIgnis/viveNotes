@@ -67,8 +67,8 @@ class ShapeFillTest {
     }
 
     @Test
-    fun `a solid fills its silhouette rather than its edges`() {
-        ShapeKind.entries.filter(ShapeKind::isSolid).forEach { kind ->
+    fun `a convex solid fills its silhouette rather than its edges`() {
+        ShapeKind.entries.filter { it.isSolid && !it.hasWallThickness }.forEach { kind ->
             val shape = shape(kind)
             assertTrue("$kind cannot be filled", shape.canFill)
             val region = shape.fillRegion().single()

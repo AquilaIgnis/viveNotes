@@ -1656,7 +1656,7 @@ private fun drawShapePreview(
 ) {
     val start = gesture.start ?: return
     val end = gesture.current
-    val tracing = trace(settings.kind, start.x, start.y, end.x, end.y)
+    val tracing = trace(settings.kind, start.x, start.y, end.x, end.y, settings.wallThickness)
     val width = settings.borderWidth.toFloat()
 
     fun paintFor(lineType: LineType) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1674,6 +1674,19 @@ private fun drawShapePreview(
 
     val checkpoint = canvas.save()
     canvas.concat(pageToView)
+    settings.fillArgb?.let { argb ->
+        val path = Path().apply {
+            fillType = Path.FillType.EVEN_ODD
+            tracing.fill.forEach { region ->
+                if (region.size >= 6) {
+                    moveTo(region[0], region[1])
+                    for (index in 2 until region.size step 2) lineTo(region[index], region[index + 1])
+                    close()
+                }
+            }
+        }
+        canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = argb })
+    }
     val visible = paintFor(settings.lineType)
     val occluded = paintFor(LineType.Dotted)
     tracing.solid.forEach { canvas.drawPath(it.toPath(), visible) }

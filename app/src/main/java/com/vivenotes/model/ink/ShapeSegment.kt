@@ -37,6 +37,12 @@ data class ShapeSegment(
     val bulge: Float = 0f,
     /** An edge the solid occludes, drawn dotted. Never true on a flat shape. */
     val hidden: Boolean = false,
+    /**
+     * An ordered fill boundary, independent of the stroke's visibility. Nested boundaries leave
+     * holes under the even-odd fill rule. Null keeps older shapes' contour/convex-hull behaviour.
+     * Kept on the segment so a move, resize or clipboard copy carries the boundary with its edge.
+     */
+    val fillContour: Int? = null,
 ) {
     val startX: Float get() = x1
     val startY: Float get() = y1

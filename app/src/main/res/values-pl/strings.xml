@@ -904,4 +904,8 @@
     <string name="lasso_select_tables">Tabele</string>
     <string name="lasso_select_objects">Obiekty</string>
     <string name="lasso_objects_description">Wzory, obrazy, wykresy i inne</string>
+    <string name="shape_hollow_cylinder">Walec wydrążony</string>
+    <string name="shape_hemisphere">Półkula</string>
+    <string name="shape_frustum">Stożek ścięty</string>
+    <string name="shape_wall_thickness" formatted="false">Grubość ścianki (%)</string>
 </resources>

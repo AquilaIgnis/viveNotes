@@ -852,4 +852,8 @@
     <string name="lasso_select_tables">表</string>
     <string name="lasso_select_objects">オブジェクト</string>
     <string name="lasso_objects_description">数式、画像、グラフなど</string>
+    <string name="shape_hollow_cylinder">中空円柱</string>
+    <string name="shape_hemisphere">半球</string>
+    <string name="shape_frustum">円錐台</string>
+    <string name="shape_wall_thickness" formatted="false">壁の厚さ（%）</string>
 </resources>

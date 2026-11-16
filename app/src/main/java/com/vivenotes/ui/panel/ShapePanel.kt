@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -53,6 +54,8 @@ import com.vivenotes.model.ink.LineType
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.automaticInkFor
 import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.MIN_SOLID_WALL_THICKNESS
+import com.vivenotes.model.ink.MAX_SOLID_WALL_THICKNESS
 import com.vivenotes.model.ink.ShapeTracing
 import com.vivenotes.model.ink.trace
 import com.vivenotes.ui.icons.MaterialSymbols
@@ -116,6 +119,18 @@ fun ColumnScope.ShapePanelContent(
 
     Spacer(Modifier.height(6.dp))
     PageDots(current = page, count = ShapeKind.PAGE_COUNT, onPick = { page = it })
+
+    if (shape.kind.hasWallThickness) {
+        Spacer(Modifier.height(4.dp))
+        PanelSlider(
+            field = "Wall thickness",
+            label = stringResource(R.string.shape_wall_thickness),
+            value = shape.wallThickness,
+            range = MIN_SOLID_WALL_THICKNESS..MAX_SOLID_WALL_THICKNESS,
+            onChange = { onChange(shape.copy(wallThickness = it)) },
+            step = 5,
+        )
+    }
 
     Spacer(Modifier.height(8.dp))
     LineTypePicker(shape.lineType, ShapePanelTags::lineType) { onChange(shape.copy(lineType = it)) }
@@ -329,7 +344,7 @@ private fun ShapePreview(shape: ShapeSettings) {
             val left = (size.width - width) / 2f
             val top = (size.height - height) / 2f
             drawTracing(
-                tracing = trace(shape.kind, left, top, left + width, top + height),
+                tracing = trace(shape.kind, left, top, left + width, top + height, shape.wallThickness),
                 color = color,
                 width = shape.borderWidth.dp.toPx() * scale,
                 lineType = shape.lineType,
@@ -490,18 +505,17 @@ internal fun DrawScope.drawTracing(
     fill: Color? = null,
 ) {
     if (fill != null) {
-        tracing.fill.forEach { region ->
-            if (region.size >= 6) {
-                drawPath(
-                    Path().apply {
-                        moveTo(region[0], region[1])
-                        for (index in 2 until region.size step 2) lineTo(region[index], region[index + 1])
-                        close()
-                    },
-                    fill,
-                )
+        val path = Path().apply {
+            fillType = PathFillType.EvenOdd
+            tracing.fill.forEach { region ->
+                if (region.size >= 6) {
+                    moveTo(region[0], region[1])
+                    for (index in 2 until region.size step 2) lineTo(region[index], region[index + 1])
+                    close()
+                }
             }
         }
+        drawPath(path, fill)
     }
     tracing.solid.forEach { drawPolyline(it, color, width, lineType.pathEffect(width)) }
     tracing.hidden.forEach { drawPolyline(it, color, width, LineType.Dotted.pathEffect(width)) }
@@ -567,4 +581,7 @@ private val ShapeKind.label: Int
         ShapeKind.Sphere -> R.string.shape_sphere
         ShapeKind.Cone -> R.string.shape_cone
         ShapeKind.Cylinder -> R.string.shape_cylinder
+        ShapeKind.HollowCylinder -> R.string.shape_hollow_cylinder
+        ShapeKind.Hemisphere -> R.string.shape_hemisphere
+        ShapeKind.Frustum -> R.string.shape_frustum
     }

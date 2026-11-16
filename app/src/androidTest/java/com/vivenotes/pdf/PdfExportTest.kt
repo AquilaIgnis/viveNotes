@@ -31,9 +31,12 @@ import com.vivenotes.model.PrintMargins
 import com.vivenotes.model.Run
 import com.vivenotes.model.RuleLines
 import com.vivenotes.model.newId
+import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.richtext.LiveEquationSpan
 import com.vivenotes.richtext.HiddenEquationSourceSpan
 import java.io.File
+import kotlin.math.roundToInt
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -430,6 +433,47 @@ class PdfExportTest {
                     }
                 }
                 assertTrue("automatic white ink disappeared on PDF paper", containsBlackInk)
+            }
+        }
+    }
+
+    @Test
+    fun aHollowCylinderKeepsItsOpeningInThePreviewAndSavedPdf() = runBlocking {
+        val solidsPage = repository.createPage(sectionId, "Hollow solids")
+        var id = 0
+        repository.saveDoc(solidsPage, PageDoc(
+            outlines = listOf(
+                Outline.Shape(
+                    id = "tube", kind = ShapeKind.HollowCylinder,
+                    segments = seedSegments(ShapeKind.HollowCylinder, 100f, 200f, 340f, 380f) { "edge-${id++}" },
+                    fillArgb = Color.BLUE,
+                ).withRecomputedBounds(),
+            ),
+            style = PageStyle(paper = PaperSize.A4, hideTitle = true, ruleLines = RuleLines.None),
+        ))
+        val plan = exporter.plan(PdfExportRequest(solidsPage, sectionId, PdfExportOptions(includeRuling = false)))
+        fun check(bitmap: Bitmap) {
+            val scale = bitmap.width / plan.paper.widthDp
+            fun pixel(x: Float, y: Float) = bitmap.getPixel((x * scale).roundToInt(), (y * scale).roundToInt())
+            val opening = pixel(220f, 233.6f)
+            assertTrue("the opening was filled", Color.red(opening) > 220 && Color.green(opening) > 220)
+            listOf(325f to 233.6f, 110f to 290f).forEach { (x, y) ->
+                val color = pixel(x, y)
+                assertTrue("a wall was left empty", Color.blue(color) > Color.red(color) + 100)
+            }
+        }
+        requireNotNull(exporter.preview(plan, 0, plan.paper.widthPoints)).let { bitmap ->
+            try { check(bitmap) } finally { bitmap.recycle() }
+        }
+        write(plan)
+        openPdf { pdf ->
+            pdf.openPage(0).use { page ->
+                val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+                try {
+                    bitmap.eraseColor(Color.WHITE)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    check(bitmap)
+                } finally { bitmap.recycle() }
             }
         }
     }

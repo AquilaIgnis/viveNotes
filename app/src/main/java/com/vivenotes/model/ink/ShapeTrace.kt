@@ -61,9 +61,14 @@ enum class ShapeKind(val page: Int) {
     Sphere(PAGE_SOLID),
     Cone(PAGE_SOLID),
     Cylinder(PAGE_SOLID),
+    HollowCylinder(PAGE_SOLID),
+    Hemisphere(PAGE_SOLID),
+    Frustum(PAGE_SOLID),
     ;
 
     val isSolid: Boolean get() = page == PAGE_SOLID
+
+    val hasWallThickness: Boolean get() = this == HollowCylinder
 
     /**
      * True for the kinds whose arms are resized one at a time, through the handles
@@ -108,7 +113,8 @@ enum class ShapeKind(val page: Int) {
  *
  * [fill] is the region a fill colour paints, and is not the same as [solid]: for a flat shape the
  * two are the same closed outline, but a wireframe cube has no single inside, so a solid reports its
- * silhouette instead. Open shapes report none.
+ * silhouette instead. Nested boundaries are holes, using the even-odd fill rule. Open shapes
+ * report none.
  *
  * Equality is inherited from `List<FloatArray>` and so compares arrays by identity. That is never
  * what a caller wants; compare the contents if you need to.
@@ -133,6 +139,7 @@ fun trace(
     startY: Float,
     endX: Float,
     endY: Float,
+    wallThickness: Int = DEFAULT_SOLID_WALL_THICKNESS,
 ): ShapeTracing {
     val left = min(startX, endX)
     val top = min(startY, endY)
@@ -182,6 +189,17 @@ fun trace(
         ShapeKind.Sphere -> sphere(left, top, right, bottom)
         ShapeKind.Cone -> cone(left, top, right, bottom)
         ShapeKind.Cylinder -> cylinder(left, top, right, bottom)
+        ShapeKind.HollowCylinder, ShapeKind.Hemisphere, ShapeKind.Frustum -> {
+            // Preview and storage share arcs and the hollow solids' explicit fill boundaries,
+            // including the holes a convex hull would lose.
+            val segments = seedSolidSegments(kind, left, top, right, bottom, wallThickness) { "" }
+            val contours = segments.contours()
+            ShapeTracing(
+                solid = contours.filterNot { it.hidden }.map { it.polyline() },
+                hidden = contours.filter { it.hidden }.map { it.polyline() },
+                fill = segments.solidFillRegion(),
+            )
+        }
     }
 }
 

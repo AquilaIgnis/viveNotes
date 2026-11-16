@@ -286,9 +286,7 @@ class PageRenderer(private val metrics: DisplayMetrics) {
 
         shape.fillArgb?.let { argb ->
             fill.color = argb
-            shape.fillRegion().forEach { region ->
-                canvas.drawPath(region.asClosedPath(), fill)
-            }
+            canvas.drawPath(shape.fillRegion().asClosedPath(), fill)
         }
 
         line.color = automaticColorOr(shape.borderArgb, shape.borderFollowsTheme, canvasInkArgb)
@@ -558,11 +556,14 @@ private fun LineType.dashEffect(width: Float): DashPathEffect? = when (this) {
     LineType.Dotted -> DashPathEffect(floatArrayOf(0.01f, width * 2f), 0f)
 }
 
-private fun FloatArray.asClosedPath(): Path = Path().apply {
-    if (size < 4) return@apply
-    moveTo(this@asClosedPath[0], this@asClosedPath[1])
-    for (index in 2 until size step 2) lineTo(this@asClosedPath[index], this@asClosedPath[index + 1])
-    close()
+private fun List<FloatArray>.asClosedPath(): Path = Path().apply {
+    fillType = Path.FillType.EVEN_ODD
+    this@asClosedPath.forEach { region ->
+        if (region.size < 6) return@forEach
+        moveTo(region[0], region[1])
+        for (index in 2 until region.size step 2) lineTo(region[index], region[index + 1])
+        close()
+    }
 }
 
 private fun ShapeContour.asPath(): Path = Path().apply {

@@ -17,6 +17,7 @@ import kotlinx.serialization.builtins.serializer
 import com.vivenotes.keyboard.KeyBindings
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.DEFAULT_SOLID_WALL_THICKNESS
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
@@ -168,6 +169,8 @@ data class ShapeSettings(
     val fillArgb: Int? = null,
     /** True only while the border is using the automatic high-contrast starter colour. */
     val colorFollowsTheme: Boolean = true,
+    /** Wall thickness as a percentage of the outer radius, for hollow solids. */
+    val wallThickness: Int = DEFAULT_SOLID_WALL_THICKNESS,
 ) {
     companion object {
         const val MIN_BORDER_WIDTH = 1

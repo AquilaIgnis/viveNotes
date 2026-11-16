@@ -852,4 +852,8 @@
     <string name="lasso_select_tables">표</string>
     <string name="lasso_select_objects">개체</string>
     <string name="lasso_objects_description">수식, 이미지, 그래프 등</string>
+    <string name="shape_hollow_cylinder">속이 빈 원기둥</string>
+    <string name="shape_hemisphere">반구</string>
+    <string name="shape_frustum">원뿔대</string>
+    <string name="shape_wall_thickness" formatted="false">벽 두께 (%)</string>
 </resources>

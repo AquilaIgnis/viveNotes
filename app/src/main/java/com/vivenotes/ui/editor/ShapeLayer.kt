@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.toArgb
@@ -547,9 +548,7 @@ private fun DrawScope.drawShape(shape: Outline.Shape, canvasInkArgb: Int) {
     // single closed contour: it filled a cube's twelve edges as one self-crossing loop, and would
     // have closed an L into a triangle the moment fill became reachable.
     shape.fillArgb?.let { argb ->
-        shape.fillRegion().forEach { region ->
-            drawPath(region.asClosedPath(), Color(argb))
-        }
+        drawPath(shape.fillRegion().asClosedPath(), Color(argb))
     }
 
     val border = Color(
@@ -801,12 +800,14 @@ private fun Outline.Shape.scaleFor(corner: Corner, x: Float, y: Float): Pair<Flo
 }
 
 /** A region as a closed path, for filling. */
-private fun FloatArray.asClosedPath(): Path = Path().apply {
-    moveTo(this@asClosedPath[0], this@asClosedPath[1])
-    for (index in 2 until this@asClosedPath.size step 2) {
-        lineTo(this@asClosedPath[index], this@asClosedPath[index + 1])
+private fun List<FloatArray>.asClosedPath(): Path = Path().apply {
+    fillType = PathFillType.EvenOdd
+    this@asClosedPath.forEach { region ->
+        if (region.size < 6) return@forEach
+        moveTo(region[0], region[1])
+        for (index in 2 until region.size step 2) lineTo(region[index], region[index + 1])
+        close()
     }
-    close()
 }
 
 private fun ShapeContour.path(): Path = Path().apply {

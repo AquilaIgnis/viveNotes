@@ -9,23 +9,37 @@ import com.vivenotes.model.Outline
  * covers is one hexagon, and painting the edges as a path would fill three faces in three
  * overlapping passes, or nothing at all, depending on the winding rule.
  *
- * Two cases, which is the difference between a flat outline and a wireframe:
+ * Three cases, distinguishing a flat outline, a hollow solid and a convex wireframe:
  *
  * - A closed run of segments is its own region — rectangles, ellipses, polygons. Read off the
  *   geometry, so an edited shape fills what it now looks like rather than what it was seeded as.
- * - A solid fills its silhouette, the convex hull of its vertices. Exact for all six of them, and
+ * - A solid with explicit fill boundaries follows those edges, leaving nested openings empty.
+ * - Other solids fill their silhouette, the convex hull of their vertices. Exact for convex solids, and
  *   unlike re-tracing at the current bounds it cannot drift: a cube stretched unevenly has a depth
  *   its own points still agree on.
  *
  * Everything else — a line, an arrow, an L, an L dragged out into a cross — reports nothing, which
  * makes [canFill] false and takes Fill out of the toolkit for it.
  */
-fun Outline.Shape.fillRegion(): List<FloatArray> = if (kind.isSolid) {
-    listOfNotNull(convexHull(segments.flatMap { it.polyline().asPoints() }))
-} else {
-    segments.contours()
-        .filter { !it.hidden && it.isClosed }
-        .map { it.polyline() }
+fun Outline.Shape.fillRegion(): List<FloatArray> {
+    val explicit = segments.explicitFillRegion()
+    return when {
+        explicit.isNotEmpty() -> explicit
+        kind.isSolid -> segments.solidFillRegion()
+        else -> segments.contours().filter { !it.hidden && it.isClosed }.map { it.polyline() }
+    }
+}
+
+/** Boundary order is stored with the edges, so it survives unequal scaling without re-tracing. */
+internal fun List<ShapeSegment>.explicitFillRegion(): List<FloatArray> =
+    filter { it.fillContour != null }.groupBy { it.fillContour }.values.map { boundary ->
+        val points = ShapeContour(hidden = false, segments = boundary).polyline()
+        // sin(2π) and sin(0) can differ by a few ulps. Close exactly for geometric consumers too.
+        points + floatArrayOf(points[0], points[1])
+    }
+
+internal fun List<ShapeSegment>.solidFillRegion(): List<FloatArray> = explicitFillRegion().ifEmpty {
+    listOfNotNull(convexHull(flatMap { it.polyline().asPoints() }))
 }
 
 /**
