@@ -16,7 +16,7 @@ enum class ImageSource { WikimediaCommons, Openverse }
 data class OnlineImage(
     val id: String,
     val title: String,
-    /** What is inserted: the original when Android can decode it at a sensible size, else a rendition. */
+    /** What is inserted: the original SVG, or a raster at a sensible size. */
     val url: String,
     /** A grid-sized rendition the source serves — when it can; see [OnlineImageSearch.thumbnail]. */
     val thumbnail: String,
@@ -70,7 +70,7 @@ internal sealed interface SourceResult {
  * Wikimedia Commons first, Openverse once Commons stops being about the query.
  *
  * Commons leads because it is where the diagrams are — a search for "meiosis" there is page after
- * page of labelled figures, and it renders its SVGs to PNG, which Openverse's results cannot offer.
+ * page of labelled figures. Its SVGs have PNG grid previews while inserts keep the original vectors.
  * Openverse follows because its photographs are broader. It is asked to leave Wikimedia out, so the
  * hand-over repeats nothing.
  *
@@ -173,7 +173,7 @@ class OnlineImageSearch internal constructor(
                 )
             }
         }
-    }.getOrNull()
+    }.getOrNull() ?: runCatching { SvgPicture.read(bytes)?.bitmap(PREVIEW_MAX_DIMENSION) }.getOrNull()
 
     internal companion object {
         /**
@@ -221,9 +221,9 @@ class OnlineImageSearch internal constructor(
         private const val PARALLEL_FETCHES = 4
 
         /**
-         * A file larger than this is not worth fetching whole. [AttachmentStore] scales whatever
-         * arrives down to its own maximum, so past this the extra bytes would only be thrown away —
-         * the thumbnail is used instead.
+         * Raster originals are bounded before [AttachmentStore] scales them down. SVG keeps its
+         * original bytes, with the stricter [SvgPictureSource.MAX_BYTES] limit in [PictureHttp].
+         * The thumbnail is used when an original exceeds its limit.
          */
         private const val MAX_ORIGINAL_BYTES = 30 * 1024 * 1024
         private const val MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024

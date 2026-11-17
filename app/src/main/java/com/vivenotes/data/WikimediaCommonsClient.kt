@@ -40,7 +40,7 @@ internal class WikimediaCommonsClient(private val http: PictureHttp) {
          */
         private val STANDARD_WIDTHS = listOf(330, 500, 960, 1280, 1920)
 
-        /** Formats inserted as they are. Anything else — SVG, TIFF — is inserted as a rendition. */
+        /** Raster formats inserted as they are when small enough. SVG always keeps its original. */
         private val DECODABLE_MIMES = setOf("image/jpeg", "image/png", "image/gif", "image/webp")
 
         private val json = Json { ignoreUnknownKeys = true }
@@ -94,21 +94,18 @@ internal class WikimediaCommonsClient(private val http: PictureHttp) {
         }
 
         /**
-         * The original when Android can decode it and [AttachmentStore] would keep it whole;
-         * otherwise a standard-width rendition, which is smaller to fetch and the same once
-         * imported. An SVG is always a rendition: there is no pixel width to stay under.
+         * SVG keeps the original vector file regardless of its nominal dimensions. A raster keeps
+         * the original when [AttachmentStore] would keep it whole; otherwise a standard-width
+         * rendition is smaller to fetch and the same once imported.
          */
         fun insertUrl(mime: String?, width: Int, height: Int, original: String, thumbnail: String): String {
+            if (mime == SvgPictureSource.MIME_TYPE) return original
             if (mime in DECODABLE_MIMES && maxOf(width, height) <= AttachmentStore.MAX_DIMENSION) {
                 return original
             }
             val widest = STANDARD_WIDTHS.last()
-            val target = if (mime == "image/svg+xml") {
-                widest
-            } else {
-                // A bitmap is never scaled up; asking for more than it has is refused.
-                STANDARD_WIDTHS.lastOrNull { it <= minOf(width, widest) }
-            } ?: return original
+            // A bitmap is never scaled up; asking for more than it has is refused.
+            val target = STANDARD_WIDTHS.lastOrNull { it <= minOf(width, widest) } ?: return original
             return renditionOf(thumbnail, target) ?: original
         }
 

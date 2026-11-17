@@ -17,6 +17,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 @RunWith(AndroidJUnit4::class)
 class SvgAttachmentTest {
@@ -66,6 +69,46 @@ class SvgAttachmentTest {
         } finally { file.delete() }
     }
 
+    @Test fun commonsSvgUsesItsPngPreviewButImportsTheOriginalVector() = runBlocking {
+        val preview = Bitmap.createBitmap(40, 20, Bitmap.Config.ARGB_8888)
+        val png = try {
+            preview.eraseColor(Color.BLUE)
+            ByteArrayOutputStream().also { preview.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        } finally { preview.recycle() }
+        val image = WikimediaCommonsClient.parseSearch("""
+            {"query":{"pages":[{"pageid":1,"title":"File:Diagram.svg","imageinfo":[{
+              "url":"https://example.org/diagram.svg","thumburl":"https://example.org/preview.png",
+              "mime":"image/svg+xml","width":8000,"height":4000}]}]}}
+        """.trimIndent(), "diagram")!!.images.single()
+        val search = OnlineImageSearch(http = PictureHttp(openConnection = { url ->
+            if (url.path.endsWith(".png")) response(png, "image/png") else response(source, "image/svg+xml")
+        }))
+
+        val thumbnail = search.thumbnail(image)!!.copy(Bitmap.Config.ARGB_8888, false)!!
+        try {
+            assertEquals(Color.BLUE, thumbnail.getPixel(20, 10))
+        } finally { thumbnail.recycle() }
+        val importedSvg = store.import(search.download(image)!!)!!
+        imported += importedSvg.id
+        assertEquals(source.sha256(), importedSvg.id)
+        assertArrayEquals(source, store.fileFor(importedSvg.id).readBytes())
+        assertEquals("image/svg+xml", db.attachmentDao().byId(importedSvg.id)!!.mimeType)
+        assertNotNull(store.loadSvg(importedSvg.id))
+    }
+
+    @Test fun anUnavailableOnlineThumbnailFallsBackToASvgPreview() = runBlocking {
+        val image = OnlineImage("svg-preview", "Diagram", "https://example.org/diagram.svg", "https://example.org/preview", 80, 40, ImageSource.Openverse)
+        val search = OnlineImageSearch(http = PictureHttp(openConnection = { url ->
+            if (url.path.endsWith(".svg")) response(source, "image/svg+xml") else response(byteArrayOf(), "text/html", 424)
+        }))
+
+        val thumbnail = search.thumbnail(image)!!
+        assertEquals(360 to 180, thumbnail.width to thumbnail.height)
+        assertEquals(Color.TRANSPARENT, thumbnail.getPixel(90, 90))
+        assertEquals(Color.RED, thumbnail.getPixel(270, 90))
+        assertArrayEquals(source, search.download(image))
+    }
+
     @Test fun largeSvgWithoutViewBoxScalesItsWholeViewport() {
         val svg = SvgPicture.read("""<svg xmlns="http://www.w3.org/2000/svg" width="8192" height="4096"><path fill="red" d="M4096 0h4096v4096H4096z"/></svg>""".encodeToByteArray())!!
         val bitmap = Bitmap.createBitmap(80, 40, Bitmap.Config.ARGB_8888)
@@ -88,4 +131,15 @@ class SvgAttachmentTest {
         assertTrue(bytes.toString(Charsets.ISO_8859_1).startsWith("%PDF-"))
         assertFalse(Regex("/Subtype\\s*/Image").containsMatchIn(bytes.toString(Charsets.ISO_8859_1)))
     }
+
+    private fun response(body: ByteArray, type: String, status: Int = 200) =
+        object : HttpURLConnection(URL("https://example.org/")) {
+            override fun getResponseCode() = status
+            override fun getContentType() = type
+            override fun getContentLengthLong() = body.size.toLong()
+            override fun getInputStream() = ByteArrayInputStream(body)
+            override fun connect() = Unit
+            override fun disconnect() = Unit
+            override fun usingProxy() = false
+        }
 }

@@ -23,7 +23,7 @@ class SvgPicture private constructor(private val svg: SVG, private val source: S
         }
     }
 
-    /** Temporary pixels for OCR; never replaces the stored SVG. */
+    /** Temporary pixels for OCR or a search preview; never replaces the stored SVG. */
     fun bitmap(maxDimension: Int): Bitmap {
         val scale = maxDimension.coerceIn(1, AttachmentStore.MAX_DIMENSION).toFloat() / maxOf(width, height)
         val bitmap = Bitmap.createBitmap(

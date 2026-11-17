@@ -34,11 +34,8 @@ internal class OpenverseClient(private val http: PictureHttp) {
         /** How far into the results an anonymous request may page. */
         const val MAX_DEPTH = 240
 
-        /**
-         * Formats [android.graphics.ImageDecoder] reads. SVG is the one that matters: it would sit
-         * in the grid as tiles that can never be inserted.
-         */
-        private const val EXTENSIONS = "jpg,jpeg,png,gif,webp"
+        /** Formats supported by the attachment importer, including original SVG files. */
+        private const val EXTENSIONS = "jpg,jpeg,png,gif,webp,svg"
 
         private val json = Json { ignoreUnknownKeys = true }
 

@@ -49,7 +49,7 @@ internal class PictureHttp(
     }
 
     /**
-     * One picture, or null — including for a picture [android.graphics.ImageDecoder] cannot read,
+     * One picture, or null — including for a type the attachment importer cannot read,
      * so a caller's fallback gets its turn instead of the import failing silently afterwards.
      */
     suspend fun image(address: String, maxBytes: Int): ByteArray? = withContext(io) {
@@ -57,8 +57,9 @@ internal class PictureHttp(
         try {
             if (connection.responseCode !in 200..299) return@withContext null
             val type = connection.contentType?.substringBefore(';')?.trim()?.lowercase()
-            if (type !in DECODABLE_TYPES) return@withContext null
-            if (connection.contentLengthLong > maxBytes) return@withContext null
+            if (type !in SUPPORTED_TYPES) return@withContext null
+            val limit = if (type == SvgPictureSource.MIME_TYPE) minOf(maxBytes, SvgPictureSource.MAX_BYTES) else maxBytes
+            if (connection.contentLengthLong > limit) return@withContext null
             val buffer = ByteArray(COPY_BUFFER_BYTES)
             val out = ByteArrayOutputStream()
             connection.inputStream.use { input ->
@@ -68,7 +69,7 @@ internal class PictureHttp(
                     if (count < 0) break
                     out.write(buffer, 0, count)
                     // Content-Length is optional, so the cap is enforced on what actually arrives.
-                    if (out.size() > maxBytes) return@withContext null
+                    if (out.size() > limit) return@withContext null
                 }
             }
             out.toByteArray().takeIf { it.isNotEmpty() }
@@ -98,8 +99,8 @@ internal class PictureHttp(
         private const val READ_TIMEOUT_MS = 20_000
         private const val COPY_BUFFER_BYTES = 16 * 1024
 
-        /** What ImageDecoder reads. Not SVG or TIFF, which both sources host plenty of. */
-        private val DECODABLE_TYPES = setOf(
+        /** Raster formats read by ImageDecoder, plus SVG read by the vector attachment importer. */
+        private val SUPPORTED_TYPES = setOf(
             "image/jpeg",
             "image/png",
             "image/gif",
@@ -108,6 +109,7 @@ internal class PictureHttp(
             "image/heif",
             "image/avif",
             "image/bmp",
+            SvgPictureSource.MIME_TYPE,
         )
 
         private val USER_AGENT =

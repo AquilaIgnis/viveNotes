@@ -10,11 +10,11 @@ import org.junit.Test
 class OpenverseClientTest {
 
     @Test
-    fun `a search asks for the anonymous page size, decodable formats, and no Wikimedia`() {
+    fun `a search includes SVG with the anonymous page size and no Wikimedia`() {
         val url = OpenverseClient.searchUrl("  red fox ", 3)
         assertEquals(
             "https://api.openverse.org/v1/images/?q=red+fox&page=3&page_size=20" +
-                "&extension=jpg,jpeg,png,gif,webp&excluded_source=wikimedia",
+                "&extension=jpg,jpeg,png,gif,webp,svg&excluded_source=wikimedia",
             url,
         )
     }

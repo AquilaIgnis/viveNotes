@@ -25,6 +25,8 @@ class WikimediaCommonsClientTest {
         val page = WikimediaCommonsClient.parseSearch(RESPONSE, "meiosis")!!
         assertEquals(listOf("commons:1", "commons:2", "commons:3"), page.images.map { it.id })
         assertEquals("Meiosis Stages", page.images[0].title)
+        assertEquals("https://upload.wikimedia.org/a.svg", page.images[0].url)
+        assertEquals("https://thumb.wikimedia.org/t1/330px-a.svg.png", page.images[0].thumbnail)
         assertEquals(ImageSource.WikimediaCommons, page.images[0].source)
         assertTrue(page.hasMore)
     }
@@ -59,11 +61,11 @@ class WikimediaCommonsClientTest {
     }
 
     @Test
-    fun `an SVG is inserted as the widest standard rendition`() {
+    fun `an SVG keeps the original even above the raster dimension limit`() {
         assertEquals(
-            "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/74/A.svg/1920px-A.svg.png?utm_source=x",
+            "https://upload.wikimedia.org/wikipedia/commons/7/74/A.svg",
             WikimediaCommonsClient.insertUrl(
-                "image/svg+xml", 400, 400, "https://upload.wikimedia.org/wikipedia/commons/7/74/A.svg",
+                "image/svg+xml", 8000, 4000, "https://upload.wikimedia.org/wikipedia/commons/7/74/A.svg",
                 "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/74/A.svg/330px-A.svg.png?utm_source=x",
             ),
         )
