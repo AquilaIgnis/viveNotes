@@ -45,6 +45,7 @@ fun seedSegments(
         // The primitive every other shape is made of, and the one that needs no box at all: it runs
         // from where the drag began to where it ended, which is why `trace` takes a drag.
         ShapeKind.Line -> listOf(straight(startX, startY, endX, endY))
+        ShapeKind.Curve -> seedCurve(left, top, right, bottom, nextId)
 
         // The head is two more segments meeting at the tip, so its wings get handles of their own
         // and an arrowhead can be widened without redrawing the arrow.

@@ -49,7 +49,7 @@ class ShapeFillTest {
 
     @Test
     fun `an open shape has no inside`() {
-        listOf(ShapeKind.Line, ShapeKind.Arrow, ShapeKind.L).forEach { kind ->
+        listOf(ShapeKind.Line, ShapeKind.Arrow, ShapeKind.Curve, ShapeKind.L).forEach { kind ->
             val shape = shape(kind)
             assertFalse("$kind offered a fill it has no room for", shape.canFill)
             assertTrue("$kind produced a region anyway", shape.fillRegion().isEmpty())

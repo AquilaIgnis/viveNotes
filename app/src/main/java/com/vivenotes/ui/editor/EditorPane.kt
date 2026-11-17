@@ -457,6 +457,7 @@ fun EditorPane(
     onResizeShape: (String, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     onResizeShapeArm: (String, String, Boolean, Float) -> Unit = { _, _, _, _ -> },
     onMoveShapeEnd: (String, Boolean, Float, Float) -> Unit = { _, _, _, _ -> },
+    onMoveShapeVertex: (String, Int, Float, Float) -> Unit = { _, _, _, _ -> },
     /**
      * The lasso's halves, taking the whole set at once: one gesture is one edit and so one Undo,
      * however many shapes it caught.
@@ -469,6 +470,7 @@ fun EditorPane(
     onSetShapeLineType: (Set<String>, LineType) -> Unit = { _, _ -> },
     /** Null clears the fill: an absent inside, not a transparent one. */
     onSetShapeFill: (Set<String>, Int?) -> Unit = { _, _ -> },
+    onAddShapeVertex: (String) -> Unit = {},
     erasing: Boolean = false,
     lassoing: Boolean = false,
     lassoSettings: LassoSettings = LassoSettings(),
@@ -1566,6 +1568,7 @@ fun EditorPane(
                                     onResizeShape = onResizeShape,
                                     onResizeShapeArm = onResizeShapeArm,
                                     onMoveShapeEnd = onMoveShapeEnd,
+                                    onMoveShapeVertex = onMoveShapeVertex,
                                     canvasExtent = canvasSize,
                                 ) {
                                     GraphLayer(
@@ -1803,6 +1806,7 @@ fun EditorPane(
                     onResizeShapes(ids, anchor.x, anchor.y, scaleX, scaleY)
                 },
                 onMoveShapeEnd = onMoveShapeEnd,
+                onMoveShapeVertex = onMoveShapeVertex,
                 onMoveTables = onMoveTables,
                 onResizeTables = { ids, anchor, scaleX, scaleY ->
                     onResizeTables(ids, anchor.x, anchor.y, scaleX, scaleY)
@@ -1929,6 +1933,9 @@ fun EditorPane(
                         }
                         if (held.isShapeOnly) {
                             val selectedShapes = shapes.filter { it.id in held.shapeIds }
+                            selectedShapes.singleOrNull()
+                                ?.takeIf { it.kind == com.vivenotes.model.ink.ShapeKind.Curve && it.lockGroup == null }
+                                ?.let { curve -> AddVertexAction { onAddShapeVertex(curve.id) } }
                             val widths = selectedShapes.map { it.borderWidth.roundToInt() }
                             ThicknessAction(
                                 width = widths.distinct().singleOrNull()

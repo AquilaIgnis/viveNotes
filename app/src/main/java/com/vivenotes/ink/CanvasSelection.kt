@@ -243,6 +243,12 @@ fun CanvasSelection?.lineShape(shapes: List<Outline.Shape>): Outline.Shape? = th
     ?.let { held -> shapes.firstOrNull { it.id in held.shapeIds } }
     ?.takeIf { it.kind.hasEnds }
 
+/** One curve held alone offers its vertices in place of box corners. */
+fun CanvasSelection?.curveShape(shapes: List<Outline.Shape>): Outline.Shape? = this
+    ?.takeIf { it.isShapeOnly && it.shapeIds.size == 1 }
+    ?.let { held -> shapes.firstOrNull { it.id in held.shapeIds } }
+    ?.takeIf { it.kind == ShapeKind.Curve }
+
 /**
  * True when this selection is ink and rules: strokes, plus at most the shapes that are strokes in
  * all but storage — the line and the arrow ([ShapeKind.hasEnds]).

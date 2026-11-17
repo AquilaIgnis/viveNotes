@@ -16,8 +16,7 @@ import kotlinx.serialization.Serializable
  * are what carries [hidden]: a solid's occluded edges have to be distinguishable from its visible
  * ones to be drawn dotted, and a single flattened path cannot say which is which.
  *
- * Segments are not separately editable — a shape is selected and moved whole — so nothing here
- * mutates one endpoint.
+ * Most shapes move whole; arms, line ends and curve vertices expose their own handles.
  *
  * [bulge] is the reason this stays two points rather than a polyline. It is the arc's height at its
  * midpoint, as a fraction of the chord, measured perpendicular to it: zero is a straight line, and a
@@ -43,6 +42,8 @@ data class ShapeSegment(
      * Kept on the segment so a move, resize or clipboard copy carries the boundary with its edge.
      */
     val fillContour: Int? = null,
+    /** Cubic Bézier controls for an editable curve; absent on the existing line/arc shapes. */
+    val cubic: ShapeCubic? = null,
 ) {
     val startX: Float get() = x1
     val startY: Float get() = y1
@@ -52,7 +53,10 @@ data class ShapeSegment(
     val length: Float get() = hypot(x2 - x1, y2 - y1)
 
     fun translated(dx: Float, dy: Float): ShapeSegment =
-        copy(x1 = x1 + dx, y1 = y1 + dy, x2 = x2 + dx, y2 = y2 + dy)
+        copy(
+            x1 = x1 + dx, y1 = y1 + dy, x2 = x2 + dx, y2 = y2 + dy,
+            cubic = cubic?.translated(dx, dy),
+        )
 
     /**
      * The segment with one of its ends moved — the one edit that moves an endpoint rather than the
@@ -94,6 +98,12 @@ data class ShapeSegment(
         val sy1 = anchorY + (y1 - anchorY) * scaleY
         val sx2 = anchorX + (x2 - anchorX) * scaleX
         val sy2 = anchorY + (y2 - anchorY) * scaleY
+        cubic?.let {
+            return copy(
+                x1 = sx1, y1 = sy1, x2 = sx2, y2 = sy2,
+                cubic = it.scaledAbout(anchorX, anchorY, scaleX, scaleY),
+            )
+        }
         val crown = scaledCrown(anchorX, anchorY, scaleX, scaleY)
             ?: return copy(x1 = sx1, y1 = sy1, x2 = sx2, y2 = sy2)
 
@@ -118,6 +128,22 @@ data class ShapeSegment(
      * without either being a special case.
      */
     fun polyline(): FloatArray {
+        cubic?.let { controls ->
+            val length = hypot(controls.x1 - x1, controls.y1 - y1) +
+                hypot(controls.x2 - controls.x1, controls.y2 - controls.y1) +
+                hypot(x2 - controls.x2, y2 - controls.y2)
+            val samples = ceil(length / 2f).toInt().coerceIn(8, 512)
+            return FloatArray((samples + 1) * 2).also { points ->
+                for (index in 0..samples) {
+                    val t = index.toFloat() / samples
+                    val u = 1f - t
+                    points[index * 2] = u * u * u * x1 + 3f * u * u * t * controls.x1 +
+                        3f * u * t * t * controls.x2 + t * t * t * x2
+                    points[index * 2 + 1] = u * u * u * y1 + 3f * u * u * t * controls.y1 +
+                        3f * u * t * t * controls.y2 + t * t * t * y2
+                }
+            }
+        }
         val circle = arcCircle() ?: return floatArrayOf(x1, y1, x2, y2)
         val centreX = circle.centreX
         val centreY = circle.centreY

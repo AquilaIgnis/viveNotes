@@ -41,6 +41,9 @@ import com.vivenotes.model.newTable
 import com.vivenotes.richtext.FormatCommand
 import com.vivenotes.ui.OutlineBox
 import com.vivenotes.ui.theme.ViveNotesTheme
+import com.vivenotes.model.ink.vertices
+import com.vivenotes.model.ink.withVertex
+import com.vivenotes.model.ink.withAddedVertex
 
 /**
  * An object on the canvas, as the whole page assembles it: moved freely, selected by a tap, shown
@@ -73,6 +76,8 @@ class PrimeObjectTest {
 
     /** The scale a corner drag reported, and null when nothing was resized. */
     private var resized: Pair<Float, Float>? = null
+    private var vertexEdits = 0
+    private var vertexIds = 0
     private var movedTexts: Set<String>? = null
     private var tableMoveCount = 0
     private lateinit var density: Density
@@ -97,6 +102,7 @@ class PrimeObjectTest {
         resized = null
         deleted = null
         tableMoveCount = 0
+        vertexEdits = 0
         compose.setContent {
             density = LocalDensity.current
             ViveNotesTheme {
@@ -158,6 +164,17 @@ class PrimeObjectTest {
                     } else {
                         null
                     },
+                    onAddShapeVertex = { id ->
+                        this@PrimeObjectTest.shapes.value = this@PrimeObjectTest.shapes.value.map {
+                            if (it.id == id) it.withAddedVertex { "vertex-${vertexIds++}" } else it
+                        }
+                    },
+                    onMoveShapeVertex = { id, index, x, y ->
+                        vertexEdits++
+                        this@PrimeObjectTest.shapes.value = this@PrimeObjectTest.shapes.value.map {
+                            if (it.id == id) it.withVertex(index, x, y) else it
+                        }
+                    },
                     onMoveShape = { _, dx, dy -> moved = dx to dy },
                     onMoveShapes = { _, dx, dy -> moved = dx to dy },
                     onMoveTexts = { ids, _, _ -> movedTexts = ids },
@@ -182,6 +199,91 @@ class PrimeObjectTest {
             }
         }
         compose.waitForIdle()
+    }
+
+    private fun curve(): Outline.Shape {
+        var next = 0
+        return Outline.Shape(id = "curve", kind = ShapeKind.Curve,
+            segments = seedSegments(ShapeKind.Curve, 60f, 180f, 300f, 320f) { "curve-${next++}" },
+        ).withRecomputedBounds()
+    }
+
+    @Test
+    fun aCurvesToolkitAddsAVertexAndTheNewHandleDrags() {
+        setPage(listOf(curve()))
+        tapPage(180f, 180f)
+        assertEquals(3, shapes.value.single().vertices().size)
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).assertIsDisplayed().performClick()
+        compose.waitForIdle()
+        val vertices = shapes.value.single().vertices()
+        assertEquals(4, vertices.size)
+        compose.onNodeWithTag(OBJECT_FILL_TAG).assertDoesNotExist()
+        val added = vertices.first { it.x != 60f && it.x != 180f && it.x != 300f }
+        dragPage(added.x, added.y, added.x + 20f, added.y + 40f)
+        val moved = shapes.value.single().vertices()[added.index]
+        assertEquals(added.x + 20f, moved.x, 1f)
+        assertEquals(added.y + 40f, moved.y, 1f)
+        assertEquals(1, vertexEdits)
+        assertNull(resized)
+    }
+
+    @Test
+    fun aLassoSelectedCurveUsesVertexHandlesToo() {
+        setPage(listOf(curve()), lassoing = true)
+        fingerTapPage(180f, 180f)
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).assertIsDisplayed().performClick()
+        compose.waitForIdle()
+        fingerDragPage(180f, 180f, 210f, 230f)
+        val peak = shapes.value.single().vertices().first { it.x == 210f }
+        assertEquals(230f, peak.y, 1f)
+        assertEquals(4, shapes.value.single().vertices().size)
+        assertEquals(1, vertexEdits)
+        assertNull(resized)
+    }
+
+    @Test
+    fun stretchingBothCurveEndsKeepsTheBendRounded() {
+        setPage(listOf(curve()))
+        tapPage(180f, 180f)
+        dragPage(60f, 320f, 40f, 580f)
+        dragPage(300f, 320f, 360f, 580f)
+        assertRoundedCurveAfterStretch()
+    }
+
+    @Test
+    fun stretchingBothLassoSelectedCurveEndsKeepsTheBendRounded() {
+        setPage(listOf(curve()), lassoing = true)
+        fingerTapPage(180f, 180f)
+        fingerDragPage(60f, 320f, 40f, 580f)
+        fingerDragPage(300f, 320f, 360f, 580f)
+        assertRoundedCurveAfterStretch()
+    }
+
+    private fun assertRoundedCurveAfterStretch() {
+        val shape = shapes.value.single()
+        val vertices = shape.vertices()
+        assertEquals(3, vertices.size)
+        assertEquals(180f, vertices[1].x, 1f)
+        assertEquals(180f, vertices[1].y, 1f)
+        assertEquals(40f, vertices.first().x, 1f)
+        assertEquals(580f, vertices.first().y, 1f)
+        assertEquals(360f, vertices.last().x, 1f)
+        assertEquals(580f, vertices.last().y, 1f)
+        shape.segments.forEach { span ->
+            val c = span.cubic!!
+            val midY = (span.y1 + 3f * c.y1 + 3f * c.y2 + span.y2) / 8f
+            assertTrue("Stretched curve flattened into the triangle's side", midY < 300f)
+        }
+        assertEquals(2, vertexEdits)
+        assertNull(resized)
+    }
+
+    @Test
+    fun aLockedCurveHasNoAddVertexAction() {
+        setPage(listOf(curve().copy(lockGroup = "locked")))
+        tapPage(180f, 180f)
+        compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).assertDoesNotExist()
     }
 
     @Test

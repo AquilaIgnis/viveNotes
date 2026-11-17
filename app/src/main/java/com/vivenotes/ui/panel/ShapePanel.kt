@@ -565,6 +565,7 @@ private val CHIP_STROKE: Dp = 1.6.dp
 private val ShapeKind.label: Int
     get() = when (this) {
         ShapeKind.Line -> R.string.shape_line
+        ShapeKind.Curve -> R.string.shape_curve
         ShapeKind.Arrow -> R.string.shape_arrow
         ShapeKind.Rectangle -> R.string.shape_rectangle
         ShapeKind.RoundedRectangle -> R.string.shape_rounded_rectangle

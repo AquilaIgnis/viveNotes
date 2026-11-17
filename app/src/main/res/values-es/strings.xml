@@ -902,4 +902,6 @@
     <string name="shape_hemisphere">Hemisferio</string>
     <string name="shape_frustum">Tronco de cono</string>
     <string name="shape_wall_thickness" formatted="false">Grosor de pared (%)</string>
+    <string name="shape_curve">Curva</string>
+    <string name="shape_add_vertex">Añadir vértice</string>
 </resources>

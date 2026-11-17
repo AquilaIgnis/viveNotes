@@ -56,6 +56,11 @@ import com.vivenotes.data.ShapeSettings
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.TAP_REACH
 import com.vivenotes.ink.lineShape
+import com.vivenotes.ink.curveShape
+import com.vivenotes.model.ink.ShapeVertex
+import com.vivenotes.model.ink.vertices
+import com.vivenotes.model.ink.vertexNear
+import com.vivenotes.model.ink.withVertex
 import com.vivenotes.ink.withEndOnPage
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.ink.InkBounds
@@ -215,6 +220,7 @@ internal fun InkOverlay(
     onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     /** One end of a lassoed line, in place of the corner resize it has no corners for. */
     onMoveShapeEnd: (String, Boolean, Float, Float) -> Unit = { _, _, _, _ -> },
+    onMoveShapeVertex: (String, Int, Float, Float) -> Unit = { _, _, _, _ -> },
     onMoveTables: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
     onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
     onMoveEquations: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
@@ -297,6 +303,7 @@ internal fun InkOverlay(
     val currentOnMoveShapes by rememberUpdatedState(onMoveShapes)
     val currentOnResizeShapes by rememberUpdatedState(onResizeShapes)
     val currentOnMoveShapeEnd by rememberUpdatedState(onMoveShapeEnd)
+    val currentOnMoveShapeVertex by rememberUpdatedState(onMoveShapeVertex)
     val currentOnMoveEquations by rememberUpdatedState(onMoveEquations)
     val currentOnResizeEquations by rememberUpdatedState(onResizeEquations)
     val currentOnMoveImages by rememberUpdatedState(onMoveImages)
@@ -766,6 +773,7 @@ internal fun InkOverlay(
                             onMoveShapes = currentOnMoveShapes,
                             onResizeShapes = currentOnResizeShapes,
                             onMoveShapeEnd = currentOnMoveShapeEnd,
+                            onMoveShapeVertex = currentOnMoveShapeVertex,
                             onMoveTables = currentOnMoveTables,
                             onResizeTables = currentOnResizeTables,
                             onMoveEquations = currentOnMoveEquations,
@@ -1082,6 +1090,7 @@ private fun handleInk(
     onMoveShapes: (Set<String>, Float, Float) -> Unit,
     onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit,
     onMoveShapeEnd: (String, Boolean, Float, Float) -> Unit,
+    onMoveShapeVertex: (String, Int, Float, Float) -> Unit,
     onMoveTables: (Set<String>, Float, Float) -> Unit,
     onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit,
     onMoveEquations: (Set<String>, Float, Float) -> Unit,
@@ -1147,6 +1156,7 @@ private fun handleInk(
             onMoveShapes = onMoveShapes,
             onResizeShapes = onResizeShapes,
             onMoveShapeEnd = onMoveShapeEnd,
+            onMoveShapeVertex = onMoveShapeVertex,
             onMoveTables = onMoveTables,
             onResizeTables = onResizeTables,
             onMoveEquations = onMoveEquations,
@@ -1588,16 +1598,18 @@ private fun drawLasso(
     // chrome and dropping them alone would leave a selected shape with nothing drawn on it.
     val locked = selection?.isLocked == true
     val line = if (locked) null else selection.lineShape(shapes)
-    if (line != null) {
-        val drawn = line.withLassoPreview(gesture)
+    val curve = if (locked) null else selection.curveShape(shapes)
+    if (line != null || curve != null) {
+        val drawn = (line ?: curve!!).withLassoPreview(gesture)
         val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.color = color
             style = Paint.Style.STROKE
             strokeWidth = SelectionChrome.STROKE.value
         }
-        drawn.ends().forEach { end ->
-            canvas.drawCircle(end.x, end.y, handleRadius, handleFill)
-            canvas.drawCircle(end.x, end.y, handleRadius, linePaint)
+        val handles = drawn.ends().map { it.x to it.y } + drawn.vertices().map { it.x to it.y }
+        handles.forEach { (x, y) ->
+            canvas.drawCircle(x, y, handleRadius, handleFill)
+            canvas.drawCircle(x, y, handleRadius, linePaint)
         }
         canvas.restoreToCount(checkpoint)
         return
@@ -2264,7 +2276,7 @@ internal class LassoGesture {
      * selection and lasso over the thing under the finger. A locked object refuses the transform,
      * not the touch.
      */
-    private enum class Mode { Idle, Drawing, Moving, Resizing, LineEnd, Held }
+    private enum class Mode { Idle, Drawing, Moving, Resizing, LineEnd, CurveVertex, Held }
     private enum class Corner { TopLeft, TopRight, BottomRight, BottomLeft }
 
     private var mode by mutableStateOf(Mode.Idle)
@@ -2288,6 +2300,7 @@ internal class LassoGesture {
      */
     private var endShape: Outline.Shape? = null
     private var endHandle: ShapeEnd? = null
+    private var vertexHandle: ShapeVertex? = null
     private var endGrab = InkPoint(0f, 0f)
     private var endAt = InkPoint(0f, 0f)
     private var endPreview by mutableStateOf<Outline.Shape?>(null)
@@ -2306,10 +2319,11 @@ internal class LassoGesture {
 
     /** True while a move, resize or end drag is in flight, so a draw knows to apply the preview. */
     val isTransforming: Boolean
-        get() = mode == Mode.Moving || mode == Mode.Resizing || mode == Mode.LineEnd
+        get() = mode == Mode.Moving || mode == Mode.Resizing || mode == Mode.LineEnd || mode == Mode.CurveVertex
 
     /** The line an end drag has made, or null — read by every layer that draws the shape. */
     fun lineEndPreview(): Outline.Shape? = endPreview.takeIf { mode == Mode.LineEnd }
+    fun curveVertexPreview(): Outline.Shape? = endPreview.takeIf { mode == Mode.CurveVertex }
 
     fun drawingPath(): List<InkPoint> = if (mode == Mode.Drawing) path else emptyList()
 
@@ -2320,7 +2334,7 @@ internal class LassoGesture {
             Mode.Resizing -> bounds.scaled(resizeAnchor, resizeScale.x, resizeScale.y)
             // Not a transform of the old rectangle: an end drag turns the line, so the box around it
             // is whatever the new geometry measures. The tooltip anchors to this.
-            Mode.LineEnd -> endPreview?.pageBounds() ?: bounds
+            Mode.LineEnd, Mode.CurveVertex -> endPreview?.pageBounds() ?: bounds
             else -> bounds
         }
     }
@@ -2387,6 +2401,7 @@ internal class LassoGesture {
         onMoveShapes: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
         onResizeShapes: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
         onMoveShapeEnd: (String, Boolean, Float, Float) -> Unit = { _, _, _, _ -> },
+        onMoveShapeVertex: (String, Int, Float, Float) -> Unit = { _, _, _, _ -> },
         onMoveTables: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
         onResizeTables: (Set<String>, InkPoint, Float, Float) -> Unit = { _, _, _, _ -> },
         onMoveEquations: (Set<String>, Float, Float) -> Unit = { _, _, _ -> },
@@ -2412,6 +2427,14 @@ internal class LassoGesture {
                         endGrab = InkPoint(grip.end.x - point.x, grip.end.y - point.y)
                         endAt = InkPoint(grip.end.x, grip.end.y)
                         endPreview = grip.line
+                    }
+                    is Grip.Vertex -> {
+                        mode = Mode.CurveVertex
+                        endShape = grip.curve
+                        vertexHandle = grip.vertex
+                        endGrab = InkPoint(grip.vertex.x - point.x, grip.vertex.y - point.y)
+                        endAt = InkPoint(grip.vertex.x, grip.vertex.y)
+                        endPreview = grip.curve
                     }
                     is Grip.Scale -> {
                         mode = Mode.Resizing
@@ -2449,6 +2472,7 @@ internal class LassoGesture {
                     }
                     Mode.Resizing -> updateResize(event.pagePoint(index, toPage))
                     Mode.LineEnd -> updateLineEnd(event.pagePoint(index, toPage))
+                    Mode.CurveVertex -> updateCurveVertex(event.pagePoint(index, toPage))
                     Mode.Held, Mode.Idle -> Unit
                 }
                 true
@@ -2578,6 +2602,16 @@ internal class LassoGesture {
                                 onSelect(selection?.copy(bounds = moved.pageBounds()))
                             }
                         }
+                        Mode.CurveVertex -> {
+                            updateCurveVertex(event.pagePoint(event.actionIndex, toPage))
+                            val shape = endShape
+                            val handle = vertexHandle
+                            val moved = endPreview
+                            if (shape != null && handle != null && moved != null && moved != shape) {
+                                onMoveShapeVertex(shape.id, handle.index, endAt.x, endAt.y)
+                                onSelect(selection?.copy(bounds = moved.pageBounds()))
+                            }
+                        }
                         // A press on something locked: the selection it landed on is already the
                         // one on screen, so the lift has nothing to report.
                         Mode.Held, Mode.Idle -> Unit
@@ -2604,6 +2638,7 @@ internal class LassoGesture {
     private sealed interface Grip {
         /** One end of a line held alone. */
         data class End(val line: Outline.Shape, val end: ShapeEnd) : Grip
+        data class Vertex(val curve: Outline.Shape, val vertex: ShapeVertex) : Grip
 
         /** A corner handle, and the rectangle it is a corner of. */
         data class Scale(val corner: Corner, val bounds: InkBounds) : Grip
@@ -2629,16 +2664,20 @@ internal class LassoGesture {
     ): Grip? {
         if (selection == null) return null
         val line = selection.lineShape(shapes)
+        val curve = selection.curveShape(shapes)
         val locked = selection.isLocked
         if (!locked) {
             if (line != null) {
                 line.endNear(point.x, point.y, SelectionChrome.HANDLE_REACH.value)
                     ?.let { return Grip.End(line, it) }
+            } else if (curve != null) {
+                curve.vertexNear(point.x, point.y, SelectionChrome.HANDLE_REACH.value)
+                    ?.let { return Grip.Vertex(curve, it) }
             } else {
                 selection.bounds.cornerNear(point)?.let { return Grip.Scale(it, selection.bounds) }
             }
         }
-        val onBody = selection.bounds.holdsBody(point, if (line != null) TAP_REACH else 0f)
+        val onBody = selection.bounds.holdsBody(point, if (line != null || curve != null) TAP_REACH else 0f)
         return if (onBody) Grip.Body(locked) else null
     }
 
@@ -2711,8 +2750,18 @@ internal class LassoGesture {
     private fun forgetLineEnd() {
         endShape = null
         endHandle = null
+        vertexHandle = null
         endGrab = InkPoint(0f, 0f)
         endPreview = null
+    }
+
+    /** Move a curve vertex from the original geometry; every frame is an absolute preview. */
+    private fun updateCurveVertex(point: InkPoint) {
+        val shape = endShape ?: return
+        val handle = vertexHandle ?: return
+        endAt = InkPoint(point.x + endGrab.x, point.y + endGrab.y)
+        endPreview = shape.withVertex(handle.index, endAt.x, endAt.y)
+        invalidateDraw()
     }
 
     /**

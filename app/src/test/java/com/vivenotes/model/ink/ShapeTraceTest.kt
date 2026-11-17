@@ -82,7 +82,7 @@ class ShapeTraceTest {
 
     @Test
     fun `closed shapes close and open ones do not`() {
-        val open = setOf(ShapeKind.Line, ShapeKind.Arrow, ShapeKind.L)
+        val open = setOf(ShapeKind.Line, ShapeKind.Arrow, ShapeKind.Curve, ShapeKind.L)
         val closed = setOf(
             ShapeKind.Rectangle, ShapeKind.RoundedRectangle, ShapeKind.Ellipse,
             ShapeKind.Triangle, ShapeKind.RightTriangle, ShapeKind.Diamond,
@@ -234,7 +234,7 @@ class ShapeTraceTest {
 
         assertEquals(ShapeKind.entries.toSet(), paged.toSet())
         assertEquals("a kind is on two pages at once", ShapeKind.entries.size, paged.size)
-        assertEquals(11, ShapeKind.onPage(PAGE_BASIC).size)
+        assertEquals(12, ShapeKind.onPage(PAGE_BASIC).size)
         assertEquals(9, ShapeKind.onPage(PAGE_SOLID).size)
         assertTrue(ShapeKind.onPage(PAGE_SOLID).all(ShapeKind::isSolid))
     }

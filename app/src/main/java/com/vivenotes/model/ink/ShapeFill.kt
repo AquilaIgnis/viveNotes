@@ -22,6 +22,7 @@ import com.vivenotes.model.Outline
  * makes [canFill] false and takes Fill out of the toolkit for it.
  */
 fun Outline.Shape.fillRegion(): List<FloatArray> {
+    if (kind == ShapeKind.Curve) return emptyList()
     val explicit = segments.explicitFillRegion()
     return when {
         explicit.isNotEmpty() -> explicit
@@ -49,7 +50,8 @@ internal fun List<ShapeSegment>.solidFillRegion(): List<FloatArray> = explicitFi
  * arc — because the toolkit asks it on every recomposition to decide whether Fill belongs on the bar.
  */
 val Outline.Shape.canFill: Boolean
-    get() = kind.isSolid || segments.contours().any { !it.hidden && it.isClosed }
+    get() = kind != ShapeKind.Curve &&
+        (kind.isSolid || segments.contours().any { !it.hidden && it.isClosed })
 
 /** Interleaved x/y as pairs. */
 private fun FloatArray.asPoints(): List<Pair<Float, Float>> =

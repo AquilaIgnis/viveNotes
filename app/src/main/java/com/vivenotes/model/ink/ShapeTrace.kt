@@ -45,6 +45,7 @@ const val PAGE_SOLID = 1
 enum class ShapeKind(val page: Int) {
     Line(PAGE_BASIC),
     Arrow(PAGE_BASIC),
+    Curve(PAGE_BASIC),
     Rectangle(PAGE_BASIC),
     RoundedRectangle(PAGE_BASIC),
     Ellipse(PAGE_BASIC),
@@ -152,6 +153,9 @@ fun trace(
 
     return when (kind) {
         ShapeKind.Line -> ShapeTracing(listOf(floatArrayOf(startX, startY, endX, endY)))
+        ShapeKind.Curve -> ShapeTracing(listOf(
+            seedCurve(left, top, right, bottom) { "" }.contours().single().polyline(),
+        ))
         ShapeKind.Arrow -> arrow(startX, startY, endX, endY)
         ShapeKind.Rectangle -> closedShape(
             closed(left, top, right, top, right, bottom, left, bottom),

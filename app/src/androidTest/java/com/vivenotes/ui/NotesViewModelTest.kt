@@ -78,6 +78,8 @@ import com.vivenotes.data.db.PageContentEntity
 import com.vivenotes.ink.InkCodec
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.db.InkEraseTargetEntity
+import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.vertices
 import com.vivenotes.ink.InkBounds
 import com.vivenotes.ink.CanvasSelection
 import com.vivenotes.ink.InkLassoMove
@@ -1504,6 +1506,48 @@ class NotesViewModelTest {
 
         assertEquals("group membership was not persisted", 1, vm.strokes.value.mapNotNull { it.groupId }.distinct().size)
         assertTrue("the selected colour was not persisted", vm.strokes.value.all { it.stroke.brush.colorIntArgb == blue })
+    }
+
+    @Test
+    fun curveVerticesAreUndoablePersistedAndCopied() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        val id = vm.insertShape(ShapeSettings(kind = ShapeKind.Curve), 40f, 80f, 280f, 240f)!!
+        val initial = vm.uiState.value.shapes.single()
+        assertEquals(3, initial.vertices().size)
+        vm.addShapeVertex(id)
+        val added = vm.uiState.value.shapes.single()
+        assertEquals(4, added.vertices().size)
+        vm.moveShapeVertex(id, 1, 100f, 150f)
+        val moved = vm.uiState.value.shapes.single()
+        assertEquals(100f, moved.vertices()[1].x, 0f)
+        vm.undoCanvas()
+        assertEquals(added, vm.uiState.value.shapes.single())
+        vm.undoCanvas()
+        assertEquals(initial, vm.uiState.value.shapes.single())
+        vm.redoCanvas()
+        vm.redoCanvas()
+        assertEquals(moved, vm.uiState.value.shapes.single())
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals(moved, vm.uiState.value.shapes.single())
+        vm.copySelection(selectionOf(shapeIds = setOf(id)))
+        vm.pasteObjects(InkPoint(400f, 300f))
+        val pasted = vm.uiState.value.shapes.first { it.id != id }
+        assertEquals(4, pasted.vertices().size)
+        assertTrue(pasted.segments.all { it.cubic != null })
+        assertTrue(pasted.segments.none { copy -> moved.segments.any { it.id == copy.id } })
+        val dx = pasted.x - moved.x
+        val dy = pasted.y - moved.y
+        pasted.segments.zip(moved.translated(dx, dy).segments).forEach { (a, b) ->
+            assertEquals(b.copy(id = a.id), a)
+        }
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals(2, vm.uiState.value.shapes.size)
+        assertEquals(pasted, vm.uiState.value.shapes.first { it.id != id })
     }
 
     @Test

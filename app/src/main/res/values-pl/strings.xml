@@ -908,4 +908,6 @@
     <string name="shape_hemisphere">Półkula</string>
     <string name="shape_frustum">Stożek ścięty</string>
     <string name="shape_wall_thickness" formatted="false">Grubość ścianki (%)</string>
+    <string name="shape_curve">Krzywa</string>
+    <string name="shape_add_vertex">Dodaj wierzchołek</string>
 </resources>

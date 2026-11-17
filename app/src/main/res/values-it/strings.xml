@@ -874,4 +874,6 @@
     <string name="shape_hemisphere">Emisfero</string>
     <string name="shape_frustum">Tronco di cono</string>
     <string name="shape_wall_thickness" formatted="false">Spessore della parete (%)</string>
+    <string name="shape_curve">Curva</string>
+    <string name="shape_add_vertex">Aggiungi vertice</string>
 </resources>

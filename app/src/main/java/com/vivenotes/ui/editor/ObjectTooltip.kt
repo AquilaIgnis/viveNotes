@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
@@ -459,6 +460,23 @@ internal fun RowScope.EquationGraphAction(onGraph: () -> Unit) {
             .semantics { contentDescription = description },
     ) {
         Icon(MaterialSymbols.AddChart, contentDescription = null, tint = Color(0xFFE8EAED), modifier = Modifier.size(18.dp))
+    }
+}
+
+internal const val OBJECT_ADD_VERTEX_TAG = "object-add-vertex"
+
+@Composable
+internal fun RowScope.AddVertexAction(onAdd: () -> Unit) {
+    TextButton(
+        onClick = onAdd,
+        contentPadding = PaddingValues(horizontal = 7.dp),
+        modifier = Modifier.heightIn(min = 48.dp).testTag(OBJECT_ADD_VERTEX_TAG),
+    ) {
+        Text(
+            text = stringResource(R.string.shape_add_vertex),
+            color = Color(0xFFE8EAED),
+            style = MaterialTheme.typography.labelSmall,
+        )
     }
 }
 

@@ -951,4 +951,6 @@
     <string name="shape_hemisphere">Hemisphere</string>
     <string name="shape_frustum">Frustum</string>
     <string name="shape_wall_thickness" formatted="false">Wall thickness (%)</string>
+    <string name="shape_curve">Curve</string>
+    <string name="shape_add_vertex">Add vertex</string>
 </resources>

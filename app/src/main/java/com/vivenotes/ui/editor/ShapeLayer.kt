@@ -47,6 +47,11 @@ import com.vivenotes.model.ink.ShapeAxis
 import com.vivenotes.model.ink.ShapeContour
 import com.vivenotes.model.ink.ShapeEnd
 import com.vivenotes.model.ink.ShapeSegment
+import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.ShapeVertex
+import com.vivenotes.model.ink.vertices
+import com.vivenotes.model.ink.vertexNear
+import com.vivenotes.model.ink.withVertex
 import com.vivenotes.model.ink.arms
 import com.vivenotes.model.ink.endNear
 import com.vivenotes.model.ink.ends
@@ -121,6 +126,7 @@ internal fun ShapeLayer(
     /** One end of a line or an arrow, moved to where the finger left it — see [ShapeEnd]. */
     onMoveShapeEnd: (shapeId: String, atEnd: Boolean, x: Float, y: Float) -> Unit =
         { _, _, _, _ -> },
+    onMoveShapeVertex: (String, Int, Float, Float) -> Unit = { _, _, _, _ -> },
     /** Null in standalone uses; the document extent when hosted by the unbounded page. */
     canvasExtent: DpSize? = null,
     modifier: Modifier = Modifier,
@@ -148,6 +154,7 @@ internal fun ShapeLayer(
     val currentOnResize = rememberUpdatedState(onResizeShape)
     val currentOnResizeArm = rememberUpdatedState(onResizeShapeArm)
     val currentOnMoveEnd = rememberUpdatedState(onMoveShapeEnd)
+    val currentOnMoveVertex = rememberUpdatedState(onMoveShapeVertex)
 
     // The corner drag in flight, drawn but not yet written — see [ShapeResize]. A holder rather than
     // a delegated `var` for the same reason as the states above: the gesture handler below outlives
@@ -159,6 +166,7 @@ internal fun ShapeLayer(
 
     /** And a line's end, likewise — see [ShapeEndMove]. */
     val endMove = remember { mutableStateOf<ShapeEndMove?>(null) }
+    val vertexMove = remember { mutableStateOf<ShapeVertexMove?>(null) }
 
     /** And the move, for the reason [ShapeMove] gives — which is undo's, not arithmetic's. */
     val move = remember { mutableStateOf<ShapeMove?>(null) }
@@ -214,6 +222,9 @@ internal fun ShapeLayer(
                     // line that is most of its length.
                     val endGrab = (handle as? Handle.End)?.end?.let { end ->
                         Offset(end.x - startX, end.y - startY)
+                    } ?: Offset.Zero
+                    val vertexGrab = (handle as? Handle.Vertex)?.vertex?.let {
+                        Offset(it.x - startX, it.y - startY)
                     } ?: Offset.Zero
 
                     // The shape this gesture moves, chosen on the down and held for the whole of it:
@@ -285,6 +296,9 @@ internal fun ShapeLayer(
                             }
                             move.value?.let { pending ->
                                 currentOnMove.value(pending.shapeId, pending.dx, pending.dy)
+                            }
+                            vertexMove.value?.let { pending ->
+                                currentOnMoveVertex.value(pending.shapeId, pending.index, pending.x, pending.y)
                             }
                             break
                         }
@@ -360,6 +374,10 @@ internal fun ShapeLayer(
                                     endMove.value =
                                         ShapeEndMove(target.id, handle.end.atEnd, point.x, point.y)
                                 }
+                                is Handle.Vertex -> {
+                                    val point = change.position / density + vertexGrab
+                                    vertexMove.value = ShapeVertexMove(target.id, handle.vertex.index, point.x, point.y)
+                                }
 
                                 // Measured from where the drag began rather than from the last
                                 // sample, so the travel is one number the whole way through and the
@@ -384,6 +402,7 @@ internal fun ShapeLayer(
                     resize.value = null
                     armResize.value = null
                     endMove.value = null
+                    vertexMove.value = null
                     move.value = null
                 }
             }
@@ -399,6 +418,7 @@ internal fun ShapeLayer(
             val resizing = resize.value
             val arming = armResize.value
             val ending = endMove.value
+            val vertex = vertexMove.value
             val nudging = move.value
 
             // The corner drag and the lasso are both preview-only, so both are applied here rather
@@ -406,6 +426,7 @@ internal fun ShapeLayer(
             // handles would sit around the size the drag started at. An arm drag is the same, which
             // is also what carries its tab along with the tip it is pulling.
             fun previewOf(shape: Outline.Shape): Outline.Shape = when {
+                vertex?.shapeId == shape.id -> shape.withVertex(vertex.index, vertex.x, vertex.y)
                 resizing?.shapeId == shape.id -> shape.scaledAbout(
                     resizing.anchorX, resizing.anchorY, resizing.scaleX, resizing.scaleY,
                 )
@@ -501,6 +522,8 @@ private data class ShapeEndMove(
     val y: Float,
 )
 
+private data class ShapeVertexMove(val shapeId: String, val index: Int, val x: Float, val y: Float)
+
 /**
  * A move in flight: how far the shape has travelled since the drag began.
  *
@@ -523,6 +546,7 @@ private data class ShapeMove(
  * where the shape currently is.
  */
 internal fun Outline.Shape.withLassoPreview(gesture: LassoGesture): Outline.Shape {
+    gesture.curveVertexPreview()?.takeIf { it.id == id }?.let { return it }
     gesture.lineEndPreview()?.takeIf { it.id == id }?.let { return it }
     val offset = gesture.previewOffset()
     val scale = gesture.previewScale()
@@ -608,7 +632,8 @@ private fun DrawScope.drawSelection(
     // though it has no box of its own: its whole chrome is the two end handles, and dropping those
     // without putting something in their place would leave a selected shape with nothing drawn on it.
     val ends = shape.ends()
-    val points = if (ends.isEmpty() || shape.lockGroup != null) {
+    val vertices = shape.vertices()
+    val points = if ((ends.isEmpty() && vertices.isEmpty()) || shape.lockGroup != null) {
         drawRect(
             color = accent,
             topLeft = Offset(left, top),
@@ -622,7 +647,8 @@ private fun DrawScope.drawSelection(
         )
         listOf(left to top, right to top, right to bottom, left to bottom)
     } else {
-        ends.map { end -> (end.x * scale) to (end.y * scale) }
+        ends.map { end -> (end.x * scale) to (end.y * scale) } +
+            vertices.map { (it.x * scale) to (it.y * scale) }
     }
 
     // **Locked: the rectangle stays, the grabs go**. What is held still has to
@@ -697,6 +723,7 @@ private sealed interface Handle {
     data class Box(val corner: Corner) : Handle
     data class Arm(val arm: ShapeArm) : Handle
     data class End(val end: ShapeEnd) : Handle
+    data class Vertex(val vertex: ShapeVertex) : Handle
 }
 
 private fun Outline.Shape.cornerPoint(corner: Corner): Pair<Float, Float> = when (corner) {
@@ -735,6 +762,7 @@ private fun Outline.Shape.handleNear(x: Float, y: Float): Handle? {
     // each other on a diagonal line — its ends are two corners of its own bounding box — and the
     // grab that turned the line would half the time scale it instead. A kind has one or the other.
     if (kind.hasEnds) return endNear(x, y, HANDLE_REACH.value)?.let(Handle::End)
+    if (kind == ShapeKind.Curve) return vertexNear(x, y, HANDLE_REACH.value)?.let(Handle::Vertex)
 
     val candidates = Corner.entries.map { corner ->
         val (cx, cy) = cornerPoint(corner)

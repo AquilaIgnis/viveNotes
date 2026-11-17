@@ -143,6 +143,8 @@ import com.vivenotes.model.ink.canFill
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.model.ink.ShapeKind
+import com.vivenotes.model.ink.withVertex
+import com.vivenotes.model.ink.withAddedVertex
 import com.vivenotes.ink.withEndOnPage
 import com.vivenotes.model.ink.ends
 import com.vivenotes.model.ink.withArm
@@ -2697,6 +2699,14 @@ class NotesViewModel(
             val end = shape.ends().firstOrNull { it.atEnd == atEnd }
             end?.let { shape.withEndOnPage(it, x, y) } ?: shape
         }
+    }
+
+    fun moveShapeVertex(shapeId: String, index: Int, x: Float, y: Float) {
+        updateShapeOutline(shapeId) { it.withVertex(index, x, y) }
+    }
+
+    fun addShapeVertex(shapeId: String) {
+        updateShapeOutline(shapeId) { it.withAddedVertex(::newId) }
     }
 
     /**
