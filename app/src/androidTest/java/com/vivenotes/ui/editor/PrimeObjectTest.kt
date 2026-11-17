@@ -12,6 +12,7 @@ import androidx.compose.ui.test.moveTo
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -44,6 +45,15 @@ import com.vivenotes.ui.theme.ViveNotesTheme
 import com.vivenotes.model.ink.vertices
 import com.vivenotes.model.ink.withVertex
 import com.vivenotes.model.ink.withAddedVertex
+import com.vivenotes.model.ink.curveInsertionPoints
+import com.vivenotes.model.ink.withRemovedVertex
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
 
 /**
  * An object on the canvas, as the whole page assembles it: moved freely, selected by a tap, shown
@@ -164,9 +174,14 @@ class PrimeObjectTest {
                     } else {
                         null
                     },
-                    onAddShapeVertex = { id ->
+                    onAddShapeVertex = { id, segmentId ->
                         this@PrimeObjectTest.shapes.value = this@PrimeObjectTest.shapes.value.map {
-                            if (it.id == id) it.withAddedVertex { "vertex-${vertexIds++}" } else it
+                            if (it.id == id) it.withAddedVertex(segmentId) { "vertex-${vertexIds++}" } else it
+                        }
+                    },
+                    onRemoveShapeVertex = { id, segmentId, atEnd ->
+                        this@PrimeObjectTest.shapes.value = this@PrimeObjectTest.shapes.value.map {
+                            if (it.id == id) it.withRemovedVertex(segmentId, atEnd) else it
                         }
                     },
                     onMoveShapeVertex = { id, index, x, y ->
@@ -215,8 +230,16 @@ class PrimeObjectTest {
         assertEquals(3, shapes.value.single().vertices().size)
         compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).assertIsDisplayed().performClick()
         compose.waitForIdle()
+        assertEquals("The toolkit must wait for a location", 3, shapes.value.single().vertices().size)
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).assertIsSelected()
+        compose.onNodeWithTag(curveInsertionTag(0)).assertIsDisplayed()
+        compose.onNodeWithTag(curveInsertionTag(1)).assertIsDisplayed()
+            .performTouchInput { click(center) }
+        compose.waitForIdle()
+        compose.onNodeWithTag(CURVE_INSERTION_OVERLAY_TAG).assertDoesNotExist()
         val vertices = shapes.value.single().vertices()
         assertEquals(4, vertices.size)
+        assertEquals(240f, vertices[2].x, 0.01f)
         compose.onNodeWithTag(OBJECT_FILL_TAG).assertDoesNotExist()
         val added = vertices.first { it.x != 60f && it.x != 180f && it.x != 300f }
         dragPage(added.x, added.y, added.x + 20f, added.y + 40f)
@@ -233,12 +256,136 @@ class PrimeObjectTest {
         fingerTapPage(180f, 180f)
         compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).assertIsDisplayed().performClick()
         compose.waitForIdle()
+        assertEquals(3, shapes.value.single().vertices().size)
+        compose.onNodeWithTag(curveInsertionTag(0)).assertIsDisplayed().performClick()
+        compose.waitForIdle()
         fingerDragPage(180f, 180f, 210f, 230f)
         val peak = shapes.value.single().vertices().first { it.x == 210f }
         assertEquals(230f, peak.y, 1f)
         assertEquals(4, shapes.value.single().vertices().size)
         assertEquals(1, vertexEdits)
         assertNull(resized)
+    }
+
+    @Test
+    fun curveKeepAndKeepOffActionsHaveAccessibleLabelsAndTouchTargets() {
+        setPage(listOf(curve()))
+        tapPage(180f, 180f)
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).assertIsDisplayed()
+            .assertContentDescriptionEquals("Add vertex").assertWidthIsEqualTo(48.dp).assertHeightIsEqualTo(48.dp)
+        compose.onNodeWithTag(OBJECT_REMOVE_VERTEX_TAG).assertIsDisplayed()
+            .assertContentDescriptionEquals("Remove vertex").assertWidthIsEqualTo(48.dp).assertHeightIsEqualTo(48.dp)
+        val captured = compose.onRoot().captureToImage()
+        java.io.File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "curve-vertex-toolkit.png")
+            .outputStream().use { captured.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test
+    fun removeVertexWaitsForAChosenPointAndKeepsTwoPointsEditable() {
+        setPage(listOf(curve()))
+        tapPage(180f, 180f)
+        compose.onNodeWithTag(OBJECT_REMOVE_VERTEX_TAG).performClick().assertIsSelected()
+        assertEquals(3, shapes.value.single().vertices().size)
+        for (index in 0..2) compose.onNodeWithTag(curveRemovalTag(index)).assertIsDisplayed()
+        compose.onNodeWithTag(curveRemovalTag(1)).performTouchInput { click(center) }
+        compose.waitForIdle()
+        assertEquals(listOf(60f to 320f, 300f to 320f), shapes.value.single().vertices().map { it.x to it.y })
+        compose.onNodeWithTag(CURVE_REMOVAL_OVERLAY_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(OBJECT_REMOVE_VERTEX_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).performClick()
+        compose.onNodeWithTag(curveInsertionTag(0)).performClick()
+        compose.waitForIdle()
+        assertEquals(3, shapes.value.single().vertices().size)
+        compose.onNodeWithTag(OBJECT_REMOVE_VERTEX_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    fun aLassoSelectedCurveCanRemoveAnEndpoint() {
+        setPage(listOf(curve()), lassoing = true)
+        fingerTapPage(180f, 180f)
+        compose.onNodeWithTag(OBJECT_REMOVE_VERTEX_TAG).performClick()
+        compose.onNodeWithTag(curveRemovalTag(2)).performTouchInput { click(center) }
+        compose.waitForIdle()
+        assertEquals(listOf(60f to 320f, 180f to 180f), shapes.value.single().vertices().map { it.x to it.y })
+    }
+
+    @Test
+    fun addAndRemoveVertexModesAreMutuallyExclusiveAndCanBeCancelled() {
+        val original = curve()
+        setPage(listOf(original))
+        tapPage(180f, 180f)
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).performClick()
+        compose.onNodeWithTag(curveInsertionTag(0)).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_REMOVE_VERTEX_TAG).performClick().assertIsSelected()
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).assertIsNotSelected()
+        compose.onNodeWithTag(CURVE_INSERTION_OVERLAY_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(curveRemovalTag(1)).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_REMOVE_VERTEX_TAG).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag(CURVE_REMOVAL_OVERLAY_TAG).assertDoesNotExist()
+        assertEquals(original, shapes.value.single())
+    }
+
+    @Test
+    fun pressingAddVertexAgainCancelsWithoutEditingTheCurve() {
+        val original = curve()
+        setPage(listOf(original))
+        tapPage(180f, 180f)
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).performClick()
+        compose.onNodeWithTag(curveInsertionTag(0)).assertIsDisplayed()
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag(CURVE_INSERTION_OVERLAY_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).assertIsNotSelected()
+        assertEquals(original, shapes.value.single())
+    }
+
+    @Test
+    fun tappingAwayCancelsGhostPointsWithoutOpeningText() {
+        val original = curve()
+        setPage(listOf(original))
+        tapPage(180f, 180f)
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).performClick()
+        compose.onNodeWithTag(CURVE_INSERTION_OVERLAY_TAG).performTouchInput { click(atPage(450f, 380f)) }
+        compose.waitForIdle()
+        compose.onNodeWithTag(CURVE_INSERTION_OVERLAY_TAG).assertDoesNotExist()
+        assertEquals(original, shapes.value.single())
+        assertNull(created)
+        assertTrue(holdsSelection)
+    }
+
+    @Test
+    fun ghostPointsAreRefreshedAfterEachChosenInsertion() {
+        setPage(listOf(curve()))
+        tapPage(180f, 180f)
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).performClick()
+        compose.onNodeWithTag(curveInsertionTag(0)).performClick()
+        compose.waitForIdle()
+        val afterFirst = shapes.value.single()
+        assertEquals(4, afterFirst.vertices().size)
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).performClick()
+        compose.onNodeWithTag(curveInsertionTag(0)).assertIsDisplayed()
+        compose.onNodeWithTag(curveInsertionTag(1)).assertIsDisplayed()
+        compose.onNodeWithTag(curveInsertionTag(2)).assertIsDisplayed().performClick()
+        compose.waitForIdle()
+        val result = shapes.value.single()
+        assertEquals(5, result.vertices().size)
+        assertEquals(afterFirst.segments.take(2), result.segments.take(2))
+    }
+
+    @Test
+    fun pickingAnotherToolCancelsPendingVertexInsertion() {
+        setPage(listOf(curve()))
+        tapPage(180f, 180f)
+        compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).performClick()
+        compose.onNodeWithTag(curveInsertionTag(0)).assertIsDisplayed()
+        pickAnotherTool()
+        compose.onNodeWithTag(CURVE_INSERTION_OVERLAY_TAG).assertDoesNotExist()
+        assertEquals(3, shapes.value.single().vertices().size)
+    }
+
+    private fun atPage(x: Float, y: Float): Offset = with(density) {
+        Offset(x.dp.toPx(), y.dp.toPx())
     }
 
     @Test
@@ -284,6 +431,7 @@ class PrimeObjectTest {
         tapPage(180f, 180f)
         compose.onNodeWithTag(OBJECT_TOOLTIP_TAG).assertIsDisplayed()
         compose.onNodeWithTag(OBJECT_ADD_VERTEX_TAG).assertDoesNotExist()
+        compose.onNodeWithTag(OBJECT_REMOVE_VERTEX_TAG).assertDoesNotExist()
     }
 
     @Test

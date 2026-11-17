@@ -145,6 +145,7 @@ import com.vivenotes.model.ink.seedSegments
 import com.vivenotes.model.ink.ShapeKind
 import com.vivenotes.model.ink.withVertex
 import com.vivenotes.model.ink.withAddedVertex
+import com.vivenotes.model.ink.withRemovedVertex
 import com.vivenotes.ink.withEndOnPage
 import com.vivenotes.model.ink.ends
 import com.vivenotes.model.ink.withArm
@@ -2705,8 +2706,12 @@ class NotesViewModel(
         updateShapeOutline(shapeId) { it.withVertex(index, x, y) }
     }
 
-    fun addShapeVertex(shapeId: String) {
-        updateShapeOutline(shapeId) { it.withAddedVertex(::newId) }
+    fun addShapeVertex(shapeId: String, segmentId: String) {
+        updateShapeOutline(shapeId) { it.withAddedVertex(segmentId, ::newId) }
+    }
+
+    fun removeShapeVertex(shapeId: String, segmentId: String, atEnd: Boolean) {
+        updateShapeOutline(shapeId) { it.withRemovedVertex(segmentId, atEnd) }
     }
 
     /**

@@ -1509,15 +1509,37 @@ class NotesViewModelTest {
     }
 
     @Test
+    fun curveVertexRemovalIsUndoableAndPersistsAfterReload() = runTest(dispatcher) {
+        val vm = seededViewModel()
+        val pageId = vm.uiState.value.selectedPageId!!
+        val id = vm.insertShape(ShapeSettings(kind = ShapeKind.Curve), 40f, 80f, 280f, 240f)!!
+        val before = vm.uiState.value.shapes.single()
+        vm.removeShapeVertex(id, before.segments.last().id, false)
+        val removed = vm.uiState.value.shapes.single()
+        assertEquals(2, removed.vertices().size)
+        vm.undoCanvas()
+        assertEquals(before, vm.uiState.value.shapes.single())
+        vm.redoCanvas()
+        assertEquals(removed, vm.uiState.value.shapes.single())
+        advanceUntilIdle()
+        vm.openPage(pageId)
+        advanceUntilIdle()
+        assertEquals(removed, vm.uiState.value.shapes.single())
+        vm.addShapeVertex(id, removed.segments.single().id)
+        assertEquals(3, vm.uiState.value.shapes.single().vertices().size)
+    }
+
+    @Test
     fun curveVerticesAreUndoablePersistedAndCopied() = runTest(dispatcher) {
         val vm = seededViewModel()
         val pageId = vm.uiState.value.selectedPageId!!
         val id = vm.insertShape(ShapeSettings(kind = ShapeKind.Curve), 40f, 80f, 280f, 240f)!!
         val initial = vm.uiState.value.shapes.single()
         assertEquals(3, initial.vertices().size)
-        vm.addShapeVertex(id)
+        vm.addShapeVertex(id, initial.segments.last().id)
         val added = vm.uiState.value.shapes.single()
         assertEquals(4, added.vertices().size)
+        assertEquals(initial.segments.first(), added.segments.first())
         vm.moveShapeVertex(id, 1, 100f, 150f)
         val moved = vm.uiState.value.shapes.single()
         assertEquals(100f, moved.vertices()[1].x, 0f)

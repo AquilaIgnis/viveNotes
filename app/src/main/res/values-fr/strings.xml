@@ -876,4 +876,7 @@
     <string name="shape_wall_thickness" formatted="false">Épaisseur de paroi (%)</string>
     <string name="shape_curve">Courbe</string>
     <string name="shape_add_vertex">Ajouter un sommet</string>
+    <string name="shape_insert_vertex_between">Ajouter un sommet entre les points %1$d et %2$d</string>
+    <string name="shape_remove_vertex">Supprimer un sommet</string>
+    <string name="shape_remove_vertex_point">Supprimer le point %1$d</string>
 </resources>

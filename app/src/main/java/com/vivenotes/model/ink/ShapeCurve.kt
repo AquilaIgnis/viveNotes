@@ -19,6 +19,54 @@ data class ShapeCubic(val x1: Float, val y1: Float, val x2: Float, val y2: Float
 /** A curve's on-path vertex, addressed independently of its coordinates. */
 data class ShapeVertex(val index: Int, val x: Float, val y: Float)
 
+/** A proposed on-path vertex between two existing vertices, addressed by the span to split. */
+data class CurveInsertionPoint(val segmentId: String, val x: Float, val y: Float)
+
+/** An existing vertex, addressed by its segment so a stale target cannot remove another point. */
+data class CurveRemovalPoint(val segmentId: String, val atEnd: Boolean, val index: Int, val x: Float, val y: Float)
+
+fun Outline.Shape.curveRemovalPoints(): List<CurveRemovalPoint> {
+    val points = vertices()
+    if (lockGroup != null || points.size <= 2) return emptyList()
+    return points.map { point ->
+        val atEnd = point.index == segments.size
+        CurveRemovalPoint(
+            segments[if (atEnd) segments.lastIndex else point.index].id,
+            atEnd, point.index, point.x, point.y,
+        )
+    }
+}
+
+/** Remove the chosen vertex and refit through the remaining points, keeping at least two. */
+fun Outline.Shape.withRemovedVertex(segmentId: String, atEnd: Boolean): Outline.Shape {
+    if (kind != ShapeKind.Curve || lockGroup != null) return this
+    val points = vertices()
+    if (points.size <= 2) return this
+    val span = segments.indexOfFirst { it.id == segmentId }
+    if (span < 0 || (atEnd && span != segments.lastIndex)) return this
+    val index = if (atEnd) span + 1 else span
+    val remaining = points.filterIndexed { position, _ -> position != index }
+        .mapIndexed { position, point -> point.copy(index = position) }
+    // An interior removal joins the incoming span to the next vertex and drops the outgoing span.
+    val edges = segments.filterIndexed { position, _ ->
+        position != if (index == points.lastIndex) segments.lastIndex else index
+    }
+    return copy(segments = smoothCurve(remaining, edges)).withRecomputedBounds()
+}
+
+fun Outline.Shape.curveInsertionPoints(): List<CurveInsertionPoint> {
+    if (kind != ShapeKind.Curve || lockGroup != null) return emptyList()
+    return segments.mapNotNull { span ->
+        span.cubic?.let { c ->
+            CurveInsertionPoint(
+                span.id,
+                (span.x1 + 3f * c.x1 + 3f * c.x2 + span.x2) / 8f,
+                (span.y1 + 3f * c.y1 + 3f * c.y2 + span.y2) / 8f,
+            )
+        }
+    }
+}
+
 fun Outline.Shape.vertices(): List<ShapeVertex> {
     if (kind != ShapeKind.Curve || segments.isEmpty()) return emptyList()
     return segments.mapIndexed { index, segment -> ShapeVertex(index, segment.x1, segment.y1) } +
@@ -116,15 +164,11 @@ private fun smoothCurve(points: List<ShapeVertex>, segments: List<ShapeSegment>)
     }
 }
 
-/** Split the longest span at its midpoint with de Casteljau subdivision: the path stays identical. */
-fun Outline.Shape.withAddedVertex(nextId: () -> String): Outline.Shape {
+/** Split the chosen span at its midpoint with de Casteljau subdivision: the path stays identical. */
+fun Outline.Shape.withAddedVertex(segmentId: String, nextId: () -> String): Outline.Shape {
     if (kind != ShapeKind.Curve || lockGroup != null) return this
-    val index = segments.indices.maxByOrNull { span ->
-        val points = segments[span].polyline()
-        (0 until points.size - 2 step 2).sumOf {
-            hypot(points[it + 2] - points[it], points[it + 3] - points[it + 1]).toDouble()
-        }
-    } ?: return this
+    val index = segments.indexOfFirst { it.id == segmentId }
+    if (index < 0) return this
     val segment = segments[index]
     val c = segment.cubic ?: return this
     val ax = (segment.x1 + c.x1) / 2f

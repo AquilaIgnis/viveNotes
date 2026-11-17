@@ -858,4 +858,7 @@
     <string name="shape_wall_thickness" formatted="false">벽 두께 (%)</string>
     <string name="shape_curve">곡선</string>
     <string name="shape_add_vertex">꼭짓점 추가</string>
+    <string name="shape_insert_vertex_between">점 %1$d과(와) %2$d 사이에 꼭짓점 추가</string>
+    <string name="shape_remove_vertex">꼭짓점 삭제</string>
+    <string name="shape_remove_vertex_point">점 %1$d 삭제</string>
 </resources>

@@ -128,6 +128,7 @@ import com.vivenotes.ink.InkPoint
 import com.vivenotes.graph.GraphDrag
 import com.vivenotes.graph.GraphPainter
 import com.vivenotes.ink.CanvasSelection
+import com.vivenotes.ink.curveShape
 import com.vivenotes.ink.isInkAndLines
 import com.vivenotes.ink.selectByFingerTap
 import com.vivenotes.ink.InkLassoMove
@@ -470,7 +471,8 @@ fun EditorPane(
     onSetShapeLineType: (Set<String>, LineType) -> Unit = { _, _ -> },
     /** Null clears the fill: an absent inside, not a transparent one. */
     onSetShapeFill: (Set<String>, Int?) -> Unit = { _, _ -> },
-    onAddShapeVertex: (String) -> Unit = {},
+    onAddShapeVertex: (String, String) -> Unit = { _, _ -> },
+    onRemoveShapeVertex: (String, String, Boolean) -> Unit = { _, _, _ -> },
     erasing: Boolean = false,
     lassoing: Boolean = false,
     lassoSettings: LassoSettings = LassoSettings(),
@@ -660,6 +662,13 @@ fun EditorPane(
      * Cleared with the page, since ids from the last page mean nothing on this one.
      */
     var selection by remember(pageId) { mutableStateOf<CanvasSelection?>(null) }
+    var vertexEdit by remember(pageId) { mutableStateOf<CurveVertexEdit?>(null) }
+    val insertionCurve = selection.curveShape(shapes)?.takeIf { it.lockGroup == null }
+    LaunchedEffect(vertexEdit, insertionCurve?.id, insertionCurve?.segments?.size) {
+        if (vertexEdit?.shapeId != insertionCurve?.id ||
+            (vertexEdit?.mode == CurveVertexMode.Remove && (insertionCurve?.segments?.size ?: 0) < 2)
+        ) vertexEdit = null
+    }
 
     /**
      * The same thing, reachable from the canvas tap detector — which is keyed on page geometry and so
@@ -1862,6 +1871,26 @@ fun EditorPane(
                 )
             }
 
+            insertionCurve?.let { curve ->
+                CurveVertexInsertionOverlay(
+                    curve = curve,
+                    visible = vertexEdit?.shapeId == curve.id,
+                    mode = vertexEdit?.mode ?: CurveVertexMode.Add,
+                    pageToView = {
+                        inkPageToView(zoom, density.density, horizontal.value.toFloat(), vertical.value.toFloat())
+                    },
+                    onInsert = { segmentId ->
+                        vertexEdit = null
+                        onAddShapeVertex(curve.id, segmentId)
+                    },
+                    onRemove = { segmentId, atEnd ->
+                        vertexEdit = null
+                        onRemoveShapeVertex(curve.id, segmentId, atEnd)
+                    },
+                    onDismiss = { vertexEdit = null },
+                )
+            }
+
             // One bar over whatever is selected, whatever kind it is. Raised here rather than
             // inside a layer because a selection can hold both kinds, and because the bar is chrome:
             // out here it keeps its own size at any zoom and is clamped against the *window*, where a
@@ -1935,7 +1964,18 @@ fun EditorPane(
                             val selectedShapes = shapes.filter { it.id in held.shapeIds }
                             selectedShapes.singleOrNull()
                                 ?.takeIf { it.kind == com.vivenotes.model.ink.ShapeKind.Curve && it.lockGroup == null }
-                                ?.let { curve -> AddVertexAction { onAddShapeVertex(curve.id) } }
+                                ?.let { curve ->
+                                    val add = CurveVertexEdit(curve.id, CurveVertexMode.Add)
+                                    AddVertexAction(adding = vertexEdit == add) {
+                                        vertexEdit = if (vertexEdit == add) null else add
+                                    }
+                                    if (curve.segments.size > 1) {
+                                        val remove = CurveVertexEdit(curve.id, CurveVertexMode.Remove)
+                                        RemoveVertexAction(removing = vertexEdit == remove) {
+                                            vertexEdit = if (vertexEdit == remove) null else remove
+                                        }
+                                    }
+                                }
                             val widths = selectedShapes.map { it.borderWidth.roundToInt() }
                             ThicknessAction(
                                 width = widths.distinct().singleOrNull()

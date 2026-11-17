@@ -2229,6 +2229,7 @@ private fun PageEditor(
         onMoveShapeEnd = viewModel::moveShapeEnd,
         onMoveShapeVertex = viewModel::moveShapeVertex,
         onAddShapeVertex = viewModel::addShapeVertex,
+        onRemoveShapeVertex = viewModel::removeShapeVertex,
         onMoveShapes = viewModel::moveShapes,
         onResizeShapes = viewModel::resizeShapes,
         onDeleteShapes = viewModel::deleteShapes,

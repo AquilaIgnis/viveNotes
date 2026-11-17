@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
@@ -24,6 +23,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -464,19 +465,28 @@ internal fun RowScope.EquationGraphAction(onGraph: () -> Unit) {
 }
 
 internal const val OBJECT_ADD_VERTEX_TAG = "object-add-vertex"
+internal const val OBJECT_REMOVE_VERTEX_TAG = "object-remove-vertex"
 
 @Composable
-internal fun RowScope.AddVertexAction(onAdd: () -> Unit) {
-    TextButton(
-        onClick = onAdd,
-        contentPadding = PaddingValues(horizontal = 7.dp),
-        modifier = Modifier.heightIn(min = 48.dp).testTag(OBJECT_ADD_VERTEX_TAG),
+internal fun RowScope.AddVertexAction(adding: Boolean = false, onAdd: () -> Unit) {
+    VertexAction(MaterialSymbols.Keep, R.string.shape_add_vertex, OBJECT_ADD_VERTEX_TAG, adding, onAdd)
+}
+
+@Composable
+internal fun RowScope.RemoveVertexAction(removing: Boolean = false, onRemove: () -> Unit) {
+    VertexAction(MaterialSymbols.KeepOff, R.string.shape_remove_vertex, OBJECT_REMOVE_VERTEX_TAG, removing, onRemove)
+}
+
+@Composable
+private fun VertexAction(glyph: ImageVector, @StringRes label: Int, tag: String, active: Boolean, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = if (active) Color(0xFFE8EAED).copy(alpha = 0.14f) else Color.Transparent,
+        ),
+        modifier = Modifier.size(48.dp).testTag(tag).semantics { selected = active },
     ) {
-        Text(
-            text = stringResource(R.string.shape_add_vertex),
-            color = Color(0xFFE8EAED),
-            style = MaterialTheme.typography.labelSmall,
-        )
+        Icon(glyph, contentDescription = stringResource(label), tint = Color(0xFFE8EAED), modifier = Modifier.size(20.dp))
     }
 }
 

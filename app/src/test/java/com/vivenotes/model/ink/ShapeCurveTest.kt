@@ -31,7 +31,7 @@ class ShapeCurveTest {
 
     @Test fun `adding a vertex preserves every point of the original cubic`() {
         val original = curve()
-        val added = original.withAddedVertex { "new" }
+        val added = original.withAddedVertex(original.segments.first().id) { "new" }
         assertEquals(4, added.vertices().size)
         val split = original.segments.indexOfFirst { old -> added.segments.first { it.id == old.id } != old }
         assertTrue(split >= 0)
@@ -44,6 +44,48 @@ class ShapeCurveTest {
             assertEquals(before.second, after.second, 0.0001f)
         }
         assertTrue(added.segments.map { it.id }.containsAll(original.segments.map { it.id }))
+    }
+
+    @Test fun `ghost points are on every span between existing vertices`() {
+        val original = curve()
+        val points = original.curveInsertionPoints()
+        assertEquals(2, points.size)
+        points.zip(original.segments).forEach { (point, span) ->
+            assertEquals(span.id, point.segmentId)
+            assertEquals(span.at(0.5f).first, point.x, 0.0001f)
+            assertEquals(span.at(0.5f).second, point.y, 0.0001f)
+        }
+        assertTrue(original.copy(lockGroup = "locked").curveInsertionPoints().isEmpty())
+        assertTrue(original.copy(kind = ShapeKind.Line).curveInsertionPoints().isEmpty())
+    }
+
+    @Test fun `choosing a shorter span inserts there and leaves the other span untouched`() {
+        val original = curve().withVertex(2, 1200f, 180f)
+        val chosen = original.curveInsertionPoints().first()
+        val added = original.withAddedVertex(chosen.segmentId) { "new" }
+        assertEquals(4, added.vertices().size)
+        assertEquals(chosen.x, added.vertices()[1].x, 0.0001f)
+        assertEquals(chosen.y, added.vertices()[1].y, 0.0001f)
+        assertEquals(original.segments.last(), added.segments.last())
+    }
+
+    @Test fun `choosing the last span preserves its exact path too`() {
+        val original = curve()
+        val added = original.withAddedVertex(original.segments.last().id) { "new" }
+        assertEquals(original.segments.first(), added.segments.first())
+        for (step in 0..100) {
+            val t = step / 100f
+            val before = original.segments.last().at(t)
+            val after = if (t <= 0.5f) added.segments[1].at(t * 2f)
+                else added.segments[2].at((t - 0.5f) * 2f)
+            assertEquals(before.first, after.first, 0.0001f)
+            assertEquals(before.second, after.second, 0.0001f)
+        }
+    }
+
+    @Test fun `a stale chosen span cannot add a vertex`() {
+        val original = curve()
+        assertEquals(original, original.withAddedVertex("deleted") { error("stale target allocated an id") })
     }
 
     @Test fun `moving an interior vertex keeps its neighbors fixed and its tangent smooth`() {
@@ -84,7 +126,7 @@ class ShapeCurveTest {
     }
 
     @Test fun `stretching an endpoint after adding vertices keeps every join smooth`() {
-        val original = curve().withAddedVertex { "new" }
+        val original = curve().withExtraVertex()
         val moved = original.withVertex(original.vertices().lastIndex, 3000f, 900f)
         assertEquals(original.vertices().dropLast(1), moved.vertices().dropLast(1))
         moved.segments.zipWithNext().forEach { (a, b) ->
@@ -108,7 +150,7 @@ class ShapeCurveTest {
     }
 
     @Test fun `unequal resize and reflection transform the entire curve exactly`() {
-        val original = curve().withAddedVertex { "new" }
+        val original = curve().withExtraVertex()
         val transformed = original.scaledAbout(300f, 250f, -1.7f, 0.45f).translated(20f, 50f)
         original.segments.zip(transformed.segments).forEach { (a, b) ->
             for (step in 0..20) {
@@ -121,7 +163,7 @@ class ShapeCurveTest {
     }
 
     @Test fun `edited curves round trip through JSON and CBOR`() {
-        val shape = curve().withAddedVertex { "new" }.withVertex(1, 90f, 100f)
+        val shape = curve().withExtraVertex().withVertex(1, 90f, 100f)
         assertEquals(shape, Json.decodeFromString<Outline.Shape>(Json.encodeToString(shape)))
         assertEquals(shape, Cbor.decodeFromByteArray<Outline.Shape>(Cbor.encodeToByteArray(shape)))
         val old = Json.decodeFromString<ShapeSegment>("""{"id":"old","x1":0,"y1":0,"x2":1,"y2":1}""")
@@ -131,7 +173,7 @@ class ShapeCurveTest {
     @Test fun `locked shapes and invalid edits leave geometry alone`() {
         val locked = curve().copy(lockGroup = "lock")
         assertEquals(locked, locked.withVertex(1, 60f, 60f))
-        assertEquals(locked, locked.withAddedVertex { error("locked shape allocated an id") })
+        assertEquals(locked, locked.withAddedVertex(locked.segments.first().id) { error("locked shape allocated an id") })
         val original = curve()
         assertEquals(original, original.withVertex(-1, 60f, 60f))
         assertEquals(original, original.withVertex(1, Float.NaN, 60f))
@@ -140,7 +182,7 @@ class ShapeCurveTest {
 
     @Test fun `repeated additions stay connected and every new vertex is editable`() {
         var shape = curve()
-        repeat(12) { shape = shape.withAddedVertex { "s-${serial++}" } }
+        repeat(12) { shape = shape.withExtraVertex() }
         assertEquals(15, shape.vertices().size)
         shape = shape.withVertex(7, 200f, 220f)
         assertEquals(ShapeVertex(7, 200f, 220f), shape.vertices()[7])
@@ -149,6 +191,82 @@ class ShapeCurveTest {
             assertEquals(a.y2, b.y1, 0f)
         }
     }
+
+    @Test fun `removing an inserted point restores the original three point curve`() {
+        val original = curve()
+        original.segments.forEachIndexed { index, segment ->
+            val added = original.withAddedVertex(segment.id) { "new" }
+            val point = added.curveRemovalPoints().single { it.index == index + 1 }
+            assertEquals(original, added.withRemovedVertex(point.segmentId, point.atEnd))
+        }
+    }
+
+    @Test fun `removing the middle point leaves an editable two point line`() {
+        val original = curve()
+        val point = original.curveRemovalPoints()[1]
+        val reduced = original.withRemovedVertex(point.segmentId, point.atEnd)
+        assertEquals(listOf(40f to 180f, 280f to 180f), reduced.vertices().map { it.x to it.y })
+        reduced.segments.single().polyline().toList().chunked(2).forEach { assertEquals(180f, it[1], 0.001f) }
+        assertTrue(reduced.curveRemovalPoints().isEmpty())
+        assertEquals(1, reduced.curveInsertionPoints().size)
+        assertEquals(3, reduced.withAddedVertex(reduced.segments.single().id) { "again" }.vertices().size)
+    }
+
+    @Test fun `either endpoint can be removed without moving the other vertices`() {
+        val original = curve()
+        for (index in listOf(0, 2)) {
+            val target = original.curveRemovalPoints()[index]
+            val reduced = original.withRemovedVertex(target.segmentId, target.atEnd)
+            assertEquals(original.vertices().filter { it.index != index }.map { it.x to it.y },
+                reduced.vertices().map { it.x to it.y })
+            assertEquals(1, reduced.segments.size)
+            assertTrue(reduced.segments.single().polyline().all { it.isFinite() && it >= 0f })
+        }
+    }
+
+    @Test fun `interior removal reconnects the remaining spans and preserves their IDs`() {
+        val original = curve().withExtraVertex().withExtraVertex()
+        val target = original.curveRemovalPoints()[2]
+        val reduced = original.withRemovedVertex(target.segmentId, target.atEnd)
+        assertEquals(original.segments.filter { it.id != target.segmentId }.map { it.id }, reduced.segments.map { it.id })
+        assertEquals(original.vertices().filter { it.index != 2 }.map { it.x to it.y }, reduced.vertices().map { it.x to it.y })
+        reduced.segments.zipWithNext().forEach { (a, b) ->
+            assertEquals(a.x2, b.x1, 0f)
+            assertEquals(a.y2, b.y1, 0f)
+            val c = a.cubic!!
+            val d = b.cubic!!
+            assertSameDirection(a.x2 - c.x2, a.y2 - c.y2, d.x1 - b.x1, d.y1 - b.y1)
+        }
+    }
+
+    @Test fun `removal rejects locked stale invalid and last two point targets`() {
+        val original = curve()
+        val id = original.segments.first().id
+        val locked = original.copy(lockGroup = "locked")
+        assertTrue(locked.curveRemovalPoints().isEmpty())
+        assertEquals(locked, locked.withRemovedVertex(id, false))
+        assertEquals(original, original.withRemovedVertex("stale", false))
+        assertEquals(original, original.withRemovedVertex(id, true))
+        val line = original.withRemovedVertex(original.segments.last().id, false)
+        assertEquals(line, line.withRemovedVertex(line.segments.single().id, false))
+        assertEquals(line, line.withRemovedVertex(line.segments.single().id, true))
+        val otherKind = original.copy(kind = ShapeKind.Line)
+        assertTrue(otherKind.curveRemovalPoints().isEmpty())
+        assertEquals(otherKind, otherKind.withRemovedVertex(id, false))
+    }
+
+    @Test fun `removed vertices and rebuilt controls round trip through JSON and CBOR`() {
+        val original = curve().withExtraVertex().copy(borderWidth = 4f, lineType = LineType.Dashed)
+        val target = original.curveRemovalPoints().last()
+        val reduced = original.withRemovedVertex(target.segmentId, target.atEnd)
+        assertEquals(4f, reduced.borderWidth, 0f)
+        assertEquals(LineType.Dashed, reduced.lineType)
+        assertEquals(reduced, Json.decodeFromString<Outline.Shape>(Json.encodeToString(reduced)))
+        assertEquals(reduced, Cbor.decodeFromByteArray<Outline.Shape>(Cbor.encodeToByteArray(reduced)))
+    }
+
+    private fun Outline.Shape.withExtraVertex(): Outline.Shape =
+        withAddedVertex(segments[segments.size / 2].id) { "s-${serial++}" }
 
     private fun ShapeSegment.at(t: Float): Pair<Float, Float> {
         val c = cubic!!
