@@ -1,5 +1,5 @@
 [versions]
-agp = "9.5.1"
+agp = "9.5.2"
 # The Kotlin compiler for AGP's built-in Kotlin. AGP itself pulls in an older KGP (2.2.10 as of
 # AGP 9.5.1); the compose and serialization plugins carry this KGP onto the root classpath, where
 # it wins, so they must stay declared in the root build.gradle.kts. Verify a bump with
@@ -7,7 +7,7 @@ agp = "9.5.1"
 kotlin = "2.4.21"
 # Independently versioned since KSP 2.3.0 — it no longer tracks `kotlin` above. 2.3.6 is the
 # minimum that registers generated sources without `android.disallowKotlinSourceSets=false`.
-ksp = "2.3.13"
+ksp = "2.3.14"
 
 
 activityCompose = "1.10.1"
@@ -33,7 +33,7 @@ ink = "1.1.0-alpha06"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 # Room 2.8's migration-test serializers require the default interface methods added in 1.8.
-kotlinxSerialization = "1.12.0"
+kotlinxSerialization = "1.13.0"
 lifecycle = "2.8.7"
 # kotlinx-coroutines-test only. It must equal the coroutines-core the app resolves (transitively,
 # 1.9.0 through androidx), because AGP holds the androidTest runtime to the app's versions: a newer
@@ -41,12 +41,12 @@ lifecycle = "2.8.7"
 # `./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency kotlinx-coroutines-core`.
 kotlinxCoroutines = "1.9.0"
 room = "2.8.5"
-ratex = "0.1.15"
+ratex = "0.1.16"
 # Held below 1.29, which added Microsoft telemetry: a `TelemetryInitializer` provider that loads
 # libonnxruntime.so at process start (SIGSEGV there under the emulator's arm64 translation) and a
 # 1DS uploader inside the library. The app is offline-first with no telemetry. Remove the provider
 # and set ORT_DISABLE_TELEMETRY before raising this.
-onnxRuntime = "1.27.0"
+onnxRuntime = "1.28.0"
 chaquopy = "17.2.0"
 work = "2.12.0"
 
