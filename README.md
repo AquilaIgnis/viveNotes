@@ -12,6 +12,10 @@ and all AI features run entirely on-device.
 
 > The desktop repo is [here](https://github.com/CrownByte0b/viveNotes-multiplataform)
 
+| Minimum version    | Recommended          |
+| ------------------ | -------------------- |
+| Api 31, Android 12 | Api 35+, Android 15+ |
+
 # Download
 
 <table>
