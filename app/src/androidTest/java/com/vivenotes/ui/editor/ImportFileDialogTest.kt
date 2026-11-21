@@ -190,6 +190,31 @@ class ImportFileDialogTest {
         compose.onNodeWithTag(ImportFileTags.page(1)).assertExists()
     }
 
+    /**
+     * A PDF on a device that cannot read its text: text and tables are not on offer, the window says
+     * why where the choice would be, and Insert brings in a picture of each page.
+     */
+    @Test
+    fun aFileWhoseTextCannotBeReadComesInAsPicturesAndSaysSo() {
+        setDialog(open = { ImportedFile("scan.pdf", listOf(ImportedPageSize(612f, 792f)), Any(), readsText = false) })
+
+        compose.onNodeWithTag(ImportFileTags.PICTURES_ONLY).assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.import_file_as_pictures)).assertIsDisplayed()
+        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
+        compose.onNodeWithTag(ImportFileTags.INSERT).performClick()
+        compose.waitUntil(WAIT_MS) { insertedMode != null }
+
+        assertEquals(FileImportMode.Pictures, insertedMode)
+    }
+
+    @Test
+    fun aFileWhoseTextCanBeReadSaysNothingAboutIt() {
+        writeDocument(pages = 1)
+        setDialog()
+
+        compose.onNodeWithTag(ImportFileTags.PICTURES_ONLY).assertDoesNotExist()
+    }
+
     @Test
     fun aPdfWithAPasswordSaysThatRatherThanThatItIsBroken() {
         setDialog(open = { throw ImportException(ImportFailure.PasswordProtected) })

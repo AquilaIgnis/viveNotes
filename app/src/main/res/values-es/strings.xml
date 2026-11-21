@@ -887,6 +887,7 @@
     <string name="import_file_as_objects">Texto y tablas</string>
     <string name="import_file_as_pictures">Imagen de cada página</string>
     <string name="import_file_as_info">El texto y las tablas se pueden editar en el lienzo. Una imagen muestra la página tal como se ve aquí, lista para escribir encima.</string>
+    <string name="import_file_pdf_pictures_only">Este dispositivo no puede leer el texto de un PDF, así que cada página entra como imagen.</string>
     <string name="import_file_not_word">Solo se pueden importar documentos de Word (.doc, .docx), textos OpenDocument (.odt), presentaciones de PowerPoint (.pptx) y PDF.</string>
     <string name="import_file_password">Este archivo está protegido con contraseña.</string>
     <string name="import_file_too_large">Este archivo es demasiado grande para importarlo.</string>
