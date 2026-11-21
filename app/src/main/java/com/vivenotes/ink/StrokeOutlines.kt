@@ -1,11 +1,11 @@
 package com.vivenotes.ink
 
-import android.os.Build
 import androidx.ink.brush.InputToolType
 import androidx.ink.geometry.AffineTransform
 import androidx.ink.strokes.ExperimentalInkEraserApi
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
+import com.vivenotes.PlatformSupport
 import java.util.WeakHashMap
 
 /**
@@ -29,7 +29,7 @@ import java.util.WeakHashMap
 internal object StrokeOutlines {
 
     /** Whether the screen's renderer draws from outlines, which it does before Android 14. */
-    val screenDrawsFromOutlines: Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+    val screenDrawsFromOutlines: Boolean = !PlatformSupport.meshInk
 
     /** Keyed by the piece, so a copy lasts exactly as long as the piece it stands for. */
     private val copies = WeakHashMap<Stroke, Stroke>()

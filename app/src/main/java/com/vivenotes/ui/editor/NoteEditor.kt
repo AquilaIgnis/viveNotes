@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
 import android.net.Uri
-import android.os.Build
 import android.text.InputType
 import android.util.TypedValue
 import android.view.ViewGroup
@@ -29,6 +28,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.vivenotes.PlatformSupport
 import com.vivenotes.keyboard.KeyBindings
 import com.vivenotes.keyboard.ShortcutAction
 import com.vivenotes.data.EditorDefaults
@@ -264,7 +264,7 @@ private fun rememberNonTalkBackServiceOn(): Boolean {
     // Before Android 13, only accessibility as a whole going on or off is reported, so a service
     // switched on while a UiAutomation already holds it on would pass unheard. Services are switched
     // in Settings, another app, so coming back to this screen is when to look again.
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+    if (!PlatformSupport.accessibilityServiceEvents) {
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { on = manager.nonTalkBackServiceOn() }
     }
     return on
@@ -272,7 +272,7 @@ private fun rememberNonTalkBackServiceOn(): Boolean {
 
 /** Calls [changed] whenever accessibility services are switched on or off, and returns how to stop. */
 private fun AccessibilityManager.watchServices(context: Context, changed: () -> Unit): () -> Unit {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    if (PlatformSupport.accessibilityServiceEvents) {
         val listener = AccessibilityManager.AccessibilityServicesStateChangeListener { changed() }
         addAccessibilityServicesStateChangeListener(context.mainExecutor, listener)
         return { removeAccessibilityServicesStateChangeListener(listener) }

@@ -11,7 +11,9 @@ import com.vivenotes.data.StylusButtonMap
  *
  * They arrive as key events, not motion events. Since Android 14 the platform reports a stylus
  * button as `KEYCODE_STYLUS_BUTTON_*`, whether the pen is hovering or touching, so this is ordinary
- * key dispatch. `minSdk` is 35, so there is no older path to keep working.
+ * key dispatch. Before Android 14 a digitizer pen's barrel button is only motion-event button state,
+ * which this does not read, so on Android 12 and 13 only pens with keycodes of their own reach it:
+ * the Bluetooth pens below.
  *
  * The pen counts its own clicks: a single click, a double click and a long press arrive as different
  * keycodes, because the firmware has already done the timing. So there is no double-press window
