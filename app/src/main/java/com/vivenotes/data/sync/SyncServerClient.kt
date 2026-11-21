@@ -2022,7 +2022,7 @@ class SyncServerClient(
                 if (count < 0) break
                 body.write(chunk, 0, count)
             }
-            body.toString(Charsets.UTF_8)
+            body.toString(Charsets.UTF_8.name())
         }
     }
 
@@ -2045,7 +2045,7 @@ class SyncServerClient(
                 if (position == limit) {
                     val count = input.read(buffer)
                     if (count < 0) {
-                        return if (line.size() == 0) null else line.toString(Charsets.UTF_8)
+                        return if (line.size() == 0) null else line.toString(Charsets.UTF_8.name())
                     }
                     position = 0
                     limit = count
@@ -2058,7 +2058,7 @@ class SyncServerClient(
                     segment = position
                     if (byte == '\n'.code) {
                         boundLength(line)
-                        return line.toString(Charsets.UTF_8)
+                        return line.toString(Charsets.UTF_8.name())
                     }
                 }
                 line.write(buffer, segment, limit - segment)

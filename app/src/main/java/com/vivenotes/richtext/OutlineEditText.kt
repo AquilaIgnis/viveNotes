@@ -22,6 +22,7 @@ import android.view.ViewConfiguration
 import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.BaseInputConnection
 import android.widget.EditText
+import androidx.core.util.TypedValueCompat
 import com.vivenotes.keyboard.KeyBindings
 import com.vivenotes.keyboard.ShortcutAction
 import com.vivenotes.keyboard.ShortcutDecision
@@ -208,11 +209,12 @@ class OutlineEditText @JvmOverloads constructor(
 
     /**
      * The size text with no size mark is drawn at, read back off the view so the two can never
-     * disagree. [android.util.TypedValue.deriveDimension] inverts the density and font-scale the
-     * size was set through, so this is the number the user picked, not a pixel count.
+     * disagree. [TypedValueCompat.deriveDimension] inverts the density and font scale the size was
+     * set through, whether that is Android 14's non-linear font scaling or the linear scaling
+     * before it, so this is the number the user picked, not a pixel count.
      */
     private val baseFontSize: Int
-        get() = TypedValue
+        get() = TypedValueCompat
             .deriveDimension(TypedValue.COMPLEX_UNIT_SP, textSize, resources.displayMetrics)
             .roundToInt()
 

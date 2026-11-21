@@ -111,7 +111,7 @@ class AttachmentStore(
             ?: return@withContext null
         import(source) {
             runCatching {
-                context.contentResolver.openInputStream(uri)?.use { it.readNBytes(SvgPictureSource.MAX_BYTES + 1) }
+                context.contentResolver.openInputStream(uri)?.use { it.readAtMost(SvgPictureSource.MAX_BYTES + 1) }
             }.getOrNull()
         }
     }
@@ -255,7 +255,7 @@ class AttachmentStore(
     suspend fun loadSvg(id: String): SvgPicture? = withContext(io) {
         if (attachments.byId(id)?.mimeType != SvgPictureSource.MIME_TYPE) return@withContext null
         runCatching {
-            fileFor(id).inputStream().use { SvgPicture.read(it.readNBytes(SvgPictureSource.MAX_BYTES + 1)) }
+            fileFor(id).inputStream().use { SvgPicture.read(it.readAtMost(SvgPictureSource.MAX_BYTES + 1)) }
         }.getOrNull()
     }
 
@@ -361,7 +361,7 @@ data class ImportedAttachment(val id: String, val pixelWidth: Int, val pixelHeig
 internal fun boundsOf(file: File, mimeType: String? = null): Size? {
     if (mimeType == SvgPictureSource.MIME_TYPE) {
         return file.inputStream().use { input ->
-            SvgPicture.read(input.readNBytes(SvgPictureSource.MAX_BYTES + 1))?.let { Size(it.width, it.height) }
+            SvgPicture.read(input.readAtMost(SvgPictureSource.MAX_BYTES + 1))?.let { Size(it.width, it.height) }
         }
     }
     val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }

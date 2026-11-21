@@ -1821,7 +1821,7 @@ private fun File.hasSQLiteHeader(): Boolean = FileInputStream(this).use { input 
 }
 
 /** Up to the first [count] bytes: fewer when the file is shorter. */
-private fun File.head(count: Int): ByteArray = FileInputStream(this).use { input -> input.readNBytes(count) }
+private fun File.head(count: Int): ByteArray = FileInputStream(this).use { input -> input.readAtMost(count) }
 private fun ByteArray.sha256(): String = ByteArrayInputStream(this).sha256()
 private fun InputStream.sha256(): String {
     val digest = MessageDigest.getInstance("SHA-256")
