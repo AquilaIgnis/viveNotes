@@ -437,6 +437,58 @@ class PdfExportTest {
         }
     }
 
+    /**
+     * A stroke the eraser cut in two is two pieces of ink in the PDF, with the gap between them.
+     *
+     * The pieces `Stroke.split` returns have no outlines, and this exporter fills outlines, so until
+     * it drew their outlined copies a partly erased stroke left the PDF entirely.
+     */
+    @Test
+    fun aStrokeTheEraserCutInTwoIsBothPiecesInTheSavedPdf() = runBlocking {
+        val erasedPage = repository.createPage(sectionId, "Erased ink")
+        repository.saveDoc(erasedPage, PageDoc(style = PageStyle(hideTitle = true, ruleLines = RuleLines.None)))
+        val pen = PEN.copy(thickness = 8f)
+        val line = Stroke(
+            brush = InkCodec.brushFor(pen),
+            inputs = MutableStrokeInputBatch().apply {
+                add(InputToolType.UNKNOWN, 40f, 100f, 0L)
+                add(InputToolType.UNKNOWN, 200f, 100f, 8L)
+                add(InputToolType.UNKNOWN, 360f, 100f, 16L)
+            }.toImmutable(),
+        )
+        repository.addStroke(
+            InkCodec.encode(stroke = line, pageId = erasedPage, seq = 0, pen = pen, now = 1L).copy(id = "cut-in-two"),
+        )
+        val mask = InkCodec.eraseMask(
+            MutableStrokeInputBatch().apply {
+                add(InputToolType.UNKNOWN, 200f, 60f, 0L)
+                add(InputToolType.UNKNOWN, 200f, 140f, 10L)
+            }.toImmutable(),
+            sizeDp = 30f,
+        )
+        repository.addPartialErase(InkCodec.encodeErase(mask, erasedPage, now = 2L), listOf("cut-in-two"))
+
+        write(exporter.plan(PdfExportRequest(erasedPage, sectionId, PdfExportOptions(includeRuling = false))))
+
+        openPdf { pdf ->
+            pdf.openPage(0).use { page ->
+                val bitmap = Bitmap.createBitmap(page.width * 2, page.height * 2, Bitmap.Config.ARGB_8888)
+                try {
+                    bitmap.eraseColor(Color.WHITE)
+                    page.render(bitmap, null, android.graphics.Matrix().apply { setScale(2f, 2f) }, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    val inkColumns = (0 until bitmap.width).filter { x ->
+                        (0 until bitmap.height).any { y -> Color.red(bitmap.getPixel(x, y)) < 128 }
+                    }
+                    assertTrue("the erased stroke left the PDF entirely", inkColumns.isNotEmpty())
+                    val runs = inkColumns.zipWithNext().count { (left, right) -> right - left > 1 } + 1
+                    assertEquals("two pieces with the erased gap between them", 2, runs)
+                } finally {
+                    bitmap.recycle()
+                }
+            }
+        }
+    }
+
     @Test
     fun aHollowCylinderKeepsItsOpeningInThePreviewAndSavedPdf() = runBlocking {
         val solidsPage = repository.createPage(sectionId, "Hollow solids")

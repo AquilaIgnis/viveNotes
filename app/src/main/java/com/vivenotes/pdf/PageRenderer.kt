@@ -21,6 +21,7 @@ import com.vivenotes.graph.GraphPainter
 import com.vivenotes.graph.function
 import com.vivenotes.graph.originalFunction
 import com.vivenotes.ink.InkBounds
+import com.vivenotes.ink.StrokeOutlines
 import com.vivenotes.model.Outline
 import com.vivenotes.model.RuleLines
 import com.vivenotes.model.ink.LineType
@@ -211,7 +212,8 @@ class PageRenderer(private val metrics: DisplayMetrics) {
         )
         scratchMatrix.setScale(stroke.scaleX, stroke.scaleY)
         scratchMatrix.postTranslate(stroke.offsetX + shift.dx, stroke.offsetY + shift.dy)
-        val shape = stroke.stroke.shape
+        // A piece of erased ink has no outlines of its own, so it is filled from its outlined copy.
+        val shape = StrokeOutlines.drawable(stroke.stroke).shape
         for (group in 0 until shape.getRenderGroupCount()) {
             val path = shape.outlinesToPath(group)
             if (path.isEmpty) continue

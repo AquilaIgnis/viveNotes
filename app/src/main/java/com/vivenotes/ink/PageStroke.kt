@@ -285,6 +285,8 @@ internal fun List<PageStroke>.subtract(mask: Stroke, targetIds: Collection<Strin
                 // And one each, so the pieces are told apart — the case the key exists for.
                 cut.split(strokeToWorldTransform = pageStroke.strokeToPageTransform(), tolerance = 0f)
                     .map { component ->
+                        // For drawing only; the piece itself stays as split returns it.
+                        StrokeOutlines.prepareForScreen(component)
                         pageStroke.copy(stroke = component, projection = newProjection())
                     }
             }
@@ -328,7 +330,10 @@ internal fun List<PageStroke>.eraseObjects(
                     )
                 }
                 // One projection per surviving region, as in [subtract].
-                .map { component -> pageStroke.copy(stroke = component, projection = newProjection()) }
+                .map { component ->
+                    StrokeOutlines.prepareForScreen(component)
+                    pageStroke.copy(stroke = component, projection = newProjection())
+                }
         }
     }
 }
@@ -577,13 +582,20 @@ internal fun List<PageStroke>.recolor(ids: Collection<String>, colorArgb: Int): 
  *
  * Scoped to one canvas colour — build a new painter when the canvas flips, which is what the call
  * site's `remember` key does.
+ *
+ * Where the renderer draws from outlines, a piece of erased ink is painted from its outlined copy
+ * instead (see [StrokeOutlines]): the same derived-paint rule, for the same reason.
  */
-internal class CanvasInkPainter(private val canvasInkArgb: Int) {
+internal class CanvasInkPainter(
+    private val canvasInkArgb: Int,
+    /** Whether the renderer this paints for draws from outlines; see [StrokeOutlines]. */
+    private val fromOutlines: Boolean = StrokeOutlines.screenDrawsFromOutlines,
+) {
 
     private val painted = IdentityHashMap<Stroke, Stroke>()
 
     fun paint(pageStroke: PageStroke): Stroke {
-        val stroke = pageStroke.stroke
+        val stroke = if (fromOutlines) StrokeOutlines.drawable(pageStroke.stroke) else pageStroke.stroke
         val resolved = automaticColorOr(
             stored = stroke.brush.colorIntArgb,
             followsTheme = pageStroke.colorFollowsTheme,
