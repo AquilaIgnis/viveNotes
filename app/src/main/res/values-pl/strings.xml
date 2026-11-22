@@ -365,6 +365,15 @@
     <string name="stylus_press_single">Pojedyncze kliknięcie</string>
     <string name="stylus_press_double">Podwójne kliknięcie</string>
     <string name="stylus_press_triple">Trzykrotne kliknięcie</string>
+    <string name="hardware_button_test">Test przycisku</string>
+    <string name="hardware_button_test_info">Pokazuje, co wysyła pióro, gdy ten widok jest otwarty. Jeśli przycisk nic nie robi, skopiuj raport do zgłoszenia błędu.</string>
+    <string name="hardware_button_test_hint">Zbliż pióro do ekranu lub dotknij go piórem i naciśnij jego przycisk.</string>
+    <string name="hardware_button_test_read">Odczytano jako: %1$s</string>
+    <string name="hardware_button_test_not_read">Nieodczytywane przez ViveNotes</string>
+    <string name="hardware_button_test_no_button">Nie naciśnięto przycisku</string>
+    <string name="hardware_button_test_copy">Kopiuj raport</string>
+    <string name="hardware_button_test_clear">Wyczyść</string>
+    <string name="hardware_button_test_clip">Raport przycisku pióra</string>
     <string name="stylus_action_none">Nic</string>
     <string name="stylus_action_toggle_pen_eraser">Pióro / gumka</string>
     <string name="stylus_action_cycle_pens">Następne pióro</string>

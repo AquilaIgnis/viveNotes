@@ -356,6 +356,15 @@
     <string name="stylus_press_single">Un clic</string>
     <string name="stylus_press_double">Doble clic</string>
     <string name="stylus_press_triple">Triple clic</string>
+    <string name="hardware_button_test">Prueba del botón</string>
+    <string name="hardware_button_test_info">Muestra lo que envía tu lápiz mientras esto está abierto. Si un botón no hace nada, copia el informe en un informe de error.</string>
+    <string name="hardware_button_test_hint">Acerca el lápiz a la pantalla o tócala y pulsa su botón.</string>
+    <string name="hardware_button_test_read">Leído como %1$s</string>
+    <string name="hardware_button_test_not_read">ViveNotes no lo lee</string>
+    <string name="hardware_button_test_no_button">Ningún botón pulsado</string>
+    <string name="hardware_button_test_copy">Copiar informe</string>
+    <string name="hardware_button_test_clear">Borrar</string>
+    <string name="hardware_button_test_clip">Informe del botón del lápiz</string>
     <string name="stylus_action_none">Nada</string>
     <string name="stylus_action_toggle_pen_eraser">Lápiz / borrador</string>
     <string name="stylus_action_cycle_pens">Siguiente lápiz</string>

@@ -1,6 +1,8 @@
 package com.vivenotes.ui.panel
 
+import android.view.KeyEvent
 import androidx.annotation.StringRes
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,25 +17,35 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.data.StylusAction
@@ -41,9 +53,15 @@ import com.vivenotes.data.StylusButtonMap
 import com.vivenotes.keyboard.KeyBindings
 import com.vivenotes.keyboard.KeyChord
 import com.vivenotes.keyboard.ShortcutAction
+import com.vivenotes.ui.ProbeEvent
 import com.vivenotes.ui.StylusPress
+import com.vivenotes.ui.StylusProbe
 import com.vivenotes.ui.TABLE_ROWS
+import com.vivenotes.ui.codeLine
+import com.vivenotes.ui.copyRecognizedText
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.probeReportHeader
+import com.vivenotes.ui.report
 
 /**
  * The two kinds of hardware you write at this app with.
@@ -65,6 +83,9 @@ internal object HardwareTags {
     fun kind(kind: HardwareKind) = "hardware-${kind.name.lowercase()}"
     const val SHORTCUTS = "hardware-shortcuts"
     const val RESET_ALL = "hardware-shortcuts-reset-all"
+    const val BUTTON_TEST = "hardware-button-test"
+    const val BUTTON_TEST_CLEAR = "hardware-button-test-clear"
+    const val BUTTON_TEST_COPY = "hardware-button-test-copy"
     fun shortcut(action: ShortcutAction) = "hardware-shortcut-${action.name}"
     fun reset(action: ShortcutAction) = "hardware-shortcut-reset-${action.name}"
 }
@@ -82,7 +103,7 @@ internal object HardwareTags {
  * red", and it should follow its owner to a second tablet.
  */
 @Composable
-fun ColumnScope.HardwarePanelContent(
+internal fun ColumnScope.HardwarePanelContent(
     allowFinger: Boolean,
     onSetDrawWithFinger: (Boolean) -> Unit,
     buttons: StylusButtonMap,
@@ -90,6 +111,8 @@ fun ColumnScope.HardwarePanelContent(
     /** The keyboard shortcuts, a property of the user as the pen button's are. */
     keyBindings: KeyBindings = KeyBindings.Default,
     onSetKeyBindings: (KeyBindings) -> Unit = {},
+    /** What the pen sends, fed by `MainActivity`; the button test shows it. */
+    probe: StylusProbe = remember { StylusProbe() },
 ) {
     var kind by remember { mutableStateOf(HardwareKind.Stylus) }
 
@@ -120,6 +143,7 @@ fun ColumnScope.HardwarePanelContent(
             onSetDrawWithFinger = onSetDrawWithFinger,
             buttons = buttons,
             onSetButtons = onSetButtons,
+            probe = probe,
         )
         HardwareKind.Keyboard -> KeyboardSettings(keyBindings, onSetKeyBindings)
     }
@@ -170,6 +194,7 @@ private fun ColumnScope.StylusSettings(
     onSetDrawWithFinger: (Boolean) -> Unit,
     buttons: StylusButtonMap,
     onSetButtons: (StylusButtonMap) -> Unit,
+    probe: StylusProbe,
 ) {
     // **The only way to reach this in a shipped build.** The ribbon's finger button is compiled out
     // of release by `BuildConfig.DEBUG` — see `TabStrip` in `ui/editor/Ribbon.kt` — so this row is
@@ -181,6 +206,116 @@ private fun ColumnScope.StylusSettings(
     }
 
     PenButtonSettings(buttons, onSetButtons)
+    PenButtonTest(probe)
+}
+
+/**
+ * Press the pen's button and see what arrived: the keycode or button state, the device it came from,
+ * and whether this app reads it. Copy turns that into a report for a pen this app does not understand
+ * yet — the only other way to learn what a pen sends is `adb`.
+ *
+ * Listens only while it is on screen, and forgets when it leaves.
+ */
+@Composable
+private fun ColumnScope.PenButtonTest(probe: StylusProbe) {
+    DisposableEffect(probe) {
+        probe.start()
+        onDispose { probe.stop() }
+    }
+    val events by probe.events.collectAsState()
+    val context = LocalContext.current
+    val clipLabel = stringResource(R.string.hardware_button_test_clip)
+
+    PanelSection(
+        title = stringResource(R.string.hardware_button_test),
+        info = stringResource(R.string.hardware_button_test_info),
+    ) {
+        Surface(
+            // Highest, as the other panes' wells are: in the dark scheme High is the pane's own colour.
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())
+                .semantics { liveRegion = LiveRegionMode.Polite }
+                .testTag(HardwareTags.BUTTON_TEST),
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (events.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.hardware_button_test_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    // Newest first: the press just made is the one being looked for.
+                    events.asReversed().forEach { event -> key(event.id) { ProbeRow(event) } }
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        ) {
+            PanelButton(
+                onClick = probe::clear,
+                enabled = events.isNotEmpty(),
+                colors = ButtonDefaults.filledTonalButtonColors(),
+                modifier = Modifier.testTag(HardwareTags.BUTTON_TEST_CLEAR),
+            ) { Text(stringResource(R.string.hardware_button_test_clear)) }
+            PanelButton(
+                onClick = {
+                    copyRecognizedText(context, clipLabel, events.report(probeReportHeader(), KeyEvent::keyCodeToString))
+                },
+                enabled = events.isNotEmpty(),
+                modifier = Modifier.testTag(HardwareTags.BUTTON_TEST_COPY),
+            ) {
+                Icon(
+                    imageVector = MaterialSymbols.ContentCopy,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.hardware_button_test_copy))
+            }
+        }
+    }
+}
+
+/** One event: its codes, the device that sent it, and what this app makes of it. */
+@Composable
+private fun ProbeRow(event: ProbeEvent) {
+    val verdict = when (event) {
+        is ProbeEvent.Key -> event.press?.let {
+            stringResource(R.string.hardware_button_test_read, stringResource(it.label))
+        }
+        is ProbeEvent.Pointer -> null
+    }
+    val notRead = when (event) {
+        is ProbeEvent.Key -> R.string.hardware_button_test_not_read
+        is ProbeEvent.Pointer ->
+            if (event.pressed) R.string.hardware_button_test_not_read else R.string.hardware_button_test_no_button
+    }
+    Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+        Text(
+            text = event.codeLine(KeyEvent::keyCodeToString),
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = event.device,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = verdict ?: stringResource(notRead),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (verdict != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /**

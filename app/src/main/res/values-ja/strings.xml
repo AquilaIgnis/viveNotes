@@ -334,6 +334,15 @@
     <string name="stylus_press_single">シングルクリック</string>
     <string name="stylus_press_double">ダブルクリック</string>
     <string name="stylus_press_triple">トリプルクリック</string>
+    <string name="hardware_button_test">ボタンのテスト</string>
+    <string name="hardware_button_test_info">ここを開いている間、ペンが送信する内容を表示します。ボタンが反応しない場合は、レポートをコピーして不具合報告に貼り付けてください。</string>
+    <string name="hardware_button_test_hint">ペンを画面にかざすか触れた状態で、ボタンを押してください。</string>
+    <string name="hardware_button_test_read">%1$sとして認識</string>
+    <string name="hardware_button_test_not_read">ViveNotesでは読み取られません</string>
+    <string name="hardware_button_test_no_button">ボタンは押されていません</string>
+    <string name="hardware_button_test_copy">レポートをコピー</string>
+    <string name="hardware_button_test_clear">クリア</string>
+    <string name="hardware_button_test_clip">ペンボタンのレポート</string>
     <string name="stylus_action_none">なし</string>
     <string name="stylus_action_toggle_pen_eraser">ペン / 消しゴム</string>
     <string name="stylus_action_cycle_pens">次のペン</string>

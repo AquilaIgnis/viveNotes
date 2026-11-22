@@ -344,6 +344,15 @@
     <string name="stylus_press_single">Un clic</string>
     <string name="stylus_press_double">Double clic</string>
     <string name="stylus_press_triple">Triple clic</string>
+    <string name="hardware_button_test">Test du bouton</string>
+    <string name="hardware_button_test_info">Affiche ce que votre stylet envoie tant que ceci est ouvert. Si un bouton ne fait rien, copiez le rapport dans un signalement de bug.</string>
+    <string name="hardware_button_test_hint">Survolez ou touchez l\'écran avec le stylet et appuyez sur son bouton.</string>
+    <string name="hardware_button_test_read">Lu comme %1$s</string>
+    <string name="hardware_button_test_not_read">Non lu par ViveNotes</string>
+    <string name="hardware_button_test_no_button">Aucun bouton enfoncé</string>
+    <string name="hardware_button_test_copy">Copier le rapport</string>
+    <string name="hardware_button_test_clear">Effacer</string>
+    <string name="hardware_button_test_clip">Rapport du bouton du stylet</string>
     <string name="stylus_action_none">Rien</string>
     <string name="stylus_action_toggle_pen_eraser">Stylet / Gomme</string>
     <string name="stylus_action_cycle_pens">Stylet suivant</string>

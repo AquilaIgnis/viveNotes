@@ -670,6 +670,12 @@ class NotesViewModel(
     val stylusButtons: StateFlow<StylusButtonMap> = penSettingsStore.stylusButtons
         .stateIn(viewModelScope, SharingStarted.Eagerly, StylusButtonMap())
 
+    /**
+     * What the pen sends, for the button test in Hardware ▸ Stylus — [StylusProbe]. Held here so an
+     * open test keeps its log across a rotation.
+     */
+    internal val stylusProbe = StylusProbe()
+
     /** The keyboard shortcuts in force — [KeyBindings]. `Eagerly` for the reason [stylusButtons] is. */
     val keyBindings: StateFlow<KeyBindings> = penSettingsStore.keyBindings
         .stateIn(viewModelScope, SharingStarted.Eagerly, KeyBindings.Default)

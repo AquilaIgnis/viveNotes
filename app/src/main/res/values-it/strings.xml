@@ -344,6 +344,15 @@
     <string name="stylus_press_single">Clic singolo</string>
     <string name="stylus_press_double">Doppio clic</string>
     <string name="stylus_press_triple">Triplo clic</string>
+    <string name="hardware_button_test">Prova del tasto</string>
+    <string name="hardware_button_test_info">Mostra ciò che invia la penna mentre è aperto. Se un tasto non fa nulla, copia il rapporto in una segnalazione di bug.</string>
+    <string name="hardware_button_test_hint">Avvicina la penna allo schermo o toccalo e premi il suo tasto.</string>
+    <string name="hardware_button_test_read">Letto come %1$s</string>
+    <string name="hardware_button_test_not_read">Non letto da ViveNotes</string>
+    <string name="hardware_button_test_no_button">Nessun tasto premuto</string>
+    <string name="hardware_button_test_copy">Copia rapporto</string>
+    <string name="hardware_button_test_clear">Cancella</string>
+    <string name="hardware_button_test_clip">Rapporto tasto penna</string>
     <string name="stylus_action_none">Nessuna azione</string>
     <string name="stylus_action_toggle_pen_eraser">Penna / gomma</string>
     <string name="stylus_action_cycle_pens">Penna successiva</string>

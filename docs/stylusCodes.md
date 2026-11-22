@@ -1,5 +1,7 @@
 # Lenobo
 
+## Lenobo tab pen plus, tab p12
+
 | Click | HID usage | Keycode |
 | ----- | --------- | ------- |
 | One   | 0x0c0600  | 600     |

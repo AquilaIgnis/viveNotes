@@ -1,12 +1,19 @@
 package com.vivenotes
 
+import android.os.SystemClock
+import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.vivenotes.ui.NotesViewModel
+import com.vivenotes.ui.ProbeEvent
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -116,6 +123,57 @@ class StylusButtonDispatchTest {
 
         // And it did nothing: still on Document, with no tool armed by it.
         compose.onNodeWithContentDescription("Pen 1").assertDoesNotExist()
+    }
+
+    /**
+     * The button test sees keys and hovers at the activity, ahead of every view, and takes neither.
+     *
+     * A hover rather than a touch, which on the canvas would draw. 309 is the second barrel button,
+     * which nothing binds, so the key reaches the log and nothing else.
+     */
+    @Test
+    fun theButtonTestHearsKeysAndHoversThroughTheActivity() {
+        val probe = ViewModelProvider(compose.activity)[NotesViewModel::class.java].stylusProbe
+        compose.runOnUiThread {
+            probe.start()
+            try {
+                val activity = compose.activity
+                activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY))
+                activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY))
+                val hover = stylusHover(MotionEvent.BUTTON_STYLUS_PRIMARY)
+                activity.dispatchGenericMotionEvent(hover)
+                hover.recycle()
+
+                val events = probe.events.value
+                assertEquals(
+                    listOf(KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY, KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY),
+                    events.filterIsInstance<ProbeEvent.Key>().map { it.keyCode },
+                )
+                assertEquals(
+                    MotionEvent.BUTTON_STYLUS_PRIMARY,
+                    events.filterIsInstance<ProbeEvent.Pointer>().single().buttonState,
+                )
+            } finally {
+                probe.stop()
+            }
+        }
+    }
+
+    /** A stylus hovering at the window's corner with [buttonState] held. */
+    private fun stylusHover(buttonState: Int): MotionEvent {
+        val now = SystemClock.uptimeMillis()
+        val properties = MotionEvent.PointerProperties().apply {
+            id = 0
+            toolType = MotionEvent.TOOL_TYPE_STYLUS
+        }
+        val coords = MotionEvent.PointerCoords().apply {
+            x = 1f
+            y = 1f
+        }
+        return MotionEvent.obtain(
+            now, now, MotionEvent.ACTION_HOVER_MOVE, 1, arrayOf(properties), arrayOf(coords),
+            0, buttonState, 1f, 1f, 0, 0, InputDevice.SOURCE_STYLUS, 0,
+        )
     }
 
     /** Draw is the startup tab now, so tests of tab forwarding first move somewhere else. */

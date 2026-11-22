@@ -95,7 +95,8 @@ private const val KEYCODE_PEN_ONE_CLICK = 600
 private const val KEYCODE_PEN_TWO_CLICK = 601
 private const val KEYCODE_PEN_THREE_CLICK = 602
 
-private fun stylusPressFor(keyCode: Int): StylusPress? = when (keyCode) {
+/** Which binding a keycode presses, or null if it is not a pen button. The button test reads it too. */
+internal fun stylusPressFor(keyCode: Int): StylusPress? = when (keyCode) {
     KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY, KEYCODE_PEN_ONE_CLICK -> StylusPress.Single
     KEYCODE_PEN_TWO_CLICK -> StylusPress.Double
     KEYCODE_PEN_THREE_CLICK -> StylusPress.Triple

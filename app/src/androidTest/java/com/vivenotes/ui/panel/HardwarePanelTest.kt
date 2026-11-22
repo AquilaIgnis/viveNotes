@@ -1,5 +1,7 @@
 package com.vivenotes.ui.panel
 
+import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -28,8 +30,10 @@ import com.vivenotes.keyboard.KeyChord
 import com.vivenotes.keyboard.ShortcutAction
 import com.vivenotes.keyboard.ShortcutKey
 import com.vivenotes.ui.StylusPress
+import com.vivenotes.ui.StylusProbe
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -276,7 +280,57 @@ class HardwarePanelTest {
         compose.onNodeWithTag(HardwareTags.RESET_ALL).assertIsNotEnabled()
     }
 
+    // --- the button test ------------------------------------------------------------------------
+
+    @Test
+    fun theButtonTestListensOnlyWhileTheStylusSettingsShow() {
+        setPanel()
+        compose.waitForIdle()
+        assertTrue(probe.listening)
+
+        compose.onNodeWithTag(HardwareTags.kind(HardwareKind.Keyboard)).performClick()
+        compose.waitForIdle()
+
+        assertFalse(probe.listening)
+    }
+
+    @Test
+    fun aPressShowsWhatItIsReadAsAndClearEmptiesTheList() {
+        setPanel()
+        compose.onNodeWithText("Hover or touch with the pen and press its button.").performScrollTo()
+            .assertIsDisplayed()
+        compose.onNodeWithTag(HardwareTags.BUTTON_TEST_COPY).assertIsNotEnabled()
+
+        compose.runOnUiThread {
+            probe.onKey(KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY, false, 0, 331, "Test pen")
+        }
+
+        compose.onNodeWithText("Read as Single click").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Test pen").assertIsDisplayed()
+        compose.onNodeWithTag(HardwareTags.BUTTON_TEST_CLEAR).performScrollTo().performClick()
+        compose.onNodeWithText("Hover or touch with the pen and press its button.").assertIsDisplayed()
+    }
+
+    /** A button the app has no reading for says so, rather than looking like it worked. */
+    @Test
+    fun aButtonOnlyInTheTouchStateIsMarkedNotRead() {
+        setPanel()
+
+        compose.runOnUiThread {
+            probe.onPointer(
+                7,
+                MotionEvent.ACTION_HOVER_MOVE,
+                MotionEvent.BUTTON_STYLUS_PRIMARY,
+                MotionEvent.TOOL_TYPE_STYLUS,
+            ) { "sec_e-pen" }
+        }
+
+        compose.onNodeWithText("Not read by ViveNotes").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("HOVER_MOVE stylus  buttons 0x20 STYLUS_PRIMARY").assertIsDisplayed()
+    }
+
     private val bindings = mutableStateOf(KeyBindings.Default)
+    private val probe = StylusProbe()
 
     private fun setPanel() {
         compose.setContent {
@@ -290,6 +344,7 @@ class HardwarePanelTest {
                         onSetButtons = { buttons = it },
                         keyBindings = bindings.value,
                         onSetKeyBindings = { bindings.value = it },
+                        probe = probe,
                     )
                 }
             }

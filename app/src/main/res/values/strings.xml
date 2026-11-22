@@ -387,6 +387,15 @@
     <string name="stylus_press_single">Single click</string>
     <string name="stylus_press_double">Double click</string>
     <string name="stylus_press_triple">Triple click</string>
+    <string name="hardware_button_test">Button test</string>
+    <string name="hardware_button_test_info">Lists what your pen sends while this is open. If a button does nothing, copy the report into a bug report.</string>
+    <string name="hardware_button_test_hint">Hover or touch with the pen and press its button.</string>
+    <string name="hardware_button_test_read">Read as %1$s</string>
+    <string name="hardware_button_test_not_read">Not read by ViveNotes</string>
+    <string name="hardware_button_test_no_button">No button pressed</string>
+    <string name="hardware_button_test_copy">Copy report</string>
+    <string name="hardware_button_test_clear">Clear</string>
+    <string name="hardware_button_test_clip">Pen button report</string>
     <string name="stylus_action_none">Nothing</string>
     <string name="stylus_action_toggle_pen_eraser">Pen / eraser</string>
     <string name="stylus_action_cycle_pens">Next pen</string>

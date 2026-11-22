@@ -1895,6 +1895,7 @@ private fun ToolPaneHost(
                 onSetButtons = viewModel::setStylusButtons,
                 keyBindings = keyBindings,
                 onSetKeyBindings = viewModel::setKeyBindings,
+                probe = viewModel.stylusProbe,
             )
             ToolPane.Recognition -> recognition?.let { result ->
                 RecognitionPanelContent(

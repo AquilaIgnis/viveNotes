@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.KeyboardShortcutGroup
 import android.view.Menu
+import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import androidx.activity.ComponentActivity
@@ -20,6 +21,7 @@ import com.vivenotes.ui.NotesViewModel
 import com.vivenotes.ui.handleShortcut
 import com.vivenotes.ui.claimsStylusButton
 import com.vivenotes.ui.handleStylusButton
+import com.vivenotes.ui.record
 import com.vivenotes.ui.shortcutGroups
 import com.vivenotes.ui.theme.ViveNotesTheme
 import kotlinx.coroutines.awaitCancellation
@@ -110,8 +112,24 @@ class MainActivity : ComponentActivity() {
      * the override and the `super` call reaching into a library-private API.
      */
     @SuppressLint("RestrictedApi")
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-        viewModel.handleShortcut(event, ShortcutScope.Anywhere) || super.dispatchKeyEvent(event)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        viewModel.stylusProbe.record(event)
+        return viewModel.handleShortcut(event, ShortcutScope.Anywhere) || super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * The pen button test watches every touch and hover here, ahead of the canvas, and claims none
+     * of them — see `ui/StylusProbe.kt`.
+     */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        viewModel.stylusProbe.record(ev)
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        viewModel.stylusProbe.record(ev)
+        return super.dispatchGenericMotionEvent(ev)
+    }
 
     /**
      * The app-wide half of L2 — `ui/KeyboardShortcuts.kt` holds the dispatch and says why there are

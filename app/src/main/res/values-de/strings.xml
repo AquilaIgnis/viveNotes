@@ -344,6 +344,15 @@
     <string name="stylus_press_single">Einfachklick</string>
     <string name="stylus_press_double">Doppelklick</string>
     <string name="stylus_press_triple">Dreifachklick</string>
+    <string name="hardware_button_test">Tastentest</string>
+    <string name="hardware_button_test_info">Zeigt, was dein Stift sendet, solange dies geöffnet ist. Wenn eine Taste nichts bewirkt, kopiere den Bericht in eine Fehlermeldung.</string>
+    <string name="hardware_button_test_hint">Halte den Stift über den Bildschirm oder berühre ihn und drücke seine Taste.</string>
+    <string name="hardware_button_test_read">Erkannt als %1$s</string>
+    <string name="hardware_button_test_not_read">Von ViveNotes nicht ausgewertet</string>
+    <string name="hardware_button_test_no_button">Keine Taste gedrückt</string>
+    <string name="hardware_button_test_copy">Bericht kopieren</string>
+    <string name="hardware_button_test_clear">Leeren</string>
+    <string name="hardware_button_test_clip">Stifttasten-Bericht</string>
     <string name="stylus_action_none">Nichts</string>
     <string name="stylus_action_toggle_pen_eraser">Stift / Radierer</string>
     <string name="stylus_action_cycle_pens">Nächster Stift</string>

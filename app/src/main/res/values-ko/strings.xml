@@ -334,6 +334,15 @@
     <string name="stylus_press_single">한 번 클릭</string>
     <string name="stylus_press_double">두 번 클릭</string>
     <string name="stylus_press_triple">세 번 클릭</string>
+    <string name="hardware_button_test">버튼 테스트</string>
+    <string name="hardware_button_test_info">이 화면이 열려 있는 동안 펜이 보내는 내용을 보여 줍니다. 버튼이 작동하지 않으면 보고서를 복사해 버그 신고에 붙여 넣으세요.</string>
+    <string name="hardware_button_test_hint">펜을 화면 가까이 대거나 화면에 댄 채로 버튼을 누르세요.</string>
+    <string name="hardware_button_test_read">%1$s(으)로 인식됨</string>
+    <string name="hardware_button_test_not_read">ViveNotes에서 읽지 않음</string>
+    <string name="hardware_button_test_no_button">누른 버튼 없음</string>
+    <string name="hardware_button_test_copy">보고서 복사</string>
+    <string name="hardware_button_test_clear">지우기</string>
+    <string name="hardware_button_test_clip">펜 버튼 보고서</string>
     <string name="stylus_action_none">없음</string>
     <string name="stylus_action_toggle_pen_eraser">펜 / 지우개</string>
     <string name="stylus_action_cycle_pens">다음 펜</string>
