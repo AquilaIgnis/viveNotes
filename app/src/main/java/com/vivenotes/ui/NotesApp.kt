@@ -161,6 +161,7 @@ import com.vivenotes.ui.panel.ContentPanelContent
 import com.vivenotes.ui.panel.ContentPanelHeader
 import com.vivenotes.ui.panel.DeletedItemsPanelContent
 import com.vivenotes.ui.panel.HardwarePanelContent
+import com.vivenotes.ui.panel.PenKeys
 import com.vivenotes.ui.panel.PaperSizePanelContent
 import com.vivenotes.ui.panel.RecognitionOutputKind
 import com.vivenotes.ui.panel.RecognitionPanelContent
@@ -1896,6 +1897,14 @@ private fun ToolPaneHost(
                 keyBindings = keyBindings,
                 onSetKeyBindings = viewModel::setKeyBindings,
                 probe = viewModel.stylusProbe,
+                penKeys = PenKeys(
+                    learned = viewModel.stylusKeys.collectAsStateWithLifecycle().value,
+                    capturing = viewModel.capturingStylusKey.collectAsStateWithLifecycle().value,
+                    refused = viewModel.stylusKeyRefused.collectAsStateWithLifecycle().value,
+                ),
+                onLearnKey = viewModel::startStylusKeyCapture,
+                onStopLearning = viewModel::cancelStylusKeyCapture,
+                onResetKey = { viewModel.setStylusKey(it, null) },
             )
             ToolPane.Recognition -> recognition?.let { result ->
                 RecognitionPanelContent(

@@ -2,6 +2,7 @@ package com.vivenotes.ui
 
 import android.view.KeyEvent
 import android.view.MotionEvent
+import com.vivenotes.data.StylusKeys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -99,11 +100,21 @@ class StylusProbeTest {
         key(602)
         key(KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY)
 
-        val presses = probe.events.value.map { (it as ProbeEvent.Key).press }
+        val presses = probe.events.value.map { (it as ProbeEvent.Key).press(StylusKeys()) }
         assertEquals(
             listOf(StylusPress.Single, StylusPress.Single, StylusPress.Double, StylusPress.Triple, null),
             presses,
         )
+    }
+
+    /** A key learned on this tablet is read as its row, in the list and in the report. */
+    @Test
+    fun aLearnedKeyIsReadAsItsRow() {
+        key(612)
+        val learned = StylusKeys(triple = 612)
+
+        assertEquals(StylusPress.Triple, (probe.events.value.single() as ProbeEvent.Key).press(learned))
+        assertTrue(probe.events.value.report("h", learned, ::fakeKeyName).endsWith("read as triple click"))
     }
 
     @Test
@@ -159,7 +170,11 @@ class StylusProbeTest {
         hover(buttonState = MotionEvent.BUTTON_STYLUS_PRIMARY)
         key(KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY)
 
-        val report = probe.events.value.report("ViveNotes 1.0 · Samsung SM-P613 · Android 14 (API 34)", ::fakeKeyName)
+        val report = probe.events.value.report(
+            "ViveNotes 1.0 · Samsung SM-P613 · Android 14 (API 34)",
+            StylusKeys(),
+            ::fakeKeyName,
+        )
 
         assertEquals(
             listOf(
@@ -174,7 +189,7 @@ class StylusProbeTest {
 
     @Test
     fun anEmptyReportIsJustTheHeader() {
-        assertEquals("header", emptyList<ProbeEvent>().report("header", ::fakeKeyName))
+        assertEquals("header", emptyList<ProbeEvent>().report("header", StylusKeys(), ::fakeKeyName))
         assertNull(probe.events.value.firstOrNull())
     }
 

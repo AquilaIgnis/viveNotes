@@ -5,6 +5,7 @@ import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import com.vivenotes.BuildConfig
+import com.vivenotes.data.StylusKeys
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -105,7 +106,7 @@ internal sealed interface ProbeEvent {
         override val device: String,
     ) : ProbeEvent {
         /** Which binding this key presses, by the same rule dispatch uses; null if none. */
-        val press: StylusPress? get() = stylusPressFor(keyCode)
+        fun press(learned: StylusKeys): StylusPress? = stylusPressFor(keyCode, learned)
     }
 
     data class Pointer(
@@ -143,13 +144,17 @@ internal fun ProbeEvent.codeLine(keyName: (Int) -> String): String = when (this)
  * the app makes of it. English throughout, because it is read by whoever fixes the pen, not by the
  * person pressing it.
  */
-internal fun List<ProbeEvent>.report(header: String, keyName: (Int) -> String): String = buildString {
+internal fun List<ProbeEvent>.report(
+    header: String,
+    learned: StylusKeys,
+    keyName: (Int) -> String,
+): String = buildString {
     appendLine(header)
     for (event in this@report) {
         append(event.codeLine(keyName)).append("  [").append(event.device).append("]  ")
         appendLine(
             when (event) {
-                is ProbeEvent.Key -> event.press?.let { "read as ${it.name.lowercase()} click" } ?: "not read"
+                is ProbeEvent.Key -> event.press(learned)?.let { "read as ${it.name.lowercase()} click" } ?: "not read"
                 is ProbeEvent.Pointer -> if (event.pressed) "not read" else "no button"
             },
         )

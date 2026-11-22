@@ -111,6 +111,7 @@ object MaterialSymbols {
     val RestoreFromTrash: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_restore_from_trash)
     val Search: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_search)
     val SelectAll: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_select_all)
+    val Settings: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_settings)
     val Sort: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_sort)
     val Straighten: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_straighten)
     val Stylus: ImageVector @Composable get() = symbol(R.drawable.ms_rounded_stylus)

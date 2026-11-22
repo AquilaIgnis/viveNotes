@@ -365,6 +365,12 @@
     <string name="hardware_button_test_copy">Copiar informe</string>
     <string name="hardware_button_test_clear">Borrar</string>
     <string name="hardware_button_test_clip">Informe del botón del lápiz</string>
+    <string name="hardware_pen_key_set">Configurar la tecla del lápiz para %1$s</string>
+    <string name="hardware_pen_key_prompt">Pulsa el botón del lápiz para %1$s…</string>
+    <string name="hardware_pen_key_refused">Eso vino de un teclado. Pulsa el botón del lápiz.</string>
+    <string name="hardware_pen_key_learned">Tecla %1$d</string>
+    <string name="hardware_pen_key_built_in">Usando las teclas integradas</string>
+    <string name="hardware_pen_key_reset">Restablecer</string>
     <string name="stylus_action_none">Nada</string>
     <string name="stylus_action_toggle_pen_eraser">Lápiz / borrador</string>
     <string name="stylus_action_cycle_pens">Siguiente lápiz</string>

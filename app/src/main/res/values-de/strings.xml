@@ -353,6 +353,12 @@
     <string name="hardware_button_test_copy">Bericht kopieren</string>
     <string name="hardware_button_test_clear">Leeren</string>
     <string name="hardware_button_test_clip">Stifttasten-Bericht</string>
+    <string name="hardware_pen_key_set">Stifttaste für %1$s festlegen</string>
+    <string name="hardware_pen_key_prompt">Drücke die Stifttaste für %1$s…</string>
+    <string name="hardware_pen_key_refused">Das kam von einer Tastatur. Drücke die Taste des Stifts.</string>
+    <string name="hardware_pen_key_learned">Taste %1$d</string>
+    <string name="hardware_pen_key_built_in">Integrierte Tasten werden verwendet</string>
+    <string name="hardware_pen_key_reset">Zurücksetzen</string>
     <string name="stylus_action_none">Nichts</string>
     <string name="stylus_action_toggle_pen_eraser">Stift / Radierer</string>
     <string name="stylus_action_cycle_pens">Nächster Stift</string>

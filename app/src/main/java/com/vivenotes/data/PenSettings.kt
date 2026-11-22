@@ -505,6 +505,21 @@ data class StylusButtonMap(
 )
 
 /**
+ * A keycode learned for each click count, for a pen whose codes the app does not know — null where
+ * nothing was learned and the built-in codes alone apply.
+ *
+ * A property of this device, unlike [StylusButtonMap]: the keycode comes from the tablet's own key
+ * layout file, so the same pen can send another code on another tablet. A learned code is added to
+ * the built-in ones rather than replacing them.
+ */
+@Serializable
+data class StylusKeys(
+    val single: Int? = null,
+    val double: Int? = null,
+    val triple: Int? = null,
+)
+
+/**
  * Persists the three pens across launches.
  *
  * One JSON blob per pen rather than a preference key per field: a pen is nine values that are only
@@ -604,6 +619,19 @@ class PenSettingsStore(context: Context) {
         store.edit { it[STYLUS_BUTTONS] = penSettingsJson.encodeToString(StylusButtonMap.serializer(), map) }
     }
 
+    /** The keycodes learned for this tablet's pen — [StylusKeys], a property of the device. */
+    val stylusKeys: Flow<StylusKeys> = store.data.map { prefs ->
+        prefs[STYLUS_KEYS]?.let(::decodeStylusKeys) ?: StylusKeys()
+    }
+
+    /** Read and written in one edit, so a second row learned straight after the first cannot undo it. */
+    suspend fun updateStylusKeys(change: (StylusKeys) -> StylusKeys) {
+        store.edit { prefs ->
+            val current = prefs[STYLUS_KEYS]?.let(::decodeStylusKeys) ?: StylusKeys()
+            prefs[STYLUS_KEYS] = penSettingsJson.encodeToString(StylusKeys.serializer(), change(current))
+        }
+    }
+
     /**
      * The keyboard shortcuts as changed in Hardware ▸ Keyboard — only the changes, see
      * [KeyBindings.encode]. Beside [stylusButtons] for the reason it is here: which key does what is
@@ -694,6 +722,9 @@ class PenSettingsStore(context: Context) {
     private fun decodeStylusButtons(text: String): StylusButtonMap? =
         runCatching { penSettingsJson.decodeFromString(StylusButtonMap.serializer(), text) }.getOrNull()
 
+    private fun decodeStylusKeys(text: String): StylusKeys? =
+        runCatching { penSettingsJson.decodeFromString(StylusKeys.serializer(), text) }.getOrNull()
+
     /** A command or chord this build does not know is skipped inside [KeyBindings.decode], not here. */
     private fun decodeKeyBindings(text: String): KeyBindings? =
         runCatching { KeyBindings.decode(penSettingsJson.decodeFromString(KeyBindingsSerializer, text)) }.getOrNull()
@@ -714,6 +745,7 @@ class PenSettingsStore(context: Context) {
 
         val DRAW_WITH_FINGER = booleanPreferencesKey("draw_with_finger")
         val STYLUS_BUTTONS = stringPreferencesKey("stylus_buttons")
+        val STYLUS_KEYS = stringPreferencesKey("stylus_keys")
         val KEY_BINDINGS = stringPreferencesKey("key_bindings")
         val KeyBindingsSerializer = MapSerializer(String.serializer(), ListSerializer(String.serializer()))
         val ERASER = stringPreferencesKey("eraser")

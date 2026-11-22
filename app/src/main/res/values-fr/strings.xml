@@ -353,6 +353,12 @@
     <string name="hardware_button_test_copy">Copier le rapport</string>
     <string name="hardware_button_test_clear">Effacer</string>
     <string name="hardware_button_test_clip">Rapport du bouton du stylet</string>
+    <string name="hardware_pen_key_set">Définir la touche du stylet pour %1$s</string>
+    <string name="hardware_pen_key_prompt">Appuyez sur le bouton du stylet pour %1$s…</string>
+    <string name="hardware_pen_key_refused">Cela vient d\'un clavier. Appuyez sur le bouton du stylet.</string>
+    <string name="hardware_pen_key_learned">Touche %1$d</string>
+    <string name="hardware_pen_key_built_in">Touches intégrées utilisées</string>
+    <string name="hardware_pen_key_reset">Réinitialiser</string>
     <string name="stylus_action_none">Rien</string>
     <string name="stylus_action_toggle_pen_eraser">Stylet / Gomme</string>
     <string name="stylus_action_cycle_pens">Stylet suivant</string>

@@ -13,8 +13,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.vivenotes.ui.NotesViewModel
 import com.vivenotes.ui.ProbeEvent
+import com.vivenotes.ui.StylusPress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -159,6 +161,47 @@ class StylusButtonDispatchTest {
         }
     }
 
+    /**
+     * A row learning its key takes the next key at the activity — a bare up, as a Lenovo click is —
+     * without running what it is bound to, and from then on that key presses the row.
+     *
+     * The learned key is forgotten in `finally`: it is the real DataStore, which outlives the test.
+     */
+    @Test
+    fun aKeyLearnedBehindTheGearPressesItsRow() {
+        val viewModel = ViewModelProvider(compose.activity)[NotesViewModel::class.java]
+        openDocumentTab()
+        try {
+            compose.runOnUiThread {
+                viewModel.startStylusKeyCapture(StylusPress.Single)
+                assertTrue(compose.activity.dispatchKeyEvent(penKeyUp(LEARNED_KEY)))
+            }
+            compose.waitUntil(5_000) { viewModel.stylusKeys.value.single == LEARNED_KEY }
+            assertNull(viewModel.capturingStylusKey.value)
+            // Learning is all it did: the press that taught the key did not also toggle the tool.
+            compose.onNodeWithContentDescription("Pen 1").assertDoesNotExist()
+
+            pressStylusButton(keyCode = LEARNED_KEY)
+
+            compose.onNodeWithContentDescription("Pen 1").assertIsDisplayed()
+        } finally {
+            compose.runOnUiThread {
+                viewModel.cancelStylusKeyCapture()
+                viewModel.setStylusKey(StylusPress.Single, null)
+            }
+            compose.waitUntil(5_000) { viewModel.stylusKeys.value.single == null }
+        }
+    }
+
+    /**
+     * A key-up from no real device — so not from a keyboard, which the capture would refuse. A
+     * `KeyEvent` built without a device id says 0, which can be the emulator's virtual keyboard.
+     */
+    private fun penKeyUp(keyCode: Int): KeyEvent {
+        val now = SystemClock.uptimeMillis()
+        return KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, 0, NO_SUCH_DEVICE, 0)
+    }
+
     /** A stylus hovering at the window's corner with [buttonState] held. */
     private fun stylusHover(buttonState: Int): MotionEvent {
         val now = SystemClock.uptimeMillis()
@@ -192,5 +235,10 @@ class StylusButtonDispatchTest {
     private companion object {
         /** `PEN_THREE_CLICK` on the Lenovo pen. */
         const val VENDOR_THREE_CLICK = 602
+
+        /** A vendor keycode no built-in row answers to. */
+        const val LEARNED_KEY = 612
+
+        const val NO_SUCH_DEVICE = 9_999
     }
 }

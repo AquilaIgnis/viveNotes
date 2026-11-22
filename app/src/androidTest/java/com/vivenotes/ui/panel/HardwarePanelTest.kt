@@ -30,7 +30,9 @@ import com.vivenotes.keyboard.KeyChord
 import com.vivenotes.keyboard.ShortcutAction
 import com.vivenotes.keyboard.ShortcutKey
 import com.vivenotes.ui.StylusPress
+import com.vivenotes.data.StylusKeys
 import com.vivenotes.ui.StylusProbe
+import com.vivenotes.ui.with
 import com.vivenotes.ui.theme.ViveNotesTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -329,8 +331,73 @@ class HardwarePanelTest {
         compose.onNodeWithText("HOVER_MOVE stylus  buttons 0x20 STYLUS_PRIMARY").assertIsDisplayed()
     }
 
+    // --- the gear: learning a row's key ------------------------------------------------------------
+
+    @Test
+    fun theGearOpensTheWellForItsOwnRow() {
+        setPanel()
+
+        compose.onNodeWithTag(HardwareTags.keyGear(StylusPress.Double)).performClick()
+
+        assertEquals(StylusPress.Double, penKeys.value.capturing)
+        compose.onNodeWithText("Press the pen button for Double click…").assertIsDisplayed()
+        compose.onNodeWithText("Using the built-in keys").assertIsDisplayed()
+        compose.onNodeWithTag(HardwareTags.KEY_RESET).assertIsNotEnabled()
+    }
+
+    /** The gear again, or Cancel, stops listening — for that row. */
+    @Test
+    fun theGearAgainOrCancelStopsLearning() {
+        setPanel()
+
+        compose.onNodeWithTag(HardwareTags.keyGear(StylusPress.Single)).performClick()
+        compose.onNodeWithTag(HardwareTags.keyGear(StylusPress.Single)).performClick()
+        assertNull(penKeys.value.capturing)
+
+        compose.onNodeWithTag(HardwareTags.keyGear(StylusPress.Single)).performClick()
+        compose.onNodeWithTag(HardwareTags.KEY_CANCEL).performClick()
+        assertNull(penKeys.value.capturing)
+        compose.onNodeWithTag(HardwareTags.KEY_WELL).assertDoesNotExist()
+    }
+
+    /** Opening another row's gear moves the listening there; the first well closing must not stop it. */
+    @Test
+    fun movingToAnotherRowKeepsTheNewRowListening() {
+        setPanel()
+
+        compose.onNodeWithTag(HardwareTags.keyGear(StylusPress.Single)).performClick()
+        compose.onNodeWithTag(HardwareTags.keyGear(StylusPress.Triple)).performClick()
+        compose.waitForIdle()
+
+        assertEquals(StylusPress.Triple, penKeys.value.capturing)
+        compose.onNodeWithText("Press the pen button for Triple click…").assertIsDisplayed()
+    }
+
+    @Test
+    fun aLearnedKeyIsShownUnderItsRowAndResetForgetsIt() {
+        penKeys.value = PenKeys(learned = StylusKeys(triple = 614))
+        setPanel()
+
+        compose.onNodeWithTag(HardwareTags.keyLearned(StylusPress.Triple)).assertTextContains("Key 614")
+        compose.onNodeWithTag(HardwareTags.keyLearned(StylusPress.Single)).assertDoesNotExist()
+
+        compose.onNodeWithTag(HardwareTags.keyGear(StylusPress.Triple)).performClick()
+        compose.onNodeWithTag(HardwareTags.KEY_RESET).performClick()
+
+        assertEquals(StylusKeys(), penKeys.value.learned)
+    }
+
+    @Test
+    fun aRefusedKeySaysItCameFromAKeyboard() {
+        penKeys.value = PenKeys(capturing = StylusPress.Single, refused = true)
+        setPanel()
+
+        compose.onNodeWithText("That came from a keyboard. Press the pen's button.").assertIsDisplayed()
+    }
+
     private val bindings = mutableStateOf(KeyBindings.Default)
     private val probe = StylusProbe()
+    private val penKeys = mutableStateOf(PenKeys())
 
     private fun setPanel() {
         compose.setContent {
@@ -345,6 +412,12 @@ class HardwarePanelTest {
                         keyBindings = bindings.value,
                         onSetKeyBindings = { bindings.value = it },
                         probe = probe,
+                        penKeys = penKeys.value,
+                        onLearnKey = { penKeys.value = penKeys.value.copy(capturing = it, refused = false) },
+                        onStopLearning = { press ->
+                            if (penKeys.value.capturing == press) penKeys.value = penKeys.value.copy(capturing = null)
+                        },
+                        onResetKey = { penKeys.value = penKeys.value.copy(learned = penKeys.value.learned.with(it, null)) },
                     )
                 }
             }

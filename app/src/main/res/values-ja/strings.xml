@@ -343,6 +343,12 @@
     <string name="hardware_button_test_copy">レポートをコピー</string>
     <string name="hardware_button_test_clear">クリア</string>
     <string name="hardware_button_test_clip">ペンボタンのレポート</string>
+    <string name="hardware_pen_key_set">%1$sのペンキーを設定</string>
+    <string name="hardware_pen_key_prompt">%1$sに使うペンのボタンを押してください…</string>
+    <string name="hardware_pen_key_refused">キーボードからの入力です。ペンのボタンを押してください。</string>
+    <string name="hardware_pen_key_learned">キー %1$d</string>
+    <string name="hardware_pen_key_built_in">組み込みのキーを使用中</string>
+    <string name="hardware_pen_key_reset">リセット</string>
     <string name="stylus_action_none">なし</string>
     <string name="stylus_action_toggle_pen_eraser">ペン / 消しゴム</string>
     <string name="stylus_action_cycle_pens">次のペン</string>

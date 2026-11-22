@@ -374,6 +374,12 @@
     <string name="hardware_button_test_copy">Kopiuj raport</string>
     <string name="hardware_button_test_clear">Wyczyść</string>
     <string name="hardware_button_test_clip">Raport przycisku pióra</string>
+    <string name="hardware_pen_key_set">Ustaw klawisz pióra dla: %1$s</string>
+    <string name="hardware_pen_key_prompt">Naciśnij przycisk pióra dla: %1$s…</string>
+    <string name="hardware_pen_key_refused">To przyszło z klawiatury. Naciśnij przycisk pióra.</string>
+    <string name="hardware_pen_key_learned">Klawisz %1$d</string>
+    <string name="hardware_pen_key_built_in">Używane są wbudowane klawisze</string>
+    <string name="hardware_pen_key_reset">Resetuj</string>
     <string name="stylus_action_none">Nic</string>
     <string name="stylus_action_toggle_pen_eraser">Pióro / gumka</string>
     <string name="stylus_action_cycle_pens">Następne pióro</string>

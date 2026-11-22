@@ -18,6 +18,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.vivenotes.keyboard.ShortcutScope
 import com.vivenotes.ui.NotesApp
 import com.vivenotes.ui.NotesViewModel
+import com.vivenotes.ui.captureStylusKey
 import com.vivenotes.ui.handleShortcut
 import com.vivenotes.ui.claimsStylusButton
 import com.vivenotes.ui.handleStylusButton
@@ -107,6 +108,8 @@ class MainActivity : ComponentActivity() {
      * The shortcuts that go ahead of the focused view — Esc and Ctrl+F; see `ui/KeyboardShortcuts.kt`.
      * Everything else waits for [onKeyDown].
      *
+     * Ahead of those, a pen-button row learning its key takes every key — see `captureStylusKey`.
+     *
      * The suppression is for a false positive: this overrides the public `Activity` method, but
      * `androidx.core`'s `ComponentActivity` redeclares it under `@RestrictTo`, which lint reads as
      * the override and the `super` call reaching into a library-private API.
@@ -114,7 +117,9 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         viewModel.stylusProbe.record(event)
-        return viewModel.handleShortcut(event, ShortcutScope.Anywhere) || super.dispatchKeyEvent(event)
+        return viewModel.captureStylusKey(event) ||
+            viewModel.handleShortcut(event, ShortcutScope.Anywhere) ||
+            super.dispatchKeyEvent(event)
     }
 
     /**

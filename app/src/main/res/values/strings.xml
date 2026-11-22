@@ -396,6 +396,12 @@
     <string name="hardware_button_test_copy">Copy report</string>
     <string name="hardware_button_test_clear">Clear</string>
     <string name="hardware_button_test_clip">Pen button report</string>
+    <string name="hardware_pen_key_set">Set the pen key for %1$s</string>
+    <string name="hardware_pen_key_prompt">Press the pen button for %1$s…</string>
+    <string name="hardware_pen_key_refused">That came from a keyboard. Press the pen\'s button.</string>
+    <string name="hardware_pen_key_learned">Key %1$d</string>
+    <string name="hardware_pen_key_built_in">Using the built-in keys</string>
+    <string name="hardware_pen_key_reset">Reset</string>
     <string name="stylus_action_none">Nothing</string>
     <string name="stylus_action_toggle_pen_eraser">Pen / eraser</string>
     <string name="stylus_action_cycle_pens">Next pen</string>
