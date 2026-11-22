@@ -5,10 +5,13 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vivenotes.fileimport.DocxTestFile
 import com.vivenotes.fileimport.FileImportMode
@@ -77,6 +80,16 @@ class ImportFileDialogTest {
         }
     }
 
+    /**
+     * Page [index]'s sheet, scrolled into view first. The grid is lazy, so in a portrait window a
+     * sheet below the first row has not been composed and cannot be found without the scroll.
+     */
+    private fun page(index: Int): SemanticsNodeInteraction {
+        compose.onNodeWithTag(ImportFileTags.PAGES)
+            .performScrollToNode(hasTestTag(ImportFileTags.page(index)))
+        return compose.onNodeWithTag(ImportFileTags.page(index))
+    }
+
     @After
     fun tearDown() {
         importer.release()
@@ -88,7 +101,7 @@ class ImportFileDialogTest {
         writeDocument(pages = 3)
         setDialog()
 
-        (0 until 3).forEach { compose.onNodeWithTag(ImportFileTags.page(it)).assertIsOff() }
+        (0 until 3).forEach { page(it).assertIsOff() }
         compose.onNodeWithTag(ImportFileTags.INSERT).assertIsNotEnabled()
     }
 
@@ -97,9 +110,9 @@ class ImportFileDialogTest {
         writeDocument(pages = 3)
         setDialog()
 
-        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
-        compose.onNodeWithTag(ImportFileTags.page(2)).performClick()
-        compose.onNodeWithTag(ImportFileTags.page(1)).assertIsOff()
+        page(0).performClick()
+        page(2).performClick()
+        page(1).assertIsOff()
         compose.onNodeWithTag(ImportFileTags.INSERT).performClick()
         compose.waitUntil(WAIT_MS) { insertedPages != null }
 
@@ -110,7 +123,7 @@ class ImportFileDialogTest {
     fun objectsAreTheDefault() {
         writeDocument(pages = 1)
         setDialog()
-        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
+        page(0).performClick()
 
         compose.onNodeWithTag(ImportFileTags.INSERT).performClick()
         compose.waitUntil(WAIT_MS) { insertedMode != null }
@@ -122,7 +135,7 @@ class ImportFileDialogTest {
     fun picturesCanBeChosen() {
         writeDocument(pages = 1)
         setDialog()
-        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
+        page(0).performClick()
 
         compose.onNodeWithTag(PanelTags.field("Insert as")).performClick()
         compose.onNodeWithText(context.getString(R.string.import_file_as_pictures)).performClick()
@@ -138,11 +151,11 @@ class ImportFileDialogTest {
         setDialog()
 
         compose.onNodeWithTag(ImportFileTags.SELECT_ALL).performClick()
-        (0 until 2).forEach { compose.onNodeWithTag(ImportFileTags.page(it)).assertIsOn() }
+        (0 until 2).forEach { page(it).assertIsOn() }
         compose.onNodeWithTag(ImportFileTags.INSERT).assertIsEnabled()
 
         compose.onNodeWithTag(ImportFileTags.SELECT_NONE).performClick()
-        compose.onNodeWithTag(ImportFileTags.page(0)).assertIsOff()
+        page(0).assertIsOff()
         compose.onNodeWithTag(ImportFileTags.INSERT).assertIsNotEnabled()
     }
 
@@ -150,7 +163,7 @@ class ImportFileDialogTest {
     fun aSuccessfulInsertClosesTheWindow() {
         writeDocument(pages = 1)
         setDialog()
-        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
+        page(0).performClick()
 
         compose.onNodeWithTag(ImportFileTags.INSERT).performClick()
         compose.waitUntil(WAIT_MS) { dismissed }
@@ -162,7 +175,7 @@ class ImportFileDialogTest {
     fun anInsertThatDoesNotLandSaysSoAndStaysOpen() {
         writeDocument(pages = 1)
         setDialog(landed = false)
-        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
+        page(0).performClick()
 
         compose.onNodeWithTag(ImportFileTags.INSERT).performClick()
         compose.waitUntil(WAIT_MS) { insertedPages != null }
@@ -186,8 +199,8 @@ class ImportFileDialogTest {
     fun aPageOfNoSizeStillTakesAPlaceInTheGrid() {
         setDialog(open = { ImportedFile("broken.pdf", listOf(ImportedPageSize(0f, 0f), ImportedPageSize(612f, 0f)), Any()) })
 
-        compose.onNodeWithTag(ImportFileTags.page(0)).assertIsDisplayed()
-        compose.onNodeWithTag(ImportFileTags.page(1)).assertExists()
+        page(0).assertIsDisplayed()
+        page(1).assertExists()
     }
 
     /**
@@ -200,7 +213,7 @@ class ImportFileDialogTest {
 
         compose.onNodeWithTag(ImportFileTags.PICTURES_ONLY).assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.import_file_as_pictures)).assertIsDisplayed()
-        compose.onNodeWithTag(ImportFileTags.page(0)).performClick()
+        page(0).performClick()
         compose.onNodeWithTag(ImportFileTags.INSERT).performClick()
         compose.waitUntil(WAIT_MS) { insertedMode != null }
 
