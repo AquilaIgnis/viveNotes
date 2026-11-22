@@ -41,7 +41,7 @@ internal class OpenverseClient(private val http: PictureHttp) {
 
         fun searchUrl(query: String, page: Int): String =
             ENDPOINT +
-                "?q=" + URLEncoder.encode(query.trim(), Charsets.UTF_8) +
+                "?q=" + URLEncoder.encode(query.trim(), Charsets.UTF_8.name()) +
                 "&page=" + page +
                 "&page_size=" + PAGE_SIZE +
                 "&extension=" + EXTENSIONS +

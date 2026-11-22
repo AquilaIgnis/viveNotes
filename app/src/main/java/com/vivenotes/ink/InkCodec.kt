@@ -170,9 +170,10 @@ object InkCodec {
         FAMILY_MARKER -> StockBrushes.marker(StockBrushes.MarkerVersion.V1)
         FAMILY_HIGHLIGHTER -> StockBrushes.highlighter(
             // A highlighter that doubles back over itself must not darken where it crosses, which
-            // is exactly what ACCUMULATE does to a translucent colour — and on minSdk 35, ANY *is*
-            // ACCUMULATE, since that is its default from Android U up. DISCARD is the only option
-            // that draws one flat band per stroke, which is what a real highlighter leaves.
+            // is exactly what ACCUMULATE does to a translucent colour — and from Android 14, ANY *is*
+            // ACCUMULATE, since that is its default once the mesh renderer is there. DISCARD is the
+            // only option that draws one flat band per stroke on every version, which is what a
+            // real highlighter leaves.
             selfOverlap = SelfOverlap.DISCARD,
             // Pinned, never LATEST. This id has never been written by any build — the mapping
             // existed before anything could produce it — so choosing its meaning now restyles no

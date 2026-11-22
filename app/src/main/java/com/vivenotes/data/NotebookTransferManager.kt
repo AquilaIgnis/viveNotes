@@ -9,6 +9,7 @@ import android.provider.OpenableColumns
 import androidx.room.withTransaction
 import com.vivenotes.data.db.AttachmentEntity
 import com.vivenotes.data.db.BODY_PIECE_CHARS
+import com.vivenotes.data.db.dropColumns
 import com.vivenotes.data.db.InkEraseEntity
 import com.vivenotes.data.db.InkEraseTargetEntity
 import com.vivenotes.data.db.InkMoveEntity
@@ -412,22 +413,6 @@ class NotebookTransferManager(
                 source.execSQL("DROP TABLE IF EXISTS sync_entity_states")
                 source.execSQL("DROP TABLE IF EXISTS sync_state")
                 source.execSQL("DELETE FROM notebooks WHERE id <> ?", arrayOf(notebookId))
-                // Which shelf a notebook sits on is this account's business and not the notebook's
-                // content, so an imported notebook always arrives open and on the device it was
-                // imported to. Dropped rather than nulled for the reason the tables above are:
-                // `validateSchema` compares the bundle's columns to `EXPECTED_COLUMNS` exactly, and
-                // leaving them in would mean no build that has the shelf could import what it wrote.
-                // `ALTER TABLE ... DROP COLUMN` needs SQLite 3.35, which every `minSdk = 35` device
-                // has several versions past.
-                source.execSQL("ALTER TABLE notebooks DROP COLUMN closedAt")
-                source.execSQL("ALTER TABLE notebooks DROP COLUMN cloudOnlyAt")
-                // Likewise per device, and dropped for the same reason. Whether this installation
-                // has released a picture from its account says nothing about the notebook, and the
-                // saved-version picture index is a cache the importing device rebuilds: an imported
-                // picture arrives unreleased and an imported version unindexed, which is what a
-                // picture and a version this device has never swept are.
-                source.execSQL("ALTER TABLE attachments DROP COLUMN releasedAt")
-                source.execSQL("ALTER TABLE page_revisions DROP COLUMN pictureIds")
                 // Installation identity is not notebook content and must never travel to another
                 // device. The notebook UUID itself remains in both `notebooks.id` and vive_bundle.
                 source.execSQL("DROP TABLE IF EXISTS local_metadata")
@@ -446,6 +431,21 @@ class NotebookTransferManager(
             } finally {
                 source.endTransaction()
             }
+            // Which shelf a notebook sits on is this account's business and not the notebook's
+            // content, so an imported notebook always arrives open and on the device it was
+            // imported to. Dropped rather than nulled for the reason the tables above are:
+            // `validateSchema` compares the bundle's columns to `EXPECTED_COLUMNS` exactly, and
+            // leaving them in would mean no build that has the shelf could import what it wrote.
+            // Outside the transaction, because on a SQLite too old for `DROP COLUMN`,
+            // `dropColumns` rebuilds the table with foreign keys off, which only works outside one.
+            source.dropColumns("notebooks", setOf("closedAt", "cloudOnlyAt"))
+            // Likewise per device, and dropped for the same reason. Whether this installation has
+            // released a picture from its account says nothing about the notebook, and the
+            // saved-version picture index is a cache the importing device rebuilds: an imported
+            // picture arrives unreleased and an imported version unindexed, which is what a
+            // picture and a version this device has never swept are.
+            source.dropColumns("attachments", setOf("releasedAt"))
+            source.dropColumns("page_revisions", setOf("pictureIds"))
             DebugLog.d(DebugLog.TRANSFER) {
                 "Removed other notebooks, sync tables, device-local columns and derived caches"
             }
@@ -1821,7 +1821,7 @@ private fun File.hasSQLiteHeader(): Boolean = FileInputStream(this).use { input 
 }
 
 /** Up to the first [count] bytes: fewer when the file is shorter. */
-private fun File.head(count: Int): ByteArray = FileInputStream(this).use { input -> input.readNBytes(count) }
+private fun File.head(count: Int): ByteArray = FileInputStream(this).use { input -> input.readAtMost(count) }
 private fun ByteArray.sha256(): String = ByteArrayInputStream(this).sha256()
 private fun InputStream.sha256(): String {
     val digest = MessageDigest.getInstance("SHA-256")

@@ -10,6 +10,7 @@ import com.vivenotes.fileimport.docx.DocxPackage
 import com.vivenotes.fileimport.docx.DocxPages
 import com.vivenotes.fileimport.odt.OdtPackage
 import com.vivenotes.fileimport.odt.OdtReader
+import com.vivenotes.fileimport.pdf.PdfBackend
 import com.vivenotes.fileimport.pdf.PdfPages
 import com.vivenotes.fileimport.pptx.PptxPages
 import com.vivenotes.model.Mark
@@ -58,16 +59,23 @@ class ImportException(val failure: ImportFailure, cause: Throwable? = null) :
 internal interface ImportedDocument : Closeable {
     val pages: List<ImportedPageSize>
 
+    /** False when this device cannot read the document's text, so [items] has none to give. */
+    val readsText: Boolean get() = true
+
     fun render(index: Int, widthPx: Int): Bitmap?
 
     suspend fun items(pages: List<Int>, marks: Set<Mark>): List<CanvasPasteItem>
 }
 
-/** A document open in the importer: its name and the size of each page. */
+/**
+ * A document open in the importer: its name and the size of each page, and whether its text can be
+ * read here. When it cannot, the only useful way in is a picture of each page.
+ */
 class ImportedFile internal constructor(
     val name: String,
     val pages: List<ImportedPageSize>,
     internal val token: Any,
+    val readsText: Boolean = true,
 )
 
 /**
@@ -88,6 +96,9 @@ class FileImporter(
     private val mutex = Mutex()
 
     private var open: OpenDocument? = null
+
+    /** The renderer PDFs are read with: this device's, unless a test names another. */
+    internal var pdfBackend: PdfBackend = PdfBackend.forThisDevice()
 
     /** Set when the window closes mid-render, so the job in flight shuts the document on its way out. */
     @Volatile
@@ -152,7 +163,7 @@ class FileImporter(
     private suspend fun read(file: File): ImportedDocument = when {
         // Exact signatures first: a PDF's marker may sit anywhere in its opening kilobyte.
         CompoundFile.isCompoundFile(file) -> readCompound(CompoundFile.open(file))
-        PdfPages.isPdf(file) -> PdfPages.open(file)
+        PdfPages.isPdf(file) -> PdfPages.open(file, pdfBackend)
         OdtPackage.isOdt(file) -> OdtPackage.open(file).closedOnFailure { odt ->
             val read = OdtReader(odt).read()
             DocxPages.of(appContext, read.document, { odt.bytes(it) }, read.fontFamilies, odt)
@@ -187,6 +198,7 @@ class FileImporter(
             name = name,
             pages = pages.pages,
             token = document.token,
+            readsText = pages.readsText,
         )
     }
 

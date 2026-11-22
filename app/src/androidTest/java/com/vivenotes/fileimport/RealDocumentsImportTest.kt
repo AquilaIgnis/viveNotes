@@ -3,15 +3,20 @@ package com.vivenotes.fileimport
 import android.graphics.BitmapFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.vivenotes.fileimport.pdf.PdfBackend
 import com.vivenotes.model.BlockType
 import com.vivenotes.richtext.CanvasPasteItem
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * Real documents through the whole importer on a device: the pages its layout makes of two Word
@@ -81,6 +86,7 @@ class RealDocumentsImportTest {
 
     @Test
     fun theLecturesAsPdfComeInSlideBySlide() {
+        assumeReadsText()
         val first = open("L1.pdf")
         assertEquals(23, first.pages.size)
         val title = (objects(first, 1).single() as CanvasPasteItem.Text).blocks.first()
@@ -97,9 +103,59 @@ class RealDocumentsImportTest {
 
     @Test
     fun everyPdfSlideBringsSomethingIn() {
+        assumeReadsText()
         for (name in listOf("L1.pdf", "L2.pdf")) {
             val pdf = open(name)
             for (number in 1..pdf.pages.size) assertTrue("$name slide $number", objects(pdf, number).isNotEmpty())
+        }
+    }
+
+    /** Text needs a renderer that says where it is: Android 15, or 11 to 14 with S extension 13. */
+    private fun assumeReadsText() {
+        assumeTrue("this device cannot read the text in a PDF", importer.pdfBackend.readsText)
+    }
+
+    /** Where text cannot be read, the window brings each page in as a picture, so every one has to draw. */
+    @Test
+    fun whereTextCannotBeReadEveryLecturePageStillDraws() {
+        importer.pdfBackend = PdfBackend.PicturesOnly
+        for (name in listOf("L1.pdf", "L2.pdf")) {
+            val pdf = open(name)
+            assertFalse(pdf.readsText)
+            for (index in pdf.pages.indices) {
+                assertNotNull("$name page ${index + 1}", runBlocking { importer.preview(pdf, index, 400) })
+            }
+        }
+    }
+
+    /**
+     * The renderer Android 11 to 14 get, against Android 15's own, on the same real files. Only a
+     * device that has both can run it, which is any device on Android 15 or later.
+     */
+    @Test
+    fun bothRenderersReadTheLecturesAlike() {
+        val both = PdfBackend.onThisDevice()
+        assumeTrue("this device does not have both renderers", PdfBackend.Platform in both && PdfBackend.PreV in both)
+        for (name in listOf("L1.pdf", "L2.pdf")) {
+            val readings = listOf(PdfBackend.Platform, PdfBackend.PreV).map { backend ->
+                importer.pdfBackend = backend
+                val pdf = open(name)
+                (1..pdf.pages.size).map { number -> summary(objects(pdf, number)) }
+            }
+            readings[0].indices.forEach { page ->
+                assertEquals("$name page ${page + 1}", readings[0][page], readings[1][page])
+            }
+        }
+    }
+
+    private fun summary(items: List<CanvasPasteItem>): List<String> = items.map { item ->
+        when (item) {
+            is CanvasPasteItem.Text -> "text:" + item.blocks.joinToString("|") { "${it.type}:${it.text}" }
+            is CanvasPasteItem.Table -> "table:" + item.outline.rows.joinToString("|") { row ->
+                row.cells.joinToString(",") { it.plainText }
+            }
+            is CanvasPasteItem.Image -> "image:${item.widthDp?.roundToInt()}x${item.heightDp?.roundToInt()}"
+            else -> item.javaClass.simpleName
         }
     }
 }

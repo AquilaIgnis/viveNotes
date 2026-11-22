@@ -4,8 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.RectF
-import android.graphics.pdf.PdfRenderer
-import android.graphics.pdf.models.selection.SelectionBoundary
 import android.os.ParcelFileDescriptor
 import com.vivenotes.fileimport.ImportException
 import com.vivenotes.fileimport.ImportFailure
@@ -32,20 +30,24 @@ import kotlin.math.roundToInt
  *
  * Android renders PDFs and will say what text is where, which between them cover everything here:
  * the page pictures are the renderer's own, and the objects are worked out from the text's positions
- * and the rendered pixels. Used from one coroutine at a time, as the renderer requires.
+ * and the rendered pixels. Where the device cannot say where the text is (see [PdfBackend]), a page
+ * has no words to read, and [readsText] tells the window to bring pages in as pictures. Used from
+ * one coroutine at a time, as the renderer requires.
  */
 internal class PdfPages private constructor(
     private val descriptor: ParcelFileDescriptor,
-    private val renderer: PdfRenderer,
+    private val source: PdfSource,
     override val pages: List<ImportedPageSize>,
 ) : ImportedDocument {
+
+    override val readsText: Boolean get() = source.readsText
 
     /** Found once, on the first insert: it takes every page, and most windows are only looked at. */
     private var furniture: PdfFurniture? = null
 
     override fun render(index: Int, widthPx: Int): Bitmap? {
         if (index !in pages.indices) return null
-        renderer.openPage(index).use { page ->
+        source.openPage(index).use { page ->
             val scale = widthPx.toFloat() / page.width
             val height = (page.height * scale).roundToInt().coerceAtLeast(1)
             return drawn(page, widthPx.coerceAtLeast(1), height, Matrix().apply { setScale(scale, scale) })
@@ -53,10 +55,10 @@ internal class PdfPages private constructor(
     }
 
     /** A blank page's pixels are transparent, and what a page is drawn on is white paper. */
-    private fun drawn(page: PdfRenderer.Page, width: Int, height: Int, matrix: Matrix): Bitmap {
+    private fun drawn(page: PdfSourcePage, width: Int, height: Int, matrix: Matrix): Bitmap {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.WHITE)
-        page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+        page.render(bitmap, matrix)
         return bitmap
     }
 
@@ -83,7 +85,7 @@ internal class PdfPages private constructor(
     /** A sample spread through the file: what repeats on every page shows up in any of them. */
     private fun furnitureOf(): PdfFurniture = furniture ?: PdfFurniture.find(
         (0 until pages.size).toList().sample(FURNITURE_SAMPLE_PAGES).map { index ->
-            renderer.openPage(index).use { page -> wholeLines(readGlyphs(page)) to page.height.toFloat() }
+            source.openPage(index).use { page -> wholeLines(readGlyphs(page)) to page.height.toFloat() }
         },
     ).also { furniture = it }
 
@@ -98,8 +100,9 @@ internal class PdfPages private constructor(
      * page is two characters out by the second hyphenated one. What they share is the order of the
      * printing characters, so the two are walked together and only those are matched up.
      */
-    private fun readGlyphs(page: PdfRenderer.Page): List<PdfGlyph> {
-        val text = page.textContents.joinToString("") { it.text }
+    private fun readGlyphs(page: PdfSourcePage): List<PdfGlyph> {
+        val reading = page.text ?: return emptyList()
+        val text = reading.text()
         val glyphs = ArrayList<PdfGlyph>(text.length)
         var position = 0
         fun copySpaces() {
@@ -110,11 +113,8 @@ internal class PdfPages private constructor(
         }
         for (index in text.indices) {
             if (position >= text.length) break
-            val found = page.selectContent(SelectionBoundary(index), SelectionBoundary(index + 1))
-                ?.selectedTextContents
-                ?.firstOrNull { it.bounds.isNotEmpty() && it.text.isNotEmpty() }
-                ?: continue
-            val char = found.text.first()
+            val found = reading.selected(index) ?: continue
+            val char = found.char
             // Some producers draw their spaces, and those are already covered by copying the text's.
             if (char.isWhitespace()) continue
             copySpaces()
@@ -122,7 +122,7 @@ internal class PdfPages private constructor(
             // A character one side has and the other lacks would throw off every space after it.
             val match = (position until min(position + RESYNC_WINDOW, text.length)).firstOrNull { text[it] == char }
             if (match != null) position = match
-            glyphs += PdfGlyph(char, rectOf(found.bounds.first()))
+            glyphs += PdfGlyph(char, rectOf(found.box))
             position++
         }
         copySpaces()
@@ -132,15 +132,15 @@ internal class PdfPages private constructor(
     private fun rectOf(rect: RectF): PdfRect = PdfRect(rect.left, rect.top, rect.right, rect.bottom)
 
     private fun readPage(index: Int, found: PdfFurniture, figures: MutableMap<String, Pair<Int, PdfRect>>): PdfPageInput =
-        renderer.openPage(index).use { page ->
+        source.openPage(index).use { page ->
             val width = page.width.toFloat()
             val height = page.height.toFloat()
             val glyphs = readGlyphs(page)
             val everyLine = readLines(glyphs)
             val lines = readLines(glyphs) { line, box -> found.matches(line, box, height) }
                 .filterNot { it.rotated && isInSideMargin(it.box, width) }
-            val links = page.linkContents.mapNotNull { link ->
-                normalizedLinkUrl(link.uri.toString())?.let { url -> url to link.bounds.map(::rectOf) }
+            val links = page.text?.links().orEmpty().mapNotNull { link ->
+                normalizedLinkUrl(link.uri)?.let { url -> url to link.boxes.map(::rectOf) }
             }
             lines.forEach { line ->
                 line.words.forEach { word ->
@@ -181,7 +181,7 @@ internal class PdfPages private constructor(
         box.right < pageWidth * SIDE_MARGIN_SHARE || box.left > pageWidth * (1f - SIDE_MARGIN_SHARE)
 
     /** A figure cut out of its page, as sharp as is any use once it reaches the attachment store. */
-    private fun figureBytes(index: Int, box: PdfRect): ByteArray? = renderer.openPage(index).use { page ->
+    private fun figureBytes(index: Int, box: PdfRect): ByteArray? = source.openPage(index).use { page ->
         val longest = max(box.width, box.height).coerceAtLeast(1f)
         val scale = min(FIGURE_PIXELS_PER_POINT, FIGURE_LONGEST_PX / longest)
         val width = (box.width * scale).roundToInt().coerceAtLeast(1)
@@ -198,7 +198,7 @@ internal class PdfPages private constructor(
     }
 
     override fun close() {
-        renderer.close()
+        source.close()
         descriptor.close()
     }
 
@@ -210,18 +210,19 @@ internal class PdfPages private constructor(
             read > 0 && String(head, 0, read, Charsets.ISO_8859_1).contains("%PDF-")
         }
 
-        fun open(file: File): PdfPages {
+        /** [backend] is the device's own unless a test names one. */
+        fun open(file: File, backend: PdfBackend = PdfBackend.forThisDevice()): PdfPages {
             val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-            var renderer: PdfRenderer? = null
+            var source: PdfSource? = null
             try {
                 val opened = try {
-                    PdfRenderer(descriptor)
+                    openPdfSource(descriptor, backend)
                 } catch (locked: SecurityException) {
                     throw ImportException(ImportFailure.PasswordProtected, locked)
                 } catch (broken: IOException) {
                     throw ImportException(ImportFailure.Unreadable, broken)
                 }
-                renderer = opened
+                source = opened
                 if (opened.pageCount > MAX_PAGES) throw ImportException(ImportFailure.TooLarge)
                 val sizes = (0 until opened.pageCount).map { index ->
                     opened.openPage(index).use { page ->
@@ -231,7 +232,7 @@ internal class PdfPages private constructor(
                 return PdfPages(descriptor, opened, sizes)
             } catch (failure: Throwable) {
                 // A page that will not open is as broken as a file that will not; neither keeps the file.
-                runCatching { renderer?.close() }
+                runCatching { source?.close() }
                 descriptor.close()
                 throw failure
             }

@@ -230,7 +230,7 @@ android {
 
     defaultConfig {
         applicationId = "com.vivenotes"
-        minSdk = 35
+        minSdk = 31
         targetSdk = 36
         versionCode = 12
         versionName = appVersionName
@@ -344,6 +344,11 @@ android {
         // rather than shipped and skipped. `RecognitionPanel`'s SymPy diagnostics are the first
         // caller. A runtime `FLAG_DEBUGGABLE` check would read the same and strip nothing.
         buildConfig = true
+    }
+    // An unguarded call above minSdk crashes only on older devices, which nobody uses day to day,
+    // so NewApi is fatal: `lintVitalRelease` stops a release build that has one.
+    lint {
+        fatal += "NewApi"
     }
     // Real documents File ▸ Import is checked against, kept once for both kinds of test: the JVM
     // tests CI runs read the Word and PowerPoint files, and only a device can render the PDFs.

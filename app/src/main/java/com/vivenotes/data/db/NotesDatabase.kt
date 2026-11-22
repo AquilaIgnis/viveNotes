@@ -8,6 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 import com.vivenotes.data.DebugLog
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * The app's database.
@@ -131,13 +133,11 @@ abstract class NotesDatabase : RoomDatabase() {
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(connection: SQLiteConnection) {
                 DebugLog.i(DebugLog.DB) { "Migrating notes.db from version 2 to 3" }
-                connection.execSQL(
-                    "UPDATE sync_entity_states SET serverJson = json_remove(serverJson, '$.doc') " +
-                        "WHERE kind = 'pageContent'",
-                )
-                connection.execSQL(
-                    "UPDATE sync_entity_states SET serverJson = json_remove(serverJson, '$.points') " +
-                        "WHERE kind IN ('inkStroke', 'inkErase', 'inkMove')",
+                removeServerJsonField(connection, kinds = listOf("pageContent"), field = "doc")
+                removeServerJsonField(
+                    connection,
+                    kinds = listOf("inkStroke", "inkErase", "inkMove"),
+                    field = "points",
                 )
                 connection.execSQL(
                     "DELETE FROM local_metadata WHERE `key` = 'syncPendingHierarchyBatch' " +
@@ -145,6 +145,61 @@ abstract class NotesDatabase : RoomDatabase() {
                 )
             }
         }
+
+        /**
+         * Removes the top-level [field] from the stored server JSON of every row of [kinds].
+         *
+         * In Kotlin rather than with SQL's `json_remove`, which the SQLite in Android 12 and 13
+         * lacks. The rows this exists for are past the cursor window, so each one comes out of the
+         * database a piece at a time, as a page body does through [PageContentDao]. A row that is
+         * not a JSON object, or has no such field, is left as it is.
+         */
+        private fun removeServerJsonField(connection: SQLiteConnection, kinds: List<String>, field: String) {
+            val rows = connection.prepare(
+                "SELECT kind, entityId, length(serverJson) FROM sync_entity_states " +
+                    "WHERE kind IN (${kinds.joinToString { "?" }})",
+            ).use { statement ->
+                kinds.forEachIndexed { index, kind -> statement.bindText(index + 1, kind) }
+                buildList {
+                    while (statement.step()) {
+                        add(StateRow(statement.getText(0), statement.getText(1), statement.getLong(2).toInt()))
+                    }
+                }
+            }
+            rows.forEach { row ->
+                val stored = runCatching { Json.parseToJsonElement(serverJsonOf(connection, row)) }.getOrNull()
+                if (stored !is JsonObject || field !in stored) return@forEach
+                connection.prepare(
+                    "UPDATE sync_entity_states SET serverJson = ? WHERE kind = ? AND entityId = ?",
+                ).use { statement ->
+                    statement.bindText(1, JsonObject(stored - field).toString())
+                    statement.bindText(2, row.kind)
+                    statement.bindText(3, row.entityId)
+                    statement.step()
+                }
+            }
+        }
+
+        private fun serverJsonOf(connection: SQLiteConnection, row: StateRow): String =
+            connection.prepare(
+                "SELECT substr(serverJson, ?, $BODY_PIECE_CHARS) FROM sync_entity_states " +
+                    "WHERE kind = ? AND entityId = ?",
+            ).use { statement ->
+                val json = StringBuilder(row.length)
+                var start = 1
+                while (start <= row.length) {
+                    statement.reset()
+                    statement.bindLong(1, start.toLong())
+                    statement.bindText(2, row.kind)
+                    statement.bindText(3, row.entityId)
+                    check(statement.step()) { "A state row went away while it was being read" }
+                    json.append(statement.getText(0))
+                    start += BODY_PIECE_CHARS
+                }
+                json.toString()
+            }
+
+        private data class StateRow(val kind: String, val entityId: String, val length: Int)
 
         /**
          * Version 4: a picture's recognized text says where on the picture each line is.

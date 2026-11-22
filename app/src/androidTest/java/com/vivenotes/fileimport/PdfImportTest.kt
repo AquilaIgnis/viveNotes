@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.vivenotes.fileimport.pdf.PdfBackend
 import com.vivenotes.richtext.CanvasPasteItem
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -13,6 +14,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -77,6 +79,67 @@ class PdfImportTest {
         importer.objects(opened, pages.toList(), emptySet())
     }
 
+    /** Text needs a renderer that says where it is: Android 15, or 11 to 14 with S extension 13. */
+    private fun assumeReadsText() {
+        assumeTrue("this device cannot read the text in a PDF", importer.pdfBackend.readsText)
+    }
+
+    /**
+     * Where the text cannot be read, a file still opens with all its pages, draws each one, and says
+     * so, which is what lets the window offer a picture of each page instead.
+     */
+    @Test
+    fun whereTextCannotBeReadEveryPageStillOpensAndDraws() = runBlocking {
+        importer.pdfBackend = PdfBackend.PicturesOnly
+        writePdf(
+            pages = arrayOf(
+                { canvas: Canvas -> canvas.drawText("Words nothing here can read.", 72f, 100f, ink) },
+                { _: Canvas -> },
+            ),
+        )
+
+        val opened = importer.openFile(file, file.name)
+
+        assertFalse(opened.readsText)
+        assertEquals(2, opened.pages.size)
+        val picture = requireNotNull(importer.preview(opened, 0, 612))
+        val inked = (0 until picture.width).any { x -> (90 until 104).any { y -> Color.red(picture.getPixel(x, y)) < 128 } }
+        assertTrue("the words were not drawn", inked)
+    }
+
+    /**
+     * Android 15 has both renderers, so a tablet checks that the one Android 11 to 14 get reads a page
+     * the same way. Where only one reads text, it is checked against what the page says.
+     */
+    @Test
+    fun everyRendererThatReadsTextReadsTheSame() {
+        val readers = PdfBackend.onThisDevice().filter { it.readsText }
+        assumeTrue("this device cannot read the text in a PDF", readers.isNotEmpty())
+        writePdf(
+            pages = arrayOf({ canvas: Canvas ->
+                canvas.drawText("Read by every renderer alike.", 72f, 100f, ink)
+                canvas.table(72f, 160f, listOf(120f, 120f), 24f, listOf(listOf("Name", "Age"), listOf("Rusty", "35")))
+            }),
+        )
+
+        val readings = readers.associateWith { backend ->
+            importer.pdfBackend = backend
+            objects(0).map { item ->
+                when (item) {
+                    is CanvasPasteItem.Text -> "text:" + item.blocks.joinToString("|") { it.text }
+                    is CanvasPasteItem.Table -> "table:" + item.outline.rows.joinToString("|") { row -> row.cells.joinToString(",") { it.plainText } }
+                    else -> item.javaClass.simpleName
+                }
+            }
+        }
+
+        readings.values.forEach { reading ->
+            assertTrue(reading.toString(), "text:Read by every renderer alike." in reading)
+            assertTrue(reading.toString(), "table:Name,Age|Rusty,35" in reading)
+        }
+        assertEquals(readings.toString(), 1, readings.values.distinct().size)
+    }
+
     private fun failureOpening(): ImportFailure {
         val thrown = assertThrows(ImportException::class.java) {
             runBlocking { importer.openFile(file, file.name) }
@@ -110,6 +173,7 @@ class PdfImportTest {
 
     @Test
     fun textComesInAsTextWhereThePageHasIt() {
+        assumeReadsText()
         writePdf(pages = arrayOf({ canvas: Canvas -> canvas.drawText("The body of the page, as written.", 72f, 100f, ink) }))
 
         val text = objects(0).single() as CanvasPasteItem.Text
@@ -119,6 +183,7 @@ class PdfImportTest {
 
     @Test
     fun aRuledTableComesInAsATable() {
+        assumeReadsText()
         writePdf(
             pages = arrayOf({ canvas: Canvas ->
                 canvas.table(72f, 100f, listOf(120f, 120f, 120f), 24f, listOf(listOf("Name", "Rating", "Age"), listOf("Dustin", "7", "45"), listOf("Rusty", "10", "35")))
@@ -151,6 +216,7 @@ class PdfImportTest {
      */
     @Test
     fun aPosterSizePageComesInAsItsWords() {
+        assumeReadsText()
         writePdf(1700, 2400, { canvas: Canvas -> canvas.drawText("Findings, in large print.", 200f, 300f, ink) })
 
         val text = objects(0).single() as CanvasPasteItem.Text
@@ -171,6 +237,7 @@ class PdfImportTest {
 
     @Test
     fun onlyTheChosenPagesComeIn() {
+        assumeReadsText()
         writePdf(
             pages = arrayOf(
                 { canvas: Canvas -> canvas.drawText("Page one here.", 72f, 100f, ink) },
@@ -185,6 +252,7 @@ class PdfImportTest {
 
     @Test
     fun whatRepeatsAtTheFootOfEveryPageIsLeftOut() {
+        assumeReadsText()
         val page = { number: Int ->
             { canvas: Canvas ->
                 canvas.drawText("Body of page $number.", 72f, 100f, ink)
@@ -203,6 +271,7 @@ class PdfImportTest {
     /** One text box to a slide, so they can be moved about separately on the canvas. */
     @Test
     fun aLandscapePageIsASlideWithATextBoxOfItsOwn() {
+        assumeReadsText()
         val page = { canvas: Canvas ->
             canvas.drawText("Slide text one.", 72f, 100f, ink)
             Unit

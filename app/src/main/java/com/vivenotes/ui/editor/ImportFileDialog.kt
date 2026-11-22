@@ -87,6 +87,7 @@ internal object ImportFileTags {
     const val MESSAGE = "import-file-message"
     const val SELECT_ALL = "import-file-select-all"
     const val SELECT_NONE = "import-file-select-none"
+    const val PICTURES_ONLY = "import-file-pictures-only"
 
     /** One page in the grid. */
     fun page(index: Int): String = "import-file-page-$index"
@@ -118,6 +119,9 @@ internal fun ImportFileDialog(
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
+    // A file whose text this device cannot read has no text and tables to give, only its pages.
+    val picturesOnly = file?.readsText == false
+    val insertAs = if (picturesOnly) FileImportMode.Pictures else mode
 
     LaunchedEffect(Unit) {
         try {
@@ -157,7 +161,7 @@ internal fun ImportFileDialog(
                         message = null
                         scope.launch {
                             val landed = try {
-                                onInsert(current, chosen.sorted(), mode)
+                                onInsert(current, chosen.sorted(), insertAs)
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (_: Exception) {
@@ -197,8 +201,9 @@ internal fun ImportFileDialog(
                     }
                     val optionsPane: @Composable (Modifier) -> Unit = { modifier ->
                         ImportFileOptions(
-                            mode = mode,
+                            mode = insertAs,
                             enabled = file != null,
+                            picturesOnly = picturesOnly,
                             onMode = { mode = it },
                             onSelectAll = { file?.let { chosen = it.pages.indices.toSet() } },
                             onSelectNone = { chosen = emptySet() },
@@ -415,6 +420,7 @@ private fun shownShare(page: ImportedPageSize): Float = minOf(1f, pageRatio(page
 private fun ImportFileOptions(
     mode: FileImportMode,
     enabled: Boolean,
+    picturesOnly: Boolean,
     onMode: (FileImportMode) -> Unit,
     onSelectAll: () -> Unit,
     onSelectNone: () -> Unit,
@@ -462,8 +468,19 @@ private fun ImportFileOptions(
                     }
                 },
                 onPick = onMode,
-                enabled = enabled,
+                enabled = enabled && !picturesOnly,
             )
+            // Said where the choice is, since it is the choice this takes away.
+            if (picturesOnly) {
+                Text(
+                    text = stringResource(R.string.import_file_pdf_pictures_only),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .testTag(ImportFileTags.PICTURES_ONLY),
+                )
+            }
         }
     }
 }

@@ -936,6 +936,7 @@
     <string name="import_file_as_objects">Text and tables</string>
     <string name="import_file_as_pictures">Picture of each page</string>
     <string name="import_file_as_info">Text and tables can be edited on the canvas. A picture shows the page as laid out here, ready to write over.</string>
+    <string name="import_file_pdf_pictures_only">This device can\'t read the text in a PDF, so each page comes in as a picture.</string>
     <string name="import_file_not_word">Only Word documents (.doc, .docx), OpenDocument text (.odt), PowerPoint presentations (.pptx) and PDFs can be imported.</string>
     <string name="import_file_password">This file is password-protected.</string>
     <string name="import_file_too_large">This file is too large to import.</string>

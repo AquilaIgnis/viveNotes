@@ -64,7 +64,7 @@ internal class WikimediaCommonsClient(private val http: PictureHttp) {
                 "iiextmetadatalanguage" to "en",
             )
             return ENDPOINT + "?" + params.entries.joinToString("&") { (key, value) ->
-                key + "=" + URLEncoder.encode(value, Charsets.UTF_8)
+                key + "=" + URLEncoder.encode(value, Charsets.UTF_8.name())
             }
         }
 

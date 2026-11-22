@@ -336,7 +336,7 @@ fun NotesApp(
     }
     val closeAccount = {
         if (backStack.lastOrNull() == AppDestination.Account) {
-            backStack.removeLast()
+            backStack.removeAt(backStack.lastIndex)
             failedPasswordLogins = 0
             passwordResetGeneration++
             passwordResetState = PasswordResetUiState()
@@ -345,7 +345,7 @@ fun NotesApp(
     }
     val closeShelf = {
         if (backStack.lastOrNull() == AppDestination.ClosedNotebooks) {
-            backStack.removeLast()
+            backStack.removeAt(backStack.lastIndex)
         }
     }
 
