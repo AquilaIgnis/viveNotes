@@ -127,7 +127,7 @@ and all AI features run entirely on-device.
 | Android SDK Build Tools                 | A compatible version selected by AGP; 37.0.0 is a known-good choice        |
 | Python                                  | `python3.13` executable                                                    |
 | Android NDK                             | 28.2.13676358, selected by AGP 9.2.1                                       |
-| Platform Tools and a device or emulator | Android API 35 or newer; arm64-v8a or x86_64 for debug and `-PtestRelease` |
+| Platform Tools and a device or emulator | Android API 31 or newer; arm64-v8a or x86_64 for debug and `-PtestRelease` |
 
 The Gradle wrapper downloads **Gradle 9.7.0**; the build pins **Android Gradle Plugin 9.2.1** and **Kotlin 2.2.10** in `gradle/libs.versions.toml`.
 Gradle invokes `python3.13` directly; the exact Python 3.13.14 pin in the root `pyproject.toml` is for a separate Python environment.
@@ -166,7 +166,7 @@ Local tests need no device:
 ./gradlew :app:testDebugUnitTest
 ```
 
-The release instrumented suite tests the R8-minified app on a connected API 35+ device or emulator.
+The release instrumented suite tests the R8-minified app on a connected API 31+ device or emulator.
 
 It installs as `com.vivenotes.testrelease`, so it neither collides with nor uninstalls a signed
 `com.vivenotes`.
