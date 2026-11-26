@@ -65,3 +65,103 @@ jobs:
             app/build/reports/lint-results-*.html
           if-no-files-found: ignore
           retention-days: 14
+
+  # minSdk is 31, and the JVM tests above run on no Android version at all. These are the classes
+  # whose code takes a different path below Android 14 or 15: SQLite without DROP COLUMN or JSON1,
+  # ink pieces without outlines, and PDF import without a text-reading renderer. The emulator
+  # matches the local API 31 AVD: a landscape 2560×1600 tablet with S-extension 1.
+  api31:
+    name: Instrumented tests on API 31
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      API31_TESTS: |
+        com.vivenotes.data.db.DropColumnsTest
+        com.vivenotes.data.db.MigrationTest
+        com.vivenotes.data.NotebookTransferManagerTest
+        com.vivenotes.ink.StrokeOutlinesTest
+        com.vivenotes.ink.CanvasInkPainterTest
+        com.vivenotes.ink.DeleteProjectionTest
+        com.vivenotes.ink.InkCodecTest
+        com.vivenotes.ink.InkEraserTest
+        com.vivenotes.ink.LassoAfterEraseTest
+        com.vivenotes.ink.LassoClosureTest
+        com.vivenotes.ink.PageStrokeCopyTest
+        com.vivenotes.pdf.PdfExportTest
+        com.vivenotes.ui.editor.InkOverlayTest
+        com.vivenotes.ui.editor.LaserPointerTest
+        com.vivenotes.fileimport.PdfImportTest
+        com.vivenotes.fileimport.RealDocumentsImportTest
+        com.vivenotes.ui.editor.ImportFileDialogTest
+        com.vivenotes.ui.editor.FileTabTest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android 37 SDK platform
+        run: sdkmanager 'platforms;android-37.0'
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Read the Gradle version the project pins
+        id: gradle
+        run: |
+          version=$(sed -n 's|.*gradle-\(.*\)-bin\.zip|\1|p' gradle/wrapper/gradle-wrapper.properties)
+          test -n "$version" || { echo "no distributionUrl in gradle-wrapper.properties"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building with Gradle $version"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: ${{ steps.gradle.outputs.version }}
+
+      # Built before the emulator boots, so a compile error fails in minutes and Gradle doesn't
+      # share the runner's memory with it.
+      - name: Build the app and test APKs
+        run: gradle assembleDebug assembleDebugAndroidTest -PnoOneNote
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # The action runs each script line as its own `sh -c`.
+      - name: Run the version-sensitive classes on API 31
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 31
+          target: google_apis
+          arch: x86_64
+          profile: medium_tablet
+          cores: 4
+          ram-size: 4096M
+          heap-size: 1536M
+          disk-size: 6G
+          # LaserPointerTest skips itself when animations are off, which is the action's default.
+          disable-animations: false
+          pre-emulator-launch-script: echo 'hw.initialOrientation=landscape' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
+          script: gradle connectedDebugAndroidTest -PnoOneNote -Pandroid.testInstrumentationRunnerArguments.class=$(echo $API31_TESTS | tr ' ' ',')
+
+      - name: Upload reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: api31-test-reports
+          path: |
+            app/build/reports/androidTests/connected/
+            app/build/outputs/androidTest-results/connected/
+          if-no-files-found: ignore
+          retention-days: 14
