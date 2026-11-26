@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -141,6 +142,7 @@ internal object HomeTags {
     const val FONT_COLOR = "home-font-color"
     const val FONT_COLOR_CUSTOM = "home-font-color-custom"
     const val HIGHLIGHT = "home-highlight"
+    const val HIGHLIGHT_COLORS = "home-highlight-colors"
     const val HIGHLIGHT_NONE = "home-highlight-none"
 
     /** One of the Line spacing menu's entries: 150 for 1.5. */
@@ -185,6 +187,8 @@ fun Ribbon(
     defaults: EditorDefaults,
     /** Makes a font or size the default. A deliberate gesture, never a side effect of picking one. */
     onSetDefault: (Mark) -> Unit,
+    /** A highlight ink was picked, which the Highlight button then lays — see [EditorDefaults.highlight]. */
+    onHighlightInk: (Int) -> Unit = {},
     /** One of the Picture button's menu entries was picked. */
     onInsertPicture: (PictureSource) -> Unit = {},
     /** The open page's appearance, which the View tab both shows and changes. */
@@ -268,6 +272,8 @@ fun Ribbon(
                 defaults = defaults,
                 palette = palette,
                 onAddColor = draw.addPaletteColor,
+                highlightInk = defaults.highlight,
+                onHighlightInk = onHighlightInk,
                 onCommand = onCommand,
                 onSetDefault = onSetDefault,
                 textMode = tool == DrawTool.Text,
@@ -494,6 +500,9 @@ private fun HomeTab(
     /** The ink row the Draw tab's panes share, which font colour offers too. */
     palette: List<Int>,
     onAddColor: (Int) -> Unit,
+    /** The ink the Highlight button lays on text, kept apart from the Draw highlighter's. */
+    highlightInk: Int,
+    onHighlightInk: (Int) -> Unit,
     onCommand: (FormatCommand) -> Unit,
     onSetDefault: (Mark) -> Unit,
     textMode: Boolean,
@@ -571,6 +580,8 @@ private fun HomeTab(
         )
         HighlightButton(
             current = selection.highlight,
+            ink = highlightInk,
+            onInkChange = onHighlightInk,
             onPick = { onCommand(FormatCommand.SetMark(Mark.Highlight(it))) },
             onClear = { onCommand(FormatCommand.ClearMark(Mark.Highlight(0))) },
         )
@@ -1270,7 +1281,14 @@ internal fun FontColorButton(
 }
 
 /**
- * Highlight: the highlighter's inks, and None to take a highlight off.
+ * Highlight: a split button whose marker toggles [ink] and whose arrow picks it.
+ *
+ * Pressing the marker is a toggle against what the text already carries: text without that ink
+ * gets it, text that has it loses it, and text marked in another colour is switched to it. A
+ * selection only partly highlighted counts as not having it, so the press covers all of it. The
+ * swatches follow the same rule — the ringed one takes the highlight off — and the one picked
+ * becomes the ink. That ink is text's own: the inks are the Draw highlighter's, but its colour is
+ * not, so marking text in one colour leaves the pen drawing in another.
  *
  * No wheel, for the reason the highlighter has none — a colour off it is one drag from an opaque
  * block over the text it was meant to mark. The icon is the same tinted marker as Draw's, drawn
@@ -1279,21 +1297,53 @@ internal fun FontColorButton(
 @Composable
 internal fun HighlightButton(
     current: Int?,
+    ink: Int,
     onPick: (Int) -> Unit,
     onClear: () -> Unit,
+    onInkChange: (Int) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
     val label = stringResource(R.string.ribbon_highlight)
-    val neutral = MaterialTheme.colorScheme.onSurfaceVariant
-    val swatch = current?.takeIf { it != 0 }?.let { Color(it).copy(alpha = 1f) } ?: neutral
-    Box(Modifier.testTag(HomeTags.HIGHLIGHT)) {
-        RibbonButtonSlot(label = label, active = open, onClick = { open = true }) {
-            Icon(
-                imageVector = MaterialSymbols.StylusHighlighter,
-                contentDescription = label,
-                tint = swatch,
-                modifier = Modifier.size(19.dp).rotate(180f),
-            )
+    val colorsLabel = stringResource(R.string.ribbon_highlight_colors)
+    val on = current == ink
+    fun toggle(argb: Int) = if (current == argb) onClear() else onPick(argb)
+    Box {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RibbonButtonSlot(
+                label = label,
+                active = on,
+                onClick = { toggle(ink) },
+                modifier = Modifier.testTag(HomeTags.HIGHLIGHT).semantics { selected = on },
+            ) {
+                Icon(
+                    imageVector = MaterialSymbols.StylusHighlighter,
+                    contentDescription = label,
+                    tint = Color(ink).copy(alpha = 1f),
+                    modifier = Modifier.size(19.dp).rotate(180f),
+                )
+            }
+            HoverLabel(colorsLabel) {
+                Box(
+                    modifier = Modifier
+                        .testTag(HomeTags.HIGHLIGHT_COLORS)
+                        .height(32.dp)
+                        .width(18.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(
+                            if (open) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                        )
+                        .clickable(onClickLabel = colorsLabel) { open = true }
+                        .semantics { contentDescription = colorsLabel },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = MaterialSymbols.ArrowDropDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
         }
         FloatingSettingsPanel(
             expanded = open,
@@ -1302,7 +1352,8 @@ internal fun HighlightButton(
         ) {
             HighlighterSwatches(current = current, colorTag = HomeTags::highlight) {
                 open = false
-                onPick(it)
+                onInkChange(it)
+                toggle(it)
             }
             Spacer(Modifier.height(10.dp))
             NoColorEntry(

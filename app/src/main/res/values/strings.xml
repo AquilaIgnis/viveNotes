@@ -570,6 +570,7 @@
     <string name="ribbon_strikethrough">Strikethrough</string>
     <string name="ribbon_font_color">Font colour</string>
     <string name="ribbon_highlight">Highlight</string>
+    <string name="ribbon_highlight_colors">Highlight colour</string>
     <string name="ribbon_subscript">Subscript</string>
     <string name="ribbon_superscript">Superscript</string>
     <string name="ribbon_clear_formatting">Clear formatting</string>

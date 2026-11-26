@@ -513,6 +513,7 @@
     <string name="ribbon_strikethrough">取り消し線</string>
     <string name="ribbon_font_color">フォントの色</string>
     <string name="ribbon_highlight">ハイライト</string>
+    <string name="ribbon_highlight_colors">ハイライトの色</string>
     <string name="ribbon_subscript">下付き</string>
     <string name="ribbon_superscript">上付き</string>
     <string name="ribbon_clear_formatting">書式をクリア</string>

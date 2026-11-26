@@ -2298,6 +2298,11 @@ class NotesViewModel(
         viewModelScope.launch { editorDefaultsStore.setRuleLines(rule) }
     }
 
+    /** The ink the Document tab's Highlight button lays next — not the Draw highlighter's colour. */
+    fun setTextHighlight(argb: Int) {
+        viewModelScope.launch { editorDefaultsStore.setHighlight(argb) }
+    }
+
     /** Null restores the theme's canvas colour rather than painting a light page dark. */
     fun setPageColor(argb: Int?) = updatePageStyle { it.copy(backgroundArgb = argb) }
 

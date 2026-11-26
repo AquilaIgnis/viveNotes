@@ -1265,6 +1265,7 @@ private fun NotesWorkspace(
                         onCommand = viewModel::send,
                         defaults = defaults,
                         onSetDefault = viewModel::setDefaultFont,
+                        onHighlightInk = viewModel::setTextHighlight,
                         onInsertPicture = { source ->
                             when (source) {
                                 PictureSource.Device -> pickPicture.launch(arrayOf("image/*"))

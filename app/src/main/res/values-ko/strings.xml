@@ -513,6 +513,7 @@
     <string name="ribbon_strikethrough">취소선</string>
     <string name="ribbon_font_color">글꼴 색상</string>
     <string name="ribbon_highlight">형광펜</string>
+    <string name="ribbon_highlight_colors">형광펜 색상</string>
     <string name="ribbon_subscript">아래 첨자</string>
     <string name="ribbon_superscript">위 첨자</string>
     <string name="ribbon_clear_formatting">서식 지우기</string>

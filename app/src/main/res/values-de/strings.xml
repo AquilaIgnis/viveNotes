@@ -523,6 +523,7 @@
     <string name="ribbon_strikethrough">Durchgestrichen</string>
     <string name="ribbon_font_color">Schriftfarbe</string>
     <string name="ribbon_highlight">Hervorheben</string>
+    <string name="ribbon_highlight_colors">Hervorhebungsfarbe</string>
     <string name="ribbon_subscript">Tiefgestellt</string>
     <string name="ribbon_superscript">Hochgestellt</string>
     <string name="ribbon_clear_formatting">Formatierung löschen</string>

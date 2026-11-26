@@ -523,6 +523,7 @@
     <string name="ribbon_strikethrough">Barrato</string>
     <string name="ribbon_font_color">Colore carattere</string>
     <string name="ribbon_highlight">Evidenzia</string>
+    <string name="ribbon_highlight_colors">Colore evidenziatore</string>
     <string name="ribbon_subscript">Pedice</string>
     <string name="ribbon_superscript">Apice</string>
     <string name="ribbon_clear_formatting">Cancella formattazione</string>

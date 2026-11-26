@@ -52,13 +52,21 @@ class RibbonColorButtonsTest {
         compose.onNodeWithTag(HomeTags.FONT_COLOR).performClick()
     }
 
-    private fun setHighlight(current: Int?) {
+    private val inks = mutableListOf<Int>()
+
+    private fun setHighlight(current: Int?, ink: Int = HIGHLIGHTER_COLORS[0], open: Boolean = true) {
         compose.setContent {
             ViveNotesTheme {
-                HighlightButton(current = current, onPick = { picked += it }, onClear = { cleared++ })
+                HighlightButton(
+                    current = current,
+                    ink = ink,
+                    onPick = { picked += it },
+                    onClear = { cleared++ },
+                    onInkChange = { inks += it },
+                )
             }
         }
-        compose.onNodeWithTag(HomeTags.HIGHLIGHT).performClick()
+        if (open) compose.onNodeWithTag(HomeTags.HIGHLIGHT_COLORS).performClick()
     }
 
     @Test
@@ -114,6 +122,7 @@ class RibbonColorButtonsTest {
         compose.onNodeWithTag(HomeTags.FONT_COLOR_CUSTOM).assertDoesNotExist()
     }
 
+    /** Picking another ink switches the text to it and makes it the one the marker lays next. */
     @Test
     fun highlightOffersTheHighlighterInks() {
         setHighlight(current = HIGHLIGHTER_COLORS[0])
@@ -123,7 +132,19 @@ class RibbonColorButtonsTest {
         compose.onNodeWithTag(HomeTags.highlight(HIGHLIGHTER_COLORS[2])).performClick()
 
         assertEquals(listOf(HIGHLIGHTER_COLORS[2]), picked)
+        assertEquals(listOf(HIGHLIGHTER_COLORS[2]), inks)
         compose.onNodeWithTag(HomeTags.HIGHLIGHT_NONE).assertDoesNotExist()
+    }
+
+    /** The ringed swatch is the text's own colour, so picking it again takes it off. */
+    @Test
+    fun theRingedInkTakesTheHighlightOff() {
+        setHighlight(current = HIGHLIGHTER_COLORS[1])
+
+        compose.onNodeWithTag(HomeTags.highlight(HIGHLIGHTER_COLORS[1])).performClick()
+
+        assertEquals(1, cleared)
+        assertTrue(picked.isEmpty())
     }
 
     @Test
@@ -135,5 +156,40 @@ class RibbonColorButtonsTest {
 
         assertEquals(1, cleared)
         assertTrue(picked.isEmpty())
+    }
+
+    @Test
+    fun theMarkerAppliesItsInkToUnhighlightedText() {
+        setHighlight(current = null, ink = HIGHLIGHTER_COLORS[3], open = false)
+
+        compose.onNodeWithTag(HomeTags.HIGHLIGHT).assertIsNotSelected()
+        compose.onNodeWithTag(HomeTags.HIGHLIGHT).performClick()
+
+        assertEquals(listOf(HIGHLIGHTER_COLORS[3]), picked)
+        assertEquals(0, cleared)
+        compose.onNodeWithTag(HomeTags.HIGHLIGHT_NONE).assertDoesNotExist()
+    }
+
+    @Test
+    fun theMarkerClearsItsOwnInk() {
+        setHighlight(current = HIGHLIGHTER_COLORS[3], ink = HIGHLIGHTER_COLORS[3], open = false)
+
+        compose.onNodeWithTag(HomeTags.HIGHLIGHT).assertIsSelected()
+        compose.onNodeWithTag(HomeTags.HIGHLIGHT).performClick()
+
+        assertEquals(1, cleared)
+        assertTrue(picked.isEmpty())
+    }
+
+    @Test
+    fun theMarkerSwapsAnotherColourForItsInk() {
+        setHighlight(current = HIGHLIGHTER_COLORS[0], ink = HIGHLIGHTER_COLORS[3], open = false)
+
+        compose.onNodeWithTag(HomeTags.HIGHLIGHT).assertIsNotSelected()
+        compose.onNodeWithTag(HomeTags.HIGHLIGHT).performClick()
+
+        assertEquals(listOf(HIGHLIGHTER_COLORS[3]), picked)
+        assertEquals(0, cleared)
+        assertTrue("the marker does not change its own ink", inks.isEmpty())
     }
 }

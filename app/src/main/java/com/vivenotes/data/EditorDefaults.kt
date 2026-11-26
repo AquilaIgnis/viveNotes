@@ -15,7 +15,8 @@ import com.vivenotes.model.RuleLines
 private val Context.editorPreferences: DataStore<Preferences> by preferencesDataStore("editor")
 
 /**
- * Font family and size for text that carries no mark of its own, and the paper new pages start on.
+ * Font family and size for text that carries no mark of its own, the paper new pages start on, and
+ * the ink the Document tab's Highlight button lays on text.
  *
  * Kept out of [com.vivenotes.model.PageDoc] on purpose: this is a preference about how the user
  * likes to write, not a property of any one document. Storing it in the document would mean a page
@@ -25,15 +26,20 @@ private val Context.editorPreferences: DataStore<Preferences> by preferencesData
  * [ruleLines] is the one that does end up in a document, and only once: it is copied into a page's
  * style when the page is created, because ruling is a property of the page that travels with it.
  * Changing the default later re-rules nothing that already exists.
+ *
+ * [highlight] is the text highlighter's own, apart from the Draw highlighter's colour: it is picked
+ * from the same inks, but marking up text in green does not change what the pen draws over a page.
  */
 data class EditorDefaults(
     val fontFamily: String = FALLBACK_FONT_FAMILY,
     val fontSize: Int = FALLBACK_FONT_SIZE,
     val ruleLines: RuleLines = FALLBACK_RULE_LINES,
+    val highlight: Int = FALLBACK_HIGHLIGHT,
 ) {
     companion object {
         const val FALLBACK_FONT_FAMILY = "sans-serif"
         const val FALLBACK_FONT_SIZE = 15
+        const val FALLBACK_HIGHLIGHT = HighlighterSettings.DEFAULT_COLOR
 
         /** The ruling a page had before this was a preference, so a fresh install is unchanged. */
         val FALLBACK_RULE_LINES: RuleLines = PageStyle().ruleLines
@@ -59,6 +65,7 @@ class EditorDefaultsStore(context: Context) {
             // rather than failing every read of the store.
             ruleLines = RuleLines.entries.firstOrNull { it.name == prefs[RULE_LINES] }
                 ?: EditorDefaults.FALLBACK_RULE_LINES,
+            highlight = prefs[HIGHLIGHT] ?: EditorDefaults.FALLBACK_HIGHLIGHT,
         )
     }
 
@@ -74,9 +81,14 @@ class EditorDefaultsStore(context: Context) {
         store.edit { it[RULE_LINES] = rule.name }
     }
 
+    suspend fun setHighlight(argb: Int) {
+        store.edit { it[HIGHLIGHT] = argb }
+    }
+
     private companion object {
         val FAMILY = stringPreferencesKey("default_font_family")
         val SIZE = intPreferencesKey("default_font_size")
         val RULE_LINES = stringPreferencesKey("default_rule_lines")
+        val HIGHLIGHT = intPreferencesKey("text_highlight")
     }
 }

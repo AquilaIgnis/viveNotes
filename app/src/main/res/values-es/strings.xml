@@ -537,6 +537,7 @@
     <string name="ribbon_strikethrough">Tachado</string>
     <string name="ribbon_font_color">Color de fuente</string>
     <string name="ribbon_highlight">Resaltar</string>
+    <string name="ribbon_highlight_colors">Color de resaltado</string>
     <string name="ribbon_subscript">Subíndice</string>
     <string name="ribbon_superscript">Superíndice</string>
     <string name="ribbon_clear_formatting">Borrar formato</string>

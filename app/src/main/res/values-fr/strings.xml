@@ -523,6 +523,7 @@
     <string name="ribbon_strikethrough">Barré</string>
     <string name="ribbon_font_color">Couleur de police</string>
     <string name="ribbon_highlight">Surligner</string>
+    <string name="ribbon_highlight_colors">Couleur de surlignage</string>
     <string name="ribbon_subscript">Indice</string>
     <string name="ribbon_superscript">Exposant</string>
     <string name="ribbon_clear_formatting">Effacer la mise en forme</string>

@@ -544,6 +544,7 @@
     <string name="ribbon_strikethrough">Przekreślenie</string>
     <string name="ribbon_font_color">Kolor czcionki</string>
     <string name="ribbon_highlight">Wyróżnienie</string>
+    <string name="ribbon_highlight_colors">Kolor wyróżnienia</string>
     <string name="ribbon_subscript">Indeks dolny</string>
     <string name="ribbon_superscript">Indeks górny</string>
     <string name="ribbon_clear_formatting">Wyczyść formatowanie</string>
