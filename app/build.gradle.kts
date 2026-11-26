@@ -20,7 +20,7 @@ private val allAbis = listOf("arm64-v8a", "x86_64")
 
 
 
-private val appVersionName = "1.5.0"
+private val appVersionName = "1.5.0.dev0"
 
 /**
 
