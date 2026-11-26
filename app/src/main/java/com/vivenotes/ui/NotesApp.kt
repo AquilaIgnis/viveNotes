@@ -2123,6 +2123,8 @@ private fun PageEditor(
     val pendingPasteLayout by viewModel.pendingPasteLayout.collectAsStateWithLifecycle()
     val scrollTarget by viewModel.canvasScrollTarget.collectAsStateWithLifecycle()
     val pendingPastes by viewModel.pendingPastes.collectAsStateWithLifecycle()
+    // Held as a State and read inside the selection toolkit, so the row changing leaves the page alone.
+    val palette = viewModel.palette.collectAsStateWithLifecycle()
     val accessibilityOn = rememberAccessibilityServiceOn()
     LaunchedEffect(accessibilityOn) { viewModel.setDescribingPage(accessibilityOn) }
 
@@ -2224,6 +2226,8 @@ private fun PageEditor(
         onResizeTables = viewModel::resizeTables,
         onDeleteTables = viewModel::deleteTables,
         onRecolorTables = viewModel::recolorTables,
+        palette = { palette.value },
+        onAddPaletteColor = viewModel::addPaletteColor,
         onSetTableBorderWidth = viewModel::setTableBorderWidth,
         onSetTableFill = viewModel::setTableFill,
         onSetTableColumnWidth = viewModel::setTableColumnWidth,

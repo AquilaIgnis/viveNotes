@@ -70,6 +70,22 @@ fun ColumnScope.HighlighterPanelContent(
         color = MaterialTheme.colorScheme.onSurface,
     )
     Spacer(Modifier.height(4.dp))
+    HighlighterSwatches(current = settings.colorArgb) { onChange(settings.copy(colorArgb = it)) }
+    Spacer(Modifier.height(6.dp))
+}
+
+/**
+ * The highlighter inks as a row of swatches, shared with the Document tab's text highlight so that
+ * marking text and drawing over it offer the same inks.
+ *
+ * [colorTag] is a parameter so each caller keeps its own test-tag namespace.
+ */
+@Composable
+internal fun HighlighterSwatches(
+    current: Int?,
+    colorTag: (Int) -> String = HighlighterPanelTags::color,
+    onPick: (Int) -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
@@ -77,10 +93,10 @@ fun ColumnScope.HighlighterPanelContent(
     ) {
         HIGHLIGHTER_COLORS.forEach { argb ->
             Swatch(
-                selected = argb == settings.colorArgb,
-                tag = HighlighterPanelTags.color(argb),
+                selected = argb == current,
+                tag = colorTag(argb),
                 description = stringResource(colorName(argb)),
-                onClick = { onChange(settings.copy(colorArgb = argb)) },
+                onClick = { onPick(argb) },
             ) {
                 // Over paper, not over the panel. These inks are translucent, so on a dark surface
                 // every one of them would read as the same near-black smudge — the swatch has to
@@ -90,7 +106,6 @@ fun ColumnScope.HighlighterPanelContent(
             }
         }
     }
-    Spacer(Modifier.height(6.dp))
 }
 
 /**

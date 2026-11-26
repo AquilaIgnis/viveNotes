@@ -110,6 +110,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.emptyFlow
 import com.vivenotes.ai.InkTextRegion
+import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.AttachmentStore
 import com.vivenotes.data.EditorDefaults
 import com.vivenotes.data.EraserSettings
@@ -410,6 +411,12 @@ fun EditorPane(
     onResizeTables: (Set<String>, Float, Float, Float, Float) -> Unit = { _, _, _, _, _ -> },
     onDeleteTables: (Set<String>) -> Unit = {},
     onRecolorTables: (Set<String>, Int) -> Unit = { _, _ -> },
+    /**
+     * The ink row the Draw tab's panes share, which the object toolkit's colour and fill menus
+     * offer too. A function so a colour joining the row does not recompose the page.
+     */
+    palette: () -> List<Int> = { PEN_COLORS },
+    onAddPaletteColor: (Int) -> Unit = {},
     onSetTableBorderWidth: (Set<String>, Float) -> Unit = { _, _ -> },
     onSetTableFill: (Set<String>, Int?) -> Unit = { _, _ -> },
     onSetTableColumnWidth: (String, Int, Float) -> Unit = { _, _, _ -> },
@@ -1941,6 +1948,8 @@ fun EditorPane(
                     // there is no third state for the button to be in.
                     locked = if (held.inkIds.isEmpty() && held.textIds.isEmpty()) held.isLocked else null,
                     onToggleLock = { onSetSelectionLocked(held, !held.isLocked) },
+                    palette = palette(),
+                    onAddColor = onAddPaletteColor,
                     // The kind-specific half. Only a selection of one kind has one: over a mixed
                     // loop there is nothing both halves agree on, so the bar shows its base alone.
                     extras = {
@@ -1996,6 +2005,8 @@ fun EditorPane(
                                 FillAction(
                                     fill = selectedShapes.map { it.fillArgb }.distinct().singleOrNull(),
                                     paintBucket = true,
+                                    palette = palette(),
+                                    onAddColor = onAddPaletteColor,
                                     onChange = { onSetShapeFill(held.shapeIds, it) },
                                 )
                             }
@@ -2048,6 +2059,8 @@ fun EditorPane(
                                 words = FillWords.Background,
                                 glyph = MaterialSymbols.BackgroundReplace,
                                 noneGlyph = MaterialSymbols.BackgroundNone,
+                                palette = palette(),
+                                onAddColor = onAddPaletteColor,
                                 onChange = { onSetImageBackground(held.imageIds, it) },
                             )
                         }
@@ -2064,6 +2077,8 @@ fun EditorPane(
                             )
                             FillAction(
                                 fill = selectedTables.map { it.fillArgb }.distinct().singleOrNull(),
+                                palette = palette(),
+                                onAddColor = onAddPaletteColor,
                                 onChange = { onSetTableFill(held.tableIds, it) },
                             )
                             selectedTables.singleOrNull()?.let { table ->

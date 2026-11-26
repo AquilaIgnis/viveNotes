@@ -635,6 +635,7 @@
     <string name="tooltip_fill_swatch">Remplissage %1$s</string>
     <string name="tooltip_change_background">Changer la couleur d\'arrière-plan</string>
     <string name="tooltip_no_background">Aucun arrière-plan</string>
+    <string name="tooltip_background_color">Couleur d\'arrière-plan</string>
     <string name="tooltip_background_swatch">Arrière-plan %1$s</string>
     <string name="color_white">Blanc</string>
     <string name="color_black">Noir</string>

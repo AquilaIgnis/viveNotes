@@ -3,8 +3,6 @@ package com.vivenotes.ui.panel
 import com.vivenotes.R
 import com.vivenotes.data.HIGHLIGHTER_COLORS
 import com.vivenotes.data.PEN_COLORS
-import com.vivenotes.ui.editor.HIGHLIGHT_COLORS
-import com.vivenotes.ui.editor.TEXT_COLORS
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -35,32 +33,6 @@ class ColorNamesTest {
                 R.string.color_pink, R.string.color_orange, R.string.color_purple,
             ),
             HIGHLIGHTER_COLORS.map(::colorName),
-        )
-    }
-
-    @Test
-    fun theRibbonFontColorsAreNamedSwatchBySwatch() {
-        assertEquals(
-            listOf(
-                R.string.color_white, R.string.color_light_gray, R.string.color_gray,
-                R.string.color_black, R.string.color_red, R.string.color_orange,
-                R.string.color_yellow, R.string.color_green, R.string.color_blue,
-                R.string.color_purple, R.string.color_cyan, R.string.color_pink,
-            ),
-            TEXT_COLORS.map(::colorName),
-        )
-    }
-
-    /** The clear swatch at the end is named by the picker, not here. */
-    @Test
-    fun theRibbonHighlightsAreNamedSwatchBySwatch() {
-        assertEquals(
-            listOf(
-                R.string.color_yellow, R.string.color_green, R.string.color_blue,
-                R.string.color_pink, R.string.color_orange, R.string.color_purple,
-                R.string.color_white,
-            ),
-            HIGHLIGHT_COLORS.filter { it != 0 }.map(::colorName),
         )
     }
 

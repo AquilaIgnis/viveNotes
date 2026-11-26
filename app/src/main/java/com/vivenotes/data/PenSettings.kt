@@ -112,12 +112,12 @@ data class HighlighterSettings(
 }
 
 /**
- * The highlighter inks, the same hues at the same alpha as the Home tab's text highlight.
+ * The highlighter inks, which the Document tab's text highlight offers as well.
  *
- * Deliberately shared with that palette: a page can be highlighted either by marking up text or by
- * drawing over it, and the two producing different yellows would be a bug the user could see. The
- * "none" swatch that palette carries is absent here — an ink you cannot see is not a colour, it is
- * putting the highlighter down.
+ * Deliberately one palette: a page can be highlighted either by marking up text or by drawing over
+ * it, and the two producing different yellows would be a bug the user could see. There is no "none"
+ * ink — an ink you cannot see is not a colour. Text gets its highlight back off with the ribbon's
+ * None entry, and the highlighter by being put down.
  *
  * `0x66` alpha keeps every literal inside `Int` range, so unlike [PEN_COLORS] these need no
  * conversion from `Long`.

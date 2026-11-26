@@ -689,6 +689,7 @@
     <string name="tooltip_fill_swatch">%1$s fill</string>
     <string name="tooltip_change_background">Change background color</string>
     <string name="tooltip_no_background">No background</string>
+    <string name="tooltip_background_color">Background color</string>
     <string name="tooltip_background_swatch">%1$s background</string>
     <string name="color_white">White</string>
     <string name="color_black">Black</string>

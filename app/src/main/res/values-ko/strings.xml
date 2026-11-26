@@ -625,6 +625,7 @@
     <string name="tooltip_fill_swatch">%1$s 채우기</string>
     <string name="tooltip_change_background">배경색 변경</string>
     <string name="tooltip_no_background">배경 없음</string>
+    <string name="tooltip_background_color">배경색</string>
     <string name="tooltip_background_swatch">%1$s 배경</string>
     <string name="color_white">흰색</string>
     <string name="color_black">검은색</string>

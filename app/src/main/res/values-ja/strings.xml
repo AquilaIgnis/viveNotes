@@ -625,6 +625,7 @@
     <string name="tooltip_fill_swatch">%1$sの塗りつぶし</string>
     <string name="tooltip_change_background">背景色を変更</string>
     <string name="tooltip_no_background">背景なし</string>
+    <string name="tooltip_background_color">背景色</string>
     <string name="tooltip_background_swatch">%1$sの背景</string>
     <string name="color_white">白</string>
     <string name="color_black">黒</string>
