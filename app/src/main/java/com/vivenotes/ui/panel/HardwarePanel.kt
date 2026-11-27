@@ -1,6 +1,13 @@
 package com.vivenotes.ui.panel
 
+import android.view.KeyEvent
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,35 +22,57 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.vivenotes.R
 import com.vivenotes.data.StylusAction
 import com.vivenotes.data.StylusButtonMap
+import com.vivenotes.data.StylusKeys
 import com.vivenotes.keyboard.KeyBindings
 import com.vivenotes.keyboard.KeyChord
 import com.vivenotes.keyboard.ShortcutAction
+import com.vivenotes.ui.ProbeEvent
 import com.vivenotes.ui.StylusPress
+import com.vivenotes.ui.StylusProbe
 import com.vivenotes.ui.TABLE_ROWS
+import com.vivenotes.ui.actionFor
+import com.vivenotes.ui.codeFor
+import com.vivenotes.ui.codeLine
+import com.vivenotes.ui.copyRecognizedText
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.probeReportHeader
+import com.vivenotes.ui.report
 
 /**
  * The two kinds of hardware you write at this app with.
@@ -65,6 +94,14 @@ internal object HardwareTags {
     fun kind(kind: HardwareKind) = "hardware-${kind.name.lowercase()}"
     const val SHORTCUTS = "hardware-shortcuts"
     const val RESET_ALL = "hardware-shortcuts-reset-all"
+    const val BUTTON_TEST = "hardware-button-test"
+    const val BUTTON_TEST_CLEAR = "hardware-button-test-clear"
+    const val BUTTON_TEST_COPY = "hardware-button-test-copy"
+    fun keyGear(press: StylusPress) = "hardware-pen-key-gear-${press.name}"
+    fun keyLearned(press: StylusPress) = "hardware-pen-key-learned-${press.name}"
+    const val KEY_WELL = "hardware-pen-key-well"
+    const val KEY_RESET = "hardware-pen-key-reset"
+    const val KEY_CANCEL = "hardware-pen-key-cancel"
     fun shortcut(action: ShortcutAction) = "hardware-shortcut-${action.name}"
     fun reset(action: ShortcutAction) = "hardware-shortcut-reset-${action.name}"
 }
@@ -79,10 +116,11 @@ internal object HardwareTags {
  * time. *Let a finger draw* describes this device — whether a stylus is in the room is not a
  * property of a notebook, and must never travel to another device with one. The button bindings
  * below it describe the user: "double click means highlighter" is a working habit like "pen 2 is
- * red", and it should follow its owner to a second tablet.
+ * red", and it should follow its owner to a second tablet. The keys learned behind each row's gear
+ * describe this device again — the keycode comes from this tablet's key layout.
  */
 @Composable
-fun ColumnScope.HardwarePanelContent(
+internal fun ColumnScope.HardwarePanelContent(
     allowFinger: Boolean,
     onSetDrawWithFinger: (Boolean) -> Unit,
     buttons: StylusButtonMap,
@@ -90,6 +128,15 @@ fun ColumnScope.HardwarePanelContent(
     /** The keyboard shortcuts, a property of the user as the pen button's are. */
     keyBindings: KeyBindings = KeyBindings.Default,
     onSetKeyBindings: (KeyBindings) -> Unit = {},
+    /** What the pen sends, fed by `MainActivity`; the button test shows it. */
+    probe: StylusProbe = remember { StylusProbe() },
+    penKeys: PenKeys = PenKeys(),
+    /** Open a row's gear: listen for the pen's key for it. */
+    onLearnKey: (StylusPress) -> Unit = {},
+    /** Stop listening for a row's key — if that row is still the one listening. */
+    onStopLearning: (StylusPress) -> Unit = {},
+    /** Forget the key learned for a row, back to the built-in ones. */
+    onResetKey: (StylusPress) -> Unit = {},
 ) {
     var kind by remember { mutableStateOf(HardwareKind.Stylus) }
 
@@ -120,10 +167,29 @@ fun ColumnScope.HardwarePanelContent(
             onSetDrawWithFinger = onSetDrawWithFinger,
             buttons = buttons,
             onSetButtons = onSetButtons,
+            probe = probe,
+            penKeys = penKeys,
+            onLearnKey = onLearnKey,
+            onStopLearning = onStopLearning,
+            onResetKey = onResetKey,
         )
         HardwareKind.Keyboard -> KeyboardSettings(keyBindings, onSetKeyBindings)
     }
 }
+
+/**
+ * The keys learned for this tablet's pen, and which row's gear is open waiting for one.
+ *
+ * The listening itself happens in `MainActivity` — see `captureStylusKey` — so this is only what the
+ * pane shows about it.
+ */
+internal data class PenKeys(
+    val learned: StylusKeys = StylusKeys(),
+    /** The row waiting for the pen's key, or null. */
+    val capturing: StylusPress? = null,
+    /** The last key offered came from a keyboard and was turned away. */
+    val refused: Boolean = false,
+)
 
 /**
  * One device in the picker.
@@ -170,6 +236,11 @@ private fun ColumnScope.StylusSettings(
     onSetDrawWithFinger: (Boolean) -> Unit,
     buttons: StylusButtonMap,
     onSetButtons: (StylusButtonMap) -> Unit,
+    probe: StylusProbe,
+    penKeys: PenKeys,
+    onLearnKey: (StylusPress) -> Unit,
+    onStopLearning: (StylusPress) -> Unit,
+    onResetKey: (StylusPress) -> Unit,
 ) {
     // **The only way to reach this in a shipped build.** The ribbon's finger button is compiled out
     // of release by `BuildConfig.DEBUG` — see `TabStrip` in `ui/editor/Ribbon.kt` — so this row is
@@ -180,7 +251,118 @@ private fun ColumnScope.StylusSettings(
         PanelToggle("Let a finger draw", allowFinger, onSetDrawWithFinger)
     }
 
-    PenButtonSettings(buttons, onSetButtons)
+    PenButtonSettings(buttons, onSetButtons, penKeys, onLearnKey, onStopLearning, onResetKey)
+    PenButtonTest(probe, penKeys.learned)
+}
+
+/**
+ * Press the pen's button and see what arrived: the keycode or button state, the device it came from,
+ * and whether this app reads it. Copy turns that into a report for a pen this app does not understand
+ * yet — the only other way to learn what a pen sends is `adb`.
+ *
+ * Listens only while it is on screen, and forgets when it leaves.
+ */
+@Composable
+private fun ColumnScope.PenButtonTest(probe: StylusProbe, learned: StylusKeys) {
+    DisposableEffect(probe) {
+        probe.start()
+        onDispose { probe.stop() }
+    }
+    val events by probe.events.collectAsState()
+    val context = LocalContext.current
+    val clipLabel = stringResource(R.string.hardware_button_test_clip)
+
+    PanelSection(
+        title = stringResource(R.string.hardware_button_test),
+        info = stringResource(R.string.hardware_button_test_info),
+    ) {
+        Surface(
+            // Highest, as the other panes' wells are: in the dark scheme High is the pane's own colour.
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec())
+                .semantics { liveRegion = LiveRegionMode.Polite }
+                .testTag(HardwareTags.BUTTON_TEST),
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (events.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.hardware_button_test_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    // Newest first: the press just made is the one being looked for.
+                    events.asReversed().forEach { event -> key(event.id) { ProbeRow(event, learned) } }
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        ) {
+            PanelButton(
+                onClick = probe::clear,
+                enabled = events.isNotEmpty(),
+                colors = ButtonDefaults.filledTonalButtonColors(),
+                modifier = Modifier.testTag(HardwareTags.BUTTON_TEST_CLEAR),
+            ) { Text(stringResource(R.string.hardware_button_test_clear)) }
+            PanelButton(
+                onClick = {
+                    val report = events.report(probeReportHeader(), learned, KeyEvent::keyCodeToString)
+                    copyRecognizedText(context, clipLabel, report)
+                },
+                enabled = events.isNotEmpty(),
+                modifier = Modifier.testTag(HardwareTags.BUTTON_TEST_COPY),
+            ) {
+                Icon(
+                    imageVector = MaterialSymbols.ContentCopy,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.hardware_button_test_copy))
+            }
+        }
+    }
+}
+
+/** One event: its codes, the device that sent it, and what this app makes of it. */
+@Composable
+private fun ProbeRow(event: ProbeEvent, learned: StylusKeys) {
+    val verdict = when (event) {
+        is ProbeEvent.Key -> event.press(learned)?.let {
+            stringResource(R.string.hardware_button_test_read, stringResource(it.label))
+        }
+        is ProbeEvent.Pointer -> null
+    }
+    val notRead = when (event) {
+        is ProbeEvent.Key -> R.string.hardware_button_test_not_read
+        is ProbeEvent.Pointer ->
+            if (event.pressed) R.string.hardware_button_test_not_read else R.string.hardware_button_test_no_button
+    }
+    Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+        Text(
+            text = event.codeLine(KeyEvent::keyCodeToString),
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = event.device,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = verdict ?: stringResource(notRead),
+            style = MaterialTheme.typography.labelMedium,
+            color = if (verdict != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /**
@@ -198,38 +380,170 @@ private fun ColumnScope.StylusSettings(
 private fun ColumnScope.PenButtonSettings(
     buttons: StylusButtonMap,
     onSetButtons: (StylusButtonMap) -> Unit,
+    penKeys: PenKeys,
+    onLearnKey: (StylusPress) -> Unit,
+    onStopLearning: (StylusPress) -> Unit,
+    onResetKey: (StylusPress) -> Unit,
 ) {
     PanelSection(
         title = stringResource(R.string.hardware_pen_button),
         info = stringResource(R.string.hardware_pen_button_info),
     ) {
-        PenButtonRow(StylusPress.Single, buttons.single) { onSetButtons(buttons.copy(single = it)) }
-        PenButtonRow(StylusPress.Double, buttons.double) { onSetButtons(buttons.copy(double = it)) }
-        PenButtonRow(StylusPress.Triple, buttons.triple) { onSetButtons(buttons.copy(triple = it)) }
+        StylusPress.entries.forEach { press ->
+            PenButtonRow(
+                press = press,
+                action = buttons.actionFor(press),
+                onPick = { onSetButtons(buttons.bound(press, it)) },
+                learned = penKeys.learned.codeFor(press),
+                learning = penKeys.capturing == press,
+                refused = penKeys.refused,
+                onGear = { if (penKeys.capturing == press) onStopLearning(press) else onLearnKey(press) },
+                onCancel = { onStopLearning(press) },
+                onReset = { onResetKey(press) },
+            )
+        }
     }
 }
 
+/** [press]'s binding set to [action]. */
+private fun StylusButtonMap.bound(press: StylusPress, action: StylusAction): StylusButtonMap = when (press) {
+    StylusPress.Single -> copy(single = action)
+    StylusPress.Double -> copy(double = action)
+    StylusPress.Triple -> copy(triple = action)
+}
+
 /**
- * One binding: the click count on the left, what it does on the right.
+ * One binding: the click count on the left, what it does in the middle, and a gear on the right that
+ * learns which key this tablet's pen sends for it.
  *
  * [PanelRow] rather than [PanelSetting], which is what the toggle above uses: these are named choices
  * of very different widths, and only the fixed label column lines the drop-downs up with each other.
+ *
+ * The learning happens in a well under the row rather than in a dialog. A dialog is a window of its
+ * own, so the pen's key would go to it instead of to `MainActivity`, where it is caught — and caught
+ * there because Compose drops a key-up with no key-down, which is all some pens send.
  */
 @Composable
 private fun PenButtonRow(
     press: StylusPress,
     action: StylusAction,
     onPick: (StylusAction) -> Unit,
+    /** The key learned for this row on this tablet, or null where only the built-in keys apply. */
+    learned: Int?,
+    /** This row's gear is open, waiting for the pen. */
+    learning: Boolean,
+    refused: Boolean,
+    onGear: () -> Unit,
+    onCancel: () -> Unit,
+    onReset: () -> Unit,
 ) {
     val resources = LocalResources.current
-    PanelRow(stringResource(press.label), labelWidth = WIDE_LABEL_WIDTH) {
-        PanelChoice(
-            field = press.name,
-            current = action,
-            options = StylusAction.entries,
-            label = { resources.getString(it.label) },
-            onPick = onPick,
-        )
+    val name = stringResource(press.label)
+    Column(Modifier.fillMaxWidth()) {
+        PanelRow(name, labelWidth = WIDE_LABEL_WIDTH) {
+            Box(Modifier.weight(1f)) {
+                PanelChoice(
+                    field = press.name,
+                    current = action,
+                    options = StylusAction.entries,
+                    label = { resources.getString(it.label) },
+                    onPick = onPick,
+                )
+            }
+            IconButton(onClick = onGear, modifier = Modifier.testTag(HardwareTags.keyGear(press))) {
+                Icon(
+                    imageVector = MaterialSymbols.Settings,
+                    contentDescription = stringResource(R.string.hardware_pen_key_set, name),
+                    tint = if (learning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+        if (learned != null && !learning) {
+            Text(
+                text = stringResource(R.string.hardware_pen_key_learned, learned),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(start = WIDE_LABEL_WIDTH + 10.dp)
+                    .testTag(HardwareTags.keyLearned(press)),
+            )
+        }
+        AnimatedVisibility(
+            visible = learning,
+            enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) +
+                fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+            exit = shrinkVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) +
+                fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec()),
+        ) {
+            PenKeyWell(name, learned, refused, onCancel, onReset)
+        }
+    }
+}
+
+/**
+ * Waiting for the pen: what to do, what this row answers to now, and the two ways out.
+ *
+ * Leaving it any other way — closing the pane, switching to Keyboard — stops the listening too, so
+ * a key pressed later in a text box is never taken for a pen button.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun PenKeyWell(
+    name: String,
+    learned: Int?,
+    refused: Boolean,
+    onCancel: () -> Unit,
+    onReset: () -> Unit,
+) {
+    DisposableEffect(Unit) { onDispose(onCancel) }
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp, bottom = 6.dp)
+            .testTag(HardwareTags.KEY_WELL),
+    ) {
+        Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 2.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            ) {
+                LoadingIndicator(Modifier.size(24.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = if (refused) {
+                        stringResource(R.string.hardware_pen_key_refused)
+                    } else {
+                        stringResource(R.string.hardware_pen_key_prompt, name)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (refused) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Text(
+                text = learned?.let { stringResource(R.string.hardware_pen_key_learned, it) }
+                    ?: stringResource(R.string.hardware_pen_key_built_in),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 32.dp, top = 2.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(
+                    onClick = onReset,
+                    enabled = learned != null,
+                    modifier = Modifier.testTag(HardwareTags.KEY_RESET),
+                ) { Text(stringResource(R.string.hardware_pen_key_reset)) }
+                TextButton(
+                    onClick = onCancel,
+                    modifier = Modifier.testTag(HardwareTags.KEY_CANCEL),
+                ) { Text(stringResource(R.string.dialog_cancel)) }
+            }
+        }
     }
 }
 

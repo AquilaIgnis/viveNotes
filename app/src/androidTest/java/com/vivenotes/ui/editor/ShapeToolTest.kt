@@ -984,7 +984,7 @@ class ShapeToolTest {
         compose.onNodeWithTag(OBJECT_FILL_TAG).performClick()
         compose.onNodeWithContentDescription("Red fill").performClick()
         compose.waitForIdle()
-        assertEquals(0xFFEF4444.toInt(), fill)
+        assertEquals(0xFFE53935.toInt(), fill)
         val red = bar()
         assertTrue("the bar shows the red fill: $red", red.red > .75f && red.green < .4f && red.blue < .4f)
 
@@ -1003,7 +1003,7 @@ class ShapeToolTest {
 
         compose.onNodeWithTag(OBJECT_FILL_TAG).performClick()
         compose.onNodeWithContentDescription("Red fill").performClick()
-        assertEquals(0xFFEF4444.toInt(), fill)
+        assertEquals(0xFFE53935.toInt(), fill)
 
         compose.onNodeWithTag(OBJECT_FILL_TAG).performClick()
         compose.onNodeWithTag(OBJECT_FILL_NONE_TAG).performClick()
@@ -1023,7 +1023,7 @@ class ShapeToolTest {
 
         compose.onNodeWithContentDescription("Change background color").performClick()
         compose.onNodeWithContentDescription("Blue background").performClick()
-        assertEquals(0xFF3B82F6.toInt(), fill)
+        assertEquals(0xFF2962FF.toInt(), fill)
 
         compose.onNodeWithTag(OBJECT_FILL_TAG).performClick()
         compose.onNodeWithText("No background").performClick()

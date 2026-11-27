@@ -334,6 +334,21 @@
     <string name="stylus_press_single">シングルクリック</string>
     <string name="stylus_press_double">ダブルクリック</string>
     <string name="stylus_press_triple">トリプルクリック</string>
+    <string name="hardware_button_test">ボタンのテスト</string>
+    <string name="hardware_button_test_info">ここを開いている間、ペンが送信する内容を表示します。ボタンが反応しない場合は、レポートをコピーして不具合報告に貼り付けてください。</string>
+    <string name="hardware_button_test_hint">ペンを画面にかざすか触れた状態で、ボタンを押してください。</string>
+    <string name="hardware_button_test_read">%1$sとして認識</string>
+    <string name="hardware_button_test_not_read">ViveNotesでは読み取られません</string>
+    <string name="hardware_button_test_no_button">ボタンは押されていません</string>
+    <string name="hardware_button_test_copy">レポートをコピー</string>
+    <string name="hardware_button_test_clear">クリア</string>
+    <string name="hardware_button_test_clip">ペンボタンのレポート</string>
+    <string name="hardware_pen_key_set">%1$sのペンキーを設定</string>
+    <string name="hardware_pen_key_prompt">%1$sに使うペンのボタンを押してください…</string>
+    <string name="hardware_pen_key_refused">キーボードからの入力です。ペンのボタンを押してください。</string>
+    <string name="hardware_pen_key_learned">キー %1$d</string>
+    <string name="hardware_pen_key_built_in">組み込みのキーを使用中</string>
+    <string name="hardware_pen_key_reset">リセット</string>
     <string name="stylus_action_none">なし</string>
     <string name="stylus_action_toggle_pen_eraser">ペン / 消しゴム</string>
     <string name="stylus_action_cycle_pens">次のペン</string>
@@ -498,6 +513,7 @@
     <string name="ribbon_strikethrough">取り消し線</string>
     <string name="ribbon_font_color">フォントの色</string>
     <string name="ribbon_highlight">ハイライト</string>
+    <string name="ribbon_highlight_colors">ハイライトの色</string>
     <string name="ribbon_subscript">下付き</string>
     <string name="ribbon_superscript">上付き</string>
     <string name="ribbon_clear_formatting">書式をクリア</string>
@@ -610,6 +626,7 @@
     <string name="tooltip_fill_swatch">%1$sの塗りつぶし</string>
     <string name="tooltip_change_background">背景色を変更</string>
     <string name="tooltip_no_background">背景なし</string>
+    <string name="tooltip_background_color">背景色</string>
     <string name="tooltip_background_swatch">%1$sの背景</string>
     <string name="color_white">白</string>
     <string name="color_black">黒</string>

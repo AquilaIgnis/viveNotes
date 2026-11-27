@@ -60,6 +60,29 @@ class StylusButtonMapCodecTest {
         assertEquals(true, encoded.contains("triple"))
     }
 
+    // --- the keys learned for this tablet ----------------------------------------------------------
+
+    @Test
+    fun learnedKeysRoundTrip() {
+        val keys = StylusKeys(single = 612, triple = 614)
+
+        assertEquals(
+            keys,
+            penSettingsJson.decodeFromString(
+                StylusKeys.serializer(),
+                penSettingsJson.encodeToString(StylusKeys.serializer(), keys),
+            ),
+        )
+    }
+
+    /** A row with nothing learned, or one a later build added, decodes to "use the built-in keys". */
+    @Test
+    fun aMissingLearnedKeyIsNothingLearned() {
+        val decoded = penSettingsJson.decodeFromString(StylusKeys.serializer(), """{"double":601,"long":603}""")
+
+        assertEquals(StylusKeys(double = 601), decoded)
+    }
+
     private fun encode(map: StylusButtonMap) =
         penSettingsJson.encodeToString(StylusButtonMap.serializer(), map)
 

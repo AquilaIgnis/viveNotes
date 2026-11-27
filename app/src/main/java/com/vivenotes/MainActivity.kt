@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.KeyboardShortcutGroup
 import android.view.Menu
+import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import androidx.activity.ComponentActivity
@@ -17,9 +18,11 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.vivenotes.keyboard.ShortcutScope
 import com.vivenotes.ui.NotesApp
 import com.vivenotes.ui.NotesViewModel
+import com.vivenotes.ui.captureStylusKey
 import com.vivenotes.ui.handleShortcut
 import com.vivenotes.ui.claimsStylusButton
 import com.vivenotes.ui.handleStylusButton
+import com.vivenotes.ui.record
 import com.vivenotes.ui.shortcutGroups
 import com.vivenotes.ui.theme.ViveNotesTheme
 import kotlinx.coroutines.awaitCancellation
@@ -105,13 +108,33 @@ class MainActivity : ComponentActivity() {
      * The shortcuts that go ahead of the focused view — Esc and Ctrl+F; see `ui/KeyboardShortcuts.kt`.
      * Everything else waits for [onKeyDown].
      *
+     * Ahead of those, a pen-button row learning its key takes every key — see `captureStylusKey`.
+     *
      * The suppression is for a false positive: this overrides the public `Activity` method, but
      * `androidx.core`'s `ComponentActivity` redeclares it under `@RestrictTo`, which lint reads as
      * the override and the `super` call reaching into a library-private API.
      */
     @SuppressLint("RestrictedApi")
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-        viewModel.handleShortcut(event, ShortcutScope.Anywhere) || super.dispatchKeyEvent(event)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        viewModel.stylusProbe.record(event)
+        return viewModel.captureStylusKey(event) ||
+            viewModel.handleShortcut(event, ShortcutScope.Anywhere) ||
+            super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * The pen button test watches every touch and hover here, ahead of the canvas, and claims none
+     * of them — see `ui/StylusProbe.kt`.
+     */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        viewModel.stylusProbe.record(ev)
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        viewModel.stylusProbe.record(ev)
+        return super.dispatchGenericMotionEvent(ev)
+    }
 
     /**
      * The app-wide half of L2 — `ui/KeyboardShortcuts.kt` holds the dispatch and says why there are

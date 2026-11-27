@@ -387,6 +387,21 @@
     <string name="stylus_press_single">Single click</string>
     <string name="stylus_press_double">Double click</string>
     <string name="stylus_press_triple">Triple click</string>
+    <string name="hardware_button_test">Button test</string>
+    <string name="hardware_button_test_info">Lists what your pen sends while this is open. If a button does nothing, copy the report into a bug report.</string>
+    <string name="hardware_button_test_hint">Hover or touch with the pen and press its button.</string>
+    <string name="hardware_button_test_read">Read as %1$s</string>
+    <string name="hardware_button_test_not_read">Not read by ViveNotes</string>
+    <string name="hardware_button_test_no_button">No button pressed</string>
+    <string name="hardware_button_test_copy">Copy report</string>
+    <string name="hardware_button_test_clear">Clear</string>
+    <string name="hardware_button_test_clip">Pen button report</string>
+    <string name="hardware_pen_key_set">Set the pen key for %1$s</string>
+    <string name="hardware_pen_key_prompt">Press the pen button for %1$s…</string>
+    <string name="hardware_pen_key_refused">That came from a keyboard. Press the pen\'s button.</string>
+    <string name="hardware_pen_key_learned">Key %1$d</string>
+    <string name="hardware_pen_key_built_in">Using the built-in keys</string>
+    <string name="hardware_pen_key_reset">Reset</string>
     <string name="stylus_action_none">Nothing</string>
     <string name="stylus_action_toggle_pen_eraser">Pen / eraser</string>
     <string name="stylus_action_cycle_pens">Next pen</string>
@@ -555,6 +570,7 @@
     <string name="ribbon_strikethrough">Strikethrough</string>
     <string name="ribbon_font_color">Font colour</string>
     <string name="ribbon_highlight">Highlight</string>
+    <string name="ribbon_highlight_colors">Highlight colour</string>
     <string name="ribbon_subscript">Subscript</string>
     <string name="ribbon_superscript">Superscript</string>
     <string name="ribbon_clear_formatting">Clear formatting</string>
@@ -674,6 +690,7 @@
     <string name="tooltip_fill_swatch">%1$s fill</string>
     <string name="tooltip_change_background">Change background color</string>
     <string name="tooltip_no_background">No background</string>
+    <string name="tooltip_background_color">Background color</string>
     <string name="tooltip_background_swatch">%1$s background</string>
     <string name="color_white">White</string>
     <string name="color_black">Black</string>

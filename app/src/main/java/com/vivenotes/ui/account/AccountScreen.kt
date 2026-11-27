@@ -1713,7 +1713,6 @@ private fun ManagedSubscriptionPanel(
             CardCheckoutButton(
                 onClick = onSubscribe,
                 enabled = !state.purchasing && !state.loading,
-                filled = filled,
                 loading = state.purchasing,
                 loadingDescription = openingCheckoutDescription,
                 requiredForSync = membershipRequired,
@@ -2116,13 +2115,14 @@ private fun ProviderManagementButton(
  * Subscribe on an install that sells through Stripe Checkout. It mirrors [GooglePlayActionButton]
  * so the card keeps one shape whichever checkout it offers, with the card glyph in place of Google's
  * mark: nothing about this payment involves Google.
+ *
+ * It is always filled in [CardCheckoutContainer], whether or not it is the card's main action.
  */
 @Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private fun CardCheckoutButton(
     onClick: () -> Unit,
     enabled: Boolean,
-    filled: Boolean,
     modifier: Modifier = Modifier,
     loading: Boolean = false,
     loadingDescription: String,
@@ -2145,6 +2145,7 @@ private fun CardCheckoutButton(
                 Modifier
                     .size(18.dp)
                     .semantics { contentDescription = loadingDescription },
+                color = CardCheckoutContent,
             )
         } else {
             Icon(
@@ -2158,23 +2159,29 @@ private fun CardCheckoutButton(
             Text(stringResource(R.string.account_subscription_subscribe_card))
         }
     }
-    if (filled) {
-        Button(onClick = onClick, enabled = enabled, modifier = buttonModifier, content = content)
-    } else {
-        OutlinedButton(
-            onClick = onClick,
-            enabled = enabled,
-            modifier = buttonModifier,
-            content = content,
-        )
-    }
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = CardCheckoutContainer,
+            contentColor = CardCheckoutContent,
+        ),
+        modifier = buttonModifier,
+        content = content,
+    )
 }
+
+/** Card checkout's own cyan, the same in light and dark themes. */
+private val CardCheckoutContainer = Color(0xFF00D4FF)
+
+/** Black on [CardCheckoutContainer] contrasts about 12:1; white would manage under 2:1. */
+private val CardCheckoutContent = Color.Black
 
 /**
  * The button that opens Google Play Billing, labelled for that service rather than for Google Pay.
  *
  * The full-colour Google mark stays untinted on its own white disc, so it keeps all four colours on
- * the filled primary container as well as on the outlined surface.
+ * the filled primary container as well as on the tonal one.
  */
 @Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -2229,7 +2236,7 @@ private fun GooglePlayActionButton(
     if (filled) {
         Button(onClick = onClick, enabled = enabled, modifier = buttonModifier, content = content)
     } else {
-        OutlinedButton(
+        FilledTonalButton(
             onClick = onClick,
             enabled = enabled,
             modifier = buttonModifier,

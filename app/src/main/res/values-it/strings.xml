@@ -344,6 +344,21 @@
     <string name="stylus_press_single">Clic singolo</string>
     <string name="stylus_press_double">Doppio clic</string>
     <string name="stylus_press_triple">Triplo clic</string>
+    <string name="hardware_button_test">Prova del tasto</string>
+    <string name="hardware_button_test_info">Mostra ciò che invia la penna mentre è aperto. Se un tasto non fa nulla, copia il rapporto in una segnalazione di bug.</string>
+    <string name="hardware_button_test_hint">Avvicina la penna allo schermo o toccalo e premi il suo tasto.</string>
+    <string name="hardware_button_test_read">Letto come %1$s</string>
+    <string name="hardware_button_test_not_read">Non letto da ViveNotes</string>
+    <string name="hardware_button_test_no_button">Nessun tasto premuto</string>
+    <string name="hardware_button_test_copy">Copia rapporto</string>
+    <string name="hardware_button_test_clear">Cancella</string>
+    <string name="hardware_button_test_clip">Rapporto tasto penna</string>
+    <string name="hardware_pen_key_set">Imposta il tasto della penna per %1$s</string>
+    <string name="hardware_pen_key_prompt">Premi il tasto della penna per %1$s…</string>
+    <string name="hardware_pen_key_refused">Proviene da una tastiera. Premi il tasto della penna.</string>
+    <string name="hardware_pen_key_learned">Tasto %1$d</string>
+    <string name="hardware_pen_key_built_in">Vengono usati i tasti predefiniti</string>
+    <string name="hardware_pen_key_reset">Ripristina</string>
     <string name="stylus_action_none">Nessuna azione</string>
     <string name="stylus_action_toggle_pen_eraser">Penna / gomma</string>
     <string name="stylus_action_cycle_pens">Penna successiva</string>
@@ -508,6 +523,7 @@
     <string name="ribbon_strikethrough">Barrato</string>
     <string name="ribbon_font_color">Colore carattere</string>
     <string name="ribbon_highlight">Evidenzia</string>
+    <string name="ribbon_highlight_colors">Colore evidenziatore</string>
     <string name="ribbon_subscript">Pedice</string>
     <string name="ribbon_superscript">Apice</string>
     <string name="ribbon_clear_formatting">Cancella formattazione</string>
@@ -620,6 +636,7 @@
     <string name="tooltip_fill_swatch">Riempimento %1$s</string>
     <string name="tooltip_change_background">Modifica colore sfondo</string>
     <string name="tooltip_no_background">Nessuno sfondo</string>
+    <string name="tooltip_background_color">Colore di sfondo</string>
     <string name="tooltip_background_swatch">Sfondo %1$s</string>
     <string name="color_white">Bianco</string>
     <string name="color_black">Nero</string>

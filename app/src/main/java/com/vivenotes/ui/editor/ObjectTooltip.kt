@@ -3,7 +3,6 @@ package com.vivenotes.ui.editor
 import android.graphics.RectF
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -38,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
@@ -51,8 +50,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.vivenotes.R
 import com.vivenotes.model.ink.LineType
 import com.vivenotes.ui.icons.MaterialSymbols
+import com.vivenotes.ui.panel.ColorSwatches
+import com.vivenotes.ui.panel.FloatingSettingsPanel
 import com.vivenotes.ui.panel.LineTypePicker
+import com.vivenotes.ui.panel.NoColorEntry
 import com.vivenotes.ui.panel.PanelSlider
+import com.vivenotes.data.PEN_COLORS
 import com.vivenotes.data.ShapeSettings
 import kotlin.math.roundToInt
 
@@ -77,6 +80,14 @@ internal const val OBJECT_EQUATION_MATH_TAG = "object-tooltip-equation-math"
  */
 internal const val OBJECT_RECOGNIZE_TAG = "object-tooltip-recognize"
 
+/** The toolkit's colour and fill menus, kept off [PenPanelTags] so the panes' rows never collide. */
+internal object ObjectColorTags {
+    const val CUSTOM = "object-tooltip-color-custom"
+    const val FILL_CUSTOM = "object-tooltip-fill-custom"
+    fun color(argb: Int) = "object-tooltip-color-$argb"
+    fun fill(argb: Int) = "object-tooltip-fill-$argb"
+}
+
 /** The Table Class's half of the toolkit. */
 internal object TableActionTags {
     const val ROW = "object-tooltip-row"
@@ -86,19 +97,6 @@ internal object TableActionTags {
     const val COLUMN_RIGHT = "object-tooltip-column-right"
     const val COLUMN_DELETE = "object-tooltip-column-delete"
 }
-
-private val INK_COLORS = listOf(
-    R.string.color_white to 0xFFFFFFFF.toInt(),
-    R.string.color_black to 0xFF000000.toInt(),
-    R.string.color_gray to 0xFF6B7280.toInt(),
-    R.string.color_red to 0xFFEF4444.toInt(),
-    R.string.color_orange to 0xFFF59E0B.toInt(),
-    R.string.color_green to 0xFF22C55E.toInt(),
-    R.string.color_cyan to 0xFF06B6D4.toInt(),
-    R.string.color_blue to 0xFF3B82F6.toInt(),
-    R.string.color_purple to 0xFF8B5CF6.toInt(),
-    R.string.color_pink to 0xFFEC4899.toInt(),
-)
 
 /*
  * The ink-only wrapper that used to sit here is gone. Its whole job was deriving a swatch and a
@@ -154,6 +152,10 @@ internal fun ObjectTooltip(
     onToggleLock: () -> Unit,
     /** The kind-specific half of the toolkit. Empty for a selection holding more than one kind. */
     extras: @Composable RowScope.() -> Unit = {},
+    /** The ink row the Draw tab's panes share, which recolouring offers too. */
+    palette: List<Int> = PEN_COLORS,
+    /** Puts a colour mixed on the wheel at the front of [palette]. */
+    onAddColor: (Int) -> Unit = {},
 ) {
     var paletteOpen by remember { mutableStateOf(false) }
     var tooltipSize by remember { mutableStateOf(IntSize.Zero) }
@@ -196,29 +198,22 @@ internal fun ObjectTooltip(
                                 .background(swatch),
                         )
                     }
-                    DropdownMenu(
+                    // The panes' colour row and wheel, so a colour mixed here is one the pens offer
+                    // too. The wheel recolours as it is tried, which is the preview.
+                    FloatingSettingsPanel(
                         expanded = paletteOpen,
                         onDismissRequest = { paletteOpen = false },
+                        title = stringResource(R.string.panel_color),
                     ) {
-                        INK_COLORS.chunked(5).forEach { row ->
-                            Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
-                                row.forEach { (name, argb) ->
-                                    val colorName = stringResource(name)
-                                    Box(
-                                        Modifier
-                                            .padding(4.dp)
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(argb))
-                                            .semantics { contentDescription = colorName }
-                                            .clickable {
-                                                paletteOpen = false
-                                                onRecolor(argb)
-                                            },
-                                    )
-                                }
-                            }
-                        }
+                        ColorSwatches(
+                            palette = palette,
+                            current = swatch.toArgb(),
+                            onPick = onRecolor,
+                            onAddColor = onAddColor,
+                            colorTag = ObjectColorTags::color,
+                            customTag = ObjectColorTags.CUSTOM,
+                            onChosen = { paletteOpen = false },
+                        )
                     }
                 }
 
@@ -708,9 +703,9 @@ private fun GridMenu(
  *
  * The button shows the fill itself, as the base bar's colour button is the border. A shape's wears
  * format_color_fill with its bar painted in the fill, faint with none ([paintBucket]); a table's is a
- * swatch of it. "None" leads the palette because it is where every shape starts and the one value
- * that cannot be mixed — an absent fill is not a transparent one, and a chequer of the surface behind
- * it is how you say so without a word.
+ * swatch of it. "None" leads the menu because it is where every shape starts and the one value
+ * that cannot be mixed — an absent fill is not a transparent one. The colours under it are the
+ * panes' shared row and wheel.
  *
  * A picture's background is the same control in its own words and glyphs: [words], and the
  * [glyph] / [noneGlyph] pair standing in for the swatch and the Block icon.
@@ -725,6 +720,8 @@ internal fun RowScope.FillAction(
     noneGlyph: ImageVector? = null,
     /** Wear the paint bucket, its bar in [fill], in place of [glyph], [noneGlyph] and the swatch. */
     paintBucket: Boolean = false,
+    palette: List<Int> = PEN_COLORS,
+    onAddColor: (Int) -> Unit = {},
     onChange: (Int?) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
@@ -764,41 +761,32 @@ internal fun RowScope.FillAction(
                 )
             }
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
-                TextButton(
-                    onClick = {
-                        open = false
-                        onChange(null)
-                    },
-                    modifier = Modifier.testTag(OBJECT_FILL_NONE_TAG),
-                ) {
-                    noneGlyph?.let {
-                        Icon(it, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    }
-                    Text(stringResource(words.none), style = MaterialTheme.typography.labelLarge)
-                }
-            }
-            INK_COLORS.chunked(5).forEach { row ->
-                Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
-                    row.forEach { (name, argb) ->
-                        val swatchDescription = stringResource(words.swatch, stringResource(name))
-                        Box(
-                            Modifier
-                                .padding(4.dp)
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(argb))
-                                .semantics { contentDescription = swatchDescription }
-                                .clickable {
-                                    open = false
-                                    onChange(argb)
-                                },
-                        )
-                    }
-                }
-            }
+        FloatingSettingsPanel(
+            expanded = open,
+            onDismissRequest = { open = false },
+            title = stringResource(words.title),
+        ) {
+            NoColorEntry(
+                label = stringResource(words.none),
+                selected = fill == null,
+                tag = OBJECT_FILL_NONE_TAG,
+                icon = noneGlyph ?: MaterialSymbols.Block,
+                onClick = {
+                    open = false
+                    onChange(null)
+                },
+            )
+            Spacer(Modifier.height(10.dp))
+            ColorSwatches(
+                palette = palette,
+                current = fill,
+                onPick = onChange,
+                onAddColor = onAddColor,
+                colorTag = ObjectColorTags::fill,
+                customTag = ObjectColorTags.FILL_CUSTOM,
+                swatchWords = words.swatch,
+                onChosen = { open = false },
+            )
         }
     }
 }
@@ -809,9 +797,21 @@ internal enum class FillWords(
     @param:StringRes val none: Int,
     /** Takes the colour's name: "Red fill". */
     @param:StringRes val swatch: Int,
+    /** Heads the menu. */
+    @param:StringRes val title: Int,
 ) {
-    Fill(R.string.tooltip_change_fill, R.string.tooltip_no_fill, R.string.tooltip_fill_swatch),
-    Background(R.string.tooltip_change_background, R.string.tooltip_no_background, R.string.tooltip_background_swatch),
+    Fill(
+        R.string.tooltip_change_fill,
+        R.string.tooltip_no_fill,
+        R.string.tooltip_fill_swatch,
+        R.string.panel_fill_color,
+    ),
+    Background(
+        R.string.tooltip_change_background,
+        R.string.tooltip_no_background,
+        R.string.tooltip_background_swatch,
+        R.string.tooltip_background_color,
+    ),
 }
 
 /**

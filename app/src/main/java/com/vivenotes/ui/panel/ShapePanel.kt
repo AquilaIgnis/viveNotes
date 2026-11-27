@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.PathEffect
@@ -267,7 +268,12 @@ internal fun FillSwatch(
             onDismissRequest = { closeWheel() },
             title = fillColor,
         ) {
-            NoFillEntry(selected = fill == null, tag = noFillTag, onClick = { clearFill() })
+            NoColorEntry(
+                label = stringResource(R.string.panel_no_fill),
+                selected = fill == null,
+                tag = noFillTag,
+                onClick = { clearFill() },
+            )
             Spacer(Modifier.height(10.dp))
             ColorWheelContent(
                 initialArgb = fill ?: seedArgb,
@@ -281,9 +287,20 @@ internal fun FillSwatch(
     }
 }
 
-/** "No fill", which is a value rather than the absence of one — and the only way back to it. */
+/**
+ * "No fill", which is a value rather than the absence of one — and the only way back to it.
+ *
+ * Also the ribbon's "None" under Highlight and the object toolkit's "No fill" and "No background",
+ * which are the same choice about a different colour. [icon] is the toolkit's, for a background.
+ */
 @Composable
-private fun NoFillEntry(selected: Boolean, tag: String, onClick: () -> Unit) {
+internal fun NoColorEntry(
+    label: String,
+    selected: Boolean,
+    tag: String,
+    icon: ImageVector = MaterialSymbols.Block,
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -297,14 +314,14 @@ private fun NoFillEntry(selected: Boolean, tag: String, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = MaterialSymbols.Block,
+            imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(10.dp))
         Text(
-            text = stringResource(R.string.panel_no_fill),
+            text = label,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )

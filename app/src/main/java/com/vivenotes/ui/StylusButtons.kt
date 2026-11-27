@@ -1,10 +1,12 @@
 package com.vivenotes.ui
 
+import android.view.InputDevice
 import android.view.KeyEvent
 import com.vivenotes.data.DrawTool
 import com.vivenotes.data.PenPreset
 import com.vivenotes.data.StylusAction
 import com.vivenotes.data.StylusButtonMap
+import com.vivenotes.data.StylusKeys
 
 /**
  * The stylus's own buttons — the barrel buttons and, on pens that have one, the tail sensor.
@@ -55,9 +57,89 @@ internal fun NotesViewModel.claimsStylusButton(keyCode: Int): Boolean =
 
 /** The action this keycode is bound to, or null if it is not ours or is bound to nothing. */
 private fun NotesViewModel.boundStylusAction(keyCode: Int): StylusAction? =
-    stylusPressFor(keyCode)
+    stylusPressFor(keyCode, stylusKeys.value)
         ?.let { stylusButtons.value.actionFor(it) }
         ?.takeUnless { it == StylusAction.None }
+
+/**
+ * Learns a pen key while a row's gear is open, from `MainActivity.dispatchKeyEvent` ahead of
+ * everything else — so the key being learned does not also run whatever it is bound to now.
+ *
+ * Not a Compose key handler, and not in a dialog: Compose drops a key-up that had no key-down, and
+ * one click and three clicks on the Lenovo pen deliver *only* the up. A dialog is a window of its own
+ * as well, whose keys never reach the activity.
+ */
+internal fun NotesViewModel.captureStylusKey(event: KeyEvent): Boolean {
+    val outcome = stylusKeyCapture(
+        capturing = capturingStylusKey.value,
+        keyCode = event.keyCode,
+        up = event.action == KeyEvent.ACTION_UP,
+        repeatCount = event.repeatCount,
+        fromKeyboard = event.device?.keyboardType == InputDevice.KEYBOARD_TYPE_ALPHABETIC,
+    )
+    when (outcome) {
+        StylusKeyCapture.Ignore -> return false
+        StylusKeyCapture.Consume -> Unit
+        StylusKeyCapture.Cancel -> cancelStylusKeyCapture()
+        StylusKeyCapture.Refuse -> refuseStylusKey()
+        is StylusKeyCapture.Learn -> learnStylusKey(outcome.press, outcome.keyCode)
+    }
+    return true
+}
+
+/** What a key does while a row is learning its key — [stylusKeyCapture]. */
+internal sealed interface StylusKeyCapture {
+    /** Nothing is being learned: the key goes on as usual. */
+    data object Ignore : StylusKeyCapture
+
+    /** Held back and otherwise ignored — a down-press, whose up is the one that counts. */
+    data object Consume : StylusKeyCapture
+
+    /** Back or Esc: stop learning, change nothing. */
+    data object Cancel : StylusKeyCapture
+
+    /** From a full keyboard, so not the pen: ask again. */
+    data object Refuse : StylusKeyCapture
+
+    data class Learn(val press: StylusPress, val keyCode: Int) : StylusKeyCapture
+}
+
+/**
+ * The capture rule, pure so it is testable without a pen.
+ *
+ * Decided at key *up*, for the reason dispatch is: one click and three clicks on the Lenovo pen deliver
+ * only the up. Every key is held back while learning, down and up both, so nothing else acts on it.
+ * A full keyboard is refused so a stray keypress cannot become a pen button; anything else is
+ * accepted, volume keys included — cheap Bluetooth pen buttons often send those.
+ */
+internal fun stylusKeyCapture(
+    capturing: StylusPress?,
+    keyCode: Int,
+    up: Boolean,
+    repeatCount: Int,
+    fromKeyboard: Boolean,
+): StylusKeyCapture = when {
+    capturing == null -> StylusKeyCapture.Ignore
+    keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE ->
+        if (up) StylusKeyCapture.Cancel else StylusKeyCapture.Consume
+    !up || repeatCount > 0 -> StylusKeyCapture.Consume
+    fromKeyboard -> StylusKeyCapture.Refuse
+    else -> StylusKeyCapture.Learn(capturing, keyCode)
+}
+
+/** The key learned for [press], or null where the built-in keys alone apply. */
+internal fun StylusKeys.codeFor(press: StylusPress): Int? = when (press) {
+    StylusPress.Single -> single
+    StylusPress.Double -> double
+    StylusPress.Triple -> triple
+}
+
+/** [press] learning [code], or forgetting what it learned when [code] is null. */
+internal fun StylusKeys.with(press: StylusPress, code: Int?): StylusKeys = when (press) {
+    StylusPress.Single -> copy(single = code)
+    StylusPress.Double -> copy(double = code)
+    StylusPress.Triple -> copy(triple = code)
+}
 
 /** What the pen said it was — already counted, never inferred from timing here. */
 enum class StylusPress {
@@ -95,12 +177,19 @@ private const val KEYCODE_PEN_ONE_CLICK = 600
 private const val KEYCODE_PEN_TWO_CLICK = 601
 private const val KEYCODE_PEN_THREE_CLICK = 602
 
-private fun stylusPressFor(keyCode: Int): StylusPress? = when (keyCode) {
-    KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY, KEYCODE_PEN_ONE_CLICK -> StylusPress.Single
-    KEYCODE_PEN_TWO_CLICK -> StylusPress.Double
-    KEYCODE_PEN_THREE_CLICK -> StylusPress.Triple
-    else -> null
-}
+/**
+ * Which binding a keycode presses, or null if it is not a pen button. The button test reads it too.
+ *
+ * A key [learned] on this tablet is looked at first, so it wins even where it is another row's
+ * built-in code; the built-in codes still work beside it.
+ */
+internal fun stylusPressFor(keyCode: Int, learned: StylusKeys = StylusKeys()): StylusPress? =
+    StylusPress.entries.firstOrNull { learned.codeFor(it) == keyCode } ?: when (keyCode) {
+        KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY, KEYCODE_PEN_ONE_CLICK -> StylusPress.Single
+        KEYCODE_PEN_TWO_CLICK -> StylusPress.Double
+        KEYCODE_PEN_THREE_CLICK -> StylusPress.Triple
+        else -> null
+    }
 
 /** Pen 1, the notebook's default — [DrawTool.Pen] is indexed from zero. */
 private const val FIRST_PEN = 0

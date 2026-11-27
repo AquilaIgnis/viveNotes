@@ -368,15 +368,24 @@ private fun PenKindCard(
  * once per touch on it. Hunting for a colour means trying several, and a row that took a spot for
  * each would spend the whole palette on the near-misses. The pen still follows every touch, because
  * that is the preview.
+ *
+ * [onChosen] is for a caller that is a menu rather than a pane — the ribbon's font colour, the object
+ * toolkit — and has to close once a colour is settled: after a swatch is tapped, and after the wheel
+ * is left. It is not [onPick], which the wheel also fires for every colour it is merely trying.
+ *
+ * [current] is null for a value that is no colour at all — a fill of none — which rings nothing.
+ * [swatchWords], when given, names each swatch for what it does ("Red fill") around its colour name.
  */
 @Composable
 internal fun ColorSwatches(
     palette: List<Int>,
-    current: Int,
+    current: Int?,
     onPick: (Int) -> Unit,
     onAddColor: (Int) -> Unit,
     colorTag: (Int) -> String = PenPanelTags::color,
     customTag: String = PenPanelTags.CUSTOM_COLOR,
+    @StringRes swatchWords: Int? = null,
+    onChosen: () -> Unit = {},
 ) {
     var wheelOpen by remember { mutableStateOf(false) }
     // What the wheel has been left on. Null until it is touched, which is what makes opening the
@@ -387,6 +396,7 @@ internal fun ColorSwatches(
         wheelOpen = false
         mixed?.let(onAddColor)
         mixed = null
+        onChosen()
     }
 
     Row(
@@ -395,11 +405,15 @@ internal fun ColorSwatches(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         palette.forEach { argb ->
+            val name = stringResource(colorName(argb))
             Swatch(
                 selected = argb == current,
                 tag = colorTag(argb),
-                description = stringResource(colorName(argb)),
-                onClick = { onPick(argb) },
+                description = swatchWords?.let { stringResource(it, name) } ?: name,
+                onClick = {
+                    onPick(argb)
+                    onChosen()
+                },
             ) {
                 drawRect(Color(argb))
             }
@@ -410,7 +424,7 @@ internal fun ColorSwatches(
                 // Normally false, since a colour off the wheel joins the row and is ringed there.
                 // It survives for the ink a rolled-off swatch left behind, which has nothing else
                 // to mark it.
-                selected = current !in palette,
+                selected = current != null && current !in palette,
                 tag = customTag,
                 description = stringResource(R.string.panel_custom_color),
                 onClick = { wheelOpen = true },
@@ -434,7 +448,7 @@ internal fun ColorSwatches(
                 title = stringResource(R.string.panel_custom_color),
             ) {
                 ColorWheelContent(
-                    initialArgb = current,
+                    initialArgb = current ?: WHEEL_SEED,
                     onPick = {
                         mixed = it
                         onPick(it)
@@ -484,6 +498,9 @@ internal fun Swatch(
             .semantics { contentDescription = description },
     )
 }
+
+/** Where the wheel opens when there is no current colour to start from: its pale centre. */
+private const val WHEEL_SEED = 0xFFFFFFFF.toInt()
 
 /**
  * Ten targets have to fit one 320dp panel without wrapping, which is what sets this rather than

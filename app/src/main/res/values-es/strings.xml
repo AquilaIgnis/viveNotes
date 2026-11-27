@@ -356,6 +356,21 @@
     <string name="stylus_press_single">Un clic</string>
     <string name="stylus_press_double">Doble clic</string>
     <string name="stylus_press_triple">Triple clic</string>
+    <string name="hardware_button_test">Prueba del botón</string>
+    <string name="hardware_button_test_info">Muestra lo que envía tu lápiz mientras esto está abierto. Si un botón no hace nada, copia el informe en un informe de error.</string>
+    <string name="hardware_button_test_hint">Acerca el lápiz a la pantalla o tócala y pulsa su botón.</string>
+    <string name="hardware_button_test_read">Leído como %1$s</string>
+    <string name="hardware_button_test_not_read">ViveNotes no lo lee</string>
+    <string name="hardware_button_test_no_button">Ningún botón pulsado</string>
+    <string name="hardware_button_test_copy">Copiar informe</string>
+    <string name="hardware_button_test_clear">Borrar</string>
+    <string name="hardware_button_test_clip">Informe del botón del lápiz</string>
+    <string name="hardware_pen_key_set">Configurar la tecla del lápiz para %1$s</string>
+    <string name="hardware_pen_key_prompt">Pulsa el botón del lápiz para %1$s…</string>
+    <string name="hardware_pen_key_refused">Eso vino de un teclado. Pulsa el botón del lápiz.</string>
+    <string name="hardware_pen_key_learned">Tecla %1$d</string>
+    <string name="hardware_pen_key_built_in">Usando las teclas integradas</string>
+    <string name="hardware_pen_key_reset">Restablecer</string>
     <string name="stylus_action_none">Nada</string>
     <string name="stylus_action_toggle_pen_eraser">Lápiz / borrador</string>
     <string name="stylus_action_cycle_pens">Siguiente lápiz</string>
@@ -522,6 +537,7 @@
     <string name="ribbon_strikethrough">Tachado</string>
     <string name="ribbon_font_color">Color de fuente</string>
     <string name="ribbon_highlight">Resaltar</string>
+    <string name="ribbon_highlight_colors">Color de resaltado</string>
     <string name="ribbon_subscript">Subíndice</string>
     <string name="ribbon_superscript">Superíndice</string>
     <string name="ribbon_clear_formatting">Borrar formato</string>
@@ -639,6 +655,7 @@
     <string name="tooltip_fill_swatch">Relleno %1$s</string>
     <string name="tooltip_change_background">Cambiar color de fondo</string>
     <string name="tooltip_no_background">Sin fondo</string>
+    <string name="tooltip_background_color">Color de fondo</string>
     <string name="tooltip_background_swatch">Fondo %1$s</string>
     <string name="color_white">Blanco</string>
     <string name="color_black">Negro</string>

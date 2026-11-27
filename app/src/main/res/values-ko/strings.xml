@@ -334,6 +334,21 @@
     <string name="stylus_press_single">한 번 클릭</string>
     <string name="stylus_press_double">두 번 클릭</string>
     <string name="stylus_press_triple">세 번 클릭</string>
+    <string name="hardware_button_test">버튼 테스트</string>
+    <string name="hardware_button_test_info">이 화면이 열려 있는 동안 펜이 보내는 내용을 보여 줍니다. 버튼이 작동하지 않으면 보고서를 복사해 버그 신고에 붙여 넣으세요.</string>
+    <string name="hardware_button_test_hint">펜을 화면 가까이 대거나 화면에 댄 채로 버튼을 누르세요.</string>
+    <string name="hardware_button_test_read">%1$s(으)로 인식됨</string>
+    <string name="hardware_button_test_not_read">ViveNotes에서 읽지 않음</string>
+    <string name="hardware_button_test_no_button">누른 버튼 없음</string>
+    <string name="hardware_button_test_copy">보고서 복사</string>
+    <string name="hardware_button_test_clear">지우기</string>
+    <string name="hardware_button_test_clip">펜 버튼 보고서</string>
+    <string name="hardware_pen_key_set">%1$s에 쓸 펜 키 설정</string>
+    <string name="hardware_pen_key_prompt">%1$s에 쓸 펜 버튼을 누르세요…</string>
+    <string name="hardware_pen_key_refused">키보드에서 입력되었습니다. 펜 버튼을 누르세요.</string>
+    <string name="hardware_pen_key_learned">키 %1$d</string>
+    <string name="hardware_pen_key_built_in">기본 키 사용 중</string>
+    <string name="hardware_pen_key_reset">재설정</string>
     <string name="stylus_action_none">없음</string>
     <string name="stylus_action_toggle_pen_eraser">펜 / 지우개</string>
     <string name="stylus_action_cycle_pens">다음 펜</string>
@@ -498,6 +513,7 @@
     <string name="ribbon_strikethrough">취소선</string>
     <string name="ribbon_font_color">글꼴 색상</string>
     <string name="ribbon_highlight">형광펜</string>
+    <string name="ribbon_highlight_colors">형광펜 색상</string>
     <string name="ribbon_subscript">아래 첨자</string>
     <string name="ribbon_superscript">위 첨자</string>
     <string name="ribbon_clear_formatting">서식 지우기</string>
@@ -610,6 +626,7 @@
     <string name="tooltip_fill_swatch">%1$s 채우기</string>
     <string name="tooltip_change_background">배경색 변경</string>
     <string name="tooltip_no_background">배경 없음</string>
+    <string name="tooltip_background_color">배경색</string>
     <string name="tooltip_background_swatch">%1$s 배경</string>
     <string name="color_white">흰색</string>
     <string name="color_black">검은색</string>

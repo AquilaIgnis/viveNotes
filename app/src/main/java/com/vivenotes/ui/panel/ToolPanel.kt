@@ -278,7 +278,7 @@ private fun PanelExplanation(info: String) {
 fun PanelRow(
     label: String,
     labelWidth: Dp = LABEL_WIDTH,
-    content: @Composable () -> Unit,
+    content: @Composable RowScope.() -> Unit,
 ) {
     Row(
         modifier = Modifier

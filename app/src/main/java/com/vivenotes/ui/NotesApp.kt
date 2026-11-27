@@ -161,6 +161,7 @@ import com.vivenotes.ui.panel.ContentPanelContent
 import com.vivenotes.ui.panel.ContentPanelHeader
 import com.vivenotes.ui.panel.DeletedItemsPanelContent
 import com.vivenotes.ui.panel.HardwarePanelContent
+import com.vivenotes.ui.panel.PenKeys
 import com.vivenotes.ui.panel.PaperSizePanelContent
 import com.vivenotes.ui.panel.RecognitionOutputKind
 import com.vivenotes.ui.panel.RecognitionPanelContent
@@ -1264,6 +1265,7 @@ private fun NotesWorkspace(
                         onCommand = viewModel::send,
                         defaults = defaults,
                         onSetDefault = viewModel::setDefaultFont,
+                        onHighlightInk = viewModel::setTextHighlight,
                         onInsertPicture = { source ->
                             when (source) {
                                 PictureSource.Device -> pickPicture.launch(arrayOf("image/*"))
@@ -1895,6 +1897,15 @@ private fun ToolPaneHost(
                 onSetButtons = viewModel::setStylusButtons,
                 keyBindings = keyBindings,
                 onSetKeyBindings = viewModel::setKeyBindings,
+                probe = viewModel.stylusProbe,
+                penKeys = PenKeys(
+                    learned = viewModel.stylusKeys.collectAsStateWithLifecycle().value,
+                    capturing = viewModel.capturingStylusKey.collectAsStateWithLifecycle().value,
+                    refused = viewModel.stylusKeyRefused.collectAsStateWithLifecycle().value,
+                ),
+                onLearnKey = viewModel::startStylusKeyCapture,
+                onStopLearning = viewModel::cancelStylusKeyCapture,
+                onResetKey = { viewModel.setStylusKey(it, null) },
             )
             ToolPane.Recognition -> recognition?.let { result ->
                 RecognitionPanelContent(
@@ -2113,6 +2124,8 @@ private fun PageEditor(
     val pendingPasteLayout by viewModel.pendingPasteLayout.collectAsStateWithLifecycle()
     val scrollTarget by viewModel.canvasScrollTarget.collectAsStateWithLifecycle()
     val pendingPastes by viewModel.pendingPastes.collectAsStateWithLifecycle()
+    // Held as a State and read inside the selection toolkit, so the row changing leaves the page alone.
+    val palette = viewModel.palette.collectAsStateWithLifecycle()
     val accessibilityOn = rememberAccessibilityServiceOn()
     LaunchedEffect(accessibilityOn) { viewModel.setDescribingPage(accessibilityOn) }
 
@@ -2214,6 +2227,8 @@ private fun PageEditor(
         onResizeTables = viewModel::resizeTables,
         onDeleteTables = viewModel::deleteTables,
         onRecolorTables = viewModel::recolorTables,
+        palette = { palette.value },
+        onAddPaletteColor = viewModel::addPaletteColor,
         onSetTableBorderWidth = viewModel::setTableBorderWidth,
         onSetTableFill = viewModel::setTableFill,
         onSetTableColumnWidth = viewModel::setTableColumnWidth,

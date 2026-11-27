@@ -83,6 +83,7 @@ import com.vivenotes.data.RulerSettings
 import com.vivenotes.data.ShapeSettings
 import com.vivenotes.data.StylusAction
 import com.vivenotes.data.StylusButtonMap
+import com.vivenotes.data.StylusKeys
 import com.vivenotes.keyboard.KeyBindings
 import com.vivenotes.data.TableSettings
 import com.vivenotes.data.TabsLayout
@@ -669,6 +670,12 @@ class NotesViewModel(
      */
     val stylusButtons: StateFlow<StylusButtonMap> = penSettingsStore.stylusButtons
         .stateIn(viewModelScope, SharingStarted.Eagerly, StylusButtonMap())
+
+    /**
+     * What the pen sends, for the button test in Hardware ▸ Stylus — [StylusProbe]. Held here so an
+     * open test keeps its log across a rotation.
+     */
+    internal val stylusProbe = StylusProbe()
 
     /** The keyboard shortcuts in force — [KeyBindings]. `Eagerly` for the reason [stylusButtons] is. */
     val keyBindings: StateFlow<KeyBindings> = penSettingsStore.keyBindings
@@ -2291,6 +2298,11 @@ class NotesViewModel(
         viewModelScope.launch { editorDefaultsStore.setRuleLines(rule) }
     }
 
+    /** The ink the Document tab's Highlight button lays next — not the Draw highlighter's colour. */
+    fun setTextHighlight(argb: Int) {
+        viewModelScope.launch { editorDefaultsStore.setHighlight(argb) }
+    }
+
     /** Null restores the theme's canvas colour rather than painting a light page dark. */
     fun setPageColor(argb: Int?) = updatePageStyle { it.copy(backgroundArgb = argb) }
 
@@ -2444,6 +2456,51 @@ class NotesViewModel(
 
     fun setStylusButtons(map: StylusButtonMap) {
         viewModelScope.launch { penSettingsStore.setStylusButtons(map) }
+    }
+
+    /**
+     * The keys learned for this tablet's pen — [StylusKeys]. `Eagerly` for the reason [stylusButtons]
+     * is: dispatch reads it synchronously.
+     */
+    val stylusKeys: StateFlow<StylusKeys> = penSettingsStore.stylusKeys
+        .stateIn(viewModelScope, SharingStarted.Eagerly, StylusKeys())
+
+    /** Which row's gear is open and waiting for the pen's key; see [captureStylusKey]. */
+    private val _capturingStylusKey = MutableStateFlow<StylusPress?>(null)
+    val capturingStylusKey: StateFlow<StylusPress?> = _capturingStylusKey.asStateFlow()
+
+    /** Whether the last key offered while learning came from a keyboard rather than the pen. */
+    private val _stylusKeyRefused = MutableStateFlow(false)
+    val stylusKeyRefused: StateFlow<Boolean> = _stylusKeyRefused.asStateFlow()
+
+    fun startStylusKeyCapture(press: StylusPress) {
+        _capturingStylusKey.value = press
+        _stylusKeyRefused.value = false
+    }
+
+    /**
+     * Stops listening for a pen key. Given a [press], only if that row is still the one listening: a
+     * row's well closing after another row's gear opened must not cancel the newer one.
+     */
+    fun cancelStylusKeyCapture(press: StylusPress? = null) {
+        if (press != null && _capturingStylusKey.value != press) return
+        _capturingStylusKey.value = null
+        _stylusKeyRefused.value = false
+    }
+
+    internal fun refuseStylusKey() {
+        _stylusKeyRefused.value = true
+    }
+
+    /** [press] answers to [keyCode] on this tablet from now on; learning stops. */
+    internal fun learnStylusKey(press: StylusPress, keyCode: Int) {
+        setStylusKey(press, keyCode)
+        cancelStylusKeyCapture()
+    }
+
+    /** Learns [code] for [press], or forgets what it learned when [code] is null. */
+    fun setStylusKey(press: StylusPress, code: Int?) {
+        viewModelScope.launch { penSettingsStore.updateStylusKeys { it.with(press, code) } }
     }
 
     fun updateEraser(settings: EraserSettings) {

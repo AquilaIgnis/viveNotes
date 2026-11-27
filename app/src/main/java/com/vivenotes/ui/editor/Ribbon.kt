@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
@@ -95,8 +94,12 @@ import com.vivenotes.ui.icons.LocalRibbonIcons
 import com.vivenotes.ui.icons.MaterialSymbols
 import com.vivenotes.ui.icons.fontColorGlyph
 import com.vivenotes.ui.theme.LocalIconAccents
+import com.vivenotes.data.automaticInkFor
+import com.vivenotes.ui.panel.ColorSwatches
 import com.vivenotes.ui.panel.FloatingSettingsPanel
-import com.vivenotes.ui.panel.colorName
+import com.vivenotes.ui.panel.HighlighterSwatches
+import com.vivenotes.ui.panel.NoColorEntry
+import com.vivenotes.ui.theme.LocalCanvasColors
 import java.text.NumberFormat
 import kotlin.math.roundToInt
 
@@ -118,17 +121,6 @@ enum class RibbonTab(@param:StringRes val label: Int) {
     RibonSettings(R.string.ribbon_tab_settings),
 }
 
-internal val TEXT_COLORS = listOf(
-    0xFFFFFFFF, 0xFFE6E6E6, 0xFF9A9A9A, 0xFF000000,
-    0xFFE53935, 0xFFFB8C00, 0xFFFDD835, 0xFF43A047,
-    0xFF1E88E5, 0xFF8E24AA, 0xFF00ACC1, 0xFFD81B60,
-).map { it.toInt() }
-
-internal val HIGHLIGHT_COLORS = listOf(
-    0x66FFEB3B, 0x6676FF03, 0x6640C4FF, 0x66FF4081,
-    0x66FF9100, 0x66B388FF, 0x66FFFFFF, 0x00000000,
-)
-
 // 15 is not a size Word or OneNote offers, but it is this editor's default, and now that the
 // default persists a user who changes it could otherwise never get back to it.
 private val FONT_SIZES = listOf(8, 9, 10, 11, 12, 14, 15, 16, 18, 20, 24, 28, 36, 48, 72)
@@ -147,9 +139,16 @@ internal object HomeTags {
     const val PICTURE_ONLINE = "home-picture-online"
     const val PICTURE_CAMERA = "home-picture-camera"
     const val LINE_SPACING = "home-line-spacing"
+    const val FONT_COLOR = "home-font-color"
+    const val FONT_COLOR_CUSTOM = "home-font-color-custom"
+    const val HIGHLIGHT = "home-highlight"
+    const val HIGHLIGHT_COLORS = "home-highlight-colors"
+    const val HIGHLIGHT_NONE = "home-highlight-none"
 
     /** One of the Line spacing menu's entries: 150 for 1.5. */
     fun lineSpacing(spacing: Float): String = "$LINE_SPACING-${(spacing * 100).roundToInt()}"
+    fun fontColor(argb: Int): String = "$FONT_COLOR-$argb"
+    fun highlight(argb: Int): String = "$HIGHLIGHT-$argb"
 }
 
 /** Where the Picture button's menu fetches a picture from. */
@@ -188,6 +187,8 @@ fun Ribbon(
     defaults: EditorDefaults,
     /** Makes a font or size the default. A deliberate gesture, never a side effect of picking one. */
     onSetDefault: (Mark) -> Unit,
+    /** A highlight ink was picked, which the Highlight button then lays — see [EditorDefaults.highlight]. */
+    onHighlightInk: (Int) -> Unit = {},
     /** One of the Picture button's menu entries was picked. */
     onInsertPicture: (PictureSource) -> Unit = {},
     /** The open page's appearance, which the View tab both shows and changes. */
@@ -269,6 +270,10 @@ fun Ribbon(
             RibbonTab.Document -> HomeTab(
                 selection = selection,
                 defaults = defaults,
+                palette = palette,
+                onAddColor = draw.addPaletteColor,
+                highlightInk = defaults.highlight,
+                onHighlightInk = onHighlightInk,
                 onCommand = onCommand,
                 onSetDefault = onSetDefault,
                 textMode = tool == DrawTool.Text,
@@ -492,6 +497,12 @@ private fun RibbonNavigationButton(
 private fun HomeTab(
     selection: SelectionState,
     defaults: EditorDefaults,
+    /** The ink row the Draw tab's panes share, which font colour offers too. */
+    palette: List<Int>,
+    onAddColor: (Int) -> Unit,
+    /** The ink the Highlight button lays on text, kept apart from the Draw highlighter's. */
+    highlightInk: Int,
+    onHighlightInk: (Int) -> Unit,
     onCommand: (FormatCommand) -> Unit,
     onSetDefault: (Mark) -> Unit,
     textMode: Boolean,
@@ -560,19 +571,17 @@ private fun HomeTab(
             onCommand(FormatCommand.ToggleMark(Mark.Strikethrough))
         }
 
-        ColorPicker(
-            glyph = ::fontColorGlyph,
-            label = stringResource(R.string.ribbon_font_color),
-            colors = TEXT_COLORS,
+        FontColorButton(
+            palette = palette,
             current = selection.textColor,
             onPick = { onCommand(FormatCommand.SetMark(Mark.TextColor(it))) },
             onClear = { onCommand(FormatCommand.ClearMark(Mark.TextColor(0))) },
+            onAddColor = onAddColor,
         )
-        ColorPicker(
-            symbol = MaterialSymbols.StylusHighlighter,
-            label = stringResource(R.string.ribbon_highlight),
-            colors = HIGHLIGHT_COLORS,
+        HighlightButton(
             current = selection.highlight,
+            ink = highlightInk,
+            onInkChange = onHighlightInk,
             onPick = { onCommand(FormatCommand.SetMark(Mark.Highlight(it))) },
             onClear = { onCommand(FormatCommand.ClearMark(Mark.Highlight(0))) },
         )
@@ -1223,69 +1232,139 @@ internal fun ComboBox(
 }
 
 /**
- * Font colour and highlight, whose icons show the colour that is currently applied.
+ * Font colour: the Draw tab's ink row and wheel, under an icon that shows the colour applied.
  *
- * Font colour draws its swatch into [glyph]. Highlight uses the same tinted marker as Draw.
+ * The same row rather than a text palette of its own, so a colour mixed for a pen is there for text
+ * and the reverse. There is no "None" entry, because the automatic swatch is it: the one that
+ * stands for black on a light page and white on a dark one clears the colour, so the text follows
+ * the theme the way an automatic pen does, and it is the swatch ringed when text has no colour.
  */
 @Composable
-private fun ColorPicker(
-    glyph: ((neutral: Color, swatch: Color) -> ImageVector)? = null,
-    symbol: ImageVector? = null,
-    label: String,
-    colors: List<Int>,
+internal fun FontColorButton(
+    palette: List<Int>,
     current: Int?,
     onPick: (Int) -> Unit,
     onClear: () -> Unit,
+    onAddColor: (Int) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
+    val label = stringResource(R.string.ribbon_font_color)
     val neutral = MaterialTheme.colorScheme.onSurfaceVariant
-    // Highlights are stored semi-transparent so they read over text. The icon is drawn opaque
-    // like Draw's marker, so lighter shades remain visible against the ribbon.
-    val swatch = current?.takeIf { it != 0 }?.let { Color(it).copy(alpha = 1f) } ?: neutral
-    val icon = remember(neutral, swatch, glyph, symbol) {
-        symbol ?: requireNotNull(glyph)(neutral, swatch)
-    }
-    Box {
-        RibbonButtonSlot(label = label, active = false, onClick = { open = true }) {
+    val swatch = current?.let(::Color) ?: neutral
+    val icon = remember(neutral, swatch) { fontColorGlyph(neutral, swatch) }
+    val automaticInk = automaticInkFor(LocalCanvasColors.current.isDark)
+    Box(Modifier.testTag(HomeTags.FONT_COLOR)) {
+        RibbonButtonSlot(label = label, active = open, onClick = { open = true }) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (symbol == null) Color.Unspecified else swatch,
-                modifier = if (symbol == null) Modifier.size(20.dp)
-                    else Modifier.size(19.dp).rotate(180f),
+                tint = Color.Unspecified,
+                modifier = Modifier.size(20.dp),
             )
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Column(Modifier.padding(8.dp)) {
-                colors.chunked(4).forEach { row ->
-                    Row {
-                        row.forEach { argb ->
-                            // The clear swatch that ends the highlights has no colour to be named for.
-                            val name = stringResource(if (argb == 0) R.string.ribbon_color_none else colorName(argb))
-                            Box(
-                                modifier = Modifier
-                                    .padding(3.dp)
-                                    .size(24.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(Color(argb))
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(3.dp))
-                                    .selectable(selected = argb == current) {
-                                        open = false
-                                        onPick(argb)
-                                    }
-                                    .semantics { contentDescription = name },
-                            )
-                        }
-                    }
-                }
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.ribbon_color_none)) },
-                    onClick = {
-                        open = false
-                        onClear()
-                    },
+        FloatingSettingsPanel(
+            expanded = open,
+            onDismissRequest = { open = false },
+            title = label,
+        ) {
+            ColorSwatches(
+                palette = palette,
+                current = current ?: automaticInk,
+                onPick = { if (it == automaticInk) onClear() else onPick(it) },
+                onAddColor = onAddColor,
+                colorTag = HomeTags::fontColor,
+                customTag = HomeTags.FONT_COLOR_CUSTOM,
+                onChosen = { open = false },
+            )
+        }
+    }
+}
+
+/**
+ * Highlight: a split button whose marker toggles [ink] and whose arrow picks it.
+ *
+ * Pressing the marker is a toggle against what the text already carries: text without that ink
+ * gets it, text that has it loses it, and text marked in another colour is switched to it. A
+ * selection only partly highlighted counts as not having it, so the press covers all of it. The
+ * swatches follow the same rule — the ringed one takes the highlight off — and the one picked
+ * becomes the ink. That ink is text's own: the inks are the Draw highlighter's, but its colour is
+ * not, so marking text in one colour leaves the pen drawing in another.
+ *
+ * No wheel, for the reason the highlighter has none — a colour off it is one drag from an opaque
+ * block over the text it was meant to mark. The icon is the same tinted marker as Draw's, drawn
+ * opaque so the lighter inks stay visible against the ribbon.
+ */
+@Composable
+internal fun HighlightButton(
+    current: Int?,
+    ink: Int,
+    onPick: (Int) -> Unit,
+    onClear: () -> Unit,
+    onInkChange: (Int) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val label = stringResource(R.string.ribbon_highlight)
+    val colorsLabel = stringResource(R.string.ribbon_highlight_colors)
+    val on = current == ink
+    fun toggle(argb: Int) = if (current == argb) onClear() else onPick(argb)
+    Box {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            RibbonButtonSlot(
+                label = label,
+                active = on,
+                onClick = { toggle(ink) },
+                modifier = Modifier.testTag(HomeTags.HIGHLIGHT).semantics { selected = on },
+            ) {
+                Icon(
+                    imageVector = MaterialSymbols.StylusHighlighter,
+                    contentDescription = label,
+                    tint = Color(ink).copy(alpha = 1f),
+                    modifier = Modifier.size(19.dp).rotate(180f),
                 )
             }
+            HoverLabel(colorsLabel) {
+                Box(
+                    modifier = Modifier
+                        .testTag(HomeTags.HIGHLIGHT_COLORS)
+                        .height(32.dp)
+                        .width(18.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(
+                            if (open) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                        )
+                        .clickable(onClickLabel = colorsLabel) { open = true }
+                        .semantics { contentDescription = colorsLabel },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = MaterialSymbols.ArrowDropDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+        FloatingSettingsPanel(
+            expanded = open,
+            onDismissRequest = { open = false },
+            title = label,
+        ) {
+            HighlighterSwatches(current = current, colorTag = HomeTags::highlight) {
+                open = false
+                onInkChange(it)
+                toggle(it)
+            }
+            Spacer(Modifier.height(10.dp))
+            NoColorEntry(
+                label = stringResource(R.string.ribbon_color_none),
+                selected = current == null || current == 0,
+                tag = HomeTags.HIGHLIGHT_NONE,
+                onClick = {
+                    open = false
+                    onClear()
+                },
+            )
         }
     }
 }

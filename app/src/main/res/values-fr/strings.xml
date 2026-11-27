@@ -344,6 +344,21 @@
     <string name="stylus_press_single">Un clic</string>
     <string name="stylus_press_double">Double clic</string>
     <string name="stylus_press_triple">Triple clic</string>
+    <string name="hardware_button_test">Test du bouton</string>
+    <string name="hardware_button_test_info">Affiche ce que votre stylet envoie tant que ceci est ouvert. Si un bouton ne fait rien, copiez le rapport dans un signalement de bug.</string>
+    <string name="hardware_button_test_hint">Survolez ou touchez l\'écran avec le stylet et appuyez sur son bouton.</string>
+    <string name="hardware_button_test_read">Lu comme %1$s</string>
+    <string name="hardware_button_test_not_read">Non lu par ViveNotes</string>
+    <string name="hardware_button_test_no_button">Aucun bouton enfoncé</string>
+    <string name="hardware_button_test_copy">Copier le rapport</string>
+    <string name="hardware_button_test_clear">Effacer</string>
+    <string name="hardware_button_test_clip">Rapport du bouton du stylet</string>
+    <string name="hardware_pen_key_set">Définir la touche du stylet pour %1$s</string>
+    <string name="hardware_pen_key_prompt">Appuyez sur le bouton du stylet pour %1$s…</string>
+    <string name="hardware_pen_key_refused">Cela vient d\'un clavier. Appuyez sur le bouton du stylet.</string>
+    <string name="hardware_pen_key_learned">Touche %1$d</string>
+    <string name="hardware_pen_key_built_in">Touches intégrées utilisées</string>
+    <string name="hardware_pen_key_reset">Réinitialiser</string>
     <string name="stylus_action_none">Rien</string>
     <string name="stylus_action_toggle_pen_eraser">Stylet / Gomme</string>
     <string name="stylus_action_cycle_pens">Stylet suivant</string>
@@ -508,6 +523,7 @@
     <string name="ribbon_strikethrough">Barré</string>
     <string name="ribbon_font_color">Couleur de police</string>
     <string name="ribbon_highlight">Surligner</string>
+    <string name="ribbon_highlight_colors">Couleur de surlignage</string>
     <string name="ribbon_subscript">Indice</string>
     <string name="ribbon_superscript">Exposant</string>
     <string name="ribbon_clear_formatting">Effacer la mise en forme</string>
@@ -620,6 +636,7 @@
     <string name="tooltip_fill_swatch">Remplissage %1$s</string>
     <string name="tooltip_change_background">Changer la couleur d\'arrière-plan</string>
     <string name="tooltip_no_background">Aucun arrière-plan</string>
+    <string name="tooltip_background_color">Couleur d\'arrière-plan</string>
     <string name="tooltip_background_swatch">Arrière-plan %1$s</string>
     <string name="color_white">Blanc</string>
     <string name="color_black">Noir</string>

@@ -20,7 +20,7 @@ private val allAbis = listOf("arm64-v8a", "x86_64")
 
 
 
-private val appVersionName = "1.4.0.dev0"
+private val appVersionName = "1.5.0.dev0"
 
 /**
 
@@ -232,7 +232,7 @@ android {
         applicationId = "com.vivenotes"
         minSdk = 31
         targetSdk = 36
-        versionCode = 12
+        versionCode = 13
         versionName = appVersionName
 
         testInstrumentationRunner = "com.vivenotes.ViveNotesTestRunner"
